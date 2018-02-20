@@ -50,13 +50,13 @@ contains
         call cline%set('numlen', real(p_master%numlen))
         call cline%set('stream', 'yes')
         ! ! make target directories
-        call mkdir(preprocess_STREAM_DIR)
-        call mkdir(motion_correct_STREAM_DIR)
-        call mkdir(CTF_STREAM_DIR)
-        call mkdir(UNIDOC_STREAM_DIR)
+        call mkdir(trim(PREPROCESS_STREAM_DIR))
+        call mkdir(trim(MOTION_CORRECT_STREAM_DIR))
+        call mkdir(trim(CTF_STREAM_DIR))
+        call mkdir(trim(UNIDOC_STREAM_DIR))
         if( p_master%l_pick )then
-            call mkdir(PICK_STREAM_DIR)
-            if( cline%defined('refs') )call mkdir(EXTRACT_STREAM_DIR)
+            call mkdir(trim(PICK_STREAM_DIR))
+            if( cline%defined('refs') )call mkdir(trim(EXTRACT_STREAM_DIR))
         endif
         ! setup the environment for distributed execution
         call qenv%new(p_master, stream=.true.)
@@ -173,7 +173,7 @@ contains
         if( p_master%autoscale.eq.'yes' )then
             smpd_glob = LP2SMPDFAC * p_master%lp
             scale     = p_master%smpd / smpd_glob
-            call mkdir(SCSTK_DIR)
+            call mkdir(trim(SCSTK_DIR))
         else
             msk_glob  = p_master%msk
             smpd_glob = p_master%smpd
@@ -323,8 +323,8 @@ contains
                         cnt = cnt + 1
                         ext       = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
                         fbody     = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                        stktab(i) = SCSTK_DIR // trim(fbody)// SCALE_SUFFIX // p_master%ext
-                        call cline_scale%set('dir_target', SCSTK_DIR)
+                        stktab(i) = trim(SCSTK_DIR) // trim(fbody)// SCALE_SUFFIX // p_master%ext
+                        call cline_scale%set('dir_target', trim(SCSTK_DIR))
                     enddo
                     call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
                     call qsys_cleanup(p_master)

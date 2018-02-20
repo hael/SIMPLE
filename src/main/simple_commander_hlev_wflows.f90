@@ -207,7 +207,6 @@ contains
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
         integer,               parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
-        character(len=32),     parameter :: ITERFBODY     = 'refine3Ddoc_'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
@@ -238,8 +237,8 @@ contains
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         ! delete possibly pre-existing stack_parts
-        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
-        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext, suffix='_sc')
+        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
+        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
         ! make master parameters
         p_master = params(cline)
         ! set global state string
@@ -293,7 +292,7 @@ contains
         call cline_refine3D_init%set('ctf',    'no')
         call cline_refine3D_init%set('maxits', real(MAXITS_INIT))
         call cline_refine3D_init%set('vol1',   trim(SNHCVOL)//trim(str_state)//p_master%ext)
-        call cline_refine3D_init%set('oritab', SNHCDOC)
+        call cline_refine3D_init%set('oritab', trim(SNHCDOC))
         call cline_refine3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_refine3D_init%set('lp',     lplims(1))
         if( .not. cline_refine3D_init%defined('nspace') )then
@@ -411,8 +410,8 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(ITERFBODY)//trim(str_iter)//trim(METADATA_EXT)
-                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                oritab   = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//METADATA_EXT
+                vol_iter =trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
     end subroutine exec_initial_3Dmodel
@@ -429,7 +428,7 @@ contains
         integer,            parameter :: MAXITS   = 50
         character(len=2),   parameter :: one = '01'
         ! distributed commanders
-        type(prime3D_distr_commander) :: xprime3D_distr
+        type(prime3D_distr_commander)        :: xprime3D_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
         ! shared-mem commanders
         type(postprocess_commander)  :: xpostprocess
@@ -550,12 +549,12 @@ contains
                 call cline%set('pgrp', 'c1')
             endif
             call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
-            rename_stat = rename(VOL_FBODY//one//p_master%ext, CLUSTER3D_VOL//p_master%ext)
-            rename_stat = rename(VOL_FBODY//one//'_even'//p_master%ext, CLUSTER3D_VOL//'_even'//p_master%ext)
-            rename_stat = rename(VOL_FBODY//one//'_odd'//p_master%ext,  CLUSTER3D_VOL//'_odd'//p_master%ext)
-            rename_stat = rename(FSC_FBODY//one//BIN_EXT, CLUSTER3D_FSC)
-            rename_stat = rename(FRCS_FBODY//one//BIN_EXT, CLUSTER3D_FRCS)
-            rename_stat = rename(ANISOLP_FBODY//one//p_master%ext, CLUSTER3D_ANISOLP//p_master%ext)
+            rename_stat = rename(trim(VOL_FBODY)//one//p_master%ext, trim(CLUSTER3D_VOL)//p_master%ext)
+            rename_stat = rename(trim(VOL_FBODY)//one//'_even'//p_master%ext, trim(CLUSTER3D_VOL)//'_even'//p_master%ext)
+            rename_stat = rename(trim(VOL_FBODY)//one//'_odd'//p_master%ext,  trim(CLUSTER3D_VOL)//'_odd'//p_master%ext)
+            rename_stat = rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
+            rename_stat = rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
+            rename_stat = rename(trim(ANISOLP_FBODY)//one//p_master%ext, trim(CLUSTER3D_ANISOLP)//p_master%ext)
         endif
 
         ! STAGE1: frozen orientation parameters
@@ -564,7 +563,7 @@ contains
         write(*,'(A)')    '>>>'
         call xprime3D_distr%execute(cline_refine3D1)
         iter   = nint(cline_refine3D1%get_rarg('endit'))
-        oritab = REFINE3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
+        oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
         oritab = 'cluster3Ddoc_stage1'//trim(METADATA_EXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -575,9 +574,9 @@ contains
         !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
         !     do state = 1, p_master%nstates
         !         str_state  = int2str_pad(state, 2)
-        !         call cline_postprocess%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
-        !         call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
-        !         call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+        !         call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//p_master%ext)
+        !         call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
+        !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p_master%ext)
         !         call xpostprocess%execute(cline_postprocess)
         !     enddo
         ! endif
@@ -592,7 +591,7 @@ contains
         write(*,'(A)')    '>>>'
         call xprime3D_distr%execute(cline_refine3D2)
         iter   = nint(cline_refine3D2%get_rarg('endit'))
-        oritab = REFINE3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
+        oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
         oritab = 'cluster3Ddoc_stage2'//trim(METADATA_EXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -603,9 +602,9 @@ contains
             call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
             do state = 1, p_master%nstates
                 str_state  = int2str_pad(state, 2)
-                call cline_postprocess%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
-                call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
-                call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+                call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//p_master%ext)
+                call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
+                call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p_master%ext)
                 call xpostprocess%execute(cline_postprocess)
             enddo
         endif
@@ -687,9 +686,9 @@ contains
         class(cluster3D_refine_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
-        character(len=20),  parameter :: INIT_FBODY  = 'cluster3Dinit_refine_state'
-        character(len=19),  parameter :: FINAL_FBODY = 'cluster3Ddoc_refine_state'
-        character(len=17),  parameter :: FINAL_DOC   = 'cluster3Ddoc_refine'//trim(METADATA_EXT)
+        character(len=:), allocatable :: INIT_FBODY
+        character(len=:), allocatable :: FINAL_FBODY
+        character(len=:), allocatable :: FINAL_DOC
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
@@ -716,6 +715,11 @@ contains
         p_master      = params(cline)
         l_singlestate = cline%defined('state')
         error         = .false.
+
+        ! filenaming strings allocation
+        allocate(INIT_FBODY, source='cluster3Dinit_refine_state')
+        allocate(FINAL_FBODY, source='cluster3Ddoc_refine_state')
+        allocate(FINAL_DOC, source='cluster3Ddoc_refine'//trim(METADATA_EXT))
 
         ! sanity checks
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
@@ -754,15 +758,15 @@ contains
             end where
             call os_state%set_all('state', real(states))
             deallocate(states)
-            init_docs(state) = INIT_FBODY//str_state//trim(METADATA_EXT)
+            init_docs(state) = trim(INIT_FBODY)//str_state//trim(METADATA_EXT)
             call binwrite_oritab(init_docs(state), os_state, [1,p_master%nptcls])
-            final_docs(state) = FINAL_FBODY//str_state//trim(METADATA_EXT)
+            final_docs(state) = trim(FINAL_FBODY)//str_state//trim(METADATA_EXT)
             ! check & move volumes
             l_hasvols(state) = trim(p_master%vols(state)) .ne. ''
             if( l_hasvols(state) )then
                 if( p_master%eo .ne. 'no' )then
                     ! fsc
-                    fname = FSC_FBODY//str_state//BIN_EXT
+                    fname = trim(FSC_FBODY)//str_state//BIN_EXT
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                         error = .true.
@@ -770,14 +774,14 @@ contains
                         rename_stat = rename(fname, dir//trim(fname))
                     endif
                     ! FRC
-                    fname = FRCS_FBODY//str_state//BIN_EXT
+                    fname = trim(FRCS_FBODY)//str_state//BIN_EXT
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
                         rename_stat = rename(fname, dir//trim(fname))
                     endif
                     ! aniso
-                    fname = ANISOLP_FBODY//str_state//p_master%ext
+                    fname = trim(ANISOLP_FBODY)//str_state//p_master%ext
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
@@ -858,11 +862,11 @@ contains
             if( l_hasvols(state) )then
                 call cline_refine3D%set('vol1', trim(p_master%vols(state)))
                 if( p_master%eo.ne.'no' )then
-                    fname = dir//FSC_FBODY//str_state//BIN_EXT
+                    fname = dir//trim(FSC_FBODY)//str_state//BIN_EXT
                     call exec_cmdline('cp '//trim(fname)//' fsc_state01.bin')
-                    fname = dir//FRCS_FBODY//str_state//BIN_EXT
+                    fname = dir//trim(FRCS_FBODY)//str_state//BIN_EXT
                     if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' frcs_state01.bin')
-                    fname = dir//ANISOLP_FBODY//str_state//p_master%ext
+                    fname = dir//trim(ANISOLP_FBODY)//str_state//p_master%ext
                     if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' aniso_optlp_state01.mrc')
                 endif
             endif
@@ -871,7 +875,7 @@ contains
             call xprime3D_distr%execute(cline_refine3D)
             ! harvest outcome
             iter   = nint(cline_refine3D%get_rarg('endit'))
-            oritab = REFINE3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
+            oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
             ! stash
             call os_state%new(p_master%nptcls)
             call binread_oritab(oritab, os_state, [1,p_master%nptcls])
@@ -897,8 +901,8 @@ contains
                 if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p_master%mskvols(state)))
                 vol = 'recvol_state'//trim(str_state)//p_master%ext
                 call cline_postprocess%set('vol1', trim(vol))
-                call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
-                call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+                call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
+                call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p_master%ext)
                 call xpostprocess%execute(cline_postprocess)
             enddo
         endif
@@ -918,34 +922,34 @@ contains
                 do it = 1, iter
                     str_iter = int2str_pad(it,3)
                     ! volumes
-                    src  = VOL_FBODY//one//'_iter'//str_iter//p_master%ext
-                    dist = dir//VOL_FBODY//one//'_iter'//str_iter//p_master%ext
+                    src  = trim(VOL_FBODY)//one//'_iter'//str_iter//p_master%ext
+                    dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//p_master%ext
                     rename_stat = rename(src, dist)
-                    src  = VOL_FBODY//one//'_iter'//str_iter//'_pproc'//p_master%ext
-                    dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_pproc'//p_master%ext
+                    src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_pproc'//p_master%ext
+                    dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_pproc'//p_master%ext
                     rename_stat = rename(src, dist)
                     ! e/o
                     if( p_master%eo.ne.'no')then
-                        src  = VOL_FBODY//one//'_iter'//str_iter//'_even'//p_master%ext
-                        dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_even'//p_master%ext
+                        src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p_master%ext
+                        dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p_master%ext
                         rename_stat = rename(src, dist)
-                        src  = VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
-                        dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
+                        src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p_master%ext
+                        dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p_master%ext
                         rename_stat = rename(src, dist)
                         src = 'RESOLUTION_STATE'//one//'_ITER'//str_iter
                         rename_stat = rename(src, dir//src)
                     endif
                     ! orientation document
-                    src = REFINE3D_ITER_FBODY//str_iter//trim(METADATA_EXT)
+                    src = trim(REFINE3D_ITER_FBODY)//str_iter//trim(METADATA_EXT)
                     if( file_exists(src) ) rename_stat = rename(src, dir//src)
                 enddo
                 ! resolution measures
                 if( p_master%eo.ne.'no')then
-                    src  = FSC_FBODY//one//BIN_EXT
+                    src  = trim(FSC_FBODY)//one//BIN_EXT
                     if( file_exists(src) ) rename_stat = rename(src, dir//src)
-                    src  = FRCS_FBODY//one//BIN_EXT
+                    src  = trim(FRCS_FBODY)//one//BIN_EXT
                     if( file_exists(src) ) rename_stat = rename(src, dir//src)
-                    src  = ANISOLP_FBODY//one//p_master%ext
+                    src  = trim(ANISOLP_FBODY)//one//p_master%ext
                     if( file_exists(src) ) rename_stat = rename(src, dir//src)
                 endif
             end subroutine prime3d_cleanup

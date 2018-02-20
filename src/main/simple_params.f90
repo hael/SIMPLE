@@ -919,7 +919,7 @@ contains
         else
             if( ddel_scaled )then
                 ! delete possibly pre-existing scaled stack parts
-                call del_files(STKPARTFBODY, self%nparts, ext=self%ext, suffix='_sc')
+                call del_files(trim(STKPARTFBODY), self%nparts, ext=self%ext, suffix='_sc')
             endif
             ! set name of partial files in parallel execution
             stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext

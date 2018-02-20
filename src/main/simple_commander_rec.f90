@@ -116,13 +116,13 @@ contains
             call b%eorecvol%reset_all
             ! assemble volumes
             do part=1,p%nparts
-                call eorecvol_read%read_eos(VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
+                call eorecvol_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 ! sum the Fourier coefficients
                 call b%eorecvol%sum(eorecvol_read)
             end do
             if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
-            allocate(recname, source=VOL_FBODY//int2str_pad(state,2))
+            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
             allocate(volname, source=recname//p%ext)
             eonames(1) = trim(recname)//'_even'//p%ext
             eonames(2) = trim(recname)//'_odd'//p%ext
@@ -244,7 +244,7 @@ contains
             if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
-                allocate(fbody, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
+                allocate(fbody, source=trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
                 call assemble(p%vols(s), trim(rho_name))

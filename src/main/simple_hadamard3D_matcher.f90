@@ -230,9 +230,9 @@ contains
         write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
             if( p%refine .eq. 'snhc')then
-                p%outfile = SNHCDOC
+                p%outfile = trim(SNHCDOC)
             else
-                p%outfile = 'refine3Ddoc_'//int2str_pad(which_iter,3)//trim(METADATA_EXT)
+                p%outfile = trim(REFINE3D_ITER_FBODY)//int2str_pad(which_iter,3)//trim(METADATA_EXT)
             endif
         endif
 

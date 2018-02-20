@@ -164,9 +164,9 @@ contains
                 fsc_bin_exists    = .false.
                 do s=1,p%nstates
                     if( str_has_substr(p%refine,'het') )then
-                        fsc_fname = CLUSTER3D_FSC
+                        fsc_fname = trim(CLUSTER3D_FSC)
                     else
-                        fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                        fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                     endif
                     fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
                     if( b%a%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
@@ -181,9 +181,9 @@ contains
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
                             if( str_has_substr(p%refine,'het') )then
-                                fsc_fname = CLUSTER3D_FSC
+                                fsc_fname = trim(CLUSTER3D_FSC)
                             else
-                                fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                                fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                             endif
                             fsc_arr    = file2rarr(trim(adjustl(fsc_fname)))
                             b%fsc(s,:) = fsc_arr(:)
@@ -621,7 +621,7 @@ contains
                         call b%eorecvols(istate)%new(p)
                         call b%eorecvols(istate)%reset_all
                         if( p%l_frac_update )then
-                            call b%eorecvols(istate)%read_eos(VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str)
+                            call b%eorecvols(istate)%read_eos(trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str)
                             call b%eorecvols(istate)%expand_exp
                             call b%eorecvols(istate)%apply_weight(1.0 - p%update_frac)
                         endif
@@ -635,8 +635,8 @@ contains
                         call b%recvols(istate)%reset
                         call b%recvols(istate)%reset_exp
                         if( p%l_frac_update )then
-                            allocate(recname, source=VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
-                            allocate(rhoname, source='rho_'//VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
+                            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//p%ext)
+                            allocate(rhoname, source='rho_'//trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//p%ext)
                             if( file_exists(recname) .and. file_exists(rhoname) )then
                                 call b%recvols(istate)%read(recname)
                                 call b%recvols(istate)%read_rho(rhoname)
@@ -755,9 +755,9 @@ contains
         if( p%eo.ne.'no' )then
             ! anisotropic matched filter
             if( p%nstates.eq.1 )then
-                allocate(fname_vol_filter, source=ANISOLP_FBODY//int2str_pad(s,2)//trim(p%ext))
+                allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(p%ext))
             else
-                allocate(fname_vol_filter, source=CLUSTER3D_ANISOLP//trim(p%ext))
+                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(p%ext))
             endif
             if( file_exists(fname_vol_filter) )then
                 call b%vol2%read(fname_vol_filter)

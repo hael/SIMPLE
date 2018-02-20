@@ -468,13 +468,13 @@ contains
         cline_make_cavgs        = cline
 
         ! initialise static command line parameters and static job description parameters
-        call cline_merge_algndocs%set('fbody',    ALGN_FBODY           )
-        call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
-        call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
-        call cline_check2D_conv%set('box',        real(p_master%box)   )
-        call cline_check2D_conv%set('nptcls',     real(p_master%nptcls))
-        call cline_cavgassemble%set('prg',        'cavgassemble'       )
-        call cline_make_cavgs%set('prg',           'make_cavgs'          )
+        call cline_merge_algndocs%set('fbody',  trim(ALGN_FBODY)     )
+        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
+        call cline_merge_algndocs%set('ndocs',  real(p_master%nparts))
+        call cline_check2D_conv%set('box',      real(p_master%box)   )
+        call cline_check2D_conv%set('nptcls',   real(p_master%nptcls))
+        call cline_cavgassemble%set('prg',      'cavgassemble'       )
+        call cline_make_cavgs%set('prg',        'make_cavgs'         )
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         if( .not. cline%defined('stktab') )then
@@ -546,9 +546,9 @@ contains
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
-            call job_descr%set('frcs', FRCS_ITER_FBODY//int2str_pad(iter - 1,3)//'.bin')
+            call job_descr%set('frcs', trim(FRCS_ITER_FBODY)//int2str_pad(iter - 1,3)//'.bin')
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGN_FBODY)
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! merge orientation documents
             oritab = trim(CLUSTER2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
             call cline_merge_algndocs%set('outfile', trim(oritab))
@@ -627,7 +627,7 @@ contains
                         if( p_master%match_filt.eq.'yes')then
                             ! updates FRCs
                             state     = 1
-                            frcs_iter = FRCS_ITER_FBODY//int2str_pad(iter,3)//'.bin'
+                            frcs_iter = trim(FRCS_ITER_FBODY)//int2str_pad(iter,3)//'.bin'
                             call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
                             call frcs%read(frcs_iter)
                             do icls = 1, size(fromtocls, dim=1)
@@ -801,14 +801,14 @@ contains
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )       ! required for distributed call
         call cline_refine3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
         if( trim(p_master%refine).eq.'hetsym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
-        call cline_merge_algndocs%set('nthr',     1.)
-        call cline_merge_algndocs%set('fbody',    ALGN_FBODY)
-        call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
-        call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
-        call cline_check3D_conv%set('box',        real(p_master%box)   )
-        call cline_check3D_conv%set('nptcls',     real(p_master%nptcls))
-        call cline_postprocess%set('nstates',    1.)
-        call cline_postprocess%set('mirr',       'no')
+        call cline_merge_algndocs%set('nthr',   1.)
+        call cline_merge_algndocs%set('fbody',  trim(ALGN_FBODY))
+        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
+        call cline_merge_algndocs%set('ndocs',  real(p_master%nparts))
+        call cline_check3D_conv%set('box',      real(p_master%box)   )
+        call cline_check3D_conv%set('nptcls',   real(p_master%nptcls))
+        call cline_postprocess%set('nstates',   1.)
+        call cline_postprocess%set('mirr',      'no')
 
         ! for parallel volassemble over states
         allocate(state_assemble_finished(p_master%nstates) )
@@ -851,16 +851,16 @@ contains
                 ! rename volumes and update cline
                 str_state = int2str_pad(state,2)
                 vol = trim(VOL_FBODY)//trim(str_state)//p_master%ext
-                str = 'startvol_state'//trim(str_state)//p_master%ext
+                str = trim(STARTVOL_FBODY)//trim(str_state)//p_master%ext
                 call simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
                 if( p_master%eo .ne. 'no' )then
                     vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p_master%ext
-                    str = 'startvol_state'//trim(str_state)//'_even'//p_master%ext
+                    str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//p_master%ext
                     call simple_rename( trim(vol_even), trim(str) )
                     vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p_master%ext
-                    str = 'startvol_state'//trim(str_state)//'_odd'//p_master%ext
+                    str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//p_master%ext
                     call simple_rename( trim(vol_odd), trim(str) )
                 endif
             enddo
@@ -960,7 +960,7 @@ contains
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGN_FBODY)
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! ASSEMBLE ALIGNMENT DOCS
             if( p_master%refine .eq. 'snhc' )then
                 oritab = trim(SNHCDOC)

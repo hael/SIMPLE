@@ -110,7 +110,7 @@ contains
             stop 'tomography mode (tomo=yes) not yet supported!'
         endif
         if( p%stream.eq.'yes' )then
-            p%dir_target = preprocess_STREAM_DIR
+            p%dir_target = PREPROCESS_STREAM_DIR
         endif
         if( p%l_pick .and. .not. cline%defined('refs'))then
             stop 'need references for picker or turn off picking with dopick=no'
@@ -156,7 +156,7 @@ contains
                 p%fbody = trim(movie_fbody)
                 ! motion_correct: on call
                 ! ctf: on call and output set below
-                allocate(fname_unidoc_output, source=UNIDOC_STREAM_DIR//UNIDOC_OUTPUT//trim(movie_fbody)//'.txt')
+                allocate(fname_unidoc_output, source=trim(UNIDOC_STREAM_DIR)//trim(UNIDOC_OUTPUT)//trim(movie_fbody)//'.txt')
                 ! picker: on call
                 ! extract
                 allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
@@ -188,7 +188,7 @@ contains
             ! motion_correct
             if( p%stream.eq.'yes' )then
                 call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
-                &frame_counter, movienames(imovie), smpd_scaled, dir_out=motion_correct_STREAM_DIR)
+                &frame_counter, movienames(imovie), smpd_scaled, dir_out=trim(MOTION_CORRECT_STREAM_DIR))
             else
                 call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
                 &frame_counter, movienames(imovie), smpd_scaled)
@@ -204,7 +204,7 @@ contains
             p%lp             = p%lp_ctffind
             if( p%stream.eq.'yes' )then
                 call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni,&
-                &dir_out=CTF_STREAM_DIR)
+                &dir_out=trim(CTF_STREAM_DIR))
             else
                 call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni)
             endif
@@ -213,7 +213,7 @@ contains
                 movie_counter = movie_counter - 1
                 p%lp          = p%lp_pick
                 if( p%stream.eq.'yes' )then
-                    call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out, dir_out=PICK_STREAM_DIR)
+                    call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out, dir_out=trim(PICK_STREAM_DIR))
                 else
                     call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out)
                 endif
@@ -226,7 +226,7 @@ contains
                 ! extract particles & params
                 if( p%l_pick )then
                     cline_extract = cline
-                    call cline_extract%set('dir_ptcls', EXTRACT_STREAM_DIR)
+                    call cline_extract%set('dir_ptcls', trim(EXTRACT_STREAM_DIR))
                     call cline_extract%set('smpd',      p%smpd)
                     call cline_extract%set('unidoc',    fname_unidoc_output)
                     call cline_extract%set('outfile',   fname_ctf_extract)

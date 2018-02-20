@@ -172,14 +172,14 @@ contains
         fbody      = get_fbody(trim(fname_here), trim(ext))
         if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//trim(adjustl(fbody))
         ! motion_correct
-        motion_correct_name = motion_correct_STREAM_DIR//trim(adjustl(fbody))//THUMBNAIL_SUFFIX//trim(self%ext)
+        motion_correct_name = trim(MOTION_CORRECT_STREAM_DIR)//trim(adjustl(fbody))//trim(THUMBNAIL_SUFFIX)//trim(self%ext)
         motion_correct_done = file_exists(trim(motion_correct_name))
         if( motion_correct_done )then
-            motion_correct_name = motion_correct_STREAM_DIR//trim(adjustl(fbody))//INTGMOV_SUFFIX//trim(self%ext)
+            motion_correct_name = trim(MOTION_CORRECT_STREAM_DIR)//trim(adjustl(fbody))//trim(INTGMOV_SUFFIX)//trim(self%ext)
             motion_correct_done = file_exists(trim(motion_correct_name))
         endif
         ! ctffind
-        unidoc_name  = UNIDOC_STREAM_DIR//UNIDOC_OUTPUT//trim(adjustl(fbody))//'.txt'
+        unidoc_name  = trim(UNIDOC_STREAM_DIR)//trim(UNIDOC_OUTPUT)//trim(adjustl(fbody))//'.txt'
         ctffind_done = file_exists(trim(unidoc_name))
         to_process = .not. (motion_correct_done .and. ctffind_done)
     end function to_process
