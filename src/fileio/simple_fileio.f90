@@ -326,6 +326,33 @@ contains
         endif
     end function nlines
 
+    !> \brief  return the size of a binary file
+    function filelength( fname ) result( filesz )
+        character(len=*), intent(in) :: fname !< input filename
+        integer                      :: filesz, funit, ios, cnt,recl
+        character(len=1)             :: junk
+        if(  file_exists(fname) )then
+            recl=1
+            call fopen(funit, fname, ACTION='read', IOSTAT=ios,&
+                ACCESS='direct', form='unformatted', recl=recl)
+            call fileiochk('simple_fileio :: nlines opening '//trim(fname), ios)
+            cnt = 0
+            filesz = 0
+            do
+                cnt = cnt+1
+                read(funit,rec=cnt,IOSTAT=ios) junk
+                if(ios /= 0)then
+                    exit
+                else
+                    filesz = filesz+1
+                endif
+            end do
+            call fclose_1( funit, ios ,errmsg=" Error closing file in ::filelength "//trim(fname))
+        else
+            filesz = 0
+        endif
+    end function filelength
+
     !> \brief  return file size in bytes
     function funit_size(unit) result(sz)
         integer, intent(in)          :: unit !< input file unit
@@ -396,7 +423,7 @@ contains
 #endif
 
         else
-            call simple_stop( "simple_fileio:: simple_rename failed to rename file,  designated input filename doesn't exist "//trim(filein))
+            call simple_stop( "simple_fileio::simple_rename, designated input filename doesn't exist "//trim(filein))
         end if
         if(file_status /= 0) call fileiochk( " simple_rename failed to rename file "//trim(filein), file_status)
     end subroutine simple_rename
@@ -801,7 +828,7 @@ contains
             call fclose_1(funit,io_stat, errmsg="file2iarr failed to close "//trim(fnam))
         else
             write(*,*) fnam
-            stop 'file does not exist; file2iarr; simple_fileio      '
+            call simple_stop('file does not exist; file2iarr; simple_fileio      ', __FILENAME__,__LINE__)
         endif
     end function file2iarr
 
@@ -842,8 +869,7 @@ contains
             end do
             call fclose_1(funit,io_stat,errmsg="file2rarr fclose_1 failed "//trim(fnam))
         else
-            write(*,*) fnam, ' does not exist; file2rarr; simple_fileio      '
-            stop
+            call simple_stop(trim(fnam)//' does not exist; file2rarr; simple_fileio ', __FILENAME__,__LINE__)
         endif
     end function file2rarr
 
