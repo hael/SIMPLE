@@ -186,8 +186,8 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
   set(fordebug "-g ${warn}  -traceback -gopt -Mcuda=debug -Mneginfo=all,ftn -Mpgicoff -traceback -Mprof  ")
   set(forspeed "-O3 -fast " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
-  set(forpar   " -mp  -Mcuda=cc60,cuda8.0") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
-  set(target   " -m64 -fPIC ")  #
+  set(forpar   " -mp -acc ") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
+  set(target   " -m64 ")  #
   set(common   "${preproc} ${dialect} ${target}")
   # further PGI options
   option(PGI_EXTRACT_ALL  "PGI --Extract subprograms for inlining (-Mextract)" OFF)

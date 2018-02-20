@@ -442,30 +442,12 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
      set (EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
   endif()
 
-  if(PGI_CUDA_IOMUTEX)
-     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Miomutex")
-  endif()
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
- if(PGI_CHECKING)
-     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign  -Minfo=all,ftn -Mneginfo=all")
-  endif()
-  if (USE_OPENACC_ONLY)
-   set(EXTRA_FLAGS "${EXTRA_FLAGS}  -acc")
-    add_definitions(" -DUSE_OPENACC ")
-   else()
-    set(EXTRA_FLAGS "${EXTRA_FLAGS} -mp")
-  endif()
- if(PGI_EXTRA_FAST)
-     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
-  endif()
-
-  if(PGI_CUDA_IOMUTEX)
-     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Miomutex")
-  endif()
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
+  # NVIDIA PGI Linux compiler
 #  set(CMAKE_AR                           "pgfortran")
   set(CMAKE_CPP_COMPILER                 "pgcc -E ")
   set(CMAKE_CPP_COMPILER_FLAGS           "  ")
-  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS}")
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} ${CMAKE_Fortran_FLAGS}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS_DEBUG} ${CMAKE_Fortran_FLAGS}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        "${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${CMAKE_Fortran_FLAGS}")
@@ -485,6 +467,9 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
 
   if (PGI_LARGE_FILE_SUPPORT)
     set(CMAKE_EXE_LINKER_FLAGS          "-Mlfs ${CMAKE_EXE_LINKER_FLAGS}")
+  endif()
+  if(PGI_CUDA_IOMUTEX)
+     set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Miomutex")
   endif()
 
 
