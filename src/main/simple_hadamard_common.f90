@@ -270,7 +270,7 @@ contains
             p%lp_dyn     = p%lp
             call b%a%set_all2single('lp',p%lp)
         else
-            if( file_exists(p%frcs) )then
+            if( file_exists(p%frcs) .and. which_iter > LPLIM1ITERBOUND )then
                 lplim = b%projfrcs%estimate_lp_for_align()
             else
                 if( which_iter <= LPLIM1ITERBOUND )then

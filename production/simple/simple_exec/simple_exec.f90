@@ -106,13 +106,14 @@ select case(prg)
     case( 'simulate_particles' )
         !==Program simulate_particles
         !
-        ! <simulate_particles/begin>is a program for simulating cryo-EM images. It is not a very sophisticated simulator, but it is
-        ! nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for
-        ! simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM
-        ! map, which we usually generate from a PDB file using EMANs program pdb2mrc. simulate_particles then projects the
-        ! volume using Fourier interpolation, adds 20% of the total noise to the images (pink noise), Fourier transforms
-        ! them, and multiplies them with astigmatic CTF and B-factor. The images are inverse FTed before the remaining 80%
-        ! of the noise (white noise) is added<simulate_particles/end>
+        ! <simulate_particles/begin>is a program for simulating single-particle cryo-EM images. It is not a very
+        ! sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-
+        ! slice simulation and it cannot be used for simulating molecules containing heavy atoms. It does not even
+        ! accept a PDB file as an input. Input is a cryo-EM map, which we usually generate from a PDB file using
+        ! EMANs program pdb2mrc. The volume is projected using Fourier interpolation, 20% of the total noise is
+        ! added to the images (pink noise), they are then Fourier transformed and multiplied with astigmatic CTF and 
+        ! B-factor. Next, the they are inverse FTed before the remaining 80% of the noise (white noise) is added
+        ! <simulate_particles/end>
         !
         ! set required keys
         keys_required(1)  = 'vol1'
@@ -201,7 +202,7 @@ select case(prg)
     case( 'simulate_subtomogram' )
         !==Program simulate_subtomogram
         !
-        ! <simulate_subtomogram/begin>is a program for crude simulation of a subtomograms<simulate_subtomogram/end>
+        ! <simulate_subtomogram/begin>is a program for crude simulation of a subtomogram<simulate_subtomogram/end>
         !
         ! set required keys
         keys_required(1) = 'vol1'
@@ -262,12 +263,12 @@ select case(prg)
     case( 'extract' )
         !==Program extract
         !
-        ! <extract/begin>is a program that extracts particle images from
-        ! integrated movies. Boxfiles are assumed to be in EMAN format but we provide
-        ! a conversion script (relion2emanbox.pl) for *.star files containing
-        ! particle coordinates obtained with Relion. In addition to one single-particle
-        ! image stack per micrograph, the program produces a parameter files 
-        ! that should be concatenated for use in conjunction with other SIMPLE programs.
+        ! <extract/begin>is a program that extracts particle images from integrated movies.
+        ! Boxfiles are assumed to be in EMAN format but we provide a conversion script
+        ! (relion2emanbox.pl) for *.star files containing particle coordinates obtained
+        ! with Relion. In addition to one single-particle image stack per micrograph, the
+        ! program produces a parameter files that should be concatenated for use in
+        ! conjunction with other SIMPLE programs.
         ! <extract/end>
         !
         ! set required keys
@@ -389,9 +390,7 @@ select case(prg)
     case( 'fsc' )
         !==Program fsc
         !
-        ! <fsc/begin>is a program for calculating the FSC between the two input volumes. No modifications
-        ! are done to the volumes, which allow you to test different masking options and see how they
-        ! affect the FSCs<fsc/end>
+        ! <fsc/begin>is a program for calculating the FSC between the two input volumes<fsc/end>
         !
         ! set required keys
         keys_required(1) = 'smpd'
@@ -428,7 +427,9 @@ select case(prg)
     case( 'postprocess' )
         !==Program postprocess
         !
-        ! <postprocess/begin>is a program for post-processing of volumes<postprocess/end>
+        ! <postprocess/begin>is a program for post-processing of volumes.
+        ! Use program volops to estimate the B-factor with the Guinier plot
+        ! <postprocess/end>
         !
         ! set required keys
         keys_required(1)  = 'vol1'
