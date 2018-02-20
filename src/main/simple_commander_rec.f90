@@ -61,7 +61,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(params)                  :: p
         type(build)                   :: b
-        type(reconstructor_eo)        :: eoreconstruct3D_read
+        type(reconstructor_eo)        :: eorecvol_read
         character(len=:), allocatable :: finished_fname, recname, volname
         character(len=32)             :: eonames(2), resmskname, benchfname
         real, allocatable             :: res05s(:), res0143s(:)
@@ -88,8 +88,8 @@ contains
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call eoreconstruct3D_read%new(p)
-        call eoreconstruct3D_read%kill_exp ! reduced memory usage
+        call eorecvol_read%new(p)
+        call eorecvol_read%kill_exp ! reduced memory usage
         n = p%nstates*p%nparts
         if( L_BENCH )then
             ! end of init
@@ -116,9 +116,9 @@ contains
             call b%eorecvol%reset_all
             ! assemble volumes
             do part=1,p%nparts
-                call eoreconstruct3D_read%read_eos(VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
+                call eorecvol_read%read_eos(VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 ! sum the Fourier coefficients
-                call b%eorecvol%sum(eoreconstruct3D_read)
+                call b%eorecvol%sum(eorecvol_read)
             end do
             if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
@@ -174,7 +174,7 @@ contains
         res  = maxval(res0143s)
         p%lp = max( p%lpstop,res )
         write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', p%lp
-        call eoreconstruct3D_read%kill
+        call eorecvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE_EO NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
@@ -225,14 +225,14 @@ contains
         character(len=:), allocatable :: fbody, finished_fname
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state, ldim(3)
-        type(reconstructor)           :: reconstruct3D_read
+        type(reconstructor)           :: recvol_read
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
         ! rebuild b%vol according to box size (because it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call reconstruct3D_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call reconstruct3D_read%alloc_rho(p)
+        call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
+        call recvol_read%alloc_rho(p)
         do ss=1,p%nstates
             if( cline%defined('state') )then
                 s     = 1        ! index in reconstruct3D
@@ -258,8 +258,8 @@ contains
             call correct_for_sampling_density(trim(recvolname))
             if( cline%defined('state') )exit
         end do
-        call reconstruct3D_read%dealloc_rho
-        call reconstruct3D_read%kill
+        call recvol_read%dealloc_rho
+        call recvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
@@ -279,9 +279,9 @@ contains
                 here(1)=file_exists(recnam)
                 here(2)=file_exists(kernam)
                 if( all(here) )then
-                    call reconstruct3D_read%read(recnam)
-                    call reconstruct3D_read%read_rho(kernam)
-                    call b%recvol%sum(reconstruct3D_read)
+                    call recvol_read%read(recnam)
+                    call recvol_read%read_rho(kernam)
+                    call b%recvol%sum(recvol_read)
                 else
                     if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
                     if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'

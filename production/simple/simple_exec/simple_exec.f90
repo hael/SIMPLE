@@ -262,14 +262,13 @@ select case(prg)
     case( 'extract' )
         !==Program extract
         !
-        ! <extract/begin>is a program that extracts particle images from DDD movies
-        ! or integrated movies. Boxfiles are assumed to be in EMAN format but we provide
+        ! <extract/begin>is a program that extracts particle images from
+        ! integrated movies. Boxfiles are assumed to be in EMAN format but we provide
         ! a conversion script (relion2emanbox.pl) for *.star files containing
-        ! particle coordinates obtained with Relion. The program creates one stack per movie
-        ! frame as well as a stack of corrected framesums. In addition to single-particle
-        ! image stacks, the program produces a parameter file extract_params.ext
-        ! that can be used in conjunction with other SIMPLE programs. We obtain CTF parameters
-        ! with CTFFIND4<extract/end>
+        ! particle coordinates obtained with Relion. In addition to one single-particle
+        ! image stack per micrograph, the program produces a parameter files 
+        ! that should be concatenated for use in conjunction with other SIMPLE programs.
+        ! <extract/end>
         !
         ! set required keys
         keys_required(1) = 'smpd'
@@ -295,7 +294,9 @@ select case(prg)
         !==Program cluster_cavgs
         !
         ! <cluster_cavgs/begin>is a program for analyzing class averages with affinity propagation,
-        ! in order to get a better understanding of the view distribution<cluster_cavgs/end>
+        ! in order to get a better understanding of the view distribution. The balance flag is used
+        ! to apply a balancing restraint (on the class population). Adjust balance until you are
+        ! satisfied with the shape of the histogram. <cluster_cavgs/end>
         !
         ! set required keys
         keys_required(1) = 'stk'

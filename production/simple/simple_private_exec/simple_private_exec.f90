@@ -112,13 +112,10 @@ character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
-logical               :: describe
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
 call get_command(entire_line)
-if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_programs
-describe = str_has_substr(entire_line, 'describe=yes')
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
@@ -172,7 +169,6 @@ select case(prg)
         keys_optional(30)  = 'pcontrast'
         keys_optional(31)  = 'ctfreslim'
         ! parse command line
-        if( describe ) call print_doc_preprocess
         call cline%parse(keys_required(:5), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
@@ -202,7 +198,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'startit'
         ! parse command line
-        if( describe ) call print_doc_select_frames
         call cline%parse(keys_required(:5), keys_optional(:1))
         ! execute
         call xselect_frames%execute(cline)
@@ -220,7 +215,6 @@ select case(prg)
         keys_optional(3) = 'boxconvsz'
         keys_optional(4) = 'startit'
         ! parse command line
-        if( describe ) call print_doc_boxconvs
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('boxconvsz') ) call cline%set('boxconvsz', 512.)
@@ -244,7 +238,6 @@ select case(prg)
         keys_optional(7) = 'lp'
         keys_optional(8) = 'clip'
         ! parse command line
-        if( describe ) call print_doc_powerspecs
         call cline%parse(keys_required(:2), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
@@ -287,7 +280,6 @@ select case(prg)
         keys_optional(16) = 'nsig'
         keys_optional(17) = 'outfile'
         ! parse command line
-        if( describe ) call print_doc_motion_correct
         call cline%parse(keys_required(:2), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',                      5.)
@@ -318,7 +310,6 @@ select case(prg)
         keys_optional(7) = 'astigtol'
         keys_optional(8) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_ctffind
         call cline%parse(keys_required(:5), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
@@ -347,7 +338,6 @@ select case(prg)
         keys_optional(7) = 'astigtol'
         keys_optional(8) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_ctf_estimate
         call cline%parse(keys_required(:5), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
@@ -391,7 +381,6 @@ select case(prg)
         keys_optional(22) = 'astigtol'
         keys_optional(23) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_motion_correct_ctffind
         call cline%parse(keys_required(:5), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
@@ -422,7 +411,6 @@ select case(prg)
         keys_optional(3) = 'thres'
         keys_optional(4) = 'ndev'
         ! parse command line
-        if( describe ) call print_doc_pick
         call cline%parse(keys_required(:3), keys_optional(:4))
         ! execute
         call xpick%execute(cline)
@@ -455,7 +443,6 @@ select case(prg)
         keys_optional(14) = 'stktab'
         keys_optional(15) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_make_cavgs
         call cline%parse(keys_required(:2), keys_optional(:15))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -505,7 +492,6 @@ select case(prg)
         keys_optional(24) = 'opt'
         keys_optional(25) = 'objfun'
         ! parse command line
-        ! if( describe ) call print_doc_cluster2D
         call cline%parse(keys_required(:4), keys_optional(:25))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -542,7 +528,6 @@ select case(prg)
         keys_optional(5) = 'stktab'
         keys_optional(6) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_cavgassemble
         call cline%parse(keys_required(:5), keys_optional(:6))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -572,7 +557,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'lp'
         ! parse command line
-        if( describe ) call print_doc_check2D_conv
         call cline%parse(keys_required(:4), keys_optional(:1))
         ! set defaults
         if( .not. cline%defined('lp') ) call cline%set('lp', 20.)
@@ -592,7 +576,6 @@ select case(prg)
         keys_optional(1) = 'outstk'
         keys_optional(2) = 'classdoc'
         ! parse command line
-        if( describe ) call print_doc_rank_cavgs
         call cline%parse(keys_required(:2), keys_optional(:2))
         ! execute
         call xrank_cavgs%execute(cline)
@@ -626,7 +609,6 @@ select case(prg)
         keys_optional(4) = 'box'
         keys_optional(5) = 'moldiam'
         ! parse command line
-        if( describe ) call print_doc_resrange
         call cline%parse(keys_required(:1), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -647,7 +629,6 @@ select case(prg)
         keys_optional(2) = 'moldiam'
         keys_optional(3) = 'pgrp'
         ! parse command line
-        if( describe ) call print_doc_npeaks
         call cline%parse(keys_required(:3), keys_optional(:3))
         ! set defaults
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -663,7 +644,6 @@ select case(prg)
         ! set required keys
         keys_required(1)  = 'moldiam'
         ! parse command line
-        if( describe ) call print_doc_nspace
         call cline%parse(keys_required=keys_required(:1))
         ! execute
         call xnspace%execute(cline)
@@ -694,7 +674,6 @@ select case(prg)
         keys_optional(11) = 'stktab'
         keys_optional(12) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_prime3D_init
         call cline%parse(keys_required(:4), keys_optional(:12))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -738,7 +717,6 @@ select case(prg)
         keys_optional(15) = 'stktab'
         keys_optional(16) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_multiptcl_init
         call cline%parse(keys_required(:6), keys_optional(:16))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -803,7 +781,6 @@ select case(prg)
         keys_optional(36) = 'focusmsk'
         keys_optional(37) = 'objfun'
         ! parse command line
-        ! if( describe ) call print_doc_refine3D
         call cline%parse(keys_required(:5), keys_optional(:37))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -872,7 +849,6 @@ select case(prg)
         keys_optional(5) = 'find'
         keys_optional(6) = 'refine'
         ! parse command line
-        if( describe ) call print_doc_check3D_conv
         call cline%parse(keys_required(:5), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('lp') .and. .not.cline%defined('lp') )call cline%set('lp', 20.)
@@ -910,7 +886,6 @@ select case(prg)
         keys_optional(4) = 'nspace'
         keys_optional(5) = 'center'
         ! parse command line
-        if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:7), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('nspace') )then
@@ -948,7 +923,6 @@ select case(prg)
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         ! parse command line
-        if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:9), keys_optional(:3))
         ! set defaults
         call cline%set('eo','no')
@@ -972,7 +946,6 @@ select case(prg)
         keys_optional(3) = 'outfile'
         keys_optional(4) = 'outvol'
         ! parse command line
-        if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:4), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
@@ -991,7 +964,6 @@ select case(prg)
         keys_required(2) = 'msk'
         keys_required(3) = 'mskfile'
         ! parse command line
-        ! if( describe ) call print_doc_resmask
         call cline%parse(keys_required(:3))
         ! execute
         call xresmask%execute(cline)
@@ -1030,7 +1002,6 @@ select case(prg)
         keys_optional(9)  = 'stktab'
         keys_optional(10) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_reconstruct3D
         call cline%parse(keys_required(:5), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -1066,7 +1037,6 @@ select case(prg)
         keys_optional(5) = 'stk'
         keys_optional(6) = 'stktab'
         ! parse command line
-        if( describe ) call print_doc_volassemble_eo
         call cline%parse(keys_required(:4), keys_optional(:6))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -1096,7 +1066,6 @@ select case(prg)
         keys_optional(4) = 'stk'
         keys_optional(5) = 'stktab'
         ! parse command line
-        if( describe ) call print_doc_volassemble
         call cline%parse(keys_required(:3), keys_optional(:5))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -1119,7 +1088,6 @@ select case(prg)
         keys_optional(1) = 'stk'
         keys_optional(2) = 'vol1'
         ! parse command line
-        if( describe ) call print_doc_check_box
         call cline%parse( keys_optional=keys_optional(:2))
         ! execute
         call xcheck_box%execute(cline)
@@ -1132,7 +1100,6 @@ select case(prg)
         ! set optional keys
         keys_required(1) = 'stk'
         ! parse command line
-        if( describe ) call print_doc_check_nptcls
         call cline%parse(keys_required(:1))
         ! execute
         call xcheck_nptcls%execute(cline)
@@ -1163,7 +1130,6 @@ select case(prg)
         keys_optional(12) = 'inner'
         keys_optional(13) = 'mirr'
         ! parse command line
-        if( describe ) call print_doc_postprocess
         call cline%parse(keys_required(:3), keys_optional(:13))
         ! execute
         call xpostprocess%execute(cline)
@@ -1196,7 +1162,6 @@ select case(prg)
         keys_optional(9)  = 'top'
         keys_optional(10) = 'msk'
         ! parse command line
-        if( describe ) call print_doc_project
         call cline%parse(keys_required(:2), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
@@ -1216,7 +1181,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         ! parse command line
-        if( describe ) call print_doc_volaverager
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xvolaverager%execute(cline)
@@ -1235,7 +1199,6 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'hp'
         ! parse command line
-        if( describe ) call print_doc_volume_smat
         call cline%parse(keys_required(:4), keys_optional(:2))
         ! execute
         call xvolume_smat%execute(cline)
@@ -1256,7 +1219,6 @@ select case(prg)
         keys_optional(2) = 'dockmode'
         keys_optional(3) = 'outvol'
         ! parse command line
-        if( describe ) call print_doc_dock_volpair
         call cline%parse(keys_required(:5), keys_optional(:3))
         ! execute
         call xdock_volpair%execute(cline)
@@ -1284,7 +1246,6 @@ select case(prg)
         keys_optional(10) = 'outstk'
         keys_optional(11) = 'outstk2'
         ! parse command line
-        if( describe ) call print_doc_scale
         call cline%parse(keys_required(:1),keys_optional(:11))
         ! execute
         call xscale%execute(cline)
@@ -1305,7 +1266,6 @@ select case(prg)
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
         ! parse command line
-        if( describe ) call print_doc_binarise
         call cline%parse(keys_optional=keys_optional(:10))
         ! execute
         call xbinarise%execute(cline)
@@ -1324,7 +1284,6 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'smpd'
         ! parse command line
-        if( describe ) call print_doc_corrcompare
         call cline%parse(keys_required(:2), keys_optional(:4))
         ! execute
         call xcorrcompare%execute(cline)
@@ -1343,7 +1302,6 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'smpd'
         ! parse command line
-        if( describe ) call print_doc_image_diff
         call cline%parse(keys_required(:2), keys_optional(:4))
         ! execute
         call ximage_diff%execute(cline)
@@ -1363,7 +1321,6 @@ select case(prg)
         keys_optional(3) = 'hp'
         keys_optional(4) = 'nthr'
         ! parse command line
-        if( describe ) call print_doc_image_smat
         call cline%parse(keys_required(:2), keys_optional(:4))
         ! execute
         call ximage_smat%execute(cline)
@@ -1385,7 +1342,6 @@ select case(prg)
         keys_optional(2) = 'neg'
         keys_optional(3) = 'outstk'
         ! parse command line
-        if( describe ) call print_doc_masscen
         call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xmasscen%execute(cline)
@@ -1404,7 +1360,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         ! parse command line
-        if( describe ) call print_doc_cluster_smat
         call cline%parse(keys_required(:4), keys_optional(:1))
         ! execute
         call xcluster_smat%execute(cline)
@@ -1422,7 +1377,6 @@ select case(prg)
         keys_optional(2) = 'msk'
         keys_optional(3) = 'inner'
         ! parse command line
-        if( describe ) call print_doc_cluster_smat
         call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xintgpeaks%execute(cline)
@@ -1440,7 +1394,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'kv'
         ! parse command line
-        if( describe ) call print_doc_print_dose_weights
         call cline%parse(keys_required(:5),keys_optional(:1))
         ! execute
         call xprint_dose_weights%execute(cline)
@@ -1454,7 +1407,6 @@ select case(prg)
         keys_required(2) = 'find'
         keys_required(3) = 'box'
         ! parse command line
-        if( describe ) call print_doc_res
         call cline%parse(keys_required(:3))
         !execute
         call xres%execute(cline)
@@ -1472,7 +1424,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         ! parse command line
-        if( describe ) call print_doc_cluster_oris
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xcluster_oris%execute(cline)
@@ -1491,7 +1442,6 @@ select case(prg)
        keys_optional(4) = 'outfile'
        keys_optional(5) = 'mul'
        ! parse command line
-       if( describe ) call print_doc_map2ptcls
        call cline%parse(keys_required(:1), keys_optional(:5))
        ! set defaults
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
@@ -1508,7 +1458,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'outfile'
         ! parse command line
-        if( describe ) call print_doc_rotmats2oris
         call cline%parse( keys_required(:1), keys_optional(:1) )
         ! execute
         call xrotmats2oris%execute(cline)
@@ -1521,7 +1470,6 @@ select case(prg)
         keys_required(1) = 'oritab'
         keys_required(2) = 'projfile'
         keys_required(3) = 'oritype'
-        ! if( describe ) call print_doc_txt2project
         call cline%parse(keys_required(:3))
         ! execute
         call xtxt2project%execute(cline)
@@ -1535,7 +1483,6 @@ select case(prg)
         keys_required(2) = 'oritype'
         ! set optional keys
         keys_optional(1)  = 'outfile'
-        ! if( describe ) call print_doc_project2txt
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xproject2txt%execute(cline)
@@ -1546,7 +1493,6 @@ select case(prg)
         !
         ! Required keys
         keys_required(1) = 'projfile'
-        ! if( describe ) call print_doc_print_project_info
         call cline%parse(keys_required(:1))
         ! execute
         call xprint_project_info%execute(cline)
@@ -1564,7 +1510,6 @@ select case(prg)
         keys_required(2) = 'smpd'
         keys_required(3) = 'nframesgrp'
         ! parse command line
-        if( describe ) call print_doc_tseries_extract
         call cline%parse(keys_required(:3))
         ! execute
         call xtseries_extract%execute(cline)
@@ -1588,7 +1533,6 @@ select case(prg)
         keys_optional(7) = 'neg'
         keys_optional(8) = 'cenlp'
         ! parse command line
-        if( describe ) call print_doc_tseries_track
         call cline%parse(keys_required(:3), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
@@ -1616,7 +1560,6 @@ select case(prg)
         keys_optional(5) = 'deftab'
         keys_optional(6) = 'outstk'
         ! parse command line
-        if( describe ) call print_doc_tseries_backgr_subtr
         call cline%parse(keys_required(:3), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('hp')    ) call cline%set('hp',    5.0)
@@ -1637,7 +1580,6 @@ select case(prg)
         keys_required(4) = 'chunksz'
         keys_required(5) = 'stepsz'
         ! parse command line
-        if( describe ) call print_doc_tseries_split
         call cline%parse(keys_required(:5))
         ! execute
         call xtseries_split%execute(cline)
@@ -1659,7 +1601,6 @@ select case(prg)
         keys_optional(1) = 'numlen'
         keys_optional(2) = 'oritype' ! needs to be required when we move to *.simple format
         ! parse command line
-        if( describe ) call print_doc_merge_algndocs
         call cline%parse(keys_required(:4), keys_optional(:2))
         ! execute
         call xmerge_algndocs%execute(cline)
@@ -1674,7 +1615,6 @@ select case(prg)
         keys_required(2) = 'nparts'
         keys_required(3) = 'nnn'
         ! parse command line
-        if( describe ) call print_doc_merge_nnmat
         call cline%parse( keys_required(:3) )
         ! execute
         call xmerge_nnmat%execute(cline)
@@ -1689,7 +1629,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nparts'
         ! parse command line
-        if( describe ) call print_doc_merge_similarities
         call cline%parse(keys_required(:1), keys_optional(:1))
         ! execute
         call xmerge_similarities%execute(cline)
@@ -1703,7 +1642,6 @@ select case(prg)
         keys_required(1) = 'nptcls'
         keys_required(2) = 'nparts'
         ! parse command line
-        if( describe ) call print_doc_split_pairs
         call cline%parse(keys_required(:2))
         ! execute
         call xsplit_pairs%execute(cline)
@@ -1721,7 +1659,6 @@ select case(prg)
         keys_optional(3) = 'nparts'
         keys_optional(4) = 'neg'
         ! parse command line
-        if( describe ) call print_doc_split
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then

@@ -559,7 +559,7 @@ contains
                             if( val > 1.0e38 )then
                                 val = 0.
                             else
-                                val = val_prev/val
+                                val = min(val_prev/val, 1e20)
                             endif
                             call W_img%set_cmat_at( phys, cmplx(val, 0.))
                         end do
@@ -589,8 +589,8 @@ contains
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
                         phys   = self%comp_addr_phys([h, k, m])
-                        if( self%rho(phys(1),phys(2),phys(3)) > 1.0e38 )then
-                            call self%mul_cmat_at(0., phys)
+                        if( self%rho(phys(1),phys(2),phys(3)) < 1.e-20 )then
+                            call self%set_cmat_at(phys,cmplx(0.,0.))
                         else
                             call self%mul_cmat_at(1./self%rho(phys(1),phys(2),phys(3)), phys)
                         endif
