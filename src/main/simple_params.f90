@@ -55,6 +55,7 @@ type :: params
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
+    character(len=3)      :: neigh='no'             !<
     character(len=3)      :: noise_norm ='no'
     character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
     character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
@@ -349,7 +350,6 @@ type :: params
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
     real    :: ndev=2.0            !< # deviations in one-cluster clustering
-    real    :: neigh=0.2
     real    :: nsig=2.5            !< # sigmas
     real    :: optlims(7,2)=0.
     real    :: outer=0.            !< outer mask radius(in pixels)
@@ -508,6 +508,7 @@ contains
         call check_carg('mirr',           self%mirr)
         call check_carg('msktype',        self%msktype)
         call check_carg('neg',            self%neg)
+        call check_carg('neigh',          self%neigh)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('noise',          self%noise)
         call check_carg('norec',          self%norec)
@@ -733,7 +734,6 @@ contains
         call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
         call check_rarg('ndev',           self%ndev)
-        call check_rarg('neigh',          self%neigh)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
         call check_rarg('phranlp',        self%phranlp)

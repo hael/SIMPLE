@@ -3,18 +3,20 @@ module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_ori,              only: ori
-use simple_oris,             only: oris
-use simple_build,            only: build
-use simple_params,           only: params
-use simple_cmdline,          only: cmdline
-use simple_binoris_io,       only: binwrite_oritab
-use simple_kbinterpol,       only: kbinterpol
-use simple_prep4cgrid,       only: prep4cgrid
-use simple_hadamard_common   ! use all in there
-use simple_timer             ! use all in there
-use simple_prime3D_srch      ! use all in there
+use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_ori,               only: ori
+use simple_oris,              only: oris
+use simple_build,             only: build
+use simple_params,            only: params
+use simple_cmdline,           only: cmdline
+use simple_binoris_io,        only: binwrite_oritab
+use simple_kbinterpol,        only: kbinterpol
+use simple_prep4cgrid,        only: prep4cgrid
+use simple_strategy3D,        only: strategy3D
+use simple_strategy3D_srch,   only: strategy3D_spec
+use simple_strategy3D_alloc,  only: o_peaks, clean_strategy3D, prep_strategy3D
+use simple_hadamard_common    ! use all in there
+use simple_timer              ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -23,8 +25,7 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter              :: L_BENCH = .false.
-type(polarft_corrcalc)          :: pftcc
-type(prime3D_srch), allocatable :: primesrch3D(:)
+type(polarft_corrcalc), target  :: pftcc
 integer,            allocatable :: pinds(:)
 logical,            allocatable :: ptcl_mask(:)
 integer                         :: nptcls2update
@@ -61,26 +62,34 @@ contains
     end subroutine prime3D_find_resrange
 
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
+        use simple_strategy3D_cluster,       only: strategy3D_cluster
+        use simple_strategy3D_single,        only: strategy3D_single
+        use simple_strategy3D_multi,         only: strategy3D_multi
+        use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
+        use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
+        use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
         use simple_sym,       only: sym
         use simple_image,     only: image
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: which_iter
-        logical,        intent(inout) :: update_res, converged
-        type(ori)                :: orientation
-        type(kbinterpol)         :: kbwin
-        type(sym)                :: c1_symop
-        type(prep4cgrid)         :: gridprep
-        type(image), allocatable :: rec_imgs(:)
-        integer,     allocatable :: symmat(:,:)
-        logical,     allocatable :: het_mask(:)
-        character(len=STDLEN)    :: fname
+        class(build),  target, intent(inout) :: b
+        class(params), target, intent(inout) :: p
+        class(cmdline),        intent(inout) :: cline
+        integer,               intent(in)    :: which_iter
+        logical,               intent(inout) :: update_res, converged
+        type(image),     allocatable :: rec_imgs(:)
+        integer, target, allocatable :: symmat(:,:)
+        logical,         allocatable :: het_mask(:)
+        class(strategy3D), pointer   :: strategy3Dsrch(:)
+        type(strategy3D_spec)        :: strategy3Dspec(p%fromp:p%top)
+        type(ori)                    :: orientation
+        type(kbinterpol)             :: kbwin
+        type(sym)                    :: c1_symop
+        type(prep4cgrid)             :: gridprep
+        character(len=STDLEN)        :: fname, refine
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
-        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
+        integer :: iptcl, iextr_lim, i, j, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
         integer :: state_counts(2)
         logical :: doprint, do_extr
 
@@ -111,14 +120,14 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh', 'greedy', 'greedyneigh', 'states')
+                case('cluster', 'snhc')
+                    p%npeaks = 1
+                case DEFAULT
                     if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
                         p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
                     endif
-                case DEFAULT
-                    p%npeaks = 1
             end select
             DebugPrint '*** hadamard3D_matcher ***: determined the number of peaks'
         endif
@@ -189,7 +198,7 @@ contains
         ! EXTREMAL LOGICS
         do_extr  = .false.
         select case(trim(p%refine))
-            case('het','hetsym')
+        case('cluster')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
                 zero_pop    = count(.not.b%a%included(consider_w=.false.))
@@ -221,7 +230,7 @@ contains
         end select
 
         if( L_BENCH ) rt_init = toc(t_init)
-        ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
+        ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURstrategy3D_specE
         if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align( b, p, cline )
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
@@ -245,133 +254,83 @@ contains
             call b%vol2%kill
         endif
         ! class array allocation in prime3D_srch
-        call prep4prime3D_srch( b, p, ptcl_mask )
+        call prep_strategy3D( b, p, ptcl_mask )
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
-        allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
-        allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
+
+        ! SWITCH FOR POLYMORPHIC STRATEGY3D CONSTRUCTION
+        if( p%oritab.eq.'' )then
+            if( p%nstates==1 )then
+                refine = 'greedy_single'
+            else
+                stop 'Refinement mode unsupported'
+            endif
+        else
+            refine = p%refine
+        endif
+        select case(trim(refine))
+            case('snhc')
+                allocate(strategy3D_snhc_single   :: strategy3Dsrch(p%fromp:p%top))
+            case('single')
+                allocate(strategy3D_single        :: strategy3Dsrch(p%fromp:p%top))
+            case('multi')
+                allocate(strategy3D_multi         :: strategy3Dsrch(p%fromp:p%top))
+            case('greedy_single')
+                allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top))
+            case('greedy_multi')
+                allocate(strategy3D_greedy_multi  :: strategy3Dsrch(p%fromp:p%top))
+            case('cluster')
+                allocate(strategy3D_cluster       :: strategy3Dsrch(p%fromp:p%top))
+            case DEFAULT
+                write(*,*) 'refine flag: ', trim(p%refine)
+                stop 'Refinement mode unsupported'
+        end select
+        ! actual construction
         cnt = 0
         do iptcl=p%fromp,p%top
             if( ptcl_mask(iptcl) )then
                 cnt = cnt + 1
-                call primesrch3D(iptcl)%new(iptcl, cnt, p, pftcc, b%a, b%se)
+                ! search spec
+                strategy3Dspec(iptcl)%iptcl       = iptcl
+                strategy3Dspec(iptcl)%iptcl_map   = cnt
+                strategy3Dspec(iptcl)%szsn        = p%szsn
+                strategy3Dspec(iptcl)%corr_thresh = corr_thresh
+                strategy3Dspec(iptcl)%pp          => p
+                strategy3Dspec(iptcl)%ppftcc      => pftcc
+                strategy3Dspec(iptcl)%pa          => b%a
+                strategy3Dspec(iptcl)%pse         => b%se
+                if(allocated(b%nnmat))      strategy3Dspec(iptcl)%nnmat => b%nnmat
+                if(allocated(b%grid_projs)) strategy3Dspec(iptcl)%grid_projs => b%grid_projs
+                if( allocated(het_mask) )   strategy3Dspec(iptcl)%do_extr = het_mask(iptcl)
+                if( allocated(symmat) )     strategy3Dspec(iptcl)%symmat => symmat
+                ! search object
+                call strategy3Dsrch(iptcl)%new(strategy3Dspec(iptcl))
             endif
         end do
+
+        ! MEMOIZATION
         ! generate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! memoize B-factors
         if( p%eo .ne. 'no' ) call pftcc%memoize_bfacs(b%a)
-        ! execute the search
+
+        ! SEARCH
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()
-        select case(p%refine)
-            case( 'snhc' )
-                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch(szsn=p%szsn)
-                end do
-                !$omp end parallel do
-            case( 'no','shc' )
-                if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.)
-                    end do
-                    !$omp end parallel do
-                else
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch()
-                    end do
-                    !$omp end parallel do
-                endif
-            case('neigh','shcneigh')
-                if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch(nnmat=b%nnmat, grid_projs=b%grid_projs)
-                end do
-                !$omp end parallel do
-            case('greedy')
-                if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.)
-                    end do
-                    !$omp end parallel do
-                else
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.)
-                    end do
-                    !$omp end parallel do
-                endif
-            case('greedyneigh')
-                if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.,&
-                            &nnmat=b%nnmat, grid_projs=b%grid_projs)
-                    end do
-                    !$omp end parallel do
-                else
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.,&
-                            &nnmat=b%nnmat, grid_projs=b%grid_projs)
-                    end do
-                    !$omp end parallel do
-                endif
-            case('het')
-                if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                state_counts = 0
-                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)&
-                !$omp reduction(+:state_counts)
-                do iptcl=p%fromp,p%top
-                    if(het_mask(iptcl))then
-                        call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts)
-                    else
-                        call primesrch3D(iptcl)%calc_corr()
-                    endif
-                end do
-                !$omp end parallel do
-                if( do_extr )then
-                    write(*,'(A,F8.3)')'>>> CORRELATION THRESHOLD:', corr_thresh
-                    write(*,'(A,F8.3)')'>>> RANDOMIZATION RATE:   ', extr_thresh
-                    write(*,'(A,I6,A1,F6.2,A1)')'>>> RANDOMIZED PARTICLES:',state_counts(1),';',&
-                        &100.*real(state_counts(1))/real(sum(state_counts)),'%'
-                    write(*,'(A,I6,A1,F6.2,A1)')'>>> SHC-OPT    PARTICLES:',state_counts(2),';',&
-                        &100.*real(state_counts(2))/real(sum(state_counts)),'%'
-                endif
-            case('hetsym')
-                if(p%oritab .eq. '') stop 'cannot run the refine=hetsym mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts, symmat=symmat)
-                end do
-                !$omp end parallel do
-            case DEFAULT
-                write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
-                stop
-        end select
+        !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+        do i=1,nptcls2update
+            iptcl = pinds(i)
+            call strategy3Dsrch(iptcl)%srch(strategy3Dspec(iptcl))
+        end do
 
         ! CLEANUP primesrch3D & pftcc
-        call cleanprime3D_srch()
+        call clean_strategy3D()
         call pftcc%kill
         do iptcl = p%fromp,p%top
-            if( ptcl_mask(iptcl) ) call primesrch3D(iptcl)%kill
+            if( ptcl_mask(iptcl) ) call strategy3Dsrch(iptcl)%kill
         end do
-        deallocate(primesrch3D)
+        deallocate(strategy3Dsrch)
         if( L_BENCH ) rt_align = toc(t_align)
         if( allocated(symmat) )deallocate(symmat)
         if( allocated(het_mask) )deallocate(het_mask)
@@ -422,7 +381,7 @@ contains
                     if( p%npeaks > 1 )then
                         call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
                     else
-                        if( trim(p%refine).eq.'hetsym' )then
+                        if( trim(p%refine).eq.'cluster' )then
                             ! always C1 reconstruction
                             call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation)
                         else
@@ -454,7 +413,7 @@ contains
             call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
         else
             select case(trim(p%refine))
-                case('het', 'hetsym')
+            case('cluster')
                     converged = b%conv%check_conv_het()
                 case DEFAULT
                     converged = b%conv%check_conv3D(update_res)

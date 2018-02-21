@@ -1090,13 +1090,12 @@ contains
     end function extract_table
 
     !>  \brief  angular standard deviation
-    real function ang_sdev( self, refine, nstates, npeaks )
-        class(oris),           intent(inout) :: self
-        character(len=STDLEN), intent(in)    :: refine
-        integer,               intent(in)    :: nstates, npeaks
+    real function ang_sdev( self, nstates, npeaks )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nstates, npeaks
         integer :: instates, state, pop
         ang_sdev = 0.
-        if(npeaks < 3 .or. trim(refine).eq.'shc' .or. trim(refine).eq.'shcneigh')return
+        if(npeaks < 3 )return
         instates = 0
         do state=1,nstates
             pop = self%get_pop( state, 'state' )

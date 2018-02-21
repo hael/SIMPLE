@@ -21,7 +21,7 @@ use simple_binoris_io,       only: binread_ctfparams_state_eo, binread_oritab ! 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none
 
-public :: build, test_build
+public :: build
 private
 #include "simple_local_flags.inc"
 
@@ -330,14 +330,14 @@ contains
         type(oris) :: os
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
-        if( str_has_substr(p%refine,'neigh') )then
+        if( p%neigh.eq.'yes' )then
             if( file_exists(p%oritab3D) )then
                 call os%new(p%ncls)
                 call binread_oritab(p%oritab3D, os, [1,p%ncls])
                 call os%nearest_proj_neighbors(p%nnn, self%nnmat)
                 call os%kill
             else
-                stop 'need oritab3D input for prime2D refine=neigh mode; simple_build :: build_hadamard_prime2D_tbox'
+                stop 'need oritab3D input for prime2D neigh=yes mode; simple_build :: build_hadamard_prime2D_tbox'
             endif
         endif
         call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)
@@ -368,7 +368,7 @@ contains
             allocate( self%recvols(p%nstates), stat=alloc_stat )
             allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         endif
-        if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'states' )then
+        if( p%neigh.eq.'yes' ) then
             nnn = p%nnn
             call self%se%nearest_proj_neighbors(self%e, nnn, self%nnmat)
         endif
@@ -455,167 +455,5 @@ contains
             endif
         endif
     end subroutine raise_hard_ctf_exception
-
-    ! UNIT TEST
-
-    !> \brief  build unit test
-    subroutine test_build
-        type(build)   :: myb
-        type(cmdline) :: mycline_static, mycline_varying
-        type(params)  :: myp
-        write(*,'(a)') '**info(simple_build_unit_test): testing the different building options'
-        ! setup command line
-        call mycline_static%set('box',      100.)
-        call mycline_static%set('msk',       40.)
-        call mycline_static%set('smpd',       2.)
-        call mycline_static%set('nvars',     40.)
-        call mycline_static%set('nptcls', 10000.)
-        call mycline_static%set('ncls',     100.)
-        call mycline_static%set('nstates',    2.)
-        write(*,'(a)') '**info(simple_build_unit_test): generated command line'
-        ! 12 cases to test
-        ! case 1:  refine=no, pgrp=c1, eo=yes
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=no, pgrp=c1, eo=yes'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 1 passed'
-        ! case 2:  refine=no, pgrp=c1, eo=no
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=no, pgrp=c1, eo=no'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 2 passed'
-        ! case 3:  refine=no, pgrp=c2, eo=yes
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=no, pgrp=c2, eo=yes'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 3 passed'
-        ! case 4:  refine=no, pgrp=c2, eo=no
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=no, pgrp=c2, eo=no'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 4 passed'
-        ! case 5:  refine=neigh, pgrp=c1, eo=yes
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c1, eo=yes'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 5 passed'
-        ! case 6:  refine=neigh, pgrp=c1, eo=no
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c1, eo=no'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 6 passed'
-        ! case 7:  refine=neigh, pgrp=c2, eo=yes
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c2, eo=yes'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 7 passed'
-        ! case 8:  refine=neigh, pgrp=c2, eo=no
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c2, eo=no'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 8 passed'
-        ! case 9:  refine=neigh, pgrp=c1, eo=yes
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c1, eo=yes'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 9 passed'
-        ! case 10: refine=neigh, pgrp=c1, eo=no
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c1, eo=no'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        write(*,'(a)') '**info(simple_build_unit_test): case 10 passed'
-        ! case 11: refine=neigh, pgrp=c2, eo=yes
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c2, eo=yes'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 11 passed'
-        ! case 12: refine=neigh, pgrp=c2, eo=no
-        write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c2, eo=no'
-        mycline_varying = mycline_static
-        call mycline_varying%set('refine', 'no')
-        call mycline_varying%set('pgrp',   'c1')
-        call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying)
-        call tester
-        write(*,'(a)') '**info(simple_build_unit_test): case 12 passed'
-        write(*,'(a)') 'SIMPLE_BUILD_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-
-      contains
-
-          subroutine tester
-              call myb%build_general_tbox(myp, mycline_varying, do3d=.true., nooritab=.true.)
-              call myb%build_general_tbox(myp, mycline_varying, do3d=.true., nooritab=.true.)
-              call myb%kill_general_tbox
-              write(*,'(a)') 'build_general_tbox passed'
-              call myb%build_comlin_tbox(myp)
-              call myb%build_comlin_tbox(myp)
-              call myb%kill_comlin_tbox
-              write(*,'(a)') 'build_comlin_tbox passed'
-              call myb%build_rec_tbox(myp)
-              call myb%build_rec_tbox(myp)
-              call myb%kill_rec_tbox
-              write(*,'(a)') 'build_rec_tbox passed'
-              call myb%build_rec_eo_tbox(myp)
-              call myb%build_rec_eo_tbox(myp)
-              call myb%kill_eo_rec_tbox
-              write(*,'(a)') 'build_rec_eo_tbox passed'
-              call myb%build_hadamard_prime3D_tbox(myp)
-              call myb%build_hadamard_prime3D_tbox(myp)
-              call myb%kill_hadamard_prime3D_tbox
-              write(*,'(a)') 'build_hadamard_prime3D_tbox passed'
-              call myb%build_hadamard_prime2D_tbox(myp)
-              call myb%build_hadamard_prime2D_tbox(myp)
-              call myb%kill_hadamard_prime2D_tbox
-              write(*,'(a)') 'build_hadamard_prime2D_tbox passed'
-              call myb%build_extremal3D_tbox(myp)
-              call myb%build_extremal3D_tbox(myp)
-              call myb%kill_extremal3D_tbox
-              write(*,'(a)') 'build_extremal3D_tbox passed'
-          end subroutine tester
-
-    end subroutine test_build
 
 end module simple_build

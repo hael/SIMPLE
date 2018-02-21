@@ -1,0 +1,153 @@
+module simple_strategy3D_cluster
+use simple_strategy3D_alloc
+use simple_strategy3D,      only: strategy3D
+use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
+implicit none
+
+public :: strategy3D_cluster
+private
+
+logical, parameter :: DEBUG = .false.
+
+type, extends(strategy3D) :: strategy3D_cluster
+    private
+    type(strategy3D_srch) :: s
+contains
+    procedure :: new         => new_cluster3D
+    procedure :: srch        => srch_cluster3D
+    procedure :: oris_assign => oris_assign_cluster3D
+    procedure :: kill        => kill_cluster3D
+end type strategy3D_cluster
+
+contains
+
+    subroutine new_cluster3D( self, spec )
+        class(strategy3D_cluster), intent(inout) :: self
+        class(strategy3D_spec),    intent(inout) :: spec
+        call self%s%new( spec )
+    end subroutine new_cluster3D
+
+    subroutine srch_cluster3D( self, spec )
+        use simple_rnd,      only: shcloc, irnd_uni
+        class(strategy3D_cluster),   intent(inout) :: self
+        class(strategy3D_spec),      intent(inout) :: spec
+        integer :: sym_projs(self%s%nstates), loc(1), iproj, iref, isym, state
+        real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
+        real    :: shvec(2), corr, mi_state, frac, mi_inpl, mi_proj
+        logical :: hetsym
+        if( prev_states(self%s%iptcl_map) > 0 )then
+            hetsym = associated(spec%symmat)
+            self%s%prev_roind = self%s%pftcc_ptr%get_roind(360.-self%s%a_ptr%e3get(self%s%iptcl))
+            self%s%prev_corr  = self%s%a_ptr%get(self%s%iptcl, 'corr')
+            ! evaluate all correlations
+            corrs = -1.
+            do state = 1, self%s%nstates
+                if( .not.state_exists(state) )cycle
+                if( hetsym )then
+                    ! greedy in symmetric unit
+                    do isym = 1, self%s%nsym
+                        iproj = spec%symmat(prev_proj(self%s%iptcl_map), isym)
+                        iref  = (state-1) * self%s%nprojs + iproj
+                        call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs_inpl)
+                        corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
+                    enddo
+                    loc              = maxloc(corrs_sym)
+                    isym             = loc(1)
+                    corrs(state)     = corrs_sym(isym)
+                    sym_projs(state) = spec%symmat(prev_proj(self%s%iptcl_map), isym)
+                else
+                    iref = (state-1) * self%s%nprojs + prev_proj(self%s%iptcl_map)
+                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs_inpl)
+                    ! corrs(state) = corrs_inpl(self%s%prev_roind)
+                    ! this is to somewhat take into account alignment errors
+                    corrs(state) = maxval(corrs_inpl)
+                endif
+            enddo
+            ! make moves
+            mi_state = 0.
+            mi_inpl  = 1.
+            mi_proj  = 1.
+            if( self%s%prev_corr < spec%corr_thresh )then
+                ! state randomization
+                state = irnd_uni(self%s%nstates)
+                do while(state == prev_states(self%s%iptcl_map) .or. .not.state_exists(state))
+                    state = irnd_uni(self%s%nstates)
+                enddo
+                corr            = corrs(state)
+                self%s%nrefs_eval = 1
+            else
+                ! SHC state optimization
+                self%s%prev_corr  = corrs(prev_states(self%s%iptcl_map))
+                state           = shcloc(self%s%nstates, corrs, self%s%prev_corr)
+                corr            = corrs(state)
+                self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
+                if( prev_states(self%s%iptcl_map) .eq. state ) mi_state = 1.
+                if( spec%do_extr )then
+                    ! extremal optimization
+                    if( hetsym )then
+                        ! greedy in symmetric unit
+                        if( sym_projs(state) .ne. prev_proj(self%s%iptcl_map) )then
+                            mi_proj = 0.
+                            iref    = (state-1)*self%s%nprojs + sym_projs(state)
+                            call self%s%a_ptr%e1set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 1))
+                            call self%s%a_ptr%e2set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 2))
+                        endif
+                    endif
+                else
+                    ! greedy moves after extremal optimization complete
+                    if( mi_state > 0.5 )then
+                        if( hetsym )then
+                            ! greedy in symmetric units
+                            iproj   = sym_projs(state)
+                            if( iproj .ne. prev_proj(self%s%iptcl_map) )then
+                                mi_proj = 0.
+                                iref    = (state-1) * self%s%nprojs + iproj
+                                call self%s%a_ptr%e1set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 1))
+                                call self%s%a_ptr%e2set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 2))
+                            endif
+                        else
+                            ! greedy in plane
+                            iref = (state-1)*self%s%nprojs + prev_proj(self%s%iptcl_map)
+                            proj_space_corrs(self%s%iptcl_map,iref)      = corr
+                            proj_space_inds(self%s%iptcl_map,self%s%nrefs) = iref
+                            call self%s%inpl_srch
+                            if( proj_space_corrs(self%s%iptcl_map,iref) > corr )then
+                                corr  = proj_space_corrs(self%s%iptcl_map,iref)
+                                shvec = self%s%a_ptr%get_2Dshift(self%s%iptcl) + proj_space_shift(self%s%iptcl_map,iref,:)
+                                call self%s%a_ptr%set_shift(self%s%iptcl, shvec)
+                                call self%s%a_ptr%e3set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 3))
+                            endif
+                            if( self%s%prev_roind .ne. self%s%pftcc_ptr%get_roind(360.-proj_space_euls(self%s%iptcl_map, iref, 3)) )then
+                                mi_inpl = 0.
+                            endif
+                        endif
+                    endif
+                endif
+            endif
+            ! updates peaks and orientation orientation
+            frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
+            call self%s%a_ptr%set(self%s%iptcl,'frac',     frac)
+            call self%s%a_ptr%set(self%s%iptcl,'state',    real(state))
+            call self%s%a_ptr%set(self%s%iptcl,'corr',     corr)
+            call self%s%a_ptr%set(self%s%iptcl,'mi_proj',  mi_proj)
+            call self%s%a_ptr%set(self%s%iptcl,'mi_inpl',  mi_inpl)
+            call self%s%a_ptr%set(self%s%iptcl,'mi_state', mi_state)
+            call self%s%a_ptr%set(self%s%iptcl,'mi_joint', (mi_state+mi_inpl)/2.)
+            call self%s%a_ptr%set(self%s%iptcl,'w',        1.)
+        else
+            call self%s%a_ptr%reject(self%s%iptcl)
+        endif
+        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
+    end subroutine srch_cluster3D
+
+    subroutine oris_assign_cluster3D( self )
+        class(strategy3D_cluster),   intent(inout) :: self
+        call self%s%kill
+    end subroutine oris_assign_cluster3D
+
+    subroutine kill_cluster3D( self )
+        class(strategy3D_cluster),   intent(inout) :: self
+        call self%s%kill
+    end subroutine kill_cluster3D
+
+end module simple_strategy3D_cluster

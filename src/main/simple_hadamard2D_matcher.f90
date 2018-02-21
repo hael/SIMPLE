@@ -246,8 +246,8 @@ contains
         ! execute the search
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()
-        select case(trim(p%refine))
-            case('neigh')
+        select case(trim(p%neigh))
+            case('yes')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( ptcl_mask(iptcl) )then

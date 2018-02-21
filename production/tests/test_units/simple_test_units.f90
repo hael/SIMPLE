@@ -4,7 +4,6 @@ use simple_defs          ! use all in there
 use simple_testfuns      ! use all in there
 use simple_rnd           ! use all in there
 use simple_cmd_dict,     only: test_cmd_dict
-use simple_build,        only: test_build
 use simple_ftiter,       only: test_ftiter
 use simple_ori,          only: test_ori, test_ori_dists
 use simple_oris,         only: test_oris
@@ -29,7 +28,6 @@ call exec_cmdline( trim(command) )
 call simple_chdir(folder)
 call test_cmd_dict           ! pass with PGI
 call test_args               ! pass with PGI
-call test_build              ! NOT HAPPY: get_ldim in img class bails with PGI
 call test_ftiter             ! pass with PGI
 call test_ori                ! pass with PGI
 call test_ori_dists          ! pass with PGI
@@ -77,7 +75,7 @@ contains
         write(*,*) 'this should be 0.1:', prob
         write(*,'(a)') 'SIMPLE_RND: MULTINOMAL TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
     end subroutine
-    
+
     subroutine test_testfuns
         procedure(testfun), pointer :: ptr
         integer                     :: i
@@ -140,7 +138,7 @@ contains
         end do
         write(*,'(a)') 'SIMPLE_TESTFUNS: TEST OF TEST FUNCTIONS COMPLETED ;-)'
     end subroutine
-    
+
     subroutine test_euler_shift
         use simple_ori, only: ori
         use simple_rnd, only: ran3
@@ -162,7 +160,7 @@ contains
             if( doshift ) stop 'euler shifting does not work!'
         end do
     end subroutine
-    
+
     subroutine simple_test_fit_line
         use simple_math
         use simple_rnd
@@ -188,7 +186,7 @@ contains
 !            write(*,*) 'Fitted Slope/Intercept:', slope, intercept
 !            write(*,*) 'Corr:', corr
             if( corr < 0.9999 )then
-                stop 'fit_straight_line; simple_math, failed!'        
+                stop 'fit_straight_line; simple_math, failed!'
             endif
         end do
         write(*,'(a)') 'FIT_STRAIGHT_LINE UNIT TEST COMPLETED ;-)'

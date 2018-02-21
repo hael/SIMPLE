@@ -200,10 +200,8 @@ contains
         update_res = .false.
         converged  = .false.
         p = params(cline) ! parameters generated
-        if( str_has_substr(p%refine,'neigh') )then
-            if( .not. cline%defined('oritab') )then
-                stop 'need oritab input for execution of prime3D with this refine mode'
-            endif
+        if( p%neigh.eq.'yes' .and. .not. cline%defined('oritab') )then
+            stop 'need oritab input for execution of prime3D with this refine mode'
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default

@@ -866,8 +866,8 @@ contains
             enddo
         else if( .not.cline%defined('oritab') .and. vol_defined )then
             ! projection matching
-            select case( p_master%refine )
-                case( 'neigh', 'shcneigh', 'shift' )
+            select case( p_master%neigh )
+                case( 'yes' )
                     stop 'refinement method requires input orientation document'
                 case DEFAULT
                     ! refine=no|shc, all good?

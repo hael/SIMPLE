@@ -7,27 +7,14 @@ use simple_sym,               only: sym
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch,      only: pftcc_shsrch       ! simplex-based angle and shift search
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based angle and shift search
+use simple_prime3D_srch_alloc ! use all in there
 implicit none
 
-public :: cleanprime3D_srch, prep4prime3D_srch
-public :: prime3D_srch, o_peaks
+public :: prime3D_srch
 private
 
 real,    parameter :: SOFTMAXW_THRESH = 0.01 !< threshold for softmax weights
 logical, parameter :: DEBUG = .false.
-
-! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads
-type(oris), allocatable :: o_peaks(:)                             !< solution objects
-real,       allocatable :: proj_space_euls(:,:,:)                 !< euler angles
-real,       allocatable :: proj_space_shift(:,:,:)                !< shift vector
-real,       allocatable :: proj_space_corrs(:,:)                  !< correlations vs. reference orientations
-integer,    allocatable :: proj_space_inds(:,:)                   !< stochastic index of reference orientations
-integer,    allocatable :: proj_space_state(:,:)                  !< reference orientations state
-integer,    allocatable :: proj_space_proj(:,:)                   !< reference orientations projection direction (1 state assumed)
-integer,    allocatable :: prev_proj(:)                           !< particle previous reference projection direction
-integer,    allocatable :: prev_states(:)                         !< particle previous state
-integer,    allocatable :: srch_order(:,:)                        !< stochastic search index
-logical,    allocatable :: state_exists(:)                        !< indicates state existence
 
 type prime3D_srch
     private
@@ -71,7 +58,6 @@ type prime3D_srch
     procedure, private :: greedy_srch
     procedure, private :: greedy_subspace_srch
     procedure, private :: stochastic_srch
-    procedure, private :: stochastic_srch_shc
     procedure, private :: stochastic_srch_snhc
     procedure, private :: stochastic_srch_het
     procedure, private :: inpl_srch
@@ -83,191 +69,6 @@ end type prime3D_srch
 
 contains
 
-    subroutine cleanprime3D_srch
-        if( allocated(proj_space_euls)  ) deallocate(proj_space_euls)
-        if( allocated(proj_space_shift) ) deallocate(proj_space_shift)
-        if( allocated(proj_space_corrs) ) deallocate(proj_space_corrs)
-        if( allocated(proj_space_inds)  ) deallocate(proj_space_inds)
-        if( allocated(proj_space_state) ) deallocate(proj_space_state)
-        if( allocated(proj_space_proj)  ) deallocate(proj_space_proj)
-        if( allocated(prev_proj)        ) deallocate(prev_proj)
-        if( allocated(srch_order)       ) deallocate(srch_order)
-        if( allocated(state_exists)     ) deallocate(state_exists)
-        if( allocated(prev_states)      ) deallocate(prev_states)
-    end subroutine cleanprime3D_srch
-
-    subroutine prep4prime3D_srch( b, p, ptcl_mask )
-        use simple_ran_tabu, only: ran_tabu
-        use simple_params,   only: params
-        use simple_build,    only: build
-        class(build),    intent(inout) :: b
-        class(params),   intent(inout) :: p
-        logical, target, intent(in)    :: ptcl_mask(p%fromp:p%top)
-        type(ran_tabu), allocatable :: rts(:)
-        type(ran_tabu) :: rt
-        integer        :: pinds(p%fromp:p%top)
-        integer        :: i, istate, iproj, iptcl, prev_state
-        integer        :: nnnrefs, cnt, prev_ref, nrefs, nptcls
-        ! clean all class arrays & types
-        call cleanprime3D_srch()
-        if( allocated(o_peaks) )then
-            do i=p%fromp,p%top
-                call o_peaks(i)%kill
-            enddo
-            deallocate(o_peaks)
-        endif
-        ! parameters
-        nrefs  = p%nspace * p%nstates
-        nptcls = count(ptcl_mask)
-        ! particle index mapping
-        pinds = 0
-        cnt   = 0
-        do i=p%fromp,p%top
-            if( ptcl_mask(i) )then
-                cnt = cnt + 1
-                pinds(i) = cnt
-            endif
-        end do
-        ! shared-memory arrays
-        allocate(proj_space_euls(nptcls,nrefs,3), proj_space_shift(nptcls,nrefs,2),&
-            &proj_space_corrs(nptcls,nrefs), proj_space_inds(nptcls,nrefs),&
-            &proj_space_state(nptcls,nrefs), proj_space_proj(nptcls,nrefs),&
-            &prev_proj(nptcls) )
-        ! states existence
-        if( p%oritab.ne.'' )then
-            state_exists = b%a%states_exist(p%nstates)
-        else
-            allocate(state_exists(p%nstates), source=.true.)
-        endif
-        ! The shared memory used in a parallel section should be initialised
-        ! with a (redundant) parallel section, because of how pages are organised.
-        ! Memory otherwise becomes associated with the single thread used for
-        ! allocation, causing load imbalance. This will reduce cache misses.
-        !$omp parallel default(shared) private(i,iptcl,cnt,istate,iproj) proc_bind(close)
-        !$omp do schedule(static)
-        do i=1,nptcls
-            proj_space_shift(i,:,:) = 0.
-            proj_space_corrs(i,:)   = -1.
-            proj_space_inds( i,:)   = 0
-            proj_space_state(i,:)   = 0
-            proj_space_proj( i,:)   = 0
-            ! reference projection directions
-            cnt = 0
-            do istate=1,p%nstates
-                do iproj=1,p%nspace
-                    cnt = cnt + 1
-                    proj_space_state(i,cnt)   = istate
-                    proj_space_proj(i, cnt)   = iproj
-                    proj_space_euls(i, cnt,:) = b%e%get_euler(iproj)
-                enddo
-            enddo
-        end do
-        !$omp end do nowait
-        !$omp do schedule(static)
-        do iptcl = p%fromp, p%top
-            if( pinds(iptcl) > 0 ) prev_proj(pinds(iptcl)) = b%e%find_closest_proj(b%a%get_ori(iptcl))
-        enddo
-        !$omp end do nowait
-        !$omp end parallel
-        ! projection direction peaks, eo & CTF transfer
-        select case(trim(p%refine))
-            case('het','hetsym')
-               ! nothing to do
-            case DEFAULT
-                allocate(o_peaks(p%fromp:p%top))
-                do iptcl = p%fromp, p%top
-                    if( ptcl_mask(iptcl) )then
-                        ! ORIENTATION PEAKS
-                        call o_peaks(iptcl)%new_clean(p%npeaks)
-                        ! transfer CTF params
-                        if( p%ctf.ne.'no' )then
-                            call o_peaks(iptcl)%set_all2single('kv',    b%a%get(iptcl,'kv')   )
-                            call o_peaks(iptcl)%set_all2single('cs',    b%a%get(iptcl,'cs')   )
-                            call o_peaks(iptcl)%set_all2single('fraca', b%a%get(iptcl,'fraca'))
-                            call o_peaks(iptcl)%set_all2single('dfx',   b%a%get(iptcl,'dfx')  )
-                            if( p%tfplan%mode .eq. 'astig' )then
-                                call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfy')   )
-                                call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
-                            else
-                                call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfx'))
-                                call o_peaks(iptcl)%set_all2single('angast', 0.)
-                            endif
-                            if( p%tfplan%l_phaseplate )then
-                                call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
-                            endif
-                        endif
-                        ! transfer eo flag
-                        call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
-                    endif
-                enddo
-        end select
-        ! refine mode specific allocations and initialisations
-        select case( trim(p%refine) )
-            case( 'het', 'hetsym' )
-                allocate(prev_states(nptcls), source=0)
-                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                do iptcl = p%fromp, p%top
-                    i = pinds(iptcl)
-                    if( i > 0 )then
-                        prev_states(i) = b%a%get_state(iptcl)
-                        if( prev_states(i) > 0 )then
-                             if(.not. state_exists(prev_states(i)) )&
-                            &stop 'empty previous state; prep4prime3D_srch; simple_prime3D_srch'
-                            if( prev_states(i) > p%nstates )&
-                            &stop 'previous best state outside boundary; prep4prime3D_srch; simple_prime3D_srch'
-                        endif
-                    endif
-                end do
-                !$omp end parallel do
-            case( 'neigh','shcneigh', 'greedyneigh' )
-                nnnrefs =  p%nnn * p%nstates
-                allocate(srch_order(nptcls, nnnrefs), rts(nptcls))
-                do i=1,nptcls
-                    rts(i) = ran_tabu(nnnrefs)
-                end do
-                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
-                do iptcl = p%fromp, p%top
-                    if( pinds(iptcl) > 0 )then
-                        prev_state = b%a%get_state(iptcl)
-                        prev_ref   = (prev_state - 1) * p%nspace + prev_proj(pinds(iptcl))
-                        do istate = 0, p%nstates - 1
-                            i = istate * p%nnn + 1
-                            srch_order(pinds(iptcl),i:i + p%nnn - 1) = b%nnmat(prev_proj(pinds(iptcl)),:) + istate * p%nspace
-                        enddo
-                        call rts(pinds(iptcl))%shuffle(srch_order(pinds(iptcl),:))
-                        call put_last(prev_ref, srch_order(pinds(iptcl),:))
-                    endif
-                enddo
-                !$omp end parallel do
-                do i=1,nptcls
-                    call rts(i)%kill
-                end do
-            case('no','shc','snhc','greedy')
-                allocate(srch_order(nptcls,nrefs), rts(nptcls))
-                do i=1,nptcls
-                    rts(i) = ran_tabu(nrefs)
-                end do
-                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
-                do iptcl = p%fromp, p%top
-                    if( pinds(iptcl) > 0 )then
-                        call rts(pinds(iptcl))%ne_ran_iarr(srch_order(pinds(iptcl),:))
-                        prev_state = b%a%get_state(iptcl)
-                        prev_ref   = (prev_state - 1) * p%nspace + prev_proj(pinds(iptcl))
-                        call put_last(prev_ref, srch_order(pinds(iptcl),:))
-                    endif
-                enddo
-                !$omp end parallel do
-                do i=1,nptcls
-                    call rts(i)%kill
-                end do
-            case DEFAULT
-                stop 'Unknown refinement mode; simple_hadamard3D_matcher; prep4primesrch3D'
-        end select
-        call rt%kill
-        if( allocated(srch_order) )then
-            if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
-        endif
-    end subroutine prep4prime3D_srch
 
     subroutine new( self, iptcl, iptcl_map, p, pftcc, a, se )
         use simple_params, only: params
@@ -301,9 +102,6 @@ contains
         self%nnnrefs    =  self%nnn*self%nstates
         self%kstop_grid =  p%kstop_grid
         self%opt        =  p%opt
-        if( str_has_substr(self%refine,'shc') )then
-            if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
-        endif
         ! multiple states
         if( self%nstates == 1 )then
             self%npeaks_grid = GRIDNPEAKS
@@ -311,7 +109,7 @@ contains
             ! number of populated states
             nstates_eff = count(state_exists)
             select case(trim(p%refine))
-            case('het','hetsym')
+                case('het','hetsym')
                     self%npeaks_grid = 1
                 case DEFAULT
                     ! "-(nstates_eff-1)" because all states share the same previous orientation
@@ -360,8 +158,6 @@ contains
                 stop 'refine=snhc mode needs optional input szsn; simple_prime3D_srch :: exec_prime3D_srch'
             endif
             call self%stochastic_srch_snhc(szsn)
-        else if( str_has_substr(self%refine,'shc') )then
-            call self%stochastic_srch_shc(nnmat, grid_projs)
         else
             call self%stochastic_srch(nnmat, grid_projs)
         endif
@@ -578,79 +374,6 @@ contains
             end subroutine per_ref_srch
 
     end subroutine stochastic_srch
-
-    !>  \brief  executes the stochastic hard orientation search using pure stochastic hill climbing
-    !!          (no probabilistic weighting + stochastic search of in-plane angles)
-    !! \param nnmat nearest neighbour matrix
-    !! \param grid_projs projection indices for grid search
-    subroutine stochastic_srch_shc( self, nnmat, grid_projs )
-        class(prime3D_srch), intent(inout) :: self
-        integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
-        real    :: inpl_corr, inpl_corrs(self%nrots)
-        integer :: iref,isample,nrefs,inpl_ind,loc(1),target_projs(self%npeaks_grid)
-        logical :: found_better
-        if( self%a_ptr%get_state(self%iptcl) > 0 )then
-            if( str_has_substr(self%refine, 'neigh') )then
-                ! for neighbour modes we do a coarse grid search first
-                if( .not. present(grid_projs) ) stop 'need optional grid_projs 4 subspace srch; prime3D_srch :: stochastic_srch_shc'
-                call self%greedy_subspace_srch(grid_projs, target_projs)
-                ! initialize
-                call self%prep4srch(nnmat, target_projs)
-                nrefs = self%nnnrefs
-            else
-                ! initialize
-                call self%prep4srch()
-                nrefs = self%nrefs
-            endif
-            ! initialize
-            found_better    = .false.
-            self%nrefs_eval = 0
-            ! search
-            do isample=1,nrefs
-                iref = srch_order(self%iptcl_map, isample ) ! stochastic reference index
-                call per_ref_srch                           ! actual search
-                if( inpl_ind > 0 )then
-                    ! correlation-improving reference found, store it
-                    call self%store_solution(self%nrefs, iref, inpl_ind, inpl_corr)
-                    found_better = .true. ! flag for found solution
-                    exit
-                endif
-            end do
-            if( .not. found_better )then
-                iref = self%prev_ref
-                call per_ref_srch
-                if( inpl_ind == 0 )then
-                    ! be greedy
-                    loc       = maxloc(inpl_corrs)
-                    inpl_ind  = loc(1)
-                    inpl_corr = inpl_corrs(inpl_ind)
-                endif
-                call self%store_solution(self%nrefs, iref, inpl_ind, inpl_corr)
-            endif
-            ! search shifts
-            call self%inpl_srch
-            ! output
-            call self%prep_npeaks_oris_and_weights
-        else
-            call self%a_ptr%reject(self%iptcl)
-        endif
-        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH (REFINE=SHC|SHCNEIGH)'
-
-        contains
-
-            subroutine per_ref_srch
-                use simple_rnd, only: shcloc
-                inpl_ind  = 0                                                    ! init in-plane index
-                inpl_corr = 0.                                                   ! init correlation
-                if( state_exists( proj_space_state(self%iptcl_map,iref) ) )then
-                    call self%pftcc_ptr%gencorrs( iref, self%iptcl, inpl_corrs ) ! in-plane correlations
-                    inpl_ind = shcloc(self%nrots, inpl_corrs, self%prev_corr)    ! first improving in-plane index
-                    if( inpl_ind > 0 ) inpl_corr = inpl_corrs( inpl_ind )        ! improving correlation found
-                    self%nrefs_eval = self%nrefs_eval + 1                        ! updates fractional search space
-                endif
-            end subroutine per_ref_srch
-
-    end subroutine stochastic_srch_shc
 
     !>  \brief  stochastic neighborhood hill-climbing
     !! \param szsn size ref evals
@@ -895,13 +618,9 @@ contains
             if( .not. state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         endif
         select case( self%refine )
-            case( 'neigh','shcneigh', 'greedyneigh' )
+            case( 'neigh', 'greedyneigh' )
                 ! disjoint nearest neighbour set
                 self%nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
-            case( 'no','shc','snhc','greedy','yes','het' )
-                ! all good
-            case DEFAULT
-                stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
         end select
         ! calc specscore
         self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
