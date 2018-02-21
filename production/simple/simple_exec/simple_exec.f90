@@ -111,7 +111,7 @@ select case(prg)
         ! slice simulation and it cannot be used for simulating molecules containing heavy atoms. It does not even
         ! accept a PDB file as an input. Input is a cryo-EM map, which we usually generate from a PDB file using
         ! EMANs program pdb2mrc. The volume is projected using Fourier interpolation, 20% of the total noise is
-        ! added to the images (pink noise), they are then Fourier transformed and multiplied with astigmatic CTF and 
+        ! added to the images (pink noise), they are then Fourier transformed and multiplied with astigmatic CTF and
         ! B-factor. Next, the they are inverse FTed before the remaining 80% of the noise (white noise) is added
         ! <simulate_particles/end>
         !

@@ -796,11 +796,11 @@ select case(prg)
             call cline%set('dynlp',   'no')
         endif
         if( .not. cline%defined('refine') )then
-            call cline%set('refine',  'no')
+            call cline%set('refine',  'single')
         else
-            if( cline%get_carg('refine').eq.'het' )then
-                if( .not. cline%defined('nstates') ) stop 'refine=HET requires specification of NSTATES'
-                if( .not. cline%defined('oritab')  ) stop 'refine=HET requires ORITAB input'
+            if( cline%get_carg('refine').eq.'multi' )then
+                if( .not. cline%defined('nstates') ) stop 'refine=MULTI requires specification of NSTATES'
+                if( .not. cline%defined('oritab')  ) stop 'refine=MULTI requires ORITAB input'
             endif
         endif
         ! execute

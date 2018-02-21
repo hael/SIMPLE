@@ -156,7 +156,7 @@ type :: params
     character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
     character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='no'
+    character(len=STDLEN) :: refine='single'
     character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=STDLEN) :: refs_even=''
     character(len=STDLEN) :: refs_odd=''
@@ -1110,7 +1110,7 @@ contains
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('no','snhc')
+            case('single', 'multi', 'snhc')
                     self%trs = 0.
                 case DEFAULT
                     self%trs = 1.

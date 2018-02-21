@@ -800,7 +800,7 @@ contains
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )       ! required for distributed call
         call cline_refine3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
-        if( trim(p_master%refine).eq.'hetsym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
+        if( trim(p_master%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_merge_algndocs%set('nthr',   1.)
         call cline_merge_algndocs%set('fbody',  trim(ALGN_FBODY))
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
@@ -1060,7 +1060,7 @@ contains
             enddo
             ! CONVERGENCE
             call cline_check3D_conv%set( 'oritab', trim(oritab) )
-            if(p_master%refine.eq.'het') call cline_check3D_conv%delete('update_res')
+            if(p_master%refine.eq.'cluster') call cline_check3D_conv%delete('update_res')
             call xcheck3D_conv%execute( cline_check3D_conv )
             if( iter >= p_master%startit+2 )then
                 ! after a minimum of 2 iterations

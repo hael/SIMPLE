@@ -661,7 +661,7 @@ select case(prg)
         ! set defaults
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
         if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
+        if( .not. cline%defined('refine')                  ) call cline%set('refine',  'single')
         if( .not. cline%defined('pproc')                   ) call cline%set('pproc',  'yes')
         if( .not. cline%defined('eo') )then
             call cline%set('eo', 'no')

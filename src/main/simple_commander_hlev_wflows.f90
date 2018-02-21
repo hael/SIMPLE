@@ -324,7 +324,7 @@ contains
         call cline_refine3D_refine%set('prg', 'refine3D')
         call cline_refine3D_refine%set('ctf', 'no')
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
-        call cline_refine3D_refine%set('refine', 'no')
+        call cline_refine3D_refine%set('refine', 'single')
         call cline_refine3D_refine%set('npeaks', real(NPEAKS_REFINE))
         call cline_refine3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_refine3D_refine%set('lp', lplims(2))
@@ -468,11 +468,11 @@ contains
         call cline_refine3D1%set('maxits', real(MAXITS))
         select case(trim(p_master%refine))
             case('sym')
-                call cline_refine3D1%set('refine', 'hetsym')
+                call cline_refine3D1%set('refine', 'clustersym')
             case DEFAULT
-                call cline_refine3D1%set('refine', 'het')
+                call cline_refine3D1%set('refine', 'cluster')
         end select
-        call cline_refine3D2%set('refine', 'no')
+        call cline_refine3D2%set('refine', 'multi')
         call cline_refine3D1%set('dynlp', 'no')
         call cline_refine3D1%set('pproc', 'no')
         call cline_refine3D1%delete('oritab2')

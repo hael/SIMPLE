@@ -89,7 +89,7 @@ contains
         type(prep4cgrid)             :: gridprep
         character(len=STDLEN)        :: fname, refine
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
-        integer :: iptcl, iextr_lim, i, j, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
+        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
         integer :: state_counts(2)
         logical :: doprint, do_extr
 
@@ -281,7 +281,7 @@ contains
             case('cluster')
                 allocate(strategy3D_cluster       :: strategy3Dsrch(p%fromp:p%top))
             case DEFAULT
-                write(*,*) 'refine flag: ', trim(p%refine)
+                write(*,*) 'refine flag: ', trim(refine)
                 stop 'Refinement mode unsupported'
         end select
         ! actual construction
