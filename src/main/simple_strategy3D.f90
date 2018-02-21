@@ -1,4 +1,4 @@
-! abstract optimiser defining an interface for the extending optimisation classes
+! abstract strategy3D base class
 module simple_strategy3D
 implicit none
 
@@ -22,11 +22,9 @@ abstract interface
         class(strategy3D_spec), intent(inout) :: spec
     end subroutine generic_new
 
-    subroutine generic_srch( self, spec )
-        use simple_strategy3D_srch, only: strategy3D_spec
+    subroutine generic_srch( self )
         import :: strategy3D
-        class(strategy3D),      intent(inout) :: self
-        class(strategy3D_spec), intent(inout) :: spec
+        class(strategy3D), intent(inout) :: self
     end subroutine generic_srch
 
     subroutine generic_oris_assign( self )

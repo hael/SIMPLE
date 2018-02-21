@@ -1,5 +1,6 @@
+! concrete strategy3D: stochastic neighbourhood hill-climbing
 module simple_strategy3D_snhc_single
-use simple_strategy3D_alloc
+use simple_strategy3D_alloc ! use all in there
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
 implicit none
@@ -12,6 +13,7 @@ logical, parameter :: DEBUG = .false.
 type, extends(strategy3D) :: strategy3D_snhc_single
     private
     type(strategy3D_srch) :: s
+    type(strategy3D_spec) :: spec
 contains
     procedure          :: new         => new_snhc_single
     procedure          :: srch        => srch_snhc_single
@@ -25,12 +27,11 @@ contains
         class(strategy3D_snhc_single), intent(inout) :: self
         class(strategy3D_spec),        intent(inout) :: spec
         call self%s%new( spec )
+        self%spec = spec
     end subroutine new_snhc_single
 
-    !>  \brief  stochastic neighborhood hill-climbing
-    subroutine srch_snhc_single( self, spec )
+    subroutine srch_snhc_single( self )
         class(strategy3D_snhc_single), intent(inout) :: self
-        class(strategy3D_spec),        intent(inout) :: spec
         integer :: iref, isample, loc(1), inpl_ind
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
         if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
@@ -40,11 +41,11 @@ contains
             self%s%nrefs_eval = 0
             proj_space_corrs(self%s%iptcl_map,:) = -1.
             ! search
-            do isample=1,spec%szsn
+            do isample=1,self%spec%szsn
                 iref = srch_order(self%s%iptcl_map,isample) ! set the stochastic reference index
                 call per_ref_srch                         ! actual search
             end do
-            self%s%nrefs_eval = spec%szsn
+            self%s%nrefs_eval = self%spec%szsn
             ! sort in correlation projection direction space
             corrs = proj_space_corrs(self%s%iptcl_map,:)
             call hpsort(corrs, proj_space_inds(self%s%iptcl_map,:))
@@ -53,7 +54,7 @@ contains
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED EXTREMAL SEARCH'
+        if( DEBUG ) print *, '>>> STRATEGY3D_SNHC_SINGLE :: FINISHED SEARCH'
 
         contains
 
@@ -67,18 +68,17 @@ contains
 
     end subroutine srch_snhc_single
 
-    !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine oris_assign_snhc_single( self )
         use simple_ori,  only: ori
         class(strategy3D_snhc_single), intent(inout) :: self
         type(ori)  :: osym
         real       :: dist_inpl, corr, frac, dist, inpl_dist, euldist, bfac
         integer    :: ref, roind
-        ! orientation parmeters
+        ! orientation parameters
         ref = proj_space_inds(self%s%iptcl_map, self%s%nrefs)
         if( ref < 1 .or. ref > self%s%nrefs )then
             print *, 'ref: ', ref
-            stop 'ref index out of bound; simple_prime3D_srch::prep_npeaks_oris'
+            stop 'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
         endif
         roind = self%s%pftcc_ptr%get_roind(360. - proj_space_euls(self%s%iptcl_map, ref, 3))
         ! transfer to solution set
@@ -95,24 +95,24 @@ contains
         ! angular distances
         call self%s%se_ptr%sym_dists( self%s%a_ptr%get_ori(self%s%iptcl),&
             &o_peaks(self%s%iptcl)%get_ori(1), osym, euldist, dist_inpl)
-       ! fraction search space
+        ! fraction search space
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
         ! set the overlaps
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_proj',  0. )
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_inpl',  0. )
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_state', 1.)
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_joint', 0.)
-        call self%s%a_ptr%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_proj',   0.)
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_inpl',   0.)
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_state',  1.)
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_joint',  0.)
+        call self%s%a_ptr%set(self%s%iptcl, 'dist',      0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
         call self%s%a_ptr%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call self%s%a_ptr%set(self%s%iptcl, 'state', 1.)
-        call self%s%a_ptr%set(self%s%iptcl, 'frac', frac )
-        call self%s%a_ptr%set(self%s%iptcl, 'corr', corr )
+        call self%s%a_ptr%set(self%s%iptcl, 'state',     1.)
+        call self%s%a_ptr%set(self%s%iptcl, 'frac',      frac)
+        call self%s%a_ptr%set(self%s%iptcl, 'corr',      corr)
         call self%s%a_ptr%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call self%s%a_ptr%set(self%s%iptcl, 'proj',  o_peaks(self%s%iptcl)%get(1,'proj') )
-        call self%s%a_ptr%set(self%s%iptcl, 'sdev',  0. )
-        call self%s%a_ptr%set(self%s%iptcl, 'npeaks', 1. )
-        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
+        call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(1,'proj'))
+        call self%s%a_ptr%set(self%s%iptcl, 'sdev',      0.)
+        call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    1.)
+        if( DEBUG ) print *, '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single
 
     subroutine kill_snhc_single( self )

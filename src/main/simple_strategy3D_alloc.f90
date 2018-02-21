@@ -1,10 +1,9 @@
-! PRIME3D stochastic search routines
+! array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
 module simple_strategy3D_alloc
 #include "simple_lib.f08"
 use simple_oris, only: oris
 implicit none
 
-! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads
 type(oris), allocatable :: o_peaks(:)              !< solution objects
 real,       allocatable :: proj_space_euls(:,:,:)  !< euler angles
 real,       allocatable :: proj_space_shift(:,:,:) !< shift vector
@@ -115,7 +114,7 @@ contains
                 allocate(o_peaks(p%fromp:p%top))
                 do iptcl = p%fromp, p%top
                     if( ptcl_mask(iptcl) )then
-                        ! ORIENTATION PEAKS
+                        ! orientation peaks
                         call o_peaks(iptcl)%new_clean(p%npeaks)
                         ! transfer CTF params
                         if( p%ctf.ne.'no' )then

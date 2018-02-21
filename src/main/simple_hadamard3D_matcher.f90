@@ -24,15 +24,15 @@ public :: preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH = .false.
-type(polarft_corrcalc), target  :: pftcc
-integer,            allocatable :: pinds(:)
-logical,            allocatable :: ptcl_mask(:)
-integer                         :: nptcls2update
-integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
-real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
-real(timer_int_kind)            :: rt_tot
-character(len=STDLEN)           :: benchfname
+logical, parameter             :: L_BENCH = .false.
+type(polarft_corrcalc), target :: pftcc
+integer, allocatable           :: pinds(:)
+logical, allocatable           :: ptcl_mask(:)
+integer                        :: nptcls2update
+integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
+real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
+real(timer_int_kind)           :: rt_tot
+character(len=STDLEN)          :: benchfname
 
 contains
 
@@ -82,12 +82,12 @@ contains
         integer, target, allocatable :: symmat(:,:)
         logical,         allocatable :: het_mask(:)
         class(strategy3D), pointer   :: strategy3Dsrch(:)
-        type(strategy3D_spec)        :: strategy3Dspec(p%fromp:p%top)
-        type(ori)                    :: orientation
-        type(kbinterpol)             :: kbwin
-        type(sym)                    :: c1_symop
-        type(prep4cgrid)             :: gridprep
-        character(len=STDLEN)        :: fname, refine
+        type(strategy3D_spec) :: strategy3Dspec
+        type(ori)             :: orientation
+        type(kbinterpol)      :: kbwin
+        type(sym)             :: c1_symop
+        type(prep4cgrid)      :: gridprep
+        character(len=STDLEN) :: fname, refine
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
         integer :: state_counts(2)
@@ -228,14 +228,13 @@ contains
             case DEFAULT
                 ! nothing to do
         end select
-
         if( L_BENCH ) rt_init = toc(t_init)
-        ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURstrategy3D_specE
+
+        ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align( b, p, cline )
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
-        ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
             if( p%refine .eq. 'snhc')then
@@ -246,18 +245,16 @@ contains
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
-        ! create the search objects, need to re-create every round because parameters are changing
         if( L_BENCH ) t_prep_primesrch3D = tic()
         ! clean big objects before starting to allocate new big memory chunks
         if( p%l_distr_exec )then
             call b%vol%kill
             call b%vol2%kill
         endif
-        ! class array allocation in prime3D_srch
+        ! array allocation for strategy3D
         call prep_strategy3D( b, p, ptcl_mask )
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
-
-        ! SWITCH FOR POLYMORPHIC STRATEGY3D CONSTRUCTION
+        ! switch for polymorphic strategy3D construction
         if( p%oritab.eq.'' )then
             if( p%nstates==1 )then
                 refine = 'greedy_single'
@@ -290,41 +287,38 @@ contains
             if( ptcl_mask(iptcl) )then
                 cnt = cnt + 1
                 ! search spec
-                strategy3Dspec(iptcl)%iptcl       = iptcl
-                strategy3Dspec(iptcl)%iptcl_map   = cnt
-                strategy3Dspec(iptcl)%szsn        = p%szsn
-                strategy3Dspec(iptcl)%corr_thresh = corr_thresh
-                strategy3Dspec(iptcl)%pp          => p
-                strategy3Dspec(iptcl)%ppftcc      => pftcc
-                strategy3Dspec(iptcl)%pa          => b%a
-                strategy3Dspec(iptcl)%pse         => b%se
-                if(allocated(b%nnmat))      strategy3Dspec(iptcl)%nnmat => b%nnmat
-                if(allocated(b%grid_projs)) strategy3Dspec(iptcl)%grid_projs => b%grid_projs
-                if( allocated(het_mask) )   strategy3Dspec(iptcl)%do_extr = het_mask(iptcl)
-                if( allocated(symmat) )     strategy3Dspec(iptcl)%symmat => symmat
+                strategy3Dspec%iptcl       =  iptcl
+                strategy3Dspec%iptcl_map   =  cnt
+                strategy3Dspec%szsn        =  p%szsn
+                strategy3Dspec%corr_thresh =  corr_thresh
+                strategy3Dspec%pp          => p
+                strategy3Dspec%ppftcc      => pftcc
+                strategy3Dspec%pa          => b%a
+                strategy3Dspec%pse         => b%se
+                if(allocated(b%nnmat))      strategy3Dspec%nnmat      => b%nnmat
+                if(allocated(b%grid_projs)) strategy3Dspec%grid_projs => b%grid_projs
+                if( allocated(het_mask) )   strategy3Dspec%do_extr    =  het_mask(iptcl)
+                if( allocated(symmat) )     strategy3Dspec%symmat     => symmat
                 ! search object
-                call strategy3Dsrch(iptcl)%new(strategy3Dspec(iptcl))
+                call strategy3Dsrch(iptcl)%new(strategy3Dspec)
             endif
         end do
-
-        ! MEMOIZATION
-        ! generate CTF matrices
+        ! memoize CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! memoize B-factors
         if( p%eo .ne. 'no' ) call pftcc%memoize_bfacs(b%a)
-
-        ! SEARCH
+        ! search
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()
         !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
         do i=1,nptcls2update
             iptcl = pinds(i)
-            call strategy3Dsrch(iptcl)%srch(strategy3Dspec(iptcl))
+            call strategy3Dsrch(iptcl)%srch
         end do
-
-        ! CLEANUP primesrch3D & pftcc
+        !$omp end parallel do
+        ! clean
         call clean_strategy3D()
         call pftcc%kill
         do iptcl = p%fromp,p%top
@@ -332,8 +326,8 @@ contains
         end do
         deallocate(strategy3Dsrch)
         if( L_BENCH ) rt_align = toc(t_align)
-        if( allocated(symmat) )deallocate(symmat)
-        if( allocated(het_mask) )deallocate(het_mask)
+        if( allocated(symmat)   ) deallocate(symmat)
+        if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
