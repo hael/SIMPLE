@@ -561,7 +561,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
   set(MKLROOT $ENV{MKLROOT})
   if( NOT "${MKLROOT}" STREQUAL "")
     if(BUILD_SHARED_LIBS)
-      set(EXTRA_LIBS   ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lm -ldl )
+      set(EXTRA_LIBS   ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lm -ldl)
     else()
       set(EXTRA_LIBS    ${EXTRA_LIBS} -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl)
     endif()
@@ -579,11 +579,30 @@ else()
   else()
     message(STATUS "fftw3 found")
     message(STATUS "lib: ${FFTW_LIBRARIES}")
-    include_directories(" ${FFTW_INCLUDE_DIRS} ")
-    set(EXTRA_LIBS ${EXTRA_LIBS} ${FFTW_LIBRARIES})
+    include_directories(" ${FFTW_INCLUDE_DIRS}")
+    set(EXTRA_LIBS ${FFTW_LIBRARIES} ${EXTRA_LIBS})
   endif()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
 endif()
+
+#
+#  PNG img support through LibGD
+#
+find_package(GD QUIET)
+if (NOT GD_FOUND)
+  message(FATAL_ERROR "Unable to find LibGD. Please install libgd-dev (https://libgd.github.io) which also depends on libpng and zlib.
+DEB:  sudo apt-get install libgd-dev
+FINK: fink install gd2-shlibs gd2
+BREW: brew install gd
+")
+else()
+  message(STATUS "LibGD found")
+  message(STATUS "lib: ${GD_LIBRARIES}")
+  include_directories(" ${GD_INCLUDE_DIRS}")
+  set(EXTRA_LIBS ${GD_LIBRARIES} ${EXTRA_LIBS})
+endif()
+
+
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}  ")\
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash

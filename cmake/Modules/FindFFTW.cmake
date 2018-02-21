@@ -58,7 +58,7 @@
 #   FFTW_ROOT - (as a CMake or environment variable)
 #                The root directory of the fftw install prefix
 #
-#   FIND_LIBRARY_USE_LIB64_PATHS - Global property that controls whether 
+#   FIND_LIBRARY_USE_LIB64_PATHS - Global property that controls whether
 #               findFFTW should search for 64bit or 32bit libs
 #-----------------------------------------------
 # Example Usage:
@@ -147,7 +147,7 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
 mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
 
 find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
-    NAMES fftw3f_threads libfftw3f-3_threads fftw3f_omp 
+    NAMES fftw3f_threads libfftw3f-3_threads fftw3f_omp
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
@@ -175,7 +175,7 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
 mark_as_advanced( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES )
 
 
-set( FFTW_LIBRARIES  ${FFTW_SINGLE_PRECISION_LIBRARIES} ${FFTW_DOUBLE_PRECISION_LIBRARIES} ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES} )
+set(FFTW_LIBRARIES ${FFTW_SINGLE_PRECISION_LIBRARIES} ${FFTW_DOUBLE_PRECISION_LIBRARIES} ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES})
 mark_as_advanced( FFTW_LIBRARIES )
 
 include( FindPackageHandleStandardArgs )

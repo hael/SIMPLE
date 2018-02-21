@@ -48,23 +48,28 @@ if ( USE_CUDA )
 ## else()
 ##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 endif()
+file(GLOB IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/*.f[90][08]" PARENT_SCOPE)
+list(APPEND IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c")
 
-##########################################################################
+########################################################################
 # main folder
 ##########################################################################
 file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
 list(APPEND SIMPLE_src
-  "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
+  "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
+ # "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_png.c"
+)
 
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${IMG_src} ${SIMPLE_src})
 # message(STATUS "SIMPLE LIBRARY SOURCES: ${SIMPLECORELIB}")
 
 ##########################################################################
 # Remove unused files here
 ##########################################################################
-# list(REMOVE_ITEM SIMPLECORELIB
-# )
+#list(REMOVE_ITEM SIMPLECORELIB
+#    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_png.f90"
+#)
 
 
 if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
@@ -93,7 +98,7 @@ set_target_properties(${SIMPLELIB}
   VERSION ${${PROJECT_NAME}_VERSION}
   COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
   LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
-  LINK_LIBRARIES "${EXTRA_LIBS}"
+  LINK_LIBRARIES "${EXTRA_LIBS} "
   JOB_POOL_LINK NUM_JOBS
   )
 
