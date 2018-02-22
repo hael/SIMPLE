@@ -1,4 +1,4 @@
-program simple_test_install
+program simple_test_fileio
 #include "simple_lib.f08"
 
 use simple_testfuns          ! use all in there
@@ -15,7 +15,7 @@ character(len=300)    :: command
 character(len=30) :: fname
 call seed_rnd
 call date_and_time(date=datestr)
-folder = trim('./SIMPLE_TEST_INSTALL_'//datestr)
+folder = trim('./SIMPLE_TEST_FILEIO_'//datestr)
 command = 'mkdir ' // trim( folder )//'|| true'
 call exec_cmdline( trim(command) )
 call simple_chdir( trim(folder) )
@@ -46,7 +46,7 @@ print *,">>> Testing FOPEN/FCLOSE completed"
 box    = 96
 smpd   = 2.
 nspace = 64
-msk    = nint(real(box)/3.) 
+msk    = nint(real(box)/3.)
 ! volume
 call img%new( [box,box,box], smpd )
 call img%square( nint(real(box)/12.) )
@@ -72,4 +72,4 @@ write(*,*)'>>> WROTE TEST VOLUME cubes.mrc'
 ! end
 call simple_chdir('../')
 call simple_end('**** SIMPLE_TEST_FILEIO NORMAL STOP ****')
-end program simple_test_install
+end program simple_test_fileio
