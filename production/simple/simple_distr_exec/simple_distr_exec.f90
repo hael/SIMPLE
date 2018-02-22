@@ -221,9 +221,10 @@ select case(prg)
         keys_optional(14) = 'fromf'
         keys_optional(15) = 'tof'
         keys_optional(16) = 'nsig'
+        keys_optional(17) = 'dir'
         ! parse command line
         if( describe ) call print_doc_motion_correct
-        call cline%parse(keys_required(:3), keys_optional(:16))
+        call cline%parse(keys_required(:3), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   15.)
@@ -258,9 +259,10 @@ select case(prg)
         keys_optional(9)  = 'scale'
         keys_optional(10) = 'nframesgrp'
         keys_optional(11) = 'nsig'
+        keys_optional(12) = 'dir'
         ! parse command line
         if( describe ) call print_doc_motion_correct_tomo
-        call cline%parse(keys_required(:3), keys_optional(:11))
+        call cline%parse(keys_required(:3), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',       5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)

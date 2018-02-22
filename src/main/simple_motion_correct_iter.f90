@@ -38,41 +38,35 @@ contains
         integer,                    intent(inout) :: movie_counter, frame_counter
         character(len=*),           intent(in)    :: moviename
         real,                       intent(out)   :: smpd_out
-        character(len=*), optional, intent(in)    :: dir_out
+        character(len=*),           intent(in)    :: dir_out
         real, allocatable     :: shifts(:,:)
-        character(len=STDLEN) :: dir
         integer               :: ldim(3), ldim_thumb(3), iframe, nframes
         real                  :: corr, scale
         logical               :: err
-        if( present(dir_out) )then
-            dir = trim(adjustl(dir_out))
-        else
-            dir = ''
-        endif
         ! make names
         if( cline%defined('fbody') )then
             if( p%stream.eq.'yes' )then
-                self%moviename_intg   = trim(dir)//trim(adjustl(p%fbody))//'_intg'//p%ext
-                self%moviename_forctf = trim(dir)//trim(adjustl(p%fbody))//'_forctf'//p%ext
-                self%moviename_pspec  = trim(dir)//trim(adjustl(p%fbody))//'_pspec'//p%ext
-                self%moviename_thumb  = trim(dir)//trim(adjustl(p%fbody))//'_thumb'//p%ext
+                self%moviename_intg   = trim(dir_out)//trim(adjustl(p%fbody))//'_intg'//p%ext
+                self%moviename_forctf = trim(dir_out)//trim(adjustl(p%fbody))//'_forctf'//p%ext
+                self%moviename_pspec  = trim(dir_out)//trim(adjustl(p%fbody))//'_pspec'//p%ext
+                self%moviename_thumb  = trim(dir_out)//trim(adjustl(p%fbody))//'_thumb'//p%ext
             else
-                self%moviename_intg   = trim(dir)//trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_forctf = trim(dir)//trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_pspec  = trim(dir)//trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_thumb  = trim(dir)//trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_intg   = trim(dir_out)//trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_forctf = trim(dir_out)//trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_pspec  = trim(dir_out)//trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_thumb  = trim(dir_out)//trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie,p%numlen)//p%ext
             endif
             if( cline%defined('tof') )then
-                self%moviename_intg_frames = trim(dir)//trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
+                self%moviename_intg_frames = trim(dir_out)//trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
                 &//int2str(p%tof)//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
             endif
         else
-            self%moviename_intg   = trim(dir)//int2str_pad(imovie,p%numlen)//'_intg'//p%ext
-            self%moviename_forctf = trim(dir)//int2str_pad(imovie,p%numlen)//'_forctf'//p%ext
-            self%moviename_pspec  = trim(dir)//int2str_pad(imovie,p%numlen)//'_pspec'//p%ext
-            self%moviename_thumb  = trim(dir)//int2str_pad(imovie,p%numlen)//'_thumb'//p%ext
+            self%moviename_intg   = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_intg'//p%ext
+            self%moviename_forctf = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_forctf'//p%ext
+            self%moviename_pspec  = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_pspec'//p%ext
+            self%moviename_thumb  = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_thumb'//p%ext
             if( cline%defined('tof') )then
-                self%moviename_intg_frames = trim(dir)//int2str_pad(imovie,p%numlen)//'_frames'//int2str(p%fromf)//'-'&
+                self%moviename_intg_frames = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_frames'//int2str(p%fromf)//'-'&
                 &//int2str(p%tof)//'_intg'//p%ext
             endif
         endif

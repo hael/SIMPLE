@@ -86,11 +86,11 @@ contains
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         !type(ctffind_iter)      :: cfiter
-        type(ctf_estimate_iter)       :: cfiter
-        type(motion_correct_iter)       :: ubiter
-        type(picker_iter)         :: piter
-        type(extract_commander) :: xextract
-        type(cmdline)           :: cline_extract
+        type(ctf_estimate_iter)    :: cfiter
+        type(motion_correct_iter)  :: mciter
+        type(picker_iter)          :: piter
+        type(extract_commander)    :: xextract
+        type(cmdline)              :: cline_extract
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_unidoc_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg
@@ -187,18 +187,18 @@ contains
             endif
             ! motion_correct
             if( p%stream.eq.'yes' )then
-                call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
-                &frame_counter, movienames(imovie), smpd_scaled, dir_out=trim(MOTION_CORRECT_STREAM_DIR))
+                call mciter%iterate(cline, p, orientation, movie_ind, movie_counter,&
+                &frame_counter, movienames(imovie), smpd_scaled, trim(DIR_MOTION_CORRECT))
             else
-                call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
-                &frame_counter, movienames(imovie), smpd_scaled)
+                call mciter%iterate(cline, p, orientation, movie_ind, movie_counter,&
+                &frame_counter, movienames(imovie), smpd_scaled, trim(DIR_MOTION_CORRECT))
             endif
             call os_uni%set_ori(movie_counter, orientation)
             p%smpd           = smpd_scaled
             movie_counter    = movie_counter - 1
             ! ctffind
-            moviename_forctf = ubiter%get_moviename('forctf')    !! realloc warning
-            moviename_intg   = ubiter%get_moviename('intg')
+            moviename_forctf = mciter%get_moviename('forctf')    !! realloc warning
+            moviename_intg   = mciter%get_moviename('intg')
             p%pspecsz        = p%pspecsz_ctffind
             p%hp             = p%hp_ctffind
             p%lp             = p%lp_ctffind
@@ -463,11 +463,12 @@ contains
     subroutine exec_motion_correct( self, cline )
         class(motion_correct_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
-        type(params)      :: p
-        type(motion_correct_iter) :: ubiter
-        type(oris)        :: os_uni
-        type(ori)         :: orientation
+        type(params)              :: p
+        type(motion_correct_iter) :: mciter
+        type(oris)                :: os_uni
+        type(ori)                 :: orientation
         character(len=STDLEN), allocatable :: movienames(:)
+        character(len=:),      allocatable :: output_dir
         real    :: smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer :: frame_counter, lfoo(3), nframes
@@ -488,6 +489,13 @@ contains
         else
             p%numlen = len(int2str(nmovies))
         endif
+        ! output directory
+        if( cline%defined('dir') )then
+            output_dir = trim(p%dir)
+        else
+            output_dir = trim(DIR_MOTION_CORRECT)
+        endif
+        call mkdir(output_dir)
         ! determine loop range
         if( p%l_distr_exec )then
             if( p%tomo .eq. 'no' )then
@@ -520,12 +528,12 @@ contains
         call orientation%new
         call os_uni%new(ntot)
         do imovie=fromto(1),fromto(2)
-            call ubiter%iterate(cline, p, orientation, imovie, movie_counter,&
-            &frame_counter, movienames(imovie), smpd_scaled)
+            call mciter%iterate(cline, p, orientation, imovie, movie_counter,&
+            &frame_counter, movienames(imovie), smpd_scaled, trim(output_dir))
             call os_uni%set_ori(movie_counter, orientation)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
-        call os_uni%write(p%outfile)
+        call os_uni%write( trim(output_dir)//p%outfile )
         call os_uni%kill
         call qsys_job_finished( p, 'simple_commander_preprocess :: exec_motion_correct' )
         ! end gracefully
@@ -593,15 +601,23 @@ contains
         type(params)                       :: p
         type(ctf_estimate_iter)                  :: cfiter
         character(len=STDLEN), allocatable :: movienames_forctf(:)
-        character(len=:),      allocatable :: fname_ctf_estimate_output
+        character(len=:),      allocatable :: fname_ctf_estimate_output, output_dir
         character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
         type(oris)            :: os
         integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
         p = params(cline) ! constants & derived constants produced
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
+        ! output directory
+        if( cline%defined('dir') )then
+            output_dir = trim(p%dir)
+        else
+            output_dir = trim(DIR_CTF_ESTIMATE)
+        endif
+        call mkdir(output_dir)
+        ! params
         if( p%l_distr_exec )then
-            allocate(fname_ctf_estimate_output, source='ctf_estimate_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            allocate(fname_ctf_estimate_output, source=trim(output_dir)//'ctf_estimate_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -612,20 +628,17 @@ contains
         else
             if( p%stream .eq. 'yes' )then
                 ! determine loop range
-                fromto(1) = 1
-                fromto(2) = 1
+                fromto(:)   = 1
                 movie_name  = remove_abspath(trim(movienames_forctf(1)))
                 movie_ext   = fname2ext(trim(movie_name))
                 movie_fbody = get_fbody(trim(movie_name), trim(movie_ext))
-                !!!!!!!!!!!!!
-                allocate(fname_ctf_estimate_output, source='ctf_estimate_output_'//trim(movie_fbody)//'.txt')
-                !!!!!!!!!!!!!!!
+                allocate(fname_ctf_estimate_output, source=trim(output_dir)//'ctf_estimate_output_'//trim(movie_fbody)//'.txt')
             else
                 ! determine loop range
                 fromto(1) = 1
                 if( cline%defined('startit') ) fromto(1) = p%startit
                 fromto(2) = nmovies
-                allocate(fname_ctf_estimate_output, source='ctf_estimate_output.txt')
+                allocate(fname_ctf_estimate_output, source=trim(output_dir)//'ctf_estimate_output.txt')
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
@@ -721,8 +734,8 @@ contains
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
             call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
             call fileio_errmsg('simple_commander_preprocess ; fopen error when opening '//trim(p%outfile), io_stat)
-            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select))//'|| true')
-            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject))//'|| true')
+            call mkdir(p%dir_select)
+            call mkdir(p%dir_reject)
             ! write outoput & move files
             do iimg=1,nall
                 if( lselected(iimg) )then

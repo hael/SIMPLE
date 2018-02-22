@@ -279,8 +279,9 @@ select case(prg)
         keys_optional(15) = 'tof'
         keys_optional(16) = 'nsig'
         keys_optional(17) = 'outfile'
+        keys_optional(18) = 'dir'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:17))
+        call cline%parse(keys_required(:2), keys_optional(:18))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',                      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',                 15.)

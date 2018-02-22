@@ -38,7 +38,9 @@ character(len=KEYLEN), parameter :: ALGN_FBODY                = 'algndoc_'
 character(len=KEYLEN), parameter :: EXTRACT_STK_FBODY         = 'ptcls_from_'
 character(len=KEYLEN), parameter :: EXTRACT_PARAMS_FBODY      = 'extract_params_'
 ! UNIDOC
+character(len=KEYLEN), parameter :: UNIDOC_FBODY              = 'unidoc_'
 character(len=KEYLEN), parameter :: UNIDOC_OUTPUT             = 'unidoc_output_'
+character(len=KEYLEN), parameter :: SIMPLE_UNIDOC             = 'simple_unidoc'//trim(METADATA_EXT)
 ! CLUSTER3D
 character(len=KEYLEN), parameter :: CLUSTER3D_FSC             = 'cluster3D_fsc'//BIN_EXT
 character(len=KEYLEN), parameter :: CLUSTER3D_FRCS            = 'cluster3D_frcs'//BIN_EXT
@@ -52,8 +54,9 @@ character(len=KEYLEN), parameter :: CTF_STREAM_DIR            = trim(PREPROCESS_
 character(len=KEYLEN), parameter :: PICK_STREAM_DIR           = trim(PREPROCESS_STREAM_DIR)//'boxes/'
 character(len=KEYLEN), parameter :: EXTRACT_STREAM_DIR        = trim(PREPROCESS_STREAM_DIR)//'particles/'
 character(len=KEYLEN), parameter :: UNIDOC_STREAM_DIR         = trim(PREPROCESS_STREAM_DIR)//'unidocs/'
-! OLD DIRECTORIES
-character(len=KEYLEN), parameter :: DIR_CTF_ESTIMATE = 'ctf_estimate/'
+! NEW DIRECTORIES
+character(len=KEYLEN), parameter :: DIR_CTF_ESTIMATE   = 'ctf_estimate/'
+character(len=KEYLEN), parameter :: DIR_MOTION_CORRECT = 'motion_correct/'
 ! oritype enumeration
 enum, bind(c)
     enumerator :: STK_SEG = 1, PTCL2D_SEG = 2, CLS2D_SEG = 3,&

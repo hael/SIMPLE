@@ -104,13 +104,13 @@ contains
     subroutine exec_motion_correct_ctffind_distr( self, cline )
         use simple_commander_preprocess
         class(motion_correct_ctffind_distr_commander), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
-        character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
+        class(cmdline),                                intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
-        type(cmdline)  :: cline_merge_algndocs
-        type(qsys_env) :: qenv
-        type(params)   :: p_master
-        type(chash)    :: job_descr
+        type(cmdline)                  :: cline_merge_algndocs
+        type(qsys_env)                 :: qenv
+        type(params)                   :: p_master
+        type(chash)                    :: job_descr
+        character(len=:), allocatable  :: output_dir, fbody
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -123,20 +123,29 @@ contains
         ! deal with numlen so that length matches JOB_FINISHED indicator files
         p_master%numlen = len(int2str(p_master%nptcls))
         call cline%set('numlen', real(p_master%numlen))
+        ! output directory
+        if( cline%defined('dir') )then
+            output_dir = trim(p_master%dir)
+        else
+            output_dir = trim(DIR_MOTION_CORRECT)
+            call cline%set('dir', trim(output_dir))
+        endif
+        call mkdir(output_dir)
+        allocate(fbody, source=trim(output_dir)//trim(UNIDOC_FBODY))
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.                    )
-        call cline_merge_algndocs%set( 'fbody',    'unidoc_'             )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile',  'simple_unidoc.txt'   )
-        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen) )
+        call cline_merge_algndocs%set( 'nthr',     1.                   )
+        call cline_merge_algndocs%set( 'fbody',    trim(fbody)          )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls))
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts))
+        call cline_merge_algndocs%set( 'outfile',  trim(SIMPLE_UNIDOC)  )
+        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen))
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(UNIDOC_FBODY))
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -148,12 +157,12 @@ contains
     subroutine exec_motion_correct_distr( self, cline )
         class(motion_correct_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
         type(merge_algndocs_commander) :: xmerge_algndocs
-        type(cmdline)  :: cline_merge_algndocs
-        type(qsys_env) :: qenv
-        type(params)   :: p_master
-        type(chash)    :: job_descr
+        type(cmdline)                  :: cline_merge_algndocs
+        type(qsys_env)                 :: qenv
+        type(params)                   :: p_master
+        type(chash)                    :: job_descr
+        character(len=:), allocatable  :: output_dir, fbody
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -166,20 +175,29 @@ contains
         ! deal with numlen so that length matches JOB_FINISHED indicator files
         p_master%numlen = len(int2str(p_master%nptcls))
         call cline%set('numlen', real(p_master%numlen))
+        ! output directory
+        if( cline%defined('dir') )then
+            output_dir = trim(p_master%dir)
+        else
+            output_dir = trim(DIR_MOTION_CORRECT)
+            call cline%set('dir', trim(output_dir))
+        endif
+        call mkdir(output_dir)
+        allocate(fbody, source=trim(output_dir)//trim(UNIDOC_FBODY))
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.                    )
-        call cline_merge_algndocs%set( 'fbody',    'unidoc_'             )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile',  'simple_unidoc.txt'   )
-        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen) )
+        call cline_merge_algndocs%set( 'nthr',     1.)
+        call cline_merge_algndocs%set( 'fbody',    trim(fbody))
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls))
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts))
+        call cline_merge_algndocs%set( 'outfile',  trim(output_dir)//trim(SIMPLE_UNIDOC))
+        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen))
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(UNIDOC_FBODY))
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
