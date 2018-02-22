@@ -112,7 +112,7 @@ contains
                         else
                             ! greedy in plane
                             iref = (state-1)*self%s%nprojs + prev_proj(self%s%iptcl_map)
-                            proj_space_corrs(self%s%iptcl_map,iref)      = corr
+                            proj_space_corrs(self%s%iptcl_map,iref)        = corr
                             proj_space_inds(self%s%iptcl_map,self%s%nrefs) = iref
                             call self%s%inpl_srch
                             if( proj_space_corrs(self%s%iptcl_map,iref) > corr )then
@@ -144,6 +144,7 @@ contains
         if( DEBUG ) print *,  '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
     end subroutine srch_cluster3D
 
+    !>  placeholder
     subroutine oris_assign_cluster3D( self )
         class(strategy3D_cluster), intent(inout) :: self
         ! nothing to do

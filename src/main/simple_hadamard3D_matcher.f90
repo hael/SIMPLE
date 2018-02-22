@@ -408,7 +408,7 @@ contains
         else
             select case(trim(p%refine))
             case('cluster')
-                    converged = b%conv%check_conv_het()
+                    converged = b%conv%check_conv_cluster()
                 case DEFAULT
                     converged = b%conv%check_conv3D(update_res)
             end select

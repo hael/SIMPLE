@@ -337,8 +337,9 @@ select case(prg)
         keys_optional(6) = 'dfmax'
         keys_optional(7) = 'astigtol'
         keys_optional(8) = 'phaseplate'
+        keys_optional(9) = 'dir'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:8))
+        call cline%parse(keys_required(:5), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)

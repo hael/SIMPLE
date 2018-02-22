@@ -343,15 +343,15 @@ contains
         if( cline%defined('update_res') )then
             update_res = .false.
             if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
-            if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(p%refine,'het') )then
-                converged = b%conv%check_conv_het()
+            if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(p%refine,'cluster') )then
+                converged = b%conv%check_conv_cluster()
             else
                 converged = b%conv%check_conv3D()
             endif
         else
             select case(p%refine)
-            case('het', 'hetsym')
-                    converged = b%conv%check_conv_het()
+            case('cluster','clustersym')
+                    converged = b%conv%check_conv_cluster()
                 case DEFAULT
                     converged = b%conv%check_conv3D()
             end select

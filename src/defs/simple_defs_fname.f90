@@ -44,7 +44,7 @@ character(len=KEYLEN), parameter :: CLUSTER3D_FSC             = 'cluster3D_fsc'/
 character(len=KEYLEN), parameter :: CLUSTER3D_FRCS            = 'cluster3D_frcs'//BIN_EXT
 character(len=KEYLEN), parameter :: CLUSTER3D_ANISOLP         = 'cluster3D_aniso_optlp'
 character(len=KEYLEN), parameter :: CLUSTER3D_VOL             = 'cluster3D_mixed_recvol'
-! DIRECTORIES
+! OLD DIRECTORIES
 character(len=KEYLEN), parameter :: STDERROUT_DIR             = 'stderrout/'
 character(len=KEYLEN), parameter :: PREPROCESS_STREAM_DIR     = 'pipeline/'
 character(len=KEYLEN), parameter :: MOTION_CORRECT_STREAM_DIR = trim(PREPROCESS_STREAM_DIR)//'micrographs/'
@@ -52,6 +52,8 @@ character(len=KEYLEN), parameter :: CTF_STREAM_DIR            = trim(PREPROCESS_
 character(len=KEYLEN), parameter :: PICK_STREAM_DIR           = trim(PREPROCESS_STREAM_DIR)//'boxes/'
 character(len=KEYLEN), parameter :: EXTRACT_STREAM_DIR        = trim(PREPROCESS_STREAM_DIR)//'particles/'
 character(len=KEYLEN), parameter :: UNIDOC_STREAM_DIR         = trim(PREPROCESS_STREAM_DIR)//'unidocs/'
+! OLD DIRECTORIES
+character(len=KEYLEN), parameter :: DIR_CTF_ESTIMATE = 'ctf_estimate/'
 ! oritype enumeration
 enum, bind(c)
     enumerator :: STK_SEG = 1, PTCL2D_SEG = 2, CLS2D_SEG = 3,&

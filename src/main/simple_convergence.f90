@@ -31,7 +31,7 @@ type convergence
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
-    procedure :: check_conv_het
+    procedure :: check_conv_cluster
     procedure :: get
     procedure :: kill
 end type convergence
@@ -269,7 +269,7 @@ contains
         endif
     end function check_conv3D
 
-    function check_conv_het( self ) result( converged )
+    function check_conv_cluster( self ) result( converged )
         class(convergence), intent(inout) :: self
         real, allocatable :: statepops(:)
         logical           :: converged
@@ -302,7 +302,7 @@ contains
             converged = .false.
         endif
         deallocate( statepops )
-    end function check_conv_het
+    end function check_conv_cluster
 
     !>  \brief  is a getter
     real function get( self, which )

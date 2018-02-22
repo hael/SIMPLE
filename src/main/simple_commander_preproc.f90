@@ -617,7 +617,9 @@ contains
                 movie_name  = remove_abspath(trim(movienames_forctf(1)))
                 movie_ext   = fname2ext(trim(movie_name))
                 movie_fbody = get_fbody(trim(movie_name), trim(movie_ext))
+                !!!!!!!!!!!!!
                 allocate(fname_ctf_estimate_output, source='ctf_estimate_output_'//trim(movie_fbody)//'.txt')
+                !!!!!!!!!!!!!!!
             else
                 ! determine loop range
                 fromto(1) = 1
