@@ -153,13 +153,6 @@ if(PNG_FOUND)
       endif()
   endif ()
 
-  # if (GD_GD_INCLUDE_DIR AND EXISTS "${GD_GD_INCLUDE_DIR}/gd.h")
-  #   file(STRINGS "${GD_GD_INCLUDE_DIR}/gd.h" gd_version_str REGEX "^#define[ \t]+GD_.*_VERSION[ \t]+[0-9][ \t]+.*")
-  #   message(STATUS "LibGD version ${gd_version_str}")
-  #     string(REGEX REPLACE "^#define[ \t]+GD_.*_VERSION[ \t]+([0-9]).*" "\\1" GD_VERSION_STRING "${gd_version_str}")
-  #     message(STATUS "LibGD version ${GD_VERSION_STRING}")
-  #     unset(gd_version_str)
-  # endif ()
 endif()
 
 # handle the QUIETLY and REQUIRED arguments and set GD_FOUND to TRUE if

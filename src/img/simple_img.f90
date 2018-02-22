@@ -34,7 +34,7 @@ contains
         character(*), intent(in)         :: file_name
         real, allocatable, intent(inout) :: buffer(:,:)
         integer, intent(out), optional  :: status
-        integer             :: width,height, i,j, black,white
+        integer             :: width,height, i,j, colorval,black,white
         type(base_img)      :: image
 
         if (present(status)) then
@@ -44,7 +44,7 @@ contains
         end if
         call allocate_color(image,0,0,0,black)
         call allocate_color(image,255,255,255,white)
-
+        colorval=greyscale(image)
         width  = get_width(image)
         height = get_height(image)
         allocate( buffer(height, width) )
@@ -53,7 +53,7 @@ contains
                 buffer(i,j) = REAL(get_pixel(image,i,j)) !/REAL(max_colors)
             end do
         end do
-        print *, " INterlaced? ", interlace(image)
+        !print *, " INterlaced? ", interlace(image)
         call destroy_img(image)
     end subroutine read_png
 
@@ -90,6 +90,7 @@ contains
                 call set_pixel(image,i,j, colorval )
             end do
         end do
+        colorval=greyscale(image)
         call cgd_image_png(image%ptr, trim(adjustl(filename))//char(0) )
         call destroy_img(image)
     end subroutine write_png

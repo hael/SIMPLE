@@ -1,7 +1,7 @@
 
 #if defined(HALT)
 #else
-# define HALT(X) call simple_stop (X,__FILENAME__, __LINE__)
+# define HALT(X) call simple_stop (X, __FILENAME__, __LINE__)
 #endif
 
 #if defined(allocchk)
