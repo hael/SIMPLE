@@ -9,7 +9,6 @@
 module simple_img
     include 'simple_lib.f08'
     implicit none
-
     integer, parameter :: rp = kind(1d0)
     !*** cptr should be have the same size as a c pointer
     !*** It doesn't matter whether it is an integer or a real
@@ -296,7 +295,7 @@ contains
 
     end subroutine create_img_from_png
 
-#ifndef WITHOUT_JPEG
+#ifdef WITH_JPEG
     subroutine create_img_from_jpeg(file,image,status)
         character(*), intent(in)        :: file
         type(base_img), intent(out)     :: image
@@ -367,25 +366,7 @@ contains
         height = image%height
     end function height
 
-#ifndef WITHOUT_XPM
-    subroutine create_img_from_xbm(file,image,status)
-        character(*), intent(in)        :: file
-        type(base_img), intent(out)     :: image
-        integer, optional, intent(out)  :: status
-
-        if (image%ptr /= 0) call destroy_img(image)
-        call cgd_image_create_from_xbm(trim(file)//char(0),image%ptr)
-        if (present(status)) then
-            if (image%ptr /= 0) then
-                status = 0
-            else
-                status = 1
-            endif
-        endif
-        image%width = get_width(image)
-        image%height = get_height(image)
-    end subroutine create_img_from_xbm
-
+#ifdef WITH_XPM
     subroutine create_img_from_xpm(file,image,status)
         character(*), intent(in)        :: file
         type(base_img), intent(out)     :: image
@@ -403,6 +384,30 @@ contains
         image%width = get_width(image)
         image%height = get_height(image)
     end subroutine create_img_from_xpm
+    subroutine write_img_as_xpm(img,file)
+        type(base_img), intent(in)  :: img
+        character(*), intent(in)    :: file
+
+        call cgd_image_xpm(img%ptr,trim(file)//char(0))
+
+    end subroutine write_img_as_xpm
+    subroutine create_img_from_xbm(file,image,status)
+        character(*), intent(in)        :: file
+        type(base_img), intent(out)     :: image
+        integer, optional, intent(out)  :: status
+
+        if (image%ptr /= 0) call destroy_img(image)
+        call cgd_image_create_from_xbm(trim(file)//char(0),image%ptr)
+        if (present(status)) then
+            if (image%ptr /= 0) then
+                status = 0
+            else
+                status = 1
+            endif
+        endif
+        image%width = get_width(image)
+        image%height = get_height(image)
+    end subroutine create_img_from_xbm
 #endif
 
     subroutine set_brush(image,brush)
@@ -464,6 +469,12 @@ contains
         call cgd_blue(image%ptr,color,alpha)
 
     end function alpha
+
+    function greyscale(image) result(color)
+         type(base_img), intent(in)  :: image
+         integer         :: color
+         call CGD_GREYSCALE(image%ptr, color)
+     end function greyscale
 
     function pixel_color(image,x,y)
         type(base_img), intent(in)  :: image

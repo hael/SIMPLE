@@ -22,6 +22,7 @@
 #define CGD_IMAGE_PNG                    cgd_image_png_
 #define CGD_IMAGE_GD                     cgd_image_gd_
 #define CGD_IMAGE_JPEG                   cgd_image_jpeg_
+#define CGD_IMAGE_XPM                    cgd_image_xpm_
 #define CGD_FONT_TINY                    cgd_font_tiny_
 #define CGD_FONT_SMALL                   cgd_font_small_
 #define CGD_FONT_MEDIUM_BOLD             cgd_font_medium_bold_
@@ -52,6 +53,7 @@
 #define CGD_GREEN                        cgd_green_
 #define CGD_BLUE                         cgd_blue_
 #define CGD_ALPHA                        cgd_alpha_
+#define CGD_GREYSCALE                    cgd_greyscale_
 #define CGD_PIXELCOLOR                   cgd_pixel_color_
 #define CGD_IMAGE_BOUNDS_SAFE            cgd_image_bounds_safe_
 #define CGD_IMAGE_COLOR_CLOSEST          cgd_image_color_closest_
@@ -248,32 +250,6 @@ void CGD_IMAGE_GD(gdImagePtr *ptr, const char *file)
     }
     return;
 }
-/******************************************************************************/
-#ifndef WITHOUT_JPEG
-void CGD_IMAGE_JPEG(gdImagePtr *ptr, const char *file, int *quality)
-{
-    if (0==strcmp(file,"-"))
-    {
-        gdImageJpeg(*ptr,stdout,*quality);
-    }
-    else
-    {
-        FILE *f;
-        f = fopen(file,"wb");
-        if (f == NULL)
-        {
-            *ptr = 0;
-        }
-        else
-        {
-            gdImageJpeg(*ptr,f,*quality);
-            (void)fclose(f);
-        }
-    }
-    return;
-}
-#endif
-/******************************************************************************/
 void CGD_IMAGE_POLYGON(gdImagePtr *ptr,
                        int *n, int x[], int y[],
                        int *color)
@@ -361,16 +337,14 @@ void CGD_HEIGHT(gdImagePtr *ptr, int *height)
 /******************************************************************************/
 void CGD_IMAGE_CREATE_FROM_FILE(const char *file, gdImagePtr *ptr)
 {
-    FILE *f;
-    f = fopen(file,"rb");
-    if (f == NULL)
+
+  if (0 == strcmp(file,""))
     {
         *ptr = 0;
     }
     else
     {
-        *ptr = gdImageCreateFromFile(f);
-        (void)fclose(f);
+        *ptr = gdImageCreateFromFile(file);
     }
     return;
 }
@@ -407,7 +381,30 @@ void CGD_IMAGE_CREATE_FROM_PNG(const char *file, gdImagePtr *ptr)
     return;
 }
 /******************************************************************************/
-#ifndef WITHOUT_JPEG
+#ifdef WITH_JPEG
+void CGD_IMAGE_JPEG(gdImagePtr *ptr, const char *file, int *quality)
+{
+  if (0==strcmp(file,"-"))
+  {
+    gdImageJpeg(*ptr,stdout,*quality);
+  }
+  else
+  {
+    FILE *f;
+    f = fopen(file,"wb");
+    if (f == NULL)
+    {
+      *ptr = 0;
+    }
+    else
+    {
+      gdImageJpeg(*ptr,f,*quality);
+      (void)fclose(f);
+    }
+  }
+  return;
+}
+
 void CGD_IMAGE_CREATE_FROM_JPEG(const char *file, gdImagePtr *ptr)
 {
     FILE *f;
@@ -441,12 +438,27 @@ void CGD_IMAGE_CREATE_FROM_XBM(const char *file, gdImagePtr *ptr)
     return;
 }
 /******************************************************************************/
-#ifndef WITHOUT_XPM
+#ifdef WITH_XPM
 void CGD_IMAGE_CREATE_FROM_XPM(char *file, gdImagePtr *ptr)
 {
     *ptr = gdImageCreateFromXpm(file);
     return;
 }
+
+void CGD_IMAGE_XPM(gdImagePtr *ptr, const char *file)
+{
+  int status;
+  if (0!=strcmp(file,""))
+  {
+    status = gdImageFile(*ptr,file);
+  }
+  else
+  {   *ptr = 0;
+
+  }
+  return;
+}
+
 #endif
 /******************************************************************************/
 void CGD_IMAGE_SET_BRUSH(gdImagePtr *ptr, gdImagePtr *brush)
