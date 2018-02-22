@@ -6,7 +6,7 @@ use simple_params,          only: params
 use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 use simple_projection_frcs, only: projection_frcs
-use simple_hadamard_common  ! use all in there
+use simple_strategy2D3D_common  ! use all in there
 implicit none
 
 public :: reconstruct3D_commander

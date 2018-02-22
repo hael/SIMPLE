@@ -358,7 +358,7 @@ contains
         use simple_kbinterpol,      only: kbinterpol
         use simple_prep4cgrid,      only: prep4cgrid
         use simple_map_reduce,      only: split_nobjs_even
-        use simple_hadamard_common, only: read_img
+        use simple_strategy2D3D_common, only: read_img
         logical,           intent(in) :: do_frac_update
         type(kbinterpol)              :: kbwin
         type(prep4cgrid)              :: gridprep

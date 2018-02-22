@@ -4,7 +4,7 @@ use simple_build,            only: build
 use simple_params,           only: params
 use simple_corrmat,          only: calc_roinv_corrmat
 use simple_aff_prop,         only: aff_prop
-use simple_hadamard_common   ! use all in there
+use simple_strategy2D3D_common   ! use all in there
 use simple_defs              ! use all in there
 use simple_binoris_io        ! use all in there
 implicit none

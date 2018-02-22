@@ -8,7 +8,7 @@ use simple_prep4cgrid,     only: prep4cgrid
 use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_image,          only: image
-use simple_hadamard_common ! use all in there
+use simple_strategy2D3D_common ! use all in there
 use simple_timer           ! use all in there
 use simple_defs            ! use all in there
 implicit none

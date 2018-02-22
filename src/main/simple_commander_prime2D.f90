@@ -1,15 +1,15 @@
 ! concrete commander: prime2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_prime2D
 #include "simple_lib.f08"
-use simple_cmdline,         only: cmdline
-use simple_params,          only: params
-use simple_build,           only: build
-use simple_commander_base,  only: commander_base
-use simple_imghead,         only: find_ldim_nptcls
-use simple_hadamard_common, only: gen2Dclassdoc
-use simple_qsys_funs,       only: qsys_job_finished
-use simple_projection_frcs, only: projection_frcs
-use simple_binoris_io       ! use all in there
+use simple_cmdline,             only: cmdline
+use simple_params,              only: params
+use simple_build,               only: build
+use simple_commander_base,      only: commander_base
+use simple_imghead,             only: find_ldim_nptcls
+use simple_strategy2D3D_common, only: gen2Dclassdoc
+use simple_qsys_funs,           only: qsys_job_finished
+use simple_projection_frcs,     only: projection_frcs
+use simple_binoris_io           ! use all in there
 implicit none
 
 public :: make_cavgs_commander
@@ -153,7 +153,7 @@ contains
     end subroutine exec_make_cavgs
 
     subroutine exec_prime2D( self, cline )
-        use simple_hadamard2D_matcher, only: prime2D_exec
+        use simple_strategy2D_matcher, only: prime2D_exec
         class(prime2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params) :: p

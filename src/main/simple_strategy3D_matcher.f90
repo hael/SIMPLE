@@ -1,22 +1,28 @@
 ! projection-matching based on Hadamard products, high-level search routines for PRIME3D
-module simple_hadamard3D_matcher
+module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_ori,               only: ori
-use simple_oris,              only: oris
-use simple_build,             only: build
-use simple_params,            only: params
-use simple_cmdline,           only: cmdline
-use simple_binoris_io,        only: binwrite_oritab
-use simple_kbinterpol,        only: kbinterpol
-use simple_prep4cgrid,        only: prep4cgrid
-use simple_strategy3D,        only: strategy3D
-use simple_strategy3D_srch,   only: strategy3D_spec
-use simple_strategy3D_alloc,  only: o_peaks, clean_strategy3D, prep_strategy3D
-use simple_hadamard_common    ! use all in there
-use simple_timer              ! use all in there
+use simple_polarft_corrcalc,         only: polarft_corrcalc
+use simple_ori,                      only: ori
+use simple_oris,                     only: oris
+use simple_build,                    only: build
+use simple_params,                   only: params
+use simple_cmdline,                  only: cmdline
+use simple_binoris_io,               only: binwrite_oritab
+use simple_kbinterpol,               only: kbinterpol
+use simple_prep4cgrid,               only: prep4cgrid
+use simple_strategy3D,               only: strategy3D
+use simple_strategy3D_srch,          only: strategy3D_spec
+use simple_strategy3D_alloc,         only: o_peaks, clean_strategy3D, prep_strategy3D
+use simple_strategy3D_cluster,       only: strategy3D_cluster
+use simple_strategy3D_single,        only: strategy3D_single
+use simple_strategy3D_multi,         only: strategy3D_multi
+use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
+use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
+use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
+use simple_strategy2D3D_common       ! use all in there
+use simple_timer                     ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -48,7 +54,7 @@ contains
         call o%spiral
         lfny = b%img_match%get_lfny(1)
         allocate( peaks(lfny), stat=alloc_stat )
-        allocchk("In: prime3D_find_resrange, simple_hadamard3D_matcher")
+        allocchk("In: prime3D_find_resrange, simple_strategy3D_matcher")
         do k=2,b%img_match%get_lfny(1)
             peaks(k) = real(o%find_npeaks(b%img_match%get_lp(k), p%moldiam))
         end do
@@ -62,12 +68,6 @@ contains
     end subroutine prime3D_find_resrange
 
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
-        use simple_strategy3D_cluster,       only: strategy3D_cluster
-        use simple_strategy3D_single,        only: strategy3D_single
-        use simple_strategy3D_multi,         only: strategy3D_multi
-        use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
-        use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
-        use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
@@ -101,7 +101,7 @@ contains
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( p%eo .ne. 'no' )then
             if( p%l_distr_exec )then
-                if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
+                if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: prime2D_exec'
             else
                 if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
             endif
@@ -115,7 +115,7 @@ contains
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = rad2deg( atan(max(p%fny,p%lp)/(p%moldiam/2.) ))
         reslim   = p%lp
-        DebugPrint '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
+        DebugPrint '*** strategy3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
@@ -129,7 +129,7 @@ contains
                         p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
                     endif
             end select
-            DebugPrint '*** hadamard3D_matcher ***: determined the number of peaks'
+            DebugPrint '*** strategy3D_matcher ***: determined the number of peaks'
         endif
 
         ! RANDOM MODEL GENERATION
@@ -139,7 +139,7 @@ contains
             else
                 call gen_random_model(b, p)
             endif
-            DebugPrint '*** hadamard3D_matcher ***: generated random model'
+            DebugPrint '*** strategy3D_matcher ***: generated random model'
         endif
 
         ! SET FRACTION OF SEARCH SPACE
@@ -308,7 +308,7 @@ contains
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! memoize B-factors
-        if( p%eo .ne. 'no' ) call pftcc%memoize_bfacs(b%a)
+        if( p%objfun.eq.'ccres' ) call pftcc%memoize_bfacs(b%a)
         ! search
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()
@@ -404,7 +404,7 @@ contains
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
-            call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
+            call qsys_job_finished( p, 'simple_strategy3D_matcher :: prime3D_exec')
         else
             select case(trim(p%refine))
             case('cluster')
@@ -476,7 +476,7 @@ contains
             nsamp = p%top - p%fromp + 1
             if( present(nsamp_in) ) nsamp = nsamp_in
             allocate( sample(nsamp), stat=alloc_stat )
-            call alloc_errchk("In: gen_random_model; simple_hadamard3D_matcher", alloc_stat)
+            call alloc_errchk("In: gen_random_model; simple_strategy3D_matcher", alloc_stat)
             if( present(nsamp_in) )then
                 rt = ran_tabu(p%top - p%fromp + 1)
                 call rt%ne_ran_iarr(sample)
@@ -596,7 +596,7 @@ contains
         end do
         deallocate(match_imgs, b%imgbatch)
 
-        DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
+        DebugPrint '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
-end module simple_hadamard3D_matcher
+end module simple_strategy3D_matcher

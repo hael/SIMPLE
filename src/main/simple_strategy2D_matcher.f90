@@ -1,36 +1,41 @@
 ! projection-matching based on Hadamard products, high-level search routines for PRIME2D
-module simple_hadamard2D_matcher
+module simple_strategy2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_ori,              only: ori
-use simple_build,            only: build
-use simple_params,           only: params
-use simple_cmdline,          only: cmdline
-use simple_hadamard_common   ! use all in there
-use simple_filterer          ! use all in there
-use simple_timer             ! use all in there
-use simple_classaverager     ! use all in there
-use simple_prime2D_srch      ! use all in there
+use simple_polarft_corrcalc,      only: polarft_corrcalc
+use simple_ori,                   only: ori
+use simple_build,                 only: build
+use simple_params,                only: params
+use simple_cmdline,               only: cmdline
+use simple_strategy2D,            only: strategy2D
+use simple_strategy2D_srch,       only: strategy2D_spec
+use simple_strategy2D_greedy,     only: strategy2D_greedy
+use simple_strategy2D_neigh,      only: strategy2D_neigh
+use simple_strategy2D_stochastic, only: strategy2D_stochastic
+use simple_strategy2D_alloc       ! use all in there
+use simple_strategy2D3D_common    ! use all in there
+use simple_filterer               ! use all in there
+use simple_timer                  ! use all in there
+use simple_classaverager          ! use all in there
+
 implicit none
 
 public :: prime2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH         = .false.
-logical, parameter              :: L_BENCH_PRIME2D = .false.
-type(polarft_corrcalc)          :: pftcc
-type(prime2D_srch), allocatable :: primesrch2D(:)
-integer,            allocatable :: pinds(:)
-logical,            allocatable :: ptcl_mask(:)
-integer                         :: nptcls2update
-integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
-real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
-real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
-real(timer_int_kind)            :: rt_inpl_sum
-character(len=STDLEN)           :: benchfname
+logical, parameter             :: L_BENCH         = .false.
+logical, parameter             :: L_BENCH_PRIME2D = .false.
+type(polarft_corrcalc), target :: pftcc
+integer, allocatable           :: pinds(:)
+logical, allocatable           :: ptcl_mask(:)
+integer                        :: nptcls2update
+integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
+real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
+real(timer_int_kind)           :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
+real(timer_int_kind)           :: rt_inpl_sum
+character(len=STDLEN)          :: benchfname
 
 contains
 
@@ -39,16 +44,23 @@ contains
         use simple_qsys_funs,   only: qsys_job_finished
         use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
         use simple_binoris_io,  only: binwrite_oritab
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
+        class(build),  target, intent(inout) :: b
+        class(params), target, intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer, allocatable :: prev_pops(:), pinds(:)
-        logical, allocatable :: ptcl_mask(:)
-        integer :: iptcl, icls, i, j, fnr
-        real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
+        integer, allocatable       :: prev_pops(:), pinds(:)
+        logical, allocatable       :: ptcl_mask(:)
+        class(strategy2D), pointer :: strategy2Dsrch(:)
+        type(strategy2D_spec)      :: strategy2Dspec
+        integer :: iptcl, icls, i, j, fnr, cnt
+        real    :: corr_bound, frac_srch_space, skewness, extr_thresh
         logical :: l_do_read, doprint, l_partial_sums, l_extr, l_frac_update
+
+        if( L_BENCH )then
+            t_init = tic()
+            t_tot  = t_init
+        endif
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
@@ -76,10 +88,12 @@ contains
             ! factorial decay, -2 because first step is always greedy
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-2)
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
-            corr_thresh = b%a%extremal_bound(extr_thresh)
+            corr_bound  = b%a%extremal_bound(extr_thresh)
+            write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
+            write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_bound
         else
             extr_thresh = 0.
-            corr_thresh = -huge(corr_thresh)
+            corr_bound  = -huge(corr_bound)
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
@@ -107,15 +121,11 @@ contains
         endif
 
         ! PREP REFERENCES
-        if( L_BENCH )then
-            t_init = tic()
-            t_tot  = t_init
-        endif
         call cavger_new(b, p, 'class', ptcl_mask)
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
-                stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
+                stop 'ERROR! no eo partitioning available; strategy3D_matcher :: prime2D_exec'
             endif
             if( .not. cline%defined('refs') )&
             &stop 'need refs to be part of command line for distributed prime2D execution'
@@ -228,72 +238,67 @@ contains
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
-        ! create the search objects, need to re-create every round because parameters are changing
-        call prep4prime2D_srch( b, p, ptcl_mask, which_iter )
-        allocate( primesrch2D(p%fromp:p%top), stat=alloc_stat)
-        allocchk("In hadamard2D_matcher::prime2D_exec primesrch2D objects ")
-        i = 0
+        ! array allocation for strategy2D
+        call prep_strategy2D( b, p, ptcl_mask, which_iter )
+        ! switch for polymorphic strategy2D construction
+        select case(trim(p%neigh))
+            case('yes')
+                allocate(strategy2D_neigh :: strategy2Dsrch(p%fromp:p%top))
+            case DEFAULT
+                if( p%oritab .eq. '' )then
+                    allocate(strategy2D_greedy :: strategy2Dsrch(p%fromp:p%top))
+                else
+                    allocate(strategy2D_stochastic :: strategy2Dsrch(p%fromp:p%top))
+                endif
+        end select
+        ! actual construction
+        cnt = 0
         do iptcl = p%fromp, p%top
-            if( ptcl_mask(iptcl) ) i = i + 1
-            call primesrch2D(iptcl)%new(iptcl, i, pftcc, b%a, p)
+            if( ptcl_mask(iptcl) )then
+                cnt = cnt + 1
+                ! search spec
+                strategy2Dspec%iptcl      =  iptcl
+                strategy2Dspec%iptcl_map  =  cnt
+                strategy2Dspec%corr_bound =  corr_bound
+                strategy2Dspec%pp         => p
+                strategy2Dspec%ppftcc     => pftcc
+                strategy2Dspec%pa         => b%a
+                if( allocated(b%nnmat) ) strategy2Dspec%nnmat => b%nnmat
+                ! search object
+                call strategy2Dsrch(iptcl)%new(strategy2Dspec)
+            endif
         end do
-        ! generate CTF matrices
+        ! memoize CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! memoize B-factors
         if( p%objfun.eq.'ccres' ) call pftcc%memoize_bfacs(b%a)
-        ! execute the search
+        ! search
         call del_file(p%outfile)
-        if( L_BENCH ) t_align = tic()
-        select case(trim(p%neigh))
-            case('yes')
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-                do iptcl=p%fromp,p%top
-                    if( ptcl_mask(iptcl) )then
-                        call primesrch2D(iptcl)%nn_srch(b%nnmat)
-                    endif
-                end do
-                !$omp end parallel do
-            case DEFAULT
-                if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-                    do iptcl=p%fromp,p%top
-                        call primesrch2D(iptcl)%exec_prime2D_srch(greedy=.true.)
-                    end do
-                    !$omp end parallel do
-                else
-                    if( corr_thresh > 0. )then
-                        write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
-                        write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
-                    endif
-                    if( L_BENCH_PRIME2D )then
-                        rt_refloop_sum = 0.
-                        rt_inpl_sum    = 0.
-                        rt_tot_sum     = 0.
-                    endif
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)&
-                    !$omp reduction(+:rt_refloop_sum,rt_inpl_sum,rt_tot_sum)
-                    do iptcl=p%fromp,p%top
-                        if( ptcl_mask(iptcl) )then
-                            call primesrch2D(iptcl)%exec_prime2D_srch(extr_bound=corr_thresh)
-                        endif
-                        if( L_BENCH_PRIME2D )then
-                            call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
-                            rt_refloop_sum      = rt_refloop_sum + rt_refloop
-                            rt_inpl_sum         = rt_inpl_sum    + rt_inpl
-                            rt_tot_sum          = rt_tot_sum     + rt_tot
-                        endif
-                    end do
-                    !$omp end parallel do
-                endif
-        end select
 
-        ! pftcc & primesrch2D not needed anymore
+        if( L_BENCH ) t_align = tic()
+        if( L_BENCH_PRIME2D )then
+            rt_refloop_sum = 0.
+            rt_inpl_sum    = 0.
+            rt_tot_sum     = 0.
+        endif
+        !$omp parallel do default(shared) schedule(guided) private(i,iptcl) proc_bind(close)
+        do i=1,nptcls2update
+           iptcl = pinds(i)
+           call strategy2Dsrch(iptcl)%srch
+        end do
+        !$omp end parallel do
+        ! clean
+        call clean_strategy2D()
         call pftcc%kill
-        deallocate( primesrch2D )
+        do i=1,nptcls2update
+           iptcl = pinds(i)
+           call strategy2Dsrch(iptcl)%kill
+        end do
+        deallocate( strategy2Dsrch )
         if( L_BENCH ) rt_align = toc(t_align)
-        DebugPrint ' hadamard2D_matcher; completed alignment'
+        DebugPrint ' strategy2D_matcher; completed alignment'
 
         ! REMAPPING OF HIGHEST POPULATED CLASSES
         ! needs to be here since parameters just updated
@@ -332,7 +337,7 @@ contains
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
-            call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
+            call qsys_job_finished(p, 'simple_strategy2D_matcher :: prime2D_exec')
         else
             converged = b%conv%check_conv2D()
         endif
@@ -446,7 +451,7 @@ contains
             call b%imgbatch(imatch)%kill
         end do
         deallocate(match_imgs, b%imgbatch)
-        DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
+        DebugPrint '*** strategy2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
-end module simple_hadamard2D_matcher
+end module simple_strategy2D_matcher

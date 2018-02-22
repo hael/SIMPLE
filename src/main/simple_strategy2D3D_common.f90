@@ -1,5 +1,5 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
-module simple_hadamard_common
+module simple_strategy2D3D_common
 #include "simple_lib.f08"
 use simple_image,    only: image
 use simple_cmdline,  only: cmdline
@@ -201,7 +201,7 @@ contains
                     ! low pass limit
                     p%kfromto(2) = calc_fourier_index(resarr(lp_ind), p%boxmatch, p%smpd)
                     if( p%kfromto(2) == 1 )then
-                        stop 'simple_hadamard_common, simple_math::get_lplim gives nonsensical result (==1)'
+                        stop 'simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)'
                     endif
                     ! set highest Fourier index for coarse grid search
                     p%kstop_grid   = get_lplim_at_corr(b%fsc(loc(1),:), 0.5)
@@ -215,7 +215,7 @@ contains
                     p%kfromto(2) = calc_fourier_index(b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd)
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
-                    stop 'need fsc file, lp, or find; set_bp_range; simple_hadamard_common'
+                    stop 'need fsc file, lp, or find; set_bp_range; simple_strategy2D3D_common'
                 endif
                 ! lpstop overrides any other method for setting the low-pass limit
                 if( cline%defined('lpstop') )then
@@ -228,7 +228,7 @@ contains
                         p%kfromto(2) = p%kfromto(1) + 3
                     else
                         write(*,*) 'fromto:', p%kfromto(1), p%kfromto(2)
-                        stop 'resolution range too narrow; set_bp_range; simple_hadamard_common'
+                        stop 'resolution range too narrow; set_bp_range; simple_strategy2D3D_common'
                     endif
                 endif
                 ! re-set the low-pass limit
@@ -247,12 +247,12 @@ contains
                 p%lp_dyn = p%lp
                 call b%a%set_all2single('lp',p%lp)
             case DEFAULT
-                stop 'Unsupported eo flag; simple_hadamard_common'
+                stop 'Unsupported eo flag; simple_strategy2D3D_common'
         end select
         ! set highest Fourier index for coarse grid search
         if( .not. kstop_grid_set )        p%kstop_grid = p%kfromto(2)
         if( p%kstop_grid > p%kfromto(2) ) p%kstop_grid = p%kfromto(2)
-        DebugPrint '*** simple_hadamard_common ***: did set Fourier index range'
+        DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
     subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
@@ -288,7 +288,7 @@ contains
             p%lp_dyn = lplim
             call b%a%set_all2single('lp',lplim)
         endif
-        DebugPrint  '*** simple_hadamard_common ***: did set Fourier index range'
+        DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
@@ -445,7 +445,7 @@ contains
         ! deal with CTF
         select case(p%ctf)
             case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
-                stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align'
+                stop 'ctf=mul is not supported; simple_strategy2D3D_common :: prepimg4align'
             case('no')   ! do nothing
             case('yes')  ! do nothing
             case('flip') ! flip back
@@ -463,13 +463,13 @@ contains
                         angast = 0.
                     case DEFAULT
                         write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
-                        stop 'simple_hadamard_common :: prepimg4align'
+                        stop 'simple_strategy2D3D_common :: prepimg4align'
                 end select
                 phshift = 0.
                 if( p%tfplan%l_phaseplate ) phshift = b%a%get(iptcl,'phshift')
                 call tfun%apply_serial(img_in, dfx, 'flip', dfy, angast, phshift)
             case DEFAULT
-                stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
+                stop 'Unsupported ctf mode; simple_strategy2D3D_common :: prepimg4align'
         end select
         ! shell normalization & filter
         if( is3D )then
@@ -510,7 +510,7 @@ contains
         endif
         ! return in Fourier space
         call img_out%fwd_ft
-        DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
+        DebugPrint  '*** simple_strategy2D3D_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
@@ -998,4 +998,4 @@ contains
 
     end subroutine gen_projection_frcs
 
-end module simple_hadamard_common
+end module simple_strategy2D3D_common

@@ -57,7 +57,7 @@ end type check3D_conv_commander
 contains
 
     subroutine exec_resrange( self, cline )
-        use simple_hadamard3D_matcher, only: prime3D_find_resrange
+        use simple_strategy3D_matcher, only: prime3D_find_resrange
         class(resrange_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params) :: p
@@ -112,7 +112,7 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_prime3D_init( self, cline )
-        use simple_hadamard3D_matcher, only: gen_random_model, prime3D_find_resrange
+        use simple_strategy3D_matcher, only: gen_random_model, prime3D_find_resrange
         class(prime3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)       :: p
@@ -188,7 +188,7 @@ contains
 
     subroutine exec_prime3D( self, cline )
         use simple_math,               only: calc_lowpass_lim, calc_fourier_index
-        use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
+        use simple_strategy3D_matcher, only: prime3D_exec, prime3D_find_resrange
         use simple_strings,            only: str_has_substr
         class(prime3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline

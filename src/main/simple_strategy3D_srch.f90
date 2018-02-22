@@ -77,6 +77,7 @@ contains
     subroutine new( self, spec )
         class(strategy3D_srch), intent(inout) :: self
         class(strategy3D_spec), intent(in)    :: spec
+        integer, parameter :: MAXITS = 60
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
@@ -125,9 +126,9 @@ contains
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
-            &shbarrier=spec%pp%shbarrier, nrestarts=3, maxits=60)
+            &shbarrier=spec%pp%shbarrier, nrestarts=3, maxits=MAXITS)
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
-            &shbarrier=spec%pp%shbarrier, maxits=60)
+            &shbarrier=spec%pp%shbarrier, maxits=MAXITS)
         self%exists = .true.
         if( DEBUG ) print *, '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
     end subroutine new
