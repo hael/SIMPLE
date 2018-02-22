@@ -147,7 +147,10 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
 mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
 
 find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
-    NAMES fftw3f_threads libfftw3f-3_threads fftw3f_omp
+    NAMES fftw3f_threads
+	  libfftw3f-3_threads
+          fftw3f_omp
+	  libfftw3f-3_omp
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs

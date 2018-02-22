@@ -80,7 +80,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
-
 ############################################################
 #
 # Add definition macros unique to compilation

@@ -82,7 +82,7 @@ foreach(TESTNAME ${TESTDIRS})
     target_link_libraries(${TESTEXE} ${EXTRA_LIBS})
     if(USE_OPENMP)
       set_target_properties(${TESTEXE} PROPERTIES
-        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} -fno-range-check"
         LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
         LANGUAGE Fortran)
     endif(USE_OPENMP)
