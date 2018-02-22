@@ -31,8 +31,8 @@
 #  License text for the above reference.)
 
 find_path(JPEG_INCLUDE_DIR jpeglib.h)
-
-set(JPEG_NAMES ${JPEG_NAMES} jpeg libjpeg)
+find_path(JPEG_CONFIG_DIR jconfig.h)
+set(JPEG_NAMES ${JPEG_NAMES} jpeg9 libjpeg.so.9)
 find_library(JPEG_LIBRARY NAMES ${JPEG_NAMES} )
 
 # handle the QUIETLY and REQUIRED arguments and set JPEG_FOUND to TRUE if
@@ -40,13 +40,13 @@ find_library(JPEG_LIBRARY NAMES ${JPEG_NAMES} )
 include(${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(JPEG DEFAULT_MSG JPEG_LIBRARY JPEG_INCLUDE_DIR)
 
-file(STRINGS ${JPEG_INCLUDE_DIR}/jpeglib.h JPEGLIB_VERSION REGEX ".*JPEG_LIB_VERSION_MAJOR.*")
-string(REGEX REPLACE "^.*JPEG_LIB_VERSION_MAJOR[ ]*" "" JPEGLIB_VERSION ${JPEGLIB_VERSION})
+file(STRINGS ${JPEG_CONFIG_DIR}/jconfig.h JPEGLIB_VERSION REGEX "^#define[ \t]+JPEG_LIB_VERSION")
+string(REGEX REPLACE "^#define[ ]*JPEG_LIB_VERSION[ \t]+\([0-9]\)\([0-9]\)" "\\1.\\2" JPEGLIB_VERSION ${JPEGLIB_VERSION})
 message(STATUS "JPEGlib version ${JPEGLIB_VERSION} FOUND")
-if (${JPEGLIB_VERSION} LESS 9)
-  set(JPEG_FOUND OFF)
-  message( " Jpeglib version not equal to or greater than 9. " )
-endif()
+ if ("${JPEGLIB_VERSION}" VERSION_GREATER "8.0")
+   set(JPEG_FOUND OFF)
+   message(STATUS " Jpeglib.h version not equal to or greater than 8.0 " )
+ endif()
 
 if(JPEG_FOUND)
   set(JPEG_LIBRARIES ${JPEG_LIBRARY})
