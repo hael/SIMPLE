@@ -362,9 +362,10 @@ select case(prg)
         keys_optional(6) = 'dfmax'
         keys_optional(7) = 'astigtol'
         keys_optional(8) = 'phaseplate'
+        keys_optional(9) = 'dir'
         ! parse command line
         if( describe ) call print_doc_ctf_estimate
-        call cline%parse(keys_required(:6), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',   512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',         30.)
@@ -389,9 +390,10 @@ select case(prg)
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
         keys_optional(4) = 'ndev'
+        keys_optional(5) = 'dir'
         ! parse command line
         if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:4), keys_optional(:4))
+        call cline%parse(keys_required(:4), keys_optional(:5))
         ! execute
         call xpick_distr%execute(cline)
 
