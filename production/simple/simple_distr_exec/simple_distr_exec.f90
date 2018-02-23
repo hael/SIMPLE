@@ -25,9 +25,6 @@ type(make_cavgs_distr_commander)             :: xmake_cavgs_distr
 type(prime2D_autoscale_commander)            :: xprime2D_distr
 type(prime2D_stream_distr_commander)         :: xprime2D_stream_distr
 
-! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
-type(comlin_smat_distr_commander)            :: xcomlin_smat_distr
-
 ! PRIME3D
 type(prime3D_init_distr_commander)           :: xprime3D_init_distr
 type(prime3D_distr_commander)                :: xprime3D_distr
@@ -525,34 +522,6 @@ select case(prg)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D',  'no')
         call xprime2D_stream_distr%execute(cline)
 
-    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
-
-    case( 'comlin_smat' )
-        !==Program comlin_smat
-        !
-        ! <comlin_smat/begin>is a distributed workflow for creating a similarity matrix based on
-        ! common line correlation. The idea being that it should be possible to cluster images based
-        ! on their 3D similarity witout having a 3D model by only operating on class averages
-        ! and find averages that fit well together in 3D<comlin_smat/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'lp'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'hp'
-        keys_optional(2) = 'trs'
-        ! parse command line
-        if( describe ) call print_doc_comlin_smat
-        call cline%parse(keys_required(:5), keys_optional(:2))
-        ! set defaults
-        call cline%set('nthr', 1.0)
-        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
-        ! execute
-        call xcomlin_smat_distr%execute(cline)
-
     ! PRIME3D
 
     case('prime3D_init')
@@ -590,8 +559,6 @@ select case(prg)
         else
             stop 'stk or stktab need to be part of command line!'
         endif
-        ! set defaults
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xprime3D_init_distr%execute( cline )
     case( 'refine3D' )

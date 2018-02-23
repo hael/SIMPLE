@@ -6,6 +6,7 @@ use simple_cmdline,        only: cmdline
 use simple_magic_boxes,    only: find_magic_box
 use simple_imghead,        only: find_ldim_nptcls
 use simple_stktab_handler, only: stktab_handler
+use simple_binoris,        only: binoris
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none
@@ -264,6 +265,7 @@ type :: params
     integer :: ring1=2
     integer :: ring2=0
     integer :: spec=0
+    integer :: spproj_a_seg=0      !< sp-project segments that b%a points to
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
     integer :: state2split=0       !< state group to split
@@ -406,17 +408,18 @@ contains
     end function constructor
 
     !> \brief  is a constructor
-    subroutine new( self, cline, allow_mix, del_scaled )
+    subroutine new( self, cline, allow_mix, del_scaled, spproj_a_seg )
         use simple_math, only: round2even
         use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: allow_mix, del_scaled
-        ! type(binoris)                    :: bos
+        integer, optional, intent(in)    :: spproj_a_seg
+        type(binoris)                    :: bos
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: stk_part_fname_sc, pid_file
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, sz
         logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
@@ -426,6 +429,9 @@ contains
         if( present(allow_mix) ) aamix = allow_mix
         ddel_scaled = .false.
         if( present(del_scaled) ) ddel_scaled = del_scaled
+        ! sp_project field corresponding to b%a
+        self%spproj_a_seg = GENERIC_SEG
+        if( present(spproj_a_seg) ) self%spproj_a_seg = spproj_a_seg
         ! file counter
         cntfile = 0
         ! make global ori

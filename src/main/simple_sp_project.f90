@@ -10,8 +10,7 @@ private
 integer, parameter :: MAXN_OS_SEG = 12
 
 type sp_project
-    ! oris representations of binary file segments
-
+    ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
     ! segments 1-10 reserved for simple program outputs, orientations and files
     type(oris)        :: os_stk    ! per-micrograph stack os, segment 1
     type(oris)        :: os_ptcl2D ! per-particle 2D os,      segment 2
@@ -21,9 +20,11 @@ type sp_project
 
     !...
 
+    ! ARRAY REPRESENTATIONS OF BINARY FILE SEGMENTS FOR FRCS & FSCS
     real, allocatable :: frcs(:,:) ! Fourier Ring  Corrs      segment 9
     real, allocatable :: fscs(:,:) ! Fourier Shell Corrs      segment 10
 
+    ! ORIS REPRESENTATIONS OF PROJECT DATA / DISTRIBUTED SYSTEM INFO / SYSTEM MANAGEMENT STUFF
     ! segments 11-20 reserved for project info, job management etc.
     type(oris)        :: projinfo  ! project information      segment 11
     type(oris)        :: jobproc   ! jobid + PID + etc.       segment 12
@@ -79,7 +80,7 @@ contains
             case('jobproc')
                 isegment = JOBPROC_SEG
             case DEFAULT
-                stop 'unsupported which flag; sp_project :: read_sp_oris'
+                stop 'unsupported which flag; sp_project :: which_flag2isgement'
         end select
     end function which_flag2isgement
 
@@ -138,7 +139,7 @@ contains
             case('jobproc')
                 call self%jobproc%new_clean(n)
             case DEFAULT
-                stop 'unsupported which flag; sp_project :: new_sp_oris_2'
+                stop 'unsupported which flag; sp_project :: new_sp_oris'
         end select
     end subroutine new_sp_oris
 
@@ -162,7 +163,7 @@ contains
             case('jobproc')
                 self%jobproc   = os
             case DEFAULT
-                stop 'unsupported which flag; sp_project :: new_sp_oris_1'
+                stop 'unsupported which flag; sp_project :: set_sp_oris'
         end select
     end subroutine set_sp_oris
 
@@ -220,7 +221,7 @@ contains
         integer :: isegment
         if( .not. file_exists(trim(fname)) )then
             write(*,*) 'fname: ', trim(fname)
-            stop 'inputted file does not exist; sp_project :: read_sp_oris'
+            stop 'inputted file does not exist; sp_project :: read_segment'
         endif
         select case(fname2format(fname))
             case('O')
@@ -247,11 +248,11 @@ contains
                     case('jobproc')
                         call self%jobproc%read(fname)
                     case DEFAULT
-                        stop 'unsupported which flag; sp_project :: read_sp_oris'
+                        stop 'unsupported which flag; sp_project :: read_segment'
                 end select
             case DEFAULT
                 write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: read_sp_oris'
+                stop 'file format not supported; sp_project :: read_segment'
         end select
     end subroutine read_segment
 
@@ -338,50 +339,50 @@ contains
                         if( self%os_stk%get_noris() > 0 )then
                             call self%os_stk%write(fname)
                         else
-                            write(*,*) 'WARNING, no stk-type oris available to write; sp_project :: write_sp_oris'
+                            write(*,*) 'WARNING, no stk-type oris available to write; sp_project :: write_segment'
                         endif
                     case('ptcl2D')
                         if( self%os_ptcl2D%get_noris() > 0 )then
                             call self%os_ptcl2D%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no ptcl2D-type oris available to write; sp_project :: write_sp_oris'
+                            write(*,*) 'WARNING, no ptcl2D-type oris available to write; sp_project :: write_segment'
                         endif
                     case('cls2D')
                         if( self%os_cls2D%get_noris() > 0 )then
                             call self%os_cls2D%write(fname)
                         else
-                            write(*,*) 'WARNING, no cls2D-type oris available to write; sp_project :: write_sp_oris'
+                            write(*,*) 'WARNING, no cls2D-type oris available to write; sp_project :: write_segment'
                         endif
                     case('cls3D')
                         if( self%os_cls3D%get_noris() > 0 )then
                             call self%os_cls3D%write(fname,  fromto)
                         else
-                            write(*,*) 'WARNING, no cls3D-type oris available to write; sp_project :: write_sp_oris'
+                            write(*,*) 'WARNING, no cls3D-type oris available to write; sp_project :: write_segment'
                         endif
                     case('ptcl3D')
                         if( self%os_ptcl3D%get_noris() > 0 )then
                             call self%os_ptcl3D%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no ptcl3D-type oris available to write; sp_project :: write_sp_oris'
+                            write(*,*) 'WARNING, no ptcl3D-type oris available to write; sp_project :: write_segment'
                         endif
                     case('projinfo')
                         if( self%projinfo%get_noris() > 0 )then
                             call self%projinfo%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no projinfo-type oris available to write; sp_project :: write_sp_oris'
+                            write(*,*) 'WARNING, no projinfo-type oris available to write; sp_project :: write_segment'
                         endif
                     case('jobproc')
                         if( self%jobproc%get_noris() > 0 )then
                             call self%jobproc%write(fname)
                         else
-                            write(*,*) 'WARNING, no jobproc-type oris available to write; sp_project :: write_sp_oris'
+                            write(*,*) 'WARNING, no jobproc-type oris available to write; sp_project :: write_segment'
                         endif
                     case DEFAULT
-                        stop 'unsupported which flag; sp_project :: write_sp_oris'
+                        stop 'unsupported which flag; sp_project :: write_segment'
                 end select
             case DEFAULT
                 write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: write_sp_oris'
+                stop 'file format not supported; sp_project :: write_segment'
         end select
     end subroutine write_segment
 

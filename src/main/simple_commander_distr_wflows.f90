@@ -1,19 +1,19 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
 #include "simple_lib.f08"
-use simple_cmdline,          only: cmdline
-use simple_chash,            only: chash
-use simple_qsys_env,         only: qsys_env
-use simple_build,            only: build
-use simple_params,           only: params
-use simple_commander_base,   only: commander_base
+use simple_cmdline,             only: cmdline
+use simple_chash,               only: chash
+use simple_qsys_env,            only: qsys_env
+use simple_build,               only: build
+use simple_params,              only: params
+use simple_commander_base,      only: commander_base
 use simple_commander_preprocess ! use all in there
-use simple_commander_prime2D ! use all in there
-use simple_commander_distr   ! use all in there
-use simple_commander_mask    ! use all in there
-use simple_commander_distr   ! use all in there
-use simple_qsys_funs         ! use all in there
-use simple_binoris_io        ! use all in there
+use simple_commander_prime2D    ! use all in there
+use simple_commander_distr      ! use all in there
+use simple_commander_mask       ! use all in there
+use simple_commander_distr      ! use all in there
+use simple_qsys_funs            ! use all in there
+use simple_binoris_io           ! use all in there
 implicit none
 
 public :: motion_correct_ctffind_distr_commander
@@ -24,7 +24,6 @@ public :: ctffind_distr_commander
 public :: ctf_estimate_distr_commander
 public :: pick_distr_commander
 public :: make_cavgs_distr_commander
-public :: comlin_smat_distr_commander
 public :: prime2D_distr_commander
 public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
@@ -66,10 +65,6 @@ type, extends(commander_base) :: make_cavgs_distr_commander
   contains
     procedure :: execute      => exec_make_cavgs_distr
 end type make_cavgs_distr_commander
-type, extends(commander_base) :: comlin_smat_distr_commander
-  contains
-    procedure :: execute      => exec_comlin_smat_distr
-end type comlin_smat_distr_commander
 type, extends(commander_base) :: prime2D_distr_commander
   contains
     procedure :: execute      => exec_prime2D_distr
@@ -659,46 +654,6 @@ contains
             end subroutine remap_empty_cavgs
 
     end subroutine exec_prime2D_distr
-
-    subroutine exec_comlin_smat_distr( self, cline )
-        use simple_commander_comlin, only: comlin_smat_commander
-        use simple_commander_distr,  only: merge_similarities_commander
-        use simple_map_reduce
-        class(comlin_smat_distr_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        type(merge_similarities_commander) :: xmergesims
-        type(cmdline)  :: cline_mergesims
-        type(qsys_env) :: qenv
-        type(params)   :: p_master
-        type(chash)    :: job_descr
-        integer        :: nptcls
-        ! seed the random number generator
-        call seed_rnd
-        ! output command line executed
-        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-        write(*,*) trim(cmdline_glob)
-        ! make master parameters
-        p_master = params(cline)
-        nptcls          = p_master%nptcls
-        p_master%nptcls = (p_master%nptcls*(p_master%nptcls - 1))/2
-        call split_pairs_in_parts(nptcls, p_master%nparts)
-        ! setup the environment for distributed execution
-        call qenv%new(p_master)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        ! merge similarities
-        call cline_mergesims%set('nptcls', real(nptcls))
-        call cline_mergesims%set('nparts', real(p_master%nparts))
-        call xmergesims%execute( cline_mergesims )
-        ! clean
-        call del_files('pairs_part',        p_master%nparts, ext='.bin')
-        call del_files('similarities_part', p_master%nparts, ext='.bin')
-        call qsys_cleanup(p_master)
-        ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_COMLIN_SMAT NORMAL STOP ****')
-    end subroutine exec_comlin_smat_distr
 
     subroutine exec_prime3D_init_distr( self, cline )
         use simple_commander_prime3D

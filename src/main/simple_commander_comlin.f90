@@ -8,116 +8,16 @@ use simple_build,          only: build
 use simple_commander_base, only: commander_base
 implicit none
 
-public :: comlin_smat_commander
 public :: symsrch_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: comlin_smat_commander
-  contains
-    procedure :: execute      => exec_comlin_smat
-end type comlin_smat_commander
 type, extends(commander_base) :: symsrch_commander
   contains
     procedure :: execute      => exec_symsrch
 end type symsrch_commander
 
 contains
-
-    ! calculates a similarity matrix based on common line correlations to measure 3D similarity of 2D images
-    subroutine exec_comlin_smat( self, cline )
-        use simple_comlin_srch   ! use all in there
-        use simple_ori,          only: ori
-        use simple_imgfile,      only: imgfile
-        use simple_comlin,       only: comlin
-        use simple_qsys_funs,    only: qsys_job_finished
-        class(comlin_smat_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(params), target          :: p
-        type(build),  target          :: b
-        integer                       :: iptcl, jptcl, funit, io_stat
-        integer                       :: ntot, npairs, ipair
-        real,    allocatable          :: corrmat(:,:), corrs(:)
-        integer, allocatable          :: pairs(:,:)
-        character(len=:), allocatable :: fname
-        p = params(cline, .false.)                           ! constants & derived constants produced
-        call b%build_general_tbox(p, cline, do3d=.false., nooritab=.true.) ! general objects built (no oritab reading)
-        allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        allocchk('In: simple_comlin_smat, 1')
-        DebugPrint  'analysing this number of objects: ', p%nptcls
-        do iptcl=1,p%nptcls
-            call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
-            call b%imgs_sym(iptcl)%read(p%stk, iptcl)
-            ! apply a soft-edged mask
-            call b%imgs_sym(iptcl)%mask(p%msk, 'soft')
-            ! Fourier transform
-            call b%imgs_sym(iptcl)%fwd_ft
-        end do
-        b%clins = comlin(b%a, b%imgs_sym, p%lp)
-        if( cline%defined('part') )then
-            npairs = p%top - p%fromp + 1
-            DebugPrint  'allocating this number of similarities: ', npairs
-            allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
-            allocchk('In: simple_comlin_smat, 2')
-            ! read the pairs
-            allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin', stat=alloc_stat)
-            allocchk("In:  simple_comlin_smat, 3")
-            if( .not. file_exists(fname) )then
-                write(*,*) 'file: ', fname, ' does not exist!'
-                write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
-                stop 'I/O error; simple_comlin_smat'
-            endif
-            call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat)
-            call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
-            DebugPrint  'reading pairs in range: ', p%fromp, p%top
-            read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
-            ! check if the read was successful
-            if( io_stat .ne. 0 ) call fileio_errmsg('simple_comlin_smat reading  '//trim(fname), io_stat)
-            call fclose(funit,errmsg='simple_comlin_smat closing  '//trim(fname))
-            deallocate(fname)
-            ! calculate the similarities
-            call comlin_srch_init( b, p, 'simplex', 'pair' )
-            do ipair=p%fromp,p%top
-                p%iptcl = pairs(ipair,1)
-                p%jptcl = pairs(ipair,2)
-                corrs(ipair) = comlin_srch_pair()
-            end do
-            ! write the similarities
-            allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
-            call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM', iostat=io_stat)
-            call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
-            write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
-            ! Check if the write was successful
-            if( io_stat .ne. 0 )call fileio_errmsg('simple_comlin_smat writing  '//trim(fname), io_stat)
-            call fclose(funit, errmsg='simple_comlin_smat opening  '//trim(fname))
-            deallocate(fname, corrs, pairs)
-            call qsys_job_finished(p,'simple_commander_comlin :: exec_comlin_smat')
-        else
-            allocate(corrmat(p%nptcls,p%nptcls), stat=alloc_stat)
-            allocchk('In: simple_comlin_smat, 3')
-            corrmat = 1.
-            ntot = (p%nptcls*(p%nptcls-1))/2
-            ! calculate the similarities
-            call comlin_srch_init( b, p, 'simplex', 'pair' )
-            do iptcl=1,p%nptcls-1
-                do jptcl=iptcl+1,p%nptcls
-                    p%iptcl = iptcl
-                    p%jptcl = jptcl
-                    corrmat(iptcl,jptcl) = comlin_srch_pair()
-                    corrmat(jptcl,iptcl) = corrmat(iptcl,jptcl)
-                end do
-            end do
-            call progress(ntot, ntot)
-            call fopen(funit, status='REPLACE', action='WRITE', file='clin_smat.bin', access='STREAM', iostat=io_stat)
-            call fileio_errmsg('simple_comlin_smat opening  clin_smat.bin', io_stat)
-            write(unit=funit,pos=1,iostat=io_stat) corrmat
-            if( io_stat .ne. 0 ) call fileio_errmsg('simple_comlin_smat writing  clin_smat.bin', io_stat)
-            call fclose(funit, errmsg='simple_comlin_smat closing clin_smat.bin ')
-            deallocate(corrmat)
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
-    end subroutine exec_comlin_smat
 
     !> for identification of the principal symmetry axis
     subroutine exec_symsrch( self, cline )

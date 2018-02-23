@@ -4,9 +4,8 @@ module simple_build
 use simple_cmdline,          only: cmdline
 use simple_comlin,           only: comlin
 use simple_image,            only: image
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-use simple_oris,             only: oris ! to be replaced with sp_project
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+use simple_sp_project,       only: sp_project
+use simple_oris,             only: oris
 use simple_reconstructor,    only: reconstructor
 use simple_reconstructor_eo, only: reconstructor_eo
 use simple_params,           only: params
@@ -16,9 +15,7 @@ use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-use simple_binoris_io,       only: binread_ctfparams_state_eo, binread_oritab ! to be replaced with sp_project
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+use simple_binoris_io,       only: binread_ctfparams_state_eo, binread_oritab
 implicit none
 
 public :: build
@@ -27,7 +24,9 @@ private
 
 type :: build
     ! GENERAL TOOLBOX
-    type(oris)                          :: a, e, e_bal        !< aligndata, discrete spaces
+    type(sp_project)                    :: spproj             !< centralised single-particle project meta-data handler
+    class(oris), pointer                :: a => null()        !< pointer to field in spproj
+    type(oris)                          :: e, e_bal           !< discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
     type(image)                         :: img                !< individual image/projector objects
@@ -87,10 +86,10 @@ contains
 
     !> \brief  constructs the general toolbox
     subroutine build_general_tbox( self, p, cline, do3d, nooritab, force_ctf )
-        class(build),      intent(inout) :: self
-        class(params),     intent(inout) :: p
-        class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: do3d, nooritab, force_ctf
+        class(build), target, intent(inout) :: self
+        class(params),        intent(inout) :: p
+        class(cmdline),       intent(inout) :: cline
+        logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
         integer        :: lfny,  lfny_match, cyc_lims(3,2)
         logical        :: ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -107,7 +106,25 @@ contains
         p%eullims = self%se%srchrange()
         DebugPrint   'did setup symmetry functionality'
         ! create object for orientations
-        call self%a%new(p%nptcls)
+        ! b%a now becomes a pointer to a field in b%spproj
+        select case(p%spproj_a_seg)
+            case(STK_SEG)
+                call self%spproj%os_stk%new(p%nptcls)
+                self%a => self%spproj%os_stk
+            case(PTCL2D_SEG)
+                call self%spproj%os_ptcl2D%new(p%nptcls)
+                self%a => self%spproj%os_ptcl2D
+            case(CLS3D_SEG)
+                call self%spproj%os_cls3D%new(p%nptcls)
+                self%a => self%spproj%os_cls3D
+            case(PTCL3D_SEG)
+                call self%spproj%os_ptcl3D%new(p%nptcls)
+                self%a => self%spproj%os_ptcl3D
+            case DEFAULT
+                ! using ptcl3D as the generic segment
+                call self%spproj%os_ptcl3D%new(p%nptcls)
+                self%a => self%spproj%os_ptcl3D
+        end select
         if( present(nooritab) )then
             call self%a%spiral(p%nsym, p%eullims)
         else

@@ -612,8 +612,6 @@ select case(prg)
         keys_optional(5) = 'moldiam'
         ! parse command line
         call cline%parse(keys_required(:1), keys_optional(:5))
-        ! set defaults
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xresrange%execute(cline)
     case( 'npeaks' )
@@ -633,7 +631,6 @@ select case(prg)
         ! parse command line
         call cline%parse(keys_required(:3), keys_optional(:3))
         ! set defaults
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         if( .not. cline%defined('lp') )     call cline%set('lp',       20.)
         ! execute
         call xnpeaks%execute(cline)
@@ -684,8 +681,7 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
+        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
         call xprime3D_init%execute(cline)
     case( 'multiptcl_init' )
@@ -791,7 +787,6 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( .not. cline%defined('pproc')                   ) call cline%set('pproc',  'yes')
         if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
         if( cline%defined('lp') .or. cline%defined('find') )then
@@ -854,7 +849,6 @@ select case(prg)
         call cline%parse(keys_required(:5), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('lp') .and. .not.cline%defined('lp') )call cline%set('lp', 20.)
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xcheck3D_conv%execute(cline)
 
