@@ -108,7 +108,7 @@ contains
         !$omp end parallel
         ! projection direction peaks, eo & CTF transfer
         select case(trim(p%refine))
-            case('cluster')
+        case('cluster','clustersym','clusterdev')
                ! nothing to do
             case DEFAULT
                 allocate(o_peaks(p%fromp:p%top))
@@ -140,7 +140,7 @@ contains
         end select
         ! refine mode specific allocations and initialisations
         select case( trim(p%refine) )
-            case( 'cluster' )
+        case( 'cluster','clustersym','clusterdev' )
                 allocate(prev_states(nptcls), source=0)
                 !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top

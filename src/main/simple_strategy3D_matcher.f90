@@ -198,7 +198,7 @@ contains
         ! EXTREMAL LOGICS
         do_extr  = .false.
         select case(trim(p%refine))
-        case('cluster')
+            case('cluster','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
                 zero_pop    = count(.not.b%a%included(consider_w=.false.))
@@ -217,7 +217,7 @@ contains
                     extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))
                     corr_thresh = b%a%extremal_bound(extr_thresh)
                 endif
-                if(trim(p%refine).eq.'hetsym')then
+                if(trim(p%refine).eq.'clustersym')then
                    ! symmetry pairing matrix
                     c1_symop = sym('c1')
                     p%nspace = min( p%nspace*b%se%get_nsym(), 3000 )
@@ -225,6 +225,13 @@ contains
                     call b%e%spiral
                     call b%se%nearest_sym_neighbors( b%e, symmat )
                 endif
+            case('clusterdev')
+                if(allocated(het_mask))deallocate(het_mask)
+                allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
+                corr_thresh = -huge(corr_thresh)
+                zero_pop    = count(.not.b%a%included(consider_w=.false.))
+                iextr_lim   = ceiling(2.*log(real(p%nptcls-zero_pop)))
+                extr_thresh = 0.9 * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))
             case DEFAULT
                 ! nothing to do
         end select
@@ -275,7 +282,7 @@ contains
                 allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top))
             case('greedy_multi')
                 allocate(strategy3D_greedy_multi  :: strategy3Dsrch(p%fromp:p%top))
-            case('cluster')
+            case('cluster','clustersym','clusterdev')
                 allocate(strategy3D_cluster       :: strategy3Dsrch(p%fromp:p%top))
             case DEFAULT
                 write(*,*) 'refine flag: ', trim(refine)
@@ -375,7 +382,7 @@ contains
                     if( p%npeaks > 1 )then
                         call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
                     else
-                        if( trim(p%refine).eq.'cluster' )then
+                        if( trim(p%refine).eq.'clustersym' )then
                             ! always C1 reconstruction
                             call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation)
                         else
@@ -407,7 +414,7 @@ contains
             call qsys_job_finished( p, 'simple_strategy3D_matcher :: prime3D_exec')
         else
             select case(trim(p%refine))
-            case('cluster')
+            case('cluster','clustersym','clusterdev')
                     converged = b%conv%check_conv_cluster()
                 case DEFAULT
                     converged = b%conv%check_conv3D(update_res)
