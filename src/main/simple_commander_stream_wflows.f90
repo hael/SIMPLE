@@ -1,14 +1,14 @@
 ! concrete commander: stream processing routines
 module simple_commander_stream_wflows
 #include "simple_lib.f08"
-use simple_cmdline,           only: cmdline
-use simple_chash,             only: chash
-use simple_params,            only: params
-use simple_commander_base,    only: commander_base
+use simple_cmdline,              only: cmdline
+use simple_chash,                only: chash
+use simple_params,               only: params
+use simple_commander_base,       only: commander_base
 use simple_commander_preprocess, only: preprocess_commander
-use simple_qsys_env,          only: qsys_env
-use simple_jiffys,            only: simple_end
-use simple_qsys_funs          ! use all in there
+use simple_qsys_env,             only: qsys_env
+use simple_jiffys,               only: simple_end
+use simple_qsys_funs             ! use all in there
 implicit none
 
 public :: preprocess_stream_commander
@@ -34,7 +34,7 @@ contains
         class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
-        integer,               parameter   :: LONGTIME  = 90   ! ! 15 mins before processing a new movie
+        integer,               parameter   :: LONGTIME  = 90  ! 15 mins before processing a new movie
         type(merge_algndocs_commander)     :: xmerge_algndocs
         type(qsys_env)                     :: qenv
         type(chash)                        :: job_descr

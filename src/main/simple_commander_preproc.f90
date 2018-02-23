@@ -125,7 +125,11 @@ contains
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
         else
-            output_dir = trim(DIR_PREPROC)
+            if( p%stream.eq.'yes' )then
+                output_dir = trim(DIR_PREPROC_STREAM)
+            else
+                output_dir = trim(DIR_PREPROC)
+            endif
         endif
         output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
         output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
@@ -134,7 +138,7 @@ contains
         call mkdir(output_dir_ctf_estimate)
         call mkdir(output_dir_motion_correct)
         call mkdir(output_dir_unidoc)
-        if( p%dopick.eq.'yes' )then
+        if( p%l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
             output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
             call mkdir(output_dir_picker)
@@ -181,54 +185,6 @@ contains
                 fromto(2) = nmovies
             endif
         endif
-        ! if( p%l_distr_exec )then
-        !     if( cline%defined('dir_target') )then
-        !         if( cline%defined('outfile') )then
-        !             allocate(fname_unidoc_output, source=trim(p%dir_target)//'/'//&
-        !             &trim(p%outfile))
-        !         else
-        !             allocate(fname_unidoc_output, source=trim(p%dir_target)//'/'//&
-        !             &'unidoc_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
-        !         endif
-        !     else
-        !         if( cline%defined('outfile') )then
-        !             allocate(fname_unidoc_output, source=trim(p%outfile))
-        !         else
-        !             allocate(fname_unidoc_output, source='unidoc_output_part'//&
-        !             &int2str_pad(p%part,p%numlen)//'.txt')
-        !         endif
-        !     endif
-        !     ! determine loop range
-        !     if( cline%defined('fromp') .and. cline%defined('top') )then
-        !         fromto(1) = p%fromp
-        !         fromto(2) = p%top
-        !     else
-        !         stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
-        !     endif
-        ! else
-        !     if( p%stream.eq.'yes' )then
-        !         ! input & output files
-        !         movie_fname = remove_abspath(trim(movienames(1)))
-        !         movie_ext   = fname2ext(trim(movie_fname))
-        !         movie_fbody = get_fbody(trim(movie_fname), trim(movie_ext))
-        !         if( cline%defined('fbody') )movie_fbody = trim(p%fbody)//trim(movie_fbody)
-        !         p%fbody = trim(movie_fbody)
-        !         ! motion_correct: on call
-        !         ! ctf: on call and output set below
-        !         allocate(fname_unidoc_output, source=trim(UNIDOC_STREAM_DIR)//trim(UNIDOC_OUTPUT)//trim(movie_fbody)//'.txt')
-        !         ! picker: on call
-        !         ! extract
-        !         allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
-        !         allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//trim(METADATA_EXT))
-        !         call cline%set('fbody', trim(p%fbody))
-        !     else
-        !         allocate(fname_unidoc_output, source='unidoc_output'//trim(METADATA_EXT))
-        !     endif
-        !     ! determine loop range
-        !     fromto(1) = 1
-        !     if( cline%defined('startit') ) fromto(1) = p%startit
-        !     fromto(2) = nmovies
-        ! endif
         ntot = fromto(2) - fromto(1) + 1
         frame_counter = 0
         movie_counter = 0

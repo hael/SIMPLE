@@ -22,7 +22,6 @@ type moviewatcher
     integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
     integer                            :: n_watch        = 0     !< number of times the folder has been watched
-    logical                            :: dopick         = .false.
     logical                            :: doprint        = .false.
 contains
 
@@ -62,7 +61,6 @@ contains
         self%watch_dir   = trim(adjustl(p%dir_movies))
         self%dir_out     = trim(adjustl(p%dir))//'/'
         self%report_time = report_time
-        self%dopick      = p%l_pick
         self%ext         = trim(adjustl(p%ext))
         self%fbody       = trim(adjustl(p%fbody))
         if( present(print) )then

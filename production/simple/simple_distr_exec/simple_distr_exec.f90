@@ -131,7 +131,10 @@ select case(prg)
         else
             if( cline%defined('filetab') )stop 'The list of movies cannot be provided in streaming mode'
         endif
-
+        if( cline%defined('refs') ) call cline%set('dopick', 'yes')
+        if( cline%get_carg('dopick').eq.'yes' .and. .not.cline%defined('refs') )then
+            stop 'Picking references must be provided together with DOPICK=YES'
+        endif
         call xpreprocess_stream%execute(cline)
 
     ! PIPELINED MOTION_CORRECT + CTFFIND
