@@ -74,8 +74,7 @@ select case(prg)
         keys_required(2)  = 'kv'
         keys_required(3)  = 'cs'
         keys_required(4)  = 'fraca'
-        keys_required(5)  = 'dir_movies'
-        keys_required(6)  = 'nparts'
+        keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'refs'
@@ -108,9 +107,13 @@ select case(prg)
         keys_optional(29) = 'ndev'
         keys_optional(30) = 'box_extract'
         keys_optional(31) = 'pcontrast'
+        keys_optional(32) = 'dir'
+        keys_optional(33) = 'stream'
+        keys_optional(34) = 'dir_movies'
+        keys_optional(35) = 'filetab'
         ! parse command line
         if( describe ) call print_doc_preprocess
-        call cline%parse(keys_required(:6), keys_optional(:31))
+        call cline%parse(keys_required(:5), keys_optional(:33))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
@@ -120,9 +123,15 @@ select case(prg)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',       30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',        5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
-        if( .not. cline%defined('stream')          ) call cline%set('stream',  'yes')
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('stream')          ) call cline%set('stream',    'no')
         if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
+        if( cline%get_carg('stream') .eq. 'no' )then
+            if( .not.cline%defined('filetab')) stop 'The list of movies to process must be provided (FILETAB)'
+        else
+            if( cline%defined('filetab') )stop 'The list of movies cannot be provided in streaming mode'
+        endif
+
         call xpreprocess_stream%execute(cline)
 
     ! PIPELINED MOTION_CORRECT + CTFFIND

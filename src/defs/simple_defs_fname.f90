@@ -48,16 +48,17 @@ character(len=KEYLEN), parameter :: CLUSTER3D_ANISOLP         = 'cluster3D_aniso
 character(len=KEYLEN), parameter :: CLUSTER3D_VOL             = 'cluster3D_mixed_recvol'
 ! OLD DIRECTORIES
 character(len=KEYLEN), parameter :: STDERROUT_DIR             = 'stderrout/'
-character(len=KEYLEN), parameter :: PREPROCESS_STREAM_DIR     = 'pipeline/'
-character(len=KEYLEN), parameter :: MOTION_CORRECT_STREAM_DIR = trim(PREPROCESS_STREAM_DIR)//'micrographs/'
-character(len=KEYLEN), parameter :: CTF_STREAM_DIR            = trim(PREPROCESS_STREAM_DIR)//'ctf/'
-character(len=KEYLEN), parameter :: PICK_STREAM_DIR           = trim(PREPROCESS_STREAM_DIR)//'boxes/'
-character(len=KEYLEN), parameter :: EXTRACT_STREAM_DIR        = trim(PREPROCESS_STREAM_DIR)//'particles/'
-character(len=KEYLEN), parameter :: UNIDOC_STREAM_DIR         = trim(PREPROCESS_STREAM_DIR)//'unidocs/'
 ! NEW DIRECTORIES
-character(len=KEYLEN), parameter :: DIR_CTF_ESTIMATE   = 'ctf_estimate/'
-character(len=KEYLEN), parameter :: DIR_MOTION_CORRECT = 'motion_correct/'
-! ORITYPE ENUMERATION
+character(len=KEYLEN), parameter :: DIR_CTF_ESTIMATE          = 'ctf_estimate/'
+character(len=KEYLEN), parameter :: DIR_MOTION_CORRECT        = 'motion_correct/'
+character(len=KEYLEN), parameter :: DIR_EXTRACT               = 'extract/'
+character(len=KEYLEN), parameter :: DIR_UNIDOC                = 'unidocs/'
+character(len=KEYLEN), parameter :: DIR_PICKER                = 'picker/'
+character(len=KEYLEN), parameter :: DIR_PREPROC               = './'
+character(len=KEYLEN), parameter :: DIR_PREPROC_STREAM        = './'
+! STREAMING
+character(len=KEYLEN), parameter :: TERM_STREAM               = './SIMPLE_TERM_STREAM'
+! oritype enumeration
 enum, bind(c)
     enumerator :: STK_SEG = 1, PTCL2D_SEG = 2, CLS2D_SEG = 3, CLS3D_SEG = 4, PTCL3D_SEG = 5,&
     &FRCS_SEG=9, FSCS_SEG=10, PROJINFO_SEG=11, JOBPROC_SEG = 12, GENERIC_SEG = 5

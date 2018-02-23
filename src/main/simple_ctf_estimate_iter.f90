@@ -24,7 +24,7 @@ contains
         integer,            intent(inout)      :: movie_counter
         character(len=*),   intent(in)         :: moviename_forctf
         class(oris),        intent(inout)      :: os
-        character(len=*), optional, intent(in) :: dir_out
+        character(len=*),   intent(in)         :: dir_out
         integer                       :: nframes, ldim(3), i
         character(len=:), allocatable :: fname_diag
         type(image)                   :: micrograph, pspec_lower, pspec_upper, pspec_all
@@ -49,10 +49,7 @@ contains
         ! deal with output
         movie_counter = movie_counter + 1
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctf_estimate_diag')
-        if( present(dir_out) )then
-            fname_diag = remove_abspath(trim(fname_diag))
-            fname_diag = trim(dir_out)//'/'//trim(fname_diag)
-        endif
+        fname_diag = trim(dir_out)//'/'//remove_abspath(trim(fname_diag))
         ! fitting
         call ctf_estimate_init(pspec_all, pspec_lower, pspec_upper, p%smpd, p%kv,&
             &p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp], p%astigtol, p%phaseplate)

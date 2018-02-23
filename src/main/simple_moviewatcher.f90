@@ -13,6 +13,7 @@ type moviewatcher
     character(len=STDLEN), allocatable :: history(:)             !< history of movies detected
     character(len=STDLEN)              :: cwd            = ''    !< CWD
     character(len=STDLEN)              :: watch_dir      = ''    !< movies directory to watch
+    character(len=STDLEN)              :: dir_out        = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: fbody          = ''    !< template name
     integer                            :: n_history      = 0     !< history of movies detected
@@ -59,6 +60,7 @@ contains
         call simple_getcwd(cwd)
         self%cwd         = trim(cwd)
         self%watch_dir   = trim(adjustl(p%dir_movies))
+        self%dir_out     = trim(adjustl(p%dir))//'/'
         self%report_time = report_time
         self%dopick      = p%l_pick
         self%ext         = trim(adjustl(p%ext))
@@ -165,23 +167,26 @@ contains
     logical function to_process( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
-        character(len=STDLEN) :: fname_here, fbody, ext, motion_correct_name, unidoc_name, picker_name
-        logical :: motion_correct_done, ctffind_done, picker_done
+        character(len=STDLEN) :: fname_here, fbody, ext, motion_correct_name, ctf_name
+        logical :: motion_correct_done, ctf_done
         fname_here = remove_abspath(trim(adjustl(fname)))
         ext        = trim(fname2ext(fname_here))
         fbody      = get_fbody(trim(fname_here), trim(ext))
         if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//trim(adjustl(fbody))
         ! motion_correct
-        motion_correct_name = trim(MOTION_CORRECT_STREAM_DIR)//trim(adjustl(fbody))//trim(THUMBNAIL_SUFFIX)//trim(self%ext)
+        motion_correct_name = trim(self%dir_out)//trim(DIR_MOTION_CORRECT)//&
+            &trim(adjustl(fbody))//trim(THUMBNAIL_SUFFIX)//trim(self%ext)
         motion_correct_done = file_exists(trim(motion_correct_name))
         if( motion_correct_done )then
-            motion_correct_name = trim(MOTION_CORRECT_STREAM_DIR)//trim(adjustl(fbody))//trim(INTGMOV_SUFFIX)//trim(self%ext)
+            motion_correct_name = trim(self%dir_out)//trim(DIR_MOTION_CORRECT)//&
+                &trim(adjustl(fbody))//trim(INTGMOV_SUFFIX)//trim(self%ext)
             motion_correct_done = file_exists(trim(motion_correct_name))
         endif
-        ! ctffind
-        unidoc_name  = trim(UNIDOC_STREAM_DIR)//trim(UNIDOC_OUTPUT)//trim(adjustl(fbody))//'.txt'
-        ctffind_done = file_exists(trim(unidoc_name))
-        to_process = .not. (motion_correct_done .and. ctffind_done)
+        ! ctf_estimate
+        ctf_name = trim(self%dir_out)//trim(DIR_CTF_ESTIMATE)//trim(UNIDOC_OUTPUT)//&
+            &trim(adjustl(fbody))//trim(METADATA_EXT)
+        ctf_done = file_exists(trim(ctf_name))
+        to_process = .not. (motion_correct_done .and. ctf_done)
     end function to_process
 
     !>  \brief  is for adding to the history of already reported files
@@ -230,6 +235,7 @@ contains
         class(moviewatcher), intent(inout) :: self
         self%cwd        = ''
         self%watch_dir  = ''
+        self%dir_out    = ''
         self%ext        = ''
         if(allocated(self%history))deallocate(self%history)
         self%report_time    = 0

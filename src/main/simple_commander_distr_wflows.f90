@@ -328,12 +328,13 @@ contains
 
     subroutine exec_ctf_estimate_distr( self, cline )
         class(ctf_estimate_distr_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(cmdline),                      intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)                  :: cline_merge_algndocs
         type(params)                   :: p_master
         type(chash)                    :: job_descr
         type(qsys_env)                 :: qenv
+        character(len=:), allocatable  :: output_dir, fbody
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -343,12 +344,22 @@ contains
         p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! output directory
+        if( cline%defined('dir') )then
+            output_dir = trim(p_master%dir)
+        else
+            output_dir = trim(DIR_CTF_ESTIMATE)
+            call cline%set('dir', trim(output_dir))
+        endif
+        call mkdir(output_dir)
+        allocate(fbody, source=trim(output_dir)//trim('ctf_estimate_output_part'))
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'fbody',    'ctf_estimate_output_part'       )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)      )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)      )
-        call cline_merge_algndocs%set( 'outfile',  'ctf_estimate_output_merged.txt' )
+        call cline_merge_algndocs%set( 'nthr',     1.)
+        call cline_merge_algndocs%set( 'fbody',    trim(fbody) )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile',  trim(output_dir)//'ctf_estimate_output_merged.txt')
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description

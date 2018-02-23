@@ -412,8 +412,9 @@ select case(prg)
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
         keys_optional(4) = 'ndev'
+        keys_optional(5) = 'dir'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:4))
+        call cline%parse(keys_required(:3), keys_optional(:5))
         ! execute
         call xpick%execute(cline)
 

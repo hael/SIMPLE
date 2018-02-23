@@ -29,64 +29,115 @@ contains
 
     subroutine exec_preprocess_stream( self, cline )
         use simple_commander_preprocess, only: preprocess_commander
-        use simple_moviewatcher,      only: moviewatcher
+        use simple_commander_distr,      only: merge_algndocs_commander
+        use simple_moviewatcher,         only: moviewatcher
         class(preprocess_stream_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                     intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
-        integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
+        integer,               parameter   :: LONGTIME  = 90   ! ! 15 mins before processing a new movie
+        type(merge_algndocs_commander)     :: xmerge_algndocs
+        type(qsys_env)                     :: qenv
+        type(chash)                        :: job_descr
+        type(cmdline)                      :: cline_merge_algndocs
+        type(params)                       :: p_master
+        type(moviewatcher)                 :: movie_buff
         character(len=STDLEN), allocatable :: movies(:)
-        character(len=STDLEN)    :: movie
-        type(qsys_env)           :: qenv
-        type(params)             :: p_master
-        type(moviewatcher)       :: movie_buff
-        integer                  :: nmovies, imovie, stacksz, prev_stacksz
-        integer, parameter       :: TRAILING=5
-        debug=.true.  ! from local flags, for debugging
+        character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate
+        character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract
+        character(len=:),      allocatable :: output_dir_picker, output_dir_unidoc, fbody
+        character(len=STDLEN)              :: movie
+        integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter
         ! make master parameters
-        p_master = params(cline)
-        ! set defaults
-        p_master%split_mode = 'stream'
-        p_master%numlen     = 5
-        call cline%set('numlen', real(p_master%numlen))
-        call cline%set('stream', 'yes')
-        ! ! make target directories
-        call mkdir(trim(PREPROCESS_STREAM_DIR))
-        call mkdir(trim(MOTION_CORRECT_STREAM_DIR))
-        call mkdir(trim(CTF_STREAM_DIR))
-        call mkdir(trim(UNIDOC_STREAM_DIR))
-        if( p_master%l_pick )then
-            call mkdir(trim(PICK_STREAM_DIR))
-            if( cline%defined('refs') )call mkdir(trim(EXTRACT_STREAM_DIR))
+        p_master  = params(cline)
+        ! output directories
+        if( cline%defined('dir') )then
+            output_dir = trim(p_master%dir)//'/'
+        else
+            output_dir = trim(DIR_PREPROC)
         endif
-        ! setup the environment for distributed execution
-        call qenv%new(p_master, stream=.true.)
-        ! movie watcher init
-        movie_buff = moviewatcher(p_master, LONGTIME, print=.true.)
-        ! start watching
-        prev_stacksz = 0
-        nmovies      = 0
-        do
-            ! watch
-            call movie_buff%watch( nmovies, movies )
-            ! append movies to processing stack
-            if( nmovies > 0 )then
-                do imovie = 1, nmovies
-                    movie = trim(adjustl(movies(imovie)))
-                    call create_individual_filetab
-                    call qenv%qscripts%add_to_streaming( cline )
-                enddo
-            endif
-            ! manage stream scheduling
-            call qenv%qscripts%schedule_streaming( qenv%qdescr )
-            stacksz = qenv%qscripts%get_stacksz()
-            if( stacksz .ne. prev_stacksz )then
-                prev_stacksz = stacksz
-                write(*,'(A,I5)')'>>> MOVIES TO PROCESS: ', stacksz
-            endif
-            ! wait
-            call simple_sleep(SHORTTIME)
-        end do
-
+        output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
+        output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
+        output_dir_unidoc         = trim(output_dir)//trim(DIR_UNIDOC)
+        call mkdir(output_dir)
+        call mkdir(output_dir_ctf_estimate)
+        call mkdir(output_dir_motion_correct)
+        call mkdir(output_dir_unidoc)
+        if( p_master%l_pick )then
+            output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
+            output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
+            call mkdir(output_dir_picker)
+            call mkdir(output_dir_extract)
+        endif
+        if( p_master%stream.eq.'yes' )then
+            ! STREAMING
+            ! set defaults
+            p_master%numlen     = 5
+            call cline%set('numlen', real(p_master%numlen))
+            p_master%split_mode = 'stream'
+            p_master%ncunits    = p_master%nparts
+            ! setup the environment for distributed execution
+            call qenv%new(p_master, stream=.true.)
+            ! movie watcher init
+            movie_buff = moviewatcher(p_master, longtime, print=.true.)
+            ! start watching
+            prev_stacksz = 0
+            nmovies      = 0
+            iter         = 0
+            do
+                if( file_exists(trim(TERM_STREAM)) )then
+                    write(*,'(A)')'>>> TERMINATING PREPROCESSING STREAM'
+                    exit
+                endif
+                iter = iter + 1
+                call movie_buff%watch( nmovies, movies )
+                ! append movies to processing stack
+                if( nmovies > 0 )then
+                    do imovie = 1, nmovies
+                        movie = trim(adjustl(movies(imovie)))
+                        call create_individual_filetab
+                        call qenv%qscripts%add_to_streaming( cline )
+                    enddo
+                endif
+                ! manage stream scheduling
+                call qenv%qscripts%schedule_streaming( qenv%qdescr )
+                stacksz = qenv%qscripts%get_stacksz()
+                if( stacksz .ne. prev_stacksz )then
+                    prev_stacksz = stacksz
+                    write(*,'(A,I5)')'>>> MOVIES TO PROCESS: ', stacksz
+                endif
+                ! wait
+                call simple_sleep(SHORTTIME)
+            end do
+        else
+            ! DISTRIBUTED EXECUTION
+            p_master%nptcls = nlines(p_master%filetab)
+            if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+            ! deal with numlen so that length matches JOB_FINISHED indicator files
+            p_master%numlen = len(int2str(p_master%nptcls))
+            call cline%set('numlen', real(p_master%numlen))
+            ! output directory
+            allocate(fbody, source=trim(output_dir_unidoc)//trim(UNIDOC_FBODY))
+            ! prepare merge_algndocs command line
+            cline_merge_algndocs = cline
+            call cline_merge_algndocs%set( 'nthr',     1.)
+            call cline_merge_algndocs%set( 'fbody',    trim(fbody))
+            call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls))
+            call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts))
+            call cline_merge_algndocs%set( 'outfile',  trim(output_dir_unidoc)//trim(SIMPLE_UNIDOC))
+            call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen))
+            ! setup the environment for distributed execution
+            call qenv%new(p_master, numlen=p_master%numlen)
+            ! prepare job description
+            call cline%gen_job_descr(job_descr)
+            ! schedule & clean
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(UNIDOC_FBODY))
+            ! merge docs
+            call xmerge_algndocs%execute( cline_merge_algndocs )
+        endif
+        ! cleanup
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_PREPROCESS NORMAL STOP ****')
         contains
 
             subroutine create_individual_filetab

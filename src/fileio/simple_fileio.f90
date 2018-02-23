@@ -409,7 +409,7 @@ contains
         logical :: dir_e
         inquire( file=trim(adjustl(path)), exist=dir_e , iostat=iostat)
         if ( dir_e ) then
-            write(*,*) "simple_fileio::mkdir; directory already exists: ", trim(adjustl(path))
+            !write(*,*) "simple_fileio::mkdir; directory already exists: ", trim(adjustl(path))
         else
             call exec_cmdline('mkdir -p '//trim(adjustl(path))//'|| true')
         end if
