@@ -34,7 +34,7 @@ contains
         class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
-        integer,               parameter   :: LONGTIME  = 90  ! 15 mins before processing a new movie
+        integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
         type(merge_algndocs_commander)     :: xmerge_algndocs
         type(qsys_env)                     :: qenv
         type(chash)                        :: job_descr
@@ -290,6 +290,11 @@ contains
             call cline_cluster2D%set('oritab', trim(oritab_glob))
             call cline_cluster2D%set('refs',   trim(refs_glob))
             call remap_empty_classes
+            ! user termination
+            if( file_exists(trim(TERM_STREAM)) )then
+                write(*,'(A)')'>>> TERMINATING CLUSTER2D STREAM'
+                exit
+            endif
             ! detects new images
             call mic_watcher%watch(n_newstks)
             if(n_newstks > 0)then
@@ -310,6 +315,8 @@ contains
         call cline_make_cavgs%set('oritab',  trim(FINALDOC))
         call cline_make_cavgs%set('ncls', real(ncls_glob))
         call xmake_cavgs%execute(cline_make_cavgs)
+        ! cleanup
+        call qsys_cleanup(p_master)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_STREAM NORMAL STOP ****')
 
