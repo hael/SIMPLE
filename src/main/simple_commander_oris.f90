@@ -789,7 +789,7 @@ contains
         type(sp_project) :: sp_proj
         p = params(cline)
         call sp_proj%read(p%projfile)
-        call sp_proj%write_sp_oris(p%oritype, p%outfile)
+        call sp_proj%write_segment(p%oritype, p%outfile)
         call sp_proj%kill
         call simple_end('**** PROJECT2TXT NORMAL STOP ****')
     end subroutine exec_project2txt
