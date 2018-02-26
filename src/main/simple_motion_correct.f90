@@ -258,7 +258,7 @@ contains
         allocate( movie_frames_ftexp(nframes), movie_frames_scaled(nframes),&
             movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
             opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
-            frameweights_saved(nframes), stat=alloc_stat )
+            frameweights_saved(nframes), stat=alloc_stat )        
         allocchk('motion_correct_init; simple_motion_correct')
         corrmat = 0.
         corrs   = 0.
@@ -278,6 +278,8 @@ contains
         write(*,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
         write(*,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
         if( any(outliers) )then ! remove the outliers & do the rest
+            !$ allocate(rmat(ldim(1),ldim(2),ldim(3)), stat=alloc_stat)
+            !$ allocchk('motion_correct_init')
             do iframe=1,nframes
                 call progress(iframe, nframes)
                 call frame_tmp%read(movie_stack_fname, iframe)

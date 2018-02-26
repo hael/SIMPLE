@@ -2782,7 +2782,7 @@ contains
     !>   for calculating the median
     function median( arr ) result( val )
         real, intent(in)  :: arr(:)
-        real, allocatable :: copy(:)
+        real              :: copy(size(arr))
         real    :: val, val1, val2
         integer :: n, pos1, pos2
         n = size(arr)
@@ -2793,17 +2793,14 @@ contains
             pos1 = nint(real(n)/2.)
             pos2 = pos1
         endif
-        !allocate( copy(n), stat=alloc_stat )
-        !if(alloc_stat /= 0) call alloc_errchk('In: median, module: simple_math', alloc_stat)
-        copy = arr  ! compiler will realloc here anyway
+        copy = arr
         if( pos1 == pos2 )then
             val  = selec(pos1,n,copy)
         else
             val1 = selec(pos1,n,copy)
             val2 = selec(pos2,n,copy)
             val  = (val1+val2)/2.
-        endif
-        deallocate(copy)
+        endif       
     end function median
 
     !>   for calculating the median

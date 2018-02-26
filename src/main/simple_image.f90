@@ -1177,7 +1177,7 @@ contains
         real, allocatable :: rmat(:,:,:)
         integer :: ldim(3)
         ldim = self%ldim
-        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
+        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))        
     end function get_rmat
 
     !>  \brief   get_cmat get the image object's complex matrix
