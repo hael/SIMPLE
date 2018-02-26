@@ -206,7 +206,7 @@ contains
         character(len=*), intent(in) :: file_name
         real, intent(in), optional   :: range_in(2)
         integer, intent(out), optional  :: status
-        integer          :: width,height,i,j,k,colorval,ex, r,g,b, black,white ,colors(256,256,256)
+        integer          :: width,height,i,j,k,colorval,ex, r,g,b, black,white !,colors(256,256,256)
         type(base_img)   :: image
         character(len=STDLEN) :: filename
         real                  :: buf_range(2), offset
@@ -227,7 +227,7 @@ contains
         endif
 
         offset=0.0
-        colors=0
+       ! colors=0
 
         width  = size(buffer,1)
         height = size(buffer,2)
@@ -245,8 +245,8 @@ contains
             offset = buf_range(1)
             print *,"Offset value of buffer reset to ", offset
         end if
-        allocate(int_buffer(width,height))
-        int_buffer = INT(buffer)
+        !allocate(int_buffer(width,height))
+        int_buffer = transfer(buffer,1)
         call cgd_image_create_truecolor(width,height,image)
         ! do i=0,width-1
         !     do j=0,height-1
@@ -342,7 +342,6 @@ contains
                 status = 1
             endif
         endif
-
     end subroutine create_palette_img
 
     subroutine create_truecolor_img(width,height,image,status)
@@ -510,7 +509,7 @@ contains
 
     end subroutine create_img_from_png
 
-#ifdef WITH_JPEG
+
     subroutine create_img_from_jpeg(file,image,status)
         character(*), intent(in)        :: file
         type(base_img), intent(out)     :: image
@@ -533,12 +532,13 @@ contains
     subroutine write_img_as_jpeg(img,file,quality)
         type(base_img), intent(in)  :: img
         character(*), intent(in)    :: file
-        integer, intent(in)         :: quality
-
-        call cgd_image_jpeg(img%ptr,trim(file)//achar(0),quality)
+        integer, intent(in), optional         :: quality
+        integer qual
+        qual=90
+        if(present(quality)) qual=quality
+        call cgd_image_jpeg(img%ptr,trim(file)//achar(0),qual)
 
     end subroutine write_img_as_jpeg
-#endif
 
     subroutine fill_img(image,x,y,color)
         type(base_img), intent(in)  :: image

@@ -72,7 +72,7 @@ contains
 
 
         call create_img_from_png("bbb",image)
-        call write_img_as_jpeg(image,"bbb.jpg",70)
+        call write_img_as_jpeg(image,"bbb.jpg",90)
         call destroy_img(image)
         call create_img_from_jpeg("bbb.jpg",image)
         call write_img_as_png(image,"bbb-from-jpeg.png")
@@ -93,7 +93,7 @@ contains
 
     end subroutine test_png_io
 
-    subroutine test_png_io
+    subroutine test_jpeg_io
         use simple_img
         type(base_img)            :: image
         integer                   :: c1,c2,c3,c4,c5
@@ -103,7 +103,7 @@ contains
         integer                   :: w,h
         integer                   :: r,x,y,status
         real, allocatable         :: buffer(:,:)
-        character(len=256)        :: fout = 'gray-buffer.png'
+        character(len=256)        :: fout = 'gray-buffer.jpeg'
         real                  :: grange(2)
         a1(:) = (/ 5,47,12,55 /)
         a2(:) = (/ 36,60,2,25 /)
@@ -121,20 +121,25 @@ contains
         call draw_filled_rectangle(image,30,30,43,53,c3)
         call draw_filled_polygon(image,4,a1,a2,c4)
         call fill_img(image,1,5,c5)
-        call write_img_as_png(image,"xxx.png")
+        call write_img_as_jpeg(image,"xxx.jpeg")
         call destroy_img(image)
-        write(*,*) 'test png'
+        write(*,*) 'test jpeg'
+
 
         call create_img_from_png("bbb",image)
-        call write_img_as_png(image,"bbb-from-png.png")
+        call write_img_as_jpeg(image,"bbb.jpg",70)
         call destroy_img(image)
-        write(6,*) 'test png to png'
+        call create_img_from_jpeg("bbb.jpg",image)
+        call write_img_as_png(image,"bbb-from-jpeg.png")
+        call write_img_as_png(image,"bbb-from-jpeg.jpg")
+        call destroy_img(image)
+        write(*,*) 'test jpg done'
+
         call create_img_from_png("bbb",image)
         status = greyscale(image)
-        call write_img_as_png(image,"gray.png")
+        call write_img_as_jpeg(image,"gray.jpg",100)
         call destroy_img(image)
-        write(6,*) 'test png to grayscale'
-
+        write(6,*) 'test jpeg to grayscale'
 
         status=0
         call read_jpeg("gray.jpg", buffer, status)
@@ -153,19 +158,7 @@ contains
         write(*,*) 'test read/write jpeg from buffers'
         if( .not. compare_imgs("gray.jpg", fout) ) write(*,*) "jpeg read/write failed - images differ"
 
-
-        call create_img_from_png("bbb",image)
-        call write_img_as_jpeg(image,"bbb.jpg",70)
-        call destroy_img(image)
-        call create_img_from_jpeg("bbb.jpg",image)
-        call write_img_as_png(image,"bbb-from-jpeg.png")
-        call write_img_as_png(image,"bbb-from-jpeg.jpg")
-        call destroy_img(image)
-        write(*,*) 'test jpg done'
-
-
-
-    end subroutine test_png_io
+    end subroutine test_jpeg_io
 
 
 

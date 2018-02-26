@@ -3,7 +3,7 @@
 #define CGD_IMAGE_SET_CLIP               cgd_image_set_clip_
 #define CGD_IMAGE_GET_CLIP               cgd_image_get_clip_
 #define CGD_IMAGE_CREATE_TRUECOLOR       cgd_image_create_truecolor_
-// #define CGD_IMAGE_CREATE                 cgd_image_create_
+#define CGD_IMAGE_CREATE                 cgd_image_create_
 #define CGD_IMAGE_COLOR_ALLOCATE         cgd_image_color_allocate_
 #define CGD_IMAGE_COLOR_ALLOCATE_ALPHA   cgd_image_color_allocate_alpha_
 #define CGD_IMAGE_COLOR_DEALLOCATE       cgd_image_color_deallocate_
@@ -87,12 +87,13 @@
 #define CGD_IMAGE_JPEG_BUFFER_GET        cgd_image_jpeg_buffer_get_
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <gd.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-
+#include <gd.h>
+#include <gd_io.h>
 
 /******************************************************************************/
 void CGD_IMAGE_CREATE_TRUECOLOR(int *x, int *y, gdImagePtr *ptr)
@@ -713,71 +714,36 @@ void CGD_IMAGE_COMPARE(gdImagePtr *ptr1, gdImagePtr *ptr2,int*c)
     *c = gdImageCompare(*ptr1,*ptr2);
     return;
 }
-/******************************************************************************/
-
-void CGD_IMAGE_myLoadPng(gdImagePtr *ptr, const char *filename)
-{
-  FILE *in;
-  struct stat stat_buf;
-  in = fopen(filename, "rb");
-  if (!in) {
-    /* Error */
-  }
-  if (fstat(fileno(in), &stat_buf) != 0) {
-    /* Error */
-  }
-  /* Read the entire thing into a buffer
-    that we allocate */
-  char *buffer = malloc(stat_buf.st_size);
-  if (!buffer) {
-    /* Error */
-  }
-  if (fread(buffer, 1, stat_buf.st_size, in)  != stat_buf.st_size)
-  {
-    /* Error */
-  }
-  *ptr = gdImageCreateFromPngPtr(
-    stat_buf.st_size, buffer);
-  /* WE allocated the memory, WE free
-    it with our normal free function */
-  free(buffer);
-  fclose(in);  return;
-}
-
-/******************************************************************************\/ */
- void CGD_IMAGE_PngPtrEx(gdImagePtr *ptr, int  *size,  int **array)
- {
-   void * tmp;
-   gdImagePngPtrEx(*ptr,  *size, &tmp);
-   *array = (int *) (tmp);
-    return;
- }
 
 
  void CGD_IMAGE_PNG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
  {
-   gdIOCtx *ctx;
+   gdIOCtx *ctx;int status; const void * tmp =  array;
    gdImagePngCtx(*ptr, ctx);
-   gdPutBuf((void*)*array, *size, ctx);
+   status = gdPutBuf(tmp, *size, ctx);
  }
  void CGD_IMAGE_PNG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
  {
-   gdIOCtx *ctx;
+   gdIOCtx *ctx;void * tmp;
+   int status;
    gdImagePngCtx(*ptr,ctx);
-   gdGetBuf(*array, *size, ctx);
+   status = gdGetBuf(tmp, *size, ctx);
+   *array = (int *) (tmp);
  }
 
  void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
  {
-   gdIOCtx *ctx;
+   gdIOCtx *ctx; const void * tmp =  array;
+
    gdImageJpegCtx(*ptr, ctx, *size);
-   gdPutBuf((void*)*array, *size, ctx);
+   gdPutBuf(tmp, *size, ctx);
  }
  void CGD_IMAGE_JPEG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
  {
    gdIOCtx *ctx;void * tmp;
+   int status;
    gdImageJpegCtx(*ptr, ctx, *size);
-   gdGetBuf(&tmp, *size, ctx);
+   status = gdGetBuf(tmp, *size, ctx);
    *array = (int *) (tmp);
    return;
  }
