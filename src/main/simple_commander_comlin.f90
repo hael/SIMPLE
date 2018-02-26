@@ -43,9 +43,11 @@ contains
         character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
         character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//trim(METADATA_EXT)
         integer,           parameter :: NBEST = 30
-        p = params(cline) ! parameters generated
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
+        p = params(cline)                                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.true., nooritab=.true.) ! general objects built (no oritab reading)
-        call b%build_comlin_tbox(p)  ! objects for common lines based alignment built
+        call b%build_comlin_tbox(p) ! objects for common lines based alignment built
         ! SETUP
         if( (p%l_distr_exec .and. p%refine.eq.'no') .or. .not.p%l_distr_exec )then
             ! center volume

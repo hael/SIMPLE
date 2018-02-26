@@ -413,7 +413,7 @@ contains
         call diff_imgfiles(p%stk, p%stk2, p%outstk, p%smpd)
         ! end gracefully
         call simple_end('**** SIMPLE_IMAGE_DIFF NORMAL STOP ****')
-      end subroutine exec_image_diff
+    end subroutine exec_image_diff
 
     !> normalize is a program for normalization of MRC or SPIDER stacks and volumes.
     !! If you want to normalize your images inputted with stk, set norm=yes.

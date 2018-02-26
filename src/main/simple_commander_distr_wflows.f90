@@ -111,6 +111,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
@@ -163,6 +165,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master        = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
@@ -219,6 +223,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
         if( cline%defined('tomoseries') )then
@@ -273,6 +279,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
@@ -302,6 +310,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
@@ -340,6 +350,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
@@ -384,6 +396,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
@@ -411,6 +425,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set os segment in sp_project
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
         p_master = params(cline)
         ! setup the environment for distributed execution
@@ -465,6 +481,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
         p_master = params(cline)
         ! make builder
@@ -682,6 +700,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         p_master = params(cline)
         ! setup the environment for distributed execution
@@ -754,6 +774,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         p_master = params(cline)
         ! make oritab
@@ -1082,7 +1104,7 @@ contains
         use simple_commander_rec
         use simple_oris, only: oris
         class(reconstruct3D_distr_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
         type(split_commander)              :: xsplit
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
@@ -1097,6 +1119,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call cline%delete('refine')
         p_master = params(cline)
@@ -1256,6 +1280,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         ! make master parameters
         p_master          = params(cline)
         comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(p_master%pgrp) )

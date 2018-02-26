@@ -344,7 +344,7 @@ contains
         use simple_oris,    only: oris
         use simple_ori,     only: ori
         use simple_image,   only: image
-        use simple_imghead,  only: find_ldim_nptcls
+        use simple_imghead, only: find_ldim_nptcls
         use simple_corrmat   ! use all in there
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline

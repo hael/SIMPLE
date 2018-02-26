@@ -54,7 +54,7 @@ contains
         type(params)  :: p
         type(build)   :: b
         integer :: ncls_in_oritab, icls, fnr, file_stat, j
-        p = params(cline)                                 ! parameters generated
+        p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
@@ -162,7 +162,7 @@ contains
         logical      :: converged, l_distr_exec
         converged    = .false.
         l_distr_exec = .false.
-        p = params(cline)                                 ! parameters generated
+        p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
         if( cline%defined('refs') )then
@@ -203,7 +203,7 @@ contains
         type(params) :: p
         type(build)  :: b
         integer      :: fnr, file_stat, j
-        p = params(cline)                                 ! parameters generated
+        p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
         call cavger_new(b, p, 'class')
@@ -242,7 +242,7 @@ contains
         type(params) :: p
         type(build)  :: b
         logical      :: converged
-        p = params(cline) ! parameters generated
+        p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls    = b%a%get_n('class')
         converged = b%conv%check_conv2D() ! convergence check
@@ -271,7 +271,7 @@ contains
         type(oris)   :: clsdoc_ranked
         integer, allocatable :: order(:)
         real,    allocatable :: res(:)
-        p = params(cline)                                 ! parameters generated
+        p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls = p%nptcls
         call clsdoc_ranked%new_clean(p%ncls)
@@ -332,7 +332,7 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        p = params(cline)                                 ! parameters generated
+        p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call cluster_cavgs_exec( b, p )
          ! end gracefully

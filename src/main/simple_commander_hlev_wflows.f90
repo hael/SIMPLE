@@ -45,13 +45,13 @@ contains
         class(prime2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
-        integer,           parameter :: MAXITS_STAGE1 = 10
+        integer, parameter :: MAXITS_STAGE1 = 10
         ! commanders
-        type(split_commander)           :: xsplit
+        type(split_commander)            :: xsplit
         type(make_cavgs_distr_commander) :: xmake_cavgs
-        type(prime2D_distr_commander)   :: xprime2D_distr
-        type(rank_cavgs_commander)      :: xrank_cavgs
-        type(scale_commander)           :: xscale
+        type(prime2D_distr_commander)    :: xprime2D_distr
+        type(rank_cavgs_commander)       :: xrank_cavgs
+        type(scale_commander)            :: xscale
         ! command lines
         type(cmdline) :: cline_cluster2D_stage1
         type(cmdline) :: cline_cluster2D_stage2
@@ -67,6 +67,8 @@ contains
         character(len=STDLEN) :: refs_sc
         real                  :: scale_stage1, scale_stage2
         integer               :: nparts, last_iter_stage1, last_iter_stage2, last_iter
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         p_master = params(cline, del_scaled=.true.)
         nparts   = p_master%nparts
         if( .not. cline%defined('stktab') )then
@@ -231,6 +233,8 @@ contains
         logical               :: srch4symaxis, doautoscale
         ! set cline defaults
         call cline%set('eo', 'no')
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         ! auto-scaling prep
         doautoscale = (cline%get_carg('autoscale').eq.'yes')
         ! now, remove autoscale flag from command line, since no scaled partial stacks
@@ -425,31 +429,34 @@ contains
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         ! constants
-        integer,            parameter :: MAXITS   = 50
-        character(len=2),   parameter :: one = '01'
+        integer,          parameter :: MAXITS   = 50
+        character(len=2), parameter :: one = '01'
         ! distributed commanders
         type(prime3D_distr_commander)        :: xprime3D_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
         ! shared-mem commanders
-        type(postprocess_commander)  :: xpostprocess
+        type(postprocess_commander) :: xpostprocess
         ! command lines
-        type(cmdline)                 :: cline_refine3D1, cline_refine3D2
-        type(cmdline)                 :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
-        type(cmdline)                 :: cline_postprocess
+        type(cmdline)               :: cline_refine3D1, cline_refine3D2
+        type(cmdline)               :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
+        type(cmdline)               :: cline_postprocess
         ! other variables
-        type(sym)                     :: symop
-        integer,     allocatable      :: labels(:)
-        logical,     allocatable      :: included(:)
-        type(params)                  :: p_master
-        type(oris)                    :: os, os_states
-        character(len=STDLEN)         :: oritab, str_state
-        real                          :: trs
-        integer                       :: state, iter, n_incl, startit
-        integer                       :: rename_stat
+        type(sym)                   :: symop
+        integer,     allocatable    :: labels(:)
+        logical,     allocatable    :: included(:)
+        type(params)                :: p_master
+        type(oris)                  :: os, os_states
+        character(len=STDLEN)       :: oritab, str_state
+        real                        :: trs
+        integer                     :: state, iter, n_incl, startit
+        integer                     :: rename_stat
         call seed_rnd
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
             &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
+
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
 
         ! make master parameters
         p_master = params(cline)
@@ -458,9 +465,9 @@ contains
 
         ! prepare command lines from prototype
         call cline%delete('refine')
-        cline_refine3D1           = cline
-        cline_refine3D2           = cline
-        cline_postprocess       = cline ! eo always eq yes
+        cline_refine3D1                 = cline
+        cline_refine3D2                 = cline
+        cline_postprocess               = cline ! eo always eq yes
         cline_reconstruct3D_distr       = cline ! eo always eq yes
         cline_reconstruct3D_mixed_distr = cline ! eo always eq yes
         call cline_refine3D1%set('prg', 'refine3D')
@@ -690,10 +697,10 @@ contains
         character(len=:), allocatable :: FINAL_FBODY
         character(len=:), allocatable :: FINAL_DOC
         ! distributed commanders
-        type(prime3D_distr_commander) :: xprime3D_distr
-        type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
+        type(prime3D_distr_commander)       :: xprime3D_distr
+        type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
         ! shared-mem commanders
-        type(postprocess_commander)  :: xpostprocess
+        type(postprocess_commander)   :: xpostprocess
         ! command lines
         type(cmdline)                 :: cline_refine3D_master
         type(cmdline)                 :: cline_refine3D
@@ -711,6 +718,10 @@ contains
         integer               :: state, iptcl, iter
         logical               :: l_singlestate, error
         integer               :: rename_stat
+
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+
         ! make master parameters
         p_master      = params(cline)
         l_singlestate = cline%defined('state')

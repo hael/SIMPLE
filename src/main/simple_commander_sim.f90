@@ -183,8 +183,8 @@ contains
         integer, allocatable :: ptcl_positions(:,:)
         real,    allocatable :: shifts(:,:)
         logical              :: here
-        debug=.false.     ! declared in local flags
-        p = params(cline) ! parameters generated
+        debug=.false.                           ! declared in local flags
+        p = params(cline, spproj_a_seg=STK_SEG) ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
@@ -211,10 +211,6 @@ contains
             call b%img%insert(ptcl_positions(i,:), base_image)
         end do
         if( p%vis .eq. 'yes' ) call base_image%vis()
-
-        ! call base_image%vis
-        ! stop
-
         DebugPrint  'inserted projections'
         ! calculate snr:s
         snr_pink     = p%snr/0.2

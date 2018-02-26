@@ -1420,8 +1420,9 @@ select case(prg)
         keys_required(2) = 'ncls'
         ! set optional keys
         keys_optional(1) = 'nthr'
+        keys_optional(2) = 'oritype'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:1))
+        call cline%parse(keys_required(:2), keys_optional(:2))
         ! execute
         call xcluster_oris%execute(cline)
     case( 'map2ptcls_doc' )
@@ -1454,8 +1455,9 @@ select case(prg)
         keys_required(1)  = 'infile'
         ! set optional keys
         keys_optional(1)  = 'outfile'
+        keys_optional(2)  = 'oritype'
         ! parse command line
-        call cline%parse( keys_required(:1), keys_optional(:1) )
+        call cline%parse( keys_required(:1), keys_optional(:2) )
         ! execute
         call xrotmats2oris%execute(cline)
     case( 'txt2project' )

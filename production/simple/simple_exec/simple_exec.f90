@@ -770,9 +770,10 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'outstk'
         keys_optional(2) = 'mul'
+        keys_optional(3) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_shift
-        call cline%parse(keys_required(:3), keys_optional(:2))
+        call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xshift%execute(cline)
 
@@ -801,9 +802,10 @@ select case(prg)
         keys_optional(5) = 'angastunit'
         keys_optional(6) = 'phaseplate'
         keys_optional(7) = 'phshiftunit'
+        keys_optional(8) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_make_deftab
-        call cline%parse(keys_required(:5),keys_optional(:7))
+        call cline%parse(keys_required(:5),keys_optional(:8))
         ! execute
         call xmake_deftab%execute(cline)
     case( 'make_oris' )
@@ -843,9 +845,10 @@ select case(prg)
         keys_optional(18) = 'state'
         keys_optional(19) = 'nspace'
         keys_optional(20) = 'iares'
+        keys_optional(21) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_make_oris
-        call cline%parse(keys_required(:1),keys_optional(:20))
+        call cline%parse(keys_required(:1),keys_optional(:21))
         ! execute
         call xmake_oris%execute(cline)
     case( 'map2ptcls' )
@@ -917,9 +920,10 @@ select case(prg)
         keys_optional(23) = 'ysh'
         keys_optional(24) = 'zsh'
         keys_optional(25) = 'ctfreslim'
+        keys_optional(26) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_orisops
-        call cline%parse(keys_optional=keys_optional(:25))
+        call cline%parse(keys_optional=keys_optional(:26))
         ! execute
         call xorisops%execute(cline)
     case( 'oristats' )
@@ -952,9 +956,10 @@ select case(prg)
         keys_optional(15) = 'weights2D'
         keys_optional(16) = 'weights3D'
         keys_optional(17) = 'classtats'
+        keys_optional(18) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:17) )
+        call cline%parse( keys_required(:1), keys_optional(:18) )
         ! set defaults
         if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
         ! execute
@@ -971,9 +976,10 @@ select case(prg)
         keys_optional(1) = 'nspace'
         keys_optional(2) = 'pgrp'
         keys_optional(3) = 'tseries'
+        keys_optional(4) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_vizoris
-        call cline%parse( keys_required(:1), keys_optional(:3) )
+        call cline%parse( keys_required(:1), keys_optional(:4) )
         ! execute
         call xvizoris%execute(cline)
     case DEFAULT

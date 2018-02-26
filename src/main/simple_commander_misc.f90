@@ -340,8 +340,8 @@ contains
         logical, allocatable :: l_msk(:,:,:)
         integer, parameter   :: MAXLABELS = 9    !< maximum numbers symmetry peaks
         real,    parameter   :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
-        p = params(cline)                        ! parameters generated
-        call b%build_general_tbox(p, cline)      ! general objects built
+        p = params(cline, spproj_a_seg=CLS3D_SEG) ! parameters generated
+        call b%build_general_tbox(p, cline)       ! general objects built
         ! init
         e = b%a ! b%a contains the orientations of the references projections
         cline_c1 = cline
@@ -457,8 +457,8 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(build)  :: b
         type(params) :: p
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline, spproj_a_seg=CLS3D_SEG) ! parameters generated
+        call b%build_general_tbox(p, cline)       ! general objects built
         call dsym_cylinder(p, b%a, b%vol)
         call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
         call b%vol%write(p%outvol)

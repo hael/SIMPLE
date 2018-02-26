@@ -66,6 +66,8 @@ contains
                 allocate( os_strings(p%nptcls) )
                 ! convert from flag to enumerator to integer
                 select case(trim(p%oritype))
+                    case('stk')
+                        isegment = STK_SEG
                     case('ptcl2D')
                         isegment = PTCL2D_SEG
                     case('cls3D')
@@ -73,8 +75,7 @@ contains
                     case('ptcl3D')
                         isegment = PTCL3D_SEG
                     case DEFAULT
-                        write(*,*) 'oritype: ', trim(p%oritype)
-                        stop 'is not supported; merge_algndocs :: commander_oris'
+                        isegment = GENERIC_SEG
                 end select
                 ! read into string representation
                 do i=1,p%ndocs

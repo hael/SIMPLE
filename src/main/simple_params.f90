@@ -141,7 +141,7 @@ type :: params
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.bin)
-    character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D|jobproc)
+    character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN) :: outfile=''           !< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
@@ -400,11 +400,12 @@ end interface
 contains
 
     !> \brief  is a constructor
-    function constructor( cline, allow_mix, del_scaled ) result( self )
+    function constructor( cline, allow_mix, del_scaled, spproj_a_seg ) result( self )
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: allow_mix, del_scaled
+        integer, optional, intent(in)    :: spproj_a_seg
         type(params) :: self
-        call self%new( cline, allow_mix, del_scaled )
+        call self%new( cline, allow_mix, del_scaled, spproj_a_seg)
     end function constructor
 
     !> \brief  is a constructor
@@ -419,7 +420,7 @@ contains
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: stk_part_fname_sc, pid_file
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, sz
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, sz, spproj_a_seg_inputted
         logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
@@ -886,6 +887,30 @@ contains
                 self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
                 self%vols_odd(istate) = add2fbody(self%vols(istate), self%ext, '_odd' )
             end do
+        endif
+        if( cline%defined('oritype') )then ! oritype overrides any other spproj_a_seg setter
+            ! this determines the spproj_a_seg
+            if( present(spproj_a_seg) ) spproj_a_seg_inputted = self%spproj_a_seg
+            select case(trim(self%oritype))
+                case('stk')
+                    self%spproj_a_seg = STK_SEG
+                case('ptcl2D')
+                    self%spproj_a_seg = PTCL2D_SEG
+                case('cls3D')
+                    self%spproj_a_seg = CLS3D_SEG
+                case('ptcl3D')
+                    self%spproj_a_seg = PTCL3D_SEG
+                case DEFAULT
+                    write(*,*) 'oritype: ', trim(self%oritype)
+                    stop 'unsupported oritype; simple_params :: new'
+            end select
+            if( present(spproj_a_seg) )then
+                if( spproj_a_seg_inputted .ne. self%spproj_a_seg )then
+                    write(*,*) 'oritype: ', trim(self%oritype)
+                    write(*,*) 'inputted spproj_a_seg: ', spproj_a_seg_inputted
+                    stop 'ERROR! oritype and inputted spproj_a_seg inconsistent'
+                endif
+            endif
         endif
 
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)

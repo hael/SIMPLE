@@ -104,7 +104,7 @@ contains
         real         :: smpd_original, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
-        p = params(cline) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
         endif
@@ -388,7 +388,7 @@ contains
         if( .not. cline%defined('stk') .and. .not. cline%defined('filetab') )then
             stop 'either stk or filetab need to be defined!'
         endif
-        p = params(cline) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=STK_SEG)         ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general toolbox built
         ! create mask
         call tmp%new([p%clip,p%clip,1], p%smpd)
@@ -473,7 +473,7 @@ contains
         real    :: smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer :: frame_counter, lfoo(3), nframes
-        p = params(cline) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
         endif
@@ -551,7 +551,7 @@ contains
         character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
         type(oris)            :: os
         integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
-        p = params(cline) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
         if( p%l_distr_exec )then
@@ -606,7 +606,7 @@ contains
         character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
         type(oris)            :: os
         integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
-        p = params(cline) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
         ! output directory
@@ -679,7 +679,7 @@ contains
         else
             stop 'Need either stk3 or filetab are part of the command line!'
         endif
-        p = params(cline)                   ! parameters generated
+        p = params(cline) ! parameters generated
         ! find number of selected cavgs
         call find_ldim_nptcls(p%stk2, lfoo, nsel)
         ! find number of original cavgs
@@ -770,7 +770,7 @@ contains
     subroutine exec_make_pickrefs( self, cline )
         use simple_commander_volops,  only: project_commander
         class(make_pickrefs_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline !< command line input
+        class(cmdline),                 intent(inout) :: cline !< command line input
         integer, parameter           :: NREFS=100, NPROJS=20
         character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(METADATA_EXT)
         type(params)                 :: p
@@ -837,7 +837,7 @@ contains
         character(len=:),        allocatable :: output_dir
         character(len=STDLEN)                :: boxfile
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter, nptcls_out
-        p = params(cline) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
         ! check filetab existence
         call read_filetable(p%filetab, movienames_intg)
         nmovies = size(movienames_intg)
@@ -895,7 +895,7 @@ contains
         logical                            :: params_present(3), ctf_estimatecc_is_there, phshift_is_there
         logical                            :: ctfres_is_there
         noutside = 0
-        p = params(cline) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then
             if( cline%defined('outstk') .and. cline%defined('outfile') )then
                 ! all ok

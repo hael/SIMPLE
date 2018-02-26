@@ -47,6 +47,8 @@ contains
         character(len=:),      allocatable :: output_dir_picker, output_dir_unidoc, fbody
         character(len=STDLEN)              :: movie
         integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master  = params(cline)
         ! output directories
@@ -193,6 +195,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
         p_master = params(cline)
         ! init command-lines
