@@ -275,9 +275,9 @@ contains
         cline_refine3D_snhc   = cline
         cline_refine3D_init   = cline
         cline_refine3D_refine = cline
-        cline_symsrch        = cline
-        cline_reconstruct3D         = cline
-        cline_project        = cline
+        cline_symsrch         = cline
+        cline_reconstruct3D   = cline
+        cline_project         = cline
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
         call cline_project%delete('nparts')
@@ -291,6 +291,7 @@ contains
         call cline_refine3D_snhc%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_refine3D_snhc%set('lp',     lplims(1))
         call cline_refine3D_snhc%set('nspace', real(NSPACE_SNHC))
+        call cline_refine3D_snhc%set('objfun', 'cc')
         ! (2) PRIME3D_INIT
         call cline_refine3D_init%set('prg',    'refine3D')
         call cline_refine3D_init%set('ctf',    'no')
@@ -301,6 +302,9 @@ contains
         call cline_refine3D_init%set('lp',     lplims(1))
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_DEFAULT))
+        endif
+        if( .not. cline_refine3D_init%defined('objfun') )then
+            call cline_refine3D_init%set('objfun', 'ccres')
         endif
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -316,13 +320,13 @@ contains
             call cline_symsrch%set('outfile', 'symdoc'//trim(METADATA_EXT))
             call cline_symsrch%set('lp',      lplims(2))
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
-            call cline_reconstruct3D%set('prg', 'reconstruct3D')
-            call cline_reconstruct3D%set('trs',  5.) ! to assure that shifts are being used
-            call cline_reconstruct3D%set('ctf',  'no')
-            call cline_reconstruct3D%set('oritab', 'symdoc'//trim(METADATA_EXT))
+            call cline_reconstruct3D%set('prg',      'reconstruct3D')
+            call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
+            call cline_reconstruct3D%set('ctf',      'no')
+            call cline_reconstruct3D%set('oritab',   'symdoc'//trim(METADATA_EXT))
             ! refinement step now uses the symmetrised vol and doc
             call cline_refine3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT))
-            call cline_refine3D_refine%set('vol1', 'rec_sym'//p_master%ext)
+            call cline_refine3D_refine%set('vol1',   'rec_sym'//p_master%ext)
         endif
         ! (4) PRIME3D REFINE STEP
         call cline_refine3D_refine%set('prg', 'refine3D')
@@ -335,8 +339,11 @@ contains
         if( .not. cline_refine3D_refine%defined('nspace') )then
             call cline_refine3D_refine%set('nspace', real(NSPACE_DEFAULT))
         endif
+        if( .not. cline_refine3D_refine%defined('objfun') )then
+            call cline_refine3D_refine%set('objfun', 'ccres')
+        endif
         ! (5) RE-PROJECT VOLUME
-        call cline_project%set('prg', 'project')
+        call cline_project%set('prg',    'project')
         call cline_project%set('outstk', 'reprojs'//p_master%ext)
         call cline_project%delete('stk')
         if( doautoscale )then

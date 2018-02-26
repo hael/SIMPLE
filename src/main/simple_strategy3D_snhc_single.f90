@@ -36,21 +36,21 @@ contains
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
         if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             ! initialize
-            call self%s%prep4srch()
+            call self%s%prep4srch
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
             proj_space_corrs(self%s%iptcl_map,:) = -1.
             ! search
             do isample=1,self%spec%szsn
                 iref = srch_order(self%s%iptcl_map,isample) ! set the stochastic reference index
-                call per_ref_srch                         ! actual search
+                call per_ref_srch                           ! actual search
             end do
             self%s%nrefs_eval = self%spec%szsn
             ! sort in correlation projection direction space
             corrs = proj_space_corrs(self%s%iptcl_map,:)
             call hpsort(corrs, proj_space_inds(self%s%iptcl_map,:))
             ! output
-            call self%oris_assign()
+            call self%oris_assign
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
@@ -87,6 +87,8 @@ contains
         call o_peaks(self%s%iptcl)%set(1, 'proj',  real(proj_space_proj(self%s%iptcl_map,ref)))
         call o_peaks(self%s%iptcl)%set(1, 'corr',  corr)
         call o_peaks(self%s%iptcl)%set_euler(1, proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
+        call o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
         ! B factor
         if( self%s%pftcc_ptr%objfun_is_ccres() )then
             bfac  = self%s%pftcc_ptr%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
@@ -112,6 +114,8 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(1,'proj'))
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      0.)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    1.)
+        call self%s%a_ptr%set_euler(self%s%iptcl, proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call self%s%a_ptr%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         if( DEBUG ) print *, '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single
 
