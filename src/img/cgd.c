@@ -3,7 +3,7 @@
 #define CGD_IMAGE_SET_CLIP               cgd_image_set_clip_
 #define CGD_IMAGE_GET_CLIP               cgd_image_get_clip_
 #define CGD_IMAGE_CREATE_TRUECOLOR       cgd_image_create_truecolor_
-#define CGD_IMAGE_CREATE                 cgd_image_create_
+// #define CGD_IMAGE_CREATE                 cgd_image_create_
 #define CGD_IMAGE_COLOR_ALLOCATE         cgd_image_color_allocate_
 #define CGD_IMAGE_COLOR_ALLOCATE_ALPHA   cgd_image_color_allocate_alpha_
 #define CGD_IMAGE_COLOR_DEALLOCATE       cgd_image_color_deallocate_
@@ -54,7 +54,9 @@
 #define CGD_BLUE                         cgd_blue_
 #define CGD_ALPHA                        cgd_alpha_
 #define CGD_GREYSCALE                    cgd_greyscale_
+#define CGD_SCALE                        cgd_scale_
 #define CGD_PIXELCOLOR                   cgd_pixel_color_
+#define CGD_IMAGE_TRUECOLOR_TO_PALETTE   cgd_image_truecolor2palette_
 #define CGD_IMAGE_BOUNDS_SAFE            cgd_image_bounds_safe_
 #define CGD_IMAGE_COLOR_CLOSEST          cgd_image_color_closest_
 #define CGD_IMAGE_COLOR_CLOSEST_HWB      cgd_image_color_closest_hwb_
@@ -80,8 +82,11 @@
 #define CGD_NOFILL                       cgd_nofill_
 #define CGD_EDGED                        cgd_edged_
 #define CGD_ANTI_ALIASED                 cgd_anti_aliased_
-
-
+#define CGD_IMAGE_COMPARE                cgd_image_compare_
+#define CGD_IMAGE_JPEG_BUFFER_PUT        cgd_image_jpeg_buffer_put_
+#define CGD_IMAGE_JPEG_BUFFER_GET        cgd_image_jpeg_buffer_get_
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <gd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -93,6 +98,12 @@
 void CGD_IMAGE_CREATE_TRUECOLOR(int *x, int *y, gdImagePtr *ptr)
 {
     *ptr = gdImageCreateTrueColor(*x,*y);
+    return;
+}
+/******************************************************************************/
+void CGD_IMAGE_TRUECOLOR_TO_PALETTE(gdImagePtr *ptr,int *c1, int *c2)
+{
+    gdImageTrueColorToPalette(*ptr, *c1,*c2);
     return;
 }
 /******************************************************************************/
@@ -123,6 +134,7 @@ void CGD_IMAGE_COLOR_DEALLOCATE(gdImagePtr *ptr, int *color)
     gdImageColorDeallocate(*ptr,*color);
     return;
 }
+
 /******************************************************************************/
 void CGD_IMAGE_SET_PIXEL(gdImagePtr *ptr, int *x, int *y, int *color)
 {
@@ -380,8 +392,6 @@ void CGD_IMAGE_CREATE_FROM_PNG(const char *file, gdImagePtr *ptr)
     }
     return;
 }
-/******************************************************************************/
-#ifdef WITH_JPEG
 void CGD_IMAGE_JPEG(gdImagePtr *ptr, const char *file, int *quality)
 {
   if (0==strcmp(file,"-"))
@@ -420,7 +430,7 @@ void CGD_IMAGE_CREATE_FROM_JPEG(const char *file, gdImagePtr *ptr)
     }
     return;
 }
-#endif
+
 /******************************************************************************/
 void CGD_IMAGE_CREATE_FROM_XBM(const char *file, gdImagePtr *ptr)
 {
@@ -509,6 +519,10 @@ void CGD_PIXELCOLOR(gdImagePtr *ptr, int *x, int *y, int *color)
     return;
 }
 /******************************************************************************/
+void CGD_SCALE(gdImagePtr *ptr, int *c1, int *c2,gdImagePtr *ptr2){
+  *ptr2 = gdImageScale(	*ptr, *c1, *c2	);
+    return;
+}/******************************************************************************/
 void CGD_GREYSCALE(gdImagePtr *ptr, int *grey){
   *grey = gdImageGrayScale(	*ptr	);
     return;
@@ -694,3 +708,76 @@ void CGD_IMAGE_SET_AA_NB(gdImagePtr *ptr, int *c, int *d)
     return;
 }
 /******************************************************************************/
+void CGD_IMAGE_COMPARE(gdImagePtr *ptr1, gdImagePtr *ptr2,int*c)
+{
+    *c = gdImageCompare(*ptr1,*ptr2);
+    return;
+}
+/******************************************************************************/
+
+void CGD_IMAGE_myLoadPng(gdImagePtr *ptr, const char *filename)
+{
+  FILE *in;
+  struct stat stat_buf;
+  in = fopen(filename, "rb");
+  if (!in) {
+    /* Error */
+  }
+  if (fstat(fileno(in), &stat_buf) != 0) {
+    /* Error */
+  }
+  /* Read the entire thing into a buffer
+    that we allocate */
+  char *buffer = malloc(stat_buf.st_size);
+  if (!buffer) {
+    /* Error */
+  }
+  if (fread(buffer, 1, stat_buf.st_size, in)  != stat_buf.st_size)
+  {
+    /* Error */
+  }
+  *ptr = gdImageCreateFromPngPtr(
+    stat_buf.st_size, buffer);
+  /* WE allocated the memory, WE free
+    it with our normal free function */
+  free(buffer);
+  fclose(in);  return;
+}
+
+/******************************************************************************\/ */
+ void CGD_IMAGE_PngPtrEx(gdImagePtr *ptr, int  *size,  int **array)
+ {
+   void * tmp;
+   gdImagePngPtrEx(*ptr,  *size, &tmp);
+   *array = (int *) (tmp);
+    return;
+ }
+
+
+ void CGD_IMAGE_PNG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
+ {
+   gdIOCtx *ctx;
+   gdImagePngCtx(*ptr, ctx);
+   gdPutBuf((void*)*array, *size, ctx);
+ }
+ void CGD_IMAGE_PNG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
+ {
+   gdIOCtx *ctx;
+   gdImagePngCtx(*ptr,ctx);
+   gdGetBuf(*array, *size, ctx);
+ }
+
+ void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
+ {
+   gdIOCtx *ctx;
+   gdImageJpegCtx(*ptr, ctx, *size);
+   gdPutBuf((void*)*array, *size, ctx);
+ }
+ void CGD_IMAGE_JPEG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
+ {
+   gdIOCtx *ctx;void * tmp;
+   gdImageJpegCtx(*ptr, ctx, *size);
+   gdGetBuf(&tmp, *size, ctx);
+   *array = (int *) (tmp);
+   return;
+ }

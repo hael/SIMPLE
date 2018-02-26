@@ -9,11 +9,12 @@
 module simple_img
     include 'simple_lib.f08'
     implicit none
-    integer, parameter :: rp = kind(1d0)
+
     !*** cptr should be have the same size as a c pointer
     !*** It doesn't matter whether it is an integer or a real
     integer, parameter :: cptr = kind(5)
     integer, public, parameter :: max_colors = 256
+    !buf_range(1)buf_range(1)im2 = gdImageScale(im, 1, 65535);
 
     type base_img
         private
@@ -27,6 +28,17 @@ module simple_img
         private
         integer(cptr)  :: ptr = 0
     end type img_font
+
+
+! interface
+! subroutine cgd_image_create(x,y, ptr) bind(C, name="gdImageCreate")
+! use, intrinsic :: iso_c_binding
+! integer(c_int), value :: x,y
+! integer(kind=kind(5)) :: ptr
+! end subroutine CGD_IMAGE_CREATE
+! end interface
+
+public
 
 contains
 
@@ -42,58 +54,260 @@ contains
         else
             call create_img_from_png(file_name,image)
         end if
-        call allocate_color(image,0,0,0,black)
-        call allocate_color(image,255,255,255,white)
-        colorval=greyscale(image)
+        !  call allocate_color(image,0,0,0,black)
+        !  call allocate_color(image,255,255,255,white)
+        !  colorval=greyscale(image)
+        !  print*,' Greyscale color ', colorval
         width  = get_width(image)
         height = get_height(image)
         allocate( buffer(height, width) )
         do i=1,width
             do j=1,height
-                buffer(i,j) = REAL(get_pixel(image,i,j)) !/REAL(max_colors)
+                colorval = get_pixel(image,i,j)
+                buffer(i,j) =REAL( red(image,colorval)*max_colors**2) + &
+                    REAL(green(image,colorval)*max_colors) + &
+                    REAL(blue(image,colorval))      ! REAL(MODULO(get_pixel(image,i,j),max_colors))
             end do
         end do
-        !print *, " INterlaced? ", interlace(image)
+
+        print *," Input png file ", file_name
+        print *,"  Number of colors ", number_of_colors(image)
+        print *,"  Interlaced? ", get_interlaced(image)
+        print *,"  Anti-aliased? ", anti_aliased()
+        print *,"  Fmode ", get_fmode(image)
         call destroy_img(image)
     end subroutine read_png
 
-    subroutine write_png(buffer,file_name,status)
+    subroutine write_png(buffer,file_name,range_in,status)
         real, allocatable, intent(in) :: buffer(:,:)
         character(len=*), intent(in) :: file_name
+        real, intent(in), optional   :: range_in(2)
         integer, intent(out), optional  :: status
-        integer          :: width,height,i,j,colorval, colors(256)
+        integer          :: width,height,i,j,k,colorval,ex, r,g,b, black,white ,colors(256,256,256)
         type(base_img)   :: image
         character(len=STDLEN) :: filename
-        real             :: max_buf_value
+        real                  :: buf_range(2), offset
+        logical               :: no_range
+        no_range = .true.
         if(.not. allocated(buffer)) then
             status=-1
             print*,"simple_img::write_png buffer not allocated"
             return
         end if
         write(filename,'(A)') file_name
+        buf_range(1) = MINVAL(buffer)
+        buf_range(2) = MAXVAL(buffer)
+        if(present(range_in)) then
+            buf_range=range_in
+            no_range = .false.
+        endif
 
+        offset=0.0
+        colors=0
+        !colorval=greyscale(image)
+        !print*,' Greyscale color ', colorval
         width  = size(buffer,1)
         height = size(buffer,2)
-        max_buf_value = REAL(MAXVAL(buffer))
-        if( max_buf_value <= 1.0) max_buf_value = 1.0
+
+        print *,"Max value of buffer ", buf_range(2)
+        if (maxval(buffer) >buf_range(2)) then
+            buf_range(2) = maxval(buffer)
+            print *,"Max value of buffer reset to ", buf_range(2)
+        end if
+        if (minval(buffer) < buf_range(1)) then
+            buf_range(1) = minval(buffer)
+            print *,"Min value of buffer reset to ", buf_range(1)
+        end if
+        if(buf_range(1) < 0.0 ) then
+            offset = buf_range(1)
+            print *,"Offset value of buffer reset to ", offset
+        end if
         call create_img(width,height,image)
-        do i=0,255
-            call allocate_color(image,i,i,i,colors(i+1))
-        enddo
+        !call save_alpha(image,.true.)
+
+        ! call allocate_color(image,0,0,0,black)
+        ! call allocate_color(image,255,255,255,white)
+        ! call  allocate_color(image, 255, 0, 0,r)
+        ! call allocate_color(image, 0, 255, 0,g)
+        ! call  allocate_color(image, 0, 0, 255,b)
+        ! do i=0,255
+        !     do j=0,255
+        !         do k=0,255
+        !             call allocate_color(image,i,j,k,colors(i,j,k))
+        !         enddo
+        !     enddo
+        ! enddo
 
         call set_interlace(image,.false.)
-        do i=1,width
-            do j=1,height
-                colorval= INT( ( buffer(i,j)  / max_buf_value ) ) * max_colors
-                if (colorval >= max_colors) colorval = max_colors - 1
-                if (colorval < 0 ) colorval = 0
-                call set_pixel(image,i,j, colorval )
+        do i=0,width-1
+            do j=0,height-1
+                if (no_range) then
+                    ex= INT(buffer(i+1,j+1))
+                else
+                    colorval= INT( ( buffer(i+1,j+1) - offset / abs(buf_range(2)-buf_range(1)) )  * max_colors**3 )
+                    if (colorval >= max_colors**3) colorval = max_colors**3 - 1
+                    if (colorval < 0 ) colorval = 0
+                    r = modulo(colorval ,  max_colors* max_colors) +1
+                    g = modulo(colorval-r -1,  max_colors) +1
+                    b = colorval - r - g + 1
+                    ex = closest_color(image,r,g,b)
+                    !  if(colors(r+1,g+1,b+1)==0)  call allocate_color(image,i,j,k,colors(r,g,b))
+                end if
+                call set_pixel(image, i, j, ex )
             end do
         end do
-        colorval=greyscale(image)
+
+        !        colorval=greyscale(image)
+        !        print*,' Greyscale color ', colorval
         call cgd_image_png(image%ptr, trim(adjustl(filename))//char(0) )
         call destroy_img(image)
     end subroutine write_png
+
+
+
+    subroutine read_jpeg(file_name,buffer,status)
+        character(*), intent(in)         :: file_name
+        real, allocatable, intent(inout) :: buffer(:,:)
+        integer, intent(out), optional  :: status
+        integer             :: width,height, i,j, colorval,black,white
+        type(base_img)      :: image
+
+        if (present(status)) then
+            call create_img_from_jpeg(file_name,image,status)
+        else
+            call create_img_from_jpeg(file_name,image)
+        end if
+        !  call allocate_color(image,0,0,0,black)
+        !  call allocate_color(image,255,255,255,white)
+        !  colorval=greyscale(image)
+        !  print*,' Greyscale color ', colorval
+        width  = get_width(image)
+        height = get_height(image)
+        allocate( buffer(height, width) )
+        do i=1,width
+            do j=1,height
+                colorval = get_pixel(image,i,j)
+                buffer(i,j) =REAL( red(image,colorval)*max_colors**2) + &
+                    REAL(green(image,colorval)*max_colors) + &
+                    REAL(blue(image,colorval))      ! REAL(MODULO(get_pixel(image,i,j),max_colors))
+            end do
+        end do
+
+        print *," Input jpeg file ", file_name
+        print *,"  Number of colors ", number_of_colors(image)
+        print *,"  Interlaced? ", get_interlaced(image)
+        print *,"  Anti-aliased? ", anti_aliased()
+        print *,"  Fmode ", get_fmode(image)
+        call destroy_img(image)
+    end subroutine read_jpeg
+
+    subroutine write_jpeg(buffer,file_name,range_in,status)
+        real, allocatable, intent(in) :: buffer(:,:)
+        character(len=*), intent(in) :: file_name
+        real, intent(in), optional   :: range_in(2)
+        integer, intent(out), optional  :: status
+        integer          :: width,height,i,j,k,colorval,ex, r,g,b, black,white ,colors(256,256,256)
+        type(base_img)   :: image
+        character(len=STDLEN) :: filename
+        real                  :: buf_range(2), offset
+        logical               :: no_range
+        integer, allocatable :: int_buffer(:,:)
+        no_range = .true.
+        if(.not. allocated(buffer)) then
+            status=-1
+            print*,"simple_img::write_jpeg buffer not allocated"
+            return
+        end if
+        write(filename,'(A)') file_name
+        buf_range(1) = MINVAL(buffer)
+        buf_range(2) = MAXVAL(buffer)
+        if(present(range_in)) then
+            buf_range=range_in
+            no_range = .false.
+        endif
+
+        offset=0.0
+        colors=0
+
+        width  = size(buffer,1)
+        height = size(buffer,2)
+
+        print *,"Max value of buffer ", buf_range(2)
+        if (maxval(buffer) >buf_range(2)) then
+            buf_range(2) = maxval(buffer)
+            print *,"Max value of buffer reset to ", buf_range(2)
+        end if
+        if (minval(buffer) < buf_range(1)) then
+            buf_range(1) = minval(buffer)
+            print *,"Min value of buffer reset to ", buf_range(1)
+        end if
+        if(buf_range(1) < 0.0 ) then
+            offset = buf_range(1)
+            print *,"Offset value of buffer reset to ", offset
+        end if
+        allocate(int_buffer(width,height))
+        int_buffer = INT(buffer)
+        call cgd_image_create_truecolor(width,height,image)
+        ! do i=0,width-1
+        !     do j=0,height-1
+        !         if (no_range) then
+        !             ex= INT(buffer(i+1,j+1))
+        !         else
+        !             colorval= INT( ( buffer(i+1,j+1) - offset / abs(buf_range(2)-buf_range(1)) )  * max_colors**3 )
+        !             if (colorval >= max_colors**3) colorval = max_colors**3 - 1
+        !             if (colorval < 0 ) colorval = 0
+        !             r = modulo(colorval ,  max_colors* max_colors) +1
+        !             g = modulo(colorval-r -1,  max_colors) +1
+        !             b = colorval - r - g + 1
+        !             ex = closest_color(image,r,g,b)
+        !             !  if(colors(r+1,g+1,b+1)==0)  call allocate_color(image,i,j,k,colors(r,g,b))
+        !         end if
+        !         call set_pixel(image, i, j, ex )
+        !     end do
+        ! end do
+        call cgd_image_jpeg_buffer_put(image%ptr, width*height,int_buffer)
+        !        colorval=greyscale(image)
+        !        print*,' Greyscale color ', colorval
+        call cgd_image_jpeg(image%ptr, trim(adjustl(filename))//char(0) )
+        call destroy_img(image)
+    end subroutine write_jpeg
+
+
+    logical function compare_imgs(f1,f2)
+        character(len=*), intent(in) :: f1,f2
+        integer :: chk
+        type(base_img)   :: image1, image2
+        compare_imgs = .false.
+        chk=0
+        call create_img_from_png(f1,image1,chk)
+        if(chk==0) then
+            call create_img_from_png(f2,image2,chk)
+            if(chk==0) then
+                call cgd_image_compare(image1,image2,chk)
+                compare_imgs = chk == 0
+                call destroy_img(image1)
+                call destroy_img(image2)
+            else
+                call destroy_img(image2)
+            end if
+        else
+            call destroy_img(image1)
+        end if
+
+    end function compare_imgs
+
+    subroutine create_jpeg(width,height,image,status)
+        integer, intent(in)             :: width,height
+        type(base_img), intent(out)   :: image
+        integer, intent(out), optional  :: status
+
+        if (present(status)) then
+            call create_truecolor_img(width,height,image,status)
+        else
+            call create_truecolor_img(width,height,image)
+        endif
+
+    end subroutine create_jpeg
 
     subroutine create_img(width,height,image,status)
         integer, intent(in)             :: width,height
@@ -467,15 +681,15 @@ contains
         integer, intent(in)         :: color
         integer                     :: alpha
 
-        call cgd_blue(image%ptr,color,alpha)
+        call cgd_alpha(image%ptr,color,alpha)
 
     end function alpha
 
     function greyscale(image) result(color)
-         type(base_img), intent(in)  :: image
-         integer         :: color
-         call CGD_GREYSCALE(image%ptr, color)
-     end function greyscale
+        type(base_img), intent(in)  :: image
+        integer         :: color
+        call CGD_GREYSCALE(image%ptr, color)
+    end function greyscale
 
     function pixel_color(image,x,y)
         type(base_img), intent(in)  :: image
@@ -569,15 +783,14 @@ contains
 
     end function resolve_color
 
-    function interlace(image)
+    function get_interlaced(image)
         type(base_img), intent(in)  :: image
-        logical                     :: interlace
+        logical                     :: get_interlaced
         integer                     :: i
-
         call cgd_image_get_interlaced(image%ptr,i)
-        interlace = (i /= 0)
+        get_interlaced = (i /= 0)
+    end function get_interlaced
 
-    end function interlace
 
     function transparent_color(image)
         type(base_img), intent(in)  :: image
