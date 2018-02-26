@@ -608,9 +608,10 @@ contains
     end subroutine gen2Dclassdoc
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine preprecvols( b, p )
+    subroutine preprecvols( b, p, wcluster )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
+        real, optional, intent(in)    :: wcluster
         character(len=:), allocatable :: recname, rhoname, part_str
         integer :: istate
         allocate(part_str, source=int2str_pad(p%part,p%numlen))

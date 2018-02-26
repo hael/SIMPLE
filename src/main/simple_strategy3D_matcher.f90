@@ -90,7 +90,6 @@ contains
         character(len=STDLEN) :: fname, refine
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
-        integer :: state_counts(2)
         logical :: doprint, do_extr
 
         if( L_BENCH )then
@@ -120,7 +119,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('cluster', 'snhc')
+            case('cluster', 'snhc', 'clustersym', 'clusterdev')
                     p%npeaks = 1
                 case DEFAULT
                     if( p%eo .ne. 'no' )then
@@ -198,7 +197,7 @@ contains
         ! EXTREMAL LOGICS
         do_extr  = .false.
         select case(trim(p%refine))
-            case('cluster','clustersym')
+        case('cluster','clusterdev','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
                 zero_pop    = count(.not.b%a%included(consider_w=.false.))
@@ -225,13 +224,6 @@ contains
                     call b%e%spiral
                     call b%se%nearest_sym_neighbors( b%e, symmat )
                 endif
-            case('clusterdev')
-                if(allocated(het_mask))deallocate(het_mask)
-                allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
-                corr_thresh = -huge(corr_thresh)
-                zero_pop    = count(.not.b%a%included(consider_w=.false.))
-                iextr_lim   = ceiling(2.*log(real(p%nptcls-zero_pop)))
-                extr_thresh = 0.9 * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))
             case DEFAULT
                 ! nothing to do
         end select

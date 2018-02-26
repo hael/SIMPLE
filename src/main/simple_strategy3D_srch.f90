@@ -108,7 +108,7 @@ contains
             ! number of populated states
             nstates_eff = count(state_exists)
             select case(trim(spec%pp%refine))
-                case('cluster')
+            case('cluster','clustersym','clusterdev')
                     self%npeaks_grid = 1
                 case DEFAULT
                     ! "-(nstates_eff-1)" because all states share the same previous orientation

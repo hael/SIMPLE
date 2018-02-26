@@ -448,15 +448,16 @@ contains
         type(cmdline)               :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
         type(cmdline)               :: cline_postprocess
         ! other variables
-        type(sym)                   :: symop
-        integer,     allocatable    :: labels(:)
-        logical,     allocatable    :: included(:)
-        type(params)                :: p_master
-        type(oris)                  :: os, os_states
-        character(len=STDLEN)       :: oritab, str_state
-        real                        :: trs
-        integer                     :: state, iter, n_incl, startit
-        integer                     :: rename_stat
+        type(params)                  :: p_master
+        type(oris)                    :: os, os_states
+        type(sym)                     :: symop
+        integer,          allocatable :: labels(:)
+        logical,          allocatable :: included(:)
+        character(len=:), allocatable :: recname, rhoname, part_str
+        character(len=STDLEN)         :: oritab, str_state
+        real                          :: trs
+        integer                       :: state, iter, n_incl, startit
+        integer                       :: rename_stat, ipart
         call seed_rnd
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
@@ -484,7 +485,11 @@ contains
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
             case DEFAULT
-                call cline_refine3D1%set('refine', 'cluster')
+                if( .not.cline%defined('refine') )then
+                    call cline_refine3D1%set('refine', 'cluster')
+                else
+                    call cline_refine3D1%set('refine', trim(p_master%refine))
+                endif
         end select
         call cline_refine3D2%set('refine', 'multi')
         call cline_refine3D1%set('dynlp', 'no')
@@ -501,7 +506,6 @@ contains
         call cline_reconstruct3D_mixed_distr%delete('lp')
         call cline_postprocess%delete('lp')
         call cline_reconstruct3D_distr%set('eo','yes')
-        call cline_reconstruct3D_mixed_distr%set('eo','yes')
         call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
         call cline_postprocess%set('eo','yes')
         if( cline%defined('trs') )then
@@ -556,20 +560,28 @@ contains
         call cline_refine3D1%set('oritab', trim(oritab))
         deallocate(labels, included)
 
-        ! retrieve mixed model FSC & anisotropic filter
+        ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
+        if( trim(p_master%refine) .eq. 'sym' )then
+            call cline%set('oritab', trim('symrnd_'//oritab))
+            call cline%set('pgrp', 'c1')
+        endif
+        call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
+        rename_stat = rename(trim(VOL_FBODY)//one//p_master%ext, trim(CLUSTER3D_VOL)//p_master%ext)
         if( p_master%eo .ne. 'no' )then
-            if( trim(p_master%refine) .eq. 'sym' )then
-                call cline%set('oritab', trim('symrnd_'//oritab))
-                call cline%set('pgrp', 'c1')
-            endif
-            call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
-            rename_stat = rename(trim(VOL_FBODY)//one//p_master%ext, trim(CLUSTER3D_VOL)//p_master%ext)
             rename_stat = rename(trim(VOL_FBODY)//one//'_even'//p_master%ext, trim(CLUSTER3D_VOL)//'_even'//p_master%ext)
             rename_stat = rename(trim(VOL_FBODY)//one//'_odd'//p_master%ext,  trim(CLUSTER3D_VOL)//'_odd'//p_master%ext)
             rename_stat = rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
             rename_stat = rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
             rename_stat = rename(trim(ANISOLP_FBODY)//one//p_master%ext, trim(CLUSTER3D_ANISOLP)//p_master%ext)
         endif
+        do ipart = 1, p_master%nparts
+            allocate(part_str, source=int2str_pad(ipart,p_master%numlen))
+            allocate(recname, source=trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
+            allocate(rhoname, source='rho_'//trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
+            rename_stat = rename(recname, 'cluster3D_'//trim(recname))
+            rename_stat = rename(rhoname, 'cluster3D_'//trim(rhoname))
+            deallocate(part_str,recname,rhoname)
+        enddo
 
         ! STAGE1: frozen orientation parameters
         write(*,'(A)')    '>>>'

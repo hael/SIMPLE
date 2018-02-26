@@ -742,7 +742,7 @@ contains
         class(cmdline),                 intent(inout) :: cline
         ! commanders
         type(prime3D_init_distr_commander)   :: xprime3D_init_distr
-        type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
+        type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
         type(resrange_commander)             :: xresrange
         type(merge_algndocs_commander)       :: xmerge_algndocs
         type(check3D_conv_commander)         :: xcheck3D_conv

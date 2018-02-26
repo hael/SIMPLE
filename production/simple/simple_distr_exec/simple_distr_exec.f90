@@ -845,9 +845,10 @@ select case(prg)
         keys_optional(15) = 'mskfile'
         keys_optional(16) = 'startit'
         keys_optional(17) = 'objfun'
+        keys_optional(18) = 'refine'
         ! parse command line
         ! if( describe ) call print_doc_cluster3D
-        call cline%parse(keys_required(:7), keys_optional(:17))
+        call cline%parse(keys_required(:7), keys_optional(:18))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -855,6 +856,7 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
+        if( .not. cline%defined('refine') ) call cline%set('refine','cluster')
         if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo','yes')
         if( cline%defined('lp') ) call cline%set('eo','no')
         ! execute

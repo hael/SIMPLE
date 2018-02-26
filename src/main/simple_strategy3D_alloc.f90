@@ -107,37 +107,32 @@ contains
         !$omp end do nowait
         !$omp end parallel
         ! projection direction peaks, eo & CTF transfer
-        select case(trim(p%refine))
-        case('cluster','clustersym','clusterdev')
-               ! nothing to do
-            case DEFAULT
-                allocate(o_peaks(p%fromp:p%top))
-                do iptcl = p%fromp, p%top
-                    if( ptcl_mask(iptcl) )then
-                        ! orientation peaks
-                        call o_peaks(iptcl)%new_clean(p%npeaks)
-                        ! transfer CTF params
-                        if( p%ctf.ne.'no' )then
-                            call o_peaks(iptcl)%set_all2single('kv',    b%a%get(iptcl,'kv')   )
-                            call o_peaks(iptcl)%set_all2single('cs',    b%a%get(iptcl,'cs')   )
-                            call o_peaks(iptcl)%set_all2single('fraca', b%a%get(iptcl,'fraca'))
-                            call o_peaks(iptcl)%set_all2single('dfx',   b%a%get(iptcl,'dfx')  )
-                            if( p%tfplan%mode .eq. 'astig' )then
-                                call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfy')   )
-                                call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
-                            else
-                                call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfx'))
-                                call o_peaks(iptcl)%set_all2single('angast', 0.)
-                            endif
-                            if( p%tfplan%l_phaseplate )then
-                                call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
-                            endif
-                        endif
-                        ! transfer eo flag
-                        call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
+        allocate(o_peaks(p%fromp:p%top))
+        do iptcl = p%fromp, p%top
+            if( ptcl_mask(iptcl) )then
+                ! orientation peaks
+                call o_peaks(iptcl)%new_clean(p%npeaks)
+                ! transfer CTF params
+                if( p%ctf.ne.'no' )then
+                    call o_peaks(iptcl)%set_all2single('kv',    b%a%get(iptcl,'kv')   )
+                    call o_peaks(iptcl)%set_all2single('cs',    b%a%get(iptcl,'cs')   )
+                    call o_peaks(iptcl)%set_all2single('fraca', b%a%get(iptcl,'fraca'))
+                    call o_peaks(iptcl)%set_all2single('dfx',   b%a%get(iptcl,'dfx')  )
+                    if( p%tfplan%mode .eq. 'astig' )then
+                        call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfy')   )
+                        call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
+                    else
+                        call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfx'))
+                        call o_peaks(iptcl)%set_all2single('angast', 0.)
                     endif
-                enddo
-        end select
+                    if( p%tfplan%l_phaseplate )then
+                        call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
+                    endif
+                endif
+                ! transfer eo flag
+                call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
+            endif
+        enddo
         ! refine mode specific allocations and initialisations
         select case( trim(p%refine) )
             case( 'cluster','clustersym','clusterdev' )

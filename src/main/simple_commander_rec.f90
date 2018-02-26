@@ -295,7 +295,6 @@ contains
                 call b%recvol%bwd_ft
                 call b%recvol%clip(b%vol)
                 call b%vol%write(recname, del_if_exists=.true.)
-                call wait_for_closure(recname)
             end subroutine correct_for_sampling_density
 
     end subroutine exec_volassemble
