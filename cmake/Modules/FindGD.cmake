@@ -66,8 +66,16 @@ if(PNG_FOUND)
     /usr/include
     /usr/local/include             # OpenBSD
     /opt/sw/include
-
-  )
+    )
+  message(STATUS "LibGD version path ${GD_GD_INCLUDE_DIR}")
+  find_path(GD_GD_STATIC_LIB_DIR libgd.a
+     /usr/lib
+        /usr/lib/x86_64-linux-gnu
+        /usr/local/lib               # Homebrew
+        /opt/local/lib               # Macports
+        /usr/opt/local/lib
+        /sw/lib                      # Fink
+        )
   message(STATUS "LibGD version path ${GD_GD_INCLUDE_DIR}")
   list(APPEND GD_NAMES gd libgd)
   # unset(GD_NAMES_DEBUG)
@@ -115,7 +123,7 @@ if(PNG_FOUND)
       # gd.h includes png.h. Sigh.
       set(GD_INCLUDE_DIRS ${GD_GD_INCLUDE_DIR} ${PNG_INCLUDE_DIR} )
       set(GD_INCLUDE_DIR ${GD_INCLUDE_DIRS} ) # for backward compatiblity
-      set(GD_LIBRARIES ${GD_LIBRARY} ${PNG_LIBRARY})
+      set(GD_LIBRARIES ${GD_LIBRARY} ${PNG_LIBRARY} ${GD_GD_STATIC_LIB_DIR}/libgd.a)
 
       # if (CYGWIN)
       #   if(BUILD_SHARED_LIBS)
