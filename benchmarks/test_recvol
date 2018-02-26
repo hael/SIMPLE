@@ -28,7 +28,8 @@ echo " ## user 0m47.543s                                                        
 echo " ## sys 0m0.345s                                                                  "
 echo "                                                                                  "
 [ -f recvol_state01.mrc ] &&  rm -f recvol_state01.mrc
-time simple_exec prg=recvol ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
+#time simple_distr_exec prg=reconstruct3D ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
+time simple_private_exec prg=reconstruct3D ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
 
 echo " ## >>> TESTING AGAINST REFERENCE IMAGE                                           "
 #[ -f recvol_diff.mrc ] &&  rm -f recvol_diff.mrc
