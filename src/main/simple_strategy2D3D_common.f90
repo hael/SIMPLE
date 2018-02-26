@@ -163,7 +163,7 @@ contains
                 all_fsc_bin_exist = .true.
                 fsc_bin_exists    = .false.
                 do s=1,p%nstates
-                    if( str_has_substr(p%refine,'het') )then
+                    if( str_has_substr(p%refine,'cluster') )then
                         fsc_fname = trim(CLUSTER3D_FSC)
                     else
                         fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
@@ -180,7 +180,7 @@ contains
                     do s=1,p%nstates
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
-                            if( str_has_substr(p%refine,'het') )then
+                            if( str_has_substr(p%refine,'cluster') )then
                                 fsc_fname = trim(CLUSTER3D_FSC)
                             else
                                 fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT

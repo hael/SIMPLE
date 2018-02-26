@@ -371,15 +371,11 @@ contains
                     ibatch      = i - batchlims(1) + 1
                     orientation = b%a%get_ori(iptcl)
                     if( orientation%isstatezero() .or. nint(orientation%get('state_balance')) == 0 ) cycle
-                    if( p%npeaks > 1 )then
-                        call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
+                    if( trim(p%refine).eq.'clustersym' )then
+                        ! always C1 reconstruction
+                        call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation, o_peaks(iptcl))
                     else
-                        if( trim(p%refine).eq.'clustersym' )then
-                            ! always C1 reconstruction
-                            call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation)
-                        else
-                            call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation)
-                        endif
+                        call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
                     endif
                 end do
             end do

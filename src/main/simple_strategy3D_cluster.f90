@@ -121,13 +121,13 @@ contains
                                 shvec = self%s%a_ptr%get_2Dshift(self%s%iptcl) + proj_space_shift(self%s%iptcl_map,iref,:)
                                 call self%s%a_ptr%set_shift(self%s%iptcl, shvec)
                                 call self%s%a_ptr%e3set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 3))
-                                call o_peaks(self%s%iptcl)%set_shift(1, shvec)
                             endif
                             if( self%s%prev_roind .ne. self%s%pftcc_ptr%get_roind(360.-proj_space_euls(self%s%iptcl_map, iref, 3)) )then
                                 mi_inpl = 0.
                             endif
                         endif
                     endif
+                    call self%s%a_ptr%set(self%s%iptcl,'proj', real(proj_space_proj(self%s%iptcl_map,iref)))
                 endif
             endif
             ! updates peaks and orientation orientation
@@ -139,12 +139,13 @@ contains
             call self%s%a_ptr%set(self%s%iptcl,'mi_inpl',  mi_inpl)
             call self%s%a_ptr%set(self%s%iptcl,'mi_state', mi_state)
             call self%s%a_ptr%set(self%s%iptcl,'mi_joint', (mi_state+mi_inpl)/2.)
-            call self%s%a_ptr%set(self%s%iptcl,'w',   w)
+            call self%s%a_ptr%set(self%s%iptcl,'w',        w)
             call o_peaks(self%s%iptcl)%set(1,'state', real(state))
             call o_peaks(self%s%iptcl)%set(1,'corr',  corr)
             call o_peaks(self%s%iptcl)%set(1,'w',     w)
             call o_peaks(self%s%iptcl)%set(1,'ow',    1.)
             call o_peaks(self%s%iptcl)%set_euler(1, self%s%a_ptr%get_euler(self%s%iptcl))
+            call o_peaks(self%s%iptcl)%set_shift(1, self%s%a_ptr%get_2Dshift(self%s%iptcl))
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
