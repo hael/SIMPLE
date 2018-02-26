@@ -3,101 +3,171 @@
 !*******************************************************************************
 
 !! Modified by Michael Eager, Feb 2018
-program simple_test_img_png
+module simple_test_libgd_io
     include 'simple_lib.f08'
     use simple_img
     implicit none
-    type(base_img)            :: image
-    integer                   :: c1,c2,c3,c4,c5
-    integer                   :: a1(4),a2(4)
-    real(rp)                  :: ptsize = 30.0_rp
-    real(rp)                  :: angle = 0.0_rp
-    integer                   :: w,h
-    integer                   :: r,x,y,status
-    real, allocatable         :: buffer(:,:)
-    character(len=256)        :: fout = 'gray-buffer.png'
-    character(len=8)      :: datestr
-    character(len=STDLEN) :: folder, cmd
-    character(len=300)    :: command
+!    public :: test_png_io
+contains
 
-    a1(:) = (/ 5,47,12,55 /)
-    a2(:) = (/ 36,60,2,25 /)
-    call seed_rnd
-    call date_and_time(date=datestr)
-    folder = trim('./SIMPLE_TEST_PNG_'//datestr)
-    command = 'mkdir ' // trim( folder )//'|| true'
-    call exec_cmdline( trim(command) )
-    call simple_chdir( trim(folder) )
-    call exec_cmdline("rm -f bbb" )
-    call create_raw_png_tmp
+    subroutine test_png_io
+        use simple_img
+        type(base_img)            :: image
+        integer                   :: c1,c2,c3,c4,c5
+        integer                   :: a1(4),a2(4)
+        real(dp)                  :: ptsize = 30.0_dp
+        real(dp)                  :: angle = 0.0_dp
+        integer                   :: w,h
+        integer                   :: r,x,y,status
+        real, allocatable         :: buffer(:,:)
+        character(len=256)        :: fout = 'gray-buffer.png'
+        real                  :: grange(2)
+        a1(:) = (/ 5,47,12,55 /)
+        a2(:) = (/ 36,60,2,25 /)
+        call create_raw_png_tmp
 
-    call create_img(64,64,image)
-    call allocate_color(image,0,0,0,c1)
-    call allocate_color(image,255,255,255,c2)
-    call allocate_color(image,255,0,0,c3)
-    call allocate_color(image,255,0,255,c4)
-    call allocate_color(image,0,255,0,c5)
+        call create_img(64,64,image)
+        call allocate_color(image,0,0,0,c1)
+        call allocate_color(image,255,255,255,c2)
+        call allocate_color(image,255,0,0,c3)
+        call allocate_color(image,255,0,255,c4)
+        call allocate_color(image,0,255,0,c5)
 
-    call draw_line(image,1,1,64,64,c2)
-    call draw_rectangle(image,10,10,53,53,c2)
-    call draw_filled_rectangle(image,30,30,43,53,c3)
-    call draw_filled_polygon(image,4,a1,a2,c4)
-    call fill_img(image,1,5,c5)
-    call write_img_as_png(image,"xxx.png")
-    call destroy_img(image)
-    write(*,*) 'test png'
+        call draw_line(image,1,1,64,64,c2)
+        call draw_rectangle(image,10,10,53,53,c2)
+        call draw_filled_rectangle(image,30,30,43,53,c3)
+        call draw_filled_polygon(image,4,a1,a2,c4)
+        call fill_img(image,1,5,c5)
+        call write_img_as_png(image,"xxx.png")
+        call destroy_img(image)
+        write(*,*) 'test png'
 
-    call create_img_from_png("bbb",image)
-    call write_img_as_png(image,"bbb-from-png.png")
-    call destroy_img(image)
-    write(6,*) 'test png to png'
-    call create_img_from_png("bbb",image)
-    status = greyscale(image)
-    call write_img_as_png(image,"gray.png")
-    call destroy_img(image)
-    write(6,*) 'test png to grayscale'
+        call create_img_from_png("bbb",image)
+        call write_img_as_png(image,"bbb-from-png.png")
+        call destroy_img(image)
+        write(6,*) 'test png to png'
+        call create_img_from_png("bbb",image)
+        status = greyscale(image)
+        call write_img_as_png(image,"gray.png")
+        call destroy_img(image)
+        write(6,*) 'test png to grayscale'
 
 
-    status=0
-    call read_png("gray.png", buffer, status)
-    if (status /= 0) write(*,*) "read_png failed"
-    if (.not. allocated(buffer)) then
-        write(*,*) "read_png failed, buffer not allocated"
-    else
-        print*, "read_png width ", size(buffer,1), " height ",  size(buffer,2)
-        print*, "read_png max val ", MAXVAL(buffer)
-        print *, buffer
-    end if
+        status=0
+        call read_png("gray.png", buffer, status)
+        if (status /= 0) write(*,*) "read_png failed"
+        if (.not. allocated(buffer)) then
+            write(*,*) "read_png failed, buffer not allocated"
+        else
+            print*, "read_png width ", size(buffer,1), " height ",  size(buffer,2)
+            print*, "read_png max val ", MAXVAL(buffer)
+            print *, buffer
+        end if
+        grange(:) = (/ 0., 255. /)
+        call write_png(buffer, fout)! ,grange , status)
+        if (status /= 0) write(*,*) "write_png failed"
+        deallocate(buffer)
+        write(*,*) 'test read/write png from buffers'
+        if( .not. compare_imgs("gray.png", fout) ) write(*,*) "png read/wrbite failed - images differ"
 
-    call write_png(buffer, fout, status)
-    if (status /= 0) write(*,*) "write_png failed"
-    deallocate(buffer)
-    write(*,*) 'test read/write png from buffers'
 
+        call create_img_from_png("bbb",image)
+        call write_img_as_jpeg(image,"bbb.jpg",70)
+        call destroy_img(image)
+        call create_img_from_jpeg("bbb.jpg",image)
+        call write_img_as_png(image,"bbb-from-jpeg.png")
+        call write_img_as_png(image,"bbb-from-jpeg.jpg")
+        call destroy_img(image)
+        write(*,*) 'test jpg done'
 
-
-#ifdef WITH_JPEG
-    call create_img_from_png("bbb",image)
-    call write_img_as_jpeg(image,"bbb.jpg",70)
-    call destroy_img(image)
-    call create_img_from_jpeg("bbb.jpg",image)
-    call write_img_as_png(image,"bbb-from-jpeg.png")
-    call write_img_as_png(image,"bbb-from-jpeg.jpg")
-    call destroy_img(image)
-    write(*,*) 'test jpg done'
-#endif
 
 #ifdef WITH_XPM
-    call create_img_from_png("bbb",image)
-    call write_img_as_xpm(image,"bbb.xpm")
-    call destroy_img(image)
-    call create_img_from_xpm("bbb.xpm",image)
-    call write_img_as_png(image,"bbb-from-xpm.png")
-    call destroy_img(image)
-    write(*,*) 'test xpm done'
+        call create_img_from_png("bbb",image)
+        call write_img_as_xpm(image,"bbb.xpm")
+        call destroy_img(image)
+        call create_img_from_xpm("bbb.xpm",image)
+        call write_img_as_png(image,"bbb-from-xpm.png")
+        call destroy_img(image)
+        write(*,*) 'test xpm done'
 #endif
 
-contains
+    end subroutine test_png_io
+
+    subroutine test_png_io
+        use simple_img
+        type(base_img)            :: image
+        integer                   :: c1,c2,c3,c4,c5
+        integer                   :: a1(4),a2(4)
+        real(dp)                  :: ptsize = 30.0_dp
+        real(dp)                  :: angle = 0.0_dp
+        integer                   :: w,h
+        integer                   :: r,x,y,status
+        real, allocatable         :: buffer(:,:)
+        character(len=256)        :: fout = 'gray-buffer.png'
+        real                  :: grange(2)
+        a1(:) = (/ 5,47,12,55 /)
+        a2(:) = (/ 36,60,2,25 /)
+        call create_raw_png_tmp
+
+        call create_img(64,64,image)
+        call allocate_color(image,0,0,0,c1)
+        call allocate_color(image,255,255,255,c2)
+        call allocate_color(image,255,0,0,c3)
+        call allocate_color(image,255,0,255,c4)
+        call allocate_color(image,0,255,0,c5)
+
+        call draw_line(image,1,1,64,64,c2)
+        call draw_rectangle(image,10,10,53,53,c2)
+        call draw_filled_rectangle(image,30,30,43,53,c3)
+        call draw_filled_polygon(image,4,a1,a2,c4)
+        call fill_img(image,1,5,c5)
+        call write_img_as_png(image,"xxx.png")
+        call destroy_img(image)
+        write(*,*) 'test png'
+
+        call create_img_from_png("bbb",image)
+        call write_img_as_png(image,"bbb-from-png.png")
+        call destroy_img(image)
+        write(6,*) 'test png to png'
+        call create_img_from_png("bbb",image)
+        status = greyscale(image)
+        call write_img_as_png(image,"gray.png")
+        call destroy_img(image)
+        write(6,*) 'test png to grayscale'
+
+
+        status=0
+        call read_jpeg("gray.jpg", buffer, status)
+        if (status /= 0) write(*,*) "read_jpeg failed"
+        if (.not. allocated(buffer)) then
+            write(*,*) "read_jpeg failed, buffer not allocated"
+        else
+            print*, "read_jpeg width ", size(buffer,1), " height ",  size(buffer,2)
+            print*, "read_jpeg max val ", MAXVAL(buffer)
+            print *, buffer
+        end if
+        grange(:) = (/ 0., 255. /)
+        call write_jpeg(buffer, fout)! ,grange , status)
+        if (status /= 0) write(*,*) "write_jpeg failed"
+        deallocate(buffer)
+        write(*,*) 'test read/write jpeg from buffers'
+        if( .not. compare_imgs("gray.jpg", fout) ) write(*,*) "jpeg read/write failed - images differ"
+
+
+        call create_img_from_png("bbb",image)
+        call write_img_as_jpeg(image,"bbb.jpg",70)
+        call destroy_img(image)
+        call create_img_from_jpeg("bbb.jpg",image)
+        call write_img_as_png(image,"bbb-from-jpeg.png")
+        call write_img_as_png(image,"bbb-from-jpeg.jpg")
+        call destroy_img(image)
+        write(*,*) 'test jpg done'
+
+
+
+    end subroutine test_png_io
+
+
 
 
     subroutine create_raw_png_tmp
@@ -367,4 +437,4 @@ contains
         call fclose(fid)
     end subroutine create_raw_png_tmp
 
-end program simple_test_img_png
+end module simple_test_libgd_io
