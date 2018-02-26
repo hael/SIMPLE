@@ -1,5 +1,5 @@
  !! Modified by Michael Eager, Feb 2018
-program simple_test_img_io
+program simple_test_img_export
     include 'simple_lib.f08'
 #ifdef LIBGD
     use simple_test_libgd_io
@@ -21,10 +21,10 @@ program simple_test_img_io
     call simple_chdir( trim(folder) )
 
 #ifdef LIBGD
-    call test_png_io
     call test_jpeg_io
+    call test_png_io
 #endif
 
     call test_pnm_io
 
-end program simple_test_img_io
+end program simple_test_img_export
