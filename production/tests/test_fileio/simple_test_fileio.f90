@@ -7,7 +7,7 @@ program simple_test_fileio
     implicit none
     type( image )         :: cube, img
     real                  :: smpd
-    integer               :: box, nspace, msk, i,j,istat,ios
+    integer               :: box, nspace, msk, i,j,istat,ios,fid
     integer               :: un, u(1200)
     character             :: c
     character(len=8)      :: datestr
@@ -27,18 +27,18 @@ program simple_test_fileio
 
 #if defined(PGI)
     print *,">>> Testing PGI STREAMING  "
-    open(1,file='myfile.txt',access='stream',form='unformatted',iostat=ios,iomsg=msg)
-    write(6,*) 'ios1=',ios
-    write(6,*) 'mess1=',trim(msg)
-    read(1,pos=20,iostat=ios,iomsg=msg) c
-    write(6,*) 'ios1=',ios
-    write(6,*) 'mess1=',trim(msg)
-    read(1,pos=1,iostat=ios) c
-    write(6,*) 'ios2=',ios
-    write(6,*) 'mess2=',trim(msg)
-    close(1)
+    call fopen(fid,file='myfile.txt',access='stream',form='unformatted',iostat=ios,iomsg=msg)
+    write(*,*) 'ios1=',ios
+    write(*,*) 'mess1=',trim(msg)
+    read(fid,pos=20,iostat=ios,iomsg=msg) c
+    write(*,*) 'ios1=',ios
+    write(*,*) 'mess1=',trim(msg)
+    read(fid,pos=1,iostat=ios) c
+    write(*,*) 'ios2=',ios
+    write(*,*) 'mess2=',trim(msg)
+    call fclose(fid)
 
-    open(newunit=un,file='test.bin',status='unknown',action='write',access='stream',form='unformatted',iostat=istat,iomsg=msg)
+    call fopen(un,file='test.bin',status='unknown',action='write',access='stream',form='unformatted',iostat=istat,iomsg=msg)
     if(istat /= 0) then
         call fileiochk(" PGI STREAMING failed ", istat)
         call simple_error_check()
@@ -50,7 +50,7 @@ program simple_test_fileio
 
     write(un) 1._dp,2._dp,3._dp
     call flush(un)
-    close(un,iostat=istat)
+    call fclose(un,iostat=istat)
     open(un,file='test.bin',status='old',action='write',access='stream',form='unformatted',position='append',iostat=istat)
     write(un) 4._dp, 5._dp
     call flush(un)
@@ -75,7 +75,6 @@ program simple_test_fileio
 #endif
 
 
-
     print *,">>> Testing FOPEN  (Expecting Error 24)"
     do i=1,1200
         write(fname,'("tmp_",i0,".txt")') i
@@ -96,12 +95,6 @@ program simple_test_fileio
     command = '/bin/rm -f tmp_*.txt || true'
     call exec_cmdline( trim(command) )
     print *,">>> Testing FOPEN/FCLOSE completed"
-
-
-
-
-
-
 
     ! dummy data
     box    = 96
@@ -131,6 +124,61 @@ program simple_test_fileio
     !    & ' smpd='//real2str(smpd)//' verbose=no'
     !call exec_cmdline( trim(command) )
     ! end
+
+    write(*,*)'>>> Testing Read/Write accuracy (floats)'
+    call test_readwrite_accuracy
     call simple_chdir('../')
     call simple_end('**** SIMPLE_TEST_FILEIO NORMAL STOP ****')
+
+
+contains
+
+    subroutine  test_readwrite_accuracy
+
+        character(len=128) :: teststring
+        integer, parameter :: nformats=4
+        character(len=20), parameter :: formats(nformats) =   &
+            [ '( E11.4)', '( E13.6)', '( E15.8)', '(E17.10)' ]
+        real, dimension(nformats) :: errors
+
+        real :: output, back
+        real, parameter :: delta=epsilon(output)
+        integer :: i,j
+        real :: spacing(1000000)
+        call random_number(spacing)
+        spacing = spacing / sum(spacing)
+        errors = 0.
+        j=0
+        output =  (1.0/exp(1.0))
+        do while (output < 1)
+            do i=1,nformats
+                write(teststring,FMT=formats(i)) output
+                read(teststring,*) back
+                if (abs(back-output) > errors(i)) errors(i) = abs(back-output)
+            enddo
+            output = output + spacing(j) ! delta
+            j=j+1
+        end do
+
+        print *, 'Maximum errors: '
+        print *, formats
+        print *, errors
+
+        print *, 'Trying with default format: '
+        j=0
+        errors = 0.
+        output = (1.0/exp(1.0))
+        do while (output < 1)
+            write(teststring,*) output
+            read(teststring,*) back
+            if (abs(back-output) > errors(1)) errors(1) = abs(back-output)
+            output = output + spacing(j) ! delta
+            j=j+1
+        end do
+
+        print *, 'Error = ', errors(1)
+    end subroutine test_readwrite_accuracy
+
+
+
 end program simple_test_fileio
