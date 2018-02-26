@@ -336,6 +336,7 @@ contains
 
     end subroutine simple_cuda_stop
 #endif
+
     function get_sys_error () result(err)
         integer :: err
         CHARACTER(len=100) :: msg
