@@ -469,6 +469,7 @@ if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQ
      "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
      "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
      "-Mconcur=bind,allcores,cncall"                            # PGI
+     "-floop-parallelize-all -ftree-parallelize-loops=4"        # GNU
      )
  endif()
 endif()
@@ -586,25 +587,28 @@ else()
 endif()
 
 #
-#  PNG img support through LibGD
+#  JPEG, TIFF, PNG img support through LibGD
 #
-find_package(GD QUIET)
-if (NOT GD_FOUND)
-  message(FATAL_ERROR "Unable to find LibGD. Please install libgd-dev (https://libgd.github.io) which also depends on libpng and zlib.
+if(BUILD_WITH_LIBGD)
+  find_package(GD QUIET)
+  if (NOT GD_FOUND)
+    message(STATUS "Unable to find LibGD imaging library. Please install libgd-dev (https://libgd.github.io) which also depends on libjpeg, libpng and zlib.
 DEB:  sudo apt-get install libgd-dev
 FINK: fink install gd2-shlibs gd2
 BREW: brew install gd
+COMPILE FROM SOURCE: git clone https://github.com/libgd/libgd
+Warning -- libgd will pull latest stable libjpeg that may conflict with libjpeg9.
 ")
-else()
-  message(STATUS "LibGD found")
-  message(STATUS "lib: ${GD_LIBRARIES}")
-  include_directories(" ${GD_INCLUDE_DIRS}")
-  set(EXTRA_LIBS ${EXTRA_LIBS} ${GD_LIBRARIES} ${ZLIB_LIBRARY_RELEASE})
-  if (WITH_JPEG)
+    set(BUILD_WITH_LIBGD OFF)
+  else()
+    message(STATUS "LibGD found")
+    message(STATUS "lib: ${GD_LIBRARIES}")
+    add_definitions(" -DLIBGD ")
+    include_directories(" ${GD_INCLUDE_DIRS}")
+    set(EXTRA_LIBS ${EXTRA_LIBS} ${GD_LIBRARIES} ${ZLIB_LIBRARY_RELEASE})
     set(EXTRA_LIBS ${EXTRA_LIBS} -ljpeg)
   endif()
 endif()
-
 
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}  ")\
@@ -626,14 +630,18 @@ endif()
  endif()
 
 if(USE_PROFILING)
-  SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg")
+  SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg -fno-omit-frame-pointer")
+  SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -fno-omit-frame-pointer")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -fno-omit-frame-pointer")
 endif()
 # Option for code coverage
 #if(VERBOSE OR ${BUILD_WITH_COVERAGE})
 #  option(USE_CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
   if(USE_CODE_COVERAGE)
     if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
-      set(CMAKE_Fortran_FLAGS         "${CMAKE_Fortran_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
+      set(CMAKE_Fortran_FLAGS   "${CMAKE_Fortran_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
+      set(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS}       -g -Og -pg -fprofile-arcs -ftest-coverage")
+      set(CMAKE_CXX_FLAGS       "${CMAKE_CXX_FLAGS}     -g -Og -pg -fprofile-arcs -ftest-coverage")
      # set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
       SET(CMAKE_EXE_LINKER_FLAGS      "${CMAKE_EXE_LINKER_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
       SET(CMAKE_SHARED_LINKER_FLAGS   "${CMAKE_SHARED_LINKER_FLAGS} -Og -g -pg -fprofile-arcs -ftest-coverage")

@@ -48,16 +48,22 @@ if ( USE_CUDA )
 ## else()
 ##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 endif()
-file(GLOB IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/*.f[90][08]" PARENT_SCOPE)
-list(APPEND IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c")
+
+#if ( BUILD_WITH_LIBGD )
+  file(GLOB IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/*.f[90][08]" PARENT_SCOPE)
+  list(APPEND IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c")
+#else()
+#  set(IMG_src "")
+#endif()
 
 ########################################################################
 # main folder
 ##########################################################################
 file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
+
+# add the simple_args module to SIMPLE_src
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
- # "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_png.c"
 )
 
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
