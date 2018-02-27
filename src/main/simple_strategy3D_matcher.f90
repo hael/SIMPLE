@@ -329,7 +329,7 @@ contains
         if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
-        call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION
@@ -460,7 +460,7 @@ contains
             if( p%l_distr_exec .and. p%part.ne.1 )then
                 ! so random oris only written once in distributed mode
             else
-                call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
+                call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
             endif
             p%vols(1) = 'startvol'//p%ext
             if( p%noise .eq. 'yes' )then

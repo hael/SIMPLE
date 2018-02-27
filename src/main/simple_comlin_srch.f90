@@ -11,7 +11,7 @@ use simple_oris,        only: oris
 use simple_sym,         only: sym
 implicit none
 
-public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest, comlin_srch_write_resoris,&
+public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest,&
 comlin_coarsesrch_symaxis, comlin_singlesrch_symaxis, comlin_srch_pair
 private
 #include "simple_local_flags.inc"
@@ -113,14 +113,6 @@ contains
         integer :: nbestout
         nbestout = NBEST
     end function comlin_srch_get_nbest
-
-    !> Write results of common-line mode search to file
-    subroutine comlin_srch_write_resoris( fname, fromto )
-        use simple_binoris_io, only: binwrite_oritab
-        character(len=*) :: fname
-        integer          :: fromto(2)
-        call binwrite_oritab(fname, resoris, fromto)
-    end subroutine comlin_srch_write_resoris
 
     !> common-line mode search symmetry axis
     subroutine comlin_coarsesrch_symaxis( fromto, resoris )

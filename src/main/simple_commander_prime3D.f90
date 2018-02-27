@@ -181,7 +181,7 @@ contains
             call exec_rec_master(b, p, cline, 'startvol')
         endif
         if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
-        call binwrite_oritab('multiptcl_startdoc'//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
+        call binwrite_oritab('multiptcl_startdoc'//trim(METADATA_EXT), b%spproj, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_multiptcl_init

@@ -1,12 +1,11 @@
 module simple_cluster_cavgs
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_build,            only: build
-use simple_params,           only: params
-use simple_corrmat,          only: calc_roinv_corrmat
-use simple_aff_prop,         only: aff_prop
-use simple_strategy2D3D_common   ! use all in there
-use simple_defs              ! use all in there
-use simple_binoris_io        ! use all in there
+use simple_polarft_corrcalc,   only: polarft_corrcalc
+use simple_build,              only: build
+use simple_params,             only: params
+use simple_corrmat,            only: calc_roinv_corrmat
+use simple_aff_prop,           only: aff_prop
+use simple_strategy2D3D_common ! use all in there
+use simple_defs                ! use all in there
 implicit none
 
 public :: cluster_cavgs_exec
@@ -73,7 +72,7 @@ contains
 		do iptcl=1,p%nptcls
 			call clsdoc%set(iptcl, 'class', real(labels(iptcl)))
 		end do
-		call binwrite_oritab('aff_prop_clustering'//trim(METADATA_EXT), clsdoc, [1,p%nptcls])
+		call clsdoc%write('aff_prop_clustering'//trim(TXT_EXT), [1,p%nptcls])
 		! calculate within cluster correlations
 		corr_within_cls_avg =  0.
 		corr_within_cls_min =  1.0
@@ -202,7 +201,7 @@ contains
         do icen=1,p%ncls
             write(*,*) nint(pops(icen)),"|",('*', j=1,nint(pops(icen)*scale))
         end do
-		call binwrite_oritab('aff_prop_ceninfo'//trim(METADATA_EXT), ceninfo, [1,p%ncls])
+		call ceninfo%write('aff_prop_ceninfo'//trim(TXT_EXT), [1,p%ncls])
 		! write selected class averages
 		if( p%balance > 0 )then
 			cnt = 0

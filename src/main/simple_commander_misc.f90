@@ -1,11 +1,11 @@
 ! concrete commander: miscallenaous routines
 module simple_commander_misc
 #include "simple_lib.f08"
-use simple_binoris_io      ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_binoris_io      ! use all in there
 implicit none
 
 public :: cluster_smat_commander
@@ -119,7 +119,7 @@ contains
                 avg_ratio = avg_ratio+ratio
                 if( ratio < min_ratio )then
                     min_ratio = ratio
-                    call binwrite_oritab('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,p%nptcls])
+                    call b%a%write('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,p%nptcls])
                 endif
             end do
             validinds(ncls) = avg_ratio/real(NRESTARTS)
@@ -128,7 +128,7 @@ contains
         done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call binread_oritab('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
+            call b%a%read('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,b%a%get_noris()])
             do icls=1,ncls
                 pop = b%a%get_pop(icls, p%label)
                 write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
@@ -314,24 +314,27 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call shift_imgfile(p%stk, p%outstk, b%a, p%smpd, p%mul)
         call b%a%zero_shifts
-        call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), b%a, [1,p%nptcls])
+        call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), b%spproj, b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
     !> for robust identifiaction of the symmetry axis
     !> of a map using image-to-volume simiarity validation of the axis
     subroutine exec_sym_aggregate( self, cline )
-        use simple_oris,  only: oris
-        use simple_ori,   only: ori
-        use simple_sym,   only: sym
-        use simple_image, only: image
+        use simple_oris,           only: oris
+        use simple_ori,            only: ori
+        use simple_sym,            only: sym
+        use simple_image,          only: image
         use simple_projector_hlev, only: rotvol
+        use simple_sp_project,     only: sp_project
         class(sym_aggregate_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)        :: cline_c1
         type(params)         :: p, p_c1
         type(build)          :: b
-        type(oris)           :: e, sympeaks, sym_axes
+        type(oris)           :: e, sympeaks
+        class(oris), pointer :: sym_axes => null()
+        type(sp_project)     :: spproj
         type(ori)            :: symaxis, o
         type(image)          :: symvol, asym_vol, mskvol
         type(sym)            :: se_c1
@@ -357,9 +360,8 @@ contains
         l_msk = mskvol%bin2logical()
         call mskvol%kill
         ! identify top ranking symmetry peaks
-        nl = binread_nlines(p%oritab2)
-        sym_axes = oris(nl)
-        call binread_oritab(p%oritab2, sym_axes, [1,sym_axes%get_noris()])
+        nl = binread_nlines(p, p%oritab2)
+        call spproj%new_seg_with_ptr(nl, p%oritype, sym_axes)
         call find_sym_peaks(sym_axes, sympeaks)
         ! reconstruct & correlate volumes
         do i = 1, sympeaks%get_noris()
@@ -381,7 +383,7 @@ contains
             cc = symvol%real_corr(b%vol, l_msk)
             call sympeaks%set(i, 'corr', cc)
         enddo
-        call binwrite_oritab(p%outfile, sympeaks, [1,sympeaks%get_noris()])
+        call sympeaks%write(p%outfile, [1,sympeaks%get_noris()])
         ! the end
         call simple_touch('SYM_AGGREGATE_FINISHED', errmsg='commander_misc; sym_aggregate ')
         call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')
@@ -460,7 +462,7 @@ contains
         p = params(cline, spproj_a_seg=CLS3D_SEG) ! parameters generated
         call b%build_general_tbox(p, cline)       ! general objects built
         call dsym_cylinder(p, b%a, b%vol)
-        call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,p%nptcls])
         call b%vol%write(p%outvol)
     end subroutine exec_dsymsrch
 

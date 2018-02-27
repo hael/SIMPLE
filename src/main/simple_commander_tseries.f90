@@ -259,7 +259,7 @@ contains
             call os%new(p%chunksz)
             call exec_cmdline('mkdir -p '//'tseries_chunk'//int2str_pad(cnt,numlen)//'|| true')
             allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//p%ext)
-            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//trim(METADATA_EXT))
+            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//trim(TXT_EXT))
             call del_file( stkname )
             call del_file( oriname )
             cnt2 = 0

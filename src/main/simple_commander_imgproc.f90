@@ -1,14 +1,14 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
 #include "simple_lib.f08"
-use simple_binoris_io      ! use all in there
-use simple_procimgfile     ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_imghead,        only: find_ldim_nptcls
 use simple_qsys_funs,      only: qsys_job_finished
+use simple_binoris_io      ! use all in there
+use simple_procimgfile     ! use all in there
 implicit none
 
 public :: binarise_commander
@@ -748,7 +748,7 @@ contains
                 endif
             end do
             if( cline%defined('oritab') .or. cline%defined('deftab') )then
-                call binwrite_oritab(p%outfile, b%a, [1,p%nran])
+                call b%a%write(p%outfile, [1,p%nran])
             endif
             goto 999
         endif
@@ -802,7 +802,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATA_EXT))
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(TXT_EXT))
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,nincl
@@ -825,7 +825,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATA_EXT))
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(TXT_EXT))
             else
                 o_here = oris(nincl)
                 do i=1,nincl
@@ -834,12 +834,12 @@ contains
                     call b%img%write(p%outstk, i)
                     call o_here%set_ori(i, b%a%get_ori(pinds(i)))
                 end do
-                allocate(fname, source='extracted_oris'//trim(METADATA_EXT))
+                allocate(fname, source='extracted_oris'//trim(TXT_EXT))
             endif
             if( cline%defined('outfile') )then
-                call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])
+                call o_here%write(p%outfile, [1,o_here%get_noris()])
             else
-                call binwrite_oritab(fname, o_here, [1,o_here%get_noris()])
+                call o_here%write(fname, [1,o_here%get_noris()])
             endif
             goto 999
         endif
@@ -868,7 +868,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATA_EXT))
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(TXT_EXT))
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,p%nptcls
@@ -891,12 +891,12 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATA_EXT))
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(TXT_EXT))
             endif
             if( cline%defined('outfile') )then
-                call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])
+                call o_here%write(p%outfile, [1,o_here%get_noris()])
             else
-                call binwrite_oritab(fname, o_here, [1,o_here%get_noris()])
+                call o_here%write(fname, [1,o_here%get_noris()])
             endif
             goto 999
         endif
@@ -988,7 +988,7 @@ contains
             endif
             ! write the oritab with appropriate states
             call del_file(p%outfile)
-            call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
+            call b%a%write(p%outfile, [1,p%nptcls])
             goto 999
         endif
         ! default

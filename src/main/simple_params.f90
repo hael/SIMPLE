@@ -106,7 +106,7 @@ type :: params
     character(len=STDLEN) :: comlindoc=''         !< clustering_shc_nclsX.txt
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: cwd=''
-    character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.bin)
+    character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dir=''               !< directory
     character(len=STDLEN) :: dir_movies=''        !< grab mrc mrcs files from here
@@ -130,7 +130,7 @@ type :: params
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
-    character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.bin)
+    character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.simple)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
@@ -138,9 +138,9 @@ type :: params
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
-    character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
-    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
-    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.bin)
+    character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
+    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
+    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
     character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN) :: outfile=''           !< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
@@ -152,12 +152,12 @@ type :: params
     character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
-    character(len=STDLEN) :: phshiftunit='radians' !< additional phase-shift unit (radians|degrees){radians}
+    character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
     character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='single'
+    character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
     character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=STDLEN) :: refs_even=''
     character(len=STDLEN) :: refs_odd=''
@@ -829,6 +829,47 @@ contains
             self%box  = self%ldim(1)
             DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
+        if( cline%defined('oritype') )then ! oritype overrides any other spproj_a_seg setter
+            ! this determines the spproj_a_seg
+            if( present(spproj_a_seg) ) spproj_a_seg_inputted = self%spproj_a_seg
+            select case(trim(self%oritype))
+                case('stk')
+                    self%spproj_a_seg = STK_SEG
+                case('ptcl2D')
+                    self%spproj_a_seg = PTCL2D_SEG
+                case('cls2D')
+                    self%spproj_a_seg = CLS2D_SEG
+                case('cls3D')
+                    self%spproj_a_seg = CLS3D_SEG
+                case('ptcl3D')
+                    self%spproj_a_seg = PTCL3D_SEG
+                case DEFAULT
+                    write(*,*) 'oritype: ', trim(self%oritype)
+                    stop 'unsupported oritype; simple_params :: new'
+            end select
+            if( present(spproj_a_seg) )then
+                if( spproj_a_seg_inputted .ne. self%spproj_a_seg )then
+                    write(*,*) 'oritype: ', trim(self%oritype)
+                    write(*,*) 'inputted spproj_a_seg: ', spproj_a_seg_inputted
+                    stop 'ERROR! oritype and inputted spproj_a_seg inconsistent'
+                endif
+            endif
+        else
+            select case(self%spproj_a_seg)
+                case(STK_SEG)
+                    self%oritype = 'stk'
+                case(PTCL2D_SEG)
+                    self%oritype = 'ptcl2D'
+                case(CLS2D_SEG)
+                    self%oritype = 'cls2D'
+                case(CLS3D_SEG)
+                    self%oritype = 'ptcl2D'
+                case(PTCL3D_SEG)
+                    self%oritype = 'ptcl3D'
+                case DEFAULT
+                    stop 'unknown spproj_a_seg index; simple_params :: new'
+            end select
+        endif
         ! take care of nptcls
         if( self%stk .ne. '' )then
             if( file_exists(self%stk) )then
@@ -850,9 +891,9 @@ contains
                 else
                     ! needed because use of binoris_io causes circular dependency
                     ! since params is used by prime3D_srch
-                    ! call bos%open(self%oritab)
-                    ! self%nptcls = bos%get_n_records()
-                    ! call bos%close
+                    call bos%open(self%oritab)
+                    self%nptcls = bos%get_n_records(self%spproj_a_seg)
+                    call bos%close
                 endif
             endif
         else if( self%refs .ne. '' )then
@@ -885,32 +926,8 @@ contains
         if( cline%defined('vol1') )then
             do istate=1,self%nstates
                 self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
-                self%vols_odd(istate) = add2fbody(self%vols(istate), self%ext, '_odd' )
+                self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
             end do
-        endif
-        if( cline%defined('oritype') )then ! oritype overrides any other spproj_a_seg setter
-            ! this determines the spproj_a_seg
-            if( present(spproj_a_seg) ) spproj_a_seg_inputted = self%spproj_a_seg
-            select case(trim(self%oritype))
-                case('stk')
-                    self%spproj_a_seg = STK_SEG
-                case('ptcl2D')
-                    self%spproj_a_seg = PTCL2D_SEG
-                case('cls3D')
-                    self%spproj_a_seg = CLS3D_SEG
-                case('ptcl3D')
-                    self%spproj_a_seg = PTCL3D_SEG
-                case DEFAULT
-                    write(*,*) 'oritype: ', trim(self%oritype)
-                    stop 'unsupported oritype; simple_params :: new'
-            end select
-            if( present(spproj_a_seg) )then
-                if( spproj_a_seg_inputted .ne. self%spproj_a_seg )then
-                    write(*,*) 'oritype: ', trim(self%oritype)
-                    write(*,*) 'inputted spproj_a_seg: ', spproj_a_seg_inputted
-                    stop 'ERROR! oritype and inputted spproj_a_seg inconsistent'
-                endif
-            endif
         endif
 
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)

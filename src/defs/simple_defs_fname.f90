@@ -6,6 +6,7 @@ integer, parameter :: MAXNKEYS=100, KEYLEN=32
 integer,  parameter :: STDLEN     = 256  !< standard string length
 integer,  parameter :: LONGSTRLEN = 2048 !< longer string length
 ! EXTENSIONS
+character(len=4),      parameter :: TXT_EXT                   = '.txt'
 character(len=4),      parameter :: BIN_EXT                   = '.bin'
 character(len=7),      parameter :: METADATA_EXT              = '.txt'
 ! SUFFIXES

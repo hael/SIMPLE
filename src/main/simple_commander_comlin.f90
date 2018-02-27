@@ -6,6 +6,7 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_binoris_io      ! use all in there
 implicit none
 
 public :: symsrch_commander
@@ -25,23 +26,27 @@ contains
         use simple_oris,           only: oris
         use simple_ori,            only: ori
         use simple_projector_hlev, only: project
+        use simple_sp_project,     only: sp_project
         use simple_comlin_srch     ! use all in there
-        use simple_binoris_io,     only: binwrite_oritab, binread_oritab, binread_nlines
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                 :: p
         type(build)                  :: b
         type(ori)                    :: symaxis, orientation
-        type(oris)                   :: os, oshift, symaxes, orientation_best, tmp_os
+
+        class(oris), pointer         :: symaxes => null()
+        type(sp_project)             :: spproj
+
+        type(oris)                   :: os, oshift, orientation_best, tmp_os
         real,            allocatable :: corrs(:)
         integer,         allocatable :: order(:)
         integer                      :: fnr, file_stat, comlin_srch_nbest, cnt, i, j, nl
         integer                      :: bestloc(1), nbest_here, noris
         real                         :: shvec(3)
         character(len=STDLEN)        :: fname_finished
-        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(METADATA_EXT)
+        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
         character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
-        character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//trim(METADATA_EXT)
+        character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//trim(TXT_EXT)
         integer,           parameter :: NBEST = 30
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
@@ -60,7 +65,7 @@ contains
                 call oshift%set(1,'x',shvec(1))
                 call oshift%set(1,'y',shvec(2))
                 call oshift%set(1,'z',shvec(3))
-                call binwrite_oritab(trim(SYMSHTAB), oshift, [1,1])
+                call oshift%write(trim(SYMSHTAB), [1,1])
                 call oshift%kill
             endif
             ! generate projections
@@ -77,7 +82,7 @@ contains
                 do i=1,noris
                     call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
                 enddo
-                call binwrite_oritab(SYMPROJTAB, b%e, [1,noris])
+                call b%e%write(SYMPROJTAB, [1,noris])
             endif
             ! expand over symmetry group
             cnt = 0
@@ -94,7 +99,7 @@ contains
             call comlin_srch_init( b, p, 'simplex', 'sym')
             call comlin_coarsesrch_symaxis( [p%fromp,p%top], symaxes)
             if( p%l_distr_exec )then
-                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT), symaxes, [p%fromp,p%top])
+                call symaxes%write(trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(TXT_EXT), [p%fromp,p%top])
             else
                 noris      = symaxes%get_noris()
                 nbest_here = min(NBEST, noris)
@@ -106,7 +111,7 @@ contains
                     call tmp_os%set_ori(cnt, symaxes%get_ori(order(i)))
                 enddo
                 symaxes = tmp_os
-                call binwrite_oritab('sympeaks'//trim(METADATA_EXT), symaxes, [1,nbest_here])
+                call symaxes%write('sympeaks'//trim(TXT_EXT), [1,nbest_here])
                 deallocate(order)
                 call tmp_os%kill
             endif
@@ -116,14 +121,14 @@ contains
             call orientation_best%new(1)
             if( p%l_distr_exec )then
                 ! fetch orientation to refine
-                nl = binread_nlines(p%oritab)
-                call symaxes%new(nl)
-                call binread_oritab(p%oritab, symaxes, [1,nl])
+                nl = binread_nlines(p, p%oritab)
+                call spproj%new_seg_with_ptr(nl, p%oritype, symaxes)
+                call binread_oritab(p%oritab, spproj, symaxes, [1,nl])
                 orientation = symaxes%get_ori(p%part)
                 ! fetch refernce orientations
-                nl = binread_nlines(SYMPROJTAB)
+                nl = nlines(SYMPROJTAB)
                 call b%e%new(nl)
-                call binread_oritab(SYMPROJTAB, b%e, [1,nl])
+                call b%e%read(SYMPROJTAB, [1,nl])
                 do i=1,p%nptcls
                     call b%ref_imgs(1,i)%new([p%box, p%box, 1], p%smpd)
                     call b%ref_imgs(1,i)%read(SYMPROJSTK, i)
@@ -141,7 +146,7 @@ contains
                 call comlin_srch_init( b, p, 'simplex', 'sym')
                 call comlin_singlesrch_symaxis(orientation)
                 call orientation_best%set_ori(1, orientation)
-                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part, p%numlen)//trim(METADATA_EXT), orientation_best, [1,1])
+                call orientation_best%write(trim(p%fbody)//int2str_pad(p%part, p%numlen)//trim(TXT_EXT), [1,1])
             else
                 ! search selected peaks in non-distributed modes
                 write(*,'(A)') '>>> CONTINOUS SYMMETRY AXIS REFINEMENT'
@@ -164,7 +169,7 @@ contains
                     else
                         call b%se%apply_sym_with_shift(b%a, symaxis, shvec )
                     endif
-                    call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
+                    call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
                 endif
             endif
         endif

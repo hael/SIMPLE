@@ -8,7 +8,8 @@ use simple_qsys_env,              only: qsys_env
 use simple_oris,                  only: oris
 use simple_scaler,                only: scaler
 use simple_strings,               only: int2str_pad, str2int
-use simple_binoris_io,            only: binread_oritab, binwrite_oritab
+use simple_sp_project,            only: sp_project
+use simple_binoris_io,            ! use all in there
 use simple_commander_distr_wflows ! use all in there
 use simple_commander_distr        ! use all in there
 implicit none
@@ -61,7 +62,8 @@ contains
         ! other variables
         character(len=STDLEN) :: scaled_stktab
         character(len=STDLEN) :: finaldoc, finalcavgs, finalcavgs_ranked
-        type(oris)            :: os
+        class(oris), pointer  :: os => null()
+        type(sp_project)      :: spproj
         type(scaler)          :: scobj
         type(params)          :: p_master
         character(len=STDLEN) :: refs_sc
@@ -92,7 +94,7 @@ contains
             call scobj%scale_distr_exec
             if( cline%defined('stktab') )then
                 ! updates command lines
-                scaled_stktab = add2fbody(p_master%stktab, trim(METADATA_EXT), SCALE_SUFFIX)
+                scaled_stktab = add2fbody(p_master%stktab, trim(TXT_EXT), SCALE_SUFFIX)
                 ! update stktab
                 call p_master%stkhandle%add_scale_tag
                 call p_master%stkhandle%write_stktab(trim(scaled_stktab))
@@ -131,10 +133,11 @@ contains
             scale_stage2 = scobj%get_scaled_var('scale')
             call scobj%scale_distr_exec
             ! prepare stage 2 input -- shift modulation
-            call os%new(p_master%nptcls)
-            call binread_oritab(finaldoc, os, [1,p_master%nptcls])
+
+            call spproj%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os)
+            call binread_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
             call os%mul_shifts(scale_stage2/scale_stage1)
-            call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
+            call binwrite_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
             ! prepare stage 2 input -- command line
             cline_cluster2D_stage2 = cline
             call cline_cluster2D_stage2%delete('refs')
@@ -166,9 +169,9 @@ contains
             endif
             ! re-generate class averages at original sampling
             call scobj%uninit(cline) ! puts back the old command line
-            call binread_oritab(finaldoc, os, [1,p_master%nptcls])
+            call binread_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scale_stage2)
-            call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
+            call binwrite_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
             cline_make_cavgs = cline
             call cline_make_cavgs%delete('autoscale')
             call cline_make_cavgs%delete('balance')
@@ -226,7 +229,8 @@ contains
         ! other variables
         type(scaler)          :: scobj
         type(params)          :: p_master
-        type(oris)            :: os
+        type(sp_project)      :: spproj
+        class(oris), pointer  :: os => null()
         real                  :: iter, smpd_target, lplims(2)
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter, oritab
@@ -393,10 +397,10 @@ contains
             write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(*,'(A)') '>>>'
             ! modulate shifts
-            call os%new(p_master%nptcls)
-            call binread_oritab(oritab, os, [1,p_master%nptcls])
+            call spproj%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os)
+            call binread_oritab(oritab, spproj, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scobj%get_scaled_var('scale'))
-            call binwrite_oritab(oritab, os, [1,p_master%nptcls])
+            call binwrite_oritab(oritab, spproj, os, [1,p_master%nptcls])
             ! prepare reconstruct3D command line
             call scobj%update_stk_smpd_msk(cline_reconstruct3D, 'original')
             call cline_reconstruct3D%set('oritab', trim(oritab))
@@ -421,8 +425,8 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//METADATA_EXT
-                vol_iter =trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                oritab   = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
+                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
     end subroutine exec_initial_3Dmodel
@@ -448,13 +452,14 @@ contains
         type(cmdline)               :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
         type(cmdline)               :: cline_postprocess
         ! other variables
-        type(params)                  :: p_master
-        type(oris)                    :: os, os_states
         type(sym)                     :: symop
-        integer,          allocatable :: labels(:)
-        logical,          allocatable :: included(:)
-        character(len=:), allocatable :: recname, rhoname, part_str
+        integer,     allocatable      :: labels(:)
+        logical,     allocatable      :: included(:)
+        type(params)                  :: p_master
+        type(sp_project)              :: spproj, spproj_states
+        class(oris), pointer          :: os => null(), os_states => null()
         character(len=STDLEN)         :: oritab, str_state
+        character(len=:), allocatable :: recname, rhoname, part_str
         real                          :: trs
         integer                       :: state, iter, n_incl, startit
         integer                       :: rename_stat, ipart
@@ -520,8 +525,8 @@ contains
 
         ! generate diverse initial labels & orientations
         oritab = 'cluster3Ddoc_init'//trim(METADATA_EXT)
-        call os%new(p_master%nptcls)
-        call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
+        call spproj%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os)
+        call binread_oritab(p_master%oritab, spproj, os, [1,p_master%nptcls])
         if( p_master%eo.eq.'no' )then
             ! updates e/o flags
             call os%set_all2single('eo', -1.)
@@ -533,12 +538,12 @@ contains
             symop = sym(p_master%pgrp)
             call symop%symrandomize(os)
             call symop%kill
-            call binwrite_oritab(trim('symrnd_'//oritab), os, [1,p_master%nptcls])
+            call binwrite_oritab(trim('symrnd_'//oritab), spproj, os, [1,p_master%nptcls])
         endif
         if( cline%defined('oritab2') )then
             ! this is  to force initialisation (4 testing)
-            call os_states%new(p_master%nptcls)
-            call binread_oritab(p_master%oritab2, os_states, [1,p_master%nptcls])
+            call spproj_states%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os_states)
+            call binread_oritab(p_master%oritab2, spproj_states, os_states, [1,p_master%nptcls])
             call os%set_all('state', os_states%get_all('state'))
             call os_states%kill
         else if( .not. cline%defined('startit') )then
@@ -556,7 +561,7 @@ contains
         n_incl   = count(included)
         where( .not. included ) labels = 0
         call os%set_all('state', real(labels))
-        call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
+        call binwrite_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
         call cline_refine3D1%set('oritab', trim(oritab))
         deallocate(labels, included)
 
@@ -590,9 +595,9 @@ contains
         call xprime3D_distr%execute(cline_refine3D1)
         iter   = nint(cline_refine3D1%get_rarg('endit'))
         oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-        call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
+        call binread_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
         oritab = 'cluster3Ddoc_stage1'//trim(METADATA_EXT)
-        call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
+        call binwrite_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
 
         ! ! stage 1 reconstruction to obtain resolution estimate when eo .eq. 'no'
         ! if( p_master%eo .eq. 'no' )then
@@ -618,9 +623,9 @@ contains
         call xprime3D_distr%execute(cline_refine3D2)
         iter   = nint(cline_refine3D2%get_rarg('endit'))
         oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-        call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
+        call binread_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
         oritab = 'cluster3Ddoc_stage2'//trim(METADATA_EXT)
-        call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
+        call binwrite_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
 
         ! stage 2 reconstruction to obtain resolution estimate when eo .eq. 'no'
         if( p_master%eo .eq. 'no' )then
@@ -729,14 +734,16 @@ contains
         integer,               allocatable :: state_pops(:), states(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: l_hasmskvols(:), l_hasvols(:)
-        type(params)          :: p_master
-        type(oris)            :: os_master, os_state
-        character(len=STDLEN) :: oritab, vol, fname
-        character(len=9)      :: dir
-        character(len=2)      :: str_state
-        integer               :: state, iptcl, iter
-        logical               :: l_singlestate, error
-        integer               :: rename_stat
+        type(params)             :: p_master
+        type(sp_project)         :: spproj_master
+        type(sp_project), target :: spproj_state
+        class(oris), pointer     :: os_master => null(), os_state => null()
+        character(len=STDLEN)    :: oritab, vol, fname
+        character(len=9)         :: dir
+        character(len=2)         :: str_state
+        integer                  :: state, iptcl, iter
+        logical                  :: l_singlestate, error
+        integer                  :: rename_stat
 
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -760,9 +767,9 @@ contains
         endif
 
         ! general prep
-        p_master%nptcls = nlines(p_master%oritab)
-        call os_master%new(p_master%nptcls)
-        call binread_oritab(p_master%oritab, os_master, [1,p_master%nptcls])
+        p_master%nptcls = binread_nlines(p_master, p_master%oritab)
+        call spproj_master%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os_master)
+        call binread_oritab(p_master%oritab, spproj_master, os_master, [1,p_master%nptcls])
         p_master%nstates = os_master%get_n('state')
         if(p_master%nstates < 2 .and. .not.l_singlestate)then
             print *, 'Non-sensical number of states argument for heterogeneity refinement: ',p_master%nstates
@@ -779,7 +786,8 @@ contains
             dir = 'state_'//str_state//'/'
             call mkdir(dir)
             ! preps individual documents
-            os_state = os_master
+            spproj_state%os_ptcl3D = spproj_master%os_ptcl3D
+            os_state => spproj_state%os_ptcl3D
             states   = nint(os_state%get_all('state'))
             where( states .ne. state )
                 states = 0
@@ -789,7 +797,7 @@ contains
             call os_state%set_all('state', real(states))
             deallocate(states)
             init_docs(state) = trim(INIT_FBODY)//str_state//trim(METADATA_EXT)
-            call binwrite_oritab(init_docs(state), os_state, [1,p_master%nptcls])
+            call binwrite_oritab(init_docs(state), spproj_state, os_state, [1,p_master%nptcls])
             final_docs(state) = trim(FINAL_FBODY)//str_state//trim(METADATA_EXT)
             ! check & move volumes
             l_hasvols(state) = trim(p_master%vols(state)) .ne. ''
@@ -907,8 +915,7 @@ contains
             iter   = nint(cline_refine3D%get_rarg('endit'))
             oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
             ! stash
-            call os_state%new(p_master%nptcls)
-            call binread_oritab(oritab, os_state, [1,p_master%nptcls])
+            call binread_oritab(oritab, spproj_state, os_state, [1,p_master%nptcls])
             do iptcl = 1,p_master%nptcls
                 if( nint(os_master%get(iptcl, 'state')) .ne. 1 )cycle
                 call os_master%set_ori(iptcl, os_state%get_ori(iptcl))
@@ -919,7 +926,7 @@ contains
         enddo
 
         ! final document
-        call binwrite_oritab(FINAL_DOC, os_master, [1,p_master%nptcls])
+        call binwrite_oritab(FINAL_DOC, spproj_master, os_master, [1,p_master%nptcls])
 
         ! final reconstruction
         if( p_master%eo .eq.'no' )then

@@ -3,12 +3,12 @@ module simple_commander_oris
 #include "simple_lib.f08"
 use simple_ori,            only: ori
 use simple_oris,           only: oris
-use simple_binoris_io,     only: binwrite_oritab, binread_oritab,binread_nlines
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_nrtxtfile,      only: nrtxtfile
+use simple_binoris_io,     ! use all in there
 implicit none
 
 public :: cluster_oris_commander
@@ -103,8 +103,7 @@ contains
                 do iptcl=1,size(clsarr)
                     call os_class%set_ori(iptcl, b%a%get_ori(clsarr(iptcl)))
                 end do
-                call binwrite_oritab('oris_class'//int2str_pad(icls,numlen)//trim(METADATA_EXT),&
-                    &os_class, [1,size(clsarr)])
+                call os_class%write('oris_class'//int2str_pad(icls,numlen)//trim(TXT_EXT), [1,size(clsarr)])
                 deallocate(clsarr)
                 call os_class%kill
             endif
@@ -116,7 +115,7 @@ contains
     !>  for creating a SIMPLE conformant file of CTF parameter values (deftab)
     subroutine exec_make_deftab( self, cline )
         class(make_deftab_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
+        class(cmdline),               intent(inout) :: cline
         type(build)       :: b
         type(params)      :: p
         integer           :: nptcls, iptcl, ndatlines, nrecs
@@ -126,14 +125,13 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.)
         if( cline%defined('oritab') .or. cline%defined('deftab')  )then
             if( cline%defined('oritab') )then
-                nptcls = binread_nlines(p%oritab)
+                nptcls = binread_nlines(p, p%oritab)
                 call b%a%new(nptcls)
-                call binread_oritab(p%oritab, b%a, [1,nptcls])
+                call binread_oritab(p%oritab, b%spproj, b%a, [1,nptcls])
             endif
             if( cline%defined('deftab') )then
-                nptcls = binread_nlines(p%deftab)
-                call b%a%new(nptcls)
-                call binread_oritab(p%deftab, b%a, [1,nptcls])
+                nptcls = binread_nlines(p, p%deftab)
+                call binread_oritab(p%deftab, b%spproj, b%a, [1,nptcls])
             endif
             if( b%a%isthere('dfx') .and. b%a%isthere('dfy') .and. b%a%isthere('angast') )then
                 ! all ok, astigmatic CTF
@@ -208,7 +206,7 @@ contains
         else
             write(*,*) 'Nothing to do!'
         endif
-        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_DEFTAB NORMAL STOP ****')
     end subroutine exec_make_deftab
@@ -218,18 +216,21 @@ contains
         use simple_ori,           only: ori
         use simple_oris,          only: oris
         use simple_combinatorics, only: shc_aggregation
+        use simple_sp_project,    only: sp_project
         class(make_oris_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
+        class(cmdline),             intent(inout) :: cline
         character(len=STDLEN), allocatable :: oritabs(:)
         integer, allocatable :: labels(:,:), consensus(:)
         real,    allocatable :: corrs(:)
-        type(build)  :: b
-        type(ori)    :: orientation
-        type(oris)   :: o, o_even
-        type(params) :: p
-        real         :: e3, x, y!, score
-        integer      :: i, j, cnt, ispace, irot, class, loc(1)
-        integer      :: ioritab, noritabs, nl, nl1
+        type(build)          :: b
+        type(ori)            :: orientation
+        type(oris)           :: o_even
+        class(oris), pointer :: o => null()
+        type(params)         :: p
+        type(sp_project)     :: spproj
+        real                 :: e3, x, y
+        integer              :: i, j, cnt, ispace, irot, class, loc(1)
+        integer              :: ioritab, noritabs, nl, nl1
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
         if( cline%defined('ncls') )then
@@ -250,7 +251,7 @@ contains
                     call b%a%set(i, 'class', real(class))
                 end do
             else
-                o = oris(p%ncls)
+                call spproj%new_seg_with_ptr(p%ncls, p%oritype, o)
                 call o%spiral(p%nsym, p%eullims)
                 call b%a%new(p%ncls*p%minp)
                 cnt = 0
@@ -299,7 +300,7 @@ contains
             call read_filetable(p%doclist, oritabs)
             noritabs = size(oritabs)
             do ioritab=1,noritabs
-                nl = binread_nlines(oritabs(ioritab))
+                nl = binread_nlines(p, oritabs(ioritab))
                 if( ioritab == 1 )then
                     nl1 = nl
                 else
@@ -310,7 +311,7 @@ contains
             allocate(labels(noritabs,nl), consensus(nl), corrs(noritabs))
             call o%new(nl)
             do ioritab=1,noritabs
-                call binread_oritab(oritabs(ioritab), o, [1,nl])
+                call binread_oritab(oritabs(ioritab), spproj, o, [1,nl])
                 labels(ioritab,:) = nint(o%get_all('state'))
                 corrs(ioritab)    = sum(o%get_all('corrs'), mask=(labels(ioritab,:)>0))&
                 &/real(count(labels(ioritab,:)>0))
@@ -320,7 +321,7 @@ contains
             do i=1,nl
                 call o%set(i,'state', real(consensus(i)))
             end do
-            call binwrite_oritab('aggregated_oris'//trim(METADATA_EXT), o, [1,nl])
+            call o%write('aggregated_oris'//trim(TXT_EXT), [1,nl])
             return
         else
             call b%a%rnd_oris(p%trs)
@@ -334,17 +335,18 @@ contains
         else
             if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr)
         endif
-        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_ORIS NORMAL STOP ****')
     end subroutine exec_make_oris
 
     !> for mapping parameters that have been obtained using class averages to the individual particle images
     subroutine exec_map2ptcls( self, cline )
-        use simple_oris,    only: oris
-        use simple_ori,     only: ori
-        use simple_image,   only: image
-        use simple_imghead, only: find_ldim_nptcls
+        use simple_oris,       only: oris
+        use simple_ori,        only: ori
+        use simple_image,      only: image
+        use simple_imghead,    only: find_ldim_nptcls
+        use simple_sp_project, only: sp_project
         use simple_corrmat   ! use all in there
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -357,14 +359,15 @@ contains
         real,                  allocatable :: correlations(:,:)
         integer,               allocatable :: rejected_particles(:)
         logical,               allocatable :: selected(:)
-        integer      :: isel, nsel, loc(1), iptcl, pind, icls
-        integer      :: nlines_oritab, nlines_oritab3D, nlines_deftab
-        integer      :: lfoo(3), ldim2(3), ldim3(3)
-        real         :: corr, rproj, rstate
-        type(params) :: p
-        type(build)  :: b
-        type(oris)   :: o_oritab3D
-        type(ori)    :: ori2d, ori_comp, o
+        integer              :: isel, nsel, loc(1), iptcl, pind, icls
+        integer              :: nlines_oritab, nlines_oritab3D, nlines_deftab
+        integer              :: lfoo(3), ldim2(3), ldim3(3)
+        real                 :: corr, rproj, rstate
+        type(params)         :: p
+        type(build)          :: b
+        class(oris), pointer :: o_oritab3D
+        type(ori)            :: ori2d, ori_comp, o
+        type(sp_project)     :: spproj
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         if( cline%defined('stk2') )then
@@ -385,9 +388,9 @@ contains
             nsel   = p%ncls
         endif
         ! find number of lines in input document
-        nlines_oritab = binread_nlines(p%oritab)
+        nlines_oritab = binread_nlines(p, p%oritab)
         if( cline%defined('deftab') )then
-            nlines_deftab = binread_nlines(p%deftab)
+            nlines_deftab = binread_nlines(p, p%deftab)
             if( nlines_oritab /= nlines_deftab ) stop 'nr lines in oritab .ne. nr lines in deftab; must be congruent!'
         endif
         if( cline%defined('stk2') )then
@@ -432,10 +435,10 @@ contains
         endif
         if( cline%defined('oritab3D') )then
             if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
-            nlines_oritab3D = binread_nlines(p%oritab3D)
+            nlines_oritab3D = binread_nlines(p, p%oritab3D)
             if( nlines_oritab3D /= nsel ) stop '# lines in oritab3D /= nr of selected cavgs'
-            o_oritab3D = oris(nsel)
-            call binread_oritab(p%oritab3D, o_oritab3D, [1,nsel])
+            call spproj%new_seg_with_ptr(nsel, 'cls3D', o_oritab3D)
+            call binread_oritab(p%oritab3D, spproj, o_oritab3D, [1,nsel])
             ! compose orientations and set states
             do isel=1,nsel
                 ! get 3d ori info
@@ -464,7 +467,7 @@ contains
                 end do
             end do
         endif
-        call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
     end subroutine exec_map2ptcls
 
@@ -530,16 +533,19 @@ contains
                 call b%a%mirror3d()
             endif
         endif
-        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
 
     !> for analyzing SIMPLE orientation/parameter files
     subroutine exec_oristats(self, cline)
+        use simple_sp_project, only: sp_project
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
-        type(oris)           :: o, osubspace
+        type(sp_project)     :: spproj
+        class(oris), pointer :: o => null()
+        type(oris)           :: osubspace
         type(ori)            :: o_single
         type(params)         :: p
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
@@ -557,11 +563,11 @@ contains
         if( cline%defined('oritab2') )then
             ! Comparison
             if( .not. cline%defined('oritab') ) stop 'need oritab for comparison'
-            if( binread_nlines(p%oritab) .ne. binread_nlines(p%oritab2) )then
+            if( binread_nlines(p, p%oritab) .ne. binread_nlines(p, p%oritab2) )then
                 stop 'inconsistent number of lines in the two oritabs!'
             endif
-            o = oris(p%nptcls)
-            call binread_oritab(p%oritab2, o, [1,p%nptcls])
+            call spproj%new_seg_with_ptr(p%nptcls, p%oritype, o)
+            call binread_oritab(p%oritab2, spproj, o, [1,p%nptcls])
             call b%a%diststat(o, sumd, avgd, sdevd, mind, maxd)
             write(*,'(a,1x,f15.6)') 'SUM OF ANGULAR DISTANCE BETWEEN ORIENTATIONS  :', sumd
             write(*,'(a,1x,f15.6)') 'AVERAGE ANGULAR DISTANCE BETWEEN ORIENTATIONS :', avgd
@@ -660,7 +666,7 @@ contains
                 allocate(clustering(noris), clustszs(NSPACE_BALANCE))
                 call osubspace%new(NSPACE_BALANCE)
                 call osubspace%spiral(p%nsym, p%eullims)
-                call binwrite_oritab('even_pdirs'//trim(METADATA_EXT), osubspace, [1,NSPACE_BALANCE])
+                call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_BALANCE])
                 do iptcl=1,b%a%get_noris()
                     if( ptcl_mask(iptcl) )then
                         o_single = b%a%get_ori(iptcl)
@@ -731,6 +737,9 @@ contains
             stop 'Need infile defined on command line: text file with 9 &
             &records per line defining a rotation matrix (11) (12) (13) (21) etc.'
         endif
+        if( fname2format(trim(p%outfile)) .eq. '.simple' )then
+            stop '*.simple outfile not supported; commander_oris :: rotamts2oris'
+        endif
         nrecs_per_line = rotmats%get_nrecs_per_line()
         if( nrecs_per_line /= 9 ) stop 'need 9 records (real nrs) per&
         &line of file (infile) describing rotation matrices'
@@ -751,12 +760,12 @@ contains
             call os_out%set_ori(iline,o)
         end do
         call os_out%swape1e3
-        call binwrite_oritab(p%outfile, os_out, [1,ndatlines])
+        call os_out%write(p%outfile, [1,ndatlines])
         call rotmats%kill
         call simple_end('**** ROTMATS2ORIS NORMAL STOP ****')
     end subroutine exec_rotmats2oris
 
-    !> convert text (.txt) oris doc to binary (.bin)
+    !> convert text (.txt) oris doc to binary (.simple)
     subroutine exec_txt2project( self, cline )
         use simple_oris,       only: oris
         use simple_sp_project, only: sp_project
@@ -779,7 +788,7 @@ contains
         call simple_end('**** TXT2PROJECT NORMAL STOP ****')
     end subroutine exec_txt2project
 
-    !> convert binary (.bin) oris doc to text (.txt)
+    !> convert binary (.simple) oris doc to text (.txt)
     subroutine exec_project2txt( self, cline )
         use simple_oris,       only: oris
         use simple_sp_project, only: sp_project
@@ -794,7 +803,7 @@ contains
         call simple_end('**** PROJECT2TXT NORMAL STOP ****')
     end subroutine exec_project2txt
 
-    !> convert binary (.bin) oris doc to text (.txt)
+    !> convert binary (.simple) oris doc to text (.txt)
     subroutine exec_print_project_info( self, cline )
         use simple_oris,       only: oris
         use simple_sp_project_handler

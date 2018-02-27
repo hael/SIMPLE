@@ -108,10 +108,10 @@ contains
         ! write
         if( p%l_distr_exec )then
             if( nint(cline%get_rarg('part')) .eq. 1 )then
-                call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
+                call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
             endif
         else
-            call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
+            call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
         endif
         ! create class averager
         call cavger_new(b, p, 'class')
@@ -299,9 +299,9 @@ contains
         else
             ! tries to provide similar stats (oldschool routine for bwd compatibility)
             ! order according to population
-            p%nptcls = binread_nlines(p%oritab)
+            p%nptcls = binread_nlines(p, p%oritab)
             call b%a%new(p%nptcls)
-            call binread_oritab(p%oritab, b%a, [1,p%nptcls])
+            call binread_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
             order = b%a%order_cls(p%ncls)
             do iclass=1,p%ncls
                 pop = b%a%get_pop(order(iclass), 'class')

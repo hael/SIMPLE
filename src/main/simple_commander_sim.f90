@@ -6,7 +6,6 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_binoris_io      ! use all in there
 implicit none
 
 public :: simulate_noise_commander
@@ -32,7 +31,6 @@ type, extends(commander_base) :: simulate_subtomogram_commander
   contains
     procedure :: execute      => exec_simulate_subtomogram
 end type simulate_subtomogram_commander
-
 
 contains
 
@@ -87,7 +85,7 @@ contains
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         else
-            if( .not. cline%defined('outfile') ) p%outfile = 'simoris'//trim(METADATA_EXT)
+            if( .not. cline%defined('outfile') ) p%outfile = 'simoris'//trim(TXT_EXT)
         endif
         if( p%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
         ! generate orientation/CTF parameters
@@ -112,7 +110,7 @@ contains
             if( p%ctf .ne. 'no' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr, p%astigerr)
         endif
         DebugPrint  '>>> DONE GENERATING ORIENTATION/CTF PARAMETERS'
-        call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
+        call b%a%write(p%outfile, [1,p%nptcls])
         ! calculate snr:s
         snr_pink = p%snr/0.2
         snr_detector = p%snr/0.8
@@ -307,7 +305,7 @@ contains
         call base_image%write('optimal_movie_average'//p%ext, 1)
         if( p%vis .eq. 'yes' ) call base_image%vis()
         ! output orientations
-        call binwrite_oritab('simulate_movie_params'//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
+        call b%a%write('simulate_movie_params'//trim(TXT_EXT), [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_MOVIE NORMAL STOP ****')
 

@@ -164,7 +164,8 @@ contains
         use simple_commander_distr_wflows, only: prime2D_distr_commander, make_cavgs_distr_commander
         use simple_oris,                   only: oris
         use simple_image,                  only: image
-        use simple_binoris_io,             only: binwrite_oritab, binread_oritab
+        use simple_sp_project,             only: sp_project
+        use simple_binoris_io              ! use all in there
         use simple_extractwatcher          ! use all in there
         use simple_commander_distr         ! use all in there
         use simple_fileio                  ! use all in there
@@ -172,18 +173,19 @@ contains
         class(cmdline),                        intent(inout) :: cline
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
         character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
-        character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
+        character(len=32),       parameter :: DEFTAB          = 'deftab'//trim(METADATA_EXT)
         character(len=32),       parameter :: FINALDOC        = 'cluster2Ddoc_final'//trim(METADATA_EXT)
         integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000 ! # of ptcls required to turm on shift search
         integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
         integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
         integer,                 parameter :: MAXNCLS            = 1000 ! maximum # of classes
         type(prime2D_distr_commander)      :: xprime2D_distr
-        type(make_cavgs_distr_commander)    :: xmake_cavgs
+        type(make_cavgs_distr_commander)   :: xmake_cavgs
         type(extractwatcher)               :: mic_watcher
         type(cmdline)                      :: cline_cluster2D, cline_scale, cline_make_cavgs
         type(params)                       :: p_master, p_scale
-        type(oris)                         :: os
+        type(sp_project)                   :: spproj
+        class(oris), pointer               :: os=>null()
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
         character(len=STDLEN)              :: oritab_glob, str_iter, refs_glob, frcs_glob
         real    :: scale, smpd_glob, msk_glob, mul
@@ -313,9 +315,10 @@ contains
             endif
         enddo
         ! class averages at original sampling
-        call binread_oritab(oritab_glob, os, [1,nptcls_glob])
+        call spproj%new_seg_with_ptr(nptcls_glob, p_master%oritype, os)
+        call binread_oritab(oritab_glob, spproj, os, [1,nptcls_glob])
         call os%mul_shifts(1./scale)
-        call binwrite_oritab(FINALDOC, os, [1,nptcls_glob])
+        call binwrite_oritab(FINALDOC, spproj, os, [1,nptcls_glob])
         call cline_make_cavgs%set('oritab',  trim(FINALDOC))
         call cline_make_cavgs%set('ncls', real(ncls_glob))
         call xmake_cavgs%execute(cline_make_cavgs)
@@ -329,7 +332,8 @@ contains
             subroutine add_newstacks
                 use simple_commander_imgproc, only: scale_commander
                 type(qsys_env)                     :: qenv
-                type(oris)                         :: deftab_glob, deftab_here
+                type(sp_project)                   :: spproj_glob, spproj_here
+                class(oris), pointer               :: deftab_glob=>null(), deftab_here=>null()
                 character(len=STDLEN), allocatable :: new_deftabs(:), new_stacks(:), tmp(:)
                 character(len=STDLEN) :: stk_scaled, fbody, ext
                 integer               :: i, j, nl, nptcls, cnt, cnt2, n, ldim(3), iptcl
@@ -345,17 +349,17 @@ contains
                 if( p_master%ctf.ne.'no' )then
                     ! consolidate deftabs
                     call mic_watcher%get_new_deftabs(new_deftabs)
-                    call deftab_glob%new(nptcls_glob)
+                    call spproj_glob%new_seg_with_ptr(nptcls_glob, p_master%oritype, deftab_glob)
                     if( nptcls_glob_prev > 0 )then
                         ! transfer previous ctf params to new object
-                        call binread_oritab(trim(deftab), deftab_glob, [1, nptcls_glob_prev])
+                        call binread_oritab(trim(deftab), spproj_glob, deftab_glob, [1, nptcls_glob_prev])
                     endif
                     ! transfer new ctf params to new object
                     cnt = nptcls_glob_prev
                     do i = 1, n_newstks
-                        nl = nlines(new_deftabs(i))
-                        call deftab_here%new(nl)
-                        call binread_oritab(trim(new_deftabs(i)), deftab_here, [1, nl])
+                        nl = binread_nlines(p_master, new_deftabs(i))
+                        call spproj_here%new_seg_with_ptr(nl, p_master%oritype, deftab_here)
+                        call binread_oritab(trim(new_deftabs(i)), spproj_here, deftab_here, [1, nl])
                         cnt2 = 0
                         do j = cnt+1, cnt+nl
                             cnt2 = cnt2 + 1
@@ -364,7 +368,7 @@ contains
                         cnt = cnt + nl
                     enddo
                     call deftab_here%kill
-                    call binwrite_oritab(trim(deftab), deftab_glob, [1, nptcls_glob])
+                    call binwrite_oritab(trim(deftab), spproj_glob, deftab_glob, [1, nptcls_glob])
                 endif
                 ! stacks
                 if( nstacks_glob == 0 )then
@@ -405,15 +409,16 @@ contains
             subroutine remap_empty_classes
                 integer, allocatable  :: fromtocls(:,:)
                 integer               :: icls
-                type(oris)            :: os
+                class(oris), pointer  :: os => null()
+                type(sp_project)      :: spproj
                 type(image)           :: img_cavg
                 character(len=STDLEN) :: stk
-                call os%new(nptcls_glob)
-                call binread_oritab(oritab_glob, os, [1, nptcls_glob])
+                call spproj%new_seg_with_ptr(nptcls_glob, p_master%oritype, os)
+                call binread_oritab(oritab_glob, spproj, os, [1, nptcls_glob])
                 call os%fill_empty_classes(ncls_glob, fromtocls)
                 if( allocated(fromtocls) )then
                     ! updates document & classes
-                    call binwrite_oritab(oritab_glob, os, [1, nptcls_glob])
+                    call binwrite_oritab(oritab_glob, spproj, os, [1, nptcls_glob])
                     call img_cavg%new([box_glob, box_glob,1], smpd_glob)
                     do icls = 1, size(fromtocls, dim=1)
                         ! cavg
@@ -443,14 +448,15 @@ contains
                 use simple_ran_tabu,        only: ran_tabu
                 use simple_projection_frcs, only: projection_frcs
                 type(ran_tabu)        :: rt
-                type(oris)            :: os
+                class(oris), pointer  :: os => null()
+                type(sp_project)      :: spproj
                 type(projection_frcs) :: frcs_prev, frcs
                 type(image)           :: img_cavg
                 integer, allocatable  :: fromtocls(:,:), cls(:), pops(:)
                 integer               :: icls, ncls_prev, n, iptcl, i, state
                 character(len=STDLEN) :: stk
-                call os%new(nptcls_glob)
-                call binread_oritab(oritab_glob, os, [1, nptcls_glob_prev])
+                call spproj%new_seg_with_ptr(nptcls_glob, p_master%oritype, os)
+                call binread_oritab(oritab_glob, spproj, os, [1, nptcls_glob_prev])
                 n = nptcls_glob - nptcls_glob_prev
                 state = 1
                 ! randomize new ptcls to previous references
@@ -512,7 +518,7 @@ contains
                     endif
                 endif
                 ! document
-                call binwrite_oritab(oritab_glob, os, [1, nptcls_glob])
+                call binwrite_oritab(oritab_glob, spproj, os, [1, nptcls_glob])
             end subroutine remap_new_classes
 
     end subroutine exec_prime2D_stream_distr

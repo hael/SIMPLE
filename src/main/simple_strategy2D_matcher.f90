@@ -311,7 +311,7 @@ contains
         endif
 
         ! OUTPUT ORIENTATIONS
-        call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES

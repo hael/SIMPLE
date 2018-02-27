@@ -15,7 +15,7 @@ use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
-use simple_binoris_io,       only: binread_ctfparams_state_eo, binread_oritab
+use simple_binoris_io,       ! use all in there
 implicit none
 
 public :: build
@@ -90,8 +90,8 @@ contains
         class(params),        intent(inout) :: p
         class(cmdline),       intent(inout) :: cline
         logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
-        integer        :: lfny,  lfny_match, cyc_lims(3,2)
-        logical        :: ddo3d, fforce_ctf
+        integer :: lfny,  lfny_match, cyc_lims(3,2)
+        logical :: ddo3d, fforce_ctf
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -106,7 +106,7 @@ contains
         p%eullims = self%se%srchrange()
         DebugPrint   'did setup symmetry functionality'
         ! create object for orientations
-        ! b%a now becomes a pointer to a field in b%spproj
+        ! b%a is now a pointer to a field in b%spproj
         select case(p%spproj_a_seg)
             case(STK_SEG)
                 call self%spproj%os_stk%new(p%nptcls)
@@ -129,18 +129,8 @@ contains
             call self%a%spiral(p%nsym, p%eullims)
         else
             ! we need the oritab to override the deftab in order not to loose parameters
-            if( p%deftab /= '' ) call binread_ctfparams_state_eo(p%deftab, self%a, [1,p%nptcls])
-            if( p%oritab /= '' )then
-                if( .not. cline%defined('nstates') )then
-                    if( p%nstates > 1 )then
-                        print *,'Multiple states detected, please input the NSTATES key'
-                        stop
-                    endif
-                    call binread_oritab(p%oritab, self%a, [1,p%nptcls], p%nstates)
-                else
-                    call binread_oritab(p%oritab, self%a, [1,p%nptcls])
-                endif
-            endif
+            if( p%deftab /= '' ) call binread_ctfparams_state_eo(p%deftab,  self%spproj, self%a, [1,p%nptcls])
+            if( p%oritab /= '' ) call binread_oritab(p%oritab,              self%spproj, self%a, [1,p%nptcls])
         endif
         if( self%a%get_n('state') > 1 )then
             if( .not. cline%defined('nstates') )then
@@ -341,20 +331,16 @@ contains
 
     !> \brief  constructs the prime2D toolbox
     subroutine build_hadamard_prime2D_tbox( self, p )
-        use simple_binoris_io, only: binread_oritab
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(oris) :: os
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%neigh.eq.'yes' )then
-            if( file_exists(p%oritab3D) )then
-                call os%new(p%ncls)
-                call binread_oritab(p%oritab3D, os, [1,p%ncls])
-                call os%nearest_proj_neighbors(p%nnn, self%nnmat)
-                call os%kill
+            if( self%spproj%os_cls3D%get_noris() == p%ncls )then
+                call self%spproj%os_cls3D%nearest_proj_neighbors(p%nnn, self%nnmat)
             else
-                stop 'need oritab3D input for prime2D neigh=yes mode; simple_build :: build_hadamard_prime2D_tbox'
+                stop 'size of os_cls3D segment of spproj does not conform with # clusters (ncls); build_hadamard_prime2D_tbox'
             endif
         endif
         call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)

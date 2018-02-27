@@ -118,6 +118,7 @@ type :: oris
     procedure          :: partition_eo
     procedure          :: transf_proj2class
     procedure          :: str2ori
+    procedure          :: str2ori_ctfparams_state_eo
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -1979,6 +1980,28 @@ contains
         character(len=*), intent(inout) :: line
         call self%o(i)%str2ori(line)
     end subroutine str2ori
+
+    !>  \brief  reads ctfparams_state_eo info (by line) into the hash-tables
+    subroutine str2ori_ctfparams_state_eo( self, i, line )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(inout) :: line
+        logical   :: params_are_there(11)
+        type(ori) :: o_tmp
+        call o_tmp%str2ori(line)
+        if( o_tmp%isthere('smpd')    ) call self%o(i)%set('smpd',    o_tmp%get('smpd'))
+        if( o_tmp%isthere('kv')      ) call self%o(i)%set('kv',      o_tmp%get('kv'))
+        if( o_tmp%isthere('cs')      ) call self%o(i)%set('cs',      o_tmp%get('cs'))
+        if( o_tmp%isthere('fraca')   ) call self%o(i)%set('fraca',   o_tmp%get('fraca'))
+        if( o_tmp%isthere('phshift') ) call self%o(i)%set('phshift', o_tmp%get('phshift'))
+        if( o_tmp%isthere('dfx')     ) call self%o(i)%set('dfx',     o_tmp%get('dfx'))
+        if( o_tmp%isthere('dfy')     ) call self%o(i)%set('dfy',     o_tmp%get('dfy'))
+        if( o_tmp%isthere('angast')  ) call self%o(i)%set('angast',  o_tmp%get('angast'))
+        if( o_tmp%isthere('bfac')    ) call self%o(i)%set('bfac',    o_tmp%get('bfac'))
+        if( o_tmp%isthere('state')   ) call self%o(i)%set('state',   o_tmp%get('state'))
+        if( o_tmp%isthere('eo')      ) call self%o(i)%set('eo',      o_tmp%get('eo'))
+        call o_tmp%kill
+    end subroutine str2ori_ctfparams_state_eo
 
     ! I/O
 

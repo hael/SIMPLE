@@ -17,8 +17,8 @@ use simple_motion_correct_iter, only: motion_correct_iter
 use simple_ctffind_iter,        only: ctffind_iter
 use simple_ctf_estimate_iter,   only: ctf_estimate_iter
 use simple_picker_iter,         only: picker_iter
-use simple_binoris_io,          only: binread_oritab, binwrite_oritab
 use simple_qsys_funs,           only: qsys_job_finished
+use simple_binoris_io,          ! use all in there
 implicit none
 
 public :: preprocess_commander
@@ -555,7 +555,7 @@ contains
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
         if( p%l_distr_exec )then
-            allocate(fname_ctffind_output, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            allocate(fname_ctffind_output, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT))
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -571,13 +571,13 @@ contains
                 movie_name  = remove_abspath(trim(movienames_forctf(1)))
                 movie_ext   = fname2ext(trim(movie_name))
                 movie_fbody = get_fbody(trim(movie_name), trim(movie_ext))
-                allocate(fname_ctffind_output, source='ctffind_output_'//trim(movie_fbody)//'.txt')
+                allocate(fname_ctffind_output, source='ctffind_output_'//trim(movie_fbody)//trim(METADATA_EXT))
             else
                 ! determine loop range
                 fromto(1) = 1
                 if( cline%defined('startit') ) fromto(1) = p%startit
                 fromto(2) = nmovies
-                allocate(fname_ctffind_output, source='ctffind_output.txt')
+                allocate(fname_ctffind_output, source='ctffind_output'//trim(METADATA_EXT))
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
@@ -619,7 +619,7 @@ contains
         ! params
         if( p%l_distr_exec )then
             allocate(fname_ctf_estimate_output, source=trim(output_dir)//&
-                &'ctf_estimate_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+                &'ctf_estimate_output_part'//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT))
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -641,7 +641,7 @@ contains
                 fromto(1) = 1
                 if( cline%defined('startit') ) fromto(1) = p%startit
                 fromto(2) = nmovies
-                allocate(fname_ctf_estimate_output, source=trim(output_dir)//'ctf_estimate_output.txt')
+                allocate(fname_ctf_estimate_output, source=trim(output_dir)//'ctf_estimate_output'//trim(METADATA_EXT))
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
@@ -772,7 +772,7 @@ contains
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline !< command line input
         integer, parameter           :: NREFS=100, NPROJS=20
-        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(METADATA_EXT)
+        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(TXT_EXT)
         type(params)                 :: p
         type(build)                  :: b
         type(cmdline)                :: cline_project
@@ -787,7 +787,7 @@ contains
                 p%nptcls = NPROJS
                 call b%a%new(NPROJS)
                 call b%a%spiral( p%nsym, p%eullims )
-                call binwrite_oritab(trim(ORIFILE), b%a, [1,NPROJS])
+                call b%a%write(trim(ORIFILE), [1,NPROJS])
                 cline_project = cline
                 call cline_project%set('nspace', real(NPROJS))
                 p%stk = 'even_projs'//p%ext
@@ -911,34 +911,16 @@ contains
         endif
         call mkdir(output_dir)
         ! check file inout existence and read filetables
-        if( cline%defined('unidoc') )then
-            if( .not. file_exists(p%unidoc) ) stop 'inputted unidoc does not exist in cwd'
-            nmovies = nlines(p%unidoc)
-            call os_uni%new(nmovies)
-            call os_uni%read(p%unidoc)
-            movienames = os_uni%extract_table('intg')
-            if( os_uni%isthere('boxfile') )then
-                boxfilenames = os_uni%extract_table('boxfile')
-            else
-                if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
-                nboxfiles = nlines(p%boxtab)
-                call read_filetable(p%boxtab,  boxfilenames)
-            endif
-            if( os_uni%isthere('intg_frames') )then
-                movienames_frames = os_uni%extract_table('intg_frames')
-            endif
-        else
-            if( .not. cline%defined('filetab') ) stop 'need filetab input to extract'
-            if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
-            if( .not. file_exists(p%filetab)   ) stop 'inputted filetab does not exist in cwd'
-            if( .not. file_exists(p%boxtab)    ) stop 'inputted boxtab does not exist in cwd'
-            nmovies   = nlines(p%filetab)
-            nboxfiles = nlines(p%boxtab)
-            DebugPrint  'nboxfiles: ', nboxfiles
-            if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
-            call read_filetable(p%filetab, movienames)
-            call read_filetable(p%boxtab,  boxfilenames)
-        endif
+        if( .not. cline%defined('filetab') ) stop 'need filetab input to extract'
+        if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
+        if( .not. file_exists(p%filetab)   ) stop 'inputted filetab does not exist in cwd'
+        if( .not. file_exists(p%boxtab)    ) stop 'inputted boxtab does not exist in cwd'
+        nmovies   = nlines(p%filetab)
+        nboxfiles = nlines(p%boxtab)
+        DebugPrint  'nboxfiles: ', nboxfiles
+        if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
+        call read_filetable(p%filetab, movienames)
+        call read_filetable(p%boxtab,  boxfilenames)
         DebugPrint  'nmovies: ', nmovies
         ! determine loop range
         fromto(1) = 1
@@ -1073,7 +1055,7 @@ contains
                     outfile = trim(output_dir)//trim(EXTRACT_PARAMS_FBODY)//trim(fbody)//trim(METADATA_EXT)
                 endif
                 call del_file(outfile)
-                call binwrite_oritab(outfile, outoris, [1,count(oris_mask)])
+                call binwrite_oritab(outfile, b%spproj, outoris, [1,count(oris_mask)])
             endif
             ! output stack
             if( p%stream.eq.'yes' )then

@@ -714,6 +714,7 @@ select case(prg)
         else
             stop 'stk or stktab need to be part of command line!'
         endif
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         ! execute
         call xstackops%execute(cline)
 

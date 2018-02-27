@@ -9,7 +9,6 @@ use simple_image,          only: image
 use simple_projector_hlev, only: project, rotvol
 use simple_ori,            only: ori
 use simple_masker,         only:masker
-use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
 use simple_imghead,        only: find_ldim_nptcls
 implicit none
 
@@ -142,9 +141,7 @@ contains
             ! transfer the 3D shifts to 2D
             if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(istate,:), state=istate)
         end do
-        if( cline%defined('oritab') )then
-            call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
-        endif
+        if( cline%defined('oritab') ) call b%a%write(p%outfile, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_center
@@ -257,6 +254,7 @@ contains
     !! \param cline command line
     !!
     subroutine exec_project( self, cline )
+        use simple_binoris_io, only: binread_nlines
         class(project_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
@@ -269,9 +267,8 @@ contains
         endif
         p = params(cline) ! parameters generated
         if( cline%defined('oritab') )then
-            p%nptcls = binread_nlines(p%oritab)
+            p%nptcls = binread_nlines(p, p%oritab)
             call b%build_general_tbox(p, cline)
-            call binread_oritab(p%oritab, b%a, [1,p%nptcls])
             p%nspace = b%a%get_noris()
         else if( p%rnd .eq. 'yes' )then
             p%nptcls = p%nspace
@@ -309,7 +306,7 @@ contains
             if( p%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(p%outstk,i)
         end do
-        call binwrite_oritab('project_oris'//trim(METADATA_EXT), b%a, [1,p%nptcls])
+        call b%a%write('project_oris'//trim(TXT_EXT), [1,p%nptcls])
         call simple_end('**** SIMPLE_PROJECT NORMAL STOP ****')
     end subroutine exec_project
 

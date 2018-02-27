@@ -32,8 +32,9 @@ type sp_project
     ! binary file-handler
     type(binoris) :: bos
 contains
-    ! constructor
+    ! constructors
     procedure          :: new
+    procedure          :: new_seg_with_ptr
     ! modifiers
     procedure          :: new_sp_oris
     procedure          :: set_sp_oris
@@ -42,6 +43,7 @@ contains
     ! I/O
     ! readers
     procedure          :: read
+    procedure          :: read_ctfparams_state_eo
     procedure          :: read_segment
     procedure, private :: segreader
     procedure, private :: read_2Darray_segment
@@ -116,6 +118,33 @@ contains
         str = cline%get_carg('projfile')
         call self%write(trim(str))
     end subroutine new
+
+    subroutine new_seg_with_ptr( self, n, oritype, os_ptr )
+        class(sp_project), target, intent(inout) :: self
+        integer,                   intent(in)    :: n
+        character(len=*),          intent(in)    :: oritype
+        class(oris), pointer,      intent(inout) :: os_ptr
+        select case(trim(oritype))
+            case('stk')
+                call self%os_stk%new(n)
+                os_ptr => self%os_stk
+            case('ptcl2D')
+                call self%os_ptcl2D%new(n)
+                os_ptr => self%os_ptcl2D
+            case('cls2D')
+                call self%os_cls2D%new(n)
+                os_ptr => self%os_cls2D
+            case('cls3D')
+                call self%os_cls2D%new(n)
+                os_ptr => self%os_cls2D
+            case('ptcl3D')
+                call self%os_ptcl3D%new(n)
+                os_ptr => self%os_ptcl3D
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype)
+                stop 'unsupported oritype; sp_project :: new_with_os_segptr'
+        end select
+    end subroutine new_seg_with_ptr
 
     ! modifiers
 
@@ -213,6 +242,25 @@ contains
         call self%bos%close
     end subroutine read
 
+    subroutine read_ctfparams_state_eo( self, fname )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer :: isegment, n
+        if( .not. file_exists(trim(fname)) )then
+            write(*,*) 'fname: ', trim(fname)
+            stop 'inputted file does not exist; sp_project :: read'
+        endif
+        if( fname2format(fname) .ne. 'O' )then
+            write(*,*) 'fname: ', trim(fname)
+            stop 'file format not supported; sp_project :: read'
+        endif
+        call self%bos%open(fname)
+        do isegment=1,self%bos%get_n_segments()
+            call self%segreader(isegment, only_ctfparams_state_eo=.true.)
+        end do
+        call self%bos%close
+    end subroutine read_ctfparams_state_eo
+
     subroutine read_segment( self, which, fname, fromto )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -256,18 +304,19 @@ contains
         end select
     end subroutine read_segment
 
-    subroutine segreader( self, isegment )
+    subroutine segreader( self, isegment, only_ctfparams_state_eo )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: isegment
+        logical, optional, intent(in)    :: only_ctfparams_state_eo
         integer :: n
         n = self%bos%get_n_records(isegment)
         select case(isegment)
             case(STK_SEG)
                 call self%os_stk%new_clean(n)
-                call self%bos%read_segment(isegment, self%os_stk)
+                call self%bos%read_segment(isegment, self%os_stk,    only_ctfparams_state_eo=only_ctfparams_state_eo)
             case(PTCL2D_SEG)
                 call self%os_ptcl2D%new_clean(n)
-                call self%bos%read_segment(isegment, self%os_ptcl2D)
+                call self%bos%read_segment(isegment, self%os_ptcl2D, only_ctfparams_state_eo=only_ctfparams_state_eo)
             case(CLS2D_SEG)
                 call self%os_cls2D%new_clean(n)
                 call self%bos%read_segment(isegment, self%os_cls2D)
@@ -276,7 +325,7 @@ contains
                 call self%bos%read_segment(isegment, self%os_cls3D)
             case(PTCL3D_SEG)
                 call self%os_ptcl3D%new_clean(n)
-                call self%bos%read_segment(isegment, self%os_ptcl3D)
+                call self%bos%read_segment(isegment, self%os_ptcl3D, only_ctfparams_state_eo=only_ctfparams_state_eo)
             case(FRCS_SEG)
                 call self%read_2Darray_segment(FRCS_SEG, self%frcs)
             case(FSCS_SEG)

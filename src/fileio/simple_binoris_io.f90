@@ -1,62 +1,93 @@
 
 module simple_binoris_io
 use simple_defs
-use simple_ori,     only: ori
-use simple_oris,    only: oris
-use simple_fileio,  only: file_exists, nlines, fileio_errmsg
-use simple_strings, only: str_has_substr
+use simple_ori,        only: ori
+use simple_oris,       only: oris
+use simple_fileio,     only: file_exists, nlines, fileio_errmsg, fname2format
+use simple_strings,    only: str_has_substr
+use simple_sp_project, only: sp_project
 implicit none
-
-interface binread_oritab
-    module procedure binread_oritab_1
-end interface
-
-interface binwrite_oritab
-    module procedure binwrite_oritab_1
-end interface
 
 contains
 
-    subroutine binread_oritab_1( fname, a, fromto, nst )
-        character(len=*),  intent(in)    :: fname
-        class(oris),       intent(inout) :: a
-        integer,           intent(in)    :: fromto(2)
-        integer, optional, intent(out)   :: nst
-        integer :: irec
+    subroutine binread_oritab( fname, spproj, a, fromto )
+        character(len=*),  intent(in)     :: fname
+        class(sp_project), intent(inout)  :: spproj
+        class(oris),       intent(in out) :: a
+        integer,           intent(in)     :: fromto(2)
         if( .not. file_exists(fname) )then
             write(*,*) 'file: ', trim(fname)
             stop 'does not exist in cwd; binoris_io :: binread_oritab_1'
         endif
-        call a%read(fname, fromto=fromto, nst=nst)
-    end subroutine binread_oritab_1
+        select case(fname2format(fname))
+            case('O')
+                call spproj%read(fname)
+            case('T')
+                call a%read(fname, fromto=fromto)
+            case DEFAULT
+                write(*,*) 'file: ', trim(fname)
+                stop 'format unsupported; simple_binoris_io :: binread_oritab'
+        end select
+    end subroutine binread_oritab
 
-    subroutine binread_ctfparams_state_eo( fname, a, fromto )
-        character(len=*), intent(in)    :: fname
-        class(oris),      intent(inout) :: a
-        integer,          intent(in)    :: fromto(2)
-        integer :: irec
+    subroutine binread_ctfparams_state_eo( fname, spproj, a, fromto )
+        character(len=*),  intent(in)    :: fname
+        class(sp_project), intent(inout) :: spproj
+        class(oris),       intent(inout) :: a
+        integer,           intent(in)    :: fromto(2)
         if( .not. file_exists(fname) )then
             write(*,*) 'file: ', trim(fname)
             stop 'does not exist in cwd; binoris_io :: binread_ctfparams_and_state'
         endif
-        call a%read_ctfparams_state_eo(fname)
+        select case(fname2format(fname))
+            case('O')
+                call spproj%read_ctfparams_state_eo(fname)
+            case('T')
+                call a%read_ctfparams_state_eo(fname)
+            case DEFAULT
+                write(*,*) 'file: ', trim(fname)
+                stop 'format unsupported; simple_binoris_io :: binread_ctfparams_state_eo'
+        end select
     end subroutine binread_ctfparams_state_eo
 
-    function binread_nlines( fname ) result( nl )
+    function binread_nlines( p, fname ) result( nl )
+        use simple_params,  only: params
+        use simple_binoris, only: binoris
+        class(params),    intent(in) :: p
         character(len=*), intent(in) :: fname
-        integer :: nl
+        integer       :: nl
+        type(binoris) :: bos
         if( .not. file_exists(fname) )then
             write(*,*) 'file: ', trim(fname)
             stop 'does not exist in cwd; binoris_io :: binread_nlines'
         endif
-        nl = nlines(fname)
+        select case(fname2format(fname))
+            case('O')
+                call bos%open(fname)
+                nl = bos%get_n_records(p%spproj_a_seg)
+                call bos%close
+            case('T')
+                nl = nlines(fname)
+            case DEFAULT
+                write(*,*) 'file: ', trim(fname)
+                stop 'format unsupported; simple_binoris_io :: binread_nlines'
+        end select
     end function binread_nlines
 
-    subroutine binwrite_oritab_1( fname, a, fromto )
-        character(len=*), intent(in)    :: fname
-        class(oris),      intent(inout) :: a
-        integer,          intent(in)    :: fromto(2)
-        call a%write(fname, fromto)
-    end subroutine binwrite_oritab_1
+    subroutine binwrite_oritab( fname, spproj, a, fromto )
+        character(len=*),  intent(in)    :: fname
+        class(sp_project), intent(inout) :: spproj
+        class(oris),       intent(inout) :: a
+        integer,           intent(in)    :: fromto(2)
+        select case(fname2format(fname))
+            case('O')
+                call spproj%write(fname, fromto)
+            case('T')
+                call a%write(fname, fromto)
+            case DEFAULT
+                write(*,*) 'file: ', trim(fname)
+                stop 'format unsupported; simple_binoris_io :: binwrite_oritab'
+        end select
+    end subroutine binwrite_oritab
 
 end module simple_binoris_io

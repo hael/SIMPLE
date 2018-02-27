@@ -318,11 +318,11 @@ contains
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.                          )
-        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part'       )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)       )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)       )
-        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged.txt' )
+        call cline_merge_algndocs%set( 'nthr',     1.                    )
+        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part' )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged'//trim(METADATA_EXT) )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -371,7 +371,7 @@ contains
         call cline_merge_algndocs%set( 'fbody',    trim(fbody) )
         call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
         call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile',  trim(output_dir)//'ctf_estimate_output_merged.txt')
+        call cline_merge_algndocs%set( 'outfile',  trim(output_dir)//'ctf_estimate_output_merged'//trim(METADATA_EXT))
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -441,7 +441,7 @@ contains
             ! because outfile is output from distributed exec of make_cavgs
             call cline_cavgassemble%set('oritab', p_master%outfile)
         else
-            ! because prime2D_startdoc.txt is default output in the absence of outfile
+            ! because prime2D_startdoc.METADATA_EXT is default output in the absence of outfile
             call cline_cavgassemble%set('oritab', 'prime2D_startdoc'//trim(METADATA_EXT))
         endif
         if( .not. cline%defined('stktab') )then
@@ -560,12 +560,12 @@ contains
                 call b%a%partition_eo
             endif
             if( cline%defined('oritab') )then
-                call binwrite_oritab(p_master%oritab, b%a, [1,p_master%nptcls])
+                call binwrite_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
             else if( cline%defined('deftab') )then
-                call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
+                call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
             else
                 p_master%deftab = 'deftab_from_distr_wflow'//trim(METADATA_EXT)
-                call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
+                call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
                 call job_descr%set('deftab', trim(p_master%deftab))
                 call cline%set('deftab', trim(p_master%deftab))
             endif
@@ -641,11 +641,11 @@ contains
                 character(len=STDLEN) :: frcs_iter
                 integer               :: icls, state
                 if( p_master%dyncls.eq.'yes' )then
-                    call binread_oritab(oritab, b%a, [1,p_master%nptcls])
+                    call binread_oritab(oritab, b%spproj, b%a, [1,p_master%nptcls])
                     call b%a%fill_empty_classes(p_master%ncls, fromtocls)
                     if( allocated(fromtocls) )then
                         ! updates document
-                        call binwrite_oritab(oritab, b%a, [1,p_master%nptcls])
+                        call binwrite_oritab(oritab, b%spproj, b%a, [1,p_master%nptcls])
                         ! updates refs
                         call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
                         do icls = 1, size(fromtocls, dim=1)
@@ -759,9 +759,8 @@ contains
         ! other variables
         type(qsys_env)        :: qenv
         type(params)          :: p_master
-        type(chash)           :: job_descr
-        type(oris)            :: os
         type(build)           :: b
+        type(chash)           :: job_descr
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         character(len=STDLEN) :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
         character(len=STDLEN) :: vol_iter_odd, oritab, str, str_iter, optlp_file
@@ -778,8 +777,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         p_master = params(cline)
-        ! make oritab
-        call os%new(p_master%nptcls)
+        ! make general builder to the the orientations in
+        call b%build_general_tbox(p_master, cline, do3d=.false.)
         ! options check
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
@@ -913,21 +912,19 @@ contains
         endif
         ! EO PARTITIONING
         if( p_master%eo .ne. 'no' )then
-            if( cline%defined('deftab') ) call binread_ctfparams_state_eo(p_master%deftab, os, [1,p_master%nptcls])
-            if( cline%defined('oritab') ) call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-            if( os%get_nevenodd() == 0 )then
+            if( b%a%get_nevenodd() == 0 )then
                 if( p_master%tseries .eq. 'yes' )then
-                    call os%partition_eo(tseries=.true.)
+                    call b%a%partition_eo(tseries=.true.)
                 else
-                    call os%partition_eo
+                    call b%a%partition_eo
                 endif
                 if( cline%defined('oritab') )then
-                    call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
+                    call binwrite_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
                 else if( cline%defined('deftab') )then
-                    call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+                    call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
                 else
                     p_master%deftab = 'deftab_from_distr_wflow'//trim(METADATA_EXT)
-                    call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+                    call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
                     call job_descr%set('deftab', trim(p_master%deftab))
                     call cline%set('deftab', trim(p_master%deftab))
                 endif
@@ -945,13 +942,13 @@ contains
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
             if( cline%defined('oritab') )then
-                call binread_oritab(trim(cline%get_carg('oritab')), os, [1,p_master%nptcls])
-                frac_srch_space = os%get_avg('frac')
+                call binread_oritab(trim(cline%get_carg('oritab')), b%spproj, b%a, [1,p_master%nptcls])
+                frac_srch_space = b%a%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
                 if( p_master%refine .eq. 'snhc' )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
-                    corr      = os%get_avg('corr')
+                    corr      = b%a%get_avg('corr')
                     if( iter > 1 .and. corr <= corr_prev )then
                         p_master%szsn = min(SZSN_MAX,p_master%szsn + SZSN_STEP)
                     endif
@@ -1007,10 +1004,10 @@ contains
                 call qsys_watcher(state_assemble_finished)
             endif
             ! rename volumes, postprocess & update job_descr
-            call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
+            call binread_oritab(trim(oritab), b%spproj, b%a, [1,p_master%nptcls])
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
-                if( os%get_pop( state, 'state' ) == 0 )then
+                if( b%a%get_pop( state, 'state' ) == 0 )then
                     ! cleanup for empty state
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )
@@ -1111,7 +1108,7 @@ contains
         type(cmdline)                      :: cline_volassemble
         character(len=STDLEN)              :: volassemble_output, str_state
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
-        type(oris)                         :: os
+        type(build)                        :: b
         type(chash)                        :: job_descr
         integer                            :: state
         ! seed the random number generator
@@ -1124,8 +1121,8 @@ contains
         ! make master parameters
         call cline%delete('refine')
         p_master = params(cline)
-        ! make oritab
-        call os%new(p_master%nptcls)
+        ! make general builder to get oris in
+        call b%build_general_tbox(p_master, cline, do3d=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
@@ -1135,14 +1132,14 @@ contains
         endif
         ! eo partitioning
         if( p_master%eo .ne. 'no' )then
-            call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-            if( os%get_nevenodd() == 0 )then
+            call binread_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
+            if( b%a%get_nevenodd() == 0 )then
                 if( p_master%tseries .eq. 'yes' )then
-                    call os%partition_eo(tseries=.true.)
+                    call b%a%partition_eo(tseries=.true.)
                 else
-                    call os%partition_eo
+                    call b%a%partition_eo
                 endif
-                call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
+                call binwrite_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
             endif
         endif
         ! schedule
@@ -1256,8 +1253,9 @@ contains
         type(cmdline)                  :: cline_aggregate
         type(qsys_env)                 :: qenv
         type(params)                   :: p_master
+        type(build)                    :: b
         type(chash)                    :: job_descr
-        type(oris)                     :: tmp_os, os, sympeaks, o_shift, grid_symaxes
+        type(oris)                     :: tmp_os, sympeaks, o_shift, grid_symaxes
         type(ori)                      :: symaxis
         type(sym)                      :: syme
         integer,    allocatable        :: order(:)
@@ -1266,14 +1264,14 @@ contains
         integer                        :: i, comlin_srch_nproj, nl,  nbest_here
         integer                        :: bestloc(1), cnt, numlen
         character(len=STDLEN)          :: part_tab
-        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'              !<
-        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//trim(METADATA_EXT) !<
-        character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'                   !< symmetry axes doc (distributed mode)
-        character(len=32),   parameter :: SYMTAB       = 'symaxes'//trim(METADATA_EXT)      !< gri
-        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks.txt'                   !< symmetry peaks to refine
-        character(len=32),   parameter :: SYMSHTAB     = 'sym_3dshift'//trim(METADATA_EXT)  !< volume 3D shift
-        character(len=32),   parameter :: SYMPROJSTK   = 'sym_projs.mrc'                  !< volume reference projections
-        character(len=32),   parameter :: SYMPROJTAB   = 'sym_projs'//trim(METADATA_EXT)    !< volume reference projections doc
+        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'           !<
+        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//trim(TXT_EXT) !<
+        character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'                !< symmetry axes doc (distributed mode)
+        character(len=32),   parameter :: SYMTAB       = 'symaxes'//trim(TXT_EXT)      !<
+        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks'//trim(TXT_EXT)     !< symmetry peaks to refine
+        character(len=32),   parameter :: SYMSHTAB     = 'sym_3dshift'//trim(TXT_EXT)  !< volume 3D shift
+        character(len=32),   parameter :: SYMPROJSTK   = 'sym_projs.mrc'               !< volume reference projections
+        character(len=32),   parameter :: SYMPROJTAB   = 'sym_projs'//trim(TXT_EXT)    !< volume reference projections doc
         integer,             parameter :: NBEST = 30
         ! seed the random number generator
         call seed_rnd
@@ -1309,10 +1307,10 @@ contains
         call xmerge_algndocs%execute( cline_merge_algndocs )
 
         ! 2. SELECTION OF SYMMETRY PEAKS TO REFINE
-        nl = binread_nlines(trim(GRIDSYMTAB))
+        nl = nlines(trim(GRIDSYMTAB))
         nbest_here = min(NBEST, nl)
         call grid_symaxes%new(nl)
-        call binread_oritab(trim(GRIDSYMTAB), grid_symaxes, [1,nl])
+        call grid_symaxes%read(trim(GRIDSYMTAB), [1,nl])
         call del_file(trim(GRIDSYMTAB))
         order = grid_symaxes%order_corr()
         call tmp_os%new(nbest_here)
@@ -1322,7 +1320,7 @@ contains
             call tmp_os%set_ori(cnt, grid_symaxes%get_ori(order(i)))
         enddo
         grid_symaxes = tmp_os
-        call binwrite_oritab(trim(GRIDSYMTAB), grid_symaxes, [1,nbest_here])
+        call grid_symaxes%write(trim(GRIDSYMTAB), [1,nbest_here])
         deallocate(order)
         call tmp_os%kill
 
@@ -1362,9 +1360,9 @@ contains
         call qenv%exec_simple_prg_in_queue(cline_aggregate,&
         &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
         ! read and pick best
-        nl = binread_nlines(trim(SYMPEAKSTAB))
+        nl = nlines(trim(SYMPEAKSTAB))
         call sympeaks%new(nl)
-        call binread_oritab(trim(SYMPEAKSTAB), sympeaks, [1,nl])
+        call sympeaks%read(trim(SYMPEAKSTAB), [1,nl])
         corrs   = sympeaks%get_all('corr')
         bestloc = maxloc(corrs)
         symaxis = sympeaks%get_ori(bestloc(1))
@@ -1376,21 +1374,24 @@ contains
             call syme%new(p_master%pgrp)
             call o_shift%new(1)
             ! retrieve shift
-            call binread_oritab(trim(SYMSHTAB), o_shift, [1,1])
+            call o_shift%read(trim(SYMSHTAB), [1,1])
             shvec(1) = o_shift%get(1,'x')
             shvec(2) = o_shift%get(1,'y')
             shvec(3) = o_shift%get(1,'z')
             shvec    = -1. * shvec ! the sign is right
             ! rotate the orientations & transfer the 3d shifts to 2d
-            nl = binread_nlines(p_master%oritab)
-            os = oris(nl)
-            call binread_oritab(p_master%oritab, os, [1,nl])
+            ! begin with making a general builder to support *.simple oritab input
+            call b%build_general_tbox(p_master, cline, do3d=.false.)
+            ! oritab is now read in, whatever format it had (.txt or .simple)
+            nl = binread_nlines(p_master, p_master%oritab)
+            call binread_oritab(p_master%oritab, b%spproj, b%a, [1,nl])
             if( cline%defined('state') )then
-                call syme%apply_sym_with_shift(os, symaxis, shvec, p_master%state )
+                call syme%apply_sym_with_shift(b%a, symaxis, shvec, p_master%state )
             else
-                call syme%apply_sym_with_shift(os, symaxis, shvec )
+                call syme%apply_sym_with_shift(b%a, symaxis, shvec )
             endif
-            call binwrite_oritab(p_master%outfile, os, [1,nl])
+            call binwrite_oritab(p_master%outfile, b%spproj, b%a, [1,nl])
+            call b%kill_general_tbox
         endif
 
         ! THE END
@@ -1398,13 +1399,13 @@ contains
         call del_file(trim(SYMSHTAB))
         numlen =  len(int2str(nbest_here))
         do i = 1, nbest_here
-            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
+            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
             call del_file(trim(part_tab))
         enddo
         p_master%nparts = nint(cline%get_rarg('nparts'))
         numlen =  len(int2str(p_master%nparts))
         do i = 1, p_master%nparts
-            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
+            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
             call del_file(trim(part_tab))
         enddo
         call del_file('SYM_AGGREGATE')
@@ -1454,7 +1455,7 @@ contains
                 partsz = parts(ipart,2) - parts(ipart,1) + 1
                 allocate(part_stks(partsz))
                 ! creates part filetab
-                filetab = 'scale_stktab_part'//int2str(ipart)//trim(METADATA_EXT)
+                filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
                 do istk=1,partsz
                     cnt = cnt + 1
                     part_stks(istk) = p_master%stkhandle%get_stkname(cnt)
@@ -1490,7 +1491,7 @@ contains
         if( cline%defined('stktab') )then
             ! removes temporary split stktab lists
             do ipart=1,nparts
-                filetab = 'scale_stktab_part'//int2str(ipart)//trim(METADATA_EXT)
+                filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
                 call del_file( filetab )
             end do
         endif

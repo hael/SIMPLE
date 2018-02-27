@@ -186,7 +186,7 @@ contains
         call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble_eo')
         if( L_BENCH )then
             rt_tot     = toc(t_tot)
-            benchfname = 'volassemble_eo_BENCH.txt'
+            benchfname = 'VOLASSEMBLE_EO_BENCH.txt'
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init

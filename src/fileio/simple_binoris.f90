@@ -322,14 +322,15 @@ contains
         end do
     end subroutine update_byte_ranges
 
-    subroutine read_segment_1( self, isegment, os, fromto )
+    subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo )
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
         class(oris),    intent(inout) :: os
         integer, optional, intent(in) :: fromto(2)
+        logical, optional, intent(in) :: only_ctfparams_state_eo
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
         integer :: i, ibytes, irec
-        logical :: present_fromto
+        logical :: present_fromto, oonly_ctfparams_state_eo
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_1'
         if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_1'
         present_fromto = present(fromto)
@@ -337,6 +338,8 @@ contains
             if( .not. all(fromto .eq. self%header(isegment)%fromto) )&
                 &stop 'passed dummy fromto not consistent with self%header; binoris :: read_segment_1'
         endif
+        oonly_ctfparams_state_eo = .false.
+        if( present(only_ctfparams_state_eo) ) oonly_ctfparams_state_eo = only_ctfparams_state_eo
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             ! read orientation data
             ibytes = self%header(isegment)%first_data_byte
@@ -344,10 +347,18 @@ contains
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
                 irec = irec + 1
                 read(unit=self%funit,pos=ibytes) str_os_line
-                if( present(fromto) )then
-                    call os%str2ori(i, str_os_line)
+                if( oonly_ctfparams_state_eo )then
+                    if( present_fromto )then
+                        call os%str2ori_ctfparams_state_eo(i, str_os_line)
+                    else
+                        call os%str2ori_ctfparams_state_eo(irec, str_os_line)
+                    endif
                 else
-                    call os%str2ori(irec, str_os_line)
+                    if( present_fromto )then
+                        call os%str2ori(i, str_os_line)
+                    else
+                        call os%str2ori(irec, str_os_line)
+                    endif
                 endif
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do

@@ -24,8 +24,8 @@ type extractwatcher
     character(len=STDLEN), allocatable :: new_stks(:)            !< new extracted stacks
     character(len=STDLEN)              :: cwd            = ''    !< CWD
     character(len=STDLEN)              :: watch_dir      = ''    !< movies directory to watch
-    character(len=4)                   :: ext            = ''    !< 
-    character(len=STDLEN)              :: mic_ext        = ''    !< 
+    character(len=4)                   :: ext            = ''    !<
+    character(len=STDLEN)              :: mic_ext        = ''    !<
     integer                            :: n_history      = 0     !< history of movies detected
     integer                            :: report_time    = 10    !< time ellapsed prior to processing
     integer                            :: starttime      = 0     !< time of first watch
@@ -58,7 +58,7 @@ integer,               parameter   :: FAIL_THRESH = 50
 integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
 
 contains
-    
+
     !>  \brief  is a constructor
     function constructor( p, report_time, print )result( self )
         class(params),     intent(in) :: p
@@ -175,7 +175,7 @@ contains
     end subroutine watch
 
     !>  \brief whether the movie should be processed or not
-    !!         if one file is missing it is re-processed  
+    !!         if one file is missing it is re-processed
     logical function to_process( self, fname )
         class(extractwatcher), intent(inout) :: self
         character(len=*),    intent(in)  :: fname
@@ -239,7 +239,7 @@ contains
         fname_here = remove_abspath(trim(adjustl(fname)))
         fbody      = get_fbody(trim(fname_here), trim(self%ext), separator=.false.)
         fbody      = fbody(12:) ! removes the 'ptcls_from_'
-        deftab_from_stk = trim(self%watch_dir) // trim('extract_params_') // trim(fbody) // trim('.txt')
+        deftab_from_stk = trim(self%watch_dir) // trim('extract_params_') // trim(fbody) // trim(METADATA_EXT)
     end function deftab_from_stk
 
     ! GETTERS
