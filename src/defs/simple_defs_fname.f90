@@ -62,6 +62,6 @@ character(len=KEYLEN), parameter :: TERM_STREAM               = './SIMPLE_TERM_S
 ! oritype enumeration
 enum, bind(c)
     enumerator :: STK_SEG = 1, PTCL2D_SEG = 2, CLS2D_SEG = 3, CLS3D_SEG = 4, PTCL3D_SEG = 5,&
-    &FRCS_SEG=9, FSCS_SEG=10, PROJINFO_SEG=11, JOBPROC_SEG = 12, GENERIC_SEG = 5
+    &FRCS_SEG=9, FSCS_SEG=10, PROJINFO_SEG=11, JOBPROC_SEG = 12, COMPENV_SEG = 13, GENERIC_SEG = 5
 end enum
 end module simple_defs_fname

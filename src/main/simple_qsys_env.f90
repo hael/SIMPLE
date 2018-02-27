@@ -31,10 +31,14 @@ end type qsys_env
 contains
 
     subroutine new( self, p_master, stream, numlen )
-        class(qsys_env)               :: self
-        class(params)                 :: p_master
-        logical, optional             :: stream
-        integer, optional             :: numlen
+        use simple_ori,        only: ori
+        use simple_sp_project, only: sp_project
+        class(qsys_env), intent(inout) :: self
+        class(params),      intent(in) :: p_master
+        logical, optional,  intent(in) :: stream
+        integer, optional,  intent(in) :: numlen
+        type(ori)                     :: compenv_o
+        type(sp_project)              :: spproj
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
         integer                       :: partsz, hrs, mins, secs, nparts
         real                          :: rtpi, tot_time_sec
@@ -63,7 +67,13 @@ contains
         end select
         ! retrieve environment variables from file
         call self%qdescr%new(MAXENVKEYS)
-        call parse_env_file(self%qdescr) ! parse .env file
+        if( trim(p_master%projfile) .ne. '' )then
+            call spproj%read_segment('compenv', p_master%projfile)
+            compenv_o   = spproj%compenv%get_ori(1)
+            self%qdescr = compenv_o%get_chtab()
+        else
+            call parse_env_file(self%qdescr) ! parse .env file
+        endif
         ! deal with time
         if( self%qdescr%isthere('time_per_image') )then
             tpi          = self%qdescr%get('time_per_image')

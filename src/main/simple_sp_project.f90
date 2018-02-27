@@ -7,7 +7,7 @@ implicit none
 public :: sp_project
 private
 
-integer, parameter :: MAXN_OS_SEG = 12
+integer, parameter :: MAXN_OS_SEG = 13
 
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
@@ -28,6 +28,7 @@ type sp_project
     ! segments 11-20 reserved for project info, job management etc.
     type(oris)        :: projinfo  ! project information      segment 11
     type(oris)        :: jobproc   ! jobid + PID + etc.       segment 12
+    type(oris)        :: compenv   ! computing environment    segment 13
 
     ! binary file-handler
     type(binoris) :: bos
@@ -81,6 +82,8 @@ contains
                 isegment = PROJINFO_SEG
             case('jobproc')
                 isegment = JOBPROC_SEG
+            case('compenv')
+                isegment = COMPENV_SEG
             case DEFAULT
                 stop 'unsupported which flag; sp_project :: which_flag2isgement'
         end select
@@ -99,6 +102,7 @@ contains
         if( .not. cline%defined('cs')       ) stop 'cs (spherical aberration constant in mm{2.7}) input required to create new project; sp_project :: new'
         if( .not. cline%defined('fraca')    ) stop 'fraca (fraction of amplitude contrast{0.1}) input required to create new project; sp_project :: new'
         call self%projinfo%new(1)
+        call self%compenv%new(1)
         ! set required
         str = cline%get_carg('projfile')
         call self%projinfo%set(1, 'projfile', trim(str)            )
@@ -106,6 +110,15 @@ contains
         call self%projinfo%set(1, 'kv',    cline%get_rarg('kv')    )
         call self%projinfo%set(1, 'cs',    cline%get_rarg('cs')    )
         call self%projinfo%set(1, 'fraca', cline%get_rarg('fraca') )
+        ! compenv has to be filled as strings as it is used as a string only dictionnary
+        call self%compenv%set(1, 'simple_path',      '')
+        call self%compenv%set(1, 'time_per_image',   '10')
+        call self%compenv%set(1, 'user_email',       '')
+        call self%compenv%set(1, 'user_project',     '')
+        call self%compenv%set(1, 'qsys_name',        '')
+        call self%compenv%set(1, 'qsys_partition',   '')
+        call self%compenv%set(1, 'qsys_reservation', '')
+        call self%compenv%set(1, 'job_name',   'simple')
         ! set defaults for optionals
         if( .not. cline%defined('phaseplate') ) call self%projinfo%set(1, 'phaseplate', 'no')
         if( .not. cline%defined('astigtol')   ) call self%projinfo%set(1, 'astigtol',   0.05)
@@ -167,6 +180,8 @@ contains
                 call self%projinfo%new_clean(n)
             case('jobproc')
                 call self%jobproc%new_clean(n)
+            case('compenv')
+                call self%compenv%new_clean(n)
             case DEFAULT
                 stop 'unsupported which flag; sp_project :: new_sp_oris'
         end select
@@ -191,6 +206,8 @@ contains
                 self%projinfo  = os
             case('jobproc')
                 self%jobproc   = os
+            case('compenv')
+                self%compenv   = os
             case DEFAULT
                 stop 'unsupported which flag; sp_project :: set_sp_oris'
         end select
@@ -219,6 +236,8 @@ contains
         if( n > 1 ) write(*,'(a,1x,i10)') '# entries in project info         segment (11):', n
         n = self%jobproc%get_noris()
         if( n > 1 ) write(*,'(a,1x,i10)') '# entries in jobproc              segment (12):', n
+        n = self%compenv%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in compenv              segment (12):', n
     end subroutine print_info
 
     ! readers
@@ -295,6 +314,8 @@ contains
                         call self%projinfo%read(fname)
                     case('jobproc')
                         call self%jobproc%read(fname)
+                    case('compenv')
+                        call self%compenv%read(fname)
                     case DEFAULT
                         stop 'unsupported which flag; sp_project :: read_segment'
                 end select
@@ -336,6 +357,9 @@ contains
             case(JOBPROC_SEG)
                 call self%jobproc%new_clean(n)
                 call self%bos%read_segment(isegment, self%jobproc)
+            case(COMPENV_SEG)
+                call self%compenv%new_clean(n)
+                call self%bos%read_segment(isegment, self%compenv)
         end select
     end subroutine segreader
 
@@ -426,6 +450,12 @@ contains
                         else
                             write(*,*) 'WARNING, no jobproc-type oris available to write; sp_project :: write_segment'
                         endif
+                    case('compenv')
+                        if( self%compenv%get_noris() > 0 )then
+                            call self%compenv%write(fname)
+                        else
+                            write(*,*) 'WARNING, no compenv-type oris available to write; sp_project :: write_segment'
+                        endif
                     case DEFAULT
                         stop 'unsupported which flag; sp_project :: write_segment'
                 end select
@@ -472,6 +502,8 @@ contains
                 call self%bos%write_segment(isegment, self%projinfo)
             case(JOBPROC_SEG)
                 call self%bos%write_segment(isegment, self%jobproc)
+            case(COMPENV_SEG)
+                call self%bos%write_segment(isegment, self%compenv)
         end select
     end subroutine segwriter
 
@@ -486,6 +518,7 @@ contains
         call self%os_ptcl3D%kill
         call self%projinfo%kill
         call self%jobproc%kill
+        call self%compenv%kill
     end subroutine kill
 
 end module simple_sp_project

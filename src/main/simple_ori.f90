@@ -50,6 +50,7 @@ type :: ori
     procedure          :: str2ori
     ! GETTERS
     procedure          :: exists
+    procedure          :: get_chtab
     procedure          :: get_euler
     procedure          :: e1get
     procedure          :: e2get
@@ -453,6 +454,13 @@ contains
         logical :: t
         t = self%existence
     end function exists
+
+    !>  \brief  is a getter
+    function get_chtab( self )result( chtab )
+        class(ori), intent(in) :: self
+        type(chash) :: chtab
+        chtab = self%chtab
+    end function get_chtab
 
     !>  \brief  is a getter
     pure function get_euler( self ) result( euls )

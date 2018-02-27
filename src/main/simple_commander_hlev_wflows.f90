@@ -440,8 +440,9 @@ contains
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         ! constants
-        integer,          parameter :: MAXITS   = 50
-        character(len=2), parameter :: one = '01'
+        integer,          parameter :: MAXITS1 = 50
+        integer,          parameter :: MAXITS2 = 40
+        character(len=2), parameter :: one     = '01'
         ! distributed commanders
         type(prime3D_distr_commander)        :: xprime3D_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
@@ -485,7 +486,7 @@ contains
         cline_reconstruct3D_mixed_distr = cline ! eo always eq yes
         call cline_refine3D1%set('prg', 'refine3D')
         call cline_refine3D2%set('prg', 'refine3D')
-        call cline_refine3D1%set('maxits', real(MAXITS))
+        call cline_refine3D1%set('maxits', real(MAXITS1))
         select case(trim(p_master%refine))
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
@@ -615,7 +616,7 @@ contains
         ! STAGE2: soft multi-states refinement
         startit = iter + 1
         call cline_refine3D2%set('startit', real(startit))
-        call cline_refine3D2%set('maxits',  real(startit+50))
+        call cline_refine3D2%set('maxits',  real(startit + MAXITS2))
         call cline_refine3D2%set('oritab',  trim(oritab))
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> PRIME3D - STAGE 2'
@@ -717,6 +718,7 @@ contains
         class(cluster3D_refine_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
+        integer,            parameter :: MAXITS = 40
         character(len=:), allocatable :: INIT_FBODY
         character(len=:), allocatable :: FINAL_FBODY
         character(len=:), allocatable :: FINAL_DOC
@@ -874,11 +876,12 @@ contains
         do state = 1, p_master%nstates
             call cline%delete('vol'//int2str_pad(state,1))
         enddo
-        cline_refine3D_master = cline
-        cline_reconstruct3D_distr   = cline
-        cline_postprocess   = cline
+        cline_refine3D_master     = cline
+        cline_reconstruct3D_distr = cline
+        cline_postprocess         = cline
         call cline_refine3D_master%set('prg', 'refine3D')
         call cline_refine3D_master%set('dynlp', 'no')
+        if( .not.cline%defined('maxits') ) call cline_refine3D_master%set('maxits', real(MAXITS))
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_distr%set('oritab', trim(FINAL_DOC))
         call cline_reconstruct3D_distr%set('nstates', trim(int2str(p_master%nstates)))

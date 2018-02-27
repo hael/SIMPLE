@@ -281,7 +281,7 @@ contains
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         allocate( statepops(self%pp%nstates) )
-        statepops      = 0.
+        statepops = 0.
         do iptcl=1,self%bap%get_noris()
             istate = nint(self%bap%get(iptcl,'state'))
             if( istate==0 )cycle
@@ -289,7 +289,7 @@ contains
         end do
         if( self%bap%isthere('bfac') )then
             self%bfac = self%bap%get_avg('bfac')
-            write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR: ', self%bfac
+            write(*,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR: ', self%bfac
         endif
         self%corr = self%bap%get_avg('corr')
         write(*,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
