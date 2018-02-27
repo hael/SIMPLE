@@ -287,8 +287,12 @@ contains
             if( istate==0 )cycle
             statepops(istate) = statepops(istate) + 1.0
         end do
+        if( self%bap%isthere('bfac') )then
+            self%bfac = self%bap%get_avg('bfac')
+            write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR: ', self%bfac
+        endif
         self%corr = self%bap%get_avg('corr')
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION        :', self%corr
+        write(*,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
         ! print the overlaps and pops for the different states
         do istate=1,self%pp%nstates
             write(*,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
