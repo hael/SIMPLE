@@ -142,7 +142,7 @@ contains
         write(6,*) 'test jpeg to grayscale'
 
         status=0
-        call read_jpeg("gray.jpg", buffer, status)
+        call read_jpeg_gd("gray.jpg", buffer, status)
         if (status /= 0) write(*,*) "read_jpeg failed"
         if (.not. allocated(buffer)) then
             write(*,*) "read_jpeg failed, buffer not allocated"
@@ -152,7 +152,7 @@ contains
             print *, buffer
         end if
         grange(:) = (/ 0., 255. /)
-        call write_jpeg(buffer, fout)! ,grange , status)
+        call write_jpeg_gd(buffer, fout)! ,grange , status)
         if (status /= 0) write(*,*) "write_jpeg failed"
         deallocate(buffer)
         write(*,*) 'test read/write jpeg from buffers'

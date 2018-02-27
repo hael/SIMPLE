@@ -251,6 +251,7 @@ contains
 
         call fclose( file_unit )
     end subroutine pgma_test02
+
     subroutine pgma_test03 ( )
 
         integer , parameter :: ncol = 300

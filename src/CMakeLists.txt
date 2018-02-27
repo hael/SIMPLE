@@ -51,7 +51,10 @@ endif()
 
 #if ( BUILD_WITH_LIBGD )
   file(GLOB IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/*.f[90][08]" PARENT_SCOPE)
-  list(APPEND IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c")
+  list(APPEND IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/img/cjpg.c"
+    )
+
 #else()
 #  set(IMG_src "")
 #endif()

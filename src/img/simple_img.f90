@@ -36,7 +36,8 @@ module simple_img
 ! integer(c_int), value :: x,y
 ! integer(kind=kind(5)) :: ptr
 ! end subroutine CGD_IMAGE_CREATE
-! end interface
+    ! end interface
+
 
 public
 
@@ -165,7 +166,7 @@ contains
 
 
 
-    subroutine read_jpeg(file_name,buffer,status)
+    subroutine read_jpeg_gd(file_name,buffer,status)
         character(*), intent(in)         :: file_name
         real, allocatable, intent(inout) :: buffer(:,:)
         integer, intent(out), optional  :: status
@@ -199,9 +200,9 @@ contains
         print *,"  Anti-aliased? ", anti_aliased()
         print *,"  Fmode ", get_fmode(image)
         call destroy_img(image)
-    end subroutine read_jpeg
+    end subroutine read_jpeg_gd
 
-    subroutine write_jpeg(buffer,file_name,range_in,status)
+    subroutine write_jpeg_gd(buffer,file_name,range_in,status)
         real, allocatable, intent(in) :: buffer(:,:)
         character(len=*), intent(in) :: file_name
         real, intent(in), optional   :: range_in(2)
@@ -270,7 +271,7 @@ contains
         !        print*,' Greyscale color ', colorval
         call cgd_image_jpeg(image%ptr, trim(adjustl(filename))//char(0) )
         call destroy_img(image)
-    end subroutine write_jpeg
+    end subroutine write_jpeg_gd
 
 
     logical function compare_imgs(f1,f2)

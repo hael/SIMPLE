@@ -4,24 +4,22 @@
 !! Based on John Burkardt's  PPMA and PBMA modules (LPGL Copyright, March 2003)
 !! Modified by Michael Eager 2018, Monash University
 module simple_pnm
-    include 'simple_lib.f08'
-    use, intrinsic :: iso_c_binding
-    implicit none
+include 'simple_lib.f08'
+use, intrinsic :: iso_c_binding
+implicit none
 
 
-!     public :: pbma_read_data, pbma_check_data, pbma_read_header
-!     public :: pbma_write, pbma_write_data, pbma_write_header
+    !     public :: pbma_read_data, pbma_check_data, pbma_read_header
+    !     public :: pbma_write, pbma_write_data, pbma_write_header
 
-!     public :: ppma_read_data, ppma_read_header, ppma_check_data
-!     public :: ppma_write, ppma_write_data, ppma_write_header
+    !     public :: ppma_read_data, ppma_read_header, ppma_check_data
+    !     public :: ppma_write, ppma_write_data, ppma_write_header
 
-!     public :: pgma_check_data, pgma_read_data, pgma_read_header
-!     public :: pgma_write, pgma_write_data, pgma_write_header
-!     private
+    !     public :: pgma_check_data, pgma_read_data, pgma_read_header
+    !     public :: pgma_write, pgma_write_data, pgma_write_header
+    !     private
 
 #include "simple_local_flags.inc"
-
-
 
 
     !      type PNM
@@ -58,7 +56,7 @@ module simple_pnm
     ! !         !         end subroutine  read_pnm
     ! !     end interface
 
-  contains
+contains
 
 
     !         integer function getWidth(self)
@@ -114,7 +112,7 @@ module simple_pnm
     !         if (allocated(self%buffer)) deallocate(self%buffer)
     !         if(present(buf))then
     !             if( size(buf,1)*size(buf,2) /= width * height) then
-    !                 stop 'simple_pnm_io:: new input buffer not the same size as width|height inputs '
+    !                 stop 'simple_pnm_io:: new input buffer not the same size as width | height inputs '
     !             end if
     !             allocate( self%buffer(width*height))
     !             do i=1, self%width
@@ -135,218 +133,74 @@ module simple_pnm
     !         deallocate(self%buffer)
     !     end subroutine kill
 
-subroutine getint ( done, ierror, inunit, ival, string )
+    subroutine getint ( done, ierror, inunit, ival, string )
+        logical done
+        integer  :: i, ierror, inunit, ios, ival, last
+        character ( len = * ) string
+        character ( len = 80 ) word
 
-!*****************************************************************************80
-!
-!! GETINT reads an integer from a file.
-!
-!  Discussion:
-!
-!    The file, or at least the part read by GETINT, is assumed to
-!    contain nothing but integers.  These integers may be separated
-!    by spaces, or appear on separate lines.  Comments, which begin
-!    with "#" and extend to the end of the line, may appear anywhere.
-!
-!    Each time GETINT is called, it tries to read the next integer
-!    it can find.  It remembers where it was in the current line
-!    of text.
-!
-!    The user should open a text file on FORTRAN unit INUNIT,
-!    set STRING = ' ' and DONE = TRUE.  The GETINT routine will take
-!    care of reading in a new STRING as necessary, and extracting
-!    as many integers as possible from the line of text before
-!    reading in the next line.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license.
-!
-!  Modified:
-!
-!    07 October 2000
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input/output, logical DONE.
-!
-!    On input, if this is the first call, or the user has changed
-!    STRING, then set DONE = TRUE.
-!
-!    On output, if there is no more data to be read from STRING,
-!    then DONE is TRUE.
-!
-!    Output, integer ( kind = 4 ) IERROR, error flag.
-!    0, no error occurred.
-!    1, an error occurred while trying to read the integer.
-!
-!    Input, integer ( kind = 4 ) INUNIT, the FORTRAN unit from which to read.
-!
-!    Output, integer ( kind = 4 ) IVAL, the integer that was read.
-!
-!    Input/output, character ( len = * ) STRING, the text of the most recently
-!    read line of the file.
-!
-  logical done
-  integer  i
-  integer ierror
-  integer inunit
-  integer ios
-  integer ival
-  integer last
-  character ( len = * ) string
-  character ( len = 80 ) word
+        do
+            call word_next_rd ( string, word, done )
+            if ( .not. done ) then
+                exit
+            end if
+            read ( inunit, '(a)', iostat = ios ) string
+            if ( ios /= 0 ) then
+                ierror = 1
+                return
+            end if
+            i = index ( string, '#' )
+            if ( i /= 0 ) then
+                string(i:) = ' '
+            end if
+        end do
+        call str2int ( word, ierror, ival )
+        if ( ierror /= 0 ) then
+            write ( *, '(a)' ) ' '
+            write ( *, '(a)' ) 'GETINT - Fatal error!'
+            write ( *, '(a)' ) '  Error trying to convert string to integer.'
+            stop
+        end if
+    end subroutine getint
 
-  do
-
-    call word_next_rd ( string, word, done )
-
-    if ( .not. done ) then
-      exit
-    end if
-
-    read ( inunit, '(a)', iostat = ios ) string
-
-    if ( ios /= 0 ) then
-      ierror = 1
-      return
-    end if
-
-    i = index ( string, '#' )
-    if ( i /= 0 ) then
-      string(i:) = ' '
-    end if
-
-  end do
-
-  call str2int ( word, ierror, ival )
-
-  if ( ierror /= 0 ) then
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'GETINT - Fatal error!'
-    write ( *, '(a)' ) '  Error trying to convert string to integer.'
-    stop
-  end if
-
-  return
-end subroutine getint
-
-subroutine word_next_rd ( line, word, done )
-
-!*****************************************************************************80
-!
-!! WORD_NEXT_RD "reads" words from a string, one at a time.
-!
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license.
-!
-!  Modified:
-!
-!    18 December 2008
-!
-!  Author:
-!
-!    John Burkardt
-!
-!  Parameters:
-!
-!    Input, character ( len = * ) LINE, a string, presumably containing
-!    words separated by spaces.
-!
-!    Output, character ( len = * ) WORD.
-!    If DONE is FALSE,
-!      WORD contains the "next" word read from LINE.
-!    Else
-!      WORD is blank.
-!
-!    Input/output, logical DONE.
-!    On input, on the first call, or with a fresh value of LINE,
-!      set DONE to TRUE.
-!    Else
-!      leave it at the output value of the previous call.
-!    On output, if a new nonblank word was extracted from LINE
-!      DONE is FALSE
-!    ELSE
-!      DONE is TRUE.
-!    If DONE is TRUE, then you need to provide a new LINE of data.
-!
-!  Local Parameters:
-!
-!    NEXT is the next location in LINE that should be searched.
-!
-  implicit none
-
-  logical done
-  integer ( kind = 4 ) ilo
-  integer ( kind = 4 ) lenl
-  character ( len = * ) line
-  integer ( kind = 4 ), save :: next = 1
-  character ( len = 1 ), parameter :: TAB = char(9)
-  character ( len = * ) word
-
-  lenl = len_trim ( line )
-
-  if ( done ) then
-    next = 1
-    done = .false.
-  end if
-!
-!  Beginning at index NEXT, search LINE for the next nonblank.
-!
-  ilo = next
-
-  do
-!
-!  ...LINE(NEXT:LENL) is blank.  Return with WORD=' ', and DONE=TRUE.
-!
-    if ( lenl < ilo ) then
-      word = ' '
-      done = .true.
-      next = lenl + 1
-      return
-    end if
-!
-!  ...If the current character is blank, skip to the next one.
-!
-    if ( line(ilo:ilo) /= ' ' .and. line(ilo:ilo) /= TAB ) then
-      exit
-    end if
-
-    ilo = ilo + 1
-
-  end do
-!
-!  To get here, ILO must be the index of the nonblank starting
-!  character of the next word.
-!
-!  Now search for the LAST nonblank character.
-!
-  next = ilo + 1
-
-  do
-
-    if ( lenl < next ) then
-      word = line(ilo:next-1)
-      return
-    end if
-
-    if ( line(next:next) == ' ' .or. line(next:next) == TAB ) then
-      exit
-    end if
-
-    next = next + 1
-
-  end do
-
-  word = line(ilo:next-1)
-
-  return
-end subroutine word_next_rd
+    subroutine word_next_rd ( line, word, done )
+        character(len=*), intent(inout) :: line, word
+        logical, intent(inout) :: done
+        integer :: ilo, lenl
+        integer, save :: next = 1
+        character ( len = 1 ), parameter :: TAB = char(9)
+        lenl = len_trim ( line )
+        if ( done ) then
+            next = 1
+            done = .false.
+        end if
+        ilo = next
+        do
+            if ( lenl < ilo ) then
+                word = ' '
+                done = .true.
+                next = lenl + 1
+                return
+            end if
+            if ( line(ilo:ilo) /= ' ' .and. line(ilo:ilo) /= TAB ) then
+                exit
+            end if
+            ilo = ilo + 1
+        end do
+        next = ilo + 1
+        do
+            if ( lenl < next ) then
+                word = line(ilo:next-1)
+                return
+            end if
+            if ( line(next:next) == ' ' .or. line(next:next) == TAB ) then
+                exit
+            end if
+            next = next + 1
+        end do
+        word = line(ilo:next-1)
+        return
+    end subroutine word_next_rd
 
     subroutine pbma_read_data ( file_in_unit, row_num, col_num, b )
         integer, intent(in) :: col_num, row_num
@@ -450,34 +304,6 @@ end subroutine word_next_rd
     end subroutine pbma_read_header
 
     subroutine pbma_write ( file_out_name, row_num, col_num, b )
-
-        !*****************************************************************************80
-        !! PBMA_WRITE writes an ASCII PBM file.
-        !  Example:
-        !    P1
-        !    # feep.pbma created by PBMA_IO(PBMA_WRITE).
-        !    24 7
-        !    0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-        !    0 1 1 1 1 0 0 1 1 1 1 0 0 1 1 1 1 0 0 1 1 1 1 0
-        !    0 1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 1 0
-        !    0 1 1 1 0 0 0 1 1 1 0 0 0 1 1 1 0 0 0 1 1 1 1 0
-        !    0 1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0
-        !    0 1 0 0 0 0 0 1 1 1 1 0 0 1 1 1 1 0 0 1 0 0 0 0
-        !    0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-        !  Licensing:
-        !    This code is distributed under the GNU LGPL license.
-        !  Modified:
-        !    04 June 2010
-        !  Author:
-        !    John Burkardt
-        !  Parameters:
-        !    Input, character(len=*) FILE_OUT_NAME, the name of the file.
-        !    Input, integer :: ROW_NUM, COL_NUM, the number of rows
-        !    and columns of data.
-        !    Input, integer :: B(ROW_NUM,COL_NUM), the bit value of each
-        !    pixel.  These should be 0 or 1.
-        implicit none
-
         integer :: col_num
         integer :: row_num
 
@@ -535,7 +361,7 @@ end subroutine word_next_rd
         write ( file_out_unit, '(a2)' ) magic
         write ( file_out_unit, '(a)' ) '# ' // trim ( file_out_name ) &
             // ' created by PBMA_IO::PBMA_WRITE.F90.'
-        write ( file_out_unit, '(i8,2x,i8)' ) col_num, row_num
+        write ( file_out_unit, '(i8, 2x, i8)' ) col_num, row_num
 
         return
     end subroutine pbma_write_header
@@ -563,17 +389,15 @@ end subroutine word_next_rd
     end subroutine pbma_check_data
 
     subroutine ppma_read_data ( file_in_unit, row_num, col_num, r, g, b, ierror )
-        integer :: col_num
-        integer :: row_num
-
-        integer :: b(row_num,col_num)
+        integer, intent(inout) :: col_num
+        integer, intent(inout) :: row_num
+        integer, intent(inout) :: r(row_num,col_num)
+        integer, intent(inout) :: g(row_num,col_num)
+        integer, intent(inout) :: b(row_num,col_num)
+        integer, intent(inout) :: file_in_unit
+        integer, intent(inout) :: ierror
+        integer :: i,j
         logical done
-        integer :: file_in_unit
-        integer :: g(row_num,col_num)
-        integer :: i
-        integer :: ierror
-        integer :: j
-        integer :: r(row_num,col_num)
         character ( len = 80 ) string
 
         ierror = 0
@@ -582,9 +406,7 @@ end subroutine word_next_rd
 
         do i = 1, row_num
             do j = 1, col_num
-
                 call getint ( done, ierror, file_in_unit, r(i,j), string )
-
                 if ( ierror /= 0 ) then
                     ierror = 5
                     call fclose( file_in_unit )
@@ -593,9 +415,7 @@ end subroutine word_next_rd
                     write(*,'(a)') '  Problem reading R data.'
                     return
                 end if
-
                 call getint ( done, ierror, file_in_unit, g(i,j), string )
-
                 if ( ierror /= 0 ) then
                     ierror = 5
                     call fclose( file_in_unit )
@@ -604,9 +424,7 @@ end subroutine word_next_rd
                     write(*,'(a)') '  Problem reading G data.'
                     return
                 end if
-
                 call getint ( done, ierror, file_in_unit, b(i,j), string )
-
                 if ( ierror /= 0 ) then
                     ierror = 5
                     call fclose( file_in_unit )
@@ -753,11 +571,11 @@ end subroutine word_next_rd
         !  Report
         if ( debug ) then
             write(*,'(a)') ' '
-            write(*,'(a)') 'PPMA_WRITE - Note:'
+            write(*,'(a)') 'PPMA_WRITE - Note: '
             write(*,'(a)') '  The data was checked and written.'
-            write ( *, '(a,i8)' ) '  Number of data rows ROW_NUM =    ', row_num
-            write ( *, '(a,i8)' ) '  Number of data columns COL_NUM = ', col_num
-            write ( *, '(a,i8)' ) '  Maximum RGB value RGB_MAX =      ', rgb_max
+            write ( *, '(a, i8)' ) '  Number of data rows ROW_NUM =    ', row_num
+            write ( *, '(a, i8)' ) '  Number of data columns COL_NUM = ', col_num
+            write ( *, '(a, i8)' ) '  Maximum RGB value RGB_MAX =      ', rgb_max
         end if
 
     end subroutine ppma_write
@@ -797,7 +615,7 @@ end subroutine word_next_rd
         write ( file_out_unit, '(a2)' ) magic
         write ( file_out_unit, '(a)' ) '# ' // trim ( file_out_name ) &
             // ' created by PPMA_IO::PPMA_WRITE.F90.'
-        write ( file_out_unit, '(i5,2x,i5)' ) col_num, row_num
+        write ( file_out_unit, '(i5, 2x, i5)' ) col_num, row_num
         write ( file_out_unit, '(i5)' ) rgb_max
 
         return
@@ -825,7 +643,7 @@ end subroutine word_next_rd
             write ( *, '(a)' ) ' '
             write ( *, '(a)' ) 'PGMA_CHECK_DATA - Fatal error!'
             write ( *, '(a)' ) '  At least one gray value exceeds G_MAX.'
-            write ( *, '(a,i12)' ) '  G_MAX = ', g_max
+            write ( *, '(a, i12)' ) '  G_MAX = ', g_max
             ierror = 1
             stop
         end if
@@ -958,11 +776,11 @@ end subroutine word_next_rd
         !  Report
         if ( debug ) then
             write ( *, '(a)' ) ' '
-            write ( *, '(a)' ) 'PGMA_WRITE - Note:'
+            write ( *, '(a)' ) 'PGMA_WRITE - Note: '
             write ( *, '(a)' ) '  The data was checked and written.'
-            write ( *, '(a,i8)' ) '  Number of data rows ROW_NUM =    ', row_num
-            write ( *, '(a,i8)' ) '  Number of data columns COL_NUM = ', col_num
-            write ( *, '(a,i8)' ) '  Maximum gray value G_MAX =       ', g_max
+            write ( *, '(a, i8)' ) '  Number of data rows ROW_NUM =    ', row_num
+            write ( *, '(a, i8)' ) '  Number of data columns COL_NUM = ', col_num
+            write ( *, '(a, i8)' ) '  Maximum gray value G_MAX =       ', g_max
         end if
     end subroutine pgma_write
 
@@ -997,7 +815,7 @@ end subroutine word_next_rd
         write ( file_out_unit, '(a2)' ) magic
         write ( file_out_unit, '(a)' ) '# ' // trim ( file_out_name ) &
             // ' created by PGMA_IO::PGMA_WRITE.'
-        write ( file_out_unit, '(i8,2x,i8)' ) col_num, row_num
+        write ( file_out_unit, '(i8, 2x, i8)' ) col_num, row_num
         write ( file_out_unit, '(i8)' ) g_max
 
     end subroutine pgma_write_header

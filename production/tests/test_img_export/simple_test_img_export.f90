@@ -1,6 +1,7 @@
  !! Modified by Michael Eager, Feb 2018
 program simple_test_img_export
     include 'simple_lib.f08'
+    use simple_jpg
 #ifdef LIBGD
     use simple_test_libgd_io
 #endif
@@ -9,8 +10,7 @@ program simple_test_img_export
 
 
     character(len=8)      :: datestr
-    character(len=STDLEN) :: folder, cmd
-    character(len=300)    :: command
+    character(len=STDLEN) :: folder, command
 
 
     call seed_rnd
@@ -19,6 +19,9 @@ program simple_test_img_export
     command = 'mkdir ' // trim( folder )//'|| true'
     call exec_cmdline( trim(command) )
     call simple_chdir( trim(folder) )
+
+
+    call test_jpg_export
 
 #ifdef LIBGD
     call test_jpeg_io
