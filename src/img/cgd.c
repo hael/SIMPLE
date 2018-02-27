@@ -98,19 +98,19 @@
 /******************************************************************************/
 void CGD_IMAGE_CREATE_TRUECOLOR(int *x, int *y, gdImagePtr *ptr)
 {
-    *ptr = gdImageCreateTrueColor(*x,*y);
+    *ptr = gdImageCreateTrueColor(*x, *y);
     return;
 }
 /******************************************************************************/
-void CGD_IMAGE_TRUECOLOR_TO_PALETTE(gdImagePtr *ptr,int *c1, int *c2)
+void CGD_IMAGE_TRUECOLOR_TO_PALETTE(gdImagePtr *ptr, int *c1, int *c2)
 {
-    gdImageTrueColorToPalette(*ptr, *c1,*c2);
+    gdImageTrueColorToPalette(*ptr, *c1, *c2);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_CREATE(int *x, int *y, gdImagePtr *ptr)
 {
-    *ptr = gdImageCreate(*x,*y);
+    *ptr = gdImageCreate(*x, *y);
     return;
 }
 /******************************************************************************/
@@ -118,7 +118,7 @@ void CGD_IMAGE_COLOR_ALLOCATE(gdImagePtr *ptr,
                               int *r, int *g, int *b,
                               int *color)
 {
-    *color = gdImageColorAllocate(*ptr,*r,*g,*b);
+    *color = gdImageColorAllocate(*ptr, *r, *g, *b);
     return;
 }
 /******************************************************************************/
@@ -126,32 +126,32 @@ void CGD_IMAGE_COLOR_ALLOCATE_ALPHA(gdImagePtr *ptr,
                                     int *r, int *g, int *b, int *a,
                                     int *color)
 {
-    *color = gdImageColorAllocateAlpha(*ptr,*r,*g,*b,*a);
+    *color = gdImageColorAllocateAlpha(*ptr, *r, *g, *b, *a);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_COLOR_DEALLOCATE(gdImagePtr *ptr, int *color)
 {
-    gdImageColorDeallocate(*ptr,*color);
+    gdImageColorDeallocate(*ptr, *color);
     return;
 }
 
 /******************************************************************************/
 void CGD_IMAGE_SET_PIXEL(gdImagePtr *ptr, int *x, int *y, int *color)
 {
-    gdImageSetPixel(*ptr,*x,*y,*color);
+    gdImageSetPixel(*ptr, *x, *y, *color);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_GET_PIXEL(gdImagePtr *ptr, int *x, int *y, int *color)
 {
-    *color = gdImageGetPixel(*ptr,*x,*y);
+    *color = gdImageGetPixel(*ptr, *x, *y);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_SET_LINE_THICKNESS(gdImagePtr *ptr, int *thickness)
 {
-    gdImageSetThickness(*ptr,*thickness);
+    gdImageSetThickness(*ptr, *thickness);
     return;
 }
 /******************************************************************************/
@@ -159,7 +159,7 @@ void CGD_IMAGE_LINE(gdImagePtr *ptr,
                     int *x1, int *y1, int *x2, int *y2,
                     int *color)
 {
-    gdImageLine(*ptr,*x1,*y1,*x2,*y2,*color);
+    gdImageLine(*ptr, *x1, *y1, *x2, *y2, *color);
     return;
 }
 /******************************************************************************/
@@ -167,7 +167,7 @@ void CGD_IMAGE_RECTANGLE(gdImagePtr *ptr,
                          int *x1, int *y1, int *x2, int *y2,
                          int *color)
 {
-    gdImageRectangle(*ptr,*x1,*y1,*x2,*y2,*color);
+    gdImageRectangle(*ptr, *x1, *y1, *x2, *y2, *color);
     return;
 }
 /******************************************************************************/
@@ -175,7 +175,7 @@ void CGD_IMAGE_FILLED_RECTANGLE(gdImagePtr *ptr,
                                 int *x1, int *y1, int *x2, int *y2,
                                 int *color)
 {
-    gdImageFilledRectangle(*ptr,*x1,*y1,*x2,*y2,*color);
+    gdImageFilledRectangle(*ptr, *x1, *y1, *x2, *y2, *color);
     return;
 }
 
@@ -184,7 +184,7 @@ void CGD_IMAGE_FILLED_ELLIPSE(gdImagePtr *ptr,
                               int *x, int *y, int *w, int *h,
                               int *color)
 {
-    gdImageFilledEllipse(*ptr,*x,*y,*w,*h,*color);
+    gdImageFilledEllipse(*ptr, *x, *y, *w, *h, *color);
     return;
 }
 /******************************************************************************/
@@ -192,7 +192,7 @@ void CGD_IMAGE_ARC(gdImagePtr *ptr,
                    int *x, int *y, int *w, int *h, int *s, int *e,
                    int *color)
 {
-    gdImageArc(*ptr,*x,*y,*w,*h,*s,*e,*color);
+    gdImageArc(*ptr, *x, *y, *w, *h, *s, *e, *color);
     return;
 }
 /******************************************************************************/
@@ -200,7 +200,7 @@ void CGD_IMAGE_FILLED_ARC(gdImagePtr *ptr,
                           int *x, int *y, int *w, int *h, int *s, int *e,
                           int *color, int *style)
 {
-    gdImageFilledArc(*ptr,*x,*y,*w,*h,*s,*e,*color,*style);
+    gdImageFilledArc(*ptr, *x, *y, *w, *h, *s, *e, *color, *style);
     return;
 }
 /******************************************************************************/
@@ -212,29 +212,23 @@ void CGD_IMAGE_DESTROY(gdImagePtr *ptr)
 /******************************************************************************/
 void CGD_IMAGE_FILE(gdImagePtr *ptr, const char *file, int *status)
 {
-  if (strlen(file) > 0 && strcmp(file,"-") !=0 ){
-       *status = gdImageFile(*ptr,file);
- } else  *status = 2;
- return;
+    if(strlen(file) > 0 && strcmp(file, "-") != 0) {
+        *status = gdImageFile(*ptr, file);
+    } else  *status = 2;
+    return;
 }
 /******************************************************************************/
 void CGD_IMAGE_PNG(gdImagePtr *ptr, const char *file)
 {
-    if (strcmp(file,"-") == 0)
-    {
-        gdImagePng(*ptr,stdout);
-    }
-    else
-    {
+    if(strcmp(file, "-") == 0) {
+        gdImagePng(*ptr, stdout);
+    } else {
         FILE *f;
-        f = fopen(file,"wb");
-        if (f == NULL)
-        {
+        f = fopen(file, "wb");
+        if(f == NULL) {
             *ptr = 0;
-        }
-        else
-        {
-            gdImagePng(*ptr,f);
+        } else {
+            gdImagePng(*ptr, f);
             (void)fclose(f);
         }
     }
@@ -243,21 +237,15 @@ void CGD_IMAGE_PNG(gdImagePtr *ptr, const char *file)
 /******************************************************************************/
 void CGD_IMAGE_GD(gdImagePtr *ptr, const char *file)
 {
-    if (strcmp(file,"-") == 0)
-    {
-        gdImageGd(*ptr,stdout);
-    }
-    else
-    {
+    if(strcmp(file, "-") == 0) {
+        gdImageGd(*ptr, stdout);
+    } else {
         FILE *f;
-        f = fopen(file,"wb");
-        if (f == NULL)
-        {
+        f = fopen(file, "wb");
+        if(f == NULL) {
             *ptr = 0;
-        }
-        else
-        {
-            gdImageGd(*ptr,f);
+        } else {
+            gdImageGd(*ptr, f);
             (void)fclose(f);
         }
     }
@@ -267,29 +255,28 @@ void CGD_IMAGE_POLYGON(gdImagePtr *ptr,
                        int *n, int x[], int y[],
                        int *color)
 {
-/*
-    gdPoint points[*n];
-    int i;
+    /*
+        gdPoint points[*n];
+        int i;
 
-    for(i=0;i<*n;i++)
-    {
-        points[i].x = x[i];
-        points[i].y = y[i];
-    }
-    gdImagePolygon(*ptr,points,*n,*color);
-    return;
-*/
+        for(i=0;i<*n;i++)
+        {
+            points[i].x = x[i];
+            points[i].y = y[i];
+        }
+        gdImagePolygon(*ptr,points,*n,*color);
+        return;
+    */
 
     int i;
     gdPoint *points;
 
     points = malloc((*n) * sizeof(gdPoint));
-    for(i=0;i<*n;i++)
-    {
+    for(i = 0; i < *n; i++) {
         points[i].x = x[i];
         points[i].y = y[i];
     }
-    gdImagePolygon(*ptr,points,*n,*color);
+    gdImagePolygon(*ptr, points, *n, *color);
     free(points);
     return;
 }
@@ -302,37 +289,36 @@ void CGD_IMAGE_FILLED_POLYGON(gdImagePtr *ptr,
     gdPoint *points;
 
     points = malloc((*n) * sizeof(gdPoint));
-    for(i=0;i<*n;i++)
-    {
+    for(i = 0; i < *n; i++) {
         points[i].x = x[i];
         points[i].y = y[i];
     }
-    gdImageFilledPolygon(*ptr,points,*n,*color);
+    gdImageFilledPolygon(*ptr, points, *n, *color);
     free(points);
     return;
-/*
-    gdPoint points[*n];
-    int i;
+    /*
+        gdPoint points[*n];
+        int i;
 
-    for(i=0;i<*n;i++)
-    {
-        points[i].x = x[i];
-        points[i].y = y[i];
-    }
-    gdImageFilledPolygon(*ptr,points,*n,*color);
-    return;
-*/
+        for(i=0;i<*n;i++)
+        {
+            points[i].x = x[i];
+            points[i].y = y[i];
+        }
+        gdImageFilledPolygon(*ptr,points,*n,*color);
+        return;
+    */
 }
 /******************************************************************************/
 void CGD_IMAGE_FILL(gdImagePtr *ptr, int *x, int *y, int *color)
 {
-    gdImageFill(*ptr,*x,*y,*color);
+    gdImageFill(*ptr, *x, *y, *color);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_FILL_TO_BORDER(gdImagePtr *ptr, int *x, int *y, int *bc, int *c)
 {
-    gdImageFillToBorder(*ptr,*x,*y,*bc,*c);
+    gdImageFillToBorder(*ptr, *x, *y, *bc, *c);
     return;
 }
 /******************************************************************************/
@@ -351,12 +337,9 @@ void CGD_HEIGHT(gdImagePtr *ptr, int *height)
 void CGD_IMAGE_CREATE_FROM_FILE(const char *file, gdImagePtr *ptr)
 {
 
-  if (0 == strcmp(file,""))
-    {
+    if(0 == strcmp(file, "")) {
         *ptr = 0;
-    }
-    else
-    {
+    } else {
         *ptr = gdImageCreateFromFile(file);
     }
     return;
@@ -365,13 +348,10 @@ void CGD_IMAGE_CREATE_FROM_FILE(const char *file, gdImagePtr *ptr)
 void CGD_IMAGE_CREATE_FROM_GD(const char *file, gdImagePtr *ptr)
 {
     FILE *f;
-    f = fopen(file,"rb");
-    if (f == NULL)
-    {
+    f = fopen(file, "rb");
+    if(f == NULL) {
         *ptr = 0;
-    }
-    else
-    {
+    } else {
         *ptr = gdImageCreateFromGd(f);
         (void)fclose(f);
     }
@@ -381,13 +361,10 @@ void CGD_IMAGE_CREATE_FROM_GD(const char *file, gdImagePtr *ptr)
 void CGD_IMAGE_CREATE_FROM_PNG(const char *file, gdImagePtr *ptr)
 {
     FILE *f;
-    f = fopen(file,"rb");
-    if (f == NULL)
-    {
+    f = fopen(file, "rb");
+    if(f == NULL) {
         *ptr = 0;
-    }
-    else
-    {
+    } else {
         *ptr = gdImageCreateFromPng(f);
         (void)fclose(f);
     }
@@ -395,37 +372,28 @@ void CGD_IMAGE_CREATE_FROM_PNG(const char *file, gdImagePtr *ptr)
 }
 void CGD_IMAGE_JPEG(gdImagePtr *ptr, const char *file, int *quality)
 {
-  if (0==strcmp(file,"-"))
-  {
-    gdImageJpeg(*ptr,stdout,*quality);
-  }
-  else
-  {
-    FILE *f;
-    f = fopen(file,"wb");
-    if (f == NULL)
-    {
-      *ptr = 0;
+    if(0 == strcmp(file, "-")) {
+        gdImageJpeg(*ptr, stdout, *quality);
+    } else {
+        FILE *f;
+        f = fopen(file, "wb");
+        if(f == NULL) {
+            *ptr = 0;
+        } else {
+            gdImageJpeg(*ptr, f, *quality);
+            (void)fclose(f);
+        }
     }
-    else
-    {
-      gdImageJpeg(*ptr,f,*quality);
-      (void)fclose(f);
-    }
-  }
-  return;
+    return;
 }
 
 void CGD_IMAGE_CREATE_FROM_JPEG(const char *file, gdImagePtr *ptr)
 {
     FILE *f;
-    f = fopen(file,"rb");
-    if (f == NULL)
-    {
+    f = fopen(file, "rb");
+    if(f == NULL) {
         *ptr = 0;
-    }
-    else
-    {
+    } else {
         *ptr = gdImageCreateFromJpeg(f);
         (void)fclose(f);
     }
@@ -436,13 +404,10 @@ void CGD_IMAGE_CREATE_FROM_JPEG(const char *file, gdImagePtr *ptr)
 void CGD_IMAGE_CREATE_FROM_XBM(const char *file, gdImagePtr *ptr)
 {
     FILE *f;
-    f = fopen(file,"rb");
-    if (f == NULL)
-    {
+    f = fopen(file, "rb");
+    if(f == NULL) {
         *ptr = 0;
-    }
-    else
-    {
+    } else {
         *ptr = gdImageCreateFromXbm(f);
         (void)fclose(f);
     }
@@ -458,80 +423,80 @@ void CGD_IMAGE_CREATE_FROM_XPM(char *file, gdImagePtr *ptr)
 
 void CGD_IMAGE_XPM(gdImagePtr *ptr, const char *file)
 {
-  int status;
-  if (0!=strcmp(file,""))
-  {
-    status = gdImageFile(*ptr,file);
-  }
-  else
-  {   *ptr = 0;
+    int status;
+    if(0 != strcmp(file, "")) {
+        status = gdImageFile(*ptr, file);
+    } else {
+        *ptr = 0;
 
-  }
-  return;
+    }
+    return;
 }
 
 #endif
 /******************************************************************************/
 void CGD_IMAGE_SET_BRUSH(gdImagePtr *ptr, gdImagePtr *brush)
 {
-    gdImageSetBrush(*ptr,*brush);
+    gdImageSetBrush(*ptr, *brush);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_SET_TILE(gdImagePtr *ptr, gdImagePtr *tile)
 {
-    gdImageSetTile(*ptr,*tile);
+    gdImageSetTile(*ptr, *tile);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_SET_STYLE(gdImagePtr *ptr, int *style, int* length)
 {
-    gdImageSetStyle(*ptr,style,*length);
+    gdImageSetStyle(*ptr, style, *length);
     return;
 }
 /******************************************************************************/
 void CGD_RED(gdImagePtr *ptr, int *color, int *red)
 {
-    *red = gdImageRed(*ptr,*color);
+    *red = gdImageRed(*ptr, *color);
     return;
 }
 /******************************************************************************/
 void CGD_GREEN(gdImagePtr *ptr, int *color, int *green)
 {
-    *green = gdImageGreen(*ptr,*color);
+    *green = gdImageGreen(*ptr, *color);
     return;
 }
 /******************************************************************************/
 void CGD_BLUE(gdImagePtr *ptr, int *color, int *blue)
 {
-    *blue = gdImageBlue(*ptr,*color);
+    *blue = gdImageBlue(*ptr, *color);
     return;
 }
 /******************************************************************************/
 void CGD_ALPHA(gdImagePtr *ptr, int *color, int *alpha)
 {
-    *alpha = gdImageAlpha(*ptr,*color);
+    *alpha = gdImageAlpha(*ptr, *color);
     return;
 }
 /******************************************************************************/
 void CGD_PIXELCOLOR(gdImagePtr *ptr, int *x, int *y, int *color)
 {
-    *color = gdImagePalettePixel(*ptr,*x,*y);
+    *color = gdImagePalettePixel(*ptr, *x, *y);
     return;
 }
 /******************************************************************************/
-void CGD_SCALE(gdImagePtr *ptr, int *c1, int *c2,gdImagePtr *ptr2){
-  *ptr2 = gdImageScale(	*ptr, *c1, *c2	);
+void CGD_SCALE(gdImagePtr *ptr, int *c1, int *c2, gdImagePtr *ptr2)
+{
+    *ptr2 = gdImageScale(*ptr, *c1, *c2);
     return;
 }/******************************************************************************/
-void CGD_GREYSCALE(gdImagePtr *ptr, int *grey){
-  *grey = gdImageGrayScale(	*ptr	);
+void CGD_GREYSCALE(gdImagePtr *ptr, int *grey)
+{
+    *grey = gdImageGrayScale(*ptr);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_BOUNDS_SAFE(gdImagePtr *ptr, int *x, int *y, int *safe)
 {
-    *safe = gdImageBoundsSafe(*ptr,*x,*y);
+    *safe = gdImageBoundsSafe(*ptr, *x, *y);
     return;
 }
 /******************************************************************************/
@@ -539,7 +504,7 @@ void CGD_IMAGE_COLOR_CLOSEST(gdImagePtr *ptr,
                              int *r, int *g, int *b,
                              int *color)
 {
-    *color = gdImageColorClosest(*ptr,*r,*g,*b);
+    *color = gdImageColorClosest(*ptr, *r, *g, *b);
     return;
 }
 /******************************************************************************/
@@ -547,7 +512,7 @@ void CGD_IMAGE_COLOR_CLOSEST_HWB(gdImagePtr *ptr,
                                  int *r, int *g, int *b,
                                  int *color)
 {
-    *color = gdImageColorClosestHWB(*ptr,*r,*g,*b);
+    *color = gdImageColorClosestHWB(*ptr, *r, *g, *b);
     return;
 }
 /******************************************************************************/
@@ -555,7 +520,7 @@ void CGD_IMAGE_COLOR_RESOLVE_ALPHA(gdImagePtr *ptr,
                                    int *r, int *g, int *b, int *a,
                                    int *color)
 {
-    *color = gdImageColorResolveAlpha(*ptr,*r,*g,*b,*a);
+    *color = gdImageColorResolveAlpha(*ptr, *r, *g, *b, *a);
     return;
 }
 /******************************************************************************/
@@ -563,14 +528,14 @@ void CGD_IMAGE_COLOR_RESOLVE(gdImagePtr *ptr,
                              int *r, int *g, int *b,
                              int *color)
 {
-    *color = gdImageColorResolve(*ptr,*r,*g,*b);
+    *color = gdImageColorResolve(*ptr, *r, *g, *b);
     return;
 }
 /******************************************************************************/
 
 void CGD_IMAGE_COLOR_EXACT(gdImagePtr *ptr, int *r, int *g, int *b, int *color)
 {
-    *color = gdImageColorExact(*ptr,*r,*g,*b);
+    *color = gdImageColorExact(*ptr, *r, *g, *b);
     return;
 }
 /******************************************************************************/
@@ -594,25 +559,25 @@ void CGD_IMAGE_GET_TRANSPARENT(gdImagePtr *ptr, int *n)
 /******************************************************************************/
 void CGD_IMAGE_TRANSPARENT(gdImagePtr *ptr, int *color)
 {
-    gdImageColorTransparent(*ptr,*color);
+    gdImageColorTransparent(*ptr, *color);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_INTERLACE(gdImagePtr *ptr, int *interlace)
 {
-    gdImageInterlace(*ptr,*interlace);
+    gdImageInterlace(*ptr, *interlace);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_SET_ALPHA_BLENDING(gdImagePtr *ptr, int *blending)
 {
-    gdImageAlphaBlending(*ptr,*blending);
+    gdImageAlphaBlending(*ptr, *blending);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_SAVE_ALPHA(gdImagePtr *ptr, int *save)
 {
-    gdImageSaveAlpha(*ptr,*save);
+    gdImageSaveAlpha(*ptr, *save);
     return;
 }
 
@@ -621,7 +586,7 @@ void CGD_IMAGE_COLOR_CLOSEST_ALPHA(gdImagePtr *ptr,
                                    int *r, int *g, int *b, int *a,
                                    int *color)
 {
-    *color = gdImageColorClosestAlpha(*ptr,*r,*g,*b,*a);
+    *color = gdImageColorClosestAlpha(*ptr, *r, *g, *b, *a);
     return;
 }
 /******************************************************************************/
@@ -687,63 +652,63 @@ void CGD_ANTI_ALIASED(int *n)
 /******************************************************************************/
 void CGD_IMAGE_SET_CLIP(gdImagePtr *ptr, int *x1, int *y1, int *x2, int *y2)
 {
-    gdImageSetClip(*ptr,*x1,*y1,*x2,*y2);
+    gdImageSetClip(*ptr, *x1, *y1, *x2, *y2);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_GET_CLIP(gdImagePtr *ptr, int *x1, int *y1, int *x2, int *y2)
 {
-    gdImageGetClip(*ptr,x1,y1,x2,y2);
+    gdImageGetClip(*ptr, x1, y1, x2, y2);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_SET_AA(gdImagePtr *ptr, int *c)
 {
-    gdImageSetAntiAliased(*ptr,*c);
+    gdImageSetAntiAliased(*ptr, *c);
     return;
 }
 /******************************************************************************/
 void CGD_IMAGE_SET_AA_NB(gdImagePtr *ptr, int *c, int *d)
 {
-    gdImageSetAntiAliasedDontBlend(*ptr,*c,*d);
+    gdImageSetAntiAliasedDontBlend(*ptr, *c, *d);
     return;
 }
 /******************************************************************************/
-void CGD_IMAGE_COMPARE(gdImagePtr *ptr1, gdImagePtr *ptr2,int*c)
+void CGD_IMAGE_COMPARE(gdImagePtr *ptr1, gdImagePtr *ptr2, int*c)
 {
-    *c = gdImageCompare(*ptr1,*ptr2);
+    *c = gdImageCompare(*ptr1, *ptr2);
     return;
 }
 
 
- void CGD_IMAGE_PNG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
- {
-   gdIOCtx *ctx;int status; const void * tmp =  array;
-   gdImagePngCtx(*ptr, ctx);
-   status = gdPutBuf(tmp, *size, ctx);
- }
- void CGD_IMAGE_PNG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
- {
-   gdIOCtx *ctx;void * tmp;
-   int status;
-   gdImagePngCtx(*ptr,ctx);
-   status = gdGetBuf(tmp, *size, ctx);
-   *array = (int *) (tmp);
- }
+void CGD_IMAGE_PNG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
+{
+    gdIOCtx *ctx; int status; const void * tmp =  array;
+    gdImagePngCtx(*ptr, ctx);
+    status = gdPutBuf(tmp, *size, ctx);
+}
+void CGD_IMAGE_PNG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
+{
+    gdIOCtx *ctx; void * tmp;
+    int status;
+    gdImagePngCtx(*ptr, ctx);
+    status = gdGetBuf(tmp, *size, ctx);
+    *array = (int *)(tmp);
+}
 
- void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
- {
-   gdIOCtx *ctx; const void * tmp =  array;
+void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
+{
+    gdIOCtx *ctx; const void * tmp =  array;
 
-   gdImageJpegCtx(*ptr, ctx, *size);
-   gdPutBuf(tmp, *size, ctx);
- }
- void CGD_IMAGE_JPEG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
- {
-   gdIOCtx *ctx;void * tmp;
-   int status;
-   gdImageJpegCtx(*ptr, ctx, *size);
-   status = gdGetBuf(tmp, *size, ctx);
-   *array = (int *) (tmp);
-   return;
- }
+    gdImageJpegCtx(*ptr, ctx, *size);
+    gdPutBuf(tmp, *size, ctx);
+}
+void CGD_IMAGE_JPEG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
+{
+    gdIOCtx *ctx; void * tmp;
+    int status;
+    gdImageJpegCtx(*ptr, ctx, *size);
+    status = gdGetBuf(tmp, *size, ctx);
+    *array = (int *)(tmp);
+    return;
+}
