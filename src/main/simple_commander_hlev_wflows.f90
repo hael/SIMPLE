@@ -1038,18 +1038,18 @@ contains
                     ! volumes
                     src  = trim(VOL_FBODY)//one//'_iter'//str_iter//p_master%ext
                     dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//p_master%ext
-                    rename_stat = rename(src, dist)
+                    rename_stat = simple_rename(src, dist)
                     src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_pproc'//p_master%ext
                     dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_pproc'//p_master%ext
-                    rename_stat = rename(src, dist)
+                    rename_stat = simple_rename(src, dist)
                     ! e/o
                     if( p_master%eo.ne.'no')then
                         src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p_master%ext
                         dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p_master%ext
-                        rename_stat = rename(src, dist)
+                        rename_stat = simple_rename(src, dist)
                         src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p_master%ext
                         dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p_master%ext
-                        rename_stat = rename(src, dist)
+                        rename_stat = simple_rename(src, dist)
                         src = 'RESOLUTION_STATE'//one//'_ITER'//str_iter
                         rename_stat = rename(src, dir//src)
                     endif
@@ -1060,11 +1060,11 @@ contains
                 ! resolution measures
                 if( p_master%eo.ne.'no')then
                     src  = trim(FSC_FBODY)//one//BIN_EXT
-                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                     src  = trim(FRCS_FBODY)//one//BIN_EXT
-                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                     src  = trim(ANISOLP_FBODY)//one//p_master%ext
-                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                 endif
             end subroutine prime3d_cleanup
 
