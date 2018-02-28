@@ -79,6 +79,22 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
+# JSON-Fortran
+#include(ExternalProject)
+#
+#ExternalProject_Add(
+#  libjson
+#  URL ${CMAKE_SOURCE_DIR}/thirdparty/json-fortran-6.1.0.tar.gz
+#  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/json
+#  #CMAKE_ARGS SKIP_DOC_GEN=TRUE
+#  INSTALL_COMMAND ""
+#)
+#
+#set(JSON_LIB ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/json/src/libjson-build/lib) 
+#set(JSON_INC ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/json/src/libjson-build/include) 
+#set(JSON_LIBRARIES  "-L${JSON_LIB} -ljsonfortran")
+#include_directories(${JSON_INC})
+
 ############################################################
 #
 # Add definition macros unique to compilation
@@ -105,7 +121,6 @@ endif()
 #    NO_EXTERNAL_INSTALL     # skip installation of external project
 #    )
 
-
 #################################################################
 #
 # CREATE libSIMPLE<VERSION>
@@ -116,6 +131,7 @@ set(EXTRA_LIBS
   ${SIMPLELIB}
   ${CMAKE_THREAD_LIBS_INIT}
   ${EXTRA_LIBS})
+#  ${JSON_LIBRARIES})
 # link_directories(${LIB})
 
 #################################################################

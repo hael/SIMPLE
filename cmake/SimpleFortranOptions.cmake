@@ -585,7 +585,6 @@ else()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
 endif()
 
-
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}  ")\
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
