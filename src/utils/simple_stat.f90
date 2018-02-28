@@ -617,7 +617,7 @@ contains
         if(allocated(expnegdists)) deallocate(expnegdists)
     end function corrs2weights
 
-    ! INTEGER STUFF
+    ! integer STUFF
 
     !>    is for rank transformation of an array
     subroutine rank_transform_1( arr )
@@ -893,7 +893,7 @@ contains
         binwidth2 = ( maxval(y)-minv2 ) / real( nbins )
         ! Joint
         allocate( h(nbins,nbins) , stat=alloc_stat )
-        if(alloc_stat /= 0) call allocchk('In: simple_stat; get_jointhist' , alloc_stat) 
+        if(alloc_stat /= 0) call allocchk('In: simple_stat; get_jointhist' , alloc_stat)
         h = 0
         do i=1,n
             bin1 = bin( x(i), minv1, binwidth1 )

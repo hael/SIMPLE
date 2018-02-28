@@ -138,6 +138,7 @@ contains
                 y*  0.00392377d0)))))))) * exp( ax ) / sqrt( ax )
         end if
     end function bessi0
+
     elemental pure real(dp) function bessi0f( x )
         real(sp), intent(in) :: x
         real(dp) :: y, ax
@@ -157,7 +158,8 @@ contains
                 - 0.0106259) + 0.00473165) - 0.000813662) + 0.00116354) + 0.00686082) + 0.206013))/sqrt(1/y)
         end if
     end function bessi0f
-        elemental pure function sinhc(xin) result (y)
+
+    elemental pure function sinhc(xin) result (y)
         !! The coefficients are #2029 from Hart & Cheney. (20.36D)
         real(sp), intent(in) :: xin
         real(dp), parameter  :: P0 = -0.6307673640497716991184787251d+6,&

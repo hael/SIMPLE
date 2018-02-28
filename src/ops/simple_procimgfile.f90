@@ -3,7 +3,6 @@
 module simple_procimgfile
 include 'simple_lib.f08'
 use simple_image,   only: image
-use simple_imghead, only: find_ldim_nptcls
 use simple_oris,    only: oris
 implicit none
 

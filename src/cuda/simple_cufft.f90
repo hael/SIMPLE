@@ -53,7 +53,7 @@ module simple_cufft
        use iso_c_binding
        use simple_defs
        integer(c_int), value:: plan
-       !pgi$ ignore_tkr idata, odata
+       !$ ignore_tkr idata, odata
        complex(sp), device :: idata(*), odata(*)
        integer(c_int), value:: direction
      end subroutine cufftExecC2C
@@ -67,7 +67,7 @@ module simple_cufft
        use iso_c_binding
        use simple_defs
        integer (c_int), value :: plan
-       !pgi$ ignore_tkr idata, odata
+       !$ ignore_tkr idata, odata
        real (sp), device :: idata(*)
        complex (sp), device :: odata(*)
      end subroutine cufftExecR2C
@@ -81,7 +81,7 @@ module simple_cufft
        use iso_c_binding
        use simple_defs
        integer (c_int), value :: plan
-       !pgi$ ignore_tkr idata, odata
+       !$ ignore_tkr idata, odata
        complex (sp), device :: idata(*)
        real (sp), device :: odata(*)
      end subroutine cufftExecC2R
@@ -96,7 +96,7 @@ module simple_cufft
        use iso_c_binding
        use simple_defs
        integer(c_int),value:: plan
-       !pgi$ ignore_tkr idata, odata
+       !$ ignore_tkr idata, odata
        complex(dp), device:: idata(*), odata(*)
        integer(c_int),value:: direction
      end subroutine cufftExecZ2Z
@@ -110,7 +110,7 @@ module simple_cufft
        use iso_c_binding
        use simple_defs
        integer (c_int), value :: plan
-       !pgi$ ignore_tkr idata, odata
+       !$ ignore_tkr idata, odata
        real (dp), device :: idata(*)
        complex (dp), device :: odata(*)
      end subroutine cufftExecD2Z
@@ -124,7 +124,7 @@ module simple_cufft
        use iso_c_binding
        use simple_defs
        integer (c_int), value :: plan
-       !pgi$ ignore_tkr idata, odata
+       !$ ignore_tkr idata, odata
        complex (dp), device :: idata(*)
        real (dp), device :: odata(*)
      end subroutine cufftExecZ2D
@@ -133,7 +133,7 @@ module simple_cufft
   interface cufftExec
      subroutine cufftExec(plan, transform, idata, odata, direction)
        integer :: plan, transform
-       !pgi$ ignore_tkr idata, odata
+       !$ ignore_tkr idata, odata
        real, device :: idata(*), odata(*)
        integer, optional :: direction
      end subroutine cufftExec
@@ -182,7 +182,7 @@ module simple_cufft
   !         type, batch) bind(C,name='cufftPlanMany')
   !      use iso_c_binding
   !      implicit none
-  !      !pgi$ ignore_tkr n, inembed, onembed
+  !      !$ ignore_tkr n, inembed, onembed
   !      type(c_ptr) :: plan
   !      integer(c_int) :: n, inembed, onembed
   !      integer(c_int), value:: rank, istride, ostride, idist, odist, type, batch

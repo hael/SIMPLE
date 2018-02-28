@@ -7184,9 +7184,10 @@ contains
         real    :: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
         real    :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
         integer :: irot, ithr
+        if (angstep<TINY) return
         avgs_rmat = 0.
         rotated   = 0.
-        !$omp parallel do schedule(static) default(shared) private(irot) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(irot,ithr) proc_bind(close)
         do irot = 0 + angstep,359,angstep
             ! get thread index
             ithr = omp_get_thread_num() + 1
