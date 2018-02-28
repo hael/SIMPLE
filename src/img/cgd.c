@@ -689,11 +689,11 @@ void CGD_IMAGE_PNG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
 }
 void CGD_IMAGE_PNG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
 {
-    gdIOCtx *ctx; void * tmp;
+    gdIOCtx *ctx; void ** tmp;
     int status;
     gdImagePngCtx(*ptr, ctx);
     status = gdGetBuf(tmp, *size, ctx);
-    *array = (int *)(tmp);
+    *array = *((int *)tmp);
 }
 
 void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
@@ -703,6 +703,7 @@ void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
     gdImageJpegCtx(*ptr, ctx, *size);
     gdPutBuf(tmp, *size, ctx);
 }
+
 void CGD_IMAGE_JPEG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
 {
     gdIOCtx *ctx; void * tmp;

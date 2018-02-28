@@ -8,6 +8,7 @@
 !! Modified by Michael Eager Feb 2018
 module simple_img
     include 'simple_lib.f08'
+    use, intrinsic :: iso_c_binding
     implicit none
 
     !*** cptr should be have the same size as a c pointer
@@ -167,7 +168,7 @@ contains
 
 
     subroutine read_jpeg_gd(file_name,buffer,status)
-        character(*), intent(in)         :: file_name
+        character(len=*), intent(in)         :: file_name
         real, allocatable, intent(inout) :: buffer(:,:)
         integer, intent(out), optional  :: status
         integer             :: width,height, i,j, colorval,black,white

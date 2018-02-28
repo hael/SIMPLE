@@ -32,147 +32,6 @@ unsigned long jpg_size;
 unsigned char *jpg_buffer;
 
 
-void JpegEnc_init();
-void JpegEnc_destroy();
-void JpegDec_init();
-void JpegDec_destroy();
-/**
- * Sets the color space of the images to be worked with.
- *
- * @param colorSpace     the color space. Can be: JCS_GRAYSCALE, JCS_RGB, JCS_YCbCr, or JCS_CMYK.
- * @param numComponents  the number of components in the color space specified
- */
-//    void setColorSpace(J_COLOR_SPACE colorSpace, int numComponents);
-
-/**
- * Gets the current color space.
- *
- * @return  the color space identificator
- */
-//    J_COLOR_SPACE getColorSpace() const;
-
-/**
- * Gets the number of components in the current color space.
- *
- * @return  the number of color space components
- */
-//  int getNumComponents() const;
-
-/**
- * Sets a compression quality.
- *
- * @param quality  the quality in percents [0, 100]
- */
-// void setQuality(int quality);
-
-/**
- * Gets the current compression quality.
- *
- * @return  the quality value
- */
-// int getQuality() const;
-
-/**
- * Encodes a raw image to a JPEG file on disk using file descriptor.
- *
- * @param img     the pointer to buffer with the raw image
- * @param width   the width of the image
- * @param height  the height of the image
- * @param file    the file descriptor
- * @return        true if success, false if failed
- */
-bool JpegEnc_encode1(uint8_t* img, int width, int height, FILE* file);
-
-/**
- * Encodes a raw image to a JPEG file on disk using path.
- *
- * @param img     the pointer to buffer with the raw image
- * @param width   the width of the image
- * @param height  the height of the image
- * @param path    the path to the file
- * @return        true if success, false if failed
- */
-bool JpegEnc_encode(uint8_t* img, int width, int height, const char* path);
-
-/*private:*/
-bool JpegEnc_encode0(uint8_t* img, int width, int height);
-//};
-
-/**
- * JPEG decoder.
- */
-/* class JpegDec { */
-/* public: */
-/*     JpegDec(); */
-/*     virtual ~JpegDec(); */
-
-/*     JpegDec(const JpegDec&) = delete; */
-/*     void operator=(const JpegDec&) = delete; */
-
-/**
- * Sets the color space of the images to be worked with.
- *
- * @param colorSpace  the color space. Can be: JCS_GRAYSCALE, JCS_RGB, JCS_YCbCr, or JCS_CMYK.
- */
-void setColorSpace(J_COLOR_SPACE colorSpace);
-
-/**
- * Gets the current color space.
- *
- * @return  the color space identifier
- */
-// J_COLOR_SPACE getColorSpace() const;
-
-/**
- * Decodes a JPEG image from a memory buffer.
- *
- * @param[in]  buffer  the pointer to the buffer with encoded image
- * @param[in]  len     the size of the buffer
- * @param[out] img     the decoded raw image. The memory is allocated inside the function.
- * @param[out] width   the width of the decoded image
- * @param[out] height  the height of the decoded image
- * @return             true if success, false if failed
- */
-//    bool JpegDec_decode2(uint8_t* buffer, size_t len, uint8_t*& img, int& width, int& height);
-
-/**
- * Reads and decodes a JPEG image through file descriptor.
- *
- * @param[in]  file    the file descriptor
- * @param[out] img     the decoded raw image. The memory is allocated inside the function.
- * @param[out] width   the width of the decoded image
- * @param[out] height  the height of the decoded image
- * @return             true if success, false if failed
- */
-bool JpegDec_decode1(FILE* file, uint8_t** img, int* width, int* height);
-
-/**
- * Reads and decodes a JPEG file on disk.
- *
- * @param[in]  path    the path to the file
- * @param[out] img     the decoded raw image. The memory is allocated inside the function.
- * @param[out] width   the width of the decoded image
- * @param[out] height  the height of the decoded image
- * @return             true if success, false if failed
- */
-bool JpegDec_decode(const char* path, uint8_t** img, int* width, int* height);
-
-//private:
-bool JpegDec_decode0(uint8_t** img, int* width, int* height);
-
-
-//    jpeg_error_mgr errMgr;
-
-//    J_COLOR_SPACE colorSpace = JCS_RGB;
-//};
-
-/**
- * Gets a number of color components for the given color space.
- *
- * @param colorSpace  the color space
- * @return            the number of components for supported color space; 0 for unsupported
- */
-
 
 int getNumComponents(J_COLOR_SPACE colorSpace)
 {
@@ -226,26 +85,15 @@ int JpegEnc_getQuality()
     return quality;
 }
 
-bool JpegEnc_encode1(uint8_t* img, int width, int height, FILE* file)
+int JpegEnc_encode(uint8_t* img, int width, int height, const char* path)
 {
+  FILE* file = fopen(path, "wb");
     if(file == NULL) {
-        return false;
+        return 1;
     }
 
     jpeg_stdio_dest(&encInfo, file);
-    return JpegEnc_encode0(img, width, height);
-}
 
-bool JpegEnc_encode(uint8_t* img, int width, int height, const char* path)
-{
-    FILE* file = fopen(path, "wb");
-    bool rv = JpegEnc_encode1(img, width, height, file);
-    fclose(file);
-    return rv;
-}
-
-bool JpegEnc_encode0(uint8_t* img, int width, int height)
-{
     encInfo.image_width = width;
     encInfo.image_height = height;
     encInfo.in_color_space = colorSpace;
@@ -263,7 +111,8 @@ bool JpegEnc_encode0(uint8_t* img, int width, int height)
     }
 
     jpeg_finish_compress(&encInfo);
-    return true;
+    fclose(file);
+    return 0;
 }
 
 void JpegDec_init()
@@ -287,35 +136,18 @@ J_COLOR_SPACE JpegDec_getColorSpace()
     return colorSpace;
 }
 
-/* bool JpegDec_decode2(uint8_t* buffer,size_t length,uint8_t*& img, int& width, int& height) { */
-/*     if (buffer == nullptr) { */
-/*         return false; */
-/*     } */
 
-/*     jpeg_mem_src(&decInfo, buffer, length); */
-/*     return  JpegDec_decode0(img, width, height); */
-/* } */
-
-bool JpegDec_decode1(FILE* file, uint8_t** img, int* width, int* height)
+int JpegDec_decode(const char * path, uint8_t** imgbuf, int *width, int* height)
 {
-    if(file == NULL) {
-        return false;
-    }
+  FILE* file = fopen(path, "rb");
+  if(file == NULL) {
 
-    jpeg_stdio_src(&decInfo, file);
-    return  JpegDec_decode0(img, width, height);
-}
+    return 1;
+  }
 
-bool JpegDec_decode(const char* path, uint8_t** img, int* width, int* height)
-{
-    FILE* file = fopen(path, "rb");
-    bool rv = JpegDec_decode1(file, img, width, height);
-    fclose(file);
-    return rv;
-}
+  jpeg_stdio_src(&decInfo, file);
 
-bool JpegDec_decode0(uint8_t** img, int *width, int* height)
-{
+
     jpeg_read_header(&decInfo, true);
     decInfo.out_color_space = colorSpace;
     decInfo.raw_data_out = false;
@@ -325,28 +157,29 @@ bool JpegDec_decode0(uint8_t** img, int *width, int* height)
     *width = decInfo.image_width;
     *height = decInfo.image_height;
     size_t rowSize = decInfo.image_width * decInfo.num_components;
-    *img = (uint8_t*)malloc(decInfo.image_height * rowSize * sizeof(uint8_t));
+    *imgbuf = (uint8_t*)malloc(decInfo.image_height * rowSize * sizeof(uint8_t));
 
     JSAMPROW rows[1];
     size_t offset = 0;
     while(decInfo.output_scanline < decInfo.image_height) {
-        rows[0] = *img + offset;
+        rows[0] = *imgbuf + offset;
         jpeg_read_scanlines(&decInfo, rows, 1);
         offset += rowSize;
     }
 
     jpeg_finish_decompress(&decInfo);
-    return true;
+     fclose(file);
+    return 0;
 }
 
 
 #define CWRITE_JPEG cwrite_jpeg_
 #define CREAD_JPEG cread_jpeg_
 
-void cwrite_jpeg(uint8_t** img,  const char* file_name, int* width, int* height, int* quality_, int* colorspec, bool* status)
+void cwrite_jpeg(uint8_t** img,  const char* file_name, int* width, int* height, int* quality_, int* colorspec, int* status)
 {
     JpegEnc_init();
-    *status = false;
+    *status = 1;
     if(file_name == NULL) return;
     //switch(colorspec){
     //  case JCS_GRAYSCALE: j.setColorSpace(JCS_GRAYSCALE,j.getNumComponents());break;
@@ -354,32 +187,54 @@ void cwrite_jpeg(uint8_t** img,  const char* file_name, int* width, int* height,
     // || colorspec == JCS_RGB ){ //  , JCS_YCbCr|| JCS_CMYK
     //  j.setColorSpace(colorspec);
     // }
-    quality = *quality_;
-    *status = JpegEnc_encode(*img, *width, *height, file_name);
+    //quality = *quality_;
+    *status =  JpegEnc_encode(*img, *width, *height, file_name);
     JpegEnc_destroy();
+    *status= 0;
 }
 
-void cread_jpeg(const char* file_name, uint8_t* img, int* width, int* height, int* colorspec,  bool* status)
+void cread_jpeg(const char* file_name, void** outptr, int* width, int* height, int* colorspec, int* status)
 {
-    *status = false;
-    if(file_name == NULL) return;
+  uint8_t** img;
+  size_t rows, cols;
+  *status = 1;
+    if(file_name == NULL) {
+      printf("cread_jpeg: Filename is empty.\n");
+      *status = 1;
+      return;
+    }
     JpegDec_init();
-    *status = JpegDec_decode(file_name, &img, width, height);
+    *status =  JpegDec_decode(file_name, img, width, height);
     *colorspec = getNumComponents(colorSpace);
     JpegDec_destroy();
+
+
+    cols=*height; rows = *width;
+    int (*image)[cols] = malloc(sizeof(*image) * rows);
+     // *(*image) = (int**)malloc(sizeof(int**)*(*height));
+     if (! image){
+        printf("cread_jpeg: Image buffer is not allocated.\n");
+      *status = 1;
+      return;
+     }
+    for (int j=0; j < cols; j++)
+      for (int i=0; i< *width; i++)
+          image[i][j] = (int) img[i][j];
+    free(img);
+    *outptr = (void*) image;
+    *status=0;
 }
 
 #define WRITE_JPEG write_jpeg_
 #define READ_JPEG read_jpeg_
-
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-void read_jpeg(const char* file_name, int** out_buffer, int*width, int*height, int* colorspec,  bool* status)
+
+void read_jpeg2(const char* file_name, int** out_buffer, int*width, int*height, int* colorspec,  int* status)
 {
     struct stat file_info;
     int rc, i, pixel_size;
@@ -387,7 +242,7 @@ void read_jpeg(const char* file_name, int** out_buffer, int*width, int*height, i
     unsigned char * buffer;
     int row_stride;
     int fd;
-    *status = false;
+    *status = 1;
     rc = stat(file_name, &file_info);
     fprintf(stderr, "Read_jpeg stat input file %s", file_name);
 
@@ -432,7 +287,7 @@ void read_jpeg(const char* file_name, int** out_buffer, int*width, int*height, i
     pixel_size = decInfo.output_components;
     bmp_size = (*width) * (*height) * pixel_size;
     buffer = (unsigned char*) malloc(bmp_size);
-    fprintf(stderr, "Read_jpeg buffer allocated %d", bmp_size);
+    fprintf(stderr, "Read_jpeg buffer allocated %ld", bmp_size);
     if(buffer==NULL){
       fprintf(stderr, "Read_jpeg buffer allocate failed");
       exit(EXIT_FAILURE);
@@ -461,12 +316,16 @@ void read_jpeg(const char* file_name, int** out_buffer, int*width, int*height, i
     // And free the input buffer
     free(jpg_buffer);
     *colorspec = pixel_size;
-    *status = true;
+    *status = 0;
     out_buffer = buffer;
+
+    for (i=0; i< *width;i++){
+       fprintf(stderr, " %d ", out_buffer[0][i]);
+    }
 }
 
 
-void write_jpeg(void** img, const char* filename, int* width, int* height, int* quality_, int* colorspec,  bool*status)
+void write_jpeg(int** img, const char* filename, int* width, int* height, int* quality_, int* colorspec,  int*status)
 {
     FILE* outfile;
     unsigned long pixel;
@@ -474,10 +333,11 @@ void write_jpeg(void** img, const char* filename, int* width, int* height, int* 
     char* buffer;
     JSAMPROW row_pointer;
     int w, h;
-    int ** imgint = (int**) img;
+
     unsigned char* jbuf;
     int numerator, newsize, size;
     size = 256;
+    *status=1;
     for(numerator = 1; numerator <= 8; numerator++) {
         newsize = (*width) * numerator / 8;
         if(newsize > size)
@@ -497,7 +357,7 @@ void write_jpeg(void** img, const char* filename, int* width, int* height, int* 
 
     for(y = 0; y < *height; y++) {
         for(x = 0; x < *width; x++) {
-            pixel = (unsigned long) imgint[x][y];
+            pixel = (unsigned long) img[x][y];
             if (pixel > 0xffffff) {
               pixel = 0xffffff;
             }else{
@@ -528,6 +388,222 @@ void write_jpeg(void** img, const char* filename, int* width, int* height, int* 
     jpeg_destroy_compress(&encInfo);
     free(buffer);
     fclose(outfile);
-
+    *status=0;
     return ;
+}
+
+
+
+// memdjpeg - A super simple example of how to decode a jpeg in memory
+// Kenneth Finnegan, 2012
+// blog.thelifeofkenneth.com
+//
+// After installing jpeglib, compile with:
+// cc memdjpeg.c -ljpeg -o memdjpeg
+//
+// Run with:
+// ./memdjpeg filename.jpg
+//
+// Version	   Date		Time		  By
+// -------	----------	-----		---------
+// 0.01		2012-07-09	11:18		Kenneth Finnegan
+//
+
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <syslog.h>
+#include <sys/stat.h>
+
+#include <jpeglib.h>
+
+
+void read_jpeg (const char* file_name, void** img, int*width, int*height, int* colorspec,  int* status)
+{
+	int fd, rc, i, j;
+
+	char *syslog_prefix = (char*) malloc(1024);
+	sprintf(syslog_prefix, "read_jpeg");
+	openlog(syslog_prefix, LOG_PERROR | LOG_PID, LOG_USER);
+
+	if (file_name == NULL) {
+		fprintf(stderr, "read_jpeg failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// Variables for the source jpg
+	struct stat file_info;
+	unsigned long jpg_size;
+	unsigned char *jpg_buffer;
+
+	// Variables for the decompressor itself
+	struct jpeg_decompress_struct cinfo;
+	struct jpeg_error_mgr jerr;
+
+	// Variables for the output buffer, and how long each row is
+	unsigned long bmp_size;
+  unsigned char * bmp_buffer;
+	int row_stride, w, h, pixel_size;
+
+
+	// Load the jpeg data from a file into a memory buffer for
+	// the purpose of this demonstration.
+	// Normally, if it's a file, you'd use jpeg_stdio_src, but just
+	// imagine that this was instead being downloaded from the Internet
+	// or otherwise not coming from disk
+	rc = stat(file_name, &file_info);
+	if (rc) {
+		syslog(LOG_ERR, "FAILED to stat source jpg");
+		exit(EXIT_FAILURE);
+	}
+	jpg_size = file_info.st_size;
+	jpg_buffer = (unsigned char*) malloc(jpg_size + 100);
+
+	 fd = open(file_name, O_RDONLY);
+	i = 0;
+	while (i < jpg_size) {
+		rc = read(fd, jpg_buffer + i, jpg_size - i);
+		syslog(LOG_INFO, "Input: Read %d/%lu bytes", rc, jpg_size-i);
+		i += rc;
+	}
+	close(fd);
+
+
+	syslog(LOG_INFO, "Proc: Create Decompress struct");
+	// Allocate a new decompress struct, with the default error handler.
+	// The default error handler will exit() on pretty much any issue,
+	// so it's likely you'll want to replace it or supplement it with
+	// your own.
+	cinfo.err = jpeg_std_error(&jerr);
+	jpeg_create_decompress(&cinfo);
+
+
+	syslog(LOG_INFO, "Proc: Set memory buffer as source");
+	// Configure this decompressor to read its data from a memory
+	// buffer starting at unsigned char *jpg_buffer, which is jpg_size
+	// long, and which must contain a complete jpg already.
+	//
+	// If you need something fancier than this, you must write your
+	// own data source manager, which shouldn't be too hard if you know
+	// what it is you need it to do. See jpeg-8d/jdatasrc.c for the
+	// implementation of the standard jpeg_mem_src and jpeg_stdio_src
+	// managers as examples to work from.
+	jpeg_mem_src(&cinfo, jpg_buffer, jpg_size);
+
+
+	syslog(LOG_INFO, "Proc: Read the JPEG header");
+	// Have the decompressor scan the jpeg header. This won't populate
+	// the cinfo struct output fields, but will indicate if the
+	// jpeg is valid.
+	rc = jpeg_read_header(&cinfo, TRUE);
+
+	if (rc != 1) {
+		syslog(LOG_ERR, "File does not seem to be a normal JPEG");
+		exit(EXIT_FAILURE);
+	}
+
+	syslog(LOG_INFO, "Proc: Initiate JPEG decompression");
+	// By calling jpeg_start_decompress, you populate cinfo
+	// and can then allocate your output bitmap buffers for
+	// each scanline.
+	jpeg_start_decompress(&cinfo);
+
+	w = cinfo.output_width;
+	h = cinfo.output_height;
+	pixel_size = cinfo.output_components;
+
+	syslog(LOG_INFO, "Proc: Image is %d by %d with %d components",
+         w, h, pixel_size);
+
+	bmp_size = w * h * pixel_size;
+	bmp_buffer = (unsigned char*) malloc(bmp_size);
+
+	// The row_stride is the total number of bytes it takes to store an
+	// entire scanline (row).
+	row_stride = w * pixel_size;
+
+
+	syslog(LOG_INFO, "Proc: Start reading scanlines");
+	//
+	// Now that you have the decompressor entirely configured, it's time
+	// to read out all of the scanlines of the jpeg.
+	//
+	// By default, scanlines will come out in RGBRGBRGB...  order,
+	// but this can be changed by setting cinfo.out_color_space
+	//
+	// jpeg_read_scanlines takes an array of buffers, one for each scanline.
+	// Even if you give it a complete set of buffers for the whole image,
+	// it will only ever decompress a few lines at a time. For best
+	// performance, you should pass it an array with cinfo.rec_outbuf_height
+	// scanline buffers. rec_outbuf_height is typically 1, 2, or 4, and
+	// at the default high quality decompression setting is always 1.
+	while (cinfo.output_scanline < cinfo.output_height) {
+		unsigned char *buffer_array[1];
+		buffer_array[0] = bmp_buffer + \
+						   (cinfo.output_scanline) * row_stride;
+
+		jpeg_read_scanlines(&cinfo, buffer_array, 1);
+
+	}
+	syslog(LOG_INFO, "Proc: Done reading scanlines");
+
+
+	// Once done reading *all* scanlines, release all internal buffers,
+	// etc by calling jpeg_finish_decompress. This lets you go back and
+	// reuse the same cinfo object with the same settings, if you
+	// want to decompress several jpegs in a row.
+	//
+	// If you didn't read all the scanlines, but want to stop early,
+	// you instead need to call jpeg_abort_decompress(&cinfo)
+	jpeg_finish_decompress(&cinfo);
+
+	// At this point, optionally go back and either load a new jpg into
+	// the jpg_buffer, or define a new jpeg_mem_src, and then start
+	// another decompress operation.
+
+	// Once you're really really done, destroy the object to free everything
+	jpeg_destroy_decompress(&cinfo);
+	// And free the input buffer
+	free(jpg_buffer);
+
+  i=h-1; { //  for (i=0;i<h; i++){
+    for(j=0;j<w;j++) printf("%4.4x ", bmp_buffer[i*w + j]);
+    printf("\n");
+  }
+
+  *width = w;
+  *height = h;
+
+  int (*img_)[h] =  malloc( sizeof(*img_) * w);
+  if(!img_){
+    syslog(LOG_ERR, "Image data buffer not allocated");
+    exit(EXIT_FAILURE);
+  }
+
+  for (i=0;i<h; i++) for(j=0;j<w;j++){
+      img_[i][j] = (int) bmp_buffer[i*w + j];
+      if(i==h-1) printf("%d ", img_[i][j]);
+    }
+    //}else{
+	free(bmp_buffer);
+  img = ((void*) img_);
+	syslog(LOG_INFO, "End of decompression");
+  *status=0;
+
+  // Write the decompressed bitmap out to a ppm file, just to make sure
+	// it worked.
+	fd = open("output.ppm", O_CREAT | O_WRONLY, 0666);
+	char buf[1024];
+	rc = sprintf(buf, "P6 %d %d 255\n", *width, *height);
+	write(fd, buf, rc); // Write the PPM image header before data
+	write(fd, bmp_buffer, bmp_size); // Write out all RGB pixel data
+
+	close(fd);
+}
+
+#define SETUP_JPEG setup_jpeg_
+void setup_jpeg (  int*width, int*height, int** img,  int** outimg)
+{
+
 }

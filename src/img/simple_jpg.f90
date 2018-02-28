@@ -9,12 +9,14 @@ module simple_jpg
     implicit none
 
     public:: jpg_img, test_jpg_export
-private
+    private
     !*** cptr should be have the same size as a c pointer
     !*** It doesn't matter whether it is an integer or a real
     integer, parameter :: cptr = kind(5)
     integer, parameter :: numComponents = 3;
     integer, parameter :: pixelsize = selected_int_kind(3)
+    integer, parameter :: longint = selected_int_kind(9)
+
     integer, public, parameter :: max_colors = 256
     !buf_range(1)buf_range(1)im2 = gdImageScale(im, 1, 65535);
     integer, parameter :: GREYSCALE = 1
@@ -38,24 +40,31 @@ private
 
 
     interface
-        subroutine read_jpeg (file_name, img, width, height, colorspec, status ) bind ( c, name="read_jpeg" )
-            use iso_c_binding
+        subroutine setup_jpeg ( width, height, in, out ) bind ( c, name="setup_jpeg" )
+            import
+            integer(C_INT), value :: width
+            integer(C_INT), value :: height
+            integer(C_INT), dimension(*), intent(out) :: in
+            integer(C_INT), dimension(*), intent(out) :: out
+        end subroutine setup_jpeg
+        subroutine read_jpeg (file_name, img, width, height, colorspec, status ) bind ( c, name="cread_jpeg" )
+            import
             character ( c_char ), dimension(*), intent(in) :: file_name
-            type ( c_ptr ) :: img
-            integer ( c_int ) :: width
-            integer ( c_int ) :: height
-            integer ( c_int ) :: colorspec
-            logical ( c_bool ) :: status
+            type ( C_PTR ), value :: img
+            integer ( c_int ), intent(inout) :: width
+            integer ( c_int ), intent(inout) :: height
+            integer ( c_int ), intent(inout) :: colorspec
+            integer ( c_int ), intent(inout) :: status
         end subroutine read_jpeg
         subroutine write_jpeg (img, file_name, width, height, quality, colorspec, status ) bind ( c, name="write_jpeg" )
-            use iso_c_binding
-            type ( c_ptr ), VALUE :: img
+            import
+            type ( C_PTR ), value :: img
             character ( c_char), dimension(*), intent(in) :: file_name
             integer ( c_int ),VALUE :: width
             integer ( c_int ),VALUE :: height
-            integer ( c_int ),VALUE :: quality
+            integer ( c_int ), intent(in):: quality
             integer ( c_int ),VALUE :: colorspec
-            logical ( c_bool ) :: status
+            integer ( c_int ) :: status
         end subroutine write_jpeg
     end interface
 
@@ -80,8 +89,9 @@ contains
         integer , allocatable, target :: img_buffer(:,:)
         type(c_ptr) :: img
         integer :: w,h,c, i,j, quality_here
-        logical(1) :: status
-        status = .false.
+        integer :: status
+
+        status = 1
         c = -1
         quality_here = 100
         w = size(in_buffer,1)
@@ -95,11 +105,13 @@ contains
                 img_buffer(i,j) = INT(in_buffer(i,j),kind=4)
             end do
         end do
-        img = c_loc(img_buffer)
-        if(c_associated(img, c_loc(img_buffer))) &
-                 stop 'save_jpeg img buffer and C pointer do not point to same target'
-        call write_jpeg(img, trim(fname)//c_null_char, w, h, quality_here, c, status)
-
+         img = c_loc(img_buffer)
+        ! if(c_associated(img, c_loc(img_buffer))) &
+        !          stop 'save_jpeg img buffer and C pointer do not point to same target'
+        call write_jpeg(img, fname, w, h, quality_here, c, status)
+        if(status /= 0 ) call simple_stop('save_jpeg_r4 call to write_jpeg returned status==1' )
+        self%width = w
+        self%height = h
     end function save_jpeg_r4
 
     function save_jpeg_i4 (self, fname, in_buffer, quality) result(status)
@@ -110,8 +122,8 @@ contains
         integer , pointer :: img_buffer(:,:)
         type(c_ptr) :: img
         integer :: w,h,c, quality_here
-        logical(1) :: status
-        status = .false.
+        integer :: status
+        status = 0
         c = -1
         quality_here = 100
         w = size(in_buffer,1)
@@ -121,9 +133,11 @@ contains
         !        img_buffer = transfer(in_buffer,1_c_int8_t)
         img_buffer = in_buffer
         img=c_loc(img_buffer)
-        if(c_associated(img, c_loc(img_buffer))) &
-            stop 'save_jpeg_i4 img buffer and C pointer do not point to same target'
-        call write_jpeg(img, trim(fname)//c_null_char, w, h, quality_here, -1, status)
+        ! if(c_associated(img, c_loc(img_buffer))) &
+        !     stop 'save_jpeg_i4 img buffer and C pointer do not point to same target'
+        fname = trim(fname)//c_null_char
+        call write_jpeg(img, fname, w, h, quality_here, c, status)
+        if(status /= 0 ) call simple_stop('save_jpeg_i4 call to write_jpeg returned status==1' )
         self%width = w
         self%height = h
     end function save_jpeg_i4
@@ -135,25 +149,26 @@ contains
         integer , pointer :: img_buffer(:,:)
         type(c_ptr) :: img
         integer :: w,h,c, i,j
-        logical(1) :: status
+        integer :: status, shape(2)
         character(len=STDLEN) :: fstr
-        status = .false.
+        status = 1
         fstr = trim(fname)//c_null_char
         call read_jpeg(fstr, img, w, h,c, status)
-        if(.not. status) call simple_stop ("simple_jpg::load_jpeg_r4 read_jpeg failed ")
+        if(status /=0) call simple_stop ("simple_jpg::load_jpeg_r4 read_jpeg failed ")
         w = size(img_buffer,1)
         h=  size(img_buffer,2)
         allocate(out_buffer(w,h))
-        call c_f_pointer(img,img_buffer, [w,h])
+        shape = (/ w, h /)
+        call c_f_pointer(img,img_buffer, shape)
         !        out_buffer = transfer(img_buffer,1.0)
         do i=1,w
             do j=1,h
                 out_buffer(i,j) = REAL(img_buffer(i,j))
             end do
         end do
-         self%width = w
+        self%width = w
         self%height = h
-      !  if(allocated(img_buffer)) deallocate(img_buffer)
+        !  if(allocated(img_buffer)) deallocate(img_buffer)
     end function load_jpeg_r4
 
     function load_jpeg_i4(self, fname, out_buffer) result(status)
@@ -164,15 +179,15 @@ contains
         type(c_ptr) :: img
         integer :: shape(2)
         integer :: i,j,w,h,c
-        logical(1) :: status
+        integer :: status
         character(len=STDLEN) :: fstr
-        status = .false.
+        status = 1
         fstr = trim(fname)//c_null_char
         DebugPrint 'load_jpeg_i4 ', fstr
         call read_jpeg(fstr, img, w, h, c, status)
-        !if(.not. status) call simple_stop ("simple_jpg::load_jpeg_i4 read_jpeg failed ")
-        w = size(img_buffer,1)
-        h = size(img_buffer,2)
+        if(status/=0) call simple_stop ("simple_jpg::load_jpeg_i4 read_jpeg failed ")
+        !   w = size(img_buffer,1)
+        !   h = size(img_buffer,2)
         DebugPrint 'load_jpeg_i4 returns img size ', w, h
         shape = (/ w, h /)
         call c_f_pointer(img,img_buffer, shape)
@@ -186,7 +201,8 @@ contains
         end do
         self%width = w
         self%height = h
-    !    if(allocated(img_buffer)) deallocate(img_buffer)
+        !    if(allocated(img_buffer)) deallocate(img_buffer)
+        DebugPrint 'load_jpeg_i4 done'
     end function load_jpeg_i4
 
 
@@ -205,7 +221,7 @@ contains
         height = 149
         status=1
         bmp_size = width * height * pixel_size
-!        allocate(int32_buffer(bmp_size))
+        !        allocate(int32_buffer(bmp_size))
         simple_path_str = simple_getenv('SIMPLE_PATH')
         print *,"test_jpg_export: Starting"
         allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")
@@ -215,8 +231,10 @@ contains
             print *," Executing ", cmd
             call exec_cmdline(cmd)
         end if
+        cmd = "identify  test.jpg"
+        call exec_cmdline(cmd)
         print *,"test_jpg_export: Testing load_jpeg_i4 "
-        fstr = "test.jpg"
+        fstr = "testimg.jpg"
         status = jpg%load_jpeg_i4(fstr, int32_buffer)
         if(status == 0) then
             print *, " test_jpg_export: load_jpeg_i4 success "
