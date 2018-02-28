@@ -501,6 +501,7 @@ contains
         call cline_refine3D1%set('dynlp', 'no')
         call cline_refine3D1%set('pproc', 'no')
         call cline_refine3D1%delete('oritab2')
+        call cline_refine3D1%set('frcs', 'cluster3D_frcs.bin') !! mixed model FRCs
         call cline_refine3D2%set('dynlp', 'no')
         call cline_refine3D2%set('pproc', 'no')
         call cline_refine3D2%delete('oritab2')
@@ -580,14 +581,15 @@ contains
             rename_stat = rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
             rename_stat = rename(trim(ANISOLP_FBODY)//one//p_master%ext, trim(CLUSTER3D_ANISOLP)//p_master%ext)
         endif
-        do ipart = 1, p_master%nparts
-            allocate(part_str, source=int2str_pad(ipart,p_master%numlen))
-            allocate(recname, source=trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
-            allocate(rhoname, source='rho_'//trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
-            rename_stat = rename(recname, 'cluster3D_'//trim(recname))
-            rename_stat = rename(rhoname, 'cluster3D_'//trim(rhoname))
-            deallocate(part_str,recname,rhoname)
-        enddo
+        ! THis is experimental to keep FCs & RHO matrices from mixed model
+        ! do ipart = 1, p_master%nparts
+        !     allocate(part_str, source=int2str_pad(ipart,p_master%numlen))
+        !     allocate(recname, source=trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
+        !     allocate(rhoname, source='rho_'//trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
+        !     rename_stat = rename(recname, 'cluster3D_'//trim(recname))
+        !     rename_stat = rename(rhoname, 'cluster3D_'//trim(rhoname))
+        !     deallocate(part_str,recname,rhoname)
+        ! enddo
 
         ! STAGE1: frozen orientation parameters
         write(*,'(A)')    '>>>'

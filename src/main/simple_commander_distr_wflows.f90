@@ -588,7 +588,7 @@ contains
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
-            call job_descr%set('frcs', trim(FRCS_ITER_FBODY)//int2str_pad(iter - 1,3)//'.bin')
+            call job_descr%set('frcs', trim(FRCS_ITER_FBODY)//int2str_pad(iter - 1,3)//BIN_EXT)
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! merge orientation documents
@@ -875,7 +875,7 @@ contains
                 case( 'yes' )
                     stop 'refinement method requires input orientation document'
                 case DEFAULT
-                    ! refine=no|shc, all good?
+                    ! all good
             end select
         else
             ! all good
@@ -962,6 +962,12 @@ contains
             call cline%set('extr_iter', real(p_master%extr_iter))
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
+            ! FRCs
+            if( cline%defined('frcs') )then
+                ! all good
+            else
+                call job_descr%set('frcs', trim(FRCS_FBODY)//'01'//BIN_EXT)
+            endif
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! ASSEMBLE ALIGNMENT DOCS

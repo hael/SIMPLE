@@ -175,12 +175,12 @@ contains
                 if( p%oritab .eq. '' )all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
-                    ! we need the worst resolved fsc
                     resarr = b%img%get_res()
                     do s=1,p%nstates
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
                             if( str_has_substr(p%refine,'cluster') )then
+                                ! mixed model FSC
                                 fsc_fname = trim(CLUSTER3D_FSC)
                             else
                                 fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
