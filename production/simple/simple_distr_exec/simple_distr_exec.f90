@@ -420,13 +420,12 @@ select case(prg)
         keys_optional(8)  = 'refs'
         keys_optional(9)  = 'remap_classes'
         keys_optional(10) = 'weights2D'
-        keys_optional(11) = 'balance'
-        keys_optional(12) = 'stk'
-        keys_optional(13) = 'stktab'
-        keys_optional(14) = 'phaseplate'
+        keys_optional(11) = 'stk'
+        keys_optional(12) = 'stktab'
+        keys_optional(13) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_make_cavgs
-        call cline%parse(keys_required(:3), keys_optional(:14))
+        call cline%parse(keys_required(:3), keys_optional(:13))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -461,23 +460,19 @@ select case(prg)
         keys_optional(9)  = 'cenlp'
         keys_optional(10) = 'trs'
         keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'center'
-        keys_optional(16) = 'autoscale'
-        keys_optional(17) = 'weights2D'
-        keys_optional(18) = 'balance'
-        keys_optional(19) = 'match_filt'
-        keys_optional(20) = 'stk'
-        keys_optional(21) = 'stktab'
-        keys_optional(22) = 'dyncls'
-        keys_optional(23) = 'phaseplate'
-        keys_optional(24) = 'opt'
-        keys_optional(25) = 'objfun'
+        keys_optional(12) = 'startit'
+        keys_optional(13) = 'maxits'
+        keys_optional(14) = 'center'
+        keys_optional(15) = 'autoscale'
+        keys_optional(16) = 'weights2D'
+        keys_optional(17) = 'match_filt'
+        keys_optional(18) = 'stk'
+        keys_optional(19) = 'stktab'
+        keys_optional(20) = 'dyncls'
+        keys_optional(21) = 'phaseplate'
         ! documentation
         ! if( describe ) call print_doc_cluster2D
-        call cline%parse( keys_required(:5), keys_optional(:25) )
+        call cline%parse( keys_required(:5), keys_optional(:21) )
         ! sanity checks
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -620,21 +615,20 @@ select case(prg)
         keys_optional(25) = 'noise'
         keys_optional(26) = 'nnn'
         keys_optional(27) = 'norec'
-        keys_optional(28) = 'balance'
-        keys_optional(29) = 'center'
-        keys_optional(30) = 'pproc'
-        keys_optional(31) = 'stk'
-        keys_optional(32) = 'stktab'
-        keys_optional(33) = 'weights3D'
-        keys_optional(34) = 'phaseplate'
-        keys_optional(35) = 'opt'
-        keys_optional(36) = 'update_frac'
-        keys_optional(37) = 'focusmsk'
-        keys_optional(38) = 'objfun'
+        keys_optional(28) = 'center'
+        keys_optional(29) = 'pproc'
+        keys_optional(30) = 'stk'
+        keys_optional(31) = 'stktab'
+        keys_optional(32) = 'weights3D'
+        keys_optional(33) = 'phaseplate'
+        keys_optional(34) = 'opt'
+        keys_optional(35) = 'update_frac'
+        keys_optional(36) = 'focusmsk'
+        keys_optional(37) = 'objfun'
         ! documentation
         ! if( describe ) call print_doc_refine3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:38) )
+        call cline%parse( keys_required(:5), keys_optional(:37) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -683,13 +677,12 @@ select case(prg)
         keys_optional(4)  = 'frac'
         keys_optional(5)  = 'mskfile'
         keys_optional(6)  = 'mul'
-        keys_optional(7)  = 'balance'
-        keys_optional(8)  = 'stk'
-        keys_optional(9)  = 'stktab'
-        keys_optional(10) = 'phaseplate'
+        keys_optional(7)  = 'stk'
+        keys_optional(8)  = 'stktab'
+        keys_optional(9)  = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_reconstruct3D
-        call cline%parse(keys_required(:6), keys_optional(:10))
+        call cline%parse(keys_required(:6), keys_optional(:9))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -836,19 +829,18 @@ select case(prg)
         keys_optional(6)  = 'inner'
         keys_optional(7)  = 'width'
         keys_optional(8)  = 'nspace'
-        keys_optional(9)  = 'balance'
-        keys_optional(10) = 'stk'
-        keys_optional(11) = 'stktab'
-        keys_optional(12) = 'phaseplate'
-        keys_optional(13) = 'opt'
-        keys_optional(14) = 'oritab2'
-        keys_optional(15) = 'mskfile'
-        keys_optional(16) = 'startit'
-        keys_optional(17) = 'objfun'
-        keys_optional(18) = 'refine'
+        keys_optional(9) = 'stk'
+        keys_optional(10) = 'stktab'
+        keys_optional(11) = 'phaseplate'
+        keys_optional(12) = 'opt'
+        keys_optional(13) = 'oritab2'
+        keys_optional(14) = 'mskfile'
+        keys_optional(15) = 'startit'
+        keys_optional(16) = 'objfun'
+        keys_optional(17) = 'refine'
         ! parse command line
         ! if( describe ) call print_doc_cluster3D
-        call cline%parse(keys_required(:7), keys_optional(:18))
+        call cline%parse(keys_required(:7), keys_optional(:17))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -883,20 +875,19 @@ select case(prg)
         keys_optional(6)  = 'inner'
         keys_optional(7)  = 'width'
         keys_optional(8)  = 'nspace'
-        keys_optional(9)  = 'balance'
-        keys_optional(10) = 'stk'
-        keys_optional(11) = 'stktab'
-        keys_optional(12) = 'phaseplate'
-        keys_optional(13) = 'opt'
-        keys_optional(14) = 'msklist'
-        keys_optional(15) = 'vollist'
-        keys_optional(16) = 'state'
-        keys_optional(17) = 'trs'
-        keys_optional(18) = 'objfun'
-        keys_optional(19) = 'update_frac'
+        keys_optional(9) = 'stk'
+        keys_optional(10) = 'stktab'
+        keys_optional(11) = 'phaseplate'
+        keys_optional(12) = 'opt'
+        keys_optional(13) = 'msklist'
+        keys_optional(14) = 'vollist'
+        keys_optional(15) = 'state'
+        keys_optional(16) = 'trs'
+        keys_optional(17) = 'objfun'
+        keys_optional(18) = 'update_frac'
         ! parse command line
         ! if( describe ) call print_doc_cluster3D_refine
-        call cline%parse(keys_required(:6), keys_optional(:19))
+        call cline%parse(keys_required(:6), keys_optional(:18))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

@@ -56,7 +56,7 @@ contains
         integer :: ncls_in_oritab, icls, fnr, file_stat, j
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
+        call b%build_strategy2D_tbox(p)             ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
         if( cline%defined('oritab') .and. p%l_remap_classes )then
@@ -164,7 +164,7 @@ contains
         l_distr_exec = .false.
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
+        call b%build_strategy2D_tbox(p)             ! 2D Hadamard matcher built
         if( cline%defined('refs') )then
             call find_ldim_nptcls(p%refs, lfoo, ncls_from_refs)
             ! consistency check
@@ -205,7 +205,7 @@ contains
         integer      :: fnr, file_stat, j
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        call b%build_hadamard_prime2D_tbox(p)
+        call b%build_strategy2D_tbox(p)
         call cavger_new(b, p, 'class')
         call cavger_assemble_sums_from_parts()
         p%frcs  = 'frcs.bin'

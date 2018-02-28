@@ -65,7 +65,7 @@ contains
         if( cline%defined('box') .or. cline%defined('moldiam') )then
             p = params(cline)                     ! parameters generated
             call b%build_general_tbox(p, cline)   ! general objects built
-            call b%build_hadamard_prime3D_tbox(p) ! prime objects built
+            call b%build_strategy3D_tbox(p) ! prime objects built
             call prime3D_find_resrange( b, p, p%lp, p%lpstop )
             p%lpstart = p%lp
             call cline%set('lpstart',p%lpstart)   ! for reporting
@@ -124,7 +124,7 @@ contains
             &stop 'need texfile with defocus/astigmatism values for ctf .ne. no mode exec'
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
-        call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
+        call b%build_strategy3D_tbox(p) ! prime3D objects built
         ! determine resolution range
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
         ! determine the number of peaks
@@ -212,7 +212,7 @@ contains
         else
            stop 'need a starting low-pass limit (set lp or find)!'
         endif
-        call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
+        call b%build_strategy3D_tbox(p) ! prime3D objects built
         startit = 1
         if( cline%defined('startit') )startit = p%startit
         if( startit == 1 )call b%a%clean_updatecnt
@@ -277,7 +277,7 @@ contains
         p = params(cline)                     ! parameters generated
         call b%build_general_tbox(p, cline)   ! general objects built
         p%eo = 'yes'                          ! default
-        call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
+        call b%build_strategy3D_tbox(p) ! prime3D objects built
         ! call exec_old_school_rec( b, p, cline )
         call exec_rec_batch_gridprep( b, p, cline )
         ! end gracefully

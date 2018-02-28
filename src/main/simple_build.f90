@@ -72,11 +72,11 @@ type :: build
     procedure                           :: build_rec_tbox
     procedure                           :: kill_rec_tbox
     procedure                           :: build_rec_eo_tbox
-    procedure                           :: kill_eo_rec_tbox
-    procedure                           :: build_hadamard_prime3D_tbox
-    procedure                           :: kill_hadamard_prime3D_tbox
-    procedure                           :: build_hadamard_prime2D_tbox
-    procedure                           :: kill_hadamard_prime2D_tbox
+    procedure                           :: kill_rec_eo_tbox
+    procedure                           :: build_strategy3D_tbox
+    procedure                           :: kill_strategy3D_tbox
+    procedure                           :: build_strategy2D_tbox
+    procedure                           :: kill_strategy2D_tbox
     procedure                           :: build_extremal3D_tbox
     procedure                           :: kill_extremal3D_tbox
     procedure                           :: raise_hard_ctf_exception
@@ -310,7 +310,7 @@ contains
     subroutine build_rec_eo_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        call self%kill_eo_rec_tbox
+        call self%kill_rec_eo_tbox
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
@@ -320,56 +320,56 @@ contains
     end subroutine build_rec_eo_tbox
 
     !> \brief  destructs the eo reconstruction toolbox
-    subroutine kill_eo_rec_tbox( self )
+    subroutine kill_rec_eo_tbox( self )
         class(build), intent(inout) :: self
         if( self%eo_rec_tbox_exists )then
             call self%eorecvol%kill
             call self%projfrcs%kill
             self%eo_rec_tbox_exists = .false.
         endif
-    end subroutine kill_eo_rec_tbox
+    end subroutine kill_rec_eo_tbox
 
     !> \brief  constructs the prime2D toolbox
-    subroutine build_hadamard_prime2D_tbox( self, p )
+    subroutine build_strategy2D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(oris) :: os
-        call self%kill_hadamard_prime2D_tbox
+        call self%kill_strategy2D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%neigh.eq.'yes' )then
             if( self%spproj%os_cls3D%get_noris() == p%ncls )then
                 call self%spproj%os_cls3D%nearest_proj_neighbors(p%nnn, self%nnmat)
             else
-                stop 'size of os_cls3D segment of spproj does not conform with # clusters (ncls); build_hadamard_prime2D_tbox'
+                stop 'size of os_cls3D segment of spproj does not conform with # clusters (ncls); build_strategy2D_tbox'
             endif
         endif
         call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
-    end subroutine build_hadamard_prime2D_tbox
+    end subroutine build_strategy2D_tbox
 
     !> \brief  destructs the prime2D toolbox
-    subroutine kill_hadamard_prime2D_tbox( self )
+    subroutine kill_strategy2D_tbox( self )
         class(build), intent(inout) :: self
         if( self%hadamard_prime2D_tbox_exists )then
             call self%projfrcs%kill
             self%hadamard_prime2D_tbox_exists = .false.
         endif
-    end subroutine kill_hadamard_prime2D_tbox
+    end subroutine kill_strategy2D_tbox
 
     !> \brief  constructs the prime3D toolbox
-    subroutine build_hadamard_prime3D_tbox( self, p )
+    subroutine build_strategy3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         integer :: nnn
-        call self%kill_hadamard_prime3D_tbox
+        call self%kill_strategy3D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%eo .ne. 'no' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-            allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
+            allocchk('build_strategy3D_tbox; simple_build, 1')
         else
             allocate( self%recvols(p%nstates), stat=alloc_stat )
-            allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
+            allocchk('build_strategy3D_tbox; simple_build, 2')
         endif
         if( p%neigh.eq.'yes' ) then
             nnn = p%nnn
@@ -379,10 +379,10 @@ contains
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
-    end subroutine build_hadamard_prime3D_tbox
+    end subroutine build_strategy3D_tbox
 
     !> \brief  destructs the prime3D toolbox
-    subroutine kill_hadamard_prime3D_tbox( self )
+    subroutine kill_strategy3D_tbox( self )
         class(build), intent(inout) :: self
         integer :: i
         if( self%hadamard_prime3D_tbox_exists )then
@@ -403,7 +403,7 @@ contains
             call self%projfrcs%kill
             self%hadamard_prime3D_tbox_exists = .false.
         endif
-    end subroutine kill_hadamard_prime3D_tbox
+    end subroutine kill_strategy3D_tbox
 
     !> \brief  constructs the extremal3D toolbox
     subroutine build_extremal3D_tbox( self, p )
@@ -412,7 +412,7 @@ contains
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
-        allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
+        allocchk('build_strategy3D_tbox; simple_build, 2')
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)

@@ -441,10 +441,9 @@ select case(prg)
         keys_optional(9)  = 'refs'
         keys_optional(10) = 'remap_classes'
         keys_optional(11) = 'weights2D'
-        keys_optional(12) = 'balance'
-        keys_optional(13) = 'stk'
-        keys_optional(14) = 'stktab'
-        keys_optional(15) = 'phaseplate'
+        keys_optional(12) = 'stk'
+        keys_optional(13) = 'stktab'
+        keys_optional(14) = 'phaseplate'
         ! parse command line
         call cline%parse(keys_required(:2), keys_optional(:15))
         ! sanity check
@@ -486,16 +485,15 @@ select case(prg)
         keys_optional(15) = 'center'
         keys_optional(16) = 'weights2D'
         keys_optional(17) = 'refine'
-        keys_optional(18) = 'balance'
-        keys_optional(19) = 'match_filt'
-        keys_optional(20) = 'stk'
-        keys_optional(21) = 'stktab'
-        keys_optional(22) = 'dyncls'
-        keys_optional(23) = 'phaseplate'
-        keys_optional(24) = 'opt'
-        keys_optional(25) = 'objfun'
+        keys_optional(18) = 'match_filt'
+        keys_optional(19) = 'stk'
+        keys_optional(20) = 'stktab'
+        keys_optional(21) = 'dyncls'
+        keys_optional(22) = 'phaseplate'
+        keys_optional(23) = 'opt'
+        keys_optional(24) = 'objfun'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:25))
+        call cline%parse(keys_required(:4), keys_optional(:24))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -770,17 +768,16 @@ select case(prg)
         keys_optional(26) = 'nnn'
         keys_optional(27) = 'rrate'
         keys_optional(28) = 'norec'
-        keys_optional(29) = 'balance'
-        keys_optional(30) = 'pproc'
-        keys_optional(31) = 'update_frac'
-        keys_optional(32) = 'stk'
-        keys_optional(33) = 'stktab'
-        keys_optional(34) = 'phaseplate'
-        keys_optional(35) = 'opt'
-        keys_optional(36) = 'focusmsk'
-        keys_optional(37) = 'objfun'
+        keys_optional(29) = 'pproc'
+        keys_optional(30) = 'update_frac'
+        keys_optional(31) = 'stk'
+        keys_optional(32) = 'stktab'
+        keys_optional(33) = 'phaseplate'
+        keys_optional(34) = 'opt'
+        keys_optional(35) = 'focusmsk'
+        keys_optional(36) = 'objfun'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:37))
+        call cline%parse(keys_required(:5), keys_optional(:36))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -994,12 +991,11 @@ select case(prg)
         keys_optional(4)  = 'frac'
         keys_optional(5)  = 'mul'
         keys_optional(6)  = 'mskfile'
-        keys_optional(7)  = 'balance'
-        keys_optional(8)  = 'stk'
-        keys_optional(9)  = 'stktab'
-        keys_optional(10) = 'phaseplate'
+        keys_optional(7)  = 'stk'
+        keys_optional(8)  = 'stktab'
+        keys_optional(9)  = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:10))
+        call cline%parse(keys_required(:5), keys_optional(:9))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

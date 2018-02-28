@@ -579,14 +579,21 @@ contains
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         poulation, average correlation and weight
     subroutine gen2Dclassdoc( b, p, fname )
-        class(build),     intent(inout) :: b
-        class(params),    intent(inout) :: p
-        character(len=*), intent(in)    :: fname
+        class(build), target, intent(inout) :: b
+        class(params),        intent(inout) :: p
+        character(len=*),     intent(in)    :: fname
         integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143
-        type(oris) :: classdoc
-        call classdoc%new_clean(p%ncls)
+        class(oris), pointer :: classdoc=>null()
+        type(oris),  target  :: cdoc
+        select case(trim(METADATA_EXT))
+            case('.simple')
+                classdoc => b%spproj%os_cls2D
+            case DEFAULT
+                call cdoc%new_clean(p%ncls)
+                classdoc => cdoc
+        end select
         call b%a%get_pops(pops, 'class', maxn=p%ncls)
         do icls=1,p%ncls
             call b%projfrcs%estimate_res(icls, frc05, frc0143)
@@ -602,8 +609,14 @@ contains
                 call classdoc%set(icls, 'w',     0.0)
             endif
         end do
-        call classdoc%write(fname)
-        call classdoc%kill
+        select case(trim(METADATA_EXT))
+            case('.simple')
+                classdoc => null()
+            case DEFAULT
+                call classdoc%write(fname)
+                call cdoc%kill
+                classdoc => null()
+        end select
         deallocate(pops)
     end subroutine gen2Dclassdoc
 
