@@ -2,6 +2,7 @@
 program simple_test_img_export
     include 'simple_lib.f08'
     use simple_jpg
+    use simple_test_jpg
 #ifdef LIBGD
     use simple_test_libgd_io
 #endif
@@ -20,7 +21,7 @@ program simple_test_img_export
     call exec_cmdline( trim(command) )
     call simple_chdir( trim(folder) )
 
-
+    call test_jpg_image(.true.)
     call test_jpg_export
 
 #ifdef LIBGD

@@ -8,26 +8,26 @@
 !! Modified by Michael Eager Feb 2018
 module simple_img
     include 'simple_lib.f08'
-    use, intrinsic :: iso_c_binding
+    use, intrinsic                       :: iso_c_binding
     implicit none
 
     !*** cptr should be have the same size as a c pointer
     !*** It doesn't matter whether it is an integer or a real
-    integer, parameter :: cptr = kind(5)
-    integer, public, parameter :: max_colors = 256
+    integer, parameter                   :: cptr = kind(5)
+    integer, public, parameter           :: max_colors = 256
     !buf_range(1)buf_range(1)im2 = gdImageScale(im, 1, 65535);
 
     type base_img
         private
-        integer        :: width = 0
-        integer        :: height = 0
-        integer(cptr)  :: ptr = 0
-        logical        :: fmode = .false.
+        integer                          :: width  = 0
+        integer                          :: height = 0
+        integer(cptr)                    :: ptr    = 0
+        logical                          :: fmode  = .false.
     end type base_img
 
     type img_font
         private
-        integer(cptr)  :: ptr = 0
+        integer(cptr)                    :: ptr = 0
     end type img_font
 
 
@@ -47,9 +47,9 @@ contains
     subroutine read_png(file_name,buffer,status)
         character(*), intent(in)         :: file_name
         real, allocatable, intent(inout) :: buffer(:,:)
-        integer, intent(out), optional  :: status
-        integer             :: width,height, i,j, colorval,black,white
-        type(base_img)      :: image
+        integer, intent(out), optional   :: status
+        integer                          :: width,height, i,j, colorval,black,white
+        type(base_img)                   :: image
 
         if (present(status)) then
             call create_img_from_png(file_name,image,status)
@@ -81,27 +81,27 @@ contains
     end subroutine read_png
 
     subroutine write_png(buffer,file_name,range_in,status)
-        real, allocatable, intent(in) :: buffer(:,:)
-        character(len=*), intent(in) :: file_name
-        real, intent(in), optional   :: range_in(2)
-        integer, intent(out), optional  :: status
-        integer          :: width,height,i,j,k,colorval,ex, r,g,b, black,white ,colors(256,256,256)
-        type(base_img)   :: image
-        character(len=STDLEN) :: filename
-        real                  :: buf_range(2), offset
-        logical               :: no_range
-        no_range = .true.
+        real, allocatable, intent(in)  :: buffer(:,:)
+        character(len=*), intent(in)   :: file_name
+        real, intent(in), optional     :: range_in(2)
+        integer, intent(out), optional :: status
+        integer                        :: width,height,i,j,k,colorval,ex, r,g,b, black,white ,colors(256,256,256)
+        type(base_img)                 :: image
+        character(len=STDLEN)          :: filename
+        real                           :: buf_range(2), offset
+        logical                        :: no_range
+        no_range      = .true.
         if(.not. allocated(buffer)) then
-            status=-1
-            print*,"simple_img::write_png buffer not allocated"
+            status    = -1
+            print*,"simple_img         :: write_png buffer not allocated"
             return
         end if
         write(filename,'(A)') file_name
-        buf_range(1) = MINVAL(buffer)
-        buf_range(2) = MAXVAL(buffer)
+        buf_range(1)  = MINVAL(buffer)
+        buf_range(2)  = MAXVAL(buffer)
         if(present(range_in)) then
-            buf_range=range_in
-            no_range = .false.
+            buf_range = range_in
+            no_range  = .false.
         endif
 
         offset=0.0
@@ -168,11 +168,11 @@ contains
 
 
     subroutine read_jpeg_gd(file_name,buffer,status)
-        character(len=*), intent(in)         :: file_name
+        character(len=*), intent(in)     :: file_name
         real, allocatable, intent(inout) :: buffer(:,:)
-        integer, intent(out), optional  :: status
-        integer             :: width,height, i,j, colorval,black,white
-        type(base_img)      :: image
+        integer, intent(out), optional   :: status
+        integer                          :: width,height, i,j, colorval,black,white
+        type(base_img)                   :: image
 
         if (present(status)) then
             call create_img_from_jpeg(file_name,image,status)
@@ -204,28 +204,28 @@ contains
     end subroutine read_jpeg_gd
 
     subroutine write_jpeg_gd(buffer,file_name,range_in,status)
-        real, allocatable, intent(in) :: buffer(:,:)
-        character(len=*), intent(in) :: file_name
-        real, intent(in), optional   :: range_in(2)
-        integer, intent(out), optional  :: status
-        integer          :: width,height,i,j,k,colorval,ex, r,g,b, black,white !,colors(256,256,256)
-        type(base_img)   :: image
-        character(len=STDLEN) :: filename
-        real                  :: buf_range(2), offset
-        logical               :: no_range
-        integer, allocatable :: int_buffer(:,:)
-        no_range = .true.
+        real, allocatable, intent(in)  :: buffer(:,:)
+        character(len=*), intent(in)   :: file_name
+        real, intent(in), optional     :: range_in(2)
+        integer, intent(out), optional :: status
+        integer                        :: width,height,i,j,k,colorval,ex, r,g,b, black,white !,colors(256,256,256)
+        type(base_img)                 :: image
+        character(len=STDLEN)          :: filename
+        real                           :: buf_range(2), offset
+        logical                        :: no_range
+        integer, allocatable           :: int_buffer(:,:)
+        no_range      = .true.
         if(.not. allocated(buffer)) then
-            status=-1
-            print*,"simple_img::write_jpeg buffer not allocated"
+            status    = -1
+            print*,"simple_img         :: write_jpeg buffer not allocated"
             return
         end if
         write(filename,'(A)') file_name
-        buf_range(1) = MINVAL(buffer)
-        buf_range(2) = MAXVAL(buffer)
+        buf_range(1)  = MINVAL(buffer)
+        buf_range(2)  = MAXVAL(buffer)
         if(present(range_in)) then
-            buf_range=range_in
-            no_range = .false.
+            buf_range = range_in
+            no_range  = .false.
         endif
 
         offset=0.0

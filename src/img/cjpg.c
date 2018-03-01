@@ -157,7 +157,7 @@ int JpegDec_decode(const char * path, uint8_t** imgbuf, int *width, int* height)
     *width = decInfo.image_width;
     *height = decInfo.image_height;
     size_t rowSize = decInfo.image_width * decInfo.num_components;
-    *imgbuf = (uint8_t*)malloc(decInfo.image_height * rowSize * sizeof(uint8_t));
+    *imgbuf = malloc(decInfo.image_height * rowSize * sizeof(uint8_t));
 
     JSAMPROW rows[1];
     size_t offset = 0;
@@ -217,7 +217,7 @@ void cread_jpeg(const char* file_name, void** outptr, int* width, int* height, i
       *status = 1;
       return;
      }
-    for (int j=0; j < cols; j++)
+    for (int j=0; j < *height; j++)
       for (int i=0; i< *width; i++)
           image[i][j] = (int) img[i][j];
     free(img);
@@ -251,7 +251,7 @@ void read_jpeg2(const char* file_name, int** out_buffer, int*width, int*height, 
       exit(EXIT_FAILURE);
     }
     jpg_size = file_info.st_size;
-    jpg_buffer = (unsigned char*) malloc(jpg_size + 100);
+    jpg_buffer =  malloc(jpg_size + 100);
     if (jpg_buffer == NULL){
       fprintf(stderr, "Failed to allocate bytes %d", (int)(jpg_size+100));
       return;
@@ -286,7 +286,7 @@ void read_jpeg2(const char* file_name, int** out_buffer, int*width, int*height, 
     *height = decInfo.output_height;
     pixel_size = decInfo.output_components;
     bmp_size = (*width) * (*height) * pixel_size;
-    buffer = (unsigned char*) malloc(bmp_size);
+    buffer =  malloc(bmp_size);
     fprintf(stderr, "Read_jpeg buffer allocated %ld", bmp_size);
     if(buffer==NULL){
       fprintf(stderr, "Read_jpeg buffer allocate failed");
@@ -423,7 +423,7 @@ void read_jpeg (const char* file_name, void** img, int*width, int*height, int* c
 {
 	int fd, rc, i, j;
 
-	char *syslog_prefix = (char*) malloc(1024);
+	char *syslog_prefix =  malloc(1024);
 	sprintf(syslog_prefix, "read_jpeg");
 	openlog(syslog_prefix, LOG_PERROR | LOG_PID, LOG_USER);
 
@@ -458,7 +458,7 @@ void read_jpeg (const char* file_name, void** img, int*width, int*height, int* c
 		exit(EXIT_FAILURE);
 	}
 	jpg_size = file_info.st_size;
-	jpg_buffer = (unsigned char*) malloc(jpg_size + 100);
+	jpg_buffer =malloc(jpg_size + 100);
 
 	 fd = open(file_name, O_RDONLY);
 	i = 0;
@@ -517,7 +517,7 @@ void read_jpeg (const char* file_name, void** img, int*width, int*height, int* c
          w, h, pixel_size);
 
 	bmp_size = w * h * pixel_size;
-	bmp_buffer = (unsigned char*) malloc(bmp_size);
+	bmp_buffer =  malloc(bmp_size);
 
 	// The row_stride is the total number of bytes it takes to store an
 	// entire scanline (row).

@@ -586,6 +586,10 @@ else()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
 endif()
 
+
+
+
+
 #
 #  JPEG, TIFF, PNG img support through LibGD
 #
