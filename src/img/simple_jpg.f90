@@ -30,6 +30,7 @@ module simple_jpg
     contains
         procedure                                        :: getWidth
         procedure                                        :: getHeight
+        procedure                                        ::save_jpeg_r4_3D
         procedure, private                               :: save_jpeg_r4
         procedure, private                               :: save_jpeg_i4
         generic                                          :: save_jpeg  => save_jpeg_r4, save_jpeg_i4
@@ -68,15 +69,15 @@ module simple_jpg
         end subroutine write_jpeg
 
 
-            function fgltLoadTGA(FileName,width,height,components,eform,image)
-                use, intrinsic :: iso_c_binding
-                type(c_ptr), target :: fgltloadTGA
-                character(len=*), intent(in) :: FileName
-                integer(c_int), intent(out) :: width, height
-                integer(c_int), intent(out) :: components, eform
-                integer(c_char), dimension(:), allocatable, &
-                    intent(out), target :: image
-            end function fgltLoadTGA
+            ! function fgltLoadTGA(FileName,width,height,components,eform,image)
+            !     use, intrinsic :: iso_c_binding
+            !     type(c_ptr), target :: fgltloadTGA
+            !     character(len=*), intent(in) :: FileName
+            !     integer(c_int), intent(out) :: width, height
+            !     integer(c_int), intent(out) :: components, eform
+            !     integer(c_char), dimension(:), allocatable, &
+            !         intent(out), target :: image
+            ! end function fgltLoadTGA
 
 
     end interface
@@ -99,9 +100,9 @@ contains
         character(len=*), intent(inout)  :: fname
         real,    intent(in)              :: in_buffer(:,:,:)
         integer, intent(in), optional    :: quality
-        integer(c_int), allocatable, target    :: img_buffer(:,:)
+        integer(c_int), allocatable, target  :: img_buffer(:,:,:)
         type(c_ptr)                      :: img
-        integer                          :: w,h,c, i,j, quality_here
+        integer                          :: w,h,c,slices, islice, i,j, quality_here
         integer                          :: status
 
         status = 1
@@ -112,10 +113,10 @@ contains
         if(w == 0 .or. h == 0) return
         if(present(quality)) quality_here = quality
         !        img_buffer = transfer(in_buffer,1_c_int8_t)
-        allocate(img_buffer(w,h))
+        allocate(img_buffer(3,w,h))
         do i=1,w
             do j=1,h
-                img_buffer(i,j) = INT(in_buffer(i,j,1),kind=4)
+                img_buffer(1:3,i,j) = INT(in_buffer(i,j,1),kind=4)
             end do
         end do
          img = c_loc(img_buffer)
@@ -132,7 +133,7 @@ contains
         character(len=*), intent(inout) :: fname
         real, intent(in)                :: in_buffer(:,:)
         integer, intent(in), optional   :: quality
-        integer(c_int) , allocatable, target   :: img_buffer(:,:)
+        integer(c_int) , allocatable, target   :: img_buffer(:,:,:)
         type(c_ptr)                     :: img
         integer                         :: w,h,c, i,j, quality_here
         integer                         :: status
@@ -145,10 +146,10 @@ contains
         if(w == 0 .or. h == 0) return
         if(present(quality)) quality_here = quality
         !        img_buffer = transfer(in_buffer,1_c_int8_t)
-        allocate(img_buffer(w,h))
+        allocate(img_buffer(3,w,h))
         do i=1,w
             do j=1,h
-                img_buffer(i,j) = INT(in_buffer(i,j),kind=4)
+                img_buffer(1:3, i , j) = INT(in_buffer(i,j),kind=4)
             end do
         end do
          img = c_loc(img_buffer)
@@ -253,16 +254,18 @@ contains
 
  ! write a grayscale image as a color JPEG image
 
-  subroutine write_jpeg_grayscale(name,image)
+    subroutine write_jpeg_grayscale(self,name,image)
+        class(jpg_img), intent(inout) :: self
     character(*) name
     real :: image(:,:)
     real, allocatable :: temp(:,:,:)
+    integer status
     logical unnormalized
     allocate(temp(3,size(image,1),size(image,2)))
     temp(1,:,:) = image
     temp(2,:,:) = image
     temp(3,:,:) = image
-    call write_jpeg(name,temp)
+    status =  self%save_jpeg_r4_3D(name,temp)
   end subroutine write_jpeg_grayscale
 
   subroutine rgb2channels(image)

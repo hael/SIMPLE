@@ -325,7 +325,7 @@ void read_jpeg2(const char* file_name, int** out_buffer, int*width, int*height, 
 }
 
 
-void write_jpeg(int** img, const char* filename, int* width, int* height, int* quality_, int* colorspec,  int*status)
+void write_jpeg(int*** img, const char* filename, int* width, int* height, int* quality_, int* colorspec,  int*status)
 {
     FILE* outfile;
     unsigned long pixel;
