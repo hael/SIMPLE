@@ -15,7 +15,7 @@ use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
-use simple_binoris_io,       ! use all in there
+use simple_binoris_io       ! use all in there
 implicit none
 
 public :: build

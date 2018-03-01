@@ -8,7 +8,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_nrtxtfile,      only: nrtxtfile
-use simple_binoris_io,     ! use all in there
+use simple_binoris_io      ! use all in there
 implicit none
 
 public :: cluster_oris_commander

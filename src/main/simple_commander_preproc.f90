@@ -18,7 +18,7 @@ use simple_ctffind_iter,        only: ctffind_iter
 use simple_ctf_estimate_iter,   only: ctf_estimate_iter
 use simple_picker_iter,         only: picker_iter
 use simple_qsys_funs,           only: qsys_job_finished
-use simple_binoris_io,          ! use all in there
+use simple_binoris_io           ! use all in there
 implicit none
 
 public :: preprocess_commander

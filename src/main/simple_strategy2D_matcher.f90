@@ -41,9 +41,9 @@ contains
 
     !>  \brief  is the prime2D algorithm
     subroutine prime2D_exec( b, p, cline, which_iter, converged )
-        use simple_qsys_funs,   only: qsys_job_finished
-        use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
-        use simple_binoris_io,  only: binwrite_oritab
+        use simple_qsys_funs,    only: qsys_job_finished
+        use simple_procimgfile,  only: random_selection_from_imgfile, copy_imgfile
+        use simple_binoris_io,   only: binwrite_oritab
         class(build),  target, intent(inout) :: b
         class(params), target, intent(inout) :: p
         class(cmdline), intent(inout) :: cline

@@ -9,7 +9,7 @@ use simple_oris,                  only: oris
 use simple_scaler,                only: scaler
 use simple_strings,               only: int2str_pad, str2int
 use simple_sp_project,            only: sp_project
-use simple_binoris_io,            ! use all in there
+use simple_binoris_io             ! use all in there
 use simple_commander_distr_wflows ! use all in there
 use simple_commander_distr        ! use all in there
 implicit none
