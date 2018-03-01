@@ -107,32 +107,19 @@ endif()
 #    )
 
 
-
-#set(JSONFORTRAN_LIBBNAME "jsonfortran")
 #################################################################
 #
 # CREATE libSIMPLE<VERSION>
 #
 #################################################################
-# add_subdirectory(thirdparty libjson)
-# find_package(jsonfortran-gnu REQUIRED PATH ${CMAKE_BINARY_DIR}/lib/cmake/jsonfortran-gnu-6.1.0)
-# find_library(JSONFORTRAN_LIBRARY 
-#  NAME jsonfortran libjsonfortran
-#  HINTS ./lib
-#  PATH ${CMAKE_BINARY_DIR}/lib
-#  )
-# message(STATUS " Root folder JSONFORTRAN_LIBRARY: ${JSONFORTRAN_LIBRARY}")
+
 add_subdirectory(${SRC_PATH} lib)
 set(EXTRA_LIBS
   ${SIMPLELIB}
-#  jsonfortran
   ${CMAKE_THREAD_LIBS_INIT}
   ${EXTRA_LIBS})
 link_directories(lib)
-message(STATUS " EXTRA_LIBS  ${EXTRA_LIBS}")
-#
-#
-#
+
 
 #################################################################
 #
