@@ -13,6 +13,7 @@ use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_prime2D
 use simple_commander_prime3D
+use simple_commander_project
 use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops
@@ -92,6 +93,7 @@ type(cluster_oris_commander)         :: xcluster_oris
 type(rotmats2oris_commander)         :: xrotmats2oris
 type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
+type(manage_project_commander)       :: xmanage_project
 type(print_project_info_commander)   :: xprint_project_info
 
 ! TIME-SERIES ANALYSIS PROGRAMS
@@ -1483,6 +1485,18 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xproject2txt%execute(cline)
+    case( 'manage_project' )
+        !==Program manageproject
+        !
+        ! </begin></end>
+        !
+        ! set optional keys
+        keys_optional(1) = 'projfile'
+        keys_optional(2) = 'projname'
+        ! parse command line
+        call cline%parse(keys_optional=keys_optional(:2))
+        ! execute
+        call xmanage_project%execute(cline)
     case( 'print_project_info' )
         !==Program print_project_info
         !

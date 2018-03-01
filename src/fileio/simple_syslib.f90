@@ -545,7 +545,7 @@ contains
         character(len=STDLEN)         :: value
         character(len=:), allocatable :: varval
         integer :: length, status
-
+        simple_getenv = ''
 #if defined(PGI)
         call getenv( trim(name), value)
 #else
@@ -554,14 +554,16 @@ contains
         if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
         if( status ==  1 )then
             write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
-            value = 'undefined'
+            return
         endif
-        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
-        if( length ==  0 .or. status /= 0 ) return
+        if( status ==  2 )then
+            write(*,*)'environment variables not supported by system; simple_syslib :: simple_getenv'
+            return
+        endif
+        if( length ==  0 .or. status /= 0 )return
 #endif
 
         write(simple_getenv,'(A)') value
-        !        call alloc_errchk("In syslib::simple_getenv ", alloc_stat)
     end function simple_getenv
 
     subroutine simple_sleep( secs )

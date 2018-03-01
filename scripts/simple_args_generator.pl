@@ -99,6 +99,24 @@ foreach my$i (0 .. $#vars){
   print MODULE $str;
 }
 $j++;
+print MODULE  "    self%args(".$j.") = 'projname'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'simple_path'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'time_per_image'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'qsys_name'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'user_account'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'qsys_partition'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'qsys_qos'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'qsys_reservation'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'job_name'\n";
+$j++;
 print MODULE  "    self%args(".$j.") = ''\n";
 print MODULE  "end function
 
@@ -115,7 +133,7 @@ function is_present( self, arg ) result( yep )
         endif
     end do
 end function
-  
+
 subroutine test_args()
        type(args) :: as
     character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath

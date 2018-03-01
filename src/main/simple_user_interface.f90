@@ -27,7 +27,7 @@ type :: simple_program
 contains
     procedure, private :: new
     procedure, private :: set_input
-    procedure          :: print
+    procedure          :: print_ui
     procedure          :: write2json
 end type simple_program
 
@@ -77,7 +77,7 @@ contains
         self%inputs(i)%group    = group
     end subroutine set_input
 
-    subroutine print( self )
+    subroutine print_ui( self )
         use simple_chash,   only: chash
         use simple_strings, only: int2str
         class(simple_program), intent(in) :: self
@@ -138,61 +138,61 @@ contains
                 call ch%kill
             endif
         end do
-    end subroutine print
+    end subroutine print_ui
 
     subroutine write2json( self )
-        use, intrinsic :: iso_fortran_env, only: wp => real64
-        use json_module
+        ! use, intrinsic :: iso_fortran_env, only: wp => real64
+        ! use json_module
         use simple_strings, only: int2str
         class(simple_program), intent(in) :: self
-        logical, allocatable     :: required(:)
-        type(json_core)          :: json
-        type(json_value),pointer :: pjson, json_header, json_required, json_optional, entry
-        integer                  :: sz, n_required, n_optional, i
-        ! JSON init
-        call json%initialize()
-        call json%create_object(pjson,'')
-        call json%create_object(json_header,'header')
-        call json%create_object(json_required,'required')
-        call json%create_object(json_optional,'optional')
-        call json%create_object(json_optional,'optional')
-        call json%add(pjson, json_header)
-        call json%add(pjson, json_required)
-        call json%add(pjson, json_optional)
-        ! init
-        sz = size(self%inputs)
-        allocate(required(sz))
-        do i=1,sz
-            required(i) = self%inputs(i)%required
-        end do
-        n_required = count(required)
-        n_optional = sz - n_required
-        ! header
-        call json%add(json_header, 'name',        self%name)
-        call json%add(json_header, 'descr_short', self%descr_short)
-        call json%add(json_header, 'descr_short', self%descr_long)
-        call json%add(json_header, 'executable',  self%executable)
-        ! required
-        do i=1,sz
-            call json%create_object(entry, self%inputs(i)%key)
-            call json%add(entry,'keytype',           self%inputs(i)%keytype)
-            call json%add(entry,'descr_short',       self%inputs(i)%descr_short)
-            call json%add(entry,'descr_long',        self%inputs(i)%descr_long)
-            call json%add(entry,'descr_placeholder', self%inputs(i)%descr_placeholder)
-            if( self%inputs(i)%required )then
-                call json%add(entry,'required',      '.true.')
-                call json%add(entry,'tie',           int2str(self%inputs(i)%tie))
-                call json%add(entry,'group',         int2str(self%inputs(i)%group))
-                call json%add(json_required, entry)
-            else
-                call json%add(entry, 'required',     '.false.')
-                call json%add(entry, 'tie',          int2str(self%inputs(i)%tie))
-                call json%add(json_optional, entry)
-            endif
-        end do
-        ! write & clean
-        call json%print(pjson, trim(adjustl(self%name))//'.json')
-        call json%destroy(pjson)
+        ! logical, allocatable     :: required(:)
+        ! type(json_core)          :: json
+        ! type(json_value),pointer :: pjson, json_header, json_required, json_optional, entry
+        ! integer                  :: sz, n_required, n_optional, i
+        ! ! JSON init
+        ! call json%initialize()
+        ! call json%create_object(pjson,'')
+        ! call json%create_object(json_header,'header')
+        ! call json%create_object(json_required,'required')
+        ! call json%create_object(json_optional,'optional')
+        ! call json%create_object(json_optional,'optional')
+        ! call json%add(pjson, json_header)
+        ! call json%add(pjson, json_required)
+        ! call json%add(pjson, json_optional)
+        ! ! init
+        ! sz = size(self%inputs)
+        ! allocate(required(sz))
+        ! do i=1,sz
+        !     required(i) = self%inputs(i)%required
+        ! end do
+        ! n_required = count(required)
+        ! n_optional = sz - n_required
+        ! ! header
+        ! call json%add(json_header, 'name',        self%name)
+        ! call json%add(json_header, 'descr_short', self%descr_short)
+        ! call json%add(json_header, 'descr_short', self%descr_long)
+        ! call json%add(json_header, 'executable',  self%executable)
+        ! ! required
+        ! do i=1,sz
+        !     call json%create_object(entry, self%inputs(i)%key)
+        !     call json%add(entry,'keytype',           self%inputs(i)%keytype)
+        !     call json%add(entry,'descr_short',       self%inputs(i)%descr_short)
+        !     call json%add(entry,'descr_long',        self%inputs(i)%descr_long)
+        !     call json%add(entry,'descr_placeholder', self%inputs(i)%descr_placeholder)
+        !     if( self%inputs(i)%required )then
+        !         call json%add(entry,'required',      '.true.')
+        !         call json%add(entry,'tie',           int2str(self%inputs(i)%tie))
+        !         call json%add(entry,'group',         int2str(self%inputs(i)%group))
+        !         call json%add(json_required, entry)
+        !     else
+        !         call json%add(entry, 'required',     '.false.')
+        !         call json%add(entry, 'tie',          int2str(self%inputs(i)%tie))
+        !         call json%add(json_optional, entry)
+        !     endif
+        ! end do
+        ! ! write & clean
+        ! call json%print(pjson, trim(adjustl(self%name))//'.json')
+        ! call json%destroy(pjson)
     end subroutine write2json
 
     subroutine new_cluster2D

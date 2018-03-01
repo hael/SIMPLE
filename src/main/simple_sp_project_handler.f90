@@ -3,7 +3,7 @@ module simple_sp_project_handler
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: transfer_sp_project_segment, print_sp_project_info
+public :: transfer_sp_project_segment!, print_sp_project_info
 private
 
 contains
@@ -15,12 +15,12 @@ contains
         call sp_reciever%jobproc%write(fname_reciever)
     end subroutine transfer_sp_project_segment
 
-    subroutine print_sp_project_info( fname )
-        character(len=*), intent(in) :: fname
-        type(sp_project) :: sp_proj
-        call sp_proj%read(fname)
-        call sp_proj%print_info
-        call sp_proj%kill
-    end subroutine print_sp_project_info
+    ! subroutine print_sp_project_info( fname )
+    !     character(len=*), intent(in) :: fname
+    !     type(sp_project) :: sp_proj
+    !     call sp_proj%read(fname)
+    !     call sp_proj%print_info
+    !     call sp_proj%kill
+    ! end subroutine print_sp_project_info
 
 end module simple_sp_project_handler

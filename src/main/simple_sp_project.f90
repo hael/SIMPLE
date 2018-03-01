@@ -8,6 +8,7 @@ public :: sp_project
 private
 
 integer, parameter :: MAXN_OS_SEG = 13
+character(len=4)   :: NULL = 'null'
 
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
@@ -34,7 +35,8 @@ type sp_project
     type(binoris) :: bos
 contains
     ! constructors
-    procedure          :: new
+    procedure          :: update_projinfo
+    procedure          :: update_compenv
     procedure          :: new_seg_with_ptr
     ! modifiers
     procedure          :: new_sp_oris
@@ -89,48 +91,145 @@ contains
         end select
     end function which_flag2isgement
 
-    ! constructor
+    ! field updaters
 
-    subroutine new( self, cline )
+    subroutine update_projinfo( self, cline )
         use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        character(len=STDLEN) :: str
-        if( .not. cline%defined('projfile') ) stop 'projfile (*.simple project filename) input required to create new project; sp_project :: new'
+        character(len=:), allocatable :: projname_old
+        character(len=STDLEN)         :: projname_new, projfile, projname, cwd
+        if( self%projinfo%get_noris() > 1 )then
+            ! no need to construct field
+        else
+            call self%projinfo%new_clean(1)
+        endif
+        ! projname & profile
+        if( self%projinfo%isthere('projname') )then
+            if( cline%defined('projname') )then
+                projname_new = cline%get_carg('projname')
+                call self%projinfo%getter(1, 'projname', projname_old)
+                write(*,*) 'Changing project name from ', trim(projname_old), ' to ', trim(projname_new)
+                call self%projinfo%set(1, 'projname', trim(projname_new))
+                call self%projinfo%set(1, 'projfile', trim(projname_new)//'.simple')
+            endif
+        else
+            if( .not. cline%defined('projname') .and. .not. cline%defined('projfile') )then
+                stop 'ERROR, the project needs a name, inputted via projname or projfile!'
+            endif
+            if( cline%defined('projfile') )then
+                projfile = cline%get_carg('projfile')
+                select case(fname2format(projfile))
+                    case('O')
+                        call self%projinfo%set(1, 'projfile', trim(projfile) )
+                    case DEFAULT
+                        write(*,*) 'Inputted projfile: ', trim(projfile)
+                        stop 'has unsupported format'
+                end select
+                projname = get_fbody(projfile, '.simple')
+                call self%projinfo%set(1, 'projname', trim(projname))
+            endif
+            if( cline%defined('projname') )then
+                projname = cline%get_carg('projname')
+                call self%projinfo%set(1, 'projname', trim(projname))
+                call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
+            endif
+        endif
+        ! hard requirements
         if( .not. cline%defined('smpd')     ) stop 'smpd (sampling distance in A) input required to create new project; sp_project :: new'
         if( .not. cline%defined('kv')       ) stop 'kv (acceleration voltage in kV{300}) input required to create new project; sp_project :: new'
         if( .not. cline%defined('cs')       ) stop 'cs (spherical aberration constant in mm{2.7}) input required to create new project; sp_project :: new'
         if( .not. cline%defined('fraca')    ) stop 'fraca (fraction of amplitude contrast{0.1}) input required to create new project; sp_project :: new'
-        call self%projinfo%new(1)
-        call self%compenv%new(1)
-        ! set required
-        str = cline%get_carg('projfile')
-        call self%projinfo%set(1, 'projfile', trim(str)            )
         call self%projinfo%set(1, 'smpd',  cline%get_rarg('smpd')  )
         call self%projinfo%set(1, 'kv',    cline%get_rarg('kv')    )
         call self%projinfo%set(1, 'cs',    cline%get_rarg('cs')    )
         call self%projinfo%set(1, 'fraca', cline%get_rarg('fraca') )
-        ! compenv has to be filled as strings as it is used as a string only dictionnary
-        call self%compenv%set(1, 'simple_path',      '')
-        call self%compenv%set(1, 'time_per_image',   '10')
-        call self%compenv%set(1, 'user_email',       '')
-        call self%compenv%set(1, 'user_project',     '')
-        call self%compenv%set(1, 'qsys_name',        '')
-        call self%compenv%set(1, 'qsys_partition',   '')
-        call self%compenv%set(1, 'qsys_reservation', '')
-        call self%compenv%set(1, 'job_name',   'simple')
-        ! set defaults for optionals
-        if( .not. cline%defined('phaseplate') ) call self%projinfo%set(1, 'phaseplate', 'no')
-        if( .not. cline%defined('astigtol')   ) call self%projinfo%set(1, 'astigtol',   0.05)
-        if( .not. cline%defined('dfmax')      ) call self%projinfo%set(1, 'dfmax',       5.0)
-        if( .not. cline%defined('dfmin')      ) call self%projinfo%set(1, 'dfmin',       0.5)
+        ! phaseplate flag is optional
+        if( cline%defined('phaseplate') )then
+            call self%projinfo%set(1, 'phaseplate', cline%get_carg('phaseplate'))
+        else
+            call self%projinfo%set(1, 'phaseplate', 'no')
+        endif
         ! it is assumed that the project is created in the "project directory", i.e. stash cwd
-        call simple_getcwd(str)
-        call self%projinfo%set(1, 'cwd', trim(str))
-        ! write the project file to disk
-        str = cline%get_carg('projfile')
-        call self%write(trim(str))
-    end subroutine new
+        call simple_getcwd(cwd)
+        call self%projinfo%set(1, 'cwd', trim(cwd))
+    end subroutine update_projinfo
+
+    subroutine update_compenv( self, cline )
+        use simple_cmdline, only: cmdline
+        class(sp_project), intent(inout) :: self
+        class(cmdline),    intent(in)    :: cline
+        character(len=STDLEN)         :: env_var
+        character(len=:), allocatable :: projname
+        if( self%compenv%get_noris() > 1 )then
+            ! no need to construct field
+        else
+            call self%compenv%new_clean(1)
+        endif
+        ! compenv has to be filled as strings as it is used as a string only dictionnary
+        ! get from environment
+        env_var = trim(simple_getenv('SIMPLE_PATH'))
+        if( env_var.eq.'' )then
+            write(*,*) 'ERROR! SIMPLE_PATH is not defined in your shell environment!'
+            write(*,*) 'Please refer to installation documentation for correct system configuration'
+            stop
+        else
+            call self%compenv%set(1, 'simple_path', trim(env_var))
+        endif
+        env_var = trim(simple_getenv('SIMPLE_QSYS'))
+        if( env_var.eq.'' )then
+            stop 'SIMPLE_QSYS is not defined in your environment.'
+        else
+            call self%compenv%set(1, 'qsys_name', trim(env_var))
+        endif
+        env_var = trim(simple_getenv('SIMPLE_EMAIL'))
+        if( env_var.eq.'' ) env_var = 'my.name@uni.edu'
+        call self%compenv%set(1, 'user_email', trim(env_var))
+        ! get from command line
+        if( cline%defined('time_per_image') )then
+            call self%compenv%set(1, 'time_per_image', real2str(cline%get_rarg('time_per_image')))
+        else
+            if( .not. self%compenv%isthere('time_per_image') )then
+                call self%compenv%set(1, 'time_per_image', '100')
+            endif
+        endif
+        if( cline%defined('user_account') )then
+            call self%compenv%set(1, 'user_account', cline%get_carg('user_account'))
+        else
+            if( .not. self%compenv%isthere('user_account') )then
+                call self%compenv%set(1, 'user_account', NULL)
+            endif
+        endif
+        if( cline%defined('qsys_partition') )then
+            call self%compenv%set(1, 'qsys_partition', cline%get_carg('qsys_partition'))
+        else
+            if( .not. self%compenv%isthere('qsys_partition') )then
+                call self%compenv%set(1, 'qsys_partition', NULL)
+            endif
+        endif
+        if( cline%defined('qsys_qos') )then
+            call self%compenv%set(1, 'qsys_qos', cline%get_carg('qsys_qos'))
+        else
+            if( .not. self%compenv%isthere('qsys_qos') )then
+                call self%compenv%set(1, 'qsys_qos', NULL)
+            endif
+        endif
+        if( cline%defined('qsys_reservation') )then
+            call self%compenv%set(1, 'qsys_reservation', cline%get_carg('qsys_reservation'))
+        else
+            if( .not. self%compenv%isthere('qsys_reservation') )then
+                call self%compenv%set(1, 'qsys_reservation', NULL)
+            endif
+        endif
+        if( cline%defined('job_name') )then
+            call self%compenv%set(1, 'job_name', cline%get_carg('job_name'))
+        else
+            if( .not. self%compenv%isthere('job_name') )then
+                call self%projinfo%getter(1, 'projname', projname)
+                call self%compenv%set(1, 'job_name', 'simple_'//trim(projname) )
+            endif
+        endif
+    end subroutine update_compenv
 
     subroutine new_seg_with_ptr( self, n, oritype, os_ptr )
         class(sp_project), target, intent(inout) :: self
@@ -139,19 +238,19 @@ contains
         class(oris), pointer,      intent(inout) :: os_ptr
         select case(trim(oritype))
             case('stk')
-                call self%os_stk%new(n)
+                call self%os_stk%new_clean(n)
                 os_ptr => self%os_stk
             case('ptcl2D')
-                call self%os_ptcl2D%new(n)
+                call self%os_ptcl2D%new_clean(n)
                 os_ptr => self%os_ptcl2D
             case('cls2D')
-                call self%os_cls2D%new(n)
+                call self%os_cls2D%new_clean(n)
                 os_ptr => self%os_cls2D
             case('cls3D')
-                call self%os_cls2D%new(n)
+                call self%os_cls2D%new_clean(n)
                 os_ptr => self%os_cls2D
             case('ptcl3D')
-                call self%os_ptcl3D%new(n)
+                call self%os_ptcl3D%new_clean(n)
                 os_ptr => self%os_ptcl3D
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype)
@@ -380,14 +479,20 @@ contains
 
     subroutine write( self, fname, fromto )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        integer, optional, intent(in)    :: fromto(2)
+        character(len=*), optional, intent(in) :: fname
+        integer,          optional, intent(in) :: fromto(2)
+        character(len=:), allocatable :: projfile
         integer :: isegment
-        if( fname2format(fname) .ne. 'O' )then
-            write(*,*) 'fname: ', trim(fname)
-            stop 'file format not supported; sp_project :: write'
+        if( present(fname) )then
+            if( fname2format(fname) .ne. 'O' )then
+                write(*,*) 'fname: ', trim(fname)
+                stop 'file format not supported; sp_project :: write'
+            endif
+            projfile = trim(fname)
+        else
+            call self%projinfo%getter(1, 'projfile', projfile)
         endif
-        call self%bos%open(fname, del_if_exists=.true.)
+        call self%bos%open(projfile, del_if_exists=.true.)
         do isegment=1,MAXN_OS_SEG
             call self%segwriter(isegment, fromto)
         end do
