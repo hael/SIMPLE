@@ -79,21 +79,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
-# JSON-Fortran
-#include(ExternalProject)
-#
-#ExternalProject_Add(
-#  libjson
-#  URL ${CMAKE_SOURCE_DIR}/thirdparty/json-fortran-6.1.0.tar.gz
-#  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/json
-#  #CMAKE_ARGS SKIP_DOC_GEN=TRUE
-#  INSTALL_COMMAND ""
-#)
-#
-#set(JSON_LIB ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/json/src/libjson-build/lib) 
-#set(JSON_INC ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/json/src/libjson-build/include) 
-#set(JSON_LIBRARIES  "-L${JSON_LIB} -ljsonfortran")
-#include_directories(${JSON_INC})
 
 ############################################################
 #
@@ -114,25 +99,40 @@ endif()
 #    PROJECT libSIMPLE       # project name in subdir top CMakeLists.txt
 #    ARCHIVE_DIR ${LIB}      # dir where project places .lib files
 #    RUNTIME_DIR ${LIB}      # dir where project places .dll files
-#    LIBRARIES <lib>              # names of library targets to import
+#    LIBRARIES <lib>         # names of library targets to import
 #    LINK_LIBRARIES          # link interface libraries for LIBRARIES
 #     [LINK_LIBS ${FFTW_LIBRARIES} <dep>...]...
 #    CMAKE_COMMAND_LINE ...  # extra command line flags to pass to cmake
 #    NO_EXTERNAL_INSTALL     # skip installation of external project
 #    )
 
+
+
+set(JSONFORTRAN_LIBBNAME "jsonfortran")
 #################################################################
 #
 # CREATE libSIMPLE<VERSION>
 #
 #################################################################
+add_subdirectory(thirdparty libjson)
+find_package(jsonfortran-gnu REQUIRED PATH ${CMAKE_BINARY_DIR}/lib/cmake/jsonfortran-gnu-6.1.0)
+find_library(JSONFORTRAN_LIBRARY 
+  NAME jsonfortran libjsonfortran
+  HINTS ./lib
+  PATH ${CMAKE_BINARY_DIR}/lib
+  )
+message(STATUS " Root folder JSONFORTRAN_LIBRARY: ${JSONFORTRAN_LIBRARY}")
 add_subdirectory(${SRC_PATH} lib)
 set(EXTRA_LIBS
   ${SIMPLELIB}
+  jsonfortran
   ${CMAKE_THREAD_LIBS_INIT}
   ${EXTRA_LIBS})
-#  ${JSON_LIBRARIES})
-# link_directories(${LIB})
+link_directories(lib)
+message(STATUS " EXTRA_LIBS  ${EXTRA_LIBS}")
+#
+#
+#
 
 #################################################################
 #

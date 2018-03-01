@@ -86,6 +86,7 @@ else()
     add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
   endif()
 endif()
+#add_dependencies(${SIMPLELIB} json_fortran)
 add_dependencies(${SIMPLELIB} simple_args)
 set_target_properties(${SIMPLELIB}
   PROPERTIES
