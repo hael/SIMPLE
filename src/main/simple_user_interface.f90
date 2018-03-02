@@ -226,22 +226,58 @@ contains
         use simple_strings, only: int2str
         class(simple_program), intent(in) :: self
         ! logical, allocatable     :: required(:)
-        type(json_core)          :: json
-        type(json_value),pointer :: pjson, json_header, json_required, json_optional, entry
-        integer                  :: sz, n_required, n_optional, i
+        type(json_core)           :: json
+        type(json_value), pointer :: pjson, program
         ! ! JSON init
         call json%initialize()
         call json%create_object(pjson,'')
-        call json%create_object(json_header,'header')
-        call json%add(pjson, json_header)
-        ! header
-        call json%add(json_header, 'name',        self%name)
-        call json%add(json_header, 'descr_short', self%descr_short)
-        call json%add(json_header, 'descr_short', self%descr_long)
-        call json%add(json_header, 'executable',  self%executable)
+        call json%create_object(program, trim(self%name))
+        call json%add(pjson, program)
+        ! program section
+        call json%add(program, 'name',        self%name)
+        call json%add(program, 'descr_short', self%descr_short)
+        call json%add(program, 'descr_long', self%descr_long)
+        call json%add(program, 'executable',  self%executable)
+        ! all sections
+        call create_section( 'image input/output', self%img_ios )
+        call create_section( 'parameter input/output', self%parm_ios )
+        call create_section( 'alternative inputs', self%alt_ios )
+        call create_section( 'search controls', self%srch_ctrls )
+        call create_section( 'filter controls', self%filt_ctrls )
+        call create_section( 'mask controls', self%mask_ctrls )
+        call create_section( 'computer controls', self%comp_ctrls )
         ! ! write & clean
         call json%print(pjson, trim(adjustl(self%name))//'.json')
+        if (json%failed())then
+            print *, 'json input/output error for program: ', trim(self%name)
+            stop
+        endif
         call json%destroy(pjson)
+
+        contains
+
+            subroutine create_section( name, arr )
+                character(len=*),          intent(in) :: name
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                type(json_value), pointer :: entry, section
+                integer :: i, sz
+                call json%create_array(section, trim(name))
+                if( allocated(arr) )then
+                    sz = size(arr)
+                    do i=1,sz
+                        call json%create_object(entry, trim(arr(i)%key))
+                        call json%add(entry, 'key', trim(arr(i)%key))
+                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
+                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
+                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
+                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
+                        call json%add(entry, 'required', arr(i)%required)
+                        call json%add(section, entry)
+                    enddo
+                endif
+                call json%add(pjson, section)
+            end subroutine create_section
+
     end subroutine write2json
 
     subroutine new_cluster2D

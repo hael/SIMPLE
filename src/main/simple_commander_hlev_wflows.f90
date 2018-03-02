@@ -546,7 +546,8 @@ contains
             ! this is  to force initialisation (4 testing)
             call spproj_states%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os_states)
             call binread_oritab(p_master%oritab2, spproj_states, os_states, [1,p_master%nptcls])
-            call os%set_all('state', os_states%get_all('state'))
+            labels = os_states%get_all('state')
+            call os%set_all('state', real(labels))
             call os_states%kill
         else if( .not. cline%defined('startit') )then
             write(*,'(A)') '>>>'
