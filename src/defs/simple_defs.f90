@@ -115,6 +115,10 @@ integer(kind=c_int)       :: nthr_glob                 !< number of threads glob
 logical                   :: l_distr_exec_glob         !< global distributed execution flag
 character(len=LONGSTRLEN) :: cmdline_glob              !< global command line string
 
+! computer related
+integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
+integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100
+
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION
 integer, parameter :: img_kind = DP

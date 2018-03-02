@@ -33,14 +33,22 @@ type sp_project
 
     ! binary file-handler
     type(binoris) :: bos
+
+    ! globals
+    real    :: smpd, kv, cs, fraca
+    integer :: nptcls, box
+    logical :: l_phaseplate
 contains
-    ! constructors
+    ! field constructor
+    procedure          :: new_seg_with_ptr
+    ! field updaters
     procedure          :: update_projinfo
     procedure          :: update_compenv
-    procedure          :: new_seg_with_ptr
     ! modifiers
     procedure          :: new_sp_oris
     procedure          :: set_sp_oris
+    procedure          :: add_stk
+    procedure, private :: projinfo2globals
     ! printers
     procedure          :: print_info
     ! I/O
@@ -91,6 +99,35 @@ contains
         end select
     end function which_flag2isgement
 
+    ! field constructor
+
+    subroutine new_seg_with_ptr( self, n, oritype, os_ptr )
+        class(sp_project), target, intent(inout) :: self
+        integer,                   intent(in)    :: n
+        character(len=*),          intent(in)    :: oritype
+        class(oris), pointer,      intent(inout) :: os_ptr
+        select case(trim(oritype))
+            case('stk')
+                call self%os_stk%new_clean(n)
+                os_ptr => self%os_stk
+            case('ptcl2D')
+                call self%os_ptcl2D%new_clean(n)
+                os_ptr => self%os_ptcl2D
+            case('cls2D')
+                call self%os_cls2D%new_clean(n)
+                os_ptr => self%os_cls2D
+            case('cls3D')
+                call self%os_cls2D%new_clean(n)
+                os_ptr => self%os_cls2D
+            case('ptcl3D')
+                call self%os_ptcl3D%new_clean(n)
+                os_ptr => self%os_ptcl3D
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype)
+                stop 'unsupported oritype; sp_project :: new_with_os_segptr'
+        end select
+    end subroutine new_seg_with_ptr
+
     ! field updaters
 
     subroutine update_projinfo( self, cline )
@@ -99,6 +136,7 @@ contains
         class(cmdline),    intent(in)    :: cline
         character(len=:), allocatable :: projname_old
         character(len=STDLEN)         :: projname_new, projfile, projname, cwd
+        character(len=3)              :: phaseplate
         if( self%projinfo%get_noris() > 1 )then
             ! no need to construct field
         else
@@ -140,14 +178,21 @@ contains
         if( .not. cline%defined('kv')       ) stop 'kv (acceleration voltage in kV{300}) input required to create new project; sp_project :: new'
         if( .not. cline%defined('cs')       ) stop 'cs (spherical aberration constant in mm{2.7}) input required to create new project; sp_project :: new'
         if( .not. cline%defined('fraca')    ) stop 'fraca (fraction of amplitude contrast{0.1}) input required to create new project; sp_project :: new'
-        call self%projinfo%set(1, 'smpd',  cline%get_rarg('smpd')  )
-        call self%projinfo%set(1, 'kv',    cline%get_rarg('kv')    )
-        call self%projinfo%set(1, 'cs',    cline%get_rarg('cs')    )
-        call self%projinfo%set(1, 'fraca', cline%get_rarg('fraca') )
+        self%smpd  = cline%get_rarg('smpd')
+        call self%projinfo%set(1, 'smpd',  self%smpd )
+        self%kv    = cline%get_rarg('kv')
+        call self%projinfo%set(1, 'kv',    self%kv   )
+        self%cs    = cline%get_rarg('cs')
+        call self%projinfo%set(1, 'cs',    self%cs   )
+        self%fraca = cline%get_rarg('fraca')
+        call self%projinfo%set(1, 'fraca', self%fraca )
         ! phaseplate flag is optional
         if( cline%defined('phaseplate') )then
-            call self%projinfo%set(1, 'phaseplate', cline%get_carg('phaseplate'))
+            phaseplate        = cline%get_carg('phaseplate')
+            self%l_phaseplate = trim(phaseplate) .eq. 'yes'
+            call self%projinfo%set(1, 'phaseplate', trim(phaseplate))
         else
+            self%l_phaseplate = .false.
             call self%projinfo%set(1, 'phaseplate', 'no')
         endif
         ! it is assumed that the project is created in the "project directory", i.e. stash cwd
@@ -190,7 +235,7 @@ contains
             call self%compenv%set(1, 'time_per_image', real2str(cline%get_rarg('time_per_image')))
         else
             if( .not. self%compenv%isthere('time_per_image') )then
-                call self%compenv%set(1, 'time_per_image', '100')
+                call self%compenv%set(1, 'time_per_image', int2str(TIME_PER_IMAGE_DEFAULT))
             endif
         endif
         if( cline%defined('user_account') )then
@@ -198,6 +243,13 @@ contains
         else
             if( .not. self%compenv%isthere('user_account') )then
                 call self%compenv%set(1, 'user_account', NULL)
+            endif
+        endif
+        if( cline%defined('user_project') )then
+            call self%compenv%set(1, 'user_project', cline%get_carg('user_project'))
+        else
+            if( .not. self%compenv%isthere('user_project') )then
+                call self%compenv%set(1, 'user_project', NULL)
             endif
         endif
         if( cline%defined('qsys_partition') )then
@@ -221,42 +273,18 @@ contains
                 call self%compenv%set(1, 'qsys_reservation', NULL)
             endif
         endif
-        if( cline%defined('job_name') )then
-            call self%compenv%set(1, 'job_name', cline%get_carg('job_name'))
+        if( .not. self%compenv%isthere('job_name') )then
+            call self%projinfo%getter(1, 'projname', projname)
+            call self%compenv%set(1, 'job_name', 'simple_'//trim(projname) )
+        endif
+        if( cline%defined('job_memory_per_task') )then
+            call self%compenv%set(1, 'job_memory_per_task', real2str(cline%get_rarg('job_memory_per_task')) )
         else
-            if( .not. self%compenv%isthere('job_name') )then
-                call self%projinfo%getter(1, 'projname', projname)
-                call self%compenv%set(1, 'job_name', 'simple_'//trim(projname) )
+            if( .not. self%compenv%isthere('job_memory_per_task') )then
+                call self%compenv%set(1, 'job_memory_per_task', int2str(JOB_MEMORY_PER_TASK_DEFAULT) )
             endif
         endif
     end subroutine update_compenv
-
-    subroutine new_seg_with_ptr( self, n, oritype, os_ptr )
-        class(sp_project), target, intent(inout) :: self
-        integer,                   intent(in)    :: n
-        character(len=*),          intent(in)    :: oritype
-        class(oris), pointer,      intent(inout) :: os_ptr
-        select case(trim(oritype))
-            case('stk')
-                call self%os_stk%new_clean(n)
-                os_ptr => self%os_stk
-            case('ptcl2D')
-                call self%os_ptcl2D%new_clean(n)
-                os_ptr => self%os_ptcl2D
-            case('cls2D')
-                call self%os_cls2D%new_clean(n)
-                os_ptr => self%os_cls2D
-            case('cls3D')
-                call self%os_cls2D%new_clean(n)
-                os_ptr => self%os_cls2D
-            case('ptcl3D')
-                call self%os_ptcl3D%new_clean(n)
-                os_ptr => self%os_ptcl3D
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: new_with_os_segptr'
-        end select
-    end subroutine new_seg_with_ptr
 
     ! modifiers
 
@@ -312,6 +340,75 @@ contains
         end select
     end subroutine set_sp_oris
 
+    subroutine add_stk( self, stk, os )
+        use simple_imghead, only: find_ldim_nptcls
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: stk
+        class(oris),       intent(in)    :: os ! parameters associated with stk
+        integer :: ldim(3), nptcls, box, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        ! file exists?
+        if( .not. file_exists(stk) )then
+            write(*,*) 'Inputted stack (stk): ', trim(stk)
+            stop 'does not exist in cwd; sp_project :: add_stk'
+        endif
+        ! check if field is already populated
+        n_os_stk = self%os_stk%get_noris()
+        if( n_os_stk > 1 )then
+            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
+            stop 'ABORTING, this mode is not intended for data appendation!'
+        endif
+        ! find dimension of inputted stack and compare with os
+        call find_ldim_nptcls(stk, ldim, nptcls)
+        if( ldim(1) /= ldim(2) )then
+            write(*,*) 'xdim: ', ldim(1)
+            write(*,*) 'ydim: ', ldim(2)
+            stop 'nonsquare particle images not supported; sp_project :: add_stk'
+        endif
+        ! check that inputs are of conforming sizes
+        n_os = os%get_noris()
+        if( n_os /= nptcls )then
+            write(*,*) '# input oris: ', n_os
+            write(*,*) '# ptcl imgs in stk: ', nptcls
+            stop 'ERROR, nonconforming sizes of inputs; sp_project :: add_stk'
+        endif
+        ! make stk field
+        call self%os_stk%new_clean(1)
+        call self%os_stk%set(1, 'stk',    trim(stk))
+        call self%os_stk%set(1, 'box',    real(ldim(1)))
+        call self%os_stk%set(1, 'nptcls', real(nptcls))
+        ! update globals
+        self%nptcls = nptcls
+        self%box    = box
+        ! update particle fields
+        n_os_ptcl2D = self%os_ptcl2D%get_noris()
+        if( n_os_ptcl2D > 1 )then
+            write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
+            stop 'ABORTING, this mode assumes empty particle fields in project file'
+        endif
+        n_os_ptcl3D = self%os_ptcl3D%get_noris()
+        if( n_os_ptcl3D > 1 )then
+            write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
+            stop 'ABORTING, this mode assumes empty particle fields in project file'
+        endif
+        self%os_ptcl2D = os
+        self%os_ptcl3D = os
+    end subroutine add_stk
+
+    subroutine projinfo2globals( self )
+        class(sp_project), intent(inout) :: self
+        character(len=:), allocatable    :: phaseplate
+        if( self%projinfo%get_noris() > 0 )then
+            if( self%projinfo%isthere('smpd')       ) self%smpd  = self%projinfo%get(1, 'smpd'  )
+            if( self%projinfo%isthere('kv')         ) self%kv    = self%projinfo%get(1, 'kv'    )
+            if( self%projinfo%isthere('cs')         ) self%cs    = self%projinfo%get(1, 'cs'    )
+            if( self%projinfo%isthere('fraca')      ) self%fraca = self%projinfo%get(1, 'fraca' )
+            if( self%projinfo%isthere('phaseplate') )then
+                call self%projinfo%getter(1, 'phaseplate', phaseplate)
+                self%l_phaseplate = trim(phaseplate) .eq. 'yes'
+            endif
+        endif
+    end subroutine projinfo2globals
+
     ! printers
 
     subroutine print_info( self )
@@ -358,6 +455,7 @@ contains
             call self%segreader(isegment)
         end do
         call self%bos%close
+        call self%projinfo2globals
     end subroutine read
 
     subroutine read_ctfparams_state_eo( self, fname )
@@ -377,6 +475,7 @@ contains
             call self%segreader(isegment, only_ctfparams_state_eo=.true.)
         end do
         call self%bos%close
+        call self%projinfo2globals
     end subroutine read_ctfparams_state_eo
 
     subroutine read_segment( self, which, fname, fromto )
@@ -411,6 +510,7 @@ contains
                         call self%os_ptcl3D%read(fname, fromto)
                     case('projinfo')
                         call self%projinfo%read(fname)
+                        call self%projinfo2globals
                     case('jobproc')
                         call self%jobproc%read(fname)
                     case('compenv')
