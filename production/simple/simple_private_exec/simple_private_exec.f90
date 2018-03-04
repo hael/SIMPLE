@@ -11,7 +11,7 @@ use simple_commander_mask
 use simple_commander_misc
 use simple_commander_oris
 use simple_commander_preprocess
-use simple_commander_prime2D
+use simple_commander_cluster2D
 use simple_commander_prime3D
 use simple_commander_project
 use simple_commander_rec
@@ -30,9 +30,9 @@ type(ctffind_commander)              :: xctffind
 type(ctf_estimate_commander)         :: xctf_estimate
 type(pick_commander)                 :: xpick
 
-! PRIME2D PROGRAMS
+! CLUSTER2D PROGRAMS
 type(make_cavgs_commander)           :: xmake_cavgs
-type(prime2D_commander)              :: xprime2D
+type(cluster2D_commander)            :: xcluster2D
 type(cavgassemble_commander)         :: xcavgassemble
 type(check2D_conv_commander)         :: xcheck2D_conv
 type(rank_cavgs_commander)           :: xrank_cavgs
@@ -420,7 +420,7 @@ select case(prg)
         ! execute
         call xpick%execute(cline)
 
-    ! PRIME2D PROGRAMS
+    ! CLUSTER2D PROGRAMS
 
     case( 'make_cavgs' )
         !==Program make_cavgs
@@ -510,7 +510,7 @@ select case(prg)
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',    30.)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D','no')
         ! execute
-        call xprime2D%execute(cline)
+        call xcluster2D%execute(cline)
     case( 'cavgassemble' )
         !==Program cavgassemble
         !

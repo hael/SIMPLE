@@ -1,4 +1,4 @@
-! projection-matching based on Hadamard products, high-level search routines for PRIME2D
+! projection-matching based on Hadamard products, high-level search routines for CLUSTER2D
 module simple_strategy2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -21,12 +21,12 @@ use simple_classaverager          ! use all in there
 
 implicit none
 
-public :: prime2D_exec, preppftcc4align, pftcc
+public :: cluster2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
 logical, parameter             :: L_BENCH         = .false.
-logical, parameter             :: L_BENCH_PRIME2D = .false.
+logical, parameter             :: L_BENCH_CLUSTER2D = .false.
 type(polarft_corrcalc), target :: pftcc
 integer, allocatable           :: pinds(:)
 logical, allocatable           :: ptcl_mask(:)
@@ -40,7 +40,7 @@ character(len=STDLEN)          :: benchfname
 contains
 
     !>  \brief  is the prime2D algorithm
-    subroutine prime2D_exec( b, p, cline, which_iter, converged )
+    subroutine cluster2D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs,    only: qsys_job_finished
         use simple_procimgfile,  only: random_selection_from_imgfile, copy_imgfile
         use simple_binoris_io,   only: binwrite_oritab
@@ -125,10 +125,10 @@ contains
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
-                stop 'ERROR! no eo partitioning available; strategy3D_matcher :: prime2D_exec'
+                stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
             endif
             if( .not. cline%defined('refs') )&
-            &stop 'need refs to be part of command line for distributed prime2D execution'
+            &stop 'need refs to be part of command line for distributed cluster2D execution'
         else
             if( b%a%get_nevenodd() == 0 )then
                 call b%a%partition_eo
@@ -184,7 +184,7 @@ contains
                 else
                     call b%a%get_pops(prev_pops, 'class', consider_w=.false., maxn=p%ncls)
                 endif
-                ! frac is one by default in prime2D (no option to set frac)
+                ! frac is one by default in cluster2D (no option to set frac)
                 ! so spectral weighting is done over all images
                 call b%a%calc_spectral_weights(1.0)
                 ! call b%a%calc_spectral_weights(p%frac)
@@ -232,7 +232,7 @@ contains
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         ! INITIALIZE
-        write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
             p%outfile = 'cluster2Ddoc_'//int2str_pad(which_iter,3)//trim(METADATA_EXT)
         endif
@@ -278,7 +278,7 @@ contains
         call del_file(p%outfile)
 
         if( L_BENCH ) t_align = tic()
-        if( L_BENCH_PRIME2D )then
+        if( L_BENCH_CLUSTER2D )then
             rt_refloop_sum = 0.
             rt_inpl_sum    = 0.
             rt_tot_sum     = 0.
@@ -337,7 +337,7 @@ contains
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
-            call qsys_job_finished(p, 'simple_strategy2D_matcher :: prime2D_exec')
+            call qsys_job_finished(p, 'simple_strategy2D_matcher :: cluster2D_exec')
         else
             converged = b%conv%check_conv2D()
         endif
@@ -365,11 +365,11 @@ contains
                 call fclose(fnr)
             endif
         endif
-        if( L_BENCH_PRIME2D )then
+        if( L_BENCH_CLUSTER2D )then
             doprint = .true.
             if( p%l_distr_exec .and. p%part /= 1 ) doprint = .false.
             if( doprint )then
-                benchfname = 'PRIME2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+                benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'refloop : ', rt_refloop_sum
@@ -381,7 +381,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'in-plane: ', (rt_inpl_sum/rt_tot_sum)         * 100.
             endif
         endif
-    end subroutine prime2D_exec
+    end subroutine cluster2D_exec
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p, which_iter )
@@ -394,7 +394,7 @@ contains
         integer   :: batchlims(2), imatch, batchsz_max, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING CLUSTER2D SEARCH ENGINE'
         ! create the polarft_corrcalc object
         call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images

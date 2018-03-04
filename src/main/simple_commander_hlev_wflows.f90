@@ -14,16 +14,16 @@ use simple_commander_distr_wflows ! use all in there
 use simple_commander_distr        ! use all in there
 implicit none
 
-public :: prime2D_autoscale_commander
+public :: cluster2D_autoscale_commander
 public :: initial_3Dmodel_commander
 public :: cluster3D_commander
 public :: cluster3D_refine_commander
 private
 
-type, extends(commander_base) :: prime2D_autoscale_commander
+type, extends(commander_base) :: cluster2D_autoscale_commander
   contains
-    procedure :: execute      => exec_prime2D_autoscale
-end type prime2D_autoscale_commander
+    procedure :: execute      => exec_cluster2D_autoscale
+end type cluster2D_autoscale_commander
 type, extends(commander_base) :: initial_3Dmodel_commander
   contains
     procedure :: execute      => exec_initial_3Dmodel
@@ -39,18 +39,18 @@ end type cluster3D_refine_commander
 
 contains
 
-    !> for distributed PRIME2D with two-stage autoscaling
-    subroutine exec_prime2D_autoscale( self, cline )
-        use simple_commander_prime2D, only: rank_cavgs_commander
-        use simple_commander_imgproc, only: scale_commander
-        class(prime2D_autoscale_commander), intent(inout) :: self
+    !> for distributed CLUSTER2D with two-stage autoscaling
+    subroutine exec_cluster2D_autoscale( self, cline )
+        use simple_commander_cluster2D, only: rank_cavgs_commander
+        use simple_commander_imgproc,   only: scale_commander
+        class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer, parameter :: MAXITS_STAGE1 = 10
         ! commanders
         type(split_commander)            :: xsplit
         type(make_cavgs_distr_commander) :: xmake_cavgs
-        type(prime2D_distr_commander)    :: xprime2D_distr
+        type(cluster2D_distr_commander)  :: xcluster2D_distr
         type(rank_cavgs_commander)       :: xrank_cavgs
         type(scale_commander)            :: xscale
         ! command lines
@@ -78,7 +78,7 @@ contains
             call xsplit%execute(cline)
         endif
         if( p_master%l_autoscale )then
-            ! this workflow executes two stages of PRIME2D
+            ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
@@ -123,7 +123,7 @@ contains
             endif
             call cline_cluster2D_stage1%delete('automsk')
             call cline_cluster2D_stage1%set('objfun', 'cc') ! goal function is standard cross-correlation
-            call xprime2D_distr%execute(cline_cluster2D_stage1)
+            call xcluster2D_distr%execute(cline_cluster2D_stage1)
             last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
             finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
@@ -152,7 +152,7 @@ contains
             call cline_cluster2D_stage2%set('oritab',  trim(finaldoc))
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             call cline_cluster2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
-            call xprime2D_distr%execute(cline_cluster2D_stage2)
+            call xcluster2D_distr%execute(cline_cluster2D_stage2)
             last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
             finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
@@ -181,7 +181,7 @@ contains
             call cline_make_cavgs%set('refs',   trim(finalcavgs))
             call xmake_cavgs%execute(cline_make_cavgs)
         else ! no auto-scaling
-            call xprime2D_distr%execute(cline)
+            call xcluster2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
             finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
@@ -195,11 +195,11 @@ contains
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        call del_file('prime2D_startdoc'//trim(METADATA_EXT))
+        call del_file('cluster2D_startdoc'//trim(METADATA_EXT))
         call del_file('start2Drefs'//p_master%ext)
         ! end gracefully
-        call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
-    end subroutine exec_prime2D_autoscale
+        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
+    end subroutine exec_cluster2D_autoscale
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )

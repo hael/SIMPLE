@@ -12,7 +12,7 @@ use simple_qsys_funs             ! use all in there
 implicit none
 
 public :: preprocess_stream_commander
-public :: prime2D_stream_distr_commander
+public :: cluster2D_stream_distr_commander
 private
 #include "simple_local_flags.inc"
 
@@ -20,10 +20,10 @@ type, extends(commander_base) :: preprocess_stream_commander
   contains
     procedure :: execute      => exec_preprocess_stream
 end type preprocess_stream_commander
-type, extends(commander_base) :: prime2D_stream_distr_commander
+type, extends(commander_base) :: cluster2D_stream_distr_commander
   contains
-    procedure :: execute      => exec_prime2D_stream_distr
-end type prime2D_stream_distr_commander
+    procedure :: execute      => exec_cluster2D_stream_distr
+end type cluster2D_stream_distr_commander
 
 contains
 
@@ -158,10 +158,10 @@ contains
 
     end subroutine exec_preprocess_stream
 
-    subroutine exec_prime2D_stream_distr( self, cline )
+    subroutine exec_cluster2D_stream_distr( self, cline )
         use simple_defs_conv
         use simple_timer
-        use simple_commander_distr_wflows, only: prime2D_distr_commander, make_cavgs_distr_commander
+        use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander
         use simple_oris,                   only: oris
         use simple_image,                  only: image
         use simple_sp_project,             only: sp_project
@@ -169,23 +169,24 @@ contains
         use simple_extractwatcher          ! use all in there
         use simple_commander_distr         ! use all in there
         use simple_fileio                  ! use all in there
-        class(prime2D_stream_distr_commander), intent(inout) :: self
+        class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
-        character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
-        character(len=32),       parameter :: DEFTAB          = 'deftab'//trim(METADATA_EXT)
-        character(len=32),       parameter :: FINALDOC        = 'cluster2Ddoc_final'//trim(METADATA_EXT)
-        integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000 ! # of ptcls required to turm on shift search
-        integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
-        integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
-        integer,                 parameter :: MAXNCLS            = 1000 ! maximum # of classes
-        type(prime2D_distr_commander)      :: xprime2D_distr
+        character(len=KEYLEN),   parameter :: STK_FILETAB     = 'stkstreamtab.txt'
+        character(len=KEYLEN),   parameter :: SCALE_FILETAB   = 'stkscale.txt'
+        character(len=KEYLEN),   parameter :: DEFTAB          = 'deftab'//trim(METADATA_EXT)
+        character(len=KEYLEN),   parameter :: FINALDOC        = 'cluster2Ddoc_final'//trim(METADATA_EXT)
+        integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000  ! # of ptcls required to turn on shift search
+        integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5     ! # of iterations prior to turn on shift search
+        integer,                 parameter :: CCRES_NPTCLS_LIM   = 10000 ! # of ptcls required to turn on objfun=ccres
+        integer,                 parameter :: WAIT_WATCHER       = 60    ! seconds prior to new stack detection
+        integer,                 parameter :: MAXNCLS            = 1000  ! maximum # of classes
+        type(cluster2D_distr_commander)    :: xcluster2D_distr
         type(make_cavgs_distr_commander)   :: xmake_cavgs
         type(extractwatcher)               :: mic_watcher
         type(cmdline)                      :: cline_cluster2D, cline_scale, cline_make_cavgs
         type(params)                       :: p_master, p_scale
         type(sp_project)                   :: spproj
-        class(oris), pointer               :: os=>null()
+        class(oris), pointer               :: os => null()
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
         character(len=STDLEN)              :: oritab_glob, str_iter, refs_glob, frcs_glob
         real    :: scale, smpd_glob, msk_glob, mul
@@ -202,10 +203,10 @@ contains
         ! make master parameters
         p_master = params(cline)
         ! init command-lines
-        cline_scale     = cline
-        cline_cluster2D   = cline
+        cline_scale      = cline
+        cline_cluster2D  = cline
         cline_make_cavgs = cline
-        call cline_cluster2D%set('prg',       'prime2D')
+        call cline_cluster2D%set('prg',       'cluster2D')
         call cline_cluster2D%set('stktab',    STK_FILETAB)
         call cline_cluster2D%set('extr_iter', 100.) ! no extremal randomization
         if( p_master%ctf.ne.'no' )then
@@ -280,7 +281,7 @@ contains
                 write(*,*)'>>> TIME LIMIT WITHOUT NEW PARTICLES ADDITION REACHED'
                 exit
             endif
-            ! prime2D
+            ! cluster2D
             call cline_cluster2D%set('startit', real(iter))
             call cline_cluster2D%set('maxits',  real(iter))
             call cline_cluster2D%delete('endit')
@@ -289,7 +290,10 @@ contains
             if(nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM)then
                 call cline_cluster2D%set('trs', MINSHIFT)
             endif
-            call xprime2D_distr%execute(cline_cluster2D)
+            if(nptcls_glob > CCRES_NPTCLS_LIM)then
+                call cline_cluster2D%set('objfun', 'ccres')
+            endif
+            call xcluster2D_distr%execute(cline_cluster2D)
             oritab_glob = trim(CLUSTER2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
             refs_glob   = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p_master%ext)
             frcs_glob   = trim(FRCS_ITER_FBODY)//trim(str_iter)//'.bin'
@@ -325,7 +329,7 @@ contains
         ! cleanup
         call qsys_cleanup(p_master)
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_PRIME2D_STREAM NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
 
         contains
 
@@ -521,6 +525,6 @@ contains
                 call binwrite_oritab(oritab_glob, spproj, os, [1, nptcls_glob])
             end subroutine remap_new_classes
 
-    end subroutine exec_prime2D_stream_distr
+    end subroutine exec_cluster2D_stream_distr
 
 end module simple_commander_stream_wflows

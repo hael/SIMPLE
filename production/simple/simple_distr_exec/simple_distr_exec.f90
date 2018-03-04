@@ -20,10 +20,10 @@ type(ctffind_distr_commander)                :: xctffind_distr
 type(ctf_estimate_distr_commander)           :: xctf_estimate_distr
 type(pick_distr_commander)                   :: xpick_distr
 
-! PRIME2D
+! CLUSTER2D
 type(make_cavgs_distr_commander)             :: xmake_cavgs_distr
-type(prime2D_autoscale_commander)            :: xprime2D_distr
-type(prime2D_stream_distr_commander)         :: xprime2D_stream_distr
+type(cluster2D_autoscale_commander)          :: xcluster2D_distr
+type(cluster2D_stream_distr_commander)       :: xcluster2D_stream_distr
 
 ! PRIME3D
 type(prime3D_init_distr_commander)           :: xprime3D_init_distr
@@ -397,7 +397,7 @@ select case(prg)
         ! execute
         call xpick_distr%execute(cline)
 
-    ! PRIME2D
+    ! CLUSTER2D
 
     case( 'make_cavgs' )
         !==Program make_cavgs
@@ -488,7 +488,7 @@ select case(prg)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no' )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
-        call xprime2D_distr%execute(cline)
+        call xcluster2D_distr%execute(cline)
     case( 'cluster2D_stream' )
         !==Program cluster2D_stream
         !
@@ -529,7 +529,7 @@ select case(prg)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D',  'no')
-        call xprime2D_stream_distr%execute(cline)
+        call xcluster2D_stream_distr%execute(cline)
 
     ! PRIME3D
 

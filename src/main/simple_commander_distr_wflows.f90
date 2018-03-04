@@ -8,7 +8,7 @@ use simple_build,               only: build
 use simple_params,              only: params
 use simple_commander_base,      only: commander_base
 use simple_commander_preprocess ! use all in there
-use simple_commander_prime2D    ! use all in there
+use simple_commander_cluster2D  ! use all in there
 use simple_commander_distr      ! use all in there
 use simple_commander_mask       ! use all in there
 use simple_commander_distr      ! use all in there
@@ -24,7 +24,7 @@ public :: ctffind_distr_commander
 public :: ctf_estimate_distr_commander
 public :: pick_distr_commander
 public :: make_cavgs_distr_commander
-public :: prime2D_distr_commander
+public :: cluster2D_distr_commander
 public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: reconstruct3D_distr_commander
@@ -65,10 +65,10 @@ type, extends(commander_base) :: make_cavgs_distr_commander
   contains
     procedure :: execute      => exec_make_cavgs_distr
 end type make_cavgs_distr_commander
-type, extends(commander_base) :: prime2D_distr_commander
+type, extends(commander_base) :: cluster2D_distr_commander
   contains
-    procedure :: execute      => exec_prime2D_distr
-end type prime2D_distr_commander
+    procedure :: execute      => exec_cluster2D_distr
+end type cluster2D_distr_commander
 type, extends(commander_base) :: prime3D_init_distr_commander
   contains
     procedure :: execute      => exec_prime3D_init_distr
@@ -441,8 +441,8 @@ contains
             ! because outfile is output from distributed exec of make_cavgs
             call cline_cavgassemble%set('oritab', p_master%outfile)
         else
-            ! because prime2D_startdoc.METADATA_EXT is default output in the absence of outfile
-            call cline_cavgassemble%set('oritab', 'prime2D_startdoc'//trim(METADATA_EXT))
+            ! because cluster2D_startdoc.METADATA_EXT is default output in the absence of outfile
+            call cline_cavgassemble%set('oritab', 'cluster2D_startdoc'//trim(METADATA_EXT))
         endif
         if( .not. cline%defined('stktab') )then
             ! split stack
@@ -456,9 +456,9 @@ contains
         call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_make_cavgs_distr
 
-    subroutine exec_prime2D_distr( self, cline )
+    subroutine exec_cluster2D_distr( self, cline )
         use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
-        class(prime2D_distr_commander), intent(inout) :: self
+        class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
         type(check2D_conv_commander)         :: xcheck2D_conv
@@ -628,7 +628,7 @@ contains
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_CLUSTER2D NORMAL STOP ****')
 
         contains
 
@@ -682,7 +682,7 @@ contains
                 endif
             end subroutine remap_empty_cavgs
 
-    end subroutine exec_prime2D_distr
+    end subroutine exec_cluster2D_distr
 
     subroutine exec_prime3D_init_distr( self, cline )
         use simple_commander_prime3D

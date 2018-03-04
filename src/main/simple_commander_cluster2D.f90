@@ -1,5 +1,5 @@
-! concrete commander: prime2D for simultanous 2D alignment and clustering of single-particle images
-module simple_commander_prime2D
+! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
+module simple_commander_cluster2D
 #include "simple_lib.f08"
 use simple_cmdline,             only: cmdline
 use simple_params,              only: params
@@ -13,7 +13,7 @@ use simple_binoris_io           ! use all in there
 implicit none
 
 public :: make_cavgs_commander
-public :: prime2D_commander
+public :: cluster2D_commander
 public :: cavgassemble_commander
 public :: check2D_conv_commander
 public :: rank_cavgs_commander
@@ -24,10 +24,10 @@ type, extends(commander_base) :: make_cavgs_commander
  contains
     procedure :: execute      => exec_make_cavgs
 end type make_cavgs_commander
-type, extends(commander_base) :: prime2D_commander
+type, extends(commander_base) :: cluster2D_commander
   contains
-    procedure :: execute      => exec_prime2D
-end type prime2D_commander
+    procedure :: execute      => exec_cluster2D
+end type cluster2D_commander
 type, extends(commander_base) :: cavgassemble_commander
   contains
     procedure :: execute      => exec_cavgassemble
@@ -87,7 +87,7 @@ contains
         if( cline%defined('outfile') )then
             p%oritab = p%outfile
         else
-            p%oritab = 'prime2D_startdoc'//trim(METADATA_EXT)
+            p%oritab = 'cluster2D_startdoc'//trim(METADATA_EXT)
         endif
         ! shift multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
@@ -96,7 +96,7 @@ contains
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
             else
-                ! frac is one by default in prime2D (no option to set frac)
+                ! frac is one by default in cluster2D (no option to set frac)
                 ! so spectral weighting is done over all images
                 call b%a%calc_spectral_weights(1.0)
             endif
@@ -120,7 +120,7 @@ contains
         if( cline%defined('filwidth') )then
             ! filament option
             if( p%l_distr_exec)then
-                stop 'filwidth mode not implemented for distributed mode; simple_commander_prime2D.f90; exec_make_cavgs'
+                stop 'filwidth mode not implemented for distributed mode; simple_commander_cluster2D.f90; exec_make_cavgs'
             endif
             call b%img%bin_filament(p%filwidth)
             do icls=1,p%ncls
@@ -133,7 +133,7 @@ contains
         ! write sums
         if( p%l_distr_exec)then
             call cavger_readwrite_partial_sums('write')
-            call qsys_job_finished( p, 'simple_commander_prime2D :: exec_make_cavgs' )
+            call qsys_job_finished( p, 'simple_commander_cluster2D :: exec_make_cavgs' )
         else
             call cavger_calc_and_write_frcs_and_eoavg('frcs.bin')
             call gen2Dclassdoc( b, p, 'classdoc.txt')
@@ -152,9 +152,9 @@ contains
         call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_make_cavgs
 
-    subroutine exec_prime2D( self, cline )
-        use simple_strategy2D_matcher, only: prime2D_exec
-        class(prime2D_commander), intent(inout) :: self
+    subroutine exec_cluster2D( self, cline )
+        use simple_strategy2D_matcher, only: cluster2D_exec
+        class(cluster2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
@@ -176,7 +176,7 @@ contains
         ! execute
         if( p%l_distr_exec )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call prime2D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
+            call cluster2D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
         else
             ! extremal dynamics
             if( cline%defined('extr_iter') )then
@@ -185,16 +185,16 @@ contains
                 p%extr_iter = startit
             endif
             do i=startit,p%maxits
-                call prime2D_exec(b, p, cline, i, converged)
+                call cluster2D_exec(b, p, cline, i, converged)
                 ! updates extremal dynamics
                 p%extr_iter = p%extr_iter + 1
                 if(converged) exit
             end do
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
-        call qsys_job_finished(p, 'simple_commander_prime2D :: exec_prime2D')
-    end subroutine exec_prime2D
+        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
+        call qsys_job_finished(p, 'simple_commander_cluster2D :: exec_cluster2D')
+    end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )
         use simple_classaverager
@@ -339,4 +339,4 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_cluster_cavgs
 
-end module simple_commander_prime2D
+end module simple_commander_cluster2D
