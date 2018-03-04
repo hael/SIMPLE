@@ -37,13 +37,11 @@ contains
             select case(str2format(vals(iarg)))
                 case( 'real' )
                     call htab%set(keys(iarg), str2real(trim(vals(iarg))))
-                case( 'file' )
+                case( 'file', 'dir', 'char' )
                     call chtab%set(trim(keys(iarg)), trim(vals(iarg)))
                 case( 'int'  )
                     call str2int(trim(vals(iarg)), io_stat, ival)
                     call htab%set(keys(iarg), real(ival))
-                case( 'char' )
-                    call chtab%set(trim(keys(iarg)), trim(vals(iarg)))
             end select
         end do
         deallocate(keys, vals, line_trimmed)

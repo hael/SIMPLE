@@ -8,17 +8,24 @@ implicit none
 
 public :: chash
 private
+
+integer, parameter :: BUFFSZ_DEFAULT = 5
+
 !> Simple chash type
 type :: chash
     private
-    character(len=32), allocatable :: keys(:)   !< chash keys
-    type(str4arr),     allocatable :: values(:) !< chash values
-    integer :: nmax        = 0                  !< maximum number of entries in chash
-    integer :: chash_index = 0                  !< current highest index in hash
-    logical :: exists      = .false.            !< to indicate existence
+    character(len=KEYLEN), allocatable :: keys(:)   !< chash keys
+    type(str4arr),         allocatable :: values(:) !< chash values
+    integer :: buffsz      = BUFFSZ_DEFAULT         !< size of first buffer and subsequent allocation increments
+    integer :: chash_index = 0                      !< current highest index in hash
+    logical :: exists      = .false.                !< to indicate existence
   contains
     !< CONSTRUCTORS
-    procedure          :: new
+    procedure, private :: new_1
+    procedure, private :: new_2
+    generic            :: new => new_1, new_2
+    procedure, private :: alloc_chash
+    procedure, private :: realloc_chash
     procedure, private :: copy
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -34,7 +41,6 @@ type :: chash
     procedure, private :: get_1
     procedure, private :: get_2
     generic            :: get => get_1, get_2
-    procedure          :: get_nmax
     procedure          :: get_key
     procedure          :: chash2str
     procedure          :: size_of_chash
@@ -48,12 +54,14 @@ type :: chash
     !< I/O
     procedure          :: read
     procedure          :: write
-    !< DESTRUCTOR
+    !< DESTRUCTORS
     procedure          :: kill
+    procedure, private :: dealloc_chash
 end type chash
 
 interface chash
-    module procedure constructor
+    module procedure constructor_1
+    module procedure constructor_2
 end interface chash
 
 contains
@@ -61,37 +69,95 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
-    function constructor( nmax ) result( self )
-        integer, intent(in) :: nmax !< max nr of entries in hash table
-        type(chash)         :: self
-        call self%new(nmax)
-    end function constructor
+    function constructor_1( ) result( self )
+        type(chash) :: self
+        call self%new_1
+    end function constructor_1
 
     !>  \brief  is a constructor
-    subroutine new( self, nmax )
-        class(chash), intent(inout) :: self !< instance
-        integer,      intent(in)    :: nmax !< max nr of entries in hash table
+    function constructor_2( sz, buffsz ) result( self )
+        integer,           intent(in)    :: sz     !< initial size
+        integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
+        type(chash) :: self
+        call self%new_2(sz, buffsz)
+    end function constructor_2
+
+    !>  \brief  is a constructor
+    subroutine new_1( self )
+        class(chash), intent(inout) :: self
         call self%kill
-        self%nmax = nmax
-        allocate(self%keys(nmax), self%values(nmax), stat=alloc_stat)
-        if(alloc_stat /= 0) call alloc_errchk("In simple_chash :: new", alloc_stat)
+        self%buffsz = BUFFSZ_DEFAULT
+        call self%alloc_chash(self%buffsz)
         self%exists = .true.
-    end subroutine new
+    end subroutine new_1
+
+    !>  \brief  is a constructor
+    subroutine new_2( self, sz, buffsz )
+        class(chash),      intent(inout) :: self   !< instance
+        integer,           intent(in)    :: sz     !< initial size
+        integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
+        call self%kill
+        if( present(buffsz) )then
+            self%buffsz = buffsz
+        else
+            self%buffsz = BUFFSZ_DEFAULT
+        endif
+        call self%alloc_chash(sz)
+        self%exists = .true.
+    end subroutine new_2
+
+    !>  \brief  allocates keys and values without touching buffsz and chash_index
+    subroutine alloc_chash( self, sz )
+        class(chash), intent(inout) :: self !< instance
+        integer,      intent(in)    :: sz   !< total size
+        call self%dealloc_chash
+        allocate(self%keys(sz), self%values(sz))
+    end subroutine alloc_chash
+
+    !>  \brief  re-allocates keys and values without touching buffsz and chash_index and preserving previous key-value pairs
+    subroutine realloc_chash( self )
+        class(chash),        intent(inout) :: self
+        character(len=KEYLEN), allocatable :: keys_copy(:)
+        type(str4arr),         allocatable :: values_copy(:)
+        integer :: newsz, oldsz, i
+        if( self%exists )then
+            ! old/new size
+            oldsz = size(self%keys)
+            newsz = oldsz + self%buffsz
+            ! copy key-value pairs
+            allocate(keys_copy(oldsz), values_copy(oldsz))
+            keys_copy = self%keys
+            do i=1,oldsz
+                if( allocated(self%values(i)%str) ) allocate(values_copy(i)%str, source=self%values(i)%str)
+            enddo
+            ! allocate extended size
+            call self%alloc_chash(newsz)
+            ! set back the copied key-value pairs
+            self%keys(:oldsz) = keys_copy
+            do i=1,oldsz
+                if( allocated(values_copy(i)%str) ) allocate(self%values(i)%str, source=values_copy(i)%str)
+            enddo
+        else
+            stop 'cannot reallocate non-existent chash; simple_chash :: realloc_chash'
+        endif
+    end subroutine realloc_chash
 
     !>  \brief  copies a chash instance
     subroutine copy( self_out, self_in )
         class(chash), intent(inout) :: self_out
         class(chash), intent(in)    :: self_in
-        integer :: i
-        call self_out%new(self_in%nmax)
+        integer :: i, sz
+        sz = size(self_in%keys)
+        call self_out%alloc_chash(sz)
+        self_out%buffsz      = self_in%buffsz
+        self_out%chash_index = self_in%chash_index
+        self_out%exists      = .true.
         if( self_in%chash_index > 0 )then
             do i=1,self_in%chash_index
                 self_out%keys(i) = self_in%keys(i)
-                if( allocated(self_out%values(i)%str) ) deallocate(self_out%values(i)%str)
                 if( allocated(self_in%values(i)%str)  ) allocate(self_out%values(i)%str, source=self_in%values(i)%str)
             end do
         endif
-        self_out%chash_index = self_in%chash_index
     end subroutine copy
 
     !>  \brief  is a polymorphic assigner
@@ -105,10 +171,9 @@ contains
     subroutine parse_cmdline( self )
         class(chash), intent(inout) :: self
         character(len=STDLEN)       :: arg
-        integer, parameter          :: NMAX=60
         integer :: cmdstat, cmdlen, i, argcnt, pos1
         argcnt  = command_argument_count()
-        if( .not. self%exists ) call self%new(NMAX)
+        if( .not. self%exists ) call self%new
         do i=1,argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
@@ -139,13 +204,10 @@ contains
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         character(len=*), intent(in)    :: val
+        integer :: sz
         self%chash_index = self%chash_index + 1
-        if( self%chash_index > self%nmax )then
-            write(*,*) 'nmax: ', self%nmax
-            write(*,*) 'chash_index: ', self%chash_index
-            write(*,*) 'chash table full; push; simple_chash, nentries:', self%chash_index
-            stop
-        endif
+        sz               = size(self%keys)
+        if( self%chash_index > sz ) call self%realloc_chash
         self%keys(self%chash_index) = trim(adjustl(key))
         if( allocated(self%values(self%chash_index)%str) ) deallocate(self%values(self%chash_index)%str)
         allocate(self%values(self%chash_index)%str, source=trim(adjustl(val)))
@@ -174,15 +236,15 @@ contains
         character(len=*), intent(in)    :: key
         integer :: i, ind
         ind = self%lookup( key )
-        if( ind==0 .or. ind>self%chash_index ) return
-        do i=ind,self%chash_index-1
-            self%keys(i)   = self%keys(i+1)
+        if( ind == 0 .or. ind > self%chash_index ) return
+        do i=ind,self%chash_index - 1
+            self%keys(i)   = self%keys(i + 1)
             if( allocated(self%values(i)%str) ) deallocate(self%values(i)%str)
-            allocate(self%values(i)%str, source=self%values(i+1)%str)
+            allocate(self%values(i)%str, source=self%values(i + 1)%str)
         enddo
         self%keys(self%chash_index) = ''
         if( allocated(self%values(self%chash_index)%str) ) deallocate(self%values(self%chash_index)%str)
-        self%chash_index = self%chash_index-1
+        self%chash_index = self%chash_index - 1
     end subroutine delete
 
     ! GETTERS
@@ -226,8 +288,7 @@ contains
         integer :: i
         do i=1,self%chash_index
             if( trim(self%keys(i)) .eq. trim(key) )then
-                allocate(val, source=trim(self%values(i)%str),stat=alloc_stat)
-                if(alloc_stat /= 0) call alloc_errchk ("In simple_chash::get_1", alloc_stat)
+                allocate(val, source=trim(self%values(i)%str))
                 return
             endif
         end do
@@ -238,24 +299,15 @@ contains
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ival
         character(len=:), allocatable :: val
-        allocate(val, source=trim(self%values(ival)%str),stat=alloc_stat)
-        if(alloc_stat /= 0) call alloc_errchk("In simple_chash::get_2 val", alloc_stat)
+        allocate(val, source=trim(self%values(ival)%str))
     end function get_2
-
-    !>  \brief  gets the size of the hash
-    function get_nmax( self ) result( nmax )
-        class(chash), intent(in) :: self
-        integer :: nmax
-        nmax = self%nmax
-    end function get_nmax
 
     !>  \brief  gets a key in the chash
     function get_key( self, ikey ) result( val )
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ikey
         character(len=:), allocatable :: val
-        allocate(val, source=trim(self%keys(ikey)),stat=alloc_stat)
-        if(alloc_stat /= 0) call alloc_errchk("In simple_chash::get_key", alloc_stat)
+        allocate(val, source=trim(self%keys(ikey)))
     end function get_key
 
     !>  \brief  concatenates the chash into a string
@@ -298,12 +350,16 @@ contains
         character(len=:), allocatable  :: val
         character(len=32) :: key
         type(chash)       :: tmp
-        integer           :: ikey
+        integer           :: ikey, sz
         if( self%chash_index > 1 )then
-            call tmp%new(self%nmax)
+            ! make conforming temporary chash
+            sz = size(self%keys)
+            call tmp%alloc_chash(sz)
+            tmp%buffsz      = self%buffsz
+            tmp%chash_index = self%chash_index
+            tmp%exists      = .true.
             ! fill in keys
-            allocate(keys_sorted(self%chash_index),stat=alloc_stat)
-            if(alloc_stat /= 0) call alloc_errchk("In simple_chash::sort", alloc_stat)
+            allocate(keys_sorted(self%chash_index))
             keys_sorted = self%keys(:self%chash_index)
             ! sort keys
             call lexSort(keys_sorted)
@@ -476,28 +532,28 @@ contains
         call fclose(funit, errmsg='simple_chash :: write; ')
     end subroutine write
 
-    ! DESTRUCTOR
+    ! DESTRUCTORS
 
-    !>  \brief  is a destructor
     subroutine kill( self )
-        class(chash), intent(inout) :: self !< instance
-        integer :: i
+        class(chash), intent(inout) :: self
         if( self%exists )then
-            if(allocated(self%keys))then
-                deallocate(self%keys,stat=alloc_stat)
-                if(alloc_stat /= 0) call alloc_errchk("In simple_chash::kill keys", alloc_stat)
-            end if
-            if(allocated(self%values))then
-                do i=1,self%chash_index
-                    deallocate(self%values(i)%str)
-                end do
-                deallocate(self%values,stat=alloc_stat)
-                if(alloc_stat /= 0) call alloc_errchk("In simple_chash::kill values", alloc_stat)
-            end if
-            self%nmax        = 0
+            call self%dealloc_chash
+            self%buffsz      = 0
             self%chash_index = 0
             self%exists      = .false.
         endif
     end subroutine kill
+
+    subroutine dealloc_chash( self )
+        class(chash), intent(inout) :: self
+        integer :: i
+        if(allocated(self%keys)) deallocate(self%keys)
+        if(allocated(self%values))then
+            do i=1,size(self%values)
+                if( allocated(self%values(i)%str) ) deallocate(self%values(i)%str)
+            end do
+            deallocate(self%values)
+        end if
+    end subroutine dealloc_chash
 
 end module simple_chash

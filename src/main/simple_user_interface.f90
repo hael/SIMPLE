@@ -397,7 +397,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &3, 5, 0, 8, 7, 2, 2)                                                   ! # entries in each group
+        &3, 5, 0, 9, 7, 2, 2)                                                   ! # entries in each group
 
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -427,6 +427,7 @@ contains
         &that fall below a minimum population by randomization(yes|no){yes}', '(yes|no){yes}', .false.)
         call cluster2D%set_input('srch_ctrls', 7, maxits)
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
+        call cluster2D%set_input('srch_ctrls', 9, frac)
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

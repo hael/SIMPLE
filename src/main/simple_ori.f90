@@ -68,7 +68,6 @@ type :: ori
     procedure          :: hash_keys
     procedure          :: hash_vals
     procedure          :: chash_size
-    procedure          :: chash_nmax
     procedure          :: isthere
     procedure          :: isstatezero
     procedure          :: isevenodd
@@ -115,7 +114,6 @@ interface ori
 end interface
 
 real,       parameter :: zvec(3)  = [0.,0.,1.]
-integer,    parameter :: NNAMES   = 10
 class(ori), pointer   :: class_self1=>null(), class_self2=>null(), class_self3=>null()
 real                  :: angthres = 0.
 
@@ -143,14 +141,14 @@ contains
         call self%htab%set('state_balance',1.)
         call self%htab%set('frac',0.)
         call self%htab%set('eo',-1.) ! -1. is default (low-pass set); 0. for even; 1. for odd
-        self%chtab = chash(NNAMES)
+        self%chtab = chash()
         self%existence = .true.
     end subroutine new_ori
 
     !>  \brief  is a constructor
     subroutine new_ori_clean( self )
         class(ori), intent(inout) :: self
-        self%chtab = chash(NNAMES)
+        self%chtab = chash()
         self%existence = .true.
     end subroutine new_ori_clean
 
@@ -579,13 +577,6 @@ contains
         integer :: sz
         sz = self%chtab%size_of_chash()
     end function chash_size
-
-    !>  \brief  returns size of chash
-    function chash_nmax( self ) result( nmax )
-        class(ori), intent(in) :: self
-        integer :: nmax
-        nmax = self%chtab%get_nmax()
-    end function chash_nmax
 
     !>  \brief  check for presence of key in the ori hash
     function isthere( self, key ) result( found )

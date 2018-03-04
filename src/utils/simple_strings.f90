@@ -58,6 +58,12 @@ contains
             allocate( format, source='file' )
             return
         endif
+        ! check if string contains / -> directory
+        i = index(str, '/')
+        if( i /= 0 )then
+            allocate(format, source='dir')
+            return
+        endif
         ! real
         read(str,*,iostat=iostat) rvar
         if( iostat == 0 )then

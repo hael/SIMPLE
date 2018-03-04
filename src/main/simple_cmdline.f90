@@ -10,7 +10,7 @@ private
 
 !> cmdarg key/value pair command-line type
 type cmdarg
-    character(len=32)     :: key=''
+    character(len=KEYLEN) :: key=''
     character(len=STDLEN) :: carg=''
     logical               :: defined=.false.
     real                  :: rarg=0.

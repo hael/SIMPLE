@@ -843,6 +843,12 @@ contains
                     self%spproj_a_seg = CLS3D_SEG
                 case('ptcl3D')
                     self%spproj_a_seg = PTCL3D_SEG
+                case('projinfo')
+                    self%spproj_a_seg = PROJINFO_SEG
+                case('jobproc')
+                    self%spproj_a_seg = JOBPROC_SEG
+                case('compenv')
+                    self%spproj_a_seg = COMPENV_SEG
                 case DEFAULT
                     write(*,*) 'oritype: ', trim(self%oritype)
                     stop 'unsupported oritype; simple_params :: new'
@@ -866,6 +872,12 @@ contains
                     self%oritype = 'ptcl2D'
                 case(PTCL3D_SEG)
                     self%oritype = 'ptcl3D'
+                case(PROJINFO_SEG)
+                    self%oritype = 'projinfo'
+                case(JOBPROC_SEG)
+                    self%oritype = 'jobproc'
+                case(COMPENV_SEG)
+                    self%oritype = 'compenv'
                 case DEFAULT
                     stop 'unknown spproj_a_seg index; simple_params :: new'
             end select

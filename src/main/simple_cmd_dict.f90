@@ -184,7 +184,7 @@ contains
         call chdict%push('oritab',        'table of orientations(.txt|.simple)')
         call chdict%push('oritab2',       'table of orientations 2(.txt|.simple)')
         call chdict%push('oritab3D',      'table of 3D orientations(.txt|.simple)')
-        call chdict%push('oritype',       'SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)')
+        call chdict%push('oritype',       'SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D|projinfo|jobproc|compenv)')
         call chdict%push('outer',         'outer mask radius(in pixels)')
         call chdict%push('outfile',       'output document')
         call chdict%push('outside',       'extract boxes outside the micrograph boundaries(yes|no){no}')
