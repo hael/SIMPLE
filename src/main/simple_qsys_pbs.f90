@@ -20,7 +20,7 @@ type, extends(qsys_base) :: qsys_pbs
 end type qsys_pbs
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_pbs_env( self )
         class(qsys_pbs), intent(inout) :: self
@@ -63,7 +63,7 @@ contains
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
-        do i=1,job_descr%size_of_chash()
+        do i=1,job_descr%size_of()
             if(allocated(key))deallocate(key)
             key     = job_descr%get_key(i)
             which   = self%env%lookup(key)
@@ -118,7 +118,7 @@ contains
                 endif
             end subroutine write_formatted
     end subroutine write_pbs_header
-    
+
     !> \brief  is a destructor
     subroutine kill_pbs_env( self )
         class(qsys_pbs), intent(inout) :: self

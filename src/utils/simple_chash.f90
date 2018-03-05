@@ -1,7 +1,7 @@
 ! character hash
 module simple_chash
 use simple_defs
-use simple_syslib, only: alloc_errchk, is_open
+use simple_syslib, only: is_open
 use simple_fileio, only: fopen, fileio_errmsg, fclose
 use simple_strings
 implicit none
@@ -43,7 +43,7 @@ type :: chash
     generic            :: get => get_1, get_2
     procedure          :: get_key
     procedure          :: chash2str
-    procedure          :: size_of_chash
+    procedure          :: size_of
     !< MODIFIERS
     procedure          :: sort
     !< PRINTERS
@@ -155,7 +155,7 @@ contains
         if( self_in%chash_index > 0 )then
             do i=1,self_in%chash_index
                 self_out%keys(i) = self_in%keys(i)
-                if( allocated(self_in%values(i)%str)  ) allocate(self_out%values(i)%str, source=self_in%values(i)%str)
+                if( allocated(self_in%values(i)%str) ) allocate(self_out%values(i)%str, source=self_in%values(i)%str)
             end do
         endif
     end subroutine copy
@@ -335,11 +335,11 @@ contains
     end function chash2str
 
     !>  \brief  returns size of chash
-    function size_of_chash( self ) result( sz )
+    function size_of( self ) result( sz )
         class(chash), intent(in) :: self
         integer :: sz
         sz = self%chash_index
-    end function size_of_chash
+    end function size_of
 
     ! MODIFIERS
 

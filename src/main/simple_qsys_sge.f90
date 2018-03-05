@@ -20,7 +20,7 @@ type, extends(qsys_base) :: qsys_sge
 end type qsys_sge
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_sge_env( self )
         class(qsys_sge), intent(inout) :: self
@@ -57,20 +57,14 @@ contains
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
-        do i=1,job_descr%size_of_chash()
+        do i=1,job_descr%size_of()
             key   = job_descr%get_key(i)
-
-            print *, 'key from sge: ', key
-
             which = self%env%lookup(key)
             if( which > 0 )then
                 qsub_cmd = self%env%get(which)
                 qsub_val = job_descr%get(i)
                 if( key .eq. 'job_addon_line' )then
                     if( allocated(addon_line) ) deallocate(addon_line)
-
-                    print *, 'qsub val for key(job_addon_line): ', qsub_val
- 
                     allocate( addon_line, source=qsub_val )
                     cycle
                 else
@@ -115,7 +109,7 @@ contains
             endif
         endif
     end subroutine write_sge_header
-    
+
     !> \brief  is a destructor
     subroutine kill_sge_env( self )
         class(qsys_sge), intent(inout) :: self

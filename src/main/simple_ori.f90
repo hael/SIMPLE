@@ -130,6 +130,7 @@ contains
     !>  \brief  is a constructor
     subroutine new_ori( self )
         class(ori), intent(inout) :: self
+        self%htab = hash()
         call self%set_euler([0.,0.,0.])
         call self%htab%set('e1',0.)
         call self%htab%set('e2',0.)
@@ -148,6 +149,7 @@ contains
     !>  \brief  is a constructor
     subroutine new_ori_clean( self )
         class(ori), intent(inout) :: self
+        self%htab  = hash()
         self%chtab = chash()
         self%existence = .true.
     end subroutine new_ori_clean
@@ -554,7 +556,7 @@ contains
     function hash_size( self ) result( sz )
         class(ori), intent(in) :: self
         integer :: sz
-        sz = self%htab%size_of_hash()
+        sz = self%htab%size_of()
     end function hash_size
 
     !>  \brief  returns the keys of the hash
@@ -568,14 +570,14 @@ contains
     function hash_vals( self ) result( vals )
         class(ori), intent(inout) :: self
         real(kind=4), allocatable :: vals(:)
-        vals = self%htab%get_vals()
+        vals = self%htab%get_values()
     end function hash_vals
 
     !>  \brief  returns size of chash
     function chash_size( self ) result( sz )
         class(ori), intent(in) :: self
         integer :: sz
-        sz = self%chtab%size_of_chash()
+        sz = self%chtab%size_of()
     end function chash_size
 
     !>  \brief  check for presence of key in the ori hash
@@ -638,8 +640,8 @@ contains
         class(ori), intent(inout) :: self
         character(len=:), allocatable :: str, str_chtab, str_htab
         integer :: sz_chash, sz_hash
-        sz_chash = self%chtab%size_of_chash()
-        sz_hash  = self%htab%size_of_hash()
+        sz_chash = self%chtab%size_of()
+        sz_hash  = self%htab%size_of()
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
         if( sz_chash > 0 .and. sz_hash > 0 )then
@@ -1065,6 +1067,7 @@ contains
     subroutine kill( self )
         class(ori), intent(inout) :: self
         if( self%existence )then
+            call self%htab%kill
             call self%chtab%kill
             self%existence = .false.
         endif

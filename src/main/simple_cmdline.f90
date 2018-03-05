@@ -344,7 +344,7 @@ contains
         call h%new( self%NMAX )
         call h%read( trim(fname) )
         self%entire_line = h%chash2str()
-        self%argcnt = h%size_of_chash()
+        self%argcnt = h%size_of()
         if( self%argcnt < 2 )then
             call print_cmdline(keys_required, keys_optional)
             stop

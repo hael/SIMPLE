@@ -215,7 +215,7 @@ contains
                 call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//trim(METADATA_EXT))
             endif
             if( part_params_present  )then
-                do iadd=1,part_params(ipart)%size_of_chash()
+                do iadd=1,part_params(ipart)%size_of()
                     key = part_params(ipart)%get_key(iadd)
                     val = part_params(ipart)%get(iadd)
                     call job_descr%set(key, val)
@@ -232,7 +232,7 @@ contains
             deallocate(outfile_body_local)
         endif
         if( part_params_present  )then
-            do iadd=1,part_params(1)%size_of_chash()
+            do iadd=1,part_params(1)%size_of()
                 key = part_params(1)%get_key(iadd)
                 call job_descr%delete(key)
             end do

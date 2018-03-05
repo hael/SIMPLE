@@ -68,7 +68,7 @@ contains
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
-        do i=1,job_descr%size_of_chash()
+        do i=1,job_descr%size_of()
             key   = job_descr%get_key(i)
             which = self%env%lookup(key)
             if( which > 0 )then

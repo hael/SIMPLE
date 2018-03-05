@@ -11,7 +11,6 @@ use simple_image,        only: test_image
 use simple_cluster_shc,  only: test_cluster_shc
 use simple_args,         only: test_args
 use simple_online_var,   only: test_online_var
-use simple_hash,         only: test_hash
 use simple_imghead,      only: test_imghead
 use simple_jiffys,       only: simple_end
 use simple_ftexp_shsrch, only: test_ftexp_shsrch
@@ -36,7 +35,6 @@ call test_imghead            ! NOT HAPPY: seems to believe it is an imgheadrec
 call test_image(.false.)     ! NOT HAPPY
 call test_cluster_shc        ! pass with PGI
 call test_online_var         ! pass with PGI
-call test_hash               ! pass with PGI
 call test_ftexp_shsrch       ! pass with PGI
 ! LOCAL TESTFUNCTIONS
 call test_multinomal         ! pass with PGI
