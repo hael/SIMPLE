@@ -8,25 +8,15 @@ include 'simple_lib.f08'
 use, intrinsic :: iso_c_binding
 implicit none
 
-
-    !     public :: pbma_read_data, pbma_check_data, pbma_read_header
-    !     public :: pbma_write, pbma_write_data, pbma_write_header
-
-    !     public :: ppma_read_data, ppma_read_header, ppma_check_data
-    !     public :: ppma_write, ppma_write_data, ppma_write_header
-
-    !     public :: pgma_check_data, pgma_read_data, pgma_read_header
-    !     public :: pgma_write, pgma_write_data, pgma_write_header
-    !     private
-
+private
 #include "simple_local_flags.inc"
 
 
-    !      type PNM
+    !  type PNM
     !          type(Pixel), allocatable :: buffer(:)
     ! !         type(Pixel), allocatable :: ext_buffer(:)
     !          integer :: width ,height
-    !      contains
+    !  contains
     !          procedure :: read
     !          procedure :: write
     !          procedure :: new
@@ -36,28 +26,16 @@ implicit none
     !          procedure :: setPixelAt_Int
     !          procedure :: setPixelAt_Real
     !          procedure :: kill
-    !      end type PNM
+    !  end type PNM
 
+public :: pgma_check_data, pgma_read_data, pgma_read_header, &
+    pgma_write, pgma_write_data, pgma_write_header
 
+public :: ppma_check_data, ppma_read_data, ppma_read_header, &
+    ppma_write, ppma_write_data, ppma_write_header
 
-    ! !     !     !
-    ! !     !     !  KRONROD is provided by the C library, and so the following
-    ! !     !     !  INTERFACE block must be set up to describe how data is to
-    ! !     !     !  be passed.
-    ! !     !     !
-    ! !     interface
-    ! !         !         subroutine read_pnm (  ) bind ( c )
-    ! !         !             use iso_c_binding
-    ! !         !             integer ( c_int ), VALUE :: n
-    ! !         !             real ( c_double ), VALUE :: eps
-    ! !         !             real ( c_double ) :: x(*)
-    ! !         !             real ( c_double ) :: w1(*)
-    ! !         !             real ( c_double ) :: w2(*)
-    ! !         !         end subroutine  read_pnm
-    ! !     end interface
 
 contains
-
 
     !         integer function getWidth(self)
     !             class(PNM), intent(inout) :: self
@@ -437,6 +415,7 @@ contains
             end do
         end do
     end subroutine ppma_read_data
+
     subroutine ppma_read_header ( file_in_unit, row_num, col_num, rgb_max, ierror )
         integer, intent(in) :: file_in_unit
         integer, intent(out) :: ierror
@@ -542,7 +521,7 @@ contains
         character (len=*), intent(in) :: file_out_name
         integer, intent(inout) :: ierror
         integer :: ios, file_out_unit, rgb_max
-
+#include "simple_local_flags.inc"
         ierror = 0
         !  Compute the maximum color value.
         rgb_max = max ( &

@@ -213,7 +213,7 @@ contains
         character(len=STDLEN)          :: filename
         real                           :: buf_range(2), offset
         logical                        :: no_range
-        integer, allocatable           :: int_buffer(:,:)
+        integer, allocatable           :: int_buffer(:)
         no_range      = .true.
         if(.not. allocated(buffer)) then
             status    = -1
@@ -247,13 +247,13 @@ contains
             offset = buf_range(1)
             print *,"Offset value of buffer reset to ", offset
         end if
-        !allocate(int_buffer(width,height))
-        int_buffer = transfer(buffer,1)
-        call cgd_image_create_truecolor(width,height,image)
-        ! do i=0,width-1
-        !     do j=0,height-1
+        allocate(int_buffer(width*height))
+        !int_buffer = transfer(buffer,1)
+        call cgd_image_create(width,height,image)
+        do i=0,width-1
+             do j=0,height-1
         !         if (no_range) then
-        !             ex= INT(buffer(i+1,j+1))
+                 int_buffer(i+1+width*(j))= INT(buffer(i+1,j+1))
         !         else
         !             colorval= INT( ( buffer(i+1,j+1) - offset / abs(buf_range(2)-buf_range(1)) )  * max_colors**3 )
         !             if (colorval >= max_colors**3) colorval = max_colors**3 - 1
@@ -264,9 +264,9 @@ contains
         !             ex = closest_color(image,r,g,b)
         !             !  if(colors(r+1,g+1,b+1)==0)  call allocate_color(image,i,j,k,colors(r,g,b))
         !         end if
-        !         call set_pixel(image, i, j, ex )
-        !     end do
-        ! end do
+       !          call set_pixel(image, i, j, ex )
+             end do
+         end do
         call cgd_image_jpeg_buffer_put(image%ptr, width*height,int_buffer)
         !        colorval=greyscale(image)
         !        print*,' Greyscale color ', colorval

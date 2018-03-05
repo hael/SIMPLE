@@ -1,12 +1,4 @@
 
-/* // gcc -std=c11 -ljpeg ... */
-
-/* typedef unsigned char Pixel; */
-
-/* typedef struct { */
-/*  unsigned int width, height; */
-/*  Pixel *data; */
-/* } RawImage; */
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +18,10 @@ struct jpeg_decompress_struct decInfo;
 struct jpeg_error_mgr errMgr;
 J_COLOR_SPACE colorSpace = JCS_RGB;
 int numComponents = 3;
-int quality = 80;
+int Jpeg_quality = 80;
+int Jpeg_width = 80;
+int Jpeg_height = 80;
+int* Jpeg_img_buffer;
 struct stat file_info;
 unsigned long jpg_size;
 unsigned char *jpg_buffer;
@@ -60,30 +55,7 @@ JpegEnc_destroy()
     jpeg_destroy_compress(&encInfo);
 }
 
-//void JpegEnc_setColorSpace(J_COLOR_SPACE colorSpace_, int numComponents_) {
-//    colorSpace = colorSpace_;
-//    numComponents = numComponents_;
-//}
 
-J_COLOR_SPACE JpegEnc_getColorSpace()
-{
-    return colorSpace;
-}
-
-int JpegEnc_getNumComponents()
-{
-    return numComponents;
-}
-
-void JpegEnc_setQuality(int quality_)
-{
-    quality = quality_;
-}
-
-int JpegEnc_getQuality()
-{
-    return quality;
-}
 
 int JpegEnc_encode(uint8_t* img, int width, int height, const char* path)
 {
@@ -99,7 +71,7 @@ int JpegEnc_encode(uint8_t* img, int width, int height, const char* path)
     encInfo.in_color_space = colorSpace;
     encInfo.input_components = numComponents;
     jpeg_set_defaults(&encInfo);
-    jpeg_set_quality(&encInfo, quality, true);
+    jpeg_set_quality(&encInfo, Jpeg_quality, true);
 
     jpeg_start_compress(&encInfo, true);
 
@@ -126,36 +98,24 @@ void JpegDec_destroy()
     jpeg_destroy_decompress(&decInfo);
 }
 
-void JpegDec_setColorSpace(J_COLOR_SPACE colorSpace_)
-{
-    colorSpace = colorSpace_;
-}
-
-J_COLOR_SPACE JpegDec_getColorSpace()
-{
-    return colorSpace;
-}
 
 
 int JpegDec_decode(const char * path, uint8_t** imgbuf, int *width, int* height)
 {
-  FILE* file = fopen(path, "rb");
-  if(file == NULL) {
+    FILE* file = fopen(path, "rb");
+    if(file == NULL) {
+      return 1;
+    }
 
-    return 1;
-  }
-
-  jpeg_stdio_src(&decInfo, file);
-
-
+    jpeg_stdio_src(&decInfo, file);
     jpeg_read_header(&decInfo, true);
     decInfo.out_color_space = colorSpace;
     decInfo.raw_data_out = false;
-
     jpeg_start_decompress(&decInfo);
-
     *width = decInfo.image_width;
     *height = decInfo.image_height;
+
+
     size_t rowSize = decInfo.image_width * decInfo.num_components;
     *imgbuf = malloc(decInfo.image_height * rowSize * sizeof(uint8_t));
 
@@ -176,8 +136,9 @@ int JpegDec_decode(const char * path, uint8_t** imgbuf, int *width, int* height)
 #define CWRITE_JPEG cwrite_jpeg_
 #define CREAD_JPEG cread_jpeg_
 
-void cwrite_jpeg(uint8_t** img,  const char* file_name, int* width, int* height, int* quality_, int* colorspec, int* status)
+void cwrite_jpeg(void** imgptr,  const char* file_name, int* width, int* height, int* quality, int* colorspec, int* status)
 {
+  unsigned int pixel;
     JpegEnc_init();
     *status = 1;
     if(file_name == NULL) return;
@@ -187,8 +148,22 @@ void cwrite_jpeg(uint8_t** img,  const char* file_name, int* width, int* height,
     // || colorspec == JCS_RGB ){ //  , JCS_YCbCr|| JCS_CMYK
     //  j.setColorSpace(colorspec);
     // }
-    //quality = *quality_;
-    *status =  JpegEnc_encode(*img, *width, *height, file_name);
+    if((J_COLOR_SPACE)*colorspec != JCS_GRAYSCALE) return;
+    Jpeg_quality = *quality;
+    uint8_t *img = malloc(sizeof(char)* (*height) * (*width) * 3);
+    for(int y = 0; y < *height; y++) {
+        for(int x = 0; x < *width; x++) {
+          pixel = (unsigned int) ((int**)imgptr)[x][y];
+            if (pixel > 0xffffff) {
+              pixel = 0xffffff;
+            }else{
+            img[y * (*width) * 3 + x * 3 + 0] = (uint8_t)(pixel >> 16);
+            img[y * (*width) * 3 + x * 3 + 1] = (uint8_t)((pixel & 0x00ff00) >> 8);
+            img[y * (*width) * 3 + x * 3 + 2] = (uint8_t)(pixel & 0x0000ff);
+            }
+        }
+    }
+    *status =  JpegEnc_encode(img, *width, *height, file_name);
     JpegEnc_destroy();
     *status= 0;
 }
@@ -226,7 +201,7 @@ void cread_jpeg(const char* file_name, void** outptr, int* width, int* height, i
 }
 
 #define WRITE_JPEG write_jpeg_
-#define READ_JPEG read_jpeg_
+#define READ_JPEG2 read_jpeg_
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -237,8 +212,8 @@ void cread_jpeg(const char* file_name, void** outptr, int* width, int* height, i
 void read_jpeg2(const char* file_name, int** out_buffer, int*width, int*height, int* colorspec,  int* status)
 {
     struct stat file_info;
-    int rc, i, pixel_size;
-    unsigned long bmp_size;
+    int rc, i,j, pixel_size;
+    unsigned long bmp_size, pixel;
     unsigned char * buffer;
     int row_stride;
     int fd;
@@ -313,11 +288,24 @@ void read_jpeg2(const char* file_name, int** out_buffer, int*width, int*height, 
     jpeg_destroy_decompress(&decInfo);
     fprintf(stderr, "Read_jpeg destroy\n");
 
-    // And free the input buffer
+    // And free the jpg buffer
     free(jpg_buffer);
     *colorspec = pixel_size;
     *status = 0;
-    out_buffer = buffer;
+    //Set the output buffer
+
+    for (i=0; i< *width;i++){
+      for (j=0; j< *height;j++) {
+        if(pixel_size == 1){
+          pixel = (int) buffer[i+ j*(*width)];
+        }else{
+          pixel =  ( (unsigned long) buffer[j * (*width) * 3 + i * 3 + 0]) << 16 ;
+          pixel += ( (unsigned long) buffer[j * (*width) * 3 + i * 3 + 1] ) << 8;
+          pixel += (unsigned long) buffer[j * (*width) * 3 + i * 3 + 2] ;
+        }
+        (*out_buffer)[i+ j*(*width)] = (int) pixel;
+      }
+    }
 
     for (i=0; i< *width;i++){
        fprintf(stderr, " %d ", out_buffer[0][i]);
@@ -325,23 +313,30 @@ void read_jpeg2(const char* file_name, int** out_buffer, int*width, int*height, 
 }
 
 
-void write_jpeg(int*** img, const char* filename, int* width, int* height, int* quality_, int* colorspec,  int*status)
+void write_jpeg(void *imgptr, const char* filename, int* width, int* height, int* quality, int* colorspec,  int*status)
 {
+   if(strlen(filename) > 0 && strcmp(filename, "-") != 0)
+   fprintf(stderr, "cjpg::write_jpeg  opening output file %s", filename);
+   fflush(stderr);
     FILE* outfile;
     unsigned long pixel;
     int x, y, depth = 24;
     char* buffer;
     JSAMPROW row_pointer;
+    int ** img = imgptr;
     int w, h;
+    printf( "In write_jpeg in cjpg.c:  %d ", *img);
+    //  unsigned char* jbuf;
 
-    unsigned char* jbuf;
-    int numerator, newsize, size;
+    int size, numerator;
     size = 256;
     *status=1;
-    for(numerator = 1; numerator <= 8; numerator++) {
-        newsize = (*width) * numerator / 8;
+    {
+    for( numerator = 1; numerator <= 8; numerator++) {
+        int newsize = (*width) * numerator / 8;
         if(newsize > size)
             break;
+    }
     }
 
     outfile = fopen(filename, "wb");
@@ -354,7 +349,20 @@ void write_jpeg(int*** img, const char* filename, int* width, int* height, int* 
     printf("Width  %d   Height %d ", w, h);
     /* collect separate RGB values to a buffer */
     buffer = malloc(sizeof(char) * 3 * w * h);
-
+    if (*colorspec == 1){
+      for(y = 0; y < *height; y++) {
+        for(x = 0; x < *width; x++) {
+          pixel = (unsigned long) img[x + y* (*width)];
+          if (pixel > 0xffffff) {
+            pixel = 0xffffff;
+          }else{
+            buffer[y * (*width) * 3 + x * 3 + 0] = (char)(pixel & 0x0000ff);
+            buffer[y * (*width) * 3 + x * 3 + 1] = (char)(pixel & 0x0000ff);
+            buffer[y * (*width) * 3 + x * 3 + 2] = (char)(pixel & 0x0000ff);
+          }
+        }
+      }
+    } else{
     for(y = 0; y < *height; y++) {
         for(x = 0; x < *width; x++) {
             pixel = (unsigned long) img[x][y];
@@ -367,7 +375,7 @@ void write_jpeg(int*** img, const char* filename, int* width, int* height, int* 
             }
         }
     }
-
+    }
     encInfo.err = jpeg_std_error(&errMgr);
     jpeg_create_compress(&encInfo);
     jpeg_stdio_dest(&encInfo, outfile);
@@ -378,7 +386,7 @@ void write_jpeg(int*** img, const char* filename, int* width, int* height, int* 
     jpeg_set_defaults(&encInfo);
     encInfo.scale_num = numerator;
     encInfo.scale_denom = 8;
-    jpeg_set_quality(&encInfo, *quality_, TRUE);
+    jpeg_set_quality(&encInfo, *quality, 1);
     jpeg_start_compress(&encInfo, TRUE);
     while(encInfo.next_scanline < encInfo.image_height) {
         row_pointer = (JSAMPROW) &buffer[encInfo.next_scanline * (depth >> 3) * (*width)];
@@ -431,11 +439,6 @@ void read_jpeg (const char* file_name, void** img, int*width, int*height, int* c
 		fprintf(stderr, "read_jpeg failed\n");
 		exit(EXIT_FAILURE);
 	}
-
-	// Variables for the source jpg
-	struct stat file_info;
-	unsigned long jpg_size;
-	unsigned char *jpg_buffer;
 
 	// Variables for the decompressor itself
 	struct jpeg_decompress_struct cinfo;
@@ -593,17 +596,25 @@ void read_jpeg (const char* file_name, void** img, int*width, int*height, int* c
 
   // Write the decompressed bitmap out to a ppm file, just to make sure
 	// it worked.
-	fd = open("output.ppm", O_CREAT | O_WRONLY, 0666);
-	char buf[1024];
-	rc = sprintf(buf, "P6 %d %d 255\n", *width, *height);
-	write(fd, buf, rc); // Write the PPM image header before data
-	write(fd, bmp_buffer, bmp_size); // Write out all RGB pixel data
+	/* fd = open("output.ppm", O_CREAT | O_WRONLY, 0666); */
+	/* char buf[1024]; */
+	/* rc = sprintf(buf, "P6 %d %d 255\n", *width, *height); */
+	/* write(fd, buf, rc); // Write the PPM image header before data */
+	/* write(fd, bmp_buffer, bmp_size); // Write out all RGB pixel data */
 
-	close(fd);
+	/* close(fd); */
 }
 
 #define SETUP_JPEG setup_jpeg_
-void setup_jpeg (  int*width, int*height, int** img,  int** outimg)
+void setup_jpeg (  int*width, int*height, int** img)
 {
-
+  Jpeg_width = *width;
+  Jpeg_height = *height;
+  Jpeg_img_buffer= malloc (sizeof(int) *Jpeg_height * Jpeg_width);
+  *img = Jpeg_img_buffer;
+}
+#define DESTROY_JPEG destroy_jpeg_
+void destroy_jpeg ( )
+{
+  free(Jpeg_img_buffer);
 }

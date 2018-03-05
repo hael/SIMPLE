@@ -7,7 +7,10 @@ module simple_test_libgd_io
     include 'simple_lib.f08'
     use simple_img
     implicit none
-!    public :: test_png_io
+    private
+    public :: test_png_io, test_jpeg_io, create_raw_png_tmp
+#include "simple_local_flags.inc"
+
 contains
 
     subroutine test_png_io

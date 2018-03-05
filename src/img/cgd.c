@@ -1,3 +1,5 @@
+#define HAVE_LIBPNG 1
+#define HAVE_LIBJPEG 1
 #define CGD_IMAGE_SET_AA                 cgd_image_set_aa_
 #define CGD_IMAGE_SET_AA_NB              cgd_image_set_aa_nb_
 #define CGD_IMAGE_SET_CLIP               cgd_image_set_clip_
@@ -384,6 +386,20 @@ void CGD_IMAGE_JPEG(gdImagePtr *ptr, const char *file, int *quality)
             (void)fclose(f);
         }
     }
+#ifdef _DEBUG
+    	FILE*in = fopen (file, "rb");
+      if (!in) {
+        fprintf(stderr, "Can't open file test/gdtest.jpg.\n");
+        exit (1);
+      }
+      gdImagePtr im2 = gdImageCreateFromJpeg (in);
+      fclose (in);
+      if (!im2) {
+        fprintf(stderr, "gdImageCreateFromJpeg failed.\n");
+        exit (1);
+      }
+      gdImageDestroy (im2);
+#endif
     return;
 }
 
@@ -395,6 +411,10 @@ void CGD_IMAGE_CREATE_FROM_JPEG(const char *file, gdImagePtr *ptr)
         *ptr = 0;
     } else {
         *ptr = gdImageCreateFromJpeg(f);
+        if (!*ptr) {
+          fprintf(stderr, "gdImageCreateFromJpeg failed. Attempted to open %s\n", file);
+          exit (1);
+        }
         (void)fclose(f);
     }
     return;
@@ -683,7 +703,7 @@ void CGD_IMAGE_COMPARE(gdImagePtr *ptr1, gdImagePtr *ptr2, int*c)
 
 void CGD_IMAGE_PNG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
 {
-    gdIOCtx *ctx; int status; const void * tmp =  array;
+    struct gdIOCtx *ctx; int status; const void * tmp =  array;
     gdImagePngCtx(*ptr, ctx);
     status = gdPutBuf(tmp, *size, ctx);
 }
@@ -698,8 +718,7 @@ void CGD_IMAGE_PNG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
 
 void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
 {
-    gdIOCtx *ctx; const void * tmp =  array;
-
+    gdIOCtx *ctx; const void * tmp =  *array;
     gdImageJpegCtx(*ptr, ctx, *size);
     gdPutBuf(tmp, *size, ctx);
 }

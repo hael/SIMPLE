@@ -4,7 +4,8 @@ module simple_test_pnm_io
     use simple_pnm
     implicit none
 
-!    public :: test_pnm_io
+    public :: test_pnm_io
+#include "simple_local_flags.inc"
 
 contains
     subroutine test_pnm_io
@@ -299,85 +300,85 @@ contains
 
         return
     end subroutine pgma_test03
-    subroutine pbma_example ( row_num, col_num, b )
-        integer, intent(in) :: col_num, row_num
-        integer, intent(inout) :: b(row_num,col_num)
-        integer :: i, j
-        real (kind=dp) :: r, test, x, xc, y, yc
+    ! subroutine pbma_example ( row_num, col_num, b )
+    !     integer, intent(in) :: col_num, row_num
+    !     integer, intent(inout) :: b(row_num,col_num)
+    !     integer :: i, j
+    !     real (kind=dp) :: r, test, x, xc, y, yc
 
-        xc = real ( col_num, kind = 8 ) / 2.0D+00
-        yc = real ( row_num, kind = 8 ) / 2.0D+00
-        r = real ( min ( row_num, col_num ), kind = 8 ) / 3.0D+00
+    !     xc = real ( col_num, kind = 8 ) / 2.0D+00
+    !     yc = real ( row_num, kind = 8 ) / 2.0D+00
+    !     r = real ( min ( row_num, col_num ), kind = 8 ) / 3.0D+00
 
-        do i = 1, row_num
-            y = real ( i, kind = 8 )
-            do j = 1, col_num
-                x = real ( j, kind = 8 )
-                test = r - sqrt ( ( x - xc )**2 + 0.75D+00 * ( y - yc )**2 )
-                if ( abs ( test ) <= 3.0D+00 ) then
-                    b(i,j) = 1
-                else
-                    b(i,j) = 0
-                end if
-            end do
-        end do
-    end subroutine pbma_example
+    !     do i = 1, row_num
+    !         y = real ( i, kind = 8 )
+    !         do j = 1, col_num
+    !             x = real ( j, kind = 8 )
+    !             test = r - sqrt ( ( x - xc )**2 + 0.75D+00 * ( y - yc )**2 )
+    !             if ( abs ( test ) <= 3.0D+00 ) then
+    !                 b(i,j) = 1
+    !             else
+    !                 b(i,j) = 0
+    !             end if
+    !         end do
+    !     end do
+    ! end subroutine pbma_example
 
-    subroutine pbma_read_test ( file_in_name )
-        character(len=*), intent(in) :: file_in_name
-        integer, allocatable, dimension ( :, : ) :: b
-        integer :: file_in_unit, ierror, ios
-        integer :: col_num, row_num
+    ! subroutine pbma_read_test ( file_in_name )
+    !     character(len=*), intent(in) :: file_in_name
+    !     integer, allocatable, dimension ( :, : ) :: b
+    !     integer :: file_in_unit, ierror, ios
+    !     integer :: col_num, row_num
 
-        call fopen ( file_in_unit, file = file_in_name, status = 'old', &
-            iostat = ios )
+    !     call fopen ( file_in_unit, file = file_in_name, status = 'old', &
+    !         iostat = ios )
 
-        if ( ios /= 0 ) then
-            ierror = 1
-            write(*,'(a)') ' '
-            write(*,'(a)') 'PBMA_READ_TEST - Fatal error!'
-            write(*,'(a)') '  Could not open the file.'
-            stop
-        end if
-        !  Read the header.
-        call pbma_read_header ( file_in_unit, row_num, col_num )
-        !  Allocate the data.
-        allocate ( b(row_num,col_num) )
-        !  Read the data.
-        call pbma_read_data ( file_in_unit, row_num, col_num, b )
+    !     if ( ios /= 0 ) then
+    !         ierror = 1
+    !         write(*,'(a)') ' '
+    !         write(*,'(a)') 'PBMA_READ_TEST - Fatal error!'
+    !         write(*,'(a)') '  Could not open the file.'
+    !         stop
+    !     end if
+    !     !  Read the header.
+    !     call pbma_read_header ( file_in_unit, row_num, col_num )
+    !     !  Allocate the data.
+    !     allocate ( b(row_num,col_num) )
+    !     !  Read the data.
+    !     call pbma_read_data ( file_in_unit, row_num, col_num, b )
 
-        call fclose( file_in_unit )
-        !  Check the data.
-        call pbma_check_data ( row_num, col_num, b )
+    !     call fclose( file_in_unit )
+    !     !  Check the data.
+    !     call pbma_check_data ( row_num, col_num, b )
 
-        write(*,'(a)') ' '
-        write(*,'(a)') 'PBMA_READ_TEST:'
-        write(*,'(a)') '  PBMA_CHECK_DATA has approved the data from the file.'
+    !     write(*,'(a)') ' '
+    !     write(*,'(a)') 'PBMA_READ_TEST:'
+    !     write(*,'(a)') '  PBMA_CHECK_DATA has approved the data from the file.'
 
-        deallocate ( b )
+    !     deallocate ( b )
 
-        return
-    end subroutine pbma_read_test
+    !     return
+    ! end subroutine pbma_read_test
 
-    subroutine pbma_write_test ( file_out_name )
-        integer, allocatable, dimension ( :, : ) :: b
-        character(len=*) file_out_name
-        integer :: col_num
-        integer :: row_num
+    ! subroutine pbma_write_test ( file_out_name )
+    !     integer, allocatable, dimension ( :, : ) :: b
+    !     character(len=*) file_out_name
+    !     integer :: col_num
+    !     integer :: row_num
 
-        row_num = 200
-        col_num = 200
-        !  Allocate memory.
-        allocate ( b(row_num,col_num) )
-        !  Set the data.
-        call pbma_example ( row_num, col_num, b )
-        !  Write the data to the file.
-        call pbma_write ( file_out_name, row_num, col_num, b )
+    !     row_num = 200
+    !     col_num = 200
+    !     !  Allocate memory.
+    !     allocate ( b(row_num,col_num) )
+    !     !  Set the data.
+    !     call pbma_example ( row_num, col_num, b )
+    !     !  Write the data to the file.
+    !     call pbma_write ( file_out_name, row_num, col_num, b )
 
-        deallocate ( b );
+    !     deallocate ( b );
 
-        return
-    end subroutine pbma_write_test
+    !     return
+    ! end subroutine pbma_write_test
 
     subroutine ppma_read_test ( file_in_name, ierror )
         integer, allocatable, dimension ( :, : ) :: b
