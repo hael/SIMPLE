@@ -322,7 +322,7 @@ type :: params
     real    :: fny=0.
     real    :: focusmsk=0.         !< spherical msk for use with focused refinement
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
-    real    :: fraca=0.07          !< fraction of amplitude contrast used for fitting CTF{0.07}
+    real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_outliers=0.
     real    :: fraczero=0.

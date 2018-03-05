@@ -4,7 +4,7 @@ use simple_defs
 use simple_strings, only: real2str, parsestr
 implicit none
 
-public :: hash!, test_hash
+public :: hash
 private
 
 integer, parameter :: BUFFSZ_DEFAULT = 10
@@ -41,8 +41,6 @@ type :: hash
     procedure          :: size_of
     ! I/O
     procedure          :: print
-    ! procedure          :: read
-    ! procedure          :: write
     !< DESTRUCTORS
     procedure          :: kill
     procedure, private :: dealloc_hash
@@ -306,53 +304,6 @@ contains
         write(*,"(A)") trim(real2str(self%values(self%hash_index)))
     end subroutine print
 
-    !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
-    ! subroutine read( self, fnr )
-    !     use simple_math, only: is_a_number
-    !     class(hash), intent(inout) :: self
-    !     integer,     intent(in)    :: fnr
-    !     character(len=1024)        :: line
-    !     character(len=64)          :: keyvalpairs(NMAX)
-    !     character(len=64)          :: keyvalpair
-    !     character(len=KEYLEN)      :: key
-    !     character(len=100)         :: io_message
-    !     real    :: val
-    !     integer :: j, pos1, nkeyvalpairs, io_stat
-    !     read(fnr,fmt='(A)',advance='no',eor=100) line
-    !     100 call parsestr(line, ' ', keyvalpairs, nkeyvalpairs)
-    !     do j=1,nkeyvalpairs
-    !         keyvalpair = keyvalpairs(j)
-    !         pos1 = index(keyvalpair, '=') ! position of '='
-    !         if( pos1 /= 0 )then
-    !             key = keyvalpair(:pos1-1) ! key
-    !             read(keyvalpair(pos1+1:),*,iostat=io_stat,iomsg=io_message) val
-    !             ! Check the read was successful
-    !             if( io_stat .ne. 0 )then
-    !                 write(*,*) 'key = ', key
-    !                 write(*,*) 'value = ', val
-    !                 write(*,'(a,i0)') '**ERROR(simple_hash::read): I/O error ', io_stat
-    !                 write(*,'(2a)') 'IO error message was: ', io_message
-    !                 stop 'I/O error; read; simple_hash'
-    !             endif
-    !         endif
-    !         if( .not. is_a_number(val) ) val = 0.
-    !         call self%set(key, val)
-    !     end do
-    ! end subroutine read
-
-    !>  \brief  writes the hash to file
-    ! subroutine write( self, fnr )
-    !     class(hash), intent(inout) :: self
-    !     integer, intent(in)        :: fnr
-    !     integer                    :: i
-    !     do i=1,self%hash_index-1
-    !         write(fnr,"(1X,A,A)", advance="no") trim(self%keys(i)), '='
-    !         write(fnr,"(A)", advance="no") trim(real2str(self%values(i)))
-    !     end do
-    !     write(fnr,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)), '='
-    !     write(fnr,"(A)") trim(real2str(self%values(self%hash_index)))
-    ! end subroutine write
-
     ! DESTRUCTORS
 
     subroutine kill( self )
@@ -371,31 +322,5 @@ contains
         if(allocated(self%keys))   deallocate(self%keys)
         if(allocated(self%values)) deallocate(self%values)
     end subroutine dealloc_hash
-
-    ! UNIT TEST
-
-    !>  \brief  is the hash unit test
-    ! subroutine test_hash
-    !     use simple_fileio      , only: fopen, fclose, fileio_errmsg
-    !     type(hash) :: htab, htab2
-    !     integer    :: fnr, file_stat
-    !     write(*,'(a)') '**info(simple_hash_unit_test: testing all functionality'
-    !     call htab%push('hans',  1.)
-    !     call htab%push('donia', 2.)
-    !     call htab%push('kenji', 3.)
-    !     call htab%push('ralph', 4.)
-    !     call htab%push('kyle',  5.)
-    !     call htab%print
-    !     call fopen(fnr, status='replace', action='write', file='hashtest.txt', iostat=file_stat)
-    !     call fileio_errmsg("simple_hash_unit_test: test failed to open hastest.txt",file_stat)
-    !     call htab%write(fnr)
-    !     call fclose(fnr,errmsg="simple_hash_unit_test: test failed to close hastest.txt")
-    !     call fopen(fnr, status='old', action='read', file='hashtest.txt', iostat=file_stat)
-    !     call fileio_errmsg("simple_hash_unit_test: test failed to open 2nd  hastest.txt",file_stat)
-    !     call htab2%read(fnr)
-    !     call fclose(fnr,errmsg="simple_hash_unit_test: test failed to close 2nd hastest.txt")
-    !     call htab2%print
-    !     write(*,'(a)') 'SIMPLE_HASH_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    ! end subroutine test_hash
 
 end module simple_hash

@@ -106,7 +106,7 @@ contains
         call chdict%push('focusmsk',      'focused mask radius(in pixels)')
         call chdict%push('frac',          'fraction of ptcls(0-1){1}')
         call chdict%push('frac_outliers', 'fraction of outliers(0-1){0.0}')
-        call chdict%push('fraca',         'fraction of amplitude contrast used for fitting CTF{0.07}')
+        call chdict%push('fraca',         'fraction of amplitude contrast used for fitting CTF{0.1}')
         call chdict%push('fracdeadhot',   'fraction of dead or hot pixels{0.01}')
         call chdict%push('fromf',         'start frame index')
         call chdict%push('fromp',         'start ptcl index')

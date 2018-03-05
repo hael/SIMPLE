@@ -81,11 +81,11 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         kbwin = kbinterpol(KBWINSZ, p%alpha)
         tfun  = ctf(p%smpd, p%kv, p%cs, p%fraca)
-        if( .not. cline%defined('outstk') ) p%outstk = 'simulate_particles'//p%ext
+        if( .not. cline%defined('outstk') ) p%outstk = 'simulated_particles'//p%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         else
-            if( .not. cline%defined('outfile') ) p%outfile = 'simoris'//trim(TXT_EXT)
+            if( .not. cline%defined('outfile') ) p%outfile = 'simulated_oris'//trim(TXT_EXT)
         endif
         if( p%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
         ! generate orientation/CTF parameters
@@ -154,7 +154,7 @@ contains
             call b%img_pad%clip(b%img)
             ! write to stack
             if( cline%defined('part') )then
-                call b%img%write('simulate_particles_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
+                call b%img%write('simulated_particles_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
             else
                 call b%img%write(p%outstk, i)
             endif

@@ -194,7 +194,7 @@ contains
         endif
 
         ! add stack if present
-        if( cline%defined('stk') ) call spproj%add_stk(p%stk, os)
+        if( cline%defined('stk') ) call spproj%add_single_stk(p%stk, os)
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment

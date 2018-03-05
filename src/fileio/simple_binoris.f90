@@ -233,12 +233,13 @@ contains
     end subroutine write_segment_2
 
     subroutine write_segment_3( self, isegment, arr )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        real,           intent(in)    :: arr(:,:)
+        class(binoris),    intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        real, allocatable, intent(in)    :: arr(:,:)
         integer :: i, ibytes, io_status, nspaces
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_3'
         ! add segment to stack
+        if( .not. allocated(arr) ) return
         call self%add_segment_3(isegment, arr)
         ! update byte ranges in header
         call self%update_byte_ranges
@@ -293,9 +294,10 @@ contains
     end subroutine add_segment_2
 
     subroutine add_segment_3( self, isegment, arr )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        real,           intent(in)    :: arr(:,:)
+        class(binoris),    intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        real, allocatable, intent(in)    :: arr(:,:)
+        if( .not. allocated(arr) ) return
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS ) stop 'ERROR, isegment out of range; binoris :: add_segment_3'
         if( isegment > self%n_segments ) self%n_segments = isegment
