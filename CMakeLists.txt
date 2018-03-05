@@ -112,13 +112,13 @@ endif()
 # CREATE libSIMPLE<VERSION>
 #
 #################################################################
-
 add_subdirectory(${SRC_PATH} lib)
 set(EXTRA_LIBS
   ${SIMPLELIB}
   ${CMAKE_THREAD_LIBS_INIT}
   ${EXTRA_LIBS})
 link_directories(lib)
+message(STATUS " EXTRA_LIBS  ${EXTRA_LIBS}")
 
 
 #################################################################

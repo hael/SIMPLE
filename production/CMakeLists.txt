@@ -66,12 +66,11 @@ file(GLOB TESTDIRS
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   "tests/test_*"
   )
-list(REMOVE_ITEM TESTDIRS
- "tests/test_img_export"
-  )
+#list(REMOVE_ITEM TESTDIRS
+# "tests/test_img_export"
+#  )
 
 message( STATUS "Test directories ${TESTDIRS}")
-
 
 foreach(TESTNAME ${TESTDIRS})
   string(REPLACE "tests/" "" TESTNAME "${TESTNAME}")

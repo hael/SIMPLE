@@ -51,8 +51,10 @@ endif()
 
 #if ( BUILD_WITH_LIBGD )
   file(GLOB IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/*.f[90][08]" PARENT_SCOPE)
-  list(APPEND IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c"
+  list(APPEND IMG_src
+    "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/img/cjpg.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/img/stb_image_write.c"
     )
 
 #else()
@@ -100,7 +102,7 @@ else()
     add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
   endif()
 endif()
-add_dependencies(${SIMPLELIB} json_fortran)
+
 add_dependencies(${SIMPLELIB} simple_args)
 set_target_properties(${SIMPLELIB}
   PROPERTIES
