@@ -243,13 +243,12 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   set(CMAKE_Fortran_FLAGS_RELEASE        " ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${EXTRA_FLAGS} ")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT} \
  ${EXTRA_FLAGS} \
- -fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check \
 -O0 -g -pedantic  -Wextra -Wvector-operation-performance \
 -Wopenmp-simd -Wstack-protector -Wpedantic -Wunsafe-loop-optimizations \
 -Wshadow -Wsystem-headers -Warray-bounds -Wsuggest-attribute=pure \
 -Wsuggest-final-methods  -Wsurprising -Wuse-without-only \
 -Wintrinsic-shadow -Wno-unused-dummy-argument")
-
+##  -fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check \
   # #  CMAKE_EXE_LINKER_FLAGS
   # if (LINK_TIME_OPTIMISATION)
   #   set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -flto ")
