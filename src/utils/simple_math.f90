@@ -2800,7 +2800,7 @@ contains
             val1 = selec(pos1,n,copy)
             val2 = selec(pos2,n,copy)
             val  = (val1+val2)/2.
-        endif       
+        endif
     end function median
 
     !>   for calculating the median
@@ -2973,5 +2973,31 @@ contains
       real(dp)             :: r
       r = sqrt(dot_product(v,v))
   end function norm_2_dp
+
+  ! GCD computes greatest common divisors
+  pure function gcd (p,q)
+      integer :: gcd
+      integer, intent(in) :: p,q
+      integer x,y
+      x = abs ( p )
+      y = abs ( q )
+      do
+          if ( x .gt. y ) then
+              x = mod ( x , y )
+              if ( x .eq. 0 ) exit
+          else if ( x .lt. y ) then
+              y = mod ( y , x )
+              if ( y .eq. 0 ) exit
+          end if
+      end do
+      gcd = max ( x , y )
+  end function gcd
+
+  ! LCM computes the least common multiple of integers P,Q
+  integer function lcm( i, j )
+      integer, intent( in ) :: i, j
+      lcm = ( i * j ) / gcd( i, j )
+  end function lcm
+
 
 end module simple_math
