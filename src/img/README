@@ -1,0 +1,33 @@
+notes about image export support in SIMPLE
+
+Goal:  to enable writing simple_image class to PNG or JPG formatted images
+
+Implementation 1: PNM (J Burkardt's libraries)
+
+Pros -- stable fortran code, support for PBM, PGM, and PPM
+Cons -- no direct support for PNG or JPG (could use imagemagick to convert)
+
+        Completed -- Yes, simple_pnm.f90
+
+Implementation 2: LibGD
+
+Pros -- support for xpm,ppm, png (libpng) jpeg (libjpeg), tiff (libtiff)
+Cons -- lots of dependent libraries, C interface
+
+        Completed -- Partial, simple_img.f90, cgd.c
+
+
+Implementation 3: Jutils wrapper to libjpeg
+
+Pros -- support for jpeg (libjpeg)
+Cons -- lots of dependent libraries, C interface
+
+       Completed -- Partial, older code in simple_jpg.f90, cjpg.c
+
+
+Implementation 4: STB image
+
+Pros -- PNG and JPG support (+ TGA,BMP,PSD,GIF,PNM),  single c file, public domain, no library dependencies
+Cons -- no 12-bit JPG support
+
+        Completed -- Yes, simple_jpg.f90, stb_image*.c/h
