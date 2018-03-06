@@ -2,7 +2,7 @@ module simple_user_interface
 use simple_defs
 implicit none
 
-public :: make_user_interface, cluster2D
+public :: make_user_interface, cluster2D, refine3D
 private
 
 logical, parameter :: DEBUG = .false.
@@ -50,6 +50,7 @@ end type simple_program
 
 ! declare protected program specifications here
 type(simple_program), protected :: cluster2D
+type(simple_program), protected :: refine3D
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: ctf
@@ -59,10 +60,12 @@ type(simple_input_param) :: hp
 type(simple_input_param) :: inner
 type(simple_input_param) :: maxits
 type(simple_input_param) :: msk
+type(simple_input_param) :: mskfile
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nthr
 type(simple_input_param) :: oritab
 type(simple_input_param) :: phaseplate
+type(simple_input_param) :: pgrp
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
 type(simple_input_param) :: stk
@@ -77,6 +80,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call new_cluster2D
+        call new_refine3D
 
 
 
@@ -110,6 +114,8 @@ contains
         &rate(0.1-0.5){1.}', 'update this fraction per iter{1.0}', .false.)
         call set_param(frac,        'frac',        'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
         'fraction of particles used{1.0}', .false.)
+        call set_param(mskfile,     'mskfile',     'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false.)
+        call set_param(pgrp,        'pgrp',        'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true.)
 
         contains
 
@@ -330,7 +336,6 @@ contains
     end subroutine kill
 
     subroutine write2json( self )
-        !use, intrinsic :: iso_fortran_env, only: wp => real64
         use json_module
         use simple_strings, only: int2str
         class(simple_program), intent(in) :: self
@@ -409,6 +414,78 @@ contains
             end subroutine create_section
 
     end subroutine write2json
+
+    subroutine new_refine3D
+        ! PROGRAM SPECIFICATION
+        call refine3D%new(&
+        &'refine2D',& ! name
+        &'3D volume refinement',&                                                                          ! descr_short
+        &'is a distributed workflow for 3D volume refinement based on probabilistic projection matching',& ! descr_long
+        &'simple_distr_exec',&                                                                             ! executable
+        &3, 5, 0, 13, 9, 5, 2)                                                                              ! # entries in each group
+
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call refine3D%set_input('img_ios', 1, stk)
+        call refine3D%set_input('img_ios', 2, stktab)
+        call refine3D%set_input('img_ios', 3, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
+        & sections for particle image matching', 'input volume e.g. recvol.mrc', .false.)
+        ! parameter input/output
+        call refine3D%set_input('parm_ios', 1, ctf)
+        call refine3D%set_input('parm_ios', 2, smpd)
+        call refine3D%set_input('parm_ios', 3, phaseplate)
+        call refine3D%set_input('parm_ios', 4, deftab)
+        call refine3D%set_input('parm_ios', 5, oritab)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        call refine3D%set_input('srch_ctrls', 1, 'nspace', 'num', 'Number of projection directions', 'Number of projection directions &
+        &used in discrete 3D orientation search', '# projections used', .false.)
+        call refine3D%set_input('srch_ctrls', 2, startit)
+        call refine3D%set_input('srch_ctrls', 3, trs)
+        call refine3D%set_input('srch_ctrls', 4, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false.)
+        call refine3D%set_input('srch_ctrls', 5, maxits)
+        call refine3D%set_input('srch_ctrls', 6, update_frac)
+        call refine3D%set_input('srch_ctrls', 7, frac)
+        call refine3D%set_input('srch_ctrls', 8, pgrp)
+        call refine3D%set_input('srch_ctrls', 9, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
+        &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false.)
+        call refine3D%set_input('srch_ctrls', 10, 'npeaks', 'num', 'Number of orientations per particle', 'Number of orientations in per-particle distribution&
+        &of feasible ones with nonzero weights', '# nonzero orientation weights', .false.)
+        call refine3D%set_input('srch_ctrls', 11, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
+        '# states to reconstruct', .false.)
+        call refine3D%set_input('srch_ctrls', 12, 'objfun', 'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
+        call refine3D%set_input('srch_ctrls', 13, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
+        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}', .false.)
+        ! filter controls
+        call refine3D%set_input('filt_ctrls', 1, hp)
+        call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false.)
+        call refine3D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false.)
+        call refine3D%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false.)
+        call refine3D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
+        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false.)
+        call refine3D%set_input('filt_ctrls', 6, 'lplim_crit', 'num', 'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
+        &'low-pass FSC criterion(0.143-0.5){0.3}', .false.)
+        call refine3D%set_input('filt_ctrls', 7, 'dynlp', 'binary', 'Automatic low-pass limit update', 'Automatic low-pass limit &
+        &update(yes|no){yes}', '(yes|no){yes}', .false.)
+        call refine3D%set_input('filt_ctrls', 8, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
+        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false.)
+        call refine3D%set_input('filt_ctrls', 9, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
+        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
+        ! mask controls
+        call refine3D%set_input('mask_ctrls', 1, msk)
+        call refine3D%set_input('mask_ctrls', 2, inner)
+        call refine3D%set_input('mask_ctrls', 3, mskfile)
+        call refine3D%set_input('mask_ctrls', 4, 'focusmsk', 'binary', 'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular &
+        &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .true.)
+        call refine3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false. )
+        ! computer controls
+        call refine3D%set_input('comp_ctrls', 1, nparts)
+        call refine3D%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_refine3D
 
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION
