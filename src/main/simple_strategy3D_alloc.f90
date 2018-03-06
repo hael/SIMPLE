@@ -12,7 +12,6 @@ integer,    allocatable :: proj_space_inds(:,:)    !< stochastic index of refere
 integer,    allocatable :: proj_space_state(:,:)   !< reference orientations state
 integer,    allocatable :: proj_space_proj(:,:)    !< reference orientations projection direction (1 state assumed)
 integer,    allocatable :: prev_proj(:)            !< particle previous reference projection direction
-integer,    allocatable :: prev_states(:)          !< particle previous state
 integer,    allocatable :: srch_order(:,:)         !< stochastic search index
 logical,    allocatable :: state_exists(:)         !< indicates state existence
 
@@ -30,7 +29,6 @@ contains
         if( allocated(prev_proj)        ) deallocate(prev_proj)
         if( allocated(srch_order)       ) deallocate(srch_order)
         if( allocated(state_exists)     ) deallocate(state_exists)
-        if( allocated(prev_states)      ) deallocate(prev_states)
     end subroutine clean_strategy3D
 
     subroutine prep_strategy3D( b, p, ptcl_mask )
@@ -136,21 +134,7 @@ contains
         ! refine mode specific allocations and initialisations
         select case( trim(p%refine) )
             case( 'cluster','clustersym','clusterdev' )
-                allocate(prev_states(nptcls), source=0)
-                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                do iptcl = p%fromp, p%top
-                    i = pinds(iptcl)
-                    if( i > 0 )then
-                        prev_states(i) = b%a%get_state(iptcl)
-                        if( prev_states(i) > 0 )then
-                             if(.not. state_exists(prev_states(i)) )&
-                            &stop 'empty previous state; prep4prime3D_srch; simple_prime3D_srch'
-                            if( prev_states(i) > p%nstates )&
-                            &stop 'previous best state outside boundary; prep4prime3D_srch; simple_prime3D_srch'
-                        endif
-                    endif
-                end do
-                !$omp end parallel do
+                ! nothing to do
             case DEFAULT
                 if( p%neigh.eq.'yes' )then
                     nnnrefs =  p%nnn * p%nstates

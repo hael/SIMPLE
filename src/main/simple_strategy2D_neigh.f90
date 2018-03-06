@@ -33,7 +33,7 @@ contains
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( .not. associated(self%spec%nnmat) )&
         &stop 'nnmat need to be associated in self%spec; strategy2D_neigh :: srch_neigh'
-        if( nint(self%s%a_ptr%get(self%s%iptcl,'state')) > 0 )then
+        if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = -1.
             ! evaluate neighbors (greedy selection)

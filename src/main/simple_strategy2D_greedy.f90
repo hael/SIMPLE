@@ -31,7 +31,7 @@ contains
         class(strategy2D_greedy), intent(inout) :: self
         integer :: iref,loc(1),inpl_ind
         real    :: corrs(self%s%nrots),inpl_corr,corr
-        if( nint(self%s%a_ptr%get(self%s%iptcl,'state')) > 0 )then
+        if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = self%s%prev_corr
             do iref=1,self%s%nrefs

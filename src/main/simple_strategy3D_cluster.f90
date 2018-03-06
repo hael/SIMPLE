@@ -37,11 +37,12 @@ contains
         real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
         real    :: shvec(2), corr, mi_state, frac, mi_inpl, mi_proj, w, bfac
         logical :: hetsym
-        if( prev_states(self%s%iptcl_map) > 0 )then
+        self%s%prev_state = self%s%a_ptr%get_state(self%s%iptcl)
+        if( self%s%prev_state > 0 )then
             hetsym            = associated(self%spec%symmat)
             self%s%prev_roind = self%s%pftcc_ptr%get_roind(360.-self%s%a_ptr%e3get(self%s%iptcl))
             self%s%prev_corr  = self%s%a_ptr%get(self%s%iptcl, 'corr')
-            self%s%prev_ref   = (prev_states(self%s%iptcl_map)-1)*self%s%nprojs + prev_proj(self%s%iptcl_map)
+            self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + prev_proj(self%s%iptcl_map)
             w = 1.
             ! B-factor memoization
             if( self%s%pftcc_ptr%objfun_is_ccres() )then
@@ -82,18 +83,18 @@ contains
             if( self%s%prev_corr < self%spec%corr_thresh )then
                 ! state randomization
                 state = irnd_uni(self%s%nstates)
-                do while(state == prev_states(self%s%iptcl_map) .or. .not.state_exists(state))
+                do while(state == self%s%prev_state .or. .not.state_exists(state))
                     state = irnd_uni(self%s%nstates)
                 enddo
                 corr              = corrs(state)
                 self%s%nrefs_eval = 1
             else
                 ! SHC state optimization
-                self%s%prev_corr = corrs(prev_states(self%s%iptcl_map))
+                self%s%prev_corr = corrs(self%s%prev_state)
                 state            = shcloc(self%s%nstates, corrs, self%s%prev_corr)
                 corr             = corrs(state)
                 self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
-                if( prev_states(self%s%iptcl_map) .eq. state ) mi_state = 1.
+                if( self%s%prev_state .eq. state ) mi_state = 1.
                 if( self%spec%do_extr )then
                     ! extremal optimization
                     if( hetsym )then

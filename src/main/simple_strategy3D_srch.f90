@@ -295,9 +295,10 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         integer :: iref
         real    :: cc
-        if( prev_states(self%iptcl_map) > 0 )then
+        self%prev_state = self%a_ptr%get_state(self%iptcl)
+        if( self%prev_state > 0 )then
             self%prev_roind = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))
-            iref = (prev_states(self%iptcl_map)-1) * self%nprojs + prev_proj(self%iptcl_map)
+            iref = (self%prev_state-1) * self%nprojs + prev_proj(self%iptcl_map)
             cc = self%pftcc_ptr%gencorr_cc_for_rot(iref, self%iptcl, [0.,0.], self%prev_roind)
             call self%a_ptr%set(self%iptcl,'corr', cc)
         else

@@ -33,7 +33,7 @@ contains
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
         real    :: corrs(self%s%nrots), inpl_corr, corr_bound, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set
-        if( nint(self%s%a_ptr%get(self%s%iptcl,'state')) > 0 )then
+        if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             do_inplsrch   = .true.
             corr_bound    = -1.
             cc_glob       = -1.

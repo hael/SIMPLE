@@ -116,7 +116,11 @@ contains
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs * neff_states)
         endif
         ! set the distances before we update the orientation
-        call self%s%a_ptr%set(self%s%iptcl, 'dist',      0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
+        if( self%s%a_ptr%isthere(self%s%iptcl,'dist') )then
+            call self%s%a_ptr%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
+        else
+            call self%s%a_ptr%set(self%s%iptcl, 'dist', euldist)
+        endif
         call self%s%a_ptr%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
         call self%s%a_ptr%set_euler(self%s%iptcl, o_peaks(self%s%iptcl)%get_euler(best_loc(1)))

@@ -83,7 +83,7 @@ contains
         roind = self%s%pftcc_ptr%get_roind(360. - proj_space_euls(self%s%iptcl_map, ref, 3))
         ! transfer to solution set
         corr = max(0., proj_space_corrs(self%s%iptcl_map,ref))
-        call o_peaks(self%s%iptcl)%set(1, 'state', real(1.))
+        call o_peaks(self%s%iptcl)%set(1, 'state', 1.)
         call o_peaks(self%s%iptcl)%set(1, 'proj',  real(proj_space_proj(self%s%iptcl_map,ref)))
         call o_peaks(self%s%iptcl)%set(1, 'corr',  corr)
         call o_peaks(self%s%iptcl)%set_euler(1, proj_space_euls(self%s%iptcl_map,ref,1:3))
@@ -104,7 +104,11 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'mi_inpl',   0.)
         call self%s%a_ptr%set(self%s%iptcl, 'mi_state',  1.)
         call self%s%a_ptr%set(self%s%iptcl, 'mi_joint',  0.)
-        call self%s%a_ptr%set(self%s%iptcl, 'dist',      0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
+        if( self%s%a_ptr%isthere(self%s%iptcl,'dist') )then
+            call self%s%a_ptr%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
+        else
+            call self%s%a_ptr%set(self%s%iptcl, 'dist', euldist)
+        endif
         call self%s%a_ptr%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
         call self%s%a_ptr%set(self%s%iptcl, 'state',     1.)
