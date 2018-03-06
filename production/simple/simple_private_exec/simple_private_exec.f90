@@ -1516,8 +1516,9 @@ select case(prg)
         keys_optional(18) = 'angastunit'
         keys_optional(19) = 'phshiftunit'
         keys_optional(20) = 'oritype'
+        keys_optional(21) = 'filetab'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:20))
+        call cline%parse(keys_required(:4), keys_optional(:21))
         ! execute
         call xmanage_project%execute(cline)
     case( 'print_project_info' )

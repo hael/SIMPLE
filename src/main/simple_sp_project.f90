@@ -19,8 +19,6 @@ type sp_project
     type(oris)        :: os_cls3D  ! per-cluster 3D os,       segment 4
     type(oris)        :: os_ptcl3D ! per-particle 3D os,      segment 5
 
-    !...
-
     ! ARRAY REPRESENTATIONS OF BINARY FILE SEGMENTS FOR FRCS & FSCS
     real, allocatable :: frcs(:,:) ! Fourier Ring  Corrs      segment 9
     real, allocatable :: fscs(:,:) ! Fourier Shell Corrs      segment 10
@@ -45,15 +43,15 @@ contains
     procedure          :: update_projinfo
     procedure          :: update_compenv
     ! os_stk related methods
-    procedure          :: add_single_stk
+    procedure          :: add_movies
     procedure          :: add_stktab
-    ! procedure          :: get_stkname
-    ! procedure          :: get_stkname_and_ind
-    ! procedure          :: add_scale_tag
-    ! procedure          :: del_scale_tag
-    ! procedure          :: write_stktab
-    ! procedure          :: del_stktab_files
-
+    procedure          :: add_single_stk
+    procedure          :: get_stkname
+    procedure          :: get_stkname_and_ind
+    procedure          :: add_scale_tag
+    procedure          :: del_scale_tag
+    procedure          :: write_stktab
+    procedure          :: del_stk_files
     ! modifiers
     procedure          :: new_sp_oris
     procedure          :: set_sp_oris
@@ -115,7 +113,7 @@ contains
         character(len=:), allocatable :: projname_old
         character(len=STDLEN)         :: projname_new, projfile, projname, cwd
         character(len=3)              :: phaseplate
-        if( self%projinfo%get_noris() > 1 )then
+        if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
             call self%projinfo%new_clean(1)
@@ -184,7 +182,7 @@ contains
         class(cmdline),    intent(in)    :: cline
         character(len=STDLEN)         :: env_var
         character(len=:), allocatable :: projname
-        if( self%compenv%get_noris() > 1 )then
+        if( self%compenv%get_noris() == 1 )then
             ! no need to construct field
         else
             call self%compenv%new_clean(1)
@@ -266,22 +264,162 @@ contains
 
     ! os_stk related methods
 
+    subroutine add_movies( self, filetab )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: filetab
+        character(len=STDLEN), allocatable :: movienames(:)
+        integer :: n_os_stk, imic, ldim(3), nframes, ldim_first(3)
+        ! file exists?
+        if( .not. file_exists(filetab) )then
+            write(*,*) 'Inputted stack list (stktab): ', trim(filetab)
+            stop 'does not exist in cwd; sp_project :: add_movies'
+        endif
+        ! check that stk field is empty
+        n_os_stk = self%os_stk%get_noris()
+        if( n_os_stk > 0 )then
+            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
+            stop 'ABORTING! sp_project :: add_stktab'
+        endif
+        ! read movie names
+        call read_filetable(filetab, movienames)
+        self%nmics = size(movienames)
+        ! update os_stk field
+        call self%os_stk%new_clean(self%nmics)
+        do imic=1,self%nmics
+            call find_ldim_nptcls(trim(movienames(imic)), ldim, nframes)
+            if( nframes <= 0 )then
+                write(*,*) 'WARNING! # frames in movie ', trim(movienames(imic)), ' is zero, ommitting'
+                cycle
+            else if( nframes > 1 )then
+                call self%os_stk%set(imic, 'movie', trim(movienames(imic)))
+            else
+                call self%os_stk%set(imic, 'intg',  trim(movienames(imic)))
+            endif
+            call self%os_stk%set(imic, 'xdim',    real(ldim(1)))
+            call self%os_stk%set(imic, 'ydim',    real(ldim(2)))
+            call self%os_stk%set(imic, 'nframes', real(nframes))
+        enddo
+    end subroutine add_movies
+
+    subroutine add_stktab( self, stktab, os )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: stktab
+        class(oris),       intent(in)    :: os ! parameters associated with stktab
+        character(len=STDLEN), allocatable :: stknames(:)
+        integer :: n_os_stk, istk, ldim(3), nptcls, istart, istop
+        integer :: n_os, n_os_ptcl2D, n_os_ptcl3D, fromp, top, iptcl
+        ! file exists?
+        if( .not. file_exists(stktab) )then
+            write(*,*) 'Inputted stack list (stktab): ', trim(stktab)
+            stop 'does not exist in cwd; sp_project :: add_stktab'
+        endif
+        ! check that stk field is empty
+        n_os_stk = self%os_stk%get_noris()
+        if( n_os_stk > 0 )then
+            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
+            stop 'ABORTING! sp_project :: add_stktab'
+        endif
+        ! check that particle fields are empty
+        n_os_ptcl2D = self%os_ptcl2D%get_noris()
+        if( n_os_ptcl2D > 0 )then
+            write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
+            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_stktab'
+        endif
+        n_os_ptcl3D = self%os_ptcl3D%get_noris()
+        if( n_os_ptcl3D > 0 )then
+            write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
+            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_stktab'
+        endif
+        ! read micrograph stack names
+        call read_filetable(stktab, stknames)
+        self%nmics = size(stknames)
+        ! check that inputs are of conforming sizes
+        n_os = os%get_noris()
+        if( n_os /= self%nmics )then
+            write(*,*) '# input oris      : ', n_os
+            write(*,*) '# stacks in stktab: ', self%nmics
+            stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stktab'
+        endif
+        ! make os_stk field with the inputted os parameters transferred
+        self%os_stk = os
+        ! fill-in the image stacks
+        istart = 1
+        istop  = 0
+        do istk=1,self%nmics
+            ! logical dimension management
+            call find_ldim_nptcls(trim(stknames(istk)), ldim, nptcls)
+            ldim(3) = 1
+            if( istk == 1 )then
+                self%ldim = ldim
+            else
+                if( .not. all(self%ldim == ldim) )then
+                    write(*,*) 'micrograph stack #  : ', istk
+                    write(*,*) 'stk name            : ', trim(stknames(istk))
+                    write(*,*) 'ldim in object      : ', self%ldim
+                    write(*,*) 'ldim read from stack: ', ldim
+                    stop 'inconsistent logical dimensions; sp_project :: add_stktab'
+                endif
+            endif
+            if( ldim(1) /= ldim(2) )then
+                write(*,*) 'stk name: ', trim(stknames(istk))
+                write(*,*) 'xdim:     ', ldim(1)
+                write(*,*) 'ydim:     ', ldim(2)
+                stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stktab'
+            endif
+            ! update stop index counter
+            istop = istop + nptcls
+            ! update os_stk field
+            call self%os_stk%set(istk, 'stk',    trim(stknames(istk)))
+            call self%os_stk%set(istk, 'box',    real(ldim(1)))
+            call self%os_stk%set(istk, 'nptcls', real(nptcls))
+            call self%os_stk%set(istk, 'fromp',  real(istart))
+            call self%os_stk%set(istk, 'top',    real(istop))
+            ! update globals
+            self%nptcls = istop
+            self%box    = ldim(1)
+            ! update start index counter
+            istart = istart + nptcls
+        end do
+        ! update particle fields with stack index mapping
+        call self%os_ptcl2D%new(self%nptcls)
+        call self%os_ptcl3D%new(self%nptcls)
+        do istk=1,self%nmics
+            fromp = nint(self%os_stk%get(istk, 'fromp'))
+            top   = nint(self%os_stk%get(istk, 'top')  )
+            do iptcl=fromp,top
+                call self%os_ptcl2D%set(iptcl, 'stkind', real(istk))
+                call self%os_ptcl3D%set(iptcl, 'stkind', real(istk))
+            end do
+        end do
+    end subroutine add_stktab
+
     subroutine add_single_stk( self, stk, os )
         use simple_imghead, only: find_ldim_nptcls
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: stk
         class(oris),       intent(in)    :: os ! parameters associated with stk
-        integer :: ldim(3), nptcls, box, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         ! file exists?
         if( .not. file_exists(stk) )then
             write(*,*) 'Inputted stack (stk): ', trim(stk)
             stop 'does not exist in cwd; sp_project :: add_stk'
         endif
-        ! check if field is already populated
+        ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
-        if( n_os_stk > 1 )then
+        if( n_os_stk > 0 )then
             write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
             stop 'ABORTING! sp_project :: add_single_stk'
+        endif
+        ! check that particle fields are empty
+        n_os_ptcl2D = self%os_ptcl2D%get_noris()
+        if( n_os_ptcl2D > 0 )then
+            write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
+            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
+        endif
+        n_os_ptcl3D = self%os_ptcl3D%get_noris()
+        if( n_os_ptcl3D > 0 )then
+            write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
+            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
         endif
         ! find dimension of inputted stack and compare with os
         call find_ldim_nptcls(stk, ldim, nptcls)
@@ -293,7 +431,7 @@ contains
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
         if( n_os /= nptcls )then
-            write(*,*) '# input oris: ', n_os
+            write(*,*) '# input oris      : ', n_os
             write(*,*) '# ptcl imgs in stk: ', nptcls
             stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_single_stk'
         endif
@@ -305,19 +443,9 @@ contains
         call self%os_stk%set(1, 'fromp',  1.0)
         call self%os_stk%set(1, 'top',    real(nptcls))
         ! update globals
-        self%nptcls = nptcls
-        self%box    = box
+        self%nptcls    = nptcls
+        self%box       = ldim(1)
         ! update particle fields
-        n_os_ptcl2D = self%os_ptcl2D%get_noris()
-        if( n_os_ptcl2D > 1 )then
-            write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
-        endif
-        n_os_ptcl3D = self%os_ptcl3D%get_noris()
-        if( n_os_ptcl3D > 1 )then
-            write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
-        endif
         self%os_ptcl2D = os
         ! set stack index to 1
         call self%os_ptcl2D%set_all2single('stkind', 1.0)
@@ -325,54 +453,120 @@ contains
         self%os_ptcl3D = self%os_ptcl2D
     end subroutine add_single_stk
 
-    subroutine add_stktab( self, stktab, os )
+    function get_stkname( self, imic ) result( stkname )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: stktab
-        class(oris),       intent(in)    :: os ! parameters associated with stktab
-        character(len=STDLEN), allocatable :: micnames(:)
-        integer :: n_os_stk, imic, ldim(3), nptcls, istart, istop
-        ! check if field is already populated
-        n_os_stk = self%os_stk%get_noris()
-        if( n_os_stk > 1 )then
-            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
-            stop 'ABORTING! sp_project :: add_stktab'
+        integer,           intent(in)    :: imic
+        character(len=:), allocatable    :: stkname
+        integer :: nmics
+        nmics = self%os_stk%get_noris()
+        if( imic < 1 .or. imic > nmics )then
+            print *, 'imic : ', imic
+            print *, 'nmics: ', nmics
+            stop 'imic index out of range; sp_project :: get_stkname'
         endif
-        ! take care of micrograph stacks
-        call read_filetable(stktab, micnames)
-        self%nmics = size(micnames)
-        ! make os_stk field
-        call self%os_stk%new_clean(self%nmics)
-        istart = 1
-        istop  = 0
-        do imic=1,self%nmics
-            call find_ldim_nptcls(trim(micnames(imic)), ldim, nptcls)
-            ldim(3) = 1
-            if( imic == 1 )then
-                self%ldim = ldim
-            else
-                if( .not. all(self%ldim == ldim) )then
-                    write(*,*) 'micrograph stack #  : ', imic
-                    write(*,*) 'stk name            : ', trim(micnames(imic))
-                    write(*,*) 'ldim in object      : ', self%ldim
-                    write(*,*) 'ldim read from stack: ', ldim
-                    stop 'inconsistent logical dimensions; sp_project :: add_stktab'
-                endif
-            endif
-            if( ldim(1) /= ldim(2) )then
-                write(*,*) 'stk name: ', trim(micnames(imic))
-                write(*,*) 'xdim:     ', ldim(1)
-                write(*,*) 'ydim:     ', ldim(2)
-                stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stktab'
-            endif
-            istop = istop + nptcls
-            call self%os_stk%set(imic, 'stk',    trim(micnames(imic)))
-            call self%os_stk%set(imic, 'box',    real(ldim(1)))
-            call self%os_stk%set(imic, 'nptcls', real(nptcls))
-            call self%os_stk%set(imic, 'fromp',  real(istart))
-            call self%os_stk%set(imic, 'top',    real(istop))
-            istart = istart + nptcls
+        call self%os_stk%getter(imic, 'stk', stkname)
+    end function get_stkname
+
+    subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind )
+        class(sp_project), target,     intent(inout) :: self
+        character(len=*),              intent(in)    :: oritype
+        integer,                       intent(in)    :: iptcl
+        character(len=:), allocatable, intent(out)   :: stkname
+        integer,                       intent(out)   :: ind
+        integer :: stkind, fromp, top, nptcls
+        class(oris), pointer :: ptcl_field => null()
+        ! set field pointer
+        select case(trim(oritype))
+            case('ptcl2D')
+                ptcl_field => self%os_ptcl2D
+            case('ptcl3D')
+                ptcl_field => self%os_ptcl3D
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
+                stop 'sp_project :: get_stkname_and_ind'
+        end select
+        nptcls = ptcl_field%get_noris()
+        ! first sanity check, range
+        if( iptcl < 1 .or. iptcl > nptcls )then
+            print *, 'iptcl : ', iptcl
+            print *, 'nptcls: ', nptcls
+            stop 'iptcl index out of range; sp_project :: get_stkname_and_ind'
+        endif
+        ! second sanity check, stack index present in ptcl_field
+        if( ptcl_field%isthere(iptcl, 'stkind') )then
+            print *, 'iptcl: ', iptcl
+            print *, 'ERROR, stkind not present in field: ', trim(oritype)
+            stop 'sp_project :: get_stkname_and_ind'
+        endif
+        stkind = nint(ptcl_field%get(iptcl, 'stkind'))
+        ! third sanity check, particle index in range
+        fromp = nint(self%os_stk%get(stkind, 'fromp'))
+        top   = nint(self%os_stk%get(stkind, 'top'))
+        if( iptcl < fromp .or. iptcl > top )then
+            print *, 'iptcl            : ', iptcl
+            print *, 'prange for micstk: ', fromp, top
+            stop 'iptcl index out of micstk range; sp_project :: get_stkname_and_ind'
+        endif
+        ! output name
+        if( allocated(stkname) ) deallocate(stkname)
+        call self%os_stk%getter(stkind, 'stk', stkname)
+        ! output index in stack
+        ind = iptcl - nint(self%os_stk%get(stkind, 'fromp')) + 1
+    end subroutine get_stkname_and_ind
+
+    subroutine add_scale_tag( self )
+        use simple_fileio, only: fname2ext, add2fbody
+        class(sp_project), intent(inout) :: self
+        character(len=:), allocatable :: ext, newname, stkname
+        integer :: imic, nmics
+        nmics = self%os_stk%get_noris()
+        do imic=1,nmics
+            call self%os_stk%getter(imic, 'stk', stkname)
+            ext     = fname2ext(trim(stkname))
+            newname = add2fbody(stkname, '.'//ext, '_sc')
+            call self%os_stk%set(imic, 'stk', newname)
         end do
-    end subroutine add_stktab
+    end subroutine add_scale_tag
+
+    subroutine del_scale_tag( self )
+        use simple_fileio, only: fname2ext, del_from_fbody
+        class(sp_project), intent(inout) :: self
+        character(len=:), allocatable :: ext, newname, stkname
+        integer :: imic, nmics
+        do imic=1,nmics
+            call self%os_stk%getter(imic, 'stk', stkname)
+            ext     = fname2ext(trim(stkname))
+            newname = del_from_fbody(stkname, '.'//ext, '_sc')
+            call self%os_stk%set(imic, 'stk', newname)
+        end do
+    end subroutine del_scale_tag
+
+    subroutine write_stktab( self, tabname )
+        use simple_fileio, only: fopen, fclose
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: tabname
+        character(len=:), allocatable    :: stkname
+        integer :: fnr, imic, nmics
+        nmics = self%os_stk%get_noris()
+        call fopen(fnr, file=trim(tabname), status='replace', action='write')
+        do imic=1,nmics
+            call self%os_stk%getter(imic, 'stk', stkname)
+            write(fnr,'(a)') stkname
+        end do
+        call fclose(fnr)
+    end subroutine write_stktab
+
+    subroutine del_stk_files( self )
+        use simple_fileio, only: del_file
+        class(sp_project), intent(inout) :: self
+        character(len=:), allocatable    :: stkname
+        integer :: imic, nmics
+        nmics = self%os_stk%get_noris()
+        do imic=1,nmics
+            call self%os_stk%getter(imic, 'stk', stkname)
+            call del_file(stkname)
+        end do
+    end subroutine del_stk_files
 
     ! modifiers
 

@@ -320,7 +320,7 @@ contains
         call self%o(i)%getter(key, val)
     end subroutine getter_1
 
-    ! !>  \brief  is a getter
+    !>  \brief  is a getter
     subroutine getter_2( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i

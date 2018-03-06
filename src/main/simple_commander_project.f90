@@ -81,7 +81,7 @@ contains
         call simple_end('**** PRINT_PROJECT_INFO NORMAL STOP ****')
     end subroutine exec_print_project_info
 
-    !> for managing the projinfo and compenv segments of project
+    !> for managing projects
     subroutine exec_manage_project( self, cline )
         use simple_oris,      only: oris
         use simple_nrtxtfile, only: nrtxtfile
@@ -99,6 +99,7 @@ contains
 
         p = params(cline)
 
+        ! PARAMETER INPUT MANAGEMENT
         ! parameter input flags
         inputted_oritab       = cline%defined('oritab')
         inputted_deftab       = cline%defined('deftab')
@@ -108,8 +109,12 @@ contains
             write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
             stop 'commander_project :: exec_manage_project'
         endif
-
-        ! parameter input management
+        if( cline%defined('filetab') )then
+            if( n_ori_inputs > 0 )then
+                write(*,*) 'Parameter input (oritab|deftab|plaintexttab) not allowed when importing movies (filetab)'
+                stop 'commander_project :: exec_manage_project'
+            endif
+        endif
         if( inputted_oritab )then
             ndatlines = binread_nlines(p, p%oritab)
             call os%new_clean(ndatlines)
@@ -170,7 +175,7 @@ contains
             end do
         endif
 
-        ! project file management
+        ! PROJECT FILE MANAGEMENT
         if( cline%defined('projfile') )then
             projfile = cline%get_carg('projfile')
             if( .not. file_exists(projfile) )then
@@ -180,7 +185,7 @@ contains
             endif
         endif
 
-        ! stack input management
+        ! STACK INPUT MANAGEMENT
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! there needs to be associated parameters of some form
             if( n_ori_inputs < 1 )then
@@ -192,21 +197,28 @@ contains
             write(*,*) 'ERROR, stk and stktab are both defined on command line, use either or'
             stop 'commander_project :: exec_manage_project'
         endif
+        if( cline%defined('filetab') )then
+            if( cline%defined('stk') .or. cline%defined('stktab') )then
+                write(*,*) 'ERROR, stk and stktab cannot be inputted when filetab (of movies) is inputted'
+                stop 'commander_project :: exec_manage_project'
+            endif
+        endif
 
+        ! UPDATE FIELDS
         ! add stack if present
-        if( cline%defined('stk') ) call spproj%add_single_stk(p%stk, os)
+        if( cline%defined('stk')     ) call spproj%add_single_stk(p%stk, os)
+        ! add list of stacks (stktab) if present
+        if( cline%defined('stktab')  ) call spproj%add_stktab(p%stktab, os)
+        ! add list of movies (filetab) if present
+        if( cline%defined('filetab') ) call spproj%add_movies(p%filetab)
+
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
         call spproj%update_compenv( cline )
-        ! write project file
+
+        ! WRITE PROJECT FILE
         call spproj%write
-
-        !!!!!!!!!!!!!! debug
-        call spproj%projinfo%write('projinfo.txt')
-        call spproj%compenv%write('compenv.txt')
-        !!!!!!!!!!!!!! debug
-
         call simple_end('**** MANAGE_PROJECT NORMAL STOP ****')
     end subroutine exec_manage_project
 
