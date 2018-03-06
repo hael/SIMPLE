@@ -330,7 +330,7 @@ contains
     end subroutine kill
 
     subroutine write2json( self )
-        use, intrinsic :: iso_fortran_env, only: wp => real64
+        !use, intrinsic :: iso_fortran_env, only: wp => real64
         use json_module
         use simple_strings, only: int2str
         class(simple_program), intent(in) :: self
@@ -366,10 +366,14 @@ contains
         contains
 
             subroutine create_section( name, arr )
+                use simple_strings, only: split, parsestr
                 character(len=*),          intent(in) :: name
                 type(simple_input_param), allocatable, intent(in) :: arr(:)
-                type(json_value), pointer :: entry, section
-                integer :: i, sz
+                type(json_value), pointer :: entry, section, options
+                character(len=STDLEN)     :: options_str, before
+                character(len=KEYLEN)     :: args(8)
+                integer                   :: i, j, sz, nargs
+                logical :: found
                 call json%create_array(section, trim(name))
                 if( allocated(arr) )then
                     sz = size(arr)
@@ -381,6 +385,21 @@ contains
                         call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
                         call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
                         call json%add(entry, 'required', arr(i)%required)
+                        if( trim(arr(i)%keytype).eq.'multi' )then
+                            options_str = trim(arr(i)%descr_placeholder)
+                            call split( options_str, '(', before )
+                            call split( options_str, ')', before )
+                            call parsestr(before, '|', args, nargs)
+                            if( nargs < 3 )then
+                                write(*,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
+                                write(*,*)trim(arr(i)%descr_placeholder)
+                                stop
+                            endif
+                            call json%add(entry, 'options', args(1:nargs))
+                            do j = 1, nargs
+                                call json%update(entry, 'options['//int2str(j)//']', trim(args(j)), found)
+                            enddo
+                        endif
                         call json%add(section, entry)
                     enddo
                 endif
