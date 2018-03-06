@@ -334,10 +334,9 @@ contains
         use json_module
         use simple_strings, only: int2str
         class(simple_program), intent(in) :: self
-        ! logical, allocatable     :: required(:)
         type(json_core)           :: json
         type(json_value), pointer :: pjson, program
-        ! ! JSON init
+        ! JSON init
         call json%initialize()
         call json%create_object(pjson,'')
         call json%create_object(program, trim(self%name))
@@ -345,19 +344,19 @@ contains
         ! program section
         call json%add(program, 'name',        self%name)
         call json%add(program, 'descr_short', self%descr_short)
-        call json%add(program, 'descr_long', self%descr_long)
+        call json%add(program, 'descr_long',  self%descr_long)
         call json%add(program, 'executable',  self%executable)
         ! all sections
-        call create_section( 'image input/output', self%img_ios )
+        call create_section( 'image input/output',     self%img_ios )
         call create_section( 'parameter input/output', self%parm_ios )
-        call create_section( 'alternative inputs', self%alt_ios )
-        call create_section( 'search controls', self%srch_ctrls )
-        call create_section( 'filter controls', self%filt_ctrls )
-        call create_section( 'mask controls', self%mask_ctrls )
-        call create_section( 'computer controls', self%comp_ctrls )
-        ! ! write & clean
+        call create_section( 'alternative inputs',     self%alt_ios )
+        call create_section( 'search controls',        self%srch_ctrls )
+        call create_section( 'filter controls',        self%filt_ctrls )
+        call create_section( 'mask controls',          self%mask_ctrls )
+        call create_section( 'computer controls',      self%comp_ctrls )
+        ! write & clean
         call json%print(pjson, trim(adjustl(self%name))//'.json')
-        if (json%failed())then
+        if( json%failed() )then
             print *, 'json input/output error for program: ', trim(self%name)
             stop
         endif
@@ -373,7 +372,7 @@ contains
                 character(len=STDLEN)     :: options_str, before
                 character(len=KEYLEN)     :: args(8)
                 integer                   :: i, j, sz, nargs
-                logical :: found
+                logical :: found, param_is_multi, param_is_binary, exception
                 call json%create_array(section, trim(name))
                 if( allocated(arr) )then
                     sz = size(arr)
@@ -385,12 +384,15 @@ contains
                         call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
                         call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
                         call json%add(entry, 'required', arr(i)%required)
-                        if( trim(arr(i)%keytype).eq.'multi' )then
+                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
+                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
+                        if( param_is_multi .or. param_is_binary )then
                             options_str = trim(arr(i)%descr_placeholder)
                             call split( options_str, '(', before )
                             call split( options_str, ')', before )
                             call parsestr(before, '|', args, nargs)
-                            if( nargs < 3 )then
+                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
+                            if( exception )then
                                 write(*,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
                                 write(*,*)trim(arr(i)%descr_placeholder)
                                 stop
