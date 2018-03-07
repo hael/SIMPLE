@@ -26,8 +26,8 @@ int stbi_read_jpg(const char* file_name, void** data, int* width, int* height, i
   if(result ==NULL) { fprintf(stderr, " stbi_load result invalid \n");return 0;}
   fprintf(stderr, " stbi_load result valid \n");
   fprintf(stderr, " stbi_load result valid \n");
-  fprintf(stderr, " stbi_load result size %ld\n", sizeof(result));
-  fprintf(stderr, " stbi_load result[0] %ld\n", sizeof(result));
+  fprintf(stderr, " stbi_load result size %ld\n", sizeof(result)/sizeof(stbi_uc) );
+  fprintf(stderr, " stbi_load result[0] %4.4x\n", result[0]);fprintf(stderr, " stbi_load result[rowend] %4.4x\n", result[(*width) -1]);fprintf(stderr, " stbi_load result[end] %4.4x\n", result[(*width)*(*height)-1]);
   //*data = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
    data = result;
    //memcpy(*data, result, (*width) * (*height) * 3);

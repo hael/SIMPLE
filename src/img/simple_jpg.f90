@@ -309,7 +309,7 @@ contains
                     self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , z'000000ff') ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
-                    DebugPrint (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i-1)*c + (j-1) * w * c+ 1)
+                    DebugPrint (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i)*c + (j) * w * c+ 1)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*REAL( (in_buffer(i+1,j+1)-lo)/REAL(hi - lo) ) ,kind=c_int)
@@ -458,10 +458,11 @@ contains
         integer                             :: bshape(1)
         integer                             :: i,j,w,h,c
         integer                             :: status,pixel
+        integer(1), dimension(:),pointer :: imgbuffer
         character(len=:),allocatable  :: fstr
         status = 1
         verbose =.true.
-        allocate(fstr, source=trim(adjustl(fname))//c_null_char)
+        allocate(fstr, source=trim(fname)//c_null_char)
         VerbosePrint 'load_jpeg_i4 ', fstr
         !call read_jpeg(fstr, img, w, h, c, status)
         status = stbi_read_jpg (fstr, img, w, h, c )
@@ -469,15 +470,21 @@ contains
         status=0
         !   w = size(self%img_buffer,1)
         !   h = size(self%img_buffer,2)
-        VerbosePrint 'load_jpeg_i4 returns img size ', w, h
+        VerbosePrint 'load_jpeg_i4 return values width, height, components', w, h, c
+ !       VerbosePrint 'load_jpeg_i4 img_buffer l/u bounds ', lbound(img), ubound(img)
+        if(associated(imgbuffer)) nullify(imgbuffer)
         bshape = (/ w * h /)
-        call c_f_pointer(img,self%img_buffer, bshape)
-        VerbosePrint 'load_jpeg_i4 c_f_pointer  ', w, h
-
+        call c_f_pointer(img,imgbuffer, bshape)
+        VerbosePrint 'load_jpeg_i4 img size / shape', size(imgbuffer), shape(imgbuffer)
+        VerbosePrint 'load_jpeg_i4 img_buffer l/u bounds ', lbound(imgbuffer), ubound(imgbuffer)
+        VerbosePrint 'load_jpeg_i4 img_buffer ', associated(imgbuffer)
+        VerbosePrint 'load_jpeg_i4 img_buffer '
+        print *, imgbuffer
         allocate(out_buffer(w,h))
-        do i=0,w-1
-            do j=0,h-1
-                out_buffer(i+1,j+1) = INT(self%img_buffer(i*c + w * (j-1) * c +1) )
+        do j=0,h-1
+            do i=0,w-1
+                VerbosePrint 'load_jpeg_i4 ', (i*c) + (w*j * c) + 1, imgbuffer((i*c) + (w*j*c) + 1)
+                out_buffer(i+1,j+1) = imgbuffer((i * c) + (w * j * c) + 1)
             end do
         end do
         self%width = w
@@ -485,7 +492,7 @@ contains
         self%colorspace = c
         if(allocated(out_buffer)) deallocate(out_buffer)
         if(allocated(fstr)) deallocate(fstr)
-
+        if(associated(imgbuffer)) nullify(imgbuffer)
         VerbosePrint 'load_jpeg_i4 done'
     end function load_jpeg_i4
 
@@ -499,10 +506,10 @@ contains
         character                          :: buf(1024)
         integer, allocatable               :: int32_buffer(:,:)
         real, allocatable                  :: real32_buffer(:,:)
-        character(len=STDLEN), allocatable :: simple_path_str
-        character(len=STDLEN), allocatable :: testimg
+        character(len=:), allocatable :: simple_path_str
+        character(len=:), allocatable :: testimg
         integer status, bmp_size , width , height , pixel_size
-        character(len=STDLEN)              :: cmd, fstr
+        character(len=:), allocatable              :: cmd, fstr
         type(jpg_img)                      :: jpg
         logical passed
         debug           = .true.
@@ -516,17 +523,18 @@ contains
         simple_path_str = simple_getenv('SIMPLE_PATH')
         print *,"test_jpg_export: Starting"
         allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")
-        cmd             = "convert " //trim(adjustl(testimg))//" -colorspace Gray  test.jpg"
+        allocate(cmd, source="convert "//trim(adjustl(testimg))//" -colorspace Gray  test.jpg")
         if(.not. file_exists("test.jpg")) then
             if(.not. file_exists(testimg)) call simple_stop("test_jpg_export needs the jpeglib testimg to run test")
             print *," Executing ", cmd
             call exec_cmdline(cmd)
         end if
-        cmd = "identify  test.jpg"
+        deallocate(cmd)
+        allocate(cmd, source="identify  test.jpg")
         call exec_cmdline(cmd)
 
         print *,"test_jpg_export: Testing load_jpeg_i4 "
-        fstr = "test.jpg"
+        allocate(fstr, source="test.jpg")
         status = jpg%loadJpgFromFile(fstr, int32_buffer)
         if(status == 0) then
             print *, " test_jpg_export: load_jpeg_i4 success "
@@ -565,8 +573,8 @@ contains
             end if
         end if
         if(status==1) call simple_stop("test_jpg_export: FAILED: load_jpeg real32 failed")
-
-        fstr="test-i4.jpg"
+        deallocate(fstr)
+        allocate(fstr, source="test-i4.jpg")
         call del_file(fstr)
         status = jpg%writeJpgToFile(fstr, int32_buffer)
         if(status == 0) then
@@ -579,7 +587,8 @@ contains
         end if
         if(status==1) call simple_stop("test_jpg_export: FAILED: save_jpeg int32 failed")
 
-        fstr="test-r4.jpg"
+        deallocate(fstr)
+        allocate(fstr, source="test-r4.jpg")
         call del_file(fstr)
         print *, " test_jpg_export: save_jpeg_r4  "
         status = jpg%writeJpgToFile(fstr, real32_buffer)
@@ -601,6 +610,10 @@ contains
         ! call fclose(fd)
         if (allocated(int32_buffer)) deallocate(int32_buffer)
         if (allocated(real32_buffer)) deallocate(real32_buffer)
+        if (allocated(simple_path_str)) deallocate( simple_path_str)
+        if (allocated(testimg)) deallocate( testimg)
+        if (allocated(cmd)) deallocate(cmd)
+        if (allocated(fstr))  deallocate(fstr)
     end subroutine test_jpg_export
 
 

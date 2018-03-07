@@ -49,16 +49,17 @@ if ( USE_CUDA )
 ##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 endif()
 
-#if ( BUILD_WITH_LIBGD )
+#
   file(GLOB IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/*.f[90][08]" PARENT_SCOPE)
   list(APPEND IMG_src
-    "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/img/cjpg.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/img/stb_image_write.c"
     )
-#else()
-#  set(IMG_src "")
-#endif()
+  if ( BUILD_WITH_LIBGD )
+    list(APPEND IMG_src
+    "${CMAKE_CURRENT_SOURCE_DIR}/img/cgd.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/img/cjpg.c"
+    )
+endif()
 
 ########################################################################
 # main folder
