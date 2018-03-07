@@ -1,4 +1,4 @@
-module simple_test_jpg
+module simple_test_export_jpg
     include 'simple_lib.f08'
     use simple_jpg,   only: jpg_img
     use simple_image, only: image
@@ -13,7 +13,7 @@ contains
         logical passed
         global_verbose=.true.
         write(*,'(a)') '**info(simple_jpg_unit_test): testing simple_jpg '
-        call test_jpg_image_local( 9, 9, 100, doplot )
+        call test_jpg_image_local( 91, 91, 100, doplot )
         write(*,'(a)') 'SIMPLE_JPG_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 
     contains
@@ -40,7 +40,7 @@ contains
             print *,rbuf
             allocate(rptr(ld1,ld2),source=rbuf(:,:,1))
             status =  jpg%writeJpgToFile(str,rptr, quality=100, colorspec=1)
-            if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg returned status==1' )
+            if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg returned error' )
             call exec_cmdline('display test_jpg_ran.jpg')
 
             write(*,'(a)') '**info(simple_jpg_unit_test, part 3): testing int buffer write to JPG'
@@ -48,14 +48,20 @@ contains
             ibuf = INT(rbuf * (2**12))
             str= 'test_jpg_ran_int.jpg'
             status = jpg%writeJpgToFile(str,ibuf(:,:,1))
-            if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg ibuf returned status==1' )
+            if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg int buffer failed ' )
+            call exec_cmdline('display test_jpg_ran_int.jpg')
+
+
 
             write(*,'(a)') '**info(simple_jpg_unit_test, part 4): testing 3D real buffer write from get_rmat'
             call img3%new([ld1,ld2,10], 1.)
             call img3%gauran( 5., 15. )
             if( doplot ) call img%vis
             str= 'test_jpg_gauss.jpg'
-            status =  jpg%writeJpgToFile(str,img%get_rmat())
+            status =  jpg%writeJpgToFile(str,img3%get_rmat())
+            if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg 3D buffer failed' )
+            call exec_cmdline('montage -geometry +1+1 test_jpg_gauss*.jpg gauss.jpg && display gauss.jpg')
+
 
             if(allocated(rbuf)) deallocate(rbuf)
             if(allocated(ibuf)) deallocate(ibuf)
@@ -67,4 +73,4 @@ contains
 
     end subroutine test_jpg_image
 
-end module simple_test_jpg
+end module simple_test_export_jpg

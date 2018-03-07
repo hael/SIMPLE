@@ -1,8 +1,8 @@
 !! Based on John Burkardt's  PPMA and PBMA modules (LPGL Copyright, March 2003- 2007)
-module simple_test_pnm_io
-    include 'simple_lib.f08'
-    use simple_pnm
-    implicit none
+module simple_test_export_pnm
+include 'simple_lib.f08'
+use simple_pnm
+implicit none
 
     public :: test_pnm_io
 #include "simple_local_flags.inc"
@@ -599,6 +599,4 @@ contains
         deallocate ( g )
     end subroutine pgma_read_test
 
-
-
-end module simple_test_pnm_io
+end module simple_test_export_pnm

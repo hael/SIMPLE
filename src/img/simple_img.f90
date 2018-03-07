@@ -50,7 +50,8 @@ contains
         integer, intent(out), optional   :: status
         integer                          :: width,height, i,j, colorval,black,white
         type(base_img)                   :: image
-
+#ifdef _LIBGD
+        
         if (present(status)) then
             call create_img_from_png(file_name,image,status)
         else
@@ -78,6 +79,10 @@ contains
         print *,"  Anti-aliased? ", anti_aliased()
         print *,"  Fmode ", get_fmode(image)
         call destroy_img(image)
+#else
+        print *," LibGD img package not supported "
+#endif        
+
     end subroutine read_png
 
     subroutine write_png(buffer,file_name,range_in,status)
@@ -90,6 +95,7 @@ contains
         character(len=STDLEN)          :: filename
         real                           :: buf_range(2), offset
         logical                        :: no_range
+#ifdef _LIBGD
         no_range      = .true.
         if(.not. allocated(buffer)) then
             status    = -1
@@ -163,9 +169,12 @@ contains
         !        print*,' Greyscale color ', colorval
         call cgd_image_png(image%ptr, trim(adjustl(filename))//char(0) )
         call destroy_img(image)
-    end subroutine write_png
+#else
+        print *," LibGD img package not supported "
+#endif
+      end subroutine write_png
 
-
+#ifdef _LIBGD
 
     subroutine read_jpeg_gd(file_name,buffer,status)
         character(len=*), intent(in)     :: file_name
@@ -946,4 +955,6 @@ contains
         if (image%fmode) ym = image%height - y
     end function ym
 
+#endif
+    
 end module simple_img

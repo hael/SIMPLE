@@ -22,7 +22,7 @@ Implementation 3: Jutils wrapper to libjpeg
 Pros -- support for jpeg (libjpeg)
 Cons -- lots of dependent libraries, C interface
 
-       Completed -- Partial, older code in simple_jpg.f90, cjpg.c
+       Completed -- Partial, commented code in simple_jpg.f90, cjpg.c
 
 
 Implementation 4: STB image
@@ -31,3 +31,8 @@ Pros -- PNG and JPG support (+ TGA,BMP,PSD,GIF,PNM),  single c file, public doma
 Cons -- no 12-bit JPG support
 
         Completed -- Yes, simple_jpg.f90, stb_image*.c/h
+
+
+Testing  -- simple_test_img_export
+
+Requires ImageMagick for converting to grayscale and viewing images

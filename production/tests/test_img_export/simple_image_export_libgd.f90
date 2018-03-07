@@ -3,7 +3,7 @@
 !*******************************************************************************
 
 !! Modified by Michael Eager, Feb 2018
-module simple_test_libgd_io
+module simple_test_export_libgd
     include 'simple_lib.f08'
     use simple_img
     implicit none
@@ -14,7 +14,6 @@ module simple_test_libgd_io
 contains
 
     subroutine test_png_io
-        use simple_img
         type(base_img)            :: image
         integer                   :: c1,c2,c3,c4,c5
         integer                   :: a1(4),a2(4)
@@ -28,6 +27,8 @@ contains
         a1(:) = (/ 5,47,12,55 /)
         a2(:) = (/ 36,60,2,25 /)
         call create_raw_png_tmp
+
+#ifdef _LIBGD
 
         call create_img(64,64,image)
         call allocate_color(image,0,0,0,c1)
@@ -94,11 +95,12 @@ contains
         write(*,*) 'test xpm done'
 #endif
 
+#endif
+
     end subroutine test_png_io
 
     subroutine test_jpeg_io
-        use simple_img
-        type(base_img)            :: image
+      	type(base_img)            :: image
         integer                   :: c1,c2,c3,c4,c5
         integer                   :: a1(4),a2(4)
         real(dp)                  :: ptsize = 30.0_dp
@@ -112,6 +114,7 @@ contains
         a2(:) = (/ 36,60,2,25 /)
         call create_raw_png_tmp
 
+#ifdef _LIBGD
         call create_img(64,64,image)
         call allocate_color(image,0,0,0,c1)
         call allocate_color(image,255,255,255,c2)
@@ -160,6 +163,8 @@ contains
         deallocate(buffer)
         write(*,*) 'test read/write jpeg from buffers'
         if( .not. compare_imgs("gray.jpg", fout) ) write(*,*) "jpeg read/write failed - images differ"
+
+#endif
 
     end subroutine test_jpeg_io
 
@@ -433,4 +438,4 @@ contains
         call fclose(fid)
     end subroutine create_raw_png_tmp
 
-end module simple_test_libgd_io
+end module simple_test_export_libgd
