@@ -116,7 +116,6 @@ contains
         class(cmdline),    intent(in)    :: cline
         character(len=:), allocatable :: projname_old
         character(len=STDLEN)         :: projname_new, projfile, projname, cwd
-        character(len=3)              :: phaseplate
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -152,15 +151,6 @@ contains
                 call self%projinfo%set(1, 'projname', trim(projname))
                 call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
             endif
-        endif
-        ! phaseplate flag is optional
-        if( cline%defined('phaseplate') )then
-            phaseplate        = cline%get_carg('phaseplate')
-            self%l_phaseplate = trim(phaseplate) .eq. 'yes'
-            call self%projinfo%set(1, 'phaseplate', trim(phaseplate))
-        else
-            self%l_phaseplate = .false.
-            call self%projinfo%set(1, 'phaseplate', 'no')
         endif
         ! it is assumed that the project is created in the "project directory", i.e. stash cwd
         call simple_getcwd(cwd)
@@ -301,9 +291,10 @@ contains
 
     ! os_stk related methods
 
-    subroutine add_movies( self, filetab )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: filetab
+    subroutine add_movies( self, filetab, smpd, kv, cs, fraca, phaseplate )
+        class(sp_project), intent(inout)   :: self
+        character(len=*),  intent(in)      :: filetab, phaseplate
+        real,              intent(in)      :: smpd, kv, cs, fraca
         character(len=STDLEN), allocatable :: movienames(:)
         integer :: n_os_stk, imic, ldim(3), nframes, ldim_first(3)
         ! file exists?
@@ -332,9 +323,14 @@ contains
             else
                 call self%os_stk%set(imic, 'intg',  trim(movienames(imic)))
             endif
-            call self%os_stk%set(imic, 'xdim',    real(ldim(1)))
-            call self%os_stk%set(imic, 'ydim',    real(ldim(2)))
-            call self%os_stk%set(imic, 'nframes', real(nframes))
+            call self%os_stk%set(imic, 'xdim',       real(ldim(1)))
+            call self%os_stk%set(imic, 'ydim',       real(ldim(2)))
+            call self%os_stk%set(imic, 'nframes',    real(nframes))
+            call self%os_stk%set(imic, 'smpd',       smpd)
+            call self%os_stk%set(imic, 'kv',         kv)
+            call self%os_stk%set(imic, 'cs',         cs)
+            call self%os_stk%set(imic, 'fraca',      fraca)
+            call self%os_stk%set(imic, 'phaseplate', trim(phaseplate))
         enddo
     end subroutine add_movies
 

@@ -88,14 +88,15 @@ contains
         use simple_binoris_io ! use all in there
         class(manage_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
+        character(len=STDLEN)         :: projfile
+        character(len=:), allocatable :: phaseplate
+        real,             allocatable :: line(:)
         type(sp_project) :: spproj
         type(params)     :: p
         type(oris)       :: os
-        character(len=STDLEN) :: projfile
-        logical               :: inputted_oritab,inputted_plaintexttab,inputted_deftab
-        type(nrtxtfile)       :: paramfile
-        integer               :: i, ndatlines, nrecs, n_ori_inputs
-        real, allocatable     :: line(:)
+        type(nrtxtfile)  :: paramfile
+        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
+        integer          :: i, ndatlines, nrecs, n_ori_inputs
 
         p = params(cline)
 
@@ -222,6 +223,16 @@ contains
                 endif
             end do
         endif
+        ! phase-plate
+        if( cline%defined('phaseplate') )then
+            call os%set_all2single('phaseplate', p%phaseplate)
+        else
+            do i=1,ndatlines
+                if( .not. os%isthere(i, 'phaseplate') )then
+                    call os%set(i, 'phaseplate', 'no')
+                endif
+            end do
+        endif
 
         ! PROJECT FILE MANAGEMENT
         if( cline%defined('projfile') )then
@@ -258,8 +269,19 @@ contains
         ! add list of stacks (stktab) if present
         if( cline%defined('stktab')  ) call spproj%add_stktab(p%stktab, os)
         ! add list of movies (filetab) if present
-        if( cline%defined('filetab') ) call spproj%add_movies(p%filetab)
-
+        if( cline%defined('filetab') )then
+            ! hard requirements
+            if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing movies; commander_project :: exec_manage_project'
+            if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when importing movies; commander_project :: exec_manage_project'
+            if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when importing movies; commander_project :: exec_manage_project'
+            if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when importing movies; commander_project :: exec_manage_project'
+            if( cline%defined('phaseplate') )then
+                phaseplate = cline%get_carg('phaseplate')
+            else
+                allocate(phaseplate, source='no')
+            endif
+            call spproj%add_movies(p%filetab, p%smpd, p%kv, p%cs, p%fraca, phaseplate)
+        endif
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment

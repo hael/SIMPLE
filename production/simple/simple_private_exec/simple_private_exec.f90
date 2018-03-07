@@ -1504,8 +1504,11 @@ select case(prg)
         keys_optional(23) = 'phshiftunit'
         keys_optional(24) = 'oritype'
         keys_optional(25) = 'filetab'
+        keys_optional(26) = 'ctf'
         ! parse command line
-        call cline%parse(keys_optional= keys_optional(:25))
+        call cline%parse(keys_optional= keys_optional(:26))
+        ! set defaults
+        if( .not. cline%defined('ctf') ) call cline%set('ctf', 'yes')
         ! execute
         call xmanage_project%execute(cline)
     case( 'print_project_info' )
