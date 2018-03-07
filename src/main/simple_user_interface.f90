@@ -127,7 +127,7 @@ contains
         call set_param(pgrp,        'pgrp',        'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true.)
         call set_param(nspace,      'nspace',      'num',    'Number of projection directions', 'Number of projection directions &
         &used in discrete 3D orientation search', '# projections used', .false.)
-        call set_param(objfun,      'objfun',      'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.))
+        call set_param(objfun,      'objfun',      'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
 
         contains
 

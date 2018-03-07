@@ -483,9 +483,9 @@ contains
         self%box    = ldim(1)
         ! update particle fields
         if( present(smpd) )then
-            call self%os_ptcl2D%set_all2single('smpd', p%smpd)
+            call self%os_ptcl2D%set_all2single('smpd', smpd)
         else
-            self%os_ptcl2D = os 
+            self%os_ptcl2D = os
         endif
         ! set stack index to 1
         call self%os_ptcl2D%set_all2single('stkind', 1.0)

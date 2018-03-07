@@ -45,6 +45,19 @@ type :: ctfplan
     logical               :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfplan
 
+! type for arrays of allocatable strings
+type str4arr
+    character(len=:), allocatable :: str
+end type str4arr
+
+! CTF flag type
+enum, bind(c)
+    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP = 3
+end enum
+type :: CTFFLAGTYPE
+    integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
+end type CTFFLAGTYPE
+
 ! type for CTF parameters
 type :: ctfparams
     type(CTFFLAGTYPE) :: ctfflag
@@ -58,19 +71,6 @@ type :: ctfparams
     real    :: phshift = 0.
     logical :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfparams
-
-! type for arrays of allocatable strings
-type str4arr
-    character(len=:), allocatable :: str
-end type str4arr
-
-! CTF flag type
-enum, bind(c)
-    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP = 3
-end enum
-type :: CTFFLAGTYPE
-    integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
-end type CTFFLAGTYPE
 
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
