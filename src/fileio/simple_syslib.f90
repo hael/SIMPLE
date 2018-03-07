@@ -1037,7 +1037,7 @@ contains
     end subroutine simple_mem_usage
 
     subroutine simple_dump_mem_usage(dump_file)
-        character(len=:), intent(in), optional :: dump_file
+        character(len=*), intent(inout), optional :: dump_file
         character(len=200):: filename=' '
         character(len=80) :: line
         character(len=8)  :: pid_char=' '
@@ -1047,16 +1047,15 @@ contains
 
         !--- get process ID --  make thread safe
 
-        !$omp critical dump_mem
+        !  omp critical dump_mem
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        command = 'cat '//trim(filename)//' | '
-        command = command//' grep -E \'^(VmPeak|VmSize|VmHWM|VmRSS):\' | '
-        command = command//' awk \'{print $2}\' |xargs echo '
-        if(present(dump_file)) command = command//' >> '//trim(dump_file)
+        command = 'cat '//trim(filename)//' | '//' grep -E "^(VmPeak|VmSize|VmHWM|VmRSS):" | '//&
+        &' awk "{print $2}" |xargs echo '
+        if(present(dump_file)) command = trim(command)//' >> '//trim(dump_file)
         call exec_cmdline(trim(command))
-        !$omp end critical
+        !  omp end critical
     end subroutine simple_dump_mem_usage
 
 end module simple_syslib

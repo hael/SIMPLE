@@ -45,7 +45,6 @@
 
 
 
-
 * Installation Options
 
 /Note/: Simple is designed for modern Fortran compilers, preferrably Fortran
@@ -61,7 +60,7 @@ https://github.com/hael/SIMPLE3.0/releases/latest
 *** Build from source
 -  Building SIMPLE with CMake requires a git client, a fortran compiler
    (2008 standards compliant), perl (>= 6.0) and FFTW3 libraries.
-- _Warning: Link time optimisation  may take some time 
+- _Warning: Link time optimisation  may take some time
 -  FFTW3 -- CMake tries to find the necessary libraries in the system paths,
    otherwise it uses pkg_config
 
@@ -111,12 +110,12 @@ single and double precision libraries in the interactive =ccmake= or declare FFT
 Source the =compilervars.sh= file from your Intel compiler source path
 #+BEGIN_SRC sh
    source /opt/intel/bin/compilervars.sh intel64
-   source /opt/intel/bin/mklvars.sh 
+   source /opt/intel/bin/mklvars.sh
    mkdir build-intel
    cd build-intel
    export FC=ifort
    export CPP=fpp
-   cmake ..  
+   cmake ..
    make -j
 #+END_SRC sh
 
@@ -151,7 +150,7 @@ function set_pgilinux(){
     export PATH="${PGIDIR}/bin:${CUDADIR}/bin:${PATH}"
     export MANPATH="${PGIDIR}/man:${MANPATH}"
     export LD_LIBRARY_PATH="${PGIDIR}/lib:${CUDADIR}/lib64:${LD_LIBRARY_PATH}"
-    # if Debian/Ubuntu/Mint 
+    # if Debian/Ubuntu/Mint
     # may need to add /usr/lib/x86_64-linux-gnu
     # to LD_LIBRARY_PATH
     export OMPI_VERSION=1.10.2
@@ -182,8 +181,8 @@ function unset_pgilinux(){
 
 Create a unique directory in the SIMPLE source directory and build with cmake:
 #+BEGIN_SRC sh
-    # source file_listed_above 
-    set_pgilinux   
+    # source file_listed_above
+    set_pgilinux
     mkdir build-pgi
     cd build-pgi
     cmake .. -DUSE_CUDA=1
@@ -192,7 +191,7 @@ Create a unique directory in the SIMPLE source directory and build with cmake:
 
 **** MacOSX/Apple Clang    (Unsupported)                           :noexport:
 
-The GNU compiler is the preferred compiler.   
+The GNU compiler is the preferred compiler.
 Building with clang will be rejected by CMake.
 
 **** Windows/MinGW                                    :noexport:
@@ -221,7 +220,7 @@ Environment variables that will affect SIMPLE at runtime:
 For PGI related environment variable in Installation settings above, see PGI reference http://www.pgroup.com/resources/docs/17.7/x86/pgi-user-guide/index.htm#use-pgi-compilers-linux
 and http://www.pgroup.com/resources/docs/17.7/x86/pgi-user-guide/index.htm#env-vars-pgi
 
-PGI's version of OpenMP fails with /proc_bind/ in source !omp$ commands. 
+PGI's version of OpenMP fails with /proc_bind/ in source !omp$ commands.
 
 MP_BIND MPSTKZ NCPUS_MAX NCPUS MP_SPIN MP_WARN
  PGI_STACK_USAGE
@@ -236,12 +235,12 @@ Generic environment variables affecting Fortran programs:
 File formats can be manipulated by the CONVERT specifier. See
 https://gcc.gnu.org/onlinedocs/gcc-7.1.0/gfortran/CONVERT-specifier.html#CONVERT-specifier
 
-Compile time arg /-fconvert/ is overridden by /CONVERT=/ in calls to /open/. Both compile arg and in source are overridden by 
+Compile time arg /-fconvert/ is overridden by /CONVERT=/ in calls to /open/. Both compile arg and in source are overridden by
 GFORTRAN_CONVERT_UNIT on the commandline.
 
 See, set endianness for unformatted I/O https://gcc.gnu.org/onlinedocs/gcc-5.4.0/gfortran/GFORTRAN_005fCONVERT_005fUNIT.html
 
-*** Stack size 
+*** Stack size
 
  PGI_STACK_USAGE
 Large static stack support in Linux 64-bit systems:
@@ -289,16 +288,16 @@ Each of the following features have a test executable in the bin
 directory with a prefix =simple_test_=.
 
 #+BEGIN_EXAMPLE
-    binomial_para    parse       
-    cartcorr_sanity  ptcl_conv   
-    defocus_groups   scatsrch    
-    elem_bess        shelliter   
-    ft_expanded      speed       
-    imgfile          srch        
-    install          timer       
-    new_ori          units       
-    omp_timer        volpft_srch 
-    order_corr     
+    binomial_para    parse
+    cartcorr_sanity  ptcl_conv
+    defocus_groups   scatsrch
+    elem_bess        shelliter
+    ft_expanded      speed
+    imgfile          srch
+    install          timer
+    new_ori          units
+    omp_timer        volpft_srch
+    order_corr
 #+END_EXAMPLE
 
 To run a typical test with 8 cores, use:
@@ -307,7 +306,6 @@ To run a typical test with 8 cores, use:
     cd bin
     ./simple_test_install nthr=4
 #+END_SRC
-
 
 * Usage
 
@@ -326,7 +324,7 @@ The dev options include:
  - CPACK_GENERATOR   {TGZ, RPM, DEB, ZIP}
  - CTest
  - CodeCoverage
- - ENABLE_PROFILING   
+ - ENABLE_PROFILING
 
 Optimisation flags include:
  - ENABLE_LINK_TIME_OPTIMISATION
@@ -366,19 +364,18 @@ CTFFIND4 Copyright 2014 Howard Hughes Medical Institute
  -  Use is subject to Janelia Farm Research Campus Software Copyright 1.1
    license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 
-
 * Post Release 2.5 Changes
 ** Syslib
 
 - simple_error_check -- gather relevant info, print stuff and will not stop
-- simple_stop   -- gather relevant info, print stuff and stop 
+- simple_stop   -- gather relevant info, print stuff and stop
 - alloc_errchk  -- jiffys only for progress and simple_end
 - get_sys_error
 - all syscalls functions
 
 ** Universal File I/O
 
-- fopen  -- do not use "UNIT=",  return logical false on fail, user can then call fileio_errmsg to terminate 
+- fopen  -- do not use "UNIT=",  return logical false on fail, user can then call fileio_errmsg to terminate
 - fclose -- same as fopen
 - fileio_errmsg -- wrapper for simple_error_check, will stop if necessary, if
   you want to prevent termination use die=.false
@@ -420,3 +417,23 @@ REPLACE
 WITH
 :+ allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
 :+ call alloc_errchk("In: new_simplex_opt", alloc_stat)
+
+* Memory check and profiling
+
+Valgrind memcheck
+1. Compile with -g option (DEBUG or RELWITHDEBUGINFO)
+2. Run: valgrind --tool=memcheck --leak-check=yes    program
+
+Valgrind Massif :  [[https://valgrind.org/docs/manual/ms-manual.html][Massif manual]]
+1. Compile with -g option (DEBUG or RELWITHDEBUGINFO)
+2. Run: valgrind --tool=massif  --pages-as-heap=yes    program
+3. View Massif info: ms_print massif.out.<pid>
+
+Valgrind DHAT dynamic heap analysis tool [[https://valgrind.org/docs/manual/dh-manual.html][DHAT manual]]
+1. Compile with -g option (DEBUG or RELWITHDEBUGINFO)
+2. Run: valgrind --tool=exp-dhat   program
+
+
+Valgrind SGCheck stack and global array overrun detector
+1. Compile with -g option (DEBUG or RELWITHDEBUGINFO)
+2. Run: valgrind--tool=exp-sgcheck program
