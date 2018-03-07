@@ -40,7 +40,7 @@ endif
 
     call test_pnm_io
 
-!    call test_jpg_image(.true.)
+    call test_jpg_image(.true.)
     call test_jpg_export
 
 #ifdef _LIBGD

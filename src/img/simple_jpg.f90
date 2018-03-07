@@ -124,13 +124,15 @@ module simple_jpg
 
         end function stbi_write_png
         integer function stbi_read_jpg (file_name, data, w, h, comp ) bind ( c, name="stbi_read_jpg" )
-            import
+            use,intrinsic                                        :: iso_c_binding
+        implicit none
             character(c_char),dimension(*),intent(in)    :: file_name
+            type (C_PTR)             :: data ! (const void *)
             integer(c_int), intent(inout)            :: w
             integer(c_int), intent(inout)            :: h
             integer(c_int), intent(inout)            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
             !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
-            type (C_PTR), VALUE             :: data ! (const void *)
+
 
         end function stbi_read_jpg
 
@@ -412,45 +414,50 @@ contains
         integer                          :: w,h,c, i,j
         integer                          :: status, bshape(1), pixel
         character(len=:), allocatable            :: fstr
+         integer(1), dimension(:),pointer :: imgbuffer
         status = 1
+        verbose =.true.
         allocate(fstr, source=trim(fname)//c_null_char)
         !        call read_jpeg(fstr, img, w, h, c, status)
         status = stbi_read_jpg(fstr, img, w, h, c )
         if(status ==0) call simple_stop ("simple_jpg::load_jpeg_r4 stbi_read_jpeg failed ")
         status=0
-        deallocate(fstr)
         print *, " read_jpeg returned img width x height ", w, h
         print *, "shape img ", shape(img)
+        if(associated(imgbuffer)) nullify(imgbuffer)
 
-        allocate(out_buffer(w,h))
         bshape = (/ w * h /)
-        call c_f_pointer(img,self%img_buffer, bshape)
-        print *, "shape img ", shape(img)
-
+        call c_f_pointer(img,imgbuffer, bshape)
+        VerbosePrint 'load_jpeg_r4 img size / shape', size(imgbuffer), shape(imgbuffer)
+        VerbosePrint 'load_jpeg_r4 img_buffer l/u bounds ', lbound(imgbuffer), ubound(imgbuffer)
+        VerbosePrint 'load_jpeg_r4 img_buffer ', associated(imgbuffer)
+        VerbosePrint 'load_jpeg_r4 img_buffer '
         !        out_buffer = transfer(self%img_buffer,1.0)
+        allocate(out_buffer(w,h))
         do i=0,w-1
             do j=0,h-1
-                out_buffer(i,j) = REAL( self%img_buffer(i + w * (j-1) ) )
-                if  (c == 3) then
-                    pixel = ISHFT(INT(self%img_buffer((i-1)*c + (j-1) * w * c+ 1), kind=4), 16)
-                    pixel = pixel + ISHFT(INT(self%img_buffer((i-1)*c + (j-1) * w * c + 2),kind=4), 8)
-                    pixel = pixel +INT(self%img_buffer((i-1)*c + (j-1) * w * c + 3),kind=4)
-                    out_buffer(i+1,j+1) = INT(pixel,kind=4)
-                    print *, (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i-1)*c + (j-1) * w * c+ 1)
-                else
-                    out_buffer(i+1,j+1) = INT(self%img_buffer(i*c + (j*w*c) + 1),kind=4)
-                end if
-
+                pixel = 0
+                if  (c > 1 ) then
+                    pixel = ISHFT(INT(imgbuffer((i*c) + (j * w * c)+ 3), kind=4), 16)
+                    pixel = pixel + ISHFT(INT(imgbuffer((i*c) + (j * w * c) + 2),kind=4), 8)
+                endif
+                pixel = pixel + INT(imgbuffer((i*c) + (j * w * c) + 1),kind=4)
+                out_buffer(i+1,j+1) = REAL( pixel, kind=4 )
             end do
         end do
         self%width = w
         self%height = h
         self%colorspace = c
+        status=0
         !  if(allocated(self%img_buffer)) deallocate(self%img_buffer)
-        deallocate(fstr)
+        if(associated(imgbuffer)) nullify(imgbuffer)
+        VerbosePrint 'load_jpeg_r4 done'
+        if(allocated(fstr))deallocate(fstr)
     end function load_jpeg_r4
 
     function load_jpeg_i4(self, fname, out_buffer) result(status)
+        use,intrinsic                                        :: iso_c_binding
+        implicit none
         class(jpg_img), intent(inout)       :: self
         character(len=*), intent(inout)     :: fname
         integer, allocatable, intent(inout) :: out_buffer(:,:)
@@ -490,10 +497,11 @@ contains
         self%width = w
         self%height = h
         self%colorspace = c
-        if(allocated(out_buffer)) deallocate(out_buffer)
+
         if(allocated(fstr)) deallocate(fstr)
         if(associated(imgbuffer)) nullify(imgbuffer)
         VerbosePrint 'load_jpeg_i4 done'
+        status=0
     end function load_jpeg_i4
 
     subroutine destructor(self)
@@ -503,6 +511,8 @@ contains
     end subroutine destructor
 
     subroutine test_jpg_export()
+        use,intrinsic                                        :: iso_c_binding
+        implicit none
         character                          :: buf(1024)
         integer, allocatable               :: int32_buffer(:,:)
         real, allocatable                  :: real32_buffer(:,:)
@@ -523,7 +533,7 @@ contains
         simple_path_str = simple_getenv('SIMPLE_PATH')
         print *,"test_jpg_export: Starting"
         allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")
-        allocate(cmd, source="convert "//trim(adjustl(testimg))//" -colorspace Gray  test.jpg")
+        allocate(cmd, source="cp "//trim(adjustl(testimg))//" ./; convert testimg.jpg -colorspace Gray  test.jpg")
         if(.not. file_exists("test.jpg")) then
             if(.not. file_exists(testimg)) call simple_stop("test_jpg_export needs the jpeglib testimg to run test")
             print *," Executing ", cmd
@@ -573,6 +583,8 @@ contains
             end if
         end if
         if(status==1) call simple_stop("test_jpg_export: FAILED: load_jpeg real32 failed")
+
+
         deallocate(fstr)
         allocate(fstr, source="test-i4.jpg")
         call del_file(fstr)
@@ -580,7 +592,7 @@ contains
         if(status == 0) then
             print *, " test_jpg_export: save_jpeg_i4 success "
             if(file_exists("test-i4.jpg"))then
-                call exec_cmdline("identify test-i4.jpg")
+                call exec_cmdline("display test-i4.jpg")
             else
                 status=1
             end if
@@ -594,8 +606,8 @@ contains
         status = jpg%writeJpgToFile(fstr, real32_buffer)
         if(status == 0) then
             print *, " test_jpg_export: save_jpeg_r4 success "
-            if(file_exists("test-i4.jpg"))then
-                call exec_cmdline("identify test-r4.jpg")
+            if(file_exists("test-r4.jpg"))then
+                call exec_cmdline("display test-r4.jpg")
             else
                 status=1
             end if
