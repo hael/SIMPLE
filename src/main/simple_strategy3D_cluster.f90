@@ -23,10 +23,11 @@ end type strategy3D_cluster
 
 contains
 
-    subroutine new_cluster3D( self, spec )
+    subroutine new_cluster3D( self, spec, npeaks )
         class(strategy3D_cluster), intent(inout) :: self
         class(strategy3D_spec),    intent(inout) :: spec
-        call self%s%new( spec )
+        integer,                   intent(in)    :: npeaks
+        call self%s%new( spec, npeaks )
         self%spec = spec
     end subroutine new_cluster3D
 

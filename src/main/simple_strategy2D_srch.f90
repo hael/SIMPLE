@@ -2,7 +2,6 @@
 module simple_strategy2D_srch
 #include "simple_lib.f08"
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_pftcc_shsrch,      only: pftcc_shsrch      ! simplex-based angle and shift search
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_oris,              only: oris
 use simple_params,            only: params
@@ -28,7 +27,6 @@ end type strategy2D_spec
 type strategy2D_srch
     class(polarft_corrcalc), pointer :: pftcc_ptr => null()  !< pointer to pftcc (corrcalc) object
     class(oris),             pointer :: a_ptr     => null()  !< pointer to b%a (primary particle orientation table)
-    type(pftcc_shsrch)               :: shsrch_obj           !< origin shift search object
     type(pftcc_shsrch_grad)          :: grad_shsrch_obj      !< origin shift search object, L-BFGS with gradient
     integer                          :: nrefs         =  0   !< number of references
     integer                          :: nrots         =  0   !< number of in-plane rotations in polar representation
@@ -49,7 +47,6 @@ type strategy2D_srch
     real                             :: prev_corr     = -1.  !< previous best correlation
     real                             :: best_corr     = -1.  !< best corr found by search
     real                             :: specscore     =  0.  !< spectral score
-    character(len=STDLEN)            :: opt           = ''   !< optimizer flag
     logical                          :: dyncls  = .true.     !< whether to turn on dynamic class update (use of low population threshold)
     logical                          :: doshift = .true.     !< origin shift search indicator
   contains
@@ -85,13 +82,11 @@ contains
         self%top        =  spec%pp%top
         self%nnn        =  spec%pp%nnn
         self%dyncls     =  (spec%pp%dyncls.eq.'yes')
-        self%opt        =  spec%pp%opt
         ! construct composites
         lims(:,1)       = -spec%pp%trs
         lims(:,2)       =  spec%pp%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, nrestarts=3, maxits=MAXITS)
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, maxits=MAXITS)
         if( DEBUG ) print *, '>>> strategy2D_srch::CONSTRUCTED NEW SIMPLE_strategy2D_srch OBJECT'
     end subroutine new
@@ -142,24 +137,14 @@ contains
         integer           :: irot
         self%best_shvec = [0.,0.]
         if( self%doshift )then
-            select case(trim(self%opt))
-                case('bfgs')
-                    call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
-                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        self%best_corr  = cxy(1)
-                        self%best_rot   = irot
-                        self%best_shvec = cxy(2:3)
-                    endif
-                case DEFAULT
-                    call self%shsrch_obj%set_indices(self%best_class, self%iptcl)
-                    cxy = self%shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        self%best_corr  = cxy(1)
-                        self%best_rot   = irot
-                        self%best_shvec = cxy(2:3)
-                    endif
-            end select
+            ! BFGS
+            call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
+            cxy = self%grad_shsrch_obj%minimize(irot=irot)
+            if( irot > 0 )then
+                self%best_corr  = cxy(1)
+                self%best_rot   = irot
+                self%best_shvec = cxy(2:3)
+            endif
         endif
         if( DEBUG ) write(*,'(A)') '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch

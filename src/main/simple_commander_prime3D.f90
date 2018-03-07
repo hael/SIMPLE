@@ -85,10 +85,11 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(build)  :: b
         type(params) :: p
+        integer :: npeaks
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.)
-        p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
-        write(*,'(A,1X,I4)') '>>> NPEAKS:', p%npeaks
+        npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
+        write(*,'(A,1X,I4)') '>>> NPEAKS:', npeaks
         ! end gracefully
         call simple_end('**** SIMPLE_NPEAKS NORMAL STOP ****')
     end subroutine exec_npeaks
@@ -127,8 +128,6 @@ contains
         call b%build_strategy3D_tbox(p) ! prime3D objects built
         ! determine resolution range
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
-        ! determine the number of peaks
-        if( .not. cline%defined('npeaks') ) p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
         ! generate the random model
         if( cline%defined('nran') )then
             call gen_random_model( b, p, p%nran )
@@ -195,9 +194,8 @@ contains
         type(params)               :: p
         type(build)                :: b
         integer                    :: i, startit
-        logical                    :: update_res, converged
-        real                       :: lpstart, lpstop, corr, corr_prev
-        update_res = .false.
+        logical                    :: converged
+        real                       :: lpstop, corr, corr_prev
         converged  = .false.
         p = params(cline) ! parameters generated
         if( p%neigh.eq.'yes' .and. .not. cline%defined('oritab') )then
@@ -205,9 +203,7 @@ contains
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
-        if( p%eo .ne. 'no' ) p%dynlp = 'no'
-        if( cline%defined('lp') .or. cline%defined('find')&
-        .or. p%eo .ne. 'no' .or. p%dynlp .eq. 'yes' )then
+        if( cline%defined('lp') .or. cline%defined('find').or. p%eo .ne. 'no')then
             ! alles ok!
         else
            stop 'need a starting low-pass limit (set lp or find)!'
@@ -221,21 +217,8 @@ contains
             if( cline%defined('find') )then
                 p%lp = calc_lowpass_lim( p%find, p%boxmatch, p%smpd )
             endif
-            call prime3D_exec(b, p, cline, startit, update_res, converged) ! partition or not, depending on 'part'
+            call prime3D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
         else
-            if( p%dynlp .eq. 'yes' )then
-                call prime3D_find_resrange( b, p, lpstart, lpstop ) ! determine resolution range
-                if( cline%defined('lpstart') )then
-                    p%lp = p%lpstart
-                else
-                    p%lp = lpstart
-                endif
-                if( cline%defined('lpstop') )then
-                    ! defined aleady
-                else
-                    p%lpstop = lpstop
-                endif
-            endif
             p%find = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
             ! init extremal dynamics
             if( cline%defined('extr_iter') )then
@@ -245,7 +228,7 @@ contains
             endif
             corr = -1
             do i=startit,p%maxits
-                call prime3D_exec(b, p, cline, i, update_res, converged)
+                call prime3D_exec(b, p, cline, i, converged)
                 ! updates extremal iteration
                 p%extr_iter = p%extr_iter + 1
                 if( .not. p%l_distr_exec .and. p%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
@@ -255,11 +238,6 @@ contains
                     if( i > 1 .and. corr <= corr_prev )then
                         p%szsn = min(SZSN_MAX,p%szsn + SZSN_STEP)
                     endif
-                endif
-                if( update_res )then
-                    ! dynamic low-pass
-                    p%find = p%find+p%fstep
-                    p%lp   = max(p%lpstop, calc_lowpass_lim( p%find, p%boxmatch, p%smpd ))
                 endif
                 if( converged )exit
             end do

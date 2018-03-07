@@ -42,6 +42,7 @@ type :: params
     character(len=3)      :: dopca='yes'
     character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
+    character(len=3)      :: dryrun='no'          !< no 3D search and reconstruction, for profiling only
     character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
     character(len=3)      :: dyncls='yes'         !< dynamic class update(yes|no){yes}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
@@ -68,7 +69,6 @@ type :: params
     character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
-    character(len=3)      :: pproc='yes'          !< whether to perform volume post-processing(yes|no){yes}
     character(len=3)      :: projstats='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_classes='no'
@@ -235,7 +235,6 @@ type :: params
     integer :: nmics=0             !< # micographs
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed exection
-    integer :: npeaks=1            !< # nonzero orientation weights{1}
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
@@ -493,6 +492,7 @@ contains
         call check_carg('dopca',          self%dopca)
         call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
+        call check_carg('dryrun',         self%dryrun)
         call check_carg('dynlp',          self%dynlp)
         call check_carg('dyncls',         self%dyncls)
         call check_carg('eo',             self%eo)
@@ -650,7 +650,6 @@ contains
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
-        call check_iarg('npeaks',         self%npeaks)
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)

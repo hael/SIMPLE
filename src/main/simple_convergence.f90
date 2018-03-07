@@ -126,9 +126,8 @@ contains
         endif
     end function check_conv2D
 
-    function check_conv3D( self, update_res ) result( converged )
+    function check_conv3D( self ) result( converged )
         class(convergence), intent(inout) :: self
-        logical, optional,  intent(inout) :: update_res
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint
@@ -179,32 +178,6 @@ contains
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
-        ! automatic resolution stepping
-        if( present(update_res) )then
-            if( update_res )then
-                ! the previous round updated the resolution limit, so
-                ! don't update this round
-                update_res = .false.
-            else
-                update_res = .false.
-                if(       self%pp%dynlp .eq. 'yes'  .and. &
-                    .not. self%pcline%defined('lp') .and. &
-                          self%dist <= self%pp%athres/2. )then
-                    update_res = .true.
-                endif
-            endif
-            if( update_res )then
-                write(*,'(A)') '>>> UPDATE LOW-PASS LIMIT: .YES.'
-            else
-                write(*,'(A)') '>>> UPDATE LOW-PASS LIMIT: .NO.'
-            endif
-        else
-            if( self%pcline%defined('find') .and. self%dist <= self%pp%athres/2. )then
-                write(*,'(A)') '>>> UPDATE LOW-PASS LIMIT: .YES.'
-            else
-                write(*,'(A)') '>>> UPDATE LOW-PASS LIMIT: .NO.'
-            endif
-        endif
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. self%pcline%defined('trs') .or. self%pp%trs <  MINSHIFT )then

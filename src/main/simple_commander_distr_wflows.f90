@@ -743,7 +743,6 @@ contains
         ! commanders
         type(prime3D_init_distr_commander)   :: xprime3D_init_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
-        type(resrange_commander)             :: xresrange
         type(merge_algndocs_commander)       :: xmerge_algndocs
         type(check3D_conv_commander)         :: xcheck3D_conv
         type(split_commander)                :: xsplit
@@ -751,7 +750,6 @@ contains
         ! command lines
         type(cmdline)         :: cline_reconstruct3D_distr
         type(cmdline)         :: cline_refine3D_init
-        type(cmdline)         :: cline_resrange
         type(cmdline)         :: cline_check3D_conv
         type(cmdline)         :: cline_merge_algndocs
         type(cmdline)         :: cline_volassemble
@@ -779,14 +777,6 @@ contains
         p_master = params(cline)
         ! make general builder to the the orientations in
         call b%build_general_tbox(p_master, cline, do3d=.false.)
-        ! options check
-        if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: nstates>1 and dynlp=yes'
-        if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: automsk=yes and dynlp=yes'
-        if( p_master%eo.ne.'no' .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: eo.ne.no and dynlp=yes'
-
         ! setup the environment for distributed execution
         call qenv%new(p_master)
 
@@ -796,7 +786,6 @@ contains
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr   = cline
         cline_refine3D_init   = cline
-        cline_resrange       = cline
         cline_check3D_conv   = cline
         cline_merge_algndocs = cline
         cline_volassemble    = cline
@@ -880,30 +869,6 @@ contains
         else
             ! all good
         endif
-        ! DYNAMIC LOW-PASS
-        if( p_master%dynlp.eq.'yes' )then
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                ! all good
-            else
-                call xresrange%execute( cline_resrange )
-                ! initial low-pass
-                if( .not. cline%defined('lpstart') )then
-                    call cline%set('lpstart', cline_resrange%get_rarg('lpstart') )
-                    p_master%lpstart = cline%get_rarg('lpstart')
-                endif
-                ! final low-pass
-                if( .not.cline%defined('lpstop') )then
-                    call cline%set('lpstop', cline_resrange%get_rarg('lpstop') )
-                    p_master%lpstop = cline%get_rarg('lpstop')
-                endif
-            endif
-            ! initial fourier index
-            p_master%find = calc_fourier_index(p_master%lpstart, p_master%boxmatch, p_master%smpd)
-            p_master%lp   = p_master%lpstart
-            call cline_check3D_conv%set( 'update_res', 'no' )
-            call cline_check3D_conv%set( 'find', real(p_master%find) )
-            call cline%set( 'find', real(p_master%find) )
-        endif
         ! EXTREMAL DYNAMICS
         if( cline%defined('extr_iter') )then
             p_master%extr_iter = p_master%extr_iter - 1
@@ -979,36 +944,25 @@ contains
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
             call xmerge_algndocs%execute( cline_merge_algndocs )
-            if( p_master%norec .eq. 'yes' )then
-                ! RECONSTRUCT VOLUMES
-                call cline_reconstruct3D_distr%set( 'oritab', trim(oritab) )
-                do state = 1,p_master%nstates
-                    call cline_reconstruct3D_distr%delete('state')
-                    call cline_reconstruct3D_distr%set('state', real(state))
-                    call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
-                end do
-                call cline_reconstruct3D_distr%delete('state')
+            ! ASSEMBLE VOLUMES
+            call cline_volassemble%set( 'oritab', trim(oritab) )
+            if( p_master%eo.ne.'no' )then
+                call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
             else
-                ! ASSEMBLE VOLUMES
-                call cline_volassemble%set( 'oritab', trim(oritab) )
-                if( p_master%eo.ne.'no' )then
-                    call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
-                else
-                    call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
-                endif
-                do state = 1,p_master%nstates
-                    str_state = int2str_pad(state,2)
-                    if( p_master%eo .ne. 'no' )then
-                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
-                    else
-                        volassemble_output = ''
-                    endif
-                    call cline_volassemble%set( 'state', real(state) )
-                    call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
-                        &script_name='simple_script_state'//trim(str_state))
-                end do
-                call qsys_watcher(state_assemble_finished)
+                call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
             endif
+            do state = 1,p_master%nstates
+                str_state = int2str_pad(state,2)
+                if( p_master%eo .ne. 'no' )then
+                    volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                else
+                    volassemble_output = ''
+                endif
+                call cline_volassemble%set( 'state', real(state) )
+                call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
+                    &script_name='simple_script_state'//trim(str_state))
+            end do
+            call qsys_watcher(state_assemble_finished)
             ! rename volumes, postprocess & update job_descr
             call binread_oritab(trim(oritab), b%spproj, b%a, [1,p_master%nptcls])
             do state = 1,p_master%nstates
@@ -1043,24 +997,22 @@ contains
                         call simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
                     endif
                     ! post-process
-                    if( p_master%pproc.eq.'yes' )then
-                        vol = 'vol'//trim(int2str(state))
-                        call cline_postprocess%set( 'vol1', trim(vol_iter))
-                        fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
-                        optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
-                        if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
-                            call cline_postprocess%delete('lp')
-                            call cline_postprocess%set('fsc', trim(fsc_file))
-                            call cline_postprocess%set('vol_filt', trim(optlp_file))
-                        else if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
-                            call cline_postprocess%delete('lp')
-                            call cline_postprocess%set('fsc', trim(fsc_file))
-                        else
-                            call cline_postprocess%delete('fsc')
-                            call cline_postprocess%set('lp', p_master%lp)
-                        endif
-                        call xpostprocess%execute(cline_postprocess)
+                    vol = 'vol'//trim(int2str(state))
+                    call cline_postprocess%set( 'vol1', trim(vol_iter))
+                    fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
+                    optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+                    if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
+                        call cline_postprocess%delete('lp')
+                        call cline_postprocess%set('fsc', trim(fsc_file))
+                        call cline_postprocess%set('vol_filt', trim(optlp_file))
+                    else if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
+                        call cline_postprocess%delete('lp')
+                        call cline_postprocess%set('fsc', trim(fsc_file))
+                    else
+                        call cline_postprocess%delete('fsc')
+                        call cline_postprocess%set('lp', p_master%lp)
                     endif
+                    call xpostprocess%execute(cline_postprocess)
                     ! updates cmdlines & job description
                     vol = 'vol'//trim(int2str(state))
                     call job_descr%set( trim(vol), trim(vol_iter) )
@@ -1082,17 +1034,6 @@ contains
                 str = real2str(cline_check3D_conv%get_rarg('trs'))
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check3D_conv%get_rarg('trs') )
-            endif
-            if( p_master%dynlp.eq.'yes' )then
-                ! dynamic resolution update
-                if( cline_check3D_conv%get_carg('update_res').eq.'yes' )then
-                    p_master%find = p_master%find + p_master%fstep  ! fourier index update
-                    p_master%lp   = calc_lowpass_lim(p_master%find , p_master%box, p_master%smpd)
-                    call cline%set( 'lp', real(p_master%lp) )
-                    call job_descr%set( 'find', int2str(p_master%find) )
-                    call cline%set( 'find', real(p_master%find) )
-                    call cline_check3D_conv%set( 'find', real(p_master%find) )
-               endif
             endif
         end do
         call qsys_cleanup(p_master)

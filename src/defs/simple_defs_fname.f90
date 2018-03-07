@@ -18,19 +18,19 @@ character(len=6),      parameter :: POWSPEC_SUFFIX            = '_pspec'
 character(len=KEYLEN), parameter :: STKPARTSDIR               = 'stack_parts'
 character(len=KEYLEN), parameter :: STKPARTFBODY              = trim(STKPARTSDIR)//'/stack_part'
 character(len=1),      parameter :: DEFAULT_FILE_FORMAT       = 'M'
-! PRIME2D
+! CLUSTER2D
 character(len=KEYLEN), parameter :: CLUSTER2D_ITER_FBODY      = 'cluster2Ddoc_'
 character(len=KEYLEN), parameter :: CAVGS_ITER_FBODY          = 'cavgs_iter'
-! PRIME2D STREAM
+! CLUSTER2D STREAM
 character(len=KEYLEN), parameter :: SCSTK_DIR                 = 'stacks_sc/'
-! PRIME3D
+! REFINE3D
 character(len=KEYLEN), parameter :: REFINE3D_ITER_FBODY       = 'refine3Ddoc_'
 character(len=KEYLEN), parameter :: STARTVOL_FBODY            = 'startvol_state'
 character(len=KEYLEN), parameter :: VOL_FBODY                 = 'recvol_state'
 character(len=KEYLEN), parameter :: ANISOLP_FBODY             = 'aniso_optlp_state'
 character(len=KEYLEN), parameter :: SNHCDOC                   = 'snhc_oris'//trim(METADATA_EXT)
 character(len=KEYLEN), parameter :: SNHCVOL                   = 'snhc_recvol_state'
-! PRIME3D COMMON
+! REFINE3D COMMON
 character(len=KEYLEN), parameter :: FSC_FBODY                 = 'fsc_state'
 character(len=KEYLEN), parameter :: FRCS_FBODY                = 'frcs_state'
 character(len=KEYLEN), parameter :: FRCS_ITER_FBODY           = 'frcs_iter'

@@ -67,7 +67,7 @@ contains
         call o%kill
     end subroutine prime3D_find_resrange
 
-    subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
+    subroutine prime3D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
@@ -77,7 +77,7 @@ contains
         class(params), target, intent(inout) :: p
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
-        logical,               intent(inout) :: update_res, converged
+        logical,               intent(inout) :: converged
         type(image),     allocatable :: rec_imgs(:)
         integer, target, allocatable :: symmat(:,:)
         logical,         allocatable :: het_mask(:)
@@ -89,12 +89,17 @@ contains
         type(prep4cgrid)      :: gridprep
         character(len=STDLEN) :: fname, refine
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
-        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
+        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
+        integer :: batchlims(2)
         logical :: doprint, do_extr
 
         if( L_BENCH )then
             t_init = tic()
             t_tot  = t_init
+        endif
+
+        if( p%dryrun.eq.'yes' )then
+            ! TBD
         endif
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
@@ -117,19 +122,17 @@ contains
         DebugPrint '*** strategy3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
         ! DETERMINE THE NUMBER OF PEAKS
-        if( .not. cline%defined('npeaks') )then
-            select case(p%refine)
+        select case(p%refine)
             case('cluster', 'snhc', 'clustersym', 'clusterdev')
-                    p%npeaks = 1
-                case DEFAULT
-                    if( p%eo .ne. 'no' )then
-                        p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
-                    else
-                        p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
-                    endif
-            end select
-            DebugPrint '*** strategy3D_matcher ***: determined the number of peaks'
-        endif
+                npeaks = 1
+            case DEFAULT
+                if( p%eo .ne. 'no' )then
+                    npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
+                else
+                    npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
+                endif
+        end select
+        DebugPrint '*** strategy3D_matcher ***: determined the number of peaks'
 
         ! RANDOM MODEL GENERATION
         if( p%vols(1) .eq. '' .and. p%nstates == 1 )then
@@ -251,7 +254,7 @@ contains
             call b%vol2%kill
         endif
         ! array allocation for strategy3D
-        call prep_strategy3D( b, p, ptcl_mask )
+        call prep_strategy3D( b, p, ptcl_mask, npeaks )
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
         ! switch for polymorphic strategy3D construction
         if( p%oritab.eq.'' )then
@@ -299,7 +302,7 @@ contains
                 if( allocated(het_mask) )   strategy3Dspec%do_extr    =  het_mask(iptcl)
                 if( allocated(symmat) )     strategy3Dspec%symmat     => symmat
                 ! search object
-                call strategy3Dsrch(iptcl)%new(strategy3Dspec)
+                call strategy3Dsrch(iptcl)%new(strategy3Dspec, npeaks)
             endif
         end do
         ! memoize CTF matrices
@@ -308,15 +311,19 @@ contains
         call pftcc%memoize_ffts
         ! memoize B-factors
         if( p%objfun.eq.'ccres' ) call pftcc%memoize_bfacs(b%a)
-        ! search
-        call del_file(p%outfile)
-        if( L_BENCH ) t_align = tic()
-        !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-        do i=1,nptcls2update
-            iptcl = pinds(i)
-            call strategy3Dsrch(iptcl)%srch
-        end do
-        !$omp end parallel do
+        ! SEARCH
+        if( p%dryrun.eq.'yes' )then
+            ! TBD
+        else
+            call del_file(p%outfile)
+            if( L_BENCH ) t_align = tic()
+            !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+            do i=1,nptcls2update
+                iptcl = pinds(i)
+                call strategy3Dsrch(iptcl)%srch
+            end do
+            !$omp end parallel do
+        endif
         ! clean
         call clean_strategy3D()
         call pftcc%kill
@@ -334,67 +341,65 @@ contains
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         if( L_BENCH ) t_rec = tic()
-        if( p%norec .ne. 'yes' )then
-            ! make the gridding prepper
-            if( p%eo .ne. 'no' )then
-                kbwin = b%eorecvols(1)%get_kbwin()
-            else
-                kbwin = b%recvols(1)%get_kbwin()
-            endif
-            call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
-            ! init volumes
-            call preprecvols(b, p)
-            ! prep rec imgs
-            allocate(rec_imgs(MAXIMGBATCHSZ))
-            do i=1,MAXIMGBATCHSZ
-                call rec_imgs(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
-            end do
-            ! prep batch imgs
-            call prepimgbatch(b, p, MAXIMGBATCHSZ)
-            ! gridding batch loop
-            do i_batch=1,nptcls2update,MAXIMGBATCHSZ
-                batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
-                call read_imgbatch(b, p, nptcls2update, pinds, batchlims)
-                ! parallel gridprep
-                !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
-                do i=batchlims(1),batchlims(2)
-                    ibatch = i - batchlims(1) + 1
-                    ! normalise (read_imgbatch does not normalise)
-                    call b%imgbatch(ibatch)%norm()
-                    ! in dev=yes code, we filter before inserting into 3D vol
-                    call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
-                end do
-                !$omp end parallel do
-                ! gridding
-                do i=batchlims(1),batchlims(2)
-                    iptcl       = pinds(i)
-                    ibatch      = i - batchlims(1) + 1
-                    orientation = b%a%get_ori(iptcl)
-                    if( orientation%isstatezero() .or. nint(orientation%get('state_balance')) == 0 ) cycle
-                    if( trim(p%refine).eq.'clustersym' )then
-                        ! always C1 reconstruction
-                        call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation, o_peaks(iptcl))
-                    else
-                        call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
-                    endif
-                end do
-            end do
-            ! normalise structure factors
-            if( p%eo .ne. 'no' )then
-                call eonorm_struct_facts(b, p, cline, reslim, which_iter)
-            else
-                call norm_struct_facts(b, p, which_iter)
-            endif
-            ! destruct
-            call killrecvols(b, p)
-            call gridprep%kill
-            do ibatch=1,MAXIMGBATCHSZ
-                call rec_imgs(ibatch)%kill
-                call b%imgbatch(ibatch)%kill
-            end do
-            deallocate(rec_imgs, b%imgbatch)
-            call gridprep%kill
+        ! make the gridding prepper
+        if( p%eo .ne. 'no' )then
+            kbwin = b%eorecvols(1)%get_kbwin()
+        else
+            kbwin = b%recvols(1)%get_kbwin()
         endif
+        call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+        ! init volumes
+        call preprecvols(b, p)
+        ! prep rec imgs
+        allocate(rec_imgs(MAXIMGBATCHSZ))
+        do i=1,MAXIMGBATCHSZ
+            call rec_imgs(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
+        end do
+        ! prep batch imgs
+        call prepimgbatch(b, p, MAXIMGBATCHSZ)
+        ! gridding batch loop
+        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
+            call read_imgbatch(b, p, nptcls2update, pinds, batchlims)
+            ! parallel gridprep
+            !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
+            do i=batchlims(1),batchlims(2)
+                ibatch = i - batchlims(1) + 1
+                ! normalise (read_imgbatch does not normalise)
+                call b%imgbatch(ibatch)%norm()
+                ! in dev=yes code, we filter before inserting into 3D vol
+                call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
+            end do
+            !$omp end parallel do
+            ! gridding
+            do i=batchlims(1),batchlims(2)
+                iptcl       = pinds(i)
+                ibatch      = i - batchlims(1) + 1
+                orientation = b%a%get_ori(iptcl)
+                if( orientation%isstatezero() .or. nint(orientation%get('state_balance')) == 0 ) cycle
+                if( trim(p%refine).eq.'clustersym' )then
+                    ! always C1 reconstruction
+                    call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation, o_peaks(iptcl))
+                else
+                    call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
+                endif
+            end do
+        end do
+        ! normalise structure factors
+        if( p%eo .ne. 'no' )then
+            call eonorm_struct_facts(b, p, cline, reslim, which_iter)
+        else
+            call norm_struct_facts(b, p, which_iter)
+        endif
+        ! destruct
+        call killrecvols(b, p)
+        call gridprep%kill
+        do ibatch=1,MAXIMGBATCHSZ
+            call rec_imgs(ibatch)%kill
+            call b%imgbatch(ibatch)%kill
+        end do
+        deallocate(rec_imgs, b%imgbatch)
+        call gridprep%kill
         if( L_BENCH ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE
@@ -402,10 +407,10 @@ contains
             call qsys_job_finished( p, 'simple_strategy3D_matcher :: prime3D_exec')
         else
             select case(trim(p%refine))
-            case('cluster','clustersym','clusterdev')
+                case('cluster','clustersym','clusterdev')
                     converged = b%conv%check_conv_cluster()
                 case DEFAULT
-                    converged = b%conv%check_conv3D(update_res)
+                    converged = b%conv%check_conv3D()
             end select
         endif
         if( L_BENCH )then

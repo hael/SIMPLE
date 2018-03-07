@@ -492,10 +492,9 @@ select case(prg)
         keys_optional(20) = 'stktab'
         keys_optional(21) = 'dyncls'
         keys_optional(22) = 'phaseplate'
-        keys_optional(23) = 'opt'
-        keys_optional(24) = 'objfun'
+        keys_optional(23) = 'objfun'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:24))
+        call cline%parse(keys_required(:4), keys_optional(:23))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -668,13 +667,12 @@ select case(prg)
         keys_optional(5)  = 'width'
         keys_optional(6)  = 'nspace'
         keys_optional(7)  = 'nran'
-        keys_optional(8)  = 'npeaks'
-        keys_optional(9)  = 'refine'
-        keys_optional(10) = 'stk'
-        keys_optional(11) = 'stktab'
-        keys_optional(12) = 'phaseplate'
+        keys_optional(8)  = 'refine'
+        keys_optional(9) = 'stk'
+        keys_optional(10) = 'stktab'
+        keys_optional(11) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:12))
+        call cline%parse(keys_required(:4), keys_optional(:11))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -750,8 +748,8 @@ select case(prg)
         keys_optional(6)  = 'hp'
         keys_optional(7)  = 'lp'
         keys_optional(8)  = 'cenlp'
-        keys_optional(9)  = 'dynlp'
-        keys_optional(10) = 'lpstart'
+        keys_optional(9) = 'focusmsk'
+        keys_optional(10) = 'objfun'
         keys_optional(11) = 'lpstop'
         keys_optional(12) = 'lplim_crit'
         keys_optional(13) = 'eo'
@@ -762,24 +760,18 @@ select case(prg)
         keys_optional(18) = 'width'
         keys_optional(19) = 'nspace'
         keys_optional(20) = 'nstates'
-        keys_optional(21) = 'npeaks'
-        keys_optional(22) = 'startit'
-        keys_optional(23) = 'maxits'
-        keys_optional(24) = 'shbarrier'
-        keys_optional(25) = 'noise'
-        keys_optional(26) = 'nnn'
-        keys_optional(27) = 'rrate'
-        keys_optional(28) = 'norec'
-        keys_optional(29) = 'pproc'
-        keys_optional(30) = 'update_frac'
-        keys_optional(31) = 'stk'
-        keys_optional(32) = 'stktab'
-        keys_optional(33) = 'phaseplate'
-        keys_optional(34) = 'opt'
-        keys_optional(35) = 'focusmsk'
-        keys_optional(36) = 'objfun'
+        keys_optional(21) = 'startit'
+        keys_optional(22) = 'maxits'
+        keys_optional(23) = 'shbarrier'
+        keys_optional(24) = 'noise'
+        keys_optional(25) = 'nnn'
+        keys_optional(26) = 'rrate'
+        keys_optional(27) = 'update_frac'
+        keys_optional(28) = 'stk'
+        keys_optional(29) = 'stktab'
+        keys_optional(30) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:36))
+        call cline%parse(keys_required(:5), keys_optional(:30))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -787,11 +779,7 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('pproc')                   ) call cline%set('pproc',  'yes')
-        if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
-        if( cline%defined('lp') .or. cline%defined('find') )then
-            call cline%set('dynlp',   'no')
-        endif
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine') )then
             call cline%set('refine',  'single')
         else

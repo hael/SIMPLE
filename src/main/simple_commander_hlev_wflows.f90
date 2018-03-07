@@ -210,14 +210,14 @@ contains
         ! constants
         real,                  parameter :: CENLP=30.           !< consistency with prime3D
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
+        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
         integer,               parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(symsrch_distr_commander) :: xsymsrch_distr
         ! shared-mem commanders
-        type(reconstruct3D_commander)        :: xreconstruct3D
+        type(reconstruct3D_commander) :: xreconstruct3D
         type(project_commander)       :: xproject
         ! command lines
         type(cmdline)         :: cline_refine3D_snhc
@@ -337,7 +337,6 @@ contains
         call cline_refine3D_refine%set('ctf', 'no')
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
         call cline_refine3D_refine%set('refine', 'single')
-        call cline_refine3D_refine%set('npeaks', real(NPEAKS_REFINE))
         call cline_refine3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_refine3D_refine%set('lp', lplims(2))
         if( .not. cline_refine3D_refine%defined('nspace') )then
@@ -499,11 +498,9 @@ contains
         end select
         call cline_refine3D2%set('refine', 'multi')
         call cline_refine3D1%set('dynlp', 'no')
-        call cline_refine3D1%set('pproc', 'no')
         call cline_refine3D1%delete('oritab2')
         call cline_refine3D1%set('frcs', 'cluster3D_frcs.bin') !! mixed model FRCs
         call cline_refine3D2%set('dynlp', 'no')
-        call cline_refine3D2%set('pproc', 'no')
         call cline_refine3D2%delete('oritab2')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.2)
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')

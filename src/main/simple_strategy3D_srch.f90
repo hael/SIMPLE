@@ -6,7 +6,6 @@ use simple_oris,              only: oris
 use simple_ori,               only: ori
 use simple_sym,               only: sym
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_pftcc_shsrch,      only: pftcc_shsrch       ! simplex-based angle and shift search
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based angle and shift search
 use simple_strategy3D_alloc   ! use all in there
 implicit none
@@ -33,7 +32,6 @@ type strategy3D_srch
     class(polarft_corrcalc), pointer :: pftcc_ptr => null()       !< corrcalc object
     class(oris),             pointer :: a_ptr     => null()       !< b%a (primary particle orientation table)
     class(sym),              pointer :: se_ptr    => null()       !< b%se (symmetry elements)
-    type(pftcc_shsrch)               :: shsrch_obj                !< origin shift search object
     type(pftcc_shsrch_grad)          :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     integer, allocatable             :: nnvec(:)                  !< nearest neighbours indices
     integer                          :: iptcl         = 0         !< global particle index
@@ -74,9 +72,10 @@ end type strategy3D_srch
 
 contains
 
-    subroutine new( self, spec )
+    subroutine new( self, spec, npeaks )
         class(strategy3D_srch), intent(inout) :: self
         class(strategy3D_spec), intent(in)    :: spec
+        integer,                intent(in)    :: npeaks
         integer, parameter :: MAXITS = 60
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
@@ -90,7 +89,7 @@ contains
         self%nprojs     =  spec%pp%nspace
         self%nrefs      =  self%nprojs*self%nstates
         self%nrots      =  round2even(twopi*real(spec%pp%ring2))
-        self%npeaks     =  spec%pp%npeaks
+        self%npeaks     =  npeaks
         self%nbetter    =  0
         self%nrefs_eval =  0
         self%nsym       =  self%se_ptr%get_nsym()
@@ -100,7 +99,6 @@ contains
         self%nnn        =  spec%pp%nnn
         self%nnnrefs    =  self%nnn*self%nstates
         self%kstop_grid =  spec%pp%kstop_grid
-        self%opt        =  spec%pp%opt
         ! multiple states
         if( self%nstates == 1 )then
             self%npeaks_grid = GRIDNPEAKS
@@ -125,8 +123,6 @@ contains
         lims(:,2)      =  spec%pp%trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
-            &shbarrier=spec%pp%shbarrier, nrestarts=3, maxits=MAXITS)
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
             &shbarrier=spec%pp%shbarrier, maxits=MAXITS)
         self%exists = .true.
@@ -261,32 +257,18 @@ contains
         real, allocatable :: cxy(:)
         integer :: i, ref, irot
         if( self%doshift )then
-            select case(trim(self%opt))
-                case('bfgs')
-                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                        ref = proj_space_inds(self%iptcl_map, i)
-                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                        cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                        if( irot > 0 )then
-                            ! irot > 0 guarantees improvement found
-                            proj_space_euls(self%iptcl_map, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
-                            proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
-                            proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
-                        endif
-                    end do
-                case DEFAULT
-                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                        ref = proj_space_inds(self%iptcl_map, i)
-                        call self%shsrch_obj%set_indices(ref, self%iptcl)
-                        cxy = self%shsrch_obj%minimize(irot=irot)
-                        if( irot > 0 )then
-                            ! irot > 0 guarantees improvement found
-                            proj_space_euls(self%iptcl_map, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
-                            proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
-                            proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
-                        endif
-                    end do
-            end select
+            ! BFGS
+            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                ref = proj_space_inds(self%iptcl_map, i)
+                call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                if( irot > 0 )then
+                    ! irot > 0 guarantees improvement found
+                    proj_space_euls(self%iptcl_map, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
+                    proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
+                    proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
+                endif
+            end do
         endif
         if( DEBUG ) print *, '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
     end subroutine inpl_srch

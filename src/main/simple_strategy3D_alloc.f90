@@ -31,13 +31,14 @@ contains
         if( allocated(state_exists)     ) deallocate(state_exists)
     end subroutine clean_strategy3D
 
-    subroutine prep_strategy3D( b, p, ptcl_mask )
+    subroutine prep_strategy3D( b, p, ptcl_mask, npeaks )
         use simple_ran_tabu, only: ran_tabu
         use simple_params,   only: params
         use simple_build,    only: build
         class(build),    intent(inout) :: b
         class(params),   intent(inout) :: p
         logical, target, intent(in)    :: ptcl_mask(p%fromp:p%top)
+        integer,         intent(in)    :: npeaks
         type(ran_tabu), allocatable :: rts(:)
         type(ran_tabu) :: rt
         integer        :: pinds(p%fromp:p%top)
@@ -109,7 +110,7 @@ contains
         do iptcl = p%fromp, p%top
             if( ptcl_mask(iptcl) )then
                 ! orientation peaks
-                call o_peaks(iptcl)%new_clean(p%npeaks)
+                call o_peaks(iptcl)%new_clean(npeaks)
                 ! transfer CTF params
                 if( p%ctf.ne.'no' )then
                     call o_peaks(iptcl)%set_all2single('kv',    b%a%get(iptcl,'kv')   )

@@ -517,11 +517,10 @@ select case(prg)
         keys_optional(11) = 'phaseplate'
         keys_optional(12) = 'autoscale'
         keys_optional(13) = 'weights2D'
-        keys_optional(14) = 'opt'
-        keys_optional(15) = 'objfun'
+        keys_optional(14) = 'objfun'
         ! documentation
         ! if( describe ) call print_doc_cluster2D_stream
-        call cline%parse( keys_required(:7), keys_optional(:15) )
+        call cline%parse( keys_required(:7), keys_optional(:14) )
         ! set defaults
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',       8.)
@@ -533,7 +532,7 @@ select case(prg)
 
     ! PRIME3D
 
-    case('prime3D_init')
+    case( 'prime3D_init' )
         !==Program prime3D_init
         !
         ! <prime3D_init/begin>is a distributed workflow for generating a random initial model for
@@ -555,13 +554,12 @@ select case(prg)
         keys_optional(5)  = 'width'
         keys_optional(6)  = 'nspace'
         keys_optional(7)  = 'nran'
-        keys_optional(8)  = 'npeaks'
-        keys_optional(9)  = 'stk'
-        keys_optional(10) = 'stktab'
-        keys_optional(11) = 'phaseplate'
+        keys_optional(8)  = 'stk'
+        keys_optional(9)  = 'stktab'
+        keys_optional(10) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:5), keys_optional(:11))
+        call cline%parse(keys_required(:5), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -596,8 +594,8 @@ select case(prg)
         keys_optional(6)  = 'hp'
         keys_optional(7)  = 'lp'
         keys_optional(8)  = 'cenlp'
-        keys_optional(9) = 'dynlp'
-        keys_optional(10) = 'lpstart'
+        keys_optional(9) = 'objfun'
+        keys_optional(10) = 'focusmsk'
         keys_optional(11) = 'lpstop'
         keys_optional(12) = 'lplim_crit'
         keys_optional(13) = 'eo'
@@ -608,27 +606,21 @@ select case(prg)
         keys_optional(18) = 'width'
         keys_optional(19) = 'nspace'
         keys_optional(20) = 'nstates'
-        keys_optional(21) = 'npeaks'
-        keys_optional(22) = 'startit'
-        keys_optional(23) = 'maxits'
-        keys_optional(24) = 'shbarrier'
-        keys_optional(25) = 'noise'
-        keys_optional(26) = 'nnn'
-        keys_optional(27) = 'norec'
-        keys_optional(28) = 'center'
-        keys_optional(29) = 'pproc'
-        keys_optional(30) = 'stk'
-        keys_optional(31) = 'stktab'
-        keys_optional(32) = 'weights3D'
-        keys_optional(33) = 'phaseplate'
-        keys_optional(34) = 'opt'
-        keys_optional(35) = 'update_frac'
-        keys_optional(36) = 'focusmsk'
-        keys_optional(37) = 'objfun'
+        keys_optional(21) = 'startit'
+        keys_optional(22) = 'maxits'
+        keys_optional(23) = 'shbarrier'
+        keys_optional(24) = 'noise'
+        keys_optional(25) = 'nnn'
+        keys_optional(26) = 'center'
+        keys_optional(27) = 'stk'
+        keys_optional(28) = 'stktab'
+        keys_optional(29) = 'weights3D'
+        keys_optional(30) = 'phaseplate'
+        keys_optional(31) = 'update_frac'
         ! documentation
         ! if( describe ) call print_doc_refine3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:37) )
+        call cline%parse( keys_required(:5), keys_optional(:32) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -636,15 +628,9 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
-        if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('refine')                  ) call cline%set('refine',  'single')
-        if( .not. cline%defined('pproc')                   ) call cline%set('pproc',  'yes')
-        if( .not. cline%defined('eo') )then
-            call cline%set('eo', 'no')
-        else
-            if( cline%get_carg('eo').ne.'no' )call cline%set('dynlp','no')
-        endif
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('refine') ) call cline%set('refine',  'single')
+        if( .not. cline%defined('eo')     ) call cline%set('eo', 'no')
         ! execute
         call xprime3D_distr%execute(cline)
     case( 'reconstruct3D' )
@@ -796,12 +782,11 @@ select case(prg)
         keys_optional(9)  = 'autoscale'
         keys_optional(10) = 'pgrp_known'
         keys_optional(11) = 'center'
-        keys_optional(12) = 'opt'
-        keys_optional(13) = 'update_frac'
-        keys_optional(14) = 'objfun'
+        keys_optional(12) = 'update_frac'
+        keys_optional(13) = 'objfun'
         ! parse command line
         if( describe ) call print_doc_initial_3Dmodel
-        call cline%parse(keys_required(:5), keys_optional(:14))
+        call cline%parse(keys_required(:5), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
@@ -829,18 +814,17 @@ select case(prg)
         keys_optional(6)  = 'inner'
         keys_optional(7)  = 'width'
         keys_optional(8)  = 'nspace'
-        keys_optional(9) = 'stk'
+        keys_optional(9)  = 'stk'
         keys_optional(10) = 'stktab'
         keys_optional(11) = 'phaseplate'
-        keys_optional(12) = 'opt'
-        keys_optional(13) = 'oritab2'
-        keys_optional(14) = 'mskfile'
-        keys_optional(15) = 'startit'
-        keys_optional(16) = 'objfun'
-        keys_optional(17) = 'refine'
+        keys_optional(12) = 'oritab2'
+        keys_optional(13) = 'mskfile'
+        keys_optional(14) = 'startit'
+        keys_optional(15) = 'objfun'
+        keys_optional(16) = 'refine'
         ! parse command line
         ! if( describe ) call print_doc_cluster3D
-        call cline%parse(keys_required(:7), keys_optional(:17))
+        call cline%parse(keys_required(:7), keys_optional(:16))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -875,19 +859,18 @@ select case(prg)
         keys_optional(6)  = 'inner'
         keys_optional(7)  = 'width'
         keys_optional(8)  = 'nspace'
-        keys_optional(9) = 'stk'
+        keys_optional(9)  = 'stk'
         keys_optional(10) = 'stktab'
         keys_optional(11) = 'phaseplate'
-        keys_optional(12) = 'opt'
-        keys_optional(13) = 'msklist'
-        keys_optional(14) = 'vollist'
-        keys_optional(15) = 'state'
-        keys_optional(16) = 'trs'
-        keys_optional(17) = 'objfun'
-        keys_optional(18) = 'update_frac'
+        keys_optional(12) = 'msklist'
+        keys_optional(13) = 'vollist'
+        keys_optional(14) = 'state'
+        keys_optional(15) = 'trs'
+        keys_optional(16) = 'objfun'
+        keys_optional(17) = 'update_frac'
         ! parse command line
         ! if( describe ) call print_doc_cluster3D_refine
-        call cline%parse(keys_required(:6), keys_optional(:18))
+        call cline%parse(keys_required(:6), keys_optional(:17))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -895,7 +878,7 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('eo')       ) call cline%set('eo',       'no')
+        if( .not. cline%defined('eo') )call cline%set('eo', 'no')
         ! execute
         call xcluster3D_refine%execute( cline )
 

@@ -23,10 +23,11 @@ end type strategy3D_snhc_single
 
 contains
 
-    subroutine new_snhc_single( self, spec )
+    subroutine new_snhc_single( self, spec, npeaks )
         class(strategy3D_snhc_single), intent(inout) :: self
         class(strategy3D_spec),        intent(inout) :: spec
-        call self%s%new( spec )
+        integer,                       intent(in)    :: npeaks
+        call self%s%new( spec, npeaks )
         self%spec = spec
     end subroutine new_snhc_single
 
