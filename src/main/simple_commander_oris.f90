@@ -793,7 +793,7 @@ contains
             n = b%a%get_noris()
             do i = 1, n
                 o = b%a%get_ori(i)
-                if(nint(o%get('state')) == 0 )cycle
+                if( o%isstatezero() .or. nint(o%get('state_balance'))==0 )cycle
                 call progress(i, n)
                 closest = b%e%find_closest_proj(o)
                 pops(closest) = pops(closest) + 1

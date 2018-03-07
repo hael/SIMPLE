@@ -454,6 +454,7 @@ contains
         cval = ''
         do i=1,self%argcnt
             if( trim(self%cmds(i)%key) .eq. trim(key) )then
+                deallocate(cval)
                 allocate(cval, source=trim(self%cmds(i)%carg))
                 return
             endif
