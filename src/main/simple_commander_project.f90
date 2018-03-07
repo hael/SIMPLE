@@ -175,63 +175,75 @@ contains
                 endif
             end do
         endif
-        ! sampling distance
-        if( cline%defined('smpd') )then
-            call os%set_all2single('smpd', p%smpd)
-        else
-            do i=1,ndatlines
-                if( .not. os%isthere(i, 'smpd') )then
-                    write(*,*) 'os entry: ', i, ' lacks sampling distance (smpd)'
-                    write(*,*) 'Please, provide smpd on command line or update input document'
-                    stop 'ERROR! simple_commander_project :: exec_manage_project'
-                endif
-            end do
-        endif
-        ! acceleration voltage
-        if( cline%defined('kv') )then
-            call os%set_all2single('kv', p%kv)
-        else
-            do i=1,ndatlines
-                if( .not. os%isthere(i, 'kv') )then
-                    write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
-                    write(*,*) 'Please, provide kv on command line or update input document'
-                    stop 'ERROR! simple_commander_project :: exec_manage_project'
-                endif
-            end do
-        endif
-        ! spherical aberration
-        if( cline%defined('cs') )then
-            call os%set_all2single('cs', p%cs)
-        else
-            do i=1,ndatlines
-                if( .not. os%isthere(i, 'cs') )then
-                    write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
-                    write(*,*) 'Please, provide cs on command line or update input document'
-                    stop 'ERROR! simple_commander_project :: exec_manage_project'
-                endif
-            end do
-        endif
-        ! fraction of amplitude contrast
-        if( cline%defined('fraca') )then
-            call os%set_all2single('fraca', p%fraca)
-        else
-            do i=1,ndatlines
-                if( .not. os%isthere(i, 'fraca') )then
-                    write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
-                    write(*,*) 'Please, provide fraca on command line or update input document'
-                    stop 'ERROR! simple_commander_project :: exec_manage_project'
-                endif
-            end do
-        endif
-        ! phase-plate
-        if( cline%defined('phaseplate') )then
-            call os%set_all2single('phaseplate', p%phaseplate)
-        else
-            do i=1,ndatlines
-                if( .not. os%isthere(i, 'phaseplate') )then
-                    call os%set(i, 'phaseplate', 'no')
-                endif
-            end do
+        if( n_ori_inputs > 1 )then
+            ! sampling distance
+            if( cline%defined('smpd') )then
+                call os%set_all2single('smpd', p%smpd)
+            else
+                do i=1,ndatlines
+                    if( .not. os%isthere(i, 'smpd') )then
+                        write(*,*) 'os entry: ', i, ' lacks sampling distance (smpd)'
+                        write(*,*) 'Please, provide smpd on command line or update input document'
+                        stop 'ERROR! simple_commander_project :: exec_manage_project'
+                    endif
+                end do
+            endif
+            ! acceleration voltage
+            if( cline%defined('kv') )then
+                call os%set_all2single('kv', p%kv)
+            else
+                do i=1,ndatlines
+                    if( .not. os%isthere(i, 'kv') )then
+                        write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
+                        write(*,*) 'Please, provide kv on command line or update input document'
+                        stop 'ERROR! simple_commander_project :: exec_manage_project'
+                    endif
+                end do
+            endif
+            ! spherical aberration
+            if( cline%defined('cs') )then
+                call os%set_all2single('cs', p%cs)
+            else
+                do i=1,ndatlines
+                    if( .not. os%isthere(i, 'cs') )then
+                        write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
+                        write(*,*) 'Please, provide cs on command line or update input document'
+                        stop 'ERROR! simple_commander_project :: exec_manage_project'
+                    endif
+                end do
+            endif
+            ! fraction of amplitude contrast
+            if( cline%defined('fraca') )then
+                call os%set_all2single('fraca', p%fraca)
+            else
+                do i=1,ndatlines
+                    if( .not. os%isthere(i, 'fraca') )then
+                        write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
+                        write(*,*) 'Please, provide fraca on command line or update input document'
+                        stop 'ERROR! simple_commander_project :: exec_manage_project'
+                    endif
+                end do
+            endif
+            ! phase-plate
+            if( cline%defined('phaseplate') )then
+                call os%set_all2single('phaseplate', trim(p%phaseplate))
+            else
+                do i=1,ndatlines
+                    if( .not. os%isthere(i, 'phaseplate') )then
+                        call os%set(i, 'phaseplate', 'no')
+                    endif
+                end do
+            endif
+            ! ctf flag
+            if( cline%defined('ctf') )then
+                call os%set_all2single('ctf', trim(p%ctf))
+            else
+                do i=1,ndatlines
+                    if( .not. os%isthere(i, 'ctf') )then
+                        call os%set(i, 'ctf', 'yes')
+                    endif
+                end do
+            endif
         endif
 
         ! PROJECT FILE MANAGEMENT
@@ -246,10 +258,12 @@ contains
 
         ! STACK INPUT MANAGEMENT
         if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! there needs to be associated parameters of some form
-            if( n_ori_inputs < 1 )then
-                write(*,*) 'ERROR, stk or stktab input requires associated parameter input (oritab|deftab|plaintexttab)'
-                stop 'commander_project :: exec_manage_project'
+            if( trim(p%ctf) .ne. 'no' )then
+                ! there needs to be associated parameters of some form
+                if( n_ori_inputs < 1 )then
+                    write(*,*) 'ERROR, stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)'
+                    stop 'commander_project :: exec_manage_project'
+                endif
             endif
         endif
         if( cline%defined('stk') .and. cline%defined('stktab') )then
@@ -265,9 +279,16 @@ contains
 
         ! UPDATE FIELDS
         ! add stack if present
-        if( cline%defined('stk')     ) call spproj%add_single_stk(p%stk, os)
+        if( cline%defined('stk') )then
+            if( n_ori_inputs < 1 )then
+                if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance in A) input required when importing class averages; commander_project :: exec_manage_project'
+                call spproj%add_single_stk(p%stk, smpd=p%smpd)
+            else 
+                call spproj%add_single_stk(p%stk, os=os)
+            endif
+        endif
         ! add list of stacks (stktab) if present
-        if( cline%defined('stktab')  ) call spproj%add_stktab(p%stktab, os)
+        if( cline%defined('stktab') ) call spproj%add_stktab(p%stktab, os)
         ! add list of movies (filetab) if present
         if( cline%defined('filetab') )then
             ! hard requirements

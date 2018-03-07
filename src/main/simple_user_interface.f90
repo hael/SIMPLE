@@ -67,8 +67,10 @@ type(simple_input_param) :: inner
 type(simple_input_param) :: maxits
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
+type(simple_input_param) :: nspace
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nthr
+type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
@@ -123,6 +125,9 @@ contains
         'fraction of particles used{1.0}', .false.)
         call set_param(mskfile,     'mskfile',     'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false.)
         call set_param(pgrp,        'pgrp',        'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true.)
+        call set_param(nspace,      'nspace',      'num',    'Number of projection directions', 'Number of projection directions &
+        &used in discrete 3D orientation search', '# projections used', .false.)
+        call set_param(objfun,      'objfun',      'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.))
 
         contains
 
@@ -446,8 +451,7 @@ contains
         ! alternative inputs
         !<empty>
         ! search controls
-        call refine3D%set_input('srch_ctrls', 1, 'nspace', 'num', 'Number of projection directions', 'Number of projection directions &
-        &used in discrete 3D orientation search', '# projections used', .false.)
+        call refine3D%set_input('srch_ctrls', 1, nspace)
         call refine3D%set_input('srch_ctrls', 2, startit)
         call refine3D%set_input('srch_ctrls', 3, trs)
         call refine3D%set_input('srch_ctrls', 4, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
@@ -460,7 +464,7 @@ contains
         &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false.)
         call refine3D%set_input('srch_ctrls', 10, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false.)
-        call refine3D%set_input('srch_ctrls', 11, 'objfun', 'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
+        call refine3D%set_input('srch_ctrls', 11, objfun)
         call refine3D%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
         &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}', .false.)
         ! filter controls
@@ -571,23 +575,22 @@ contains
         ! alternative inputs
         !<empty>
         ! search controls
-        call initial_3Dmodel%set_input('srch_ctrls', 1, 'nspace', 'num', 'Number of projection directions', 'Number of projection directions &
-        &used in discrete 3D orientation search', '# projections used', .false.)
+        call initial_3Dmodel%set_input('srch_ctrls', 1, nspace)
         call initial_3Dmodel%set_input('srch_ctrls', 2, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false.)
         call initial_3Dmodel%set_input('srch_ctrls', 3, maxits)
         call initial_3Dmodel%set_input('srch_ctrls', 4, update_frac)
         call initial_3Dmodel%set_input('srch_ctrls', 5, frac)
         call initial_3Dmodel%set_input('srch_ctrls', 6, pgrp)
-        call initial_3Dmodel%set_input('srch_ctrls', 7, 'pgrp_known', 'binary', '', 'point-group known a priori(yes|no){no}', '(yes|no){no}', .false.)
-        call initial_3Dmodel%set_input('srch_ctrls', 8, 'objfun', 'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
+        call initial_3Dmodel%set_input('srch_ctrls', 7, 'pgrp_known', 'binary', 'Point-group applied directly', 'Point-group applied direclty rather than first doing a reconstruction &
+        &in c1 and searching for the symmerty axis(yes|no){no}', '(yes|no){no}', .false.)
+        call initial_3Dmodel%set_input('srch_ctrls', 8, objfun)
         call initial_3Dmodel%set_input('srch_ctrls', 9, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false.)
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
-        call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false.)
-        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
-        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false.)
+        call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false.)
+        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false.)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -618,8 +621,8 @@ contains
         ! filter controls
         call postprocess%set_input('filt_ctrls', 1, hp)
         call postprocess%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'envelope mask low-pass limit in Angstroms', .false.)
-        call postprocess%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false.)
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false.)
+        call postprocess%set_input('filt_ctrls', 3, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false.)
         call postprocess%set_input('filt_ctrls', 4, 'vol_filt', 'file', 'Input filter volume', 'Input filter volume',&
         & 'input filter volume e.g. aniso_optlp_state01.mrc', .false.)
         call postprocess%set_input('filt_ctrls', 5, 'fsc', 'file', 'Binary file with FSC info', 'Binary file with FSC info&
@@ -636,13 +639,13 @@ contains
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false.)
         call postprocess%set_input('mask_ctrls', 5, 'thres', 'num', 'Volume threshold',&
         &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false.)
-        call postprocess%set_input('mask_ctrls', 6, 'automsk', 'binary', 'Perform enveloppe masking',&
+        call postprocess%set_input('mask_ctrls', 6, 'automsk', 'binary', 'Perform envelope masking',&
         &'Whether to generate an envelope mask(yes|no){no}', '(yes|no){no}', .false.)
         call postprocess%set_input('mask_ctrls', 7, 'mw', 'num', 'Molecular weight','Molecular weight in kDa', 'in kDa', .false.)
         call postprocess%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
         &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false. )
         call postprocess%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
-        &'Cosine edge size for softening molecular envelope in pixels', '# pixels for cosine edge', .false. )
+        &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false. )
         ! computer controls
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess

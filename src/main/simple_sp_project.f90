@@ -426,11 +426,12 @@ contains
         end do
     end subroutine add_stktab
 
-    subroutine add_single_stk( self, stk, os )
+    subroutine add_single_stk( self, stk, os, smpd )
         use simple_imghead, only: find_ldim_nptcls
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: stk
-        class(oris),       intent(in)    :: os ! parameters associated with stk
+        class(sp_project),     intent(inout) :: self
+        character(len=*),      intent(in)    :: stk
+        class(oris), optional, intent(in)    :: os   ! parameters associated with stk
+        real,        optional, intent(in)    :: smpd ! sampling distance of images in stk
         integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         ! file exists?
         if( .not. file_exists(stk) )then
@@ -454,19 +455,21 @@ contains
             write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
             stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
         endif
-        ! find dimension of inputted stack and compare with os
+        ! find dimension of inputted stack
         call find_ldim_nptcls(stk, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
             stop 'ERROR! nonsquare particle images not supported; sp_project :: add_single_stk'
         endif
-        ! check that inputs are of conforming sizes
-        n_os = os%get_noris()
-        if( n_os /= nptcls )then
-            write(*,*) '# input oris      : ', n_os
-            write(*,*) '# ptcl imgs in stk: ', nptcls
-            stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_single_stk'
+        if( present(os) )then
+            ! check that inputs are of conforming sizes
+            n_os = os%get_noris()
+            if( n_os /= nptcls )then
+                write(*,*) '# input oris      : ', n_os
+                write(*,*) '# ptcl imgs in stk: ', nptcls
+                stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_single_stk'
+            endif
         endif
         ! make stk field
         call self%os_stk%new_clean(1)
@@ -476,10 +479,14 @@ contains
         call self%os_stk%set(1, 'fromp',  1.0)
         call self%os_stk%set(1, 'top',    real(nptcls))
         ! update globals
-        self%nptcls    = nptcls
-        self%box       = ldim(1)
+        self%nptcls = nptcls
+        self%box    = ldim(1)
         ! update particle fields
-        self%os_ptcl2D = os
+        if( present(smpd) )then
+            call self%os_ptcl2D%set_all2single('smpd', p%smpd)
+        else
+            self%os_ptcl2D = os 
+        endif
         ! set stack index to 1
         call self%os_ptcl2D%set_all2single('stkind', 1.0)
         ! make ptcl2D field identical to ptcl3D field
