@@ -54,7 +54,7 @@ contains
 
 
             write(*,'(a)') '**info(simple_jpg_unit_test, part 4): testing 3D real buffer write from get_rmat'
-            call img3%new([ld1,ld2,10], 1.)
+            call img3%new([21,20,10], 1.)
             call img3%gauran( 5., 15. )
             if( doplot ) call img%vis
             str= 'test_jpg_gauss.jpg'

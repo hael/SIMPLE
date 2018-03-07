@@ -94,6 +94,8 @@ contains
         call destroy_img(image)
         write(*,*) 'test xpm done'
 #endif
+#else
+        print *,"  test_png_io cannot run due to unsupported libGD "
 
 #endif
 
@@ -163,6 +165,8 @@ contains
         deallocate(buffer)
         write(*,*) 'test read/write jpeg from buffers'
         if( .not. compare_imgs("gray.jpg", fout) ) write(*,*) "jpeg read/write failed - images differ"
+#else
+        print *,"  test_jpeg_io cannot run due to unsupported libGD "
 
 #endif
 
