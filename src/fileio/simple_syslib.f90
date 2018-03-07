@@ -965,11 +965,12 @@ contains
 #endif
 
     ! Suggestion from https://stackoverflow.com/a/30241280
-    subroutine simple_mem_usage(valueRSS)
+    subroutine simple_mem_usage(valueRSS,valuePeak,valueSize,valueHWM)
         implicit none
         integer, intent(out) :: valueRSS
         integer, intent(out), optional :: valuePeak
         integer, intent(out), optional :: valueSize
+        integer, intent(out), optional :: valueHWM
 
         character(len=200):: filename=' '
         character(len=80) :: line
@@ -993,7 +994,8 @@ contains
             return
         endif
 
-        call fopen(unit, file=filename, action='read')
+        open(newunit=unit, file=filename, action='read')
+        ! the order of the following do loops is dependent on cat /proc/PID/status listing
         if(present(valuePeak))then
             do
                 read (unit,'(a)',end=110) line
@@ -1012,16 +1014,49 @@ contains
             enddo
 120         continue
         endif
+        if(present(valueHWM))then
+            do
+                read (unit,'(a)',end=130) line
+                if (line(1:6).eq.'VmHWM:') then
+                    read (line(7:),*) valueHWM
+                endif
+            enddo
+130         continue
+        endif
         do
-            read (unit,'(a)',end=130) line
+            read (unit,'(a)',end=140) line
             if (line(1:6).eq.'VmRSS:') then
                 read (line(7:),*) valueRSS
                 exit
             endif
         enddo
-130     continue
-        call fclose(unit)
+140     continue
+        close(unit)
 
         return
     end subroutine simple_mem_usage
+
+    subroutine simple_dump_mem_usage(dump_file)
+        character(len=:), intent(in), optional :: dump_file
+        character(len=200):: filename=' '
+        character(len=80) :: line
+        character(len=8)  :: pid_char=' '
+        character(len=STDLEN) :: command
+        integer :: pid,unit
+        logical :: ifxst
+
+        !--- get process ID --  make thread safe
+
+        !$omp critical dump_mem
+        pid=getpid()
+        write(pid_char,'(I8)') pid
+        filename='/proc/'//trim(adjustl(pid_char))//'/status'
+        command = 'cat '//trim(filename)//' | '
+        command = command//' grep -E \'^(VmPeak|VmSize|VmHWM|VmRSS):\' | '
+        command = command//' awk \'{print $2}\' |xargs echo '
+        if(present(dump_file)) command = command//' >> '//trim(dump_file)
+        call exec_cmdline(trim(command))
+        !$omp end critical
+    end subroutine simple_dump_mem_usage
+
 end module simple_syslib
