@@ -66,6 +66,7 @@ file(GLOB TESTDIRS
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   "tests/test_*"
   )
+## Uncomment the following block to remove ITEMS from the tests
 #list(REMOVE_ITEM TESTDIRS
 # "tests/test_img_export"
 #  )

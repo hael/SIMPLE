@@ -165,7 +165,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
   set(forspeed "-O3")                                                                           # optimisation
   set(forpar   "-fopenmp  -Wp,-fopenmp")                                                        # parallel flags
-  set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
+  set(target   "${GNUNATIVE} -fPIC -mcmodel=medium")                                            # target platform
 
   set(common   "${preproc} ${dialect} ${target} ")
 
@@ -211,9 +211,9 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   set(checks   "-check bounds -check uninit -assume buffered_io ") # -mcmodel=medium -shared-intel
   set(warn     "-warn all ")
   set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence ")
-  set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
+  set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port  ")
   set(forpar   "-qopenmp")
-  set(target   "-no-prec-div -static -fPIC")
+  set(target   "-no-prec-div -static -fPIC -mcmodel=medium -shared-intel -traceback -xHost ")
   set(common   "${preproc} ${dialect} ${checks} ${target}")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")

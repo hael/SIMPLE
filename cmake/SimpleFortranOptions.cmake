@@ -604,7 +604,7 @@ Warning -- libgd will pull latest stable libjpeg that may conflict with libjpeg9
   else()
     message(STATUS "LibGD found")
     message(STATUS "lib: ${GD_LIBRARIES}")
-    add_definitions(" -DLIBGD ")
+    add_definitions(" -D_LIBGD ")
     include_directories(" ${GD_INCLUDE_DIRS}")
     set(EXTRA_LIBS ${EXTRA_LIBS} ${GD_LIBRARIES} ${ZLIB_LIBRARY_RELEASE})
     set(EXTRA_LIBS ${EXTRA_LIBS} -ljpeg)

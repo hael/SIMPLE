@@ -56,7 +56,6 @@ endif()
     "${CMAKE_CURRENT_SOURCE_DIR}/img/cjpg.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/img/stb_image_write.c"
     )
-
 #else()
 #  set(IMG_src "")
 #endif()
