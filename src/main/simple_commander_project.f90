@@ -174,6 +174,54 @@ contains
                 endif
             end do
         endif
+        ! sampling distance
+        if( cline%defined('smpd') )then
+            call os%set_all2single('smpd', p%smpd)
+        else
+            do i=1,ndatlines
+                if( .not. os%isthere(i, 'smpd') )then
+                    write(*,*) 'os entry: ', i, ' lacks sampling distance (smpd)'
+                    write(*,*) 'Please, provide smpd on command line or update input document'
+                    stop 'ERROR! simple_commander_project :: exec_manage_project'
+                endif
+            end do
+        endif
+        ! acceleration voltage
+        if( cline%defined('kv') )then
+            call os%set_all2single('kv', p%kv)
+        else
+            do i=1,ndatlines
+                if( .not. os%isthere(i, 'kv') )then
+                    write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
+                    write(*,*) 'Please, provide kv on command line or update input document'
+                    stop 'ERROR! simple_commander_project :: exec_manage_project'
+                endif
+            end do
+        endif
+        ! spherical aberration
+        if( cline%defined('cs') )then
+            call os%set_all2single('cs', p%cs)
+        else
+            do i=1,ndatlines
+                if( .not. os%isthere(i, 'cs') )then
+                    write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
+                    write(*,*) 'Please, provide cs on command line or update input document'
+                    stop 'ERROR! simple_commander_project :: exec_manage_project'
+                endif
+            end do
+        endif
+        ! fraction of amplitude contrast
+        if( cline%defined('fraca') )then
+            call os%set_all2single('fraca', p%fraca)
+        else
+            do i=1,ndatlines
+                if( .not. os%isthere(i, 'fraca') )then
+                    write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
+                    write(*,*) 'Please, provide fraca on command line or update input document'
+                    stop 'ERROR! simple_commander_project :: exec_manage_project'
+                endif
+            end do
+        endif
 
         ! PROJECT FILE MANAGEMENT
         if( cline%defined('projfile') )then

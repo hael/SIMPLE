@@ -42,6 +42,8 @@ contains
     ! field updaters
     procedure          :: update_projinfo
     procedure          :: update_compenv
+    ! index management
+    procedure, private :: map_ptcl_ind2stk_ind
     ! os_stk related methods
     procedure          :: add_movies
     procedure          :: add_stktab
@@ -52,6 +54,8 @@ contains
     procedure          :: del_scale_tag
     procedure          :: write_stktab
     procedure          :: del_stk_files
+    ! getters
+    procedure          :: get_ctfparams
     ! modifiers
     procedure          :: new_sp_oris
     procedure          :: set_sp_oris
@@ -149,19 +153,6 @@ contains
                 call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
             endif
         endif
-        ! hard requirements
-        if( .not. cline%defined('smpd')     ) stop 'smpd (sampling distance in A) input required to create new project; sp_project :: new'
-        if( .not. cline%defined('kv')       ) stop 'kv (acceleration voltage in kV{300}) input required to create new project; sp_project :: new'
-        if( .not. cline%defined('cs')       ) stop 'cs (spherical aberration constant in mm{2.7}) input required to create new project; sp_project :: new'
-        if( .not. cline%defined('fraca')    ) stop 'fraca (fraction of amplitude contrast{0.1}) input required to create new project; sp_project :: new'
-        self%smpd  = cline%get_rarg('smpd')
-        call self%projinfo%set(1, 'smpd',  self%smpd )
-        self%kv    = cline%get_rarg('kv')
-        call self%projinfo%set(1, 'kv',    self%kv   )
-        self%cs    = cline%get_rarg('cs')
-        call self%projinfo%set(1, 'cs',    self%cs   )
-        self%fraca = cline%get_rarg('fraca')
-        call self%projinfo%set(1, 'fraca', self%fraca )
         ! phaseplate flag is optional
         if( cline%defined('phaseplate') )then
             phaseplate        = cline%get_carg('phaseplate')
@@ -262,6 +253,52 @@ contains
         endif
     end subroutine update_compenv
 
+    ! index management
+
+    subroutine map_ptcl_ind2stk_ind( self, oritype, iptcl, stkind, ind_in_stk )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        integer,                   intent(in)    :: iptcl
+        integer,                   intent(out)   :: stkind
+        integer,                   intent(out)   :: ind_in_stk
+        class(oris), pointer :: ptcl_field => null()
+        integer :: nptcls, fromp, top
+        ! set field pointer
+        select case(trim(oritype))
+            case('ptcl2D')
+                ptcl_field => self%os_ptcl2D
+            case('ptcl3D')
+                ptcl_field => self%os_ptcl3D
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
+                stop 'sp_project :: map_ptcl_ind2stk_ind'
+        end select
+        nptcls = ptcl_field%get_noris()
+        ! first sanity check, range
+        if( iptcl < 1 .or. iptcl > nptcls )then
+            print *, 'iptcl : ', iptcl
+            print *, 'nptcls: ', nptcls
+            stop 'iptcl index out of range; sp_project :: map_ptcl_ind2stk_ind'
+        endif
+        ! second sanity check, stack index present in ptcl_field
+        if( ptcl_field%isthere(iptcl, 'stkind') )then
+            print *, 'iptcl: ', iptcl
+            print *, 'ERROR, stkind not present in field: ', trim(oritype)
+            stop 'sp_project :: map_ptcl_ind2stk_ind'
+        endif
+        stkind = nint(ptcl_field%get(iptcl, 'stkind'))
+        ! third sanity check, particle index in range
+        fromp = nint(self%os_stk%get(stkind, 'fromp'))
+        top   = nint(self%os_stk%get(stkind, 'top'))
+        if( iptcl < fromp .or. iptcl > top )then
+            print *, 'iptcl            : ', iptcl
+            print *, 'prange for micstk: ', fromp, top
+            stop 'iptcl index out of micstk range; sp_project :: map_ptcl_ind2stk_ind'
+        endif
+        ! output index in stack
+        ind_in_stk = iptcl - fromp + 1
+    end subroutine map_ptcl_ind2stk_ind
+
     ! os_stk related methods
 
     subroutine add_movies( self, filetab )
@@ -288,7 +325,7 @@ contains
         do imic=1,self%nmics
             call find_ldim_nptcls(trim(movienames(imic)), ldim, nframes)
             if( nframes <= 0 )then
-                write(*,*) 'WARNING! # frames in movie ', trim(movienames(imic)), ' is zero, ommitting'
+                write(*,*) 'WARNING! # frames in movie ', trim(movienames(imic)), ' <= zero, ommitting'
                 cycle
             else if( nframes > 1 )then
                 call self%os_stk%set(imic, 'movie', trim(movienames(imic)))
@@ -467,51 +504,18 @@ contains
         call self%os_stk%getter(imic, 'stk', stkname)
     end function get_stkname
 
-    subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind )
+    subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind_in_stk )
         class(sp_project), target,     intent(inout) :: self
         character(len=*),              intent(in)    :: oritype
         integer,                       intent(in)    :: iptcl
         character(len=:), allocatable, intent(out)   :: stkname
-        integer,                       intent(out)   :: ind
-        integer :: stkind, fromp, top, nptcls
-        class(oris), pointer :: ptcl_field => null()
-        ! set field pointer
-        select case(trim(oritype))
-            case('ptcl2D')
-                ptcl_field => self%os_ptcl2D
-            case('ptcl3D')
-                ptcl_field => self%os_ptcl3D
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: get_stkname_and_ind'
-        end select
-        nptcls = ptcl_field%get_noris()
-        ! first sanity check, range
-        if( iptcl < 1 .or. iptcl > nptcls )then
-            print *, 'iptcl : ', iptcl
-            print *, 'nptcls: ', nptcls
-            stop 'iptcl index out of range; sp_project :: get_stkname_and_ind'
-        endif
-        ! second sanity check, stack index present in ptcl_field
-        if( ptcl_field%isthere(iptcl, 'stkind') )then
-            print *, 'iptcl: ', iptcl
-            print *, 'ERROR, stkind not present in field: ', trim(oritype)
-            stop 'sp_project :: get_stkname_and_ind'
-        endif
-        stkind = nint(ptcl_field%get(iptcl, 'stkind'))
-        ! third sanity check, particle index in range
-        fromp = nint(self%os_stk%get(stkind, 'fromp'))
-        top   = nint(self%os_stk%get(stkind, 'top'))
-        if( iptcl < fromp .or. iptcl > top )then
-            print *, 'iptcl            : ', iptcl
-            print *, 'prange for micstk: ', fromp, top
-            stop 'iptcl index out of micstk range; sp_project :: get_stkname_and_ind'
-        endif
+        integer,                       intent(out)   :: ind_in_stk
+        integer :: stkind
+        ! do the index mapping
+        call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk )
         ! output name
         if( allocated(stkname) ) deallocate(stkname)
         call self%os_stk%getter(stkind, 'stk', stkname)
-        ! output index in stack
-        ind = iptcl - nint(self%os_stk%get(stkind, 'fromp')) + 1
     end subroutine get_stkname_and_ind
 
     subroutine add_scale_tag( self )
@@ -567,6 +571,108 @@ contains
             call del_file(stkname)
         end do
     end subroutine del_stk_files
+
+    ! getters
+
+    function get_ctfparams( self, oritype, iptcl ) result( ctfvars )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        integer,                   intent(in)    :: iptcl
+        type(ctfparams) :: ctfvars
+        integer         :: stkind, ind_in_stk
+        logical         :: dfy_was_there
+        class(oris), pointer :: ptcl_field => null()
+        ! do the index mapping
+        call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk)
+        ! set field pointer
+        select case(trim(oritype))
+            case('ptcl2D')
+                ptcl_field => self%os_ptcl2D
+            case('ptcl3D')
+                ptcl_field => self%os_ptcl3D
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
+                stop 'sp_project :: get_ctfparams'
+        end select
+        ! extract the CTF parameters
+        ! sampling distance
+        if( ptcl_field%isthere(iptcl, 'smpd') )then
+            ctfvars%smpd = ptcl_field%get(iptcl, 'smpd')
+        else if( self%os_stk%isthere(stkind, 'smpd') )then
+            ctfvars%smpd = self%os_stk%get(stkind, 'smpd')
+        else
+            write(*,*) 'ERROR! smpd (sampling distance) lacking in os_stk_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! acceleration voltage
+        if( ptcl_field%isthere(iptcl, 'kv') )then
+            ctfvars%kv = ptcl_field%get(iptcl, 'kv')
+        else if( self%os_stk%isthere(stkind, 'kv') )then
+            ctfvars%kv = self%os_stk%get(stkind, 'kv')
+        else
+            write(*,*) 'ERROR! kv (acceleration voltage) lacking in os_stk_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! spherical aberration constant
+        if( ptcl_field%isthere(iptcl, 'cs') )then
+            ctfvars%cs = ptcl_field%get(iptcl, 'cs')
+        else if( self%os_stk%isthere(stkind, 'cs') )then
+            ctfvars%cs = self%os_stk%get(stkind, 'cs')
+        else
+            write(*,*) 'ERROR! cs (spherical aberration constant) lacking in os_stk_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! fraction of amplitude contrast
+        if( ptcl_field%isthere(iptcl, 'fraca') )then
+            ctfvars%fraca = ptcl_field%get(iptcl, 'fraca')
+        else if( self%os_stk%isthere(stkind, 'fraca') )then
+            ctfvars%fraca = self%os_stk%get(stkind, 'fraca')
+        else
+            write(*,*) 'ERROR! fraca (fraction of amplitude contrast) lacking in os_stk_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! defocus in x
+        if( ptcl_field%isthere(iptcl, 'dfx') )then
+            ctfvars%dfx = ptcl_field%get(iptcl, 'dfx')
+        else if( self%os_stk%isthere(stkind, 'dfx') )then
+            ctfvars%dfx = self%os_stk%get(stkind, 'dfx')
+        else
+            write(*,*) 'ERROR! dfx (defocus in x) lacking in os_stk_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! defocus in y
+        dfy_was_there = .false.
+        if( ptcl_field%isthere(iptcl, 'dfy') )then
+            ctfvars%dfy = ptcl_field%get(iptcl, 'dfy')
+            dfy_was_there = .true.
+        else if( self%os_stk%isthere(stkind, 'dfy') )then
+            ctfvars%dfy = self%os_stk%get(stkind, 'dfy')
+            dfy_was_there = .true.
+        else
+            ctfvars%dfy = ctfvars%dfx
+        endif
+        ! angle of astigmatism
+        if( ptcl_field%isthere(iptcl, 'angast') )then
+            ctfvars%angast = ptcl_field%get(iptcl, 'angast')
+        else if( self%os_stk%isthere(stkind, 'angast') )then
+            ctfvars%angast = self%os_stk%get(stkind, 'angast')
+        else
+            if( dfy_was_there )then
+                write(*,*) 'ERROR! astigmatic CTF model requires angast (angle of astigmatism) lacking in os_stk field'
+                stop 'sp_project :: get_ctfparams'
+            else
+                ctfvars%angast = 0.
+            endif
+        endif
+        ! additional phase shift
+        if( ptcl_field%isthere(iptcl, 'phshift') )then
+            ctfvars%phshift = ptcl_field%get(iptcl, 'phshift')
+        else if( self%os_stk%isthere(stkind, 'phshift') )then
+            ctfvars%phshift = self%os_stk%get(stkind, 'phshift')
+        else
+            ctfvars%phshift = 0.
+        endif
+    end function get_ctfparams
 
     ! modifiers
 

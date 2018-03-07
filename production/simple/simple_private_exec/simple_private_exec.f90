@@ -1490,35 +1490,34 @@ select case(prg)
         !
         ! </begin></end>
         !
-        ! set required keys
+        ! set optional keys
         keys_required(1)  = 'smpd'
         keys_required(2)  = 'cs'
         keys_required(3)  = 'kv'
         keys_required(4)  = 'fraca'
-        ! set optional keys
-        keys_optional(1)  = 'projfile'
-        keys_optional(2)  = 'projname'
-        keys_optional(3)  = 'phaseplate'
-        keys_optional(4)  = 'user_email'
-        keys_optional(5)  = 'time_per_image'
-        keys_optional(6)  = 'user_account'
-        keys_optional(7)  = 'user_project'
-        keys_optional(8)  = 'qsys_partition'
-        keys_optional(9)  = 'qsys_qos'
-        keys_optional(10) = 'qsys_reservation'
-        keys_optional(11) = 'job_memory_per_task'
-        keys_optional(12) = 'stk'
-        keys_optional(13) = 'stktab'
-        keys_optional(14) = 'plaintexttab'
-        keys_optional(15) = 'oritab'
-        keys_optional(16) = 'deftab'
-        keys_optional(17) = 'dfunit'
-        keys_optional(18) = 'angastunit'
-        keys_optional(19) = 'phshiftunit'
-        keys_optional(20) = 'oritype'
-        keys_optional(21) = 'filetab'
+        keys_optional(5)  = 'projfile'
+        keys_optional(6)  = 'projname'
+        keys_optional(7)  = 'phaseplate'
+        keys_optional(8)  = 'user_email'
+        keys_optional(9)  = 'time_per_image'
+        keys_optional(10) = 'user_account'
+        keys_optional(11) = 'user_project'
+        keys_optional(12) = 'qsys_partition'
+        keys_optional(13) = 'qsys_qos'
+        keys_optional(14) = 'qsys_reservation'
+        keys_optional(15) = 'job_memory_per_task'
+        keys_optional(16) = 'stk'
+        keys_optional(17) = 'stktab'
+        keys_optional(18) = 'plaintexttab'
+        keys_optional(19) = 'oritab'
+        keys_optional(20) = 'deftab'
+        keys_optional(21) = 'dfunit'
+        keys_optional(22) = 'angastunit'
+        keys_optional(23) = 'phshiftunit'
+        keys_optional(24) = 'oritype'
+        keys_optional(25) = 'filetab'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:21))
+        call cline%parse(keys_optional= keys_optional(:25))
         ! execute
         call xmanage_project%execute(cline)
     case( 'print_project_info' )
