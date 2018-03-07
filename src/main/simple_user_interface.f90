@@ -2,7 +2,9 @@ module simple_user_interface
 use simple_defs
 implicit none
 
-public :: make_user_interface, cluster2D, refine3D, initial_3Dmodel, postprocess
+public :: make_user_interface
+public :: cluster2D, refine3D, initial_3Dmodel
+public :: postprocess, extract, scale
 private
 
 logical, parameter :: DEBUG = .false.
@@ -37,7 +39,7 @@ type :: simple_program
     type(simple_input_param), allocatable :: comp_ctrls(:)
     ! existence flag
     logical :: exists = .false.
-contains
+  contains
     procedure, private :: new
     procedure, private :: set_input_1
     procedure, private :: set_input_2
@@ -53,6 +55,8 @@ type(simple_program), protected :: cluster2D
 type(simple_program), protected :: refine3D
 type(simple_program), protected :: initial_3Dmodel
 type(simple_program), protected :: postprocess
+type(simple_program), protected :: extract
+type(simple_program), protected :: scale
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: ctf
@@ -85,6 +89,8 @@ contains
         call new_refine3D
         call new_initial_3Dmodel
         call new_postprocess
+        call new_extract
+        call new_scale
         ! ...
     end subroutine make_user_interface
 
@@ -599,7 +605,6 @@ contains
         &'Use program volops to estimate the B-factor with the Guinier plot',&      ! descr_long
         &'simple_exec',&                                                            ! executable
         &1, 1, 0, 0, 7, 9, 1)                                                       ! # entries in each group
-
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process &
@@ -641,5 +646,83 @@ contains
         ! computer controls
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess
+
+    subroutine new_extract
+        ! PROGRAM SPECIFICATION
+        call extract%new(&
+        &'extract', & ! name
+        &'is a program that extracts particle images from integrated movies',&                  ! descr_short
+        &'Boxfiles are assumed to be in EMAN format but we provide a conversion script'//&      ! descr long
+        &' (relion2emanbox.pl) for *.star files containing particle coordinates obtained&
+        & with Relion. In addition to one single-particle image stack per micrograph the&
+        & program produces a parameter files that should be concatenated for use in&
+        & conjunction with other SIMPLE programs.',&
+        &'simple_exec',&                                                                        ! executable
+        &0, 6, 3, 0, 0, 0, 0)                                                                   ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call extract%set_input('parm_ios', 1, smpd)
+        call extract%set_input('parm_ios', 2, 'unidoc', 'file', 'Unified resources doc', 'Unified resources doc&
+        & mapping micrographs, box files & CTF parameters', 'input unidoc e.g. unidoc_001.txt', .false.)
+        call extract%set_input('parm_ios', 3, 'ctffind_doc', 'file', 'CTFFIND CTF parameters', 'list of per-micrograph &
+        & CTFFIND CTF parameters to transfer', 'list input *.txt', .false.)
+        call extract%set_input('parm_ios', 4, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false.)
+        call extract%set_input('parm_ios', 5, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false.)
+        call extract%set_input('parm_ios', 6, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false.)
+        ! alternative inputs
+        call extract%set_input('alt_ios', 1, 'filetab', 'file', 'Micrographs list',&
+        &'List of integrated micrographs', 'list input e.g. mics.txt', .false.)
+        call extract%set_input('alt_ios', 2, 'boxtab', 'file', 'List of boxes',&
+        &'List of single-particles boxes (EMAN format)', 'list input e.g. boxes.txt', .false.)
+        call extract%set_input('alt_ios', 3, 'dir', 'string', 'Ouput directory',&
+        &'Ouput directory for single-particle images & CTF parameters', '...', .false.)
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_extract
+
+    subroutine new_scale
+        ! PROGRAM SPECIFICATION
+        call scale%new(&
+        &'scale', & ! name
+        &'is a program for re-scaling MRC & SPIDER stacks and volumes',&                        ! descr_short
+        &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
+        &'simple_exec',&                                                                        ! executable
+        &3, 5, 3, 0, 0, 1, 1)                                                                   ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call scale%set_input('img_ios', 1, stk)
+        scale%img_ios(1)%required = .false.
+        call scale%set_input('img_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
+        &'input volume e.g. recvol.mrc', .false.)
+        call scale%set_input('img_ios', 3, 'filetab', 'file', 'Stacks list',&
+        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false.)
+        ! parameter input/output
+        call scale%set_input('parm_ios', 1, smpd)
+        call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'in pixels', .false.)
+        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1)', '(0-1)', .false.)
+        call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false.)
+        call scale%set_input('parm_ios', 5, 'clip', 'num', 'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false.)
+        ! alternative inputs
+        call scale%set_input('alt_ios', 1, 'outvol', 'file', 'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false.)
+        call scale%set_input('alt_ios', 2, 'outstk', 'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false.)
+        call scale%set_input('alt_ios', 3, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false.)
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call scale%set_input('mask_ctrls', 1, msk)
+        scale%mask_ctrls(1)%required = .false.
+        ! computer controls
+        call scale%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_scale
 
 end module simple_user_interface

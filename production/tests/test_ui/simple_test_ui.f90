@@ -10,4 +10,8 @@ call initial_3Dmodel%print_ui()
 call initial_3Dmodel%write2json()
 call postprocess%print_ui()
 call postprocess%write2json()
+call extract%print_ui()
+call extract%write2json()
+call scale%print_ui()
+call scale%write2json()
 end program simple_test_ui
