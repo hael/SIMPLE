@@ -14,11 +14,11 @@ integer, parameter :: BUFFSZ_DEFAULT = 5
 !> Simple chash type
 type :: chash
     private
-    character(len=KEYLEN), allocatable :: keys(:)   !< chash keys
-    type(str4arr),         allocatable :: values(:) !< chash values
-    integer :: buffsz      = BUFFSZ_DEFAULT         !< size of first buffer and subsequent allocation increments
-    integer :: chash_index = 0                      !< current highest index in hash
-    logical :: exists      = .false.                !< to indicate existence
+    type(str4arr), allocatable :: keys(:)   !< chash keys
+    type(str4arr), allocatable :: values(:) !< chash values
+    integer :: buffsz      = BUFFSZ_DEFAULT !< size of first buffer and subsequent allocation increments
+    integer :: chash_index = 0              !< current highest index in hash
+    logical :: exists      = .false.        !< to indicate existence
   contains
     !< CONSTRUCTORS
     procedure, private :: new_1
@@ -116,9 +116,8 @@ contains
 
     !>  \brief  re-allocates keys and values without touching buffsz and chash_index and preserving previous key-value pairs
     subroutine realloc_chash( self )
-        class(chash),        intent(inout) :: self
-        character(len=KEYLEN), allocatable :: keys_copy(:)
-        type(str4arr),         allocatable :: values_copy(:)
+        class(chash), intent(inout) :: self
+        type(str4arr), allocatable :: keys_copy(:), values_copy(:)
         integer :: newsz, oldsz, i
         if( self%exists )then
             ! old/new size
@@ -126,15 +125,15 @@ contains
             newsz = oldsz + self%buffsz
             ! copy key-value pairs
             allocate(keys_copy(oldsz), values_copy(oldsz))
-            keys_copy = self%keys
             do i=1,oldsz
+                if( allocated(self%keys(i)%str)   ) allocate(keys_copy(i)%str,   source=self%keys(i)%str  )
                 if( allocated(self%values(i)%str) ) allocate(values_copy(i)%str, source=self%values(i)%str)
             enddo
             ! allocate extended size
             call self%alloc_chash(newsz)
             ! set back the copied key-value pairs
-            self%keys(:oldsz) = keys_copy
             do i=1,oldsz
+                if( allocated(keys_copy(i)%str)   ) allocate(self%keys(i)%str,   source=keys_copy(i)%str  )
                 if( allocated(values_copy(i)%str) ) allocate(self%values(i)%str, source=values_copy(i)%str)
             enddo
         else
@@ -154,7 +153,7 @@ contains
         self_out%exists      = .true.
         if( self_in%chash_index > 0 )then
             do i=1,self_in%chash_index
-                self_out%keys(i) = self_in%keys(i)
+                if( allocated(self_in%keys(i)%str)   ) allocate(self_out%keys(i)%str,   source=self_in%keys(i)%str  )
                 if( allocated(self_in%values(i)%str) ) allocate(self_out%values(i)%str, source=self_in%values(i)%str)
             end do
         endif
@@ -191,7 +190,7 @@ contains
 
     !>  \brief  for generating a job description for distributed execution
     subroutine gen_job_descr( self, prg )
-         class(chash),    intent(inout) :: self
+        class(chash),    intent(inout) :: self
         character(len=*), intent(in)    :: prg
         call self%parse_cmdline
         call self%set('prg', prg)
@@ -205,11 +204,14 @@ contains
         character(len=*), intent(in)    :: key
         character(len=*), intent(in)    :: val
         integer :: sz
+        ! increment index
         self%chash_index = self%chash_index + 1
-        sz               = size(self%keys)
+        ! reallocate if needed
+        sz = size(self%keys)
         if( self%chash_index > sz ) call self%realloc_chash
-        self%keys(self%chash_index) = trim(adjustl(key))
-        if( allocated(self%values(self%chash_index)%str) ) deallocate(self%values(self%chash_index)%str)
+        ! set key
+        allocate(self%keys(self%chash_index)%str, source= trim(adjustl(key)))
+        ! set value
         allocate(self%values(self%chash_index)%str, source=trim(adjustl(val)))
     end subroutine push
 
@@ -220,13 +222,15 @@ contains
         integer :: i
         if( self%chash_index >= 1 )then
             do i=1,self%chash_index
-                if( trim(self%keys(i)) .eq. trim(key) )then
+                ! replace if there (different from standard hash table)
+                if( trim(self%keys(i)%str) .eq. trim(key) )then
                     if( allocated(self%values(i)%str) ) deallocate(self%values(i)%str)
                     allocate(self%values(i)%str, source=trim(adjustl(val)))
                     return
                 endif
             end do
         endif
+        ! otherwise, push
         call self%push(key, val)
     end subroutine set
 
@@ -238,12 +242,17 @@ contains
         ind = self%lookup( key )
         if( ind == 0 .or. ind > self%chash_index ) return
         do i=ind,self%chash_index - 1
-            self%keys(i)   = self%keys(i + 1)
+            ! replace key
+            if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
+            allocate(self%keys(i)%str, source=self%keys(i + 1)%str)
+            ! replace value
             if( allocated(self%values(i)%str) ) deallocate(self%values(i)%str)
             allocate(self%values(i)%str, source=self%values(i + 1)%str)
         enddo
-        self%keys(self%chash_index) = ''
+        ! remove previous last entry
+        if( allocated(self%keys(self%chash_index)%str)   ) deallocate(self%keys(self%chash_index)%str)
         if( allocated(self%values(self%chash_index)%str) ) deallocate(self%values(self%chash_index)%str)
+        ! decrement index
         self%chash_index = self%chash_index - 1
     end subroutine delete
 
@@ -258,7 +267,7 @@ contains
         found = .false.
         if( self%chash_index >= 1 )then
             do i=1,self%chash_index
-                if( trim(self%keys(i)) .eq. trim(key) )then
+                if( trim(self%keys(i)%str) .eq. trim(key) )then
                     found = .true.
                     return
                 endif
@@ -273,7 +282,7 @@ contains
         integer :: ikey, which
         which = 0
         do ikey=1,self%chash_index
-            if( trim(key) .eq. trim(self%keys(ikey)) )then
+            if( trim(key) .eq. trim(self%keys(ikey)%str) )then
                 which = ikey
                 return
             endif
@@ -287,8 +296,8 @@ contains
         character(len=:), allocatable :: val
         integer :: i
         do i=1,self%chash_index
-            if( trim(self%keys(i)) .eq. trim(key) )then
-                allocate(val, source=trim(self%values(i)%str))
+            if( trim(self%keys(i)%str) .eq. trim(key) )then
+                if( allocated(self%values(i)%str) ) allocate(val, source=trim(self%values(i)%str))
                 return
             endif
         end do
@@ -299,7 +308,7 @@ contains
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ival
         character(len=:), allocatable :: val
-        allocate(val, source=trim(self%values(ival)%str))
+        if( allocated(self%values(ival)%str) ) allocate(val, source=trim(self%values(ival)%str))
     end function get_2
 
     !>  \brief  gets a key in the chash
@@ -307,7 +316,7 @@ contains
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ikey
         character(len=:), allocatable :: val
-        allocate(val, source=trim(self%keys(ikey)))
+        if( allocated(self%keys(ikey)%str) ) allocate(val, source=trim(self%keys(ikey)%str))
     end function get_key
 
     !>  \brief  concatenates the chash into a string
@@ -317,19 +326,19 @@ contains
         integer :: i
         if( self%chash_index > 0 )then
             if( self%chash_index == 1 )then
-                allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)%str))
+                allocate(str, source=trim(self%keys(1)%str)//'='//trim(self%values(1)%str))
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1)%str)//' ')
+            allocate(str_moving, source=trim(self%keys(1)%str)//'='//trim(self%values(1)%str)//' ')
             if( self%chash_index > 2 )then
                 do i=2,self%chash_index-1
-                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i)%str)//' ')
+                    allocate(str, source=str_moving//trim(self%keys(i)%str)//'='//trim(self%values(i)%str)//' ')
                     deallocate(str_moving)
                     allocate(str_moving,source=str,stat=alloc_stat)
                     deallocate(str)
                 end do
             endif
-            allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//&
+            allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index)%str)//'='//&
                 &trim(self%values(self%chash_index)%str)))
         endif
     end function chash2str
@@ -345,12 +354,12 @@ contains
 
     !>  \brief  sort chash lexographically based on the keys
     subroutine sort( self )
-        class(chash), intent(inout)    :: self
-        character(len=32), allocatable :: keys_sorted(:)
-        character(len=:), allocatable  :: val
-        character(len=32) :: key
-        type(chash)       :: tmp
-        integer           :: ikey, sz
+        class(chash),          intent(inout) :: self
+        character(len=KEYLEN), allocatable   :: keys_sorted(:)
+        character(len=:),      allocatable   :: val
+        character(len=KEYLEN) :: key
+        type(chash) :: tmp
+        integer     :: ikey, sz
         if( self%chash_index > 1 )then
             ! make conforming temporary chash
             sz = size(self%keys)
@@ -360,7 +369,9 @@ contains
             tmp%exists      = .true.
             ! fill in keys
             allocate(keys_sorted(self%chash_index))
-            keys_sorted = self%keys(:self%chash_index)
+            do ikey=1,self%chash_index
+                keys_sorted(ikey) = self%keys(ikey)%str
+            end do
             ! sort keys
             call lexSort(keys_sorted)
             ! generate the sorted hash
@@ -407,7 +418,7 @@ contains
                 endif
             else
                 ! print table (for easy to read instructions)
-                key_padded = trim(self%keys(which))
+                key_padded = trim(self%keys(which)%str)
                 do while(len(key_padded) < maxlen)
                     key_padded = trim(key_padded)//' '
                 end do
@@ -430,7 +441,7 @@ contains
         integer,           intent(in) :: maxlen
         integer, optional, intent(in) :: fhandle
         character(len=maxlen) :: key_padded
-        key_padded = trim(self%keys(ikey))
+        key_padded = trim(self%keys(ikey)%str)
         do while(len(key_padded) < maxlen)
             key_padded = trim(key_padded)//' '
         end do
@@ -479,7 +490,7 @@ contains
                 ! find max key len among all keys in chash
                 maxlen = 0
                 do ikey=1,self%chash_index
-                    keylen = len_trim(self%keys(ikey))
+                    keylen = len_trim(self%keys(ikey)%str)
                     if( keylen > maxlen ) maxlen = keylen
                 end do
                 ! print all key-value pairs
@@ -497,7 +508,7 @@ contains
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
         character(len=LINE_MAX_LEN)  :: buffer !< will hold a line from the file
-        character(len=32)            :: key
+        character(len=KEYLEN)        :: key
         character(len=STDLEN)        :: val
         integer :: ios, pos, funit
         call fopen(funit, file=fname, iostat=ios, status='old')
@@ -547,13 +558,18 @@ contains
     subroutine dealloc_chash( self )
         class(chash), intent(inout) :: self
         integer :: i
-        if(allocated(self%keys)) deallocate(self%keys)
-        if(allocated(self%values))then
+        if( allocated(self%keys) )then
+            do i=1,size(self%keys)
+                if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
+            end do
+            deallocate(self%keys)
+        endif
+        if( allocated(self%values) )then
             do i=1,size(self%values)
                 if( allocated(self%values(i)%str) ) deallocate(self%values(i)%str)
             end do
             deallocate(self%values)
-        end if
+        endif
     end subroutine dealloc_chash
 
 end module simple_chash

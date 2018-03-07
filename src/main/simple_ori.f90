@@ -65,7 +65,6 @@ type :: ori
     procedure          :: get_3Dshift
     procedure          :: get_state
     procedure          :: hash_size
-    procedure          :: hash_keys
     procedure          :: hash_vals
     procedure          :: chash_size
     procedure          :: isthere
@@ -558,13 +557,6 @@ contains
         integer :: sz
         sz = self%htab%size_of()
     end function hash_size
-
-    !>  \brief  returns the keys of the hash
-    function hash_keys( self ) result( keys )
-        class(ori), intent(inout) :: self
-        character(len=32), allocatable :: keys(:)
-        keys = self%htab%get_keys()
-    end function hash_keys
 
     !>  \brief  returns the keys of the hash
     function hash_vals( self ) result( vals )

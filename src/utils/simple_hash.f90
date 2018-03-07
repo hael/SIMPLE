@@ -12,10 +12,10 @@ integer, parameter :: BUFFSZ_DEFAULT = 10
 !> hash stuct
 type :: hash
     private
-    character(len=KEYLEN), allocatable :: keys(:)   !< hash keys
-    real,                  allocatable :: values(:) !< hash values
-    integer :: buffsz     = BUFFSZ_DEFAULT          !< size of first buffer and subsequent allocation increments
-    integer :: hash_index = 0                       !< index
+    type(str4arr), allocatable :: keys(:)   !< hash keys
+    real,          allocatable :: values(:) !< hash values
+    integer :: buffsz     = BUFFSZ_DEFAULT  !< size of first buffer and subsequent allocation increments
+    integer :: hash_index = 0               !< index
     logical :: exists     = .false.
   contains
     !< CONSTRUCTORS
@@ -35,7 +35,6 @@ type :: hash
     procedure          :: isthere
     procedure          :: lookup
     procedure          :: get
-    procedure          :: get_keys
     procedure          :: get_values
     procedure          :: hash2str
     procedure          :: size_of
@@ -104,8 +103,8 @@ contains
     !>  \brief  re-allocates keys and values without touching buffsz and hash_index and preserving previous key-value pairs
     subroutine realloc_hash( self )
         class(hash), intent(inout) :: self
-        character(len=KEYLEN), allocatable :: keys_copy(:)
-        real,                  allocatable :: values_copy(:)
+        type(str4arr), allocatable :: keys_copy(:)
+        real,          allocatable :: values_copy(:)
         integer :: newsz, oldsz, i
         if( self%exists )then
             ! old/new size
@@ -113,13 +112,17 @@ contains
             newsz = oldsz + self%buffsz
             ! copy key-value pairs
             allocate(keys_copy(oldsz), values_copy(oldsz))
-            keys_copy   = self%keys
-            values_copy = self%values
+            do i=1,oldsz
+                if( allocated(self%keys(i)%str) ) allocate(keys_copy(i)%str, source=self%keys(i)%str)
+                values_copy(i) = self%values(i)
+            enddo
             ! allocate extended size
             call self%alloc_hash(newsz)
             ! set back the copied key-value pairs
-            self%keys(:oldsz)   = keys_copy
-            self%values(:oldsz) = values_copy
+            do i=1,oldsz
+                if( allocated(keys_copy(i)%str) ) allocate(self%keys(i)%str, source=keys_copy(i)%str)
+                self%values(i) = values_copy(i)
+            enddo
         else
             stop 'cannot reallocate non-existent hash; simple_hash :: realloc_hash'
         endif
@@ -137,7 +140,7 @@ contains
         self_out%exists     = .true.
         if( self_in%hash_index > 0 )then
             do i=1,self_in%hash_index
-                self_out%keys(i)   = self_in%keys(i)
+                if( allocated(self_in%keys(i)%str) ) allocate(self_out%keys(i)%str, source=self_in%keys(i)%str)
                 self_out%values(i) = self_in%values(i)
             end do
         endif
@@ -158,10 +161,14 @@ contains
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: val
         integer :: sz
+        ! increment index
         self%hash_index = self%hash_index + 1
-        sz              = size(self%keys)
+        ! reallocate if needed
+        sz = size(self%keys)
         if( self%hash_index > sz ) call self%realloc_hash
-        self%keys(self%hash_index)   = trim(key)
+        ! set key
+        allocate(self%keys(self%hash_index)%str, source= trim(adjustl(key)))
+        ! set value
         self%values(self%hash_index) = val
     end subroutine push
 
@@ -173,7 +180,7 @@ contains
         integer :: i
         if( self%hash_index >= 1 )then
             do i=1,self%hash_index
-                if( trim(self%keys(i)) .eq. trim(key) )then
+                if( trim(self%keys(i)%str) .eq. trim(key) )then
                     self%values(i) = val
                     return
                 endif
@@ -190,11 +197,16 @@ contains
         ind = self%lookup( key )
         if( ind==0 .or. ind > self%hash_index ) return
         do i=ind,self%hash_index - 1
-            self%keys(i)   = self%keys(i +1)
+            ! replace key
+            if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
+            allocate(self%keys(i)%str, source=self%keys(i + 1)%str)
+            ! replace value
             self%values(i) = self%values(i + 1)
         enddo
-        self%keys( self%hash_index ) = ''
+        ! remove previous last entry
+        if( allocated(self%keys(self%hash_index)%str)   ) deallocate(self%keys(self%hash_index)%str)
         self%values( self%hash_index ) = 0.
+        ! decrement index
         self%hash_index = self%hash_index - 1
     end subroutine delete
 
@@ -209,7 +221,7 @@ contains
         found = .false.
         if( self%hash_index >= 1 )then
             do i=1,self%hash_index
-                if( trim(self%keys(i)) .eq. trim(key) )then
+                if( trim(self%keys(i)%str) .eq. trim(key) )then
                     found = .true.
                     return
                 endif
@@ -223,7 +235,7 @@ contains
         character(len=*), intent(in)    :: key
         integer :: i
         do i=1,self%hash_index
-            if( trim(self%keys(i)) .eq. trim(key) )then
+            if( trim(self%keys(i)%str) .eq. trim(key) )then
                 lookup = i
                 return
             endif
@@ -238,19 +250,12 @@ contains
         integer :: i
         val = 0.
         do i=1,self%hash_index
-            if( trim(self%keys(i)) .eq. trim(key) )then
+            if( trim(self%keys(i)%str) .eq. trim(key) )then
                 val = self%values(i)
                 return
             endif
         end do
     end function get
-
-    !>  \brief  returns the keys of the hash
-    function get_keys( self ) result( keys )
-        class(hash), intent(inout) :: self
-        character(len=KEYLEN), allocatable :: keys(:)
-        allocate(keys(self%hash_index), source=self%keys(:self%hash_index))
-    end function get_keys
 
     !>  \brief  returns the values of the hash
     function get_values( self ) result( values )
@@ -266,19 +271,19 @@ contains
         integer :: i
         if( self%hash_index > 0 )then
             if( self%hash_index == 1 )then
-                allocate(str, source=trim(self%keys(1))//'='//trim(real2str(self%values(1))))
+                allocate(str, source=trim(self%keys(1)%str)//'='//trim(real2str(self%values(1))))
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1))//'='//trim(real2str(self%values(1)))//' ')
+            allocate(str_moving, source=trim(self%keys(1)%str)//'='//trim(real2str(self%values(1)))//' ')
             if( self%hash_index > 2 )then
                 do i=2,self%hash_index - 1
-                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(real2str(self%values(i)))//' ')
+                    allocate(str, source=str_moving//trim(self%keys(i)%str)//'='//trim(real2str(self%values(i)))//' ')
                     deallocate(str_moving)
                     allocate(str_moving,source=str,stat=alloc_stat)
                     deallocate(str)
                 end do
             endif
-            allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index))&
+            allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index)%str)&
                 &//'='//trim(real2str(self%values(self%hash_index)))))
         endif
     end function hash2str
@@ -297,10 +302,10 @@ contains
         class(hash), intent(inout) :: self
         integer :: i
         do i=1,self%hash_index-1
-            write(*,"(1X,A,A)", advance="no") trim(self%keys(i)), '='
+            write(*,"(1X,A,A)", advance="no") trim(self%keys(i)%str), '='
             write(*,"(A)", advance="no") trim(real2str(self%values(i)))
         end do
-        write(*,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)), '='
+        write(*,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)%str), '='
         write(*,"(A)") trim(real2str(self%values(self%hash_index)))
     end subroutine print
 
@@ -319,7 +324,12 @@ contains
     subroutine dealloc_hash( self )
         class(hash), intent(inout) :: self
         integer :: i
-        if(allocated(self%keys))   deallocate(self%keys)
+        if( allocated(self%keys) )then
+            do i=1,size(self%keys)
+                if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
+            end do
+            deallocate(self%keys)
+        endif
         if(allocated(self%values)) deallocate(self%values)
     end subroutine dealloc_hash
 
