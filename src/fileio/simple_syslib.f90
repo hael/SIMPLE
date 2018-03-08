@@ -540,7 +540,15 @@ contains
         ! if( err ) write(*,*) trim(adjustl(cmdmsg))
     end subroutine raise_sys_error
 
-    character(len=STDLEN) function simple_getenv( name ) ! result( varval )
+    logical function simple_isenv (name)
+        character(len=*), intent(in)  :: name
+        character(len=STDLEN)         :: value
+        integer status, length
+        call get_environment_variable( trim(name), value=value, length=length, status=status)
+        simple_isenv = (status == 0)
+    end function simple_isenv
+
+        character(len=STDLEN) function simple_getenv( name ) ! result( varval )
         character(len=*), intent(in)  :: name
         character(len=STDLEN)         :: value
         character(len=:), allocatable :: varval

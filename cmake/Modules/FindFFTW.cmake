@@ -95,7 +95,7 @@ find_path(FFTW_INCLUDE_DIRS
 mark_as_advanced( FFTW_INCLUDE_DIRS )
 
 find_library( FFTW_SINGLE_PRECISION_LIBRARIES
-    NAMES fftw3f libfftw3f-3
+    NAMES fftw3f libfftw3f libfftw3f-3
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
@@ -121,7 +121,7 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
 mark_as_advanced( FFTW_SINGLE_PRECISION_LIBRARIES )
 
 find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
-    NAMES fftw3 libfftw3-3
+    NAMES fftw3 libfftw3 libfftw3-3
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
@@ -148,9 +148,9 @@ mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
 
 find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
     NAMES fftw3f_threads
-	  libfftw3f-3_threads
-          fftw3f_omp
-	  libfftw3f-3_omp
+	  libfftw3f_threads libfftw3f-3_threads
+    fftw3f_omp
+	  libfftw3f_omp 	  libfftw3f-3_omp
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
@@ -179,9 +179,9 @@ mark_as_advanced( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES )
 
 find_library( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES
     NAMES fftw3_threads
-	      libfftw3-3_threads
-        fftw3_omp
-	      libfftw3-3_omp
+	  libfftw3_threads
+    fftw3_omp
+	  libfftw3_omp
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
