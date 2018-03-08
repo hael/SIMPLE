@@ -67,10 +67,11 @@ file(GLOB TESTDIRS
   "tests/test_*"
   )
 ## Uncomment the following block to remove ITEMS from the tests
+if(USING_CUDA)
 list(REMOVE_ITEM TESTDIRS
  "tests/test_pgi"
   )
-
+endif()
 message( STATUS "Test directories ${TESTDIRS}")
 
 foreach(TESTNAME ${TESTDIRS})
