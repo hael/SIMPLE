@@ -3,8 +3,9 @@ use simple_defs
 implicit none
 
 public :: make_user_interface
-public :: cluster2D, refine3D, initial_3Dmodel
-public :: postprocess, extract, scale
+public :: cluster2D, refine3D, initial_3Dmodel, make_cavgs
+public :: cavgassemble
+public :: extract, map2ptcls, postprocess, scale
 private
 
 logical, parameter :: DEBUG = .false.
@@ -54,13 +55,17 @@ end type simple_program
 type(simple_program), protected :: cluster2D
 type(simple_program), protected :: refine3D
 type(simple_program), protected :: initial_3Dmodel
-type(simple_program), protected :: postprocess
 type(simple_program), protected :: extract
+type(simple_program), protected :: map2ptcls
+type(simple_program), protected :: postprocess
 type(simple_program), protected :: scale
+type(simple_program), protected :: cavgassemble
+type(simple_program), protected :: make_cavgs
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: ctf
 type(simple_input_param) :: deftab
+type(simple_input_param) :: filwidth
 type(simple_input_param) :: frac
 type(simple_input_param) :: hp
 type(simple_input_param) :: inner
@@ -69,17 +74,21 @@ type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nparts
+type(simple_input_param) :: ncls
 type(simple_input_param) :: nthr
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
+type(simple_input_param) :: outfile
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
+type(simple_input_param) :: remap_classes
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
 type(simple_input_param) :: stk
 type(simple_input_param) :: stktab
 type(simple_input_param) :: trs
 type(simple_input_param) :: update_frac
+type(simple_input_param) :: weights2D
 
 contains
 
@@ -93,41 +102,51 @@ contains
         call new_postprocess
         call new_extract
         call new_scale
+        call new_map2ptcls
+        call new_cavgassemble
+        call new_make_cavgs
         ! ...
     end subroutine make_user_interface
 
     subroutine set_common_params
-        call set_param(stk,         'stk',         'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false.)
-        call set_param(stktab,      'stktab',      'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false.)
-        call set_param(ctf,         'ctf',         'multi',  'CTF correction', 'Contrast Transfer Function correction; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
+        call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false.)
+        call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false.)
+        call set_param(ctf,           'ctf',           'multi',  'CTF correction', 'Contrast Transfer Function correction; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
         &'(yes|no|flip){no}', .true.)
-        call set_param(smpd,        'smpd',        'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true.)
-        call set_param(phaseplate,  'phaseplate',  'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false.)
-        call set_param(deftab,      'deftab',      'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
+        call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true.)
+        call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false.)
+        call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
         &'.simple|.txt parameter file', .false.)
-        call set_param(oritab,      'oritab',      'file',   'Orientation and CTF parameter file', 'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
+        call set_param(oritab,        'oritab',        'file',   'Orientation and CTF parameter file', 'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
         &'.simple|.txt parameter file', .false.)
-        call set_param(startit,     'startit',     'num',    'First iteration', 'Index of first iteration when starting from a previous solution', 'start iterations from here', .false.)
-        call set_param(trs,         'trs',         'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
+        call set_param(outfile,       'outfile',       'file',   'Output orientation and CTF parameter file', 'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
+        &'.simple|.txt parameter file', .false.)
+        call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous solution', 'start iterations from here', .false.)
+        call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
         &'max shift per iteration in pixels', .false.)
-        call set_param(maxits,      'maxits',      'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false.)
-        call set_param(hp,          'hp',          'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false.)
-        call set_param(msk,         'msk',         'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true.)
-        call set_param(inner,       'inner',       'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
-        &'inner mask radius in pixles', .false.)
-        call set_param(nparts,      'nparts',      'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
+        call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false.)
+        call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false.)
+        call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true.)
+        call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
+        &'inner mask radius in pixels', .false.)
+        call set_param(filwidth,      'filwidth',      'num',    'Width of filament (in A)', 'Width of filament in Angstroms','in Angstroms', .false.)
+        call set_param(ncls,          'ncls',          'num', 'Number of 2D clusters', 'Number of groups to sort the particles &
+        &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .false.)
+        call set_param(nparts,        'nparts',        'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true.)
-        call set_param(nthr,        'nthr',        'num',    'Number of threads per part', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
+        call set_param(nthr,          'nthr',          'num',    'Number of threads per part', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .false.)
-        call set_param(update_frac, 'update_frac', 'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
+        call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
         &rate(0.1-0.5){1.}', 'update this fraction per iter{1.0}', .false.)
-        call set_param(frac,        'frac',        'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
+        call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
         'fraction of particles used{1.0}', .false.)
-        call set_param(mskfile,     'mskfile',     'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false.)
-        call set_param(pgrp,        'pgrp',        'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true.)
-        call set_param(nspace,      'nspace',      'num',    'Number of projection directions', 'Number of projection directions &
+        call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false.)
+        call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true.)
+        call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used in discrete 3D orientation search', '# projections used', .false.)
-        call set_param(objfun,      'objfun',      'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
+        call set_param(objfun,        'objfun',        'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
+        call set_param(weights2D,     'weights2D',     'binary', '2D spectral weights', 'Wether to use 2D spectral weights(yes|no){no}', '(yes|no){no}', .false.)
+        call set_param(remap_classes, 'remap_classes', 'binary', 'Whether to remap 2D references', 'Whether to remap the number of 2D references(yes|no){no}', '(yes|no){no}', .false.)
 
         contains
 
@@ -518,8 +537,8 @@ contains
         ! alternative inputs
         !<empty>
         ! search controls
-        call cluster2D%set_input('srch_ctrls', 1, 'ncls', 'num', 'Number of 2D clusters', 'Number of groups to sort the particles &
-        &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true.)
+        call cluster2D%set_input('srch_ctrls', 1, ncls)
+        cluster2D%srch_ctrls(1)%required = .true.
         call cluster2D%set_input('srch_ctrls', 2, startit)
         call cluster2D%set_input('srch_ctrls', 3, trs)
         call cluster2D%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
@@ -727,5 +746,168 @@ contains
         ! computer controls
         call scale%set_input('comp_ctrls', 1, nthr)
     end subroutine new_scale
+
+    subroutine new_map2ptcls
+        ! PROGRAM SPECIFICATION
+        call map2ptcls%new(&
+        &'map2ptcls', &                                            ! name
+        &'is a program for mapping parameters that have been obtained using class averages to &
+        & the individual particle images',&                        ! descr_short
+        &'is a program for mapping parameters that have been obtained using class averages to &
+        & the individual particle images',&                         ! descr_long
+        &'simple_exec',&                                            ! executable
+        &4, 4, 1, 0, 0, 0, 1)                                       ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call map2ptcls%set_input('img_ios', 1, stk)
+        scale%img_ios(1)%required = .false.
+        call map2ptcls%set_input('img_ios', 2, stktab)
+        scale%img_ios(2)%required = .false.
+        call map2ptcls%set_input('img_ios', 3, 'stk2', 'file', 'Stack of selected class-averages', 'Stack of selected class-averages',&
+        &'input volume e.g. selected.mrc', .false.)
+        call map2ptcls%set_input('img_ios', 4, 'stk3', 'file', 'Stack of original class-averages', 'Can be identical to stk2',&
+        &'input volume e.g. cavgs_iter016_ranked.mrc', .true.)
+        ! parameter input/output
+        call map2ptcls%set_input('parm_ios', 1, 'oritab', 'file', '2D Orientation and CTF parameters file for stk3',&
+         '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
+        &'.simple|.txt parameter file', .true.)
+        call map2ptcls%set_input('parm_ios', 2, 'oritab3D', 'file', '3D Orientations file for stk2',&
+         '3D Orientations file for stk2 in plain text (.txt) or SIMPLE project (*.simple) format',&
+        &'.simple|.txt parameter file', .false.)
+        call map2ptcls%set_input('parm_ios', 3, 'deftab', 'file', 'CTF parameter file', 'CTF parameter file congruent with stk/stktab &
+        &in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values','.simple|.txt parameter file', .false.)
+        call map2ptcls%set_input('parm_ios', 4, 'mul', 'num', 'Shift multiplication factor{1}', 'Origin shift multiplication factor{1}','(0-1){1}', .false.)
+        ! alternative inputs
+        call map2ptcls%set_input('alt_ios', 1, outfile)
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call map2ptcls%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_map2ptcls
+
+    subroutine new_cavgassemble
+        ! PROGRAM SPECIFICATION
+        call cavgassemble%new(&
+        &'cavgassemble', &     ! name
+        &'is a program that assembles class averages generated by cluster2D',&  ! descr_short
+        &'is a program that assembles class averages when the clustering&
+        & program (cluster2D) has been executed in distributed mode',&          ! descr_long
+        &'simple_private_exec',&                                                ! executable
+        &3, 5, 1, 0, 0, 0, 2)                                                   ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cavgassemble%set_input('img_ios', 1, stk)
+        call cavgassemble%set_input('img_ios', 2, stktab)
+        call cavgassemble%set_input('img_ios', 3, 'refs', 'file', '2D references',&
+        &'2D references', 'xxx.mrc file containing references', .false.)
+        ! parameter input/output
+        call cavgassemble%set_input('parm_ios', 1, smpd)
+        call cavgassemble%set_input('parm_ios', 2, ncls)
+        cavgassemble%parm_ios(2)%required = .true.
+        call cavgassemble%set_input('parm_ios', 3, ctf)
+        call cavgassemble%set_input('parm_ios', 4, phaseplate)
+        call cavgassemble%set_input('parm_ios', 5, 'oritab', 'file', '2D Orientation and CTF parameters',&
+         '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
+        &'.simple|.txt parameter file', .true.)
+        ! alternative inputs
+        call cavgassemble%set_input('alt_ios', 1, 'which_iter', 'num', 'Iteration #',&
+        &'Iteration #', '...', .false.)
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call cavgassemble%set_input('comp_ctrls', 1, nparts)
+        cavgassemble%comp_ctrls(1)%required = .true.
+        call cavgassemble%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_cavgassemble
+
+    subroutine new_make_cavgs
+        ! PROGRAM SPECIFICATION
+        call make_cavgs%new(&
+        &'make_cavgs', &     ! name
+        &'is used to produce  class averages',&     ! descr_short
+        &'is used to produce class averages or initial random references&
+        &for cluster2D execution',&                 ! descr_long
+        &'simple_distr_exec',&                      ! executable
+        &3, 6, 4, 0, 0, 1, 2)                       ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call make_cavgs%set_input('img_ios', 1, stk)
+        call make_cavgs%set_input('img_ios', 2, stktab)
+        call make_cavgs%set_input('img_ios', 3, 'refs', 'file', 'Output 2D references',&
+        &'Output 2D references', 'xxx.mrc file containing references', .false.)
+        ! parameter input/output
+        call make_cavgs%set_input('parm_ios', 1, smpd)
+        make_cavgs%parm_ios(1)%required = .true.
+        call make_cavgs%set_input('parm_ios', 2, ncls)
+        call make_cavgs%set_input('parm_ios', 3, ctf)
+        call make_cavgs%set_input('parm_ios', 4, phaseplate)
+        call make_cavgs%set_input('parm_ios', 5, deftab)
+        call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D Orientation and CTF parameters',&
+         '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
+        &'.simple|.txt parameter file', .false.)
+        ! alternative inputs
+        call make_cavgs%set_input('alt_ios', 1, 'mul', 'num', 'Shift multiplication factor{1}', 'Origin shift multiplication factor{1}','(0-1){1}', .false.)
+        call make_cavgs%set_input('alt_ios', 2, outfile)
+        call make_cavgs%set_input('alt_ios', 3, weights2D)
+        call make_cavgs%set_input('alt_ios', 4, remap_classes)
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call make_cavgs%set_input('mask_ctrls', 1, filwidth)
+        ! computer controls
+        call make_cavgs%set_input('comp_ctrls', 1, nparts)
+        make_cavgs%comp_ctrls(1)%required = .true.
+        call make_cavgs%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_make_cavgs
+
+    ! subroutine new_make_cavgs
+    !     ! PROGRAM SPECIFICATION
+    !     call make_cavgs%new(&
+    !     &'make_cavgs', &     ! name
+    !     &'is used to produce  class averages',&     ! descr_short
+    !     &'is used to produce class averages or initial random references&
+    !     &for cluster2D execution',&                 ! descr_long
+    !     &'simple_private_exec',&                    ! executable
+    !     &3, 6, 4, 0, 0, 1, 1)                       ! # entries in each group
+    !     ! INPUT PARAMETER SPECIFICATIONS
+    !     ! image input/output
+    !     call make_cavgs%set_input('img_ios', 1, stk)
+    !     call make_cavgs%set_input('img_ios', 2, stktab)
+    !     call make_cavgs%set_input('img_ios', 3, 'refs', 'file', 'Output 2D references',&
+    !     &'Output 2D references', 'xxx.mrc file containing references', .false.)
+    !     ! parameter input/output
+    !     call make_cavgs%set_input('parm_ios', 1, smpd)
+    !     make_cavgs%parm_ios(1)%required = .true.
+    !     call make_cavgs%set_input('parm_ios', 2, ncls)
+    !     call make_cavgs%set_input('parm_ios', 3, ctf)
+    !     call make_cavgs%set_input('parm_ios', 4, phaseplate)
+    !     call make_cavgs%set_input('parm_ios', 5, deftab)
+    !     call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D Orientation and CTF parameters',&
+    !      '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
+    !     &'.simple|.txt parameter file', .false.)
+    !     ! alternative inputs
+    !     call make_cavgs%set_input('alt_ios', 1, 'mul', 'num', 'Shift multiplication factor{1}', 'Origin shift multiplication factor{1}','(0-1){1}', .false.)
+    !     call make_cavgs%set_input('alt_ios', 2, outfile)
+    !     call make_cavgs%set_input('alt_ios', 3, weights2D)
+    !     call make_cavgs%set_input('alt_ios', 4, remap_classes)
+    !     ! search controls
+    !     ! <empty>
+    !     ! filter controls
+    !     ! <empty>
+    !     ! mask controls
+    !     call make_cavgs%set_input('mask_ctrls', 1, filwidth)
+    !     ! computer controls
+    !     call make_cavgs%set_input('comp_ctrls', 2, nthr)
+    ! end subroutine new_make_cavgs
 
 end module simple_user_interface

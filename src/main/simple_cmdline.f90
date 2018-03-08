@@ -451,14 +451,13 @@ contains
         character(len=*), intent(in) :: key
         character(len=:), allocatable :: cval
         integer :: i
-        cval = ''
         do i=1,self%argcnt
             if( trim(self%cmds(i)%key) .eq. trim(key) )then
-                deallocate(cval)
                 allocate(cval, source=trim(self%cmds(i)%carg))
                 return
             endif
         end do
+        cval = ''
     end function get_carg
 
     !> \brief for generating a job description (prg overrides prg in cline)
