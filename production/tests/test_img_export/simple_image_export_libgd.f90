@@ -4,11 +4,12 @@
 
 !! Modified by Michael Eager, Feb 2018
 module simple_test_export_libgd
-    include 'simple_lib.f08'
-    use simple_img
-    implicit none
-    private
-    public :: test_png_io, test_jpeg_io, create_raw_png_tmp
+#include "simple_lib.f08"
+use simple_img
+implicit none
+
+private
+public :: test_png_io, test_jpeg_io, create_raw_png_tmp
 #include "simple_local_flags.inc"
 
 contains
@@ -439,7 +440,7 @@ contains
         write(fid) INT(Z'17e2c3ae',4), INT(Z'7ac9fae9',4), INT(Z'fff6655d',4), INT(Z'ff801e19',4)
         write(fid) INT(Z'8a5bea03',4), INT(Z'9e9c3b83',4), INT(Z'0000009e',4), INT(Z'4e454900',4)
         write(fid) INT(Z'6042ae44',4), INT(Z'0082',2)
-        call fclose(fid)
+        close(fid)
     end subroutine create_raw_png_tmp
 
 end module simple_test_export_libgd

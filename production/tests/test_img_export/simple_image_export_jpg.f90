@@ -1,11 +1,11 @@
 module simple_test_export_jpg
-    include 'simple_lib.f08'
-    use simple_jpg,   only: jpg_img
-    use simple_image, only: image
+#include "simple_lib.f08"
+use simple_jpg,   only: jpg_img
+use simple_image, only: image
 implicit none
 
 #include "simple_local_flags.inc"
-    public ::  test_jpg_image
+public ::  test_jpg_image
 contains
 
     subroutine test_jpg_image (doplot)

@@ -4,7 +4,7 @@
 !! (better than 8-bit PNG)
 
 module simple_jpg
-    include 'simple_lib.f08'
+#include "simple_lib.f08"
     use,intrinsic                                        :: iso_c_binding
     implicit none
 

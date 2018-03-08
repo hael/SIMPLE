@@ -7,7 +7,7 @@
 !
 !! Modified by Michael Eager Feb 2018
 module simple_img
-    include 'simple_lib.f08'
+#include "simple_lib.f08"
     use, intrinsic                       :: iso_c_binding
     implicit none
 
@@ -51,7 +51,7 @@ contains
         integer                          :: width,height, i,j, colorval,black,white
         type(base_img)                   :: image
 #ifdef _LIBGD
-        
+
         if (present(status)) then
             call create_img_from_png(file_name,image,status)
         else
@@ -81,7 +81,7 @@ contains
         call destroy_img(image)
 #else
         print *," LibGD img package not supported "
-#endif        
+#endif
 
     end subroutine read_png
 
@@ -956,5 +956,5 @@ contains
     end function ym
 
 #endif
-    
+
 end module simple_img

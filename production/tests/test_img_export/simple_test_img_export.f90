@@ -1,6 +1,6 @@
  !! Modified by Michael Eager, Feb 2018
 program simple_test_img_export
-    include 'simple_lib.f08'
+#include "simple_lib.f08"
     use simple_jpg, only : test_jpg_export
     use simple_test_export_jpg, only : test_jpg_image
     use simple_test_export_libgd, only : test_png_io, test_jpeg_io, create_raw_png_tmp

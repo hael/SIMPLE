@@ -1,6 +1,6 @@
 !! Based on John Burkardt's  PPMA and PBMA modules (LPGL Copyright, March 2003- 2007)
 module simple_test_export_pnm
-include 'simple_lib.f08'
+#include "simple_lib.f08"
 use simple_pnm
 implicit none
 
