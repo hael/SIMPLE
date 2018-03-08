@@ -1,6 +1,6 @@
 ! optimiser specification
 module simple_opt_spec
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 public :: opt_spec, costfun
@@ -227,14 +227,14 @@ contains
         if(present(limits))      call self%set_limits(limits)
         if(present(limits_init)) call self%set_limits_init(limits_init)
         allocate( self%cyclic(self%ndim), stat=alloc_stat )
-        allocchk('In: specify; simple_opt_spec, cyclic')
+        if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, cyclic',alloc_stat)
         self%cyclic = .false.
         if( present(cyclic) )then
             self%cyclic = cyclic
         endif
         if(present(stepsz))then
             allocate( self%stepsz(ndim), stat=alloc_stat )
-            allocchk('In: specify; simple_opt_spec, stepsz')
+            if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, stepsz',alloc_stat)
             self%stepsz = stepsz
         endif
         if(present(verbose_arg)) self%verbose = verbose_arg
@@ -245,19 +245,18 @@ contains
         ! allocate
         if( self%npeaks > 0 )then
             allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
-            allocchk('In: specify; simple_opt_spec, peaks')
+            if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, peaks',alloc_stat)
         endif
         select case(str_opt)
             case('linmin')
-                allocate( self%x(self%ndim), self%x_8(self%ndim), self%xi(self%ndim), &
-                    & self%xt(self%ndim), stat=alloc_stat )
-                allocchk('In: specify; simple_opt_spec, linmin')
+                allocate( self%x(self%ndim), self%x_8(self%ndim),self%xi(self%ndim), self%xt(self%ndim), stat=alloc_stat )
+                if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, linmin',alloc_stat)
                 self%xi = 0.
                 self%xt = 0.
             case DEFAULT
                 allocate( self%x(self%ndim), self%grad_4_tmp(self%ndim), &
                     & self%x_4_tmp(self%ndim), self%x_8(self%ndim),stat=alloc_stat )
-                allocchk('In: specify; simple_opt_spec, DEFAULT')
+                if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, DEFAULT',alloc_stat)
         end select
         self%x        = 0.
         self%lbfgsb_m = 15
@@ -287,7 +286,7 @@ contains
         end do
         if( allocated(self%limits) ) deallocate(self%limits)
         allocate( self%limits(self%ndim,2), source=lims, stat=alloc_stat )
-        allocchk('In: specify; simple_opt_spec, limits')
+        if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, limits',alloc_stat)
     end subroutine set_limits
 
     !>  \brief  sets the limits for initialisation (randomized bounds)
@@ -306,7 +305,7 @@ contains
         end do
         if( allocated(self%limits_init) ) deallocate(self%limits_init)
         allocate( self%limits_init(self%ndim,2), source=lims_init, stat=alloc_stat )
-        call alloc_errchk('In: set_limits_init; simple_opt_spec', alloc_stat)
+        if(alloc_stat .ne. 0)call allocchk('In: set_limits_init; simple_opt_spec', alloc_stat)
     end subroutine set_limits_init
 
     !>  \brief  sets the initialization population for de
@@ -444,11 +443,6 @@ contains
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
-#if defined (PGI)
-        ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        real, external :: fun !< defines cost function interface
-#else
-        ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function interface
             function fun( fun_self, vec, D ) result(cost)
@@ -458,7 +452,6 @@ contains
                 real                    :: cost
             end function
         end interface
-#endif
         self%costfun => fun
     end subroutine set_costfun
 

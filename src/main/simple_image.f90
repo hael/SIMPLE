@@ -3,7 +3,7 @@
 module simple_image
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 !!import classes
 use simple_ftiter,  only: ftiter
 use simple_imgfile, only: imgfile
@@ -11,9 +11,17 @@ use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
 use simple_fftw3
 use gnufor2
+#ifdef PGI
+use simple_cufft
+#endif
+
 implicit none
 
 public :: image, test_image
+#ifdef PGI
+public :: test_image_pgi_cuda
+#endif
+
 private
 #include "simple_local_flags.inc"
 
@@ -61,18 +69,42 @@ type :: image
     procedure          :: get_shconst
     procedure          :: cyci
     procedure          :: get
-    procedure          :: get_rmat
     procedure          :: get_cmat
-    procedure          :: set_cmat
-    procedure          :: get_cmat_at
-    procedure          :: set_cmat_at
-    procedure          :: add2_cmat_at
+    procedure, private :: get_cmat_at_1
+    procedure, private :: get_cmat_at_2
+    generic            :: get_cmat_at => get_cmat_at_1, get_cmat_at_2
+    procedure, private :: get_rmat_at_1
+    procedure, private :: get_rmat_at_2
+    generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
+    procedure          :: get_cmatfull
+    procedure          :: get_rmat
+    procedure          :: set_cmat_1
+    procedure          :: set_cmat_2
+    generic            :: set_cmat => set_cmat_1, set_cmat_2
+    procedure          :: set_cmat_at_1
+    procedure          :: set_cmat_at_2
+    generic            :: set_cmat_at => set_cmat_at_1, set_cmat_at_2
     procedure          :: set_cmats_from_cmats
     procedure          :: add_cmats_to_cmats
-    procedure          :: div_cmat_at
+    procedure, private :: mul_rmat_at_1
+    procedure, private :: mul_rmat_at_2
+    generic            :: mul_rmat_at => mul_rmat_at_1, mul_rmat_at_2
+    procedure, private :: div_rmat_at_1
+    procedure, private :: div_rmat_at_2
+    generic            :: div_rmat_at => div_rmat_at_1, div_rmat_at_2
+    procedure, private :: add_cmat_at_1
+    procedure, private :: add_cmat_at_2
+    generic            :: add_cmat_at => add_cmat_at_1, add_cmat_at_2
     procedure, private :: mul_cmat_at_1
     procedure, private :: mul_cmat_at_2
-    generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2
+    procedure, private :: mul_cmat_at_3
+    procedure, private :: mul_cmat_at_4
+    generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
+    procedure, private :: div_cmat_at_1
+    procedure, private :: div_cmat_at_2
+    procedure, private :: div_cmat_at_3
+    procedure, private :: div_cmat_at_4
+    generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
     procedure          :: print_cmat
     procedure          :: expand_ft
     procedure          :: set
@@ -145,14 +177,12 @@ type :: image
     procedure, private :: subtr_3
     procedure, private :: subtr_4
     generic            :: subtr => subtr_1, subtr_2, subtr_3, subtr_4
-    procedure          :: div_rmat_at
     procedure, private :: div_1
     procedure, private :: div_2
     procedure, private :: div_3
     procedure, private :: div_4
     generic            :: div => div_1, div_2, div_3, div_4
     procedure          :: ctf_dens_correct
-    procedure          :: mul_rmat_at
     procedure, private :: mul_1
     procedure, private :: mul_2
     procedure, private :: mul_3
@@ -272,10 +302,8 @@ type :: image
     procedure          :: corners
     procedure          :: before_after
     procedure          :: gauimg
+    procedure          :: gauimg2
     procedure          :: gauimg2D
-    procedure          :: fwd_ft
-    procedure          :: ft2img
-    procedure          :: img2ft
     procedure          :: dampen_central_cross
     procedure          :: subtr_backgr
     procedure          :: subtr_avg_and_square
@@ -298,10 +326,24 @@ type :: image
     procedure          :: rtsq
     procedure          :: rtsq_serial
     procedure          :: shift_phorig
-    procedure          :: bwd_ft
     procedure          :: shift
     procedure          :: shift2Dserial
     procedure          :: set_within
+    procedure          :: ft2img
+    procedure          :: img2ft
+    ! FFTs and signal processing operations
+    procedure          :: fwd_ft    ! FFTW forward transform
+    procedure          :: bwd_ft    ! FFTW inverse transform
+    procedure          :: fft_pgi_cuda  ! CUFFT forward transform
+    !        procedure         :: fft_pgi_stream
+    procedure          :: ifft_pgi_cuda ! CUFFT inverse transform
+#ifdef PGI
+    generic            :: fft => fft_pgi_cuda
+    generic            :: ifft => ifft_pgi_cuda
+#else
+    generic            :: fft => fwd_ft
+    generic            :: ifft => bwd_ft
+#endif
     ! DENOISING FUNCTIONS
     procedure          :: cure_outliers
     procedure          :: denoise_NLM
@@ -523,7 +565,7 @@ contains
         endif
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         call img_out%new([box,box,1], self%smpd)
@@ -535,7 +577,7 @@ contains
                 call self%window([xind,yind],box,tmp)
                 call tmp%norm()
                 call tmp%edges_norm
-                call tmp%fwd_ft
+                call tmp%fft()
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
                 cnt = cnt+1
@@ -544,7 +586,7 @@ contains
             end do
         end do
         call img_out%div(real(cnt))
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end function mic2spec
 
     subroutine mic2eospecs( self, box, speckind, pspec_lower, pspec_upper, pspec_all )
@@ -561,7 +603,7 @@ contains
         endif
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         ! count # images
@@ -586,7 +628,7 @@ contains
                 call self%window_slim([xind,yind],box,tmp,outside)
                 call tmp%norm()
                 call tmp%edges_norm
-                call tmp%fwd_ft
+                call tmp%fft()
                 if( cnt <= neven_lim )then
                     neven = neven + 1
                     call tmp%ft2img(speckind, tmp2)
@@ -604,7 +646,7 @@ contains
         call pspec_all%add(pspec_upper)
         call tmp%kill
         call tmp2%kill
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end subroutine mic2eospecs
 
     function boxconv( self, box ) result( img_out )
@@ -619,7 +661,7 @@ contains
         endif
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         call img_out%new([box,box,1], self%smpd)
@@ -633,7 +675,7 @@ contains
             end do
         end do
         call img_out%div(real(cnt))
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end function boxconv
 
     !>  \brief window extracts a particle image from a box as defined by EMAN 1.9
@@ -731,7 +773,7 @@ contains
             npix = (2*winsz+1)**2
         endif
         allocate(pixels(npix), stat=alloc_stat)
-        allocchk('In: win2arr; simple_image')
+        if(alloc_stat/=0)call allocchk('In: win2arr; simple_image')
         cnt = 1
         do s=i-winsz,i+winsz
             ss = cyci_1d([1,self%ldim(1)], s)
@@ -1177,8 +1219,25 @@ contains
         real, allocatable :: rmat(:,:,:)
         integer :: ldim(3)
         ldim = self%ldim
-        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
+        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)), stat=alloc_stat)
+        if (alloc_stat /= 0)call allocchk("simple_image::get_rmat ",alloc_stat)
     end function get_rmat
+
+    !! get rmat value at index logi
+    function get_rmat_at_1( self, logi ) result( val )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: logi(3)
+        real :: val
+        val = self%rmat(logi(1),logi(2),logi(3))
+    end function get_rmat_at_1
+
+    !! get cmat value at index phys
+    elemental pure function get_rmat_at_2( self, i,j,k ) result( val )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: i,j,k
+        real :: val
+        val = self%rmat(i,j,k)
+    end function get_rmat_at_2
 
     !>  \brief   get_cmat get the image object's complex matrix
     !! \return cmat a copy of this image object's cmat
@@ -1187,30 +1246,94 @@ contains
         class(image), intent(in) :: self
         complex, allocatable :: cmat(:,:,:)
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
+        !pure function cannot call allocchk
+        !if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ")
     end function get_cmat
 
-    pure subroutine set_cmat( self, cmat )
+    !>  \brief   get_cmatfull get the image object's complex matrix, including index limits
+    !! \return cmat a copy of this image object's cmat
+    !!
+    function get_cmatfull( self , llims) result( cmat )
+        class(image), intent(in) :: self
+        integer, intent(inout), optional :: llims(3,2)
+        complex, allocatable :: cmat(:,:,:)
+        integer :: llimits(3,2)
+        if (present(llims))then
+            llimits=llims
+        else
+            llimits=1
+            llimits(:,2) = self%array_shape
+        end if
+        allocate(cmat(llimits(1,1):llimits(1,2),&
+            &llimits(2,1):llimits(2,2),&
+            &llimits(3,1):llimits(3,2)), source=self%cmat, stat=alloc_stat)
+        if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
+    end function get_cmatfull
+
+
+    pure subroutine set_cmat_1( self, cmat )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         self%ft = .true.
         self%cmat = cmat
-    end subroutine set_cmat
+    end subroutine set_cmat_1
+
+    pure subroutine set_cmat_2( self, cval )
+        class(image), intent(inout) :: self
+        complex,      intent(in)    :: cval
+        self%ft = .true.
+        self%cmat = cval
+    end subroutine set_cmat_2
 
     !! get cmat value at index phys
-    pure function get_cmat_at( self, phys ) result( comp )
+    pure function get_cmat_at_1( self, phys ) result( comp )
         class(image), intent(in)  :: self
         integer,      intent(in)  ::  phys(3)
         complex :: comp
         comp = self%cmat(phys(1),phys(2),phys(3))
-    end function get_cmat_at
+    end function get_cmat_at_1
 
-    !> add comp to cmat at index phys
-    subroutine add2_cmat_at( self , phys , comp)
+    !! get cmat value at index phys
+    elemental pure function get_cmat_at_2( self, h,k,l ) result( comp )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: h,k,l
+        complex :: comp
+        comp = self%cmat(h,k,l)
+    end function get_cmat_at_2
+
+    !! set comp to cmat at index phys
+    subroutine set_cmat_at_1( self , phys , comp)
         class(image), intent(in) :: self
         integer, intent(in) :: phys(3)
         complex, intent(in) :: comp
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
-    end subroutine add2_cmat_at
+        self%cmat(phys(1),phys(2),phys(3)) = comp
+    end subroutine set_cmat_at_1
+
+    !> add comp to cmat at index phys
+    subroutine set_cmat_at_2( self, h, k, l, comp)
+        class(image), intent(in) :: self
+        integer, intent(in) :: h,k,l
+        complex, intent(in) :: comp
+        self%cmat(h,k,l) =  comp
+    end subroutine set_cmat_at_2
+
+
+
+   !> add comp to cmat at index phys
+   subroutine add_cmat_at_1( self , phys , comp)
+       class(image), intent(in) :: self
+       integer, intent(in) :: phys(3)
+       complex, intent(in) :: comp
+       self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
+   end subroutine add_cmat_at_1
+
+    !> add comp to cmat at index (h,k,l)
+    subroutine add_cmat_at_2( self, h, k, l, comp)
+        class(image), intent(in) :: self
+        integer, intent(in) :: h,k,l
+        complex, intent(in) :: comp
+        self%cmat(h,k,l) = self%cmat(h,k,l) + comp
+    end subroutine add_cmat_at_2
 
     !>  set complex matrices from images & arrays. Specialized routine for simple_classaverager
     subroutine set_cmats_from_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
@@ -1264,41 +1387,83 @@ contains
         !$omp end parallel
     end subroutine add_cmats_to_cmats
 
-    !! set comp to cmat at index phys
-    pure subroutine set_cmat_at( self, phys, comp)
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: phys(3)
-        complex,      intent(in)    :: comp
-        self%cmat(phys(1),phys(2),phys(3)) = comp
-    end subroutine set_cmat_at
-
-    !! divide comp by cmat at index phys
-    pure subroutine div_cmat_at( self, k, phys )
+    ! divide comp by cmat at index phys
+    subroutine div_cmat_at_1( self, phys, rval )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
-        real,              intent(in)    :: k
-        if( abs(k) > 1.e-6 )then
-           self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k
+        real,              intent(in)    :: rval
+        if( abs(rval) > 1.e-6 )then
+            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) / cmplx(rval,0.)
         else
-           self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
+            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
         endif
-    end subroutine div_cmat_at
+    end subroutine div_cmat_at_1
+
+    !> div comp to cmat at index h,k,l
+    subroutine div_cmat_at_2( self,h,k,l, rval)
+        class(image), intent(in) :: self
+        integer, intent(in) :: h,k,l
+        real, intent(in) :: rval
+        if( abs(rval) > 1.e-6 )then
+            self%cmat(h,k,l) = self%cmat(h,k,l) / cmplx(rval,0.)
+        else
+            self%cmat(h,k,l) =cmplx(0.,0.)
+        end if
+    end subroutine div_cmat_at_2
+    ! divide cmat at index phys by cval
+    subroutine div_cmat_at_3( self, phys, cval )
+            class(image),      intent(inout) :: self
+        integer,           intent(in)    :: phys(3)
+        complex,           intent(in)    :: cval
+        if( abs(cval) > 1.e-6 )then
+            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) / cval
+        else
+            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
+        endif
+    end subroutine div_cmat_at_3
+
+    !> div comp to cmat at index h,k,l
+    subroutine div_cmat_at_4( self,h,k,l, cval)
+        class(image), intent(in) :: self
+        integer, intent(in)      :: h,k,l
+        complex, intent(in)      :: cval
+        if( abs(cval) > 1.e-6 )then
+            self%cmat(h,k,l) = self%cmat(h,k,l) / cval
+        else
+            self%cmat(h,k,l) =cmplx(0.,0.)
+        end if
+    end subroutine div_cmat_at_4
 
     !! multiply cmat with real k at index phys
-    pure subroutine mul_cmat_at_1( self, k, phys )
+    pure subroutine mul_cmat_at_1( self, phys, rval)
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
-        real,              intent(in)    :: k
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * k
+        real,              intent(in)    :: rval
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * rval
     end subroutine mul_cmat_at_1
 
     !! multiply cmat with complex k at index phys
-    pure subroutine mul_cmat_at_2( self, k, phys )
+    pure subroutine mul_cmat_at_2( self, phys, cval )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
-        complex,           intent(in)    :: k
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * k
+        complex,           intent(in)    :: cval
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cval
     end subroutine mul_cmat_at_2
+    !! multiply cmat at index h,k,l by real
+    subroutine mul_cmat_at_3( self, h,k,l,rval )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: h,k,l
+        real,              intent(in)    :: rval
+        self%cmat(h,k,l) = self%cmat(h,k,l) * cmplx(rval,0.)
+    end subroutine mul_cmat_at_3
+
+    !! multiply cmat at index h,k,l by complex
+    subroutine mul_cmat_at_4( self, h,k,l,cval )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: h,k,l
+        complex,           intent(in)    :: cval
+        self%cmat(h,k,l) = self%cmat(h,k,l) * cval
+    end subroutine mul_cmat_at_4
 
     !> print_cmat
     !!
@@ -1365,6 +1530,34 @@ contains
             stop 'nonconforming dims; simple_image :: set_rmat'
         endif
     end subroutine set_rmat
+    !> add comp to cmat at index phys
+    subroutine set_rmat_at_ind( self, h, k, l, rin)
+        class(image), intent(in) :: self
+        integer, intent(in) :: h,k,l
+        real, intent(in) :: rin
+        self%rmat(h,k,l) =  rin
+    end subroutine set_rmat_at_ind
+
+    !>  \brief  set (replace) image data with new 3D data
+    !! \param cmat new 3D complex data
+    !!
+    subroutine set_cmat( self, cmat )
+        class(image), intent(inout) :: self
+        complex,      intent(in)    :: cmat(:,:,:)
+        integer :: cdim(3)
+        cdim(1) = size(cmat,1)
+        cdim(2) = size(cmat,2)
+        cdim(3) = size(cmat,3)
+        if( all(self%array_shape .eq. cdim) )then
+            self%ft   = .true.
+            self%cmat = cmplx(0.,0.)
+            self%cmat(:cdim(1),:cdim(2),:cdim(3)) = cmat
+        else
+            write(*,*) 'dim(cmat): ', cdim
+            write(*,*) 'dim(self%cmat): ', self%array_shape
+            call simple_stop('nonconforming dims; simple_image :: set_cmat')
+        endif
+    end subroutine set_cmat
 
     !> \brief  set_ldim replace image dimensions new 3D size
     !! \param ldim new 3D dimensions
@@ -1549,7 +1742,7 @@ contains
         else
             pack = .true.
             allocate( pcavec(npix), stat=alloc_stat )
-            allocchk('serialize; simple_image')
+            if(alloc_stat/=0)call allocchk('serialize; simple_image')
             pcavec = 0.
         endif
         npix = 0
@@ -1650,7 +1843,7 @@ contains
                 else
                     pack = .true.
                     allocate( pcavec(npix), stat=alloc_stat )
-                    allocchk('winserialize; simple_image')
+                    if(alloc_stat/=0)call allocchk('winserialize; simple_image')
                     pcavec = 0.
                 endif
             end subroutine set_action
@@ -1744,18 +1937,32 @@ contains
     !>  \brief vis is for plotting an image
     !! \param sect
     !!
-    subroutine vis( self, sect )
+    subroutine vis( self, sect , geomorsphr)
         class(image),      intent(in) :: self
         integer, optional, intent(in) :: sect
+        logical, optional, intent(in) :: geomorsphr !< geometrical or spherical complex format
         complex, allocatable :: fplane(:,:)
         integer              :: sect_here
+        logical              :: geomorsphr_here
+
         sect_here = 1
         if( present(sect) ) sect_here = sect
+        geomorsphr_here=.true.
+        if (present(geomorsphr))geomorsphr_here=geomorsphr
+        if( simple_isenv('DISPLAY') /= 0) return
         if( self%ft )then
             if( self%ldim(3) == 1 ) sect_here = 0
+            !$ allocate(fplane(self%ldim(1)+1,self%ldim(2)+1), stat=alloc_stat)
+            !$ if(alloc_stat.ne.0)call allocchk("In simple_image::vis PGI prealloc fplane",alloc_stat)
             fplane = self%expand_ft()
-            call gnufor_image(real(fplane), palette='gray')
-            call gnufor_image(aimag(fplane), palette='gray')
+            if(geomorsphr)then
+                call gnufor_image(real(fplane), palette='gray')
+                call gnufor_image(aimag(fplane), palette='gray')
+            else
+                call gnufor_image(cabs(fplane), palette='gray')
+                call gnufor_image(atan2(real(fplane),aimag(fplane)), palette='gray')
+            endif
+
             deallocate(fplane)
         else
             if( self%ldim(3) == 1 ) sect_here = 1
@@ -2347,12 +2554,20 @@ contains
     end function multiplication
 
     ! elementwise multiplication in real-space
-    subroutine mul_rmat_at( self, logi, rc )
+    subroutine mul_rmat_at_1( self, logi, rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
-        real,         intent(in)    :: rc
-        self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rc
-    end subroutine mul_rmat_at
+        real,         intent(in)    :: rval
+        self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rval
+    end subroutine mul_rmat_at_1
+    ! elementwise multiplication in real-space
+    elemental pure subroutine mul_rmat_at_2( self,i, j, k, rval )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: i,j,k
+        real,         intent(in)    :: rval
+        self%rmat(i,j,k) = self%rmat(i,j,k)*rval
+    end subroutine mul_rmat_at_2
+
 
     !>  \brief mul_1 is for component-wise multiplication of an image with a real constant
     !! \param logi
@@ -2478,14 +2693,24 @@ contains
     end function division
 
     ! component-wise division of an image with a real number
-    subroutine div_rmat_at( self, logi, k )
+    subroutine div_rmat_at_1( self, logi, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: k
         if( abs(k) > 1e-6 )then
             self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))/k
         endif
-    end subroutine div_rmat_at
+    end subroutine div_rmat_at_1
+
+    ! component-wise division of an image with a real number
+    subroutine div_rmat_at_2( self, i, j, k, rval )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: i,j,k
+        real,         intent(in)    :: rval
+        if( abs(rval) > 1e-6 )then
+            self%rmat(i,j,k) = self%rmat(i,j,k)/rval
+        endif
+    end subroutine div_rmat_at_2
 
     !>  \brief div_1 is for dividing image with real constant, not overloaded
     !! \param c divisor
@@ -2642,9 +2867,9 @@ contains
         if( self%ft )then
             self%cmat = cmplx(real(self%cmat),-aimag(self%cmat))
         else
-            call self%fwd_ft
+            call self%fft()
             self%cmat = cmplx(real(self%cmat),-aimag(self%cmat))
-            call self%bwd_ft
+            call self%ifft()
         endif
     end subroutine signswap_aimag
 
@@ -2654,9 +2879,9 @@ contains
         if( self%ft )then
             self%cmat = cmplx(-real(self%cmat),aimag(self%cmat))
         else
-            call self%fwd_ft
+            call self%fft()
             self%cmat = cmplx(-real(self%cmat),aimag(self%cmat))
-            call self%bwd_ft
+            call self%ifft()
         endif
     end subroutine signswap_real
 
@@ -2894,6 +3119,34 @@ contains
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end function masscen
 
+    !> masscen as a subroutine
+    subroutine masscens( self, xyz )
+        class(image), intent(inout) :: self
+        real        , intent(out)   :: xyz(3)
+        real    ::  spix, ci, cj, ck
+        integer :: i, j, k
+        if( self%is_ft() ) call simple_stop('masscen not implemented for FTs; masscen; simple_image')
+        spix = 0.
+        xyz  = 0.
+        ci   = -real(self%ldim(1))/2.
+        do i=1,self%ldim(1)
+            cj = -real(self%ldim(2))/2.
+            do j=1,self%ldim(2)
+                ck = -real(self%ldim(3))/2.
+                do k=1,self%ldim(3)
+                    xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
+                    spix = spix + self%rmat(i,j,k)
+                    ck   = ck + 1.
+                end do
+                cj = cj + 1.
+            end do
+            ci = ci + 1.
+        end do
+        xyz = xyz / spix
+        if( self%ldim(3) == 1 ) xyz(3) = 0.
+    end subroutine masscens
+
+
     !>  \brief center is for centering an image based on center of mass
     !! \param lp low-pass cut-off freq
     !! \param msk mask
@@ -2907,7 +3160,7 @@ contains
         real        :: xyz(3), rmsk
         call tmp%copy(self)
         call tmp%bp(0., lp)
-        call tmp%bwd_ft
+        call tmp%ifft()
         if( present(msk) )then
             rmsk = msk
         else
@@ -2933,9 +3186,9 @@ contains
         ! copy rmat
         thread_safe_tmp_imgs(ithr)%rmat = self%rmat
         thread_safe_tmp_imgs(ithr)%ft   = .false.
-        call thread_safe_tmp_imgs(ithr)%fwd_ft
+        call thread_safe_tmp_imgs(ithr)%fft()
         call thread_safe_tmp_imgs(ithr)%bp(0., lp)
-        call thread_safe_tmp_imgs(ithr)%bwd_ft
+        call thread_safe_tmp_imgs(ithr)%ifft()
         call thread_safe_tmp_imgs(ithr)%mask(msk, 'soft')
         call thread_safe_tmp_imgs(ithr)%bin_kmeans
         xyz = thread_safe_tmp_imgs(ithr)%masscen()
@@ -2956,7 +3209,7 @@ contains
         logical, allocatable        :: add_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; grow_bin; simple image'
         allocate( add_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
-        allocchk('grow_bin; simple_image')
+        if(alloc_stat/=0)call allocchk('grow_bin; simple_image')
         ! Figure out which pixels to add
         add_pixels = .false.
         if( self%ldim(3) == 1 )then
@@ -3005,7 +3258,7 @@ contains
         logical, allocatable        :: sub_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; shrink_bin; simple image'
         allocate( sub_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
-        allocchk('shrink_bin; simple_image')
+        if(alloc_stat/=0)call allocchk('shrink_bin; simple_image')
         ! Figure out which pixels to remove
         sub_pixels = .false.
         if( self%ldim(3) == 1 )then
@@ -3074,13 +3327,13 @@ contains
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
         allocate( template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)), stat=alloc_stat )
-        allocchk('grow_bins; simple_image 2')
+        if(alloc_stat/=0)call allocchk('grow_bins; simple_image 2')
         pdsz(:,1) = 1 - nlayers
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( add_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
         &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
-        allocchk('grow_bins; simple_image 1')
+        if(alloc_stat/=0)call allocchk('grow_bins; simple_image 1')
         ! template matrix
         template = .true.
         do i = tsz(1,1), tsz(1,2)
@@ -3153,13 +3406,13 @@ contains
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
         allocate( template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)), stat=alloc_stat )
-        allocchk('shrink_bins; simple_image 2')
+        if(alloc_stat/=0)call allocchk('shrink_bins; simple_image 2')
         pdsz(:,1) = 1 - nlayers
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( sub_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
         &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
-        allocchk('shrink_bins; simple_image 1')
+        if(alloc_stat/=0)call allocchk('shrink_bins; simple_image 1')
         ! template matrix
         template = .true.
         do i = tsz(1,1), tsz(1,2)
@@ -3422,10 +3675,10 @@ contains
     subroutine acf( self )
         class(image), intent(inout) :: self
         if( .not. self%ft )then
-            call self%fwd_ft
+            call self%fft()
         endif
         self%cmat = self%cmat*conjg(self%cmat)
-        call self%bwd_ft
+        call self%ifft()
     end subroutine acf
 
     !>  \brief ccf calculates the cross-correlation function between two images
@@ -3437,14 +3690,14 @@ contains
         class(image), intent(inout) :: self1, self2
         type(image) :: cc
         if( .not. self1%ft )then
-            call self1%fwd_ft
+            call self1%fft()
         endif
         if( .not. self2%ft )then
-            call self2%fwd_ft
+            call self2%fft()
         endif
         cc      = self1
         cc%cmat = cc%cmat*conjg(self2%cmat)
-        call cc%bwd_ft
+        call cc%ifft()
     end function ccf
 
     !>  \brief guinier_bfac  generates the bfactor from the Guinier plot of the unfiltered volume
@@ -3478,7 +3731,7 @@ contains
         spec = self%spectrum('absreal')
         lfny = self%get_lfny(1)
         allocate( plot(lfny,2), stat=alloc_stat )
-        allocchk("In: guinier; simple_image")
+        if(alloc_stat/=0)call allocchk("In: guinier; simple_image")
         do k=1,lfny
             plot(k,1) = 1./(self%get_lp(k)**2.)
             plot(k,2) = log(spec(k))
@@ -3506,13 +3759,13 @@ contains
         didft = .false.
         if( which .ne. 'count' )then
             if( .not. self%ft )then
-                call self%fwd_ft
+                call self%fft()
                 didft = .true.
             endif
         endif
         lfny = self%get_lfny(1)
         allocate( spec(lfny), counts(lfny), stat=alloc_stat )
-        allocchk('spectrum; simple_image')
+        if(alloc_stat/=0)call allocchk('spectrum; simple_image')
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3634,7 +3887,7 @@ contains
                 spec = spec/counts
             end where
         endif
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end function spectrum
 
     !> \brief shellnorm for normalising each shell to uniform (=1) power
@@ -3648,13 +3901,13 @@ contains
         ! subtract average in real space
         didbwdft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didbwdft = .true.
         endif
         avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-avg
-        call self%fwd_ft
+        call self%fft()
         lfny  = self%get_lfny(1)
         lims  = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
@@ -3688,7 +3941,7 @@ contains
             ! return in Fourier space
         else
             ! return in real space
-            call self%bwd_ft
+            call self%ifft()
         endif
     end subroutine shellnorm
 
@@ -3879,7 +4132,7 @@ contains
         logical                     :: didft
         didft = .false.
         if( .not. self%ft )then
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         lims = self%fit%loop_lims(2)
@@ -3896,7 +4149,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine apply_bfac
 
     !> \brief bp  is for band-pass filtering an image
@@ -3915,7 +4168,7 @@ contains
         if( present(width) ) wwidth = width
         didft = .false.
         if( .not. self%ft )then
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         dohp = abs(hplim) > TINY
@@ -3949,7 +4202,7 @@ contains
                 end do
             end do
         end do
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine bp
 
     !>  \brief gen_lpfilt is for generating low-pass filter weights
@@ -3991,7 +4244,7 @@ contains
         nyq = size(filter)
         didft = .false.
         if( .not. self%ft )then
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         wzero = maxval(filter)
@@ -4017,7 +4270,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine apply_filter_1
 
     !> \brief apply_filter_2  is for application of an arbitrary filter function
@@ -4097,7 +4350,7 @@ contains
         real, parameter             :: errfrac=0.5
         didft = .false.
         if( .not. self%ft )then
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         lp_freq = self%fit%get_find(1,lp) ! assuming square 4 now
@@ -4121,7 +4374,7 @@ contains
                 end do
             end do
         end do
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine phase_rand
 
     !> \brief hannw a constructor that constructs an antialiasing Hanning window
@@ -4142,7 +4395,7 @@ contains
         maxl = maxval(lims)
         kmax = maxl+int(oshoot*real(maxl))
         allocate( w(kmax), stat=alloc_stat )
-        allocchk("In: hannw; simple_image")
+        if(alloc_stat/=0)call allocchk("In: hannw; simple_image")
         wstr = 'hann'
         wfuns = winfuns(wstr, real(kmax), 2.)
         do k=1,kmax
@@ -4282,7 +4535,7 @@ contains
         if( self%ft )stop 'real space only; simple_image%sobel'
         if( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
         allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
-        allocchk("In: sobel; simple_image")
+        if(alloc_stat/=0)call allocchk("In: sobel; simple_image")
         kernel      = 0.
         kernel(1,:) = -1
         kernel(1,2) = -2.
@@ -4369,7 +4622,7 @@ contains
         ! FT
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         ! 2d/3d
@@ -4393,7 +4646,7 @@ contains
             stop 'unrecognized parameter: which; stats_1; simple_image'
         endif
         allocate( pixels(product(self%ldim)), stat=alloc_stat )
-        allocchk('backgr; simple_image')
+        if(alloc_stat/=0)call allocchk('backgr; simple_image')
         pixels = 0.
         npix = 0
         if( self%ldim(3) > 1 )then
@@ -4455,7 +4708,7 @@ contains
         else
             if( err ) write(*,'(a)') 'WARNING: variance zero; stats_1; simple_image'
         endif
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end subroutine stats_1
 
     !> \brief stats  is for providing within mask statistics
@@ -4539,7 +4792,7 @@ contains
         ovar = online_var( )
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         ci = -real(self%ldim(1))/2.
@@ -4566,7 +4819,7 @@ contains
         mv = ovar%get_mean_var()
         sdev = 0.
         if( mv(2) > 0. ) sdev = sqrt(mv(2))
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end function noisesdev
 
     !>  \brief  is for calculating the mean of an image
@@ -4579,11 +4832,11 @@ contains
         logical :: didft
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end function mean
 
     !>  \brief  is for checking the numerical soundness of an image
@@ -4729,12 +4982,12 @@ contains
         if( self1.eqdims.self2 )then
             didft1 = .false.
             if( .not. self1%ft )then
-                call self1%fwd_ft
+                call self1%fft()
                 didft1 = .true.
             endif
             didft2 = .false.
             if( .not. self2%ft )then
-                call self2%fwd_ft
+                call self2%fft()
                 didft2 = .true.
             endif
             r = 0.
@@ -4773,8 +5026,8 @@ contains
             else
                 r = r / sqrt(sumasq * sumbsq)
             endif
-            if( didft1 ) call self1%bwd_ft
-            if( didft2 ) call self2%bwd_ft
+            if( didft1 ) call self1%ifft()
+            if( didft2 ) call self2%ifft()
         else
             write(*,*) 'self1%ldim:', self1%ldim
             write(*,*) 'self2%ldim:', self2%ldim
@@ -4980,7 +5233,6 @@ contains
     !! \param corrs
     !!
     subroutine fsc( self1, self2, corrs )
-        use simple_math, only: csq
         class(image), intent(inout) :: self1, self2
         real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
         real    :: sumasq(fdim(self1%ldim(1))-1), sumbsq(fdim(self1%ldim(1))-1)
@@ -5027,13 +5279,13 @@ contains
         if( .not. square_dims(self) ) stop 'square dimensions only! fsc; simple_image'
         didft = .false.
         if( .not. self%is_ft() )then
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         n = self%get_filtsz()
         if( allocated(voxs) )deallocate(voxs)
         allocate( voxs(n), stat=alloc_stat )
-        allocchk('In: get_nvoxshell, module: simple_image')
+        if(alloc_stat/=0)call allocchk('In: get_nvoxshell, module: simple_image')
         voxs = 0.
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
@@ -5049,7 +5301,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine get_nvoxshell
 
     !>  \brief get array of resolution steps
@@ -5062,7 +5314,7 @@ contains
         integer                  :: n, k
         n = self%get_filtsz()
         allocate( res(n), stat=alloc_stat )
-        allocchk('In: get_res, module: simple_image')
+        if(alloc_stat/=0)call allocchk('In: get_res, module: simple_image')
         do k=1,n
             res(k) = self%fit%get_lp(1,k)
         end do
@@ -5443,7 +5695,7 @@ contains
         self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
             &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
         !$omp end parallel workshare
-        call self_out%fwd_ft
+        call self_out%fft()
     end subroutine subtr_backgr_pad_divwinstr_fft
 
     subroutine subtr_backgr_pad_divwinstr_fft_serial( self, mskimg, instr_fun, self_out )
@@ -5467,7 +5719,7 @@ contains
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
         self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
             &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
-        call self_out%fwd_ft
+        call self_out%fft()
     end subroutine subtr_backgr_pad_divwinstr_fft_serial
 
     subroutine subtr_backgr_pad_divwinstr_serial( self, mskimg, instr_fun, self_out )
@@ -5541,7 +5793,7 @@ contains
                       smooth_avg_curr_edge_start(self%ldim(dim2),self%ldim(dim3)),&
                       smooth_avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
                       stat=alloc_stat)
-            allocchk("In simple_image::taper_edges avg_curr etc.")
+            if(alloc_stat/=0)call allocchk("In simple_image::taper_edges avg_curr etc.")
             avg_curr_edge_start        = 0.0e0
             avg_curr_edge_stop         = 0.0e0
             avg_curr_edge_avg          = 0.0e0
@@ -5803,6 +6055,37 @@ contains
         self%ft = .false.
     end subroutine gauimg
 
+    !> \brief gauimg2  just a Gaussian fun for testing purposes
+    !! \param wsz window size
+    subroutine gauimg2( self, wsz, offx,offy)
+        class(image), intent(inout) :: self
+        integer, intent(in) :: wsz, offx, offy
+        real    :: x, y, z, xw, yw, zw
+        integer :: i, j, k
+        x = -real(self%ldim(1))/2. -real(offx)
+        do i=1,self%ldim(1)
+            xw = gauwfun(x, 0.5*real(wsz))
+            y = -real(self%ldim(2))/2. - real(offy)
+            do j=1,self%ldim(2)
+                yw = gauwfun(y, 0.5*real(wsz))
+                z = -real(self%ldim(3))/2.
+                do k=1,self%ldim(3)
+                    if( self%ldim(3) > 1 )then
+                        zw = gauwfun(z, 0.5*real(wsz))
+                    else
+                        zw = 1.
+                    endif
+                    self%rmat(i,j,k) =  self%rmat(i,j,k) + xw*yw*zw
+                    z = z+1.
+                end do
+                y = y+1.
+            end do
+            x = x+1.
+        end do
+        self%ft = .false.
+    end subroutine gauimg2
+
+
     subroutine gauimg2D( self, xsigma, ysigma )
         class(image), intent(inout) :: self
         real,         intent(in)    :: xsigma, ysigma
@@ -5820,20 +6103,20 @@ contains
         self%ft = .false.
     end subroutine gauimg2D
 
-    !> \brief fwd_ft  forward Fourier transform
+    !> \brief fwd_ft  forward Fourier transform FFTW3
     !!
     subroutine fwd_ft( self )
         class(image), intent(inout) :: self
         if( self%ft ) return
         if( shift_to_phase_origin ) call self%shift_phorig
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
-        ! now scale the values so that a bwd_ft of the output yields the
+        ! now scale the values so that a ifft() of the output yields the
         ! original image back, rather than a scaled version
         self%cmat = self%cmat/real(product(self%ldim))
         self%ft = .true.
     end subroutine fwd_ft
 
-    !> \brief bwd_ft  backward Fourier transform
+    !> \brief bwd_ft  backward Fourier transform FFTW3
     !!
     subroutine bwd_ft( self )
         class(image), intent(inout) :: self
@@ -5859,7 +6142,7 @@ contains
         endif
         didft = .false.
         if( .not. self%ft )then
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         call img%zero_and_unflag_ft
@@ -5893,7 +6176,7 @@ contains
                 end do
             end do
         end do
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine ft2img
 
     subroutine img2ft( self, img )
@@ -5929,6 +6212,250 @@ contains
             end do
         end do
     end subroutine img2ft
+
+    subroutine fft_pgi_cuda( self )
+#ifndef PGI
+        class(image), intent(inout)      :: self
+        print *,"simple_image::fft_pgi_cuda cannot be called from this compiler"
+#else
+        !! IN-PLACE 3D FFT using CUDA's cufft library
+        use simple_cufft
+#ifdef _OPENACC
+        use openacc
+#endif
+        use cudafor
+        class(image), intent(inout)      :: self
+        complex, allocatable, device     :: coutput_d(:,:,:)
+        complex, allocatable             :: coutput(:,:,:)
+        real,    allocatable             :: rinput(:,:,:)
+        integer      :: plan, planType
+        integer      :: i,j,k,h,l,n,istat
+        integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
+        real         :: nscale
+        integer(timer_int_kind) :: t1
+        if( self%ft ) return
+        ldim = self%ldim
+        verbose=.true.
+        if(debug)t1=tic()
+        ! synchronise
+!        istat=cudaDeviceSynchronize()
+!        if(istat.ne.0)then
+!            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
+!        endif
+
+        ! Allocate arrays on the host
+        allocate(coutput(ldim(1),ldim(2),ldim(3)),stat=istat)
+        if(alloc_stat.ne.0)call allocchk("In simple_image::fft coutput",istat)
+        !$ allocate( rinput(ldim(1), ldim(2), ldim(3)),source=0.,stat=alloc_stat)
+        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pgi_fft rinput",alloc_stat)
+        rinput = self%get_rmat()
+
+        ! Allocate arrays on the device
+        allocate(coutput_d(ldim(1),ldim(2),ldim(3)))
+        ! Set planType to either single or double precision
+        planType = CUFFT_C2C    !! (fp_kind == singlePrecision)
+
+        ! Copy arrays to device
+        coutput=cmplx(rinput,0.)
+        coutput_d = coutput
+
+        ! Initialize the plan for real to complex transform
+        call cufftPlan3d(plan,ldim(1),ldim(2),ldim(3),planType)
+        DebugPrint "In Image::fft  PGI ", toc()
+
+        ! Execute  Forward transform in place
+        call cufftExec(plan,planType,coutput_d,coutput_d,CUFFT_FORWARD )
+
+        ! Scale
+        !$acc kernels
+        coutput_d = coutput_d / nscale
+        !$acc end kernels
+
+        ! Copy results back to host
+        coutput = coutput_d
+
+
+        self%ft =.true.
+        self%cmat(:cdim(1),:cdim(2),:cdim(3))=coutput(:cdim(1),:cdim(2),:cdim(3))
+
+
+        ! Release memory on the host and on the device
+        deallocate(coutput_d,coutput,rinput,stat=istat)
+        if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",istat)
+        ! Destroy the plans
+        call cufftDestroy(plan)
+        DebugPrint "In simple_cufft::fft_pgi  PGI destroyed ", toc()
+
+        ! DebugPrint "In simple_cufft::fft_pgi  deallocating host arrays", toc()
+        ! ! Remove host storage
+        ! if(allocated(coutput))then
+        !     deallocate(coutput,stat=alloc_stat)
+        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",alloc_stat)
+        ! end if
+        ! if(allocated(rinput))then
+        !     deallocate(rinput,stat=alloc_stat)
+        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host rinput",alloc_stat)
+        ! end if
+        ! DebugPrint "In simple_cufft::fft_pgi deallocating done "
+        ! istat=cudaThreadSynchronize()
+        !   VerbosePrint "In simple_cufft::fft_pgi  PGI scaling ", size(coutput), LBOUND(coutput), UBOUND(coutput)
+
+        !istat=istat+cudaDeviceSynchronize()
+        !if(istat.ne.0)then
+        !    call simple_cuda_stop("In simple_image::fft post fft sync ",__FILENAME__,__LINE__)
+        !endif
+        DebugPrint "In simple_cufft::fft_pgi finished ", toc(t1)
+#endif
+    end subroutine fft_pgi_cuda
+
+
+    subroutine ifft_pgi_cuda( self )
+#ifndef PGI
+        class(image), intent(inout)      :: self
+        print *,"ERROR>>> simple_image::ifft_pgi_cuda cannot be called with compiler ", FC_COMPILER
+#else
+        !! IN-PLACE 3D FFT using CUDA's cufft
+#ifdef _OPENACC
+        use openacc
+#endif
+        use simple_cufft
+        use gnufor2
+        !        complex,intent(in) ::cin(:,:,:)
+        !        integer, intent(in) :: ldim(3)
+        class(image), intent(inout)       :: self
+        complex, device, allocatable :: inplace_d(:,:,:)
+        complex, allocatable         :: cinout(:,:,:)
+        ! real, allocatable         :: routput(:,:,:)
+
+        integer      :: i,j,k,f,g,h, xdim(2),ydim(2),zdim(2),ii,jj,kk
+        integer      :: nerrors,  ldim(3), cdim(3),lims(3,2),phys(3), cmat_shape(3)
+        real         :: nscale, rswap
+        complex      :: comp, cswap
+        integer      :: planType, plan,istat
+
+
+        ldim = self%ldim
+
+        cmat_shape = self%array_shape
+        cmat_shape(1) = size(self%cmat,1)
+        self%ft = .false.
+
+        ! allocate arrays on the host
+        !  if (allocated(routput))deallocate(routput)
+        if (allocated(cinout))deallocate(cinout)
+        !allocate(cin(cmat_shape(1),cmat_shape(2),cmat_shape(3)))
+        !cin = self%get_cmatfull()
+        !  allocate(routput(ldim(2),ldim(1),1))
+        allocate(cinout(ldim(1),ldim(2),ldim(3)),stat=istat)
+        if(alloc_stat.ne.0)call allocchk("In simple_image::ifft coutput",istat)
+        ! allocate arrays on the device
+        allocate(inplace_d(ldim(1),ldim(2),ldim(3)))
+
+        ! if(is_even(n))then
+        ! lowerbounds(1) = lbound(cin,1);lowerbounds(2) = lbound(cin,2);
+        ! upperbounds(1) = ubound(cin,1); upperbounds(2) = ubound(cin,2)
+        !     xbounds = (\ lbound(cin,1), ubound(cin,1) \) ! n/2
+        !     ybounds = (\ lbound(cin,2), ubound(cin,2) \) !  m/2
+        ! else
+        xdim = [ -(ldim(1)-1)/2 , ((ldim(1)-1)/2) - 1  ]
+        ydim = [ -(ldim(2)/2)   , (ldim(2)/2) - 1      ]
+        zdim = [ -(ldim(3)/2)   , (ldim(3)/2) - 1      ]
+        ! endif
+
+        DebugPrint "simple_image::ifft_pgi_cuda CIN    ", xdim, ydim, zdim, cmat_shape
+        DebugPrint "simple_image::ifft_pgi_cuda CINPUT ", shape(self%cmat)
+        cinout = cmplx(0.,0.)
+        lims = self%fit%loop_lims(2)
+        DebugPrint "simple_image::ifft_pgi_cuda CMAT LIMS ", lims
+        phys=1
+
+        !$omp parallel do collapse(2) default(shared) private(i,j,k,f,g,h,phys,comp)
+        do j=1,ldim(2)
+            do k=1,ldim(3)
+                g=ydim(1)+(j-1)
+                f=zdim(1)+(k-1)
+                phys=1
+                i=1
+                do h= xdim(1),-1
+                    phys(1) = -h + 1
+                    phys(2) = -g + 1 + MERGE(ldim(2),0, -g < 0)
+                    phys(3) = -f + 1 + MERGE(ldim(3),0, -f < 0)
+#ifdef _DEBUG
+                    if (phys(1) < 1 .or. phys(1) > cmat_shape(1) ) print *," CIN ind 1 err ", i, h, phys(1)
+                    if (phys(2)< 1 .or. phys(2) > cmat_shape(2)) print *," CIN ind 2 err ", j, g, phys(2)
+                    if (phys(3)< 1 .or. phys(3) > cmat_shape(3)) print *," CIN ind 3 err ", k,f, phys(3)
+
+                    if (i < 1 .or. i > ldim(1)) print *," CINOUT ind 1 err ", i, h
+                    if (j < 1 .or. j > ldim(2)) print *," CINOUT ind 2 err ", j, g
+                    if (k < 1 .or. k > ldim(3)) print *," CINOUT ind 3 err ", k, f
+#endif
+
+                    cinout(i,j,k) = conjg(self%cmat(phys(1),phys(2),phys(3)))
+                    i=i+1
+                end do
+                do h=0,xdim(2)
+                    phys(1) = h + 1
+                    phys(2) = g + 1 + MERGE(ldim(2),0, g < 0)
+                    phys(3) = f + 1 + MERGE(ldim(3),0, f < 0)
+#ifdef _DEBUG
+                    if (phys(1) < 1 .or. phys(1) > cmat_shape(1) ) print *," CIN ind 1 err ", i, h, phys(1)
+                    if (phys(2)< 1 .or. phys(2) > cmat_shape(2)) print *," CIN ind 2 err ", j, g, phys(2)
+                    if (phys(3)< 1 .or. phys(3) > cmat_shape(3)) print *," CIN ind 3 err ", k,f, phys(3)
+                    if (i < 1 .or. i > ldim(1)) print *," CINOUT ind 1 err ", i, h
+                    if (j < 1 .or. j > ldim(2)) print *," CINOUT ind 2 err ", j, g
+                    if (k < 1 .or. k > ldim(3)) print *," CINOUT ind 3 err ", k, f
+#endif
+                    cinout(i,j,k) = self%cmat(phys(1),phys(2),phys(3))
+                    i=i+1
+                enddo
+            end do
+        end do
+        !$omp end parallel do
+
+        ! copy input to device
+        inplace_d = cinout
+        ! Initialize the plan for complex to complex transform
+        call cufftPlan3D(plan,ldim(1),ldim(2),ldim(3),CUFFT_C2C)
+        ! Execute  Backward transform in place
+        call cufftExec(plan,CUFFT_C2C,inplace_d,inplace_d,CUFFT_INVERSE)
+        ! Copy results back to host
+        cinout = inplace_d
+
+        ! Save to image obj
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,ii,jj,kk)
+        do k=1,ldim(3)
+            do j=1, ldim(2)
+                do i=1, ldim(1)
+                    jj = mod(j+(ldim(2)+1)/2,ldim(2))
+                    if(jj==0) jj = ldim(2)
+                    kk = mod(k+(ldim(3)+1)/2,ldim(3))
+                    if(kk==0) kk = ldim(3)
+                    ii = mod(i+(ldim(1)+1)/2,ldim(1))
+                    if(ii==0) ii = ldim(1)
+                    self%rmat(ii,jj,kk) = cabs(cinout(i,j,k))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        ! Release memory on the host and on the device
+        deallocate( cinout, inplace_d ,stat=alloc_stat)
+
+        ! Destroy the plans
+        call cufftDestroy(plan)
+        DebugPrint "In simple_image::ifft_pgi done "
+#endif
+    end subroutine ifft_pgi_cuda
+
+
+
+
+
+
+
+
+
+
 
     !> \brief dampens the central cross of a powerspectrum by median filtering
     subroutine dampen_central_cross( self )
@@ -6094,7 +6621,7 @@ contains
     !     if( self%ldim(3) == 1 ) shvec_here(3) = 0.0
     !     didft = .false.
     !     if( .not. self%ft )then
-    !         call self%fwd_ft
+    !         call self%fft()
     !         didft = .true.
     !     endif
     !     if( lp_dyn_present )then
@@ -6131,8 +6658,8 @@ contains
     !         !$omp end parallel do
     !     endif
     !     if( didft )then
-    !         call self%bwd_ft
-    !         if( imgout_present ) call imgout%bwd_ft
+    !         call self%ifft()
+    !         if( imgout_present ) call imgout%ifft()
     !     endif
     ! end subroutine shift
 
@@ -6151,7 +6678,7 @@ contains
         if( self%ldim(3) == 1 ) shvec_here(3) = 0.0
         didft = .false.
         if( .not. self%ft )then
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         lims = self%fit%loop_lims(2)
@@ -6167,7 +6694,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine shift
 
     subroutine shift2Dserial( self, shvec  )
@@ -6212,7 +6739,7 @@ contains
         ! FT
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         ! minlen
@@ -6317,7 +6844,7 @@ contains
                 enddo
             endif
         endif
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end subroutine mask
 
     !> \brief neg  is for inverting the contrast
@@ -6328,11 +6855,11 @@ contains
         didft = .false.
         if( self%ft )then
         else
-            call self%fwd_ft
+            call self%fft()
             didft = .true.
         endif
         call self%mul(-1.)
-        if( didft ) call self%bwd_ft
+        if( didft ) call self%ifft()
     end subroutine neg
 
     !> \brief pad is a constructor that pads the input image to input ldim
@@ -6513,7 +7040,7 @@ contains
         logical :: didft
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         if( md == 'x' )then
@@ -6537,7 +7064,7 @@ contains
         else
             write(*,'(a)') 'Mode needs to be either x, y or z; mirror; simple_image'
         endif
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end subroutine mirror
 
     subroutine norm( self  )
@@ -6675,7 +7202,7 @@ contains
         logical                     :: didft
         didft = .false.
         if( self%ft )then
-            call self%bwd_ft
+            call self%ifft()
             didft = .true.
         endif
         ! find minmax
@@ -6684,7 +7211,7 @@ contains
         ! create [0,1]-normalized image
         self%rmat = (self%rmat - smin)  / (smax-smin)
         self%rmat = (exp(self%rmat)-1.) / (exp(1.)-1.)
-        if( didft ) call self%fwd_ft
+        if( didft ) call self%fft()
     end subroutine norm_bin
 
     !> \brief roavg  is for creating a rotation average of self
@@ -6741,7 +7268,7 @@ contains
         call self_here%new(self_in%ldim, self_in%smpd)
         didft = .false.
         if( self_in%ft )then
-            call self_in%bwd_ft
+            call self_in%ifft()
             didft = .true.
         endif
         mat_out = 0. ! this is necessary, because it bugs out if I try to use the 3D matrix
@@ -6806,7 +7333,7 @@ contains
         endif
         call self_here%kill()
         if( didft )then
-            call self_in%bwd_ft
+            call self_in%ifft()
         endif
     end subroutine rtsq
 
@@ -6926,7 +7453,7 @@ contains
         hwinsz   = 6
         if( allocated(outliers) ) deallocate(outliers)
         allocate( outliers(self%ldim(1),self%ldim(2)), stat=alloc_stat)
-        allocchk("In simple_image::cure_outliers ")
+        if(alloc_stat/=0)call allocchk("In simple_image::cure_outliers ")
         outliers = .false.
         call moment( self%rmat, ave, sdev, var, err )
         if( sdev<TINY )return
@@ -6937,7 +7464,7 @@ contains
             deadhot = 0
             allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &win(winsz,winsz), stat=alloc_stat)
-            allocchk('In: cure_outliers; simple_image 1')
+            if(alloc_stat/=0)call allocchk('In: cure_outliers; simple_image 1')
             rmat_pad(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
             rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
@@ -7005,7 +7532,7 @@ contains
             deadhot = 0
             allocate(padded_image(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &patch(winsz,winsz), stat=alloc_stat)
-            allocchk('In: cure_outliers; simple_image 1')
+            if(alloc_stat/=0)call allocchk('In: cure_outliers; simple_image 1')
             padded_image(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
             padded_image(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
@@ -7287,15 +7814,15 @@ contains
                 if( .not. passed ) stop 'padding/clipping test failed'
                 call img%square(10)
                 if( doplot ) call img%vis
-                call img%fwd_ft
+                call img%fft()
                 call img%pad(img_2)
-                call img_2%bwd_ft
+                call img_2%ifft()
                 if( doplot ) call img_2%vis
                 call img_2%square(20)
                 if( doplot ) call img_2%vis
-                call img_2%fwd_ft
+                call img_2%fft()
                 call img_2%clip(img)
-                call img%bwd_ft
+                call img%ifft()
                 if( doplot ) call img%vis
 
                 write(*,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'
@@ -7342,9 +7869,9 @@ contains
                 call img%new(ldim, smpd)
                 call img_2%new(ldim, smpd)
                 call img%gauimg(10)
-                call img%fwd_ft
+                call img%fft()
                 call img_2%gauimg(13)
-                call img_2%fwd_ft
+                call img_2%fft()
                 corr = img%corr(img_2)
                 corr_lp = img%corr(img_2,20.)
                 if( corr > 0.96 .and. corr < 0.98 .and. corr_lp > 0.96 .and. corr_lp < 0.98 ) passed = .true.
@@ -7475,6 +8002,218 @@ contains
              end subroutine test_image_ops
 
     end subroutine test_image
+
+    subroutine test_image_pgi_cuda( doplot )
+        logical, intent(in)  :: doplot
+        write(*,'(a)') '**info(simple_image PGI unit_test): testing square dimensions'
+        call test_image_pgi( 100, 100, 100, doplot )
+        write(*,'(a)') '**info(simple_image PGI unit_test): testing non-square dimensions'
+        ! call test_image_pgi( 120, 90, 80, doplot )
+        write(*,'(a)') 'SIMPLE_IMAGE_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+
+
+
+    contains
+
+
+
+        subroutine test_image_pgi( ld1, ld2, ld3, doplot )
+            !              use simple_fftshifter
+#ifdef PGI
+            use cudafor
+#endif
+            integer, intent(in)  :: ld1, ld2, ld3
+            logical, intent(in)  :: doplot
+            type(image)          :: img, img_2, img_3, img_4, img3d
+            type(image)          :: imgs(20)
+            complex, allocatable :: fplane_simple(:,:), fplane_frealix(:,:)
+            complex              :: c1,c2
+            integer              :: i, j, k, h, cnt, lfny, ldim(3), istat, phys(3),lims(3,2)
+            real                 :: input, msk, ave, sdev, var, med, xyz(3), pow, r1, r2
+            real                 :: imcorr, recorr, corr, corr_lp, maxv, minv
+            real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:),rsh(:,:,:)
+            real                 :: smpd=2.
+            logical              :: passed, test(6)
+
+
+            verbose=.true.
+            debug=.true.
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 1): testing basal constructors'
+
+            call img%new([ld1,ld2,1], 1.)
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 1):'
+            call img_3%new([ld1,ld2,1], 1.)
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 1):'
+            call img3d%new([ld1,ld2,1], 1.)
+            call img_4%new([ld1,ld2,1], 1.)
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 1):'
+            if( .not. img%exists() ) call simple_stop('ERROR, in constructor or in exists function, 1')
+            if( .not. img3d%exists() ) call simple_stop('ERROR, in constructor or in exists function, 2')
+
+            write(*,'(a)') '**info(simple_image_PGI unit_test, PGI CUFFT 2): testing CUFFT and FFTW3'
+            passed = .false.
+            ldim = [ld1,ld2,1]
+            call img%new(ldim, smpd)
+            call img_2%new(ldim, smpd)
+            call img_3%new(ldim, smpd)
+            call img_4%new(ldim, smpd)
+            img%cmat=cmplx(0.,0.)
+            img%rmat=1.0
+            call img%gauimg(10)
+            call gnufor_image(log10(img%rmat(:ldim(1),:ldim(2),1)), palette='gray')
+            call gnufor_image(log10(img%rmat(:,:,1)), palette='gray')
+            i=1;j=1
+            lims = img%fit%loop_lims(2)
+            print *, "Rmat ", img%ldim, img%array_shape
+            print *, "Rmat size", size(img%rmat,1),  size(img%rmat,2),  size(img%rmat,3)
+            print *, "Loop lims ", lims
+            do h = lims(1,1),lims(1,2)
+                j=1
+                do k = lims(2,1),lims(2,2)
+                    phys = img%comp_addr_phys([h,k,0])
+                    img%cmat(phys(1),phys(2),phys(3)) = cmplx(img%rmat(i,j,1), real(i*j)/100.)
+                    j=j+1
+                end do
+                i=i+1
+            end do
+            call gnufor_image(log10(real(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')                               ! Show img
+            call gnufor_image(log10(aimag(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')
+            call gnufor_image(real(img%cmat(:,:,1)), palette='gray')                               ! Show img
+            call gnufor_image(aimag(img%cmat(:,:,1)), palette='gray')
+            write(*,'(a)') '**info(simple_image PGI test): testing fftw3 '
+            read *
+            call img%fft()
+
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): PGI FFT completed '
+            call gnufor_image(log10(real(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')                               ! Show img
+            call gnufor_image(log10(aimag(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')
+            call gnufor_image(log10(cabs(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')                               ! Show img
+            call gnufor_image(log10(atan2(real(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1)),&
+                &aimag(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1)))), palette='gray')
+
+            call gnufor_image(real(img%cmat(:,:,1)), palette='gray')                               ! Show img
+            call gnufor_image(aimag(img%cmat(:,:,1)), palette='gray')                               ! Show img
+
+            call img%gauimg(10)
+            call img%add_gauran(1.)
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): Noisy image'
+            !                call img_2%gauimg(10)
+            !                call img_2%add_gauimg(15)
+            !                if(doplot)call img_2%vis                               ! Show img_2
+            img_2 = img
+            ave = (img.lonesum.img_2)
+            print *," L1 norm sum of img copy [must be zero]", ave
+
+            !  call img_2%ifftshift3r()
+            !                if(doplot)call img_2%vis()                             ! Show img_2
+            !                if(doplot)call img%vis                                 ! Show img
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): ifftshift3r prior to fft [PGI]'
+            print *,'Press enter to run PGI R=>C FFT'
+            read(*,*)
+            call img_2%fft_pgi_cuda()
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): PGI FFT completed '
+            !img_4 = img_2
+            call gnufor_image(real(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
+            call gnufor_image(aimag(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
+            print *,'Press enter to run FFTW3 FFT'
+            read(*,*)
+
+
+            print *,'Press enter to show PGI amplitude of cmat'
+            read *
+            call img_2%ft2img('amp',img_4)
+            if(doplot)call img_4%vis(geomorsphr=.false.)
+
+
+            !  call img_2%fftshift3c()
+            print *,'Press enter to show 2nd FFTSHIFT complex images'
+            read *
+
+            call gnufor_image(real(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
+            call gnufor_image(aimag(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
+
+            ! call img_2%ft2img('amp',img_4)
+            ! if(doplot)call img_4%vis(geomorsphr=.false.)
+
+
+            !    call img%ft2img('amp',img_3)
+            !   if(doplot)call img_3%vis(geomorsphr=.false.)
+            print *," L1 norm FFTW and CUFFT ", img.lonesum.img_2
+
+
+            print *," PGI ", real(img_2%cmat(:,1,1))
+            print *," FFTW ", real(img%cmat(:,1,1))
+
+            ! write(*,'(a)') '**info(simple_image PGI test): testing subtracting CUFFT and FFTW3 '
+            ! read *
+            ! call img%subtr(img_2)
+            ! call img%ft2img('amp',img_3)
+            ! if(doplot)call img_3%vis(geomorsphr=.false.)
+            ! write(*,'(a)') '**info(simple_image PGI test): testing difference '
+
+            ! call img%add(img_2)
+            ! read(*,*)
+            ! VerbosePrint "In Image::fft_pgi testing "
+            ! do i=1,ldim(1)
+            !     do j=1,ldim(2)
+            !         do k=1,ldim(3)
+            !             if (abs(cabs(img%cmat(ldim(1)-i+1,j,k)) - cabs(img_2%cmat(i,j,k))) >= TINY )then
+            !                 print *,'wrong FFT i/j/k fftw cufft', i,j,k,real(img%cmat(i,j,k)) ,&
+            !                     &aimag(img%cmat(i,j,k)) , real( img_2%cmat(i,j,k)), aimag( img_2%cmat(i,j,k))
+            !                 call simple_stop("image FFT inverse PGI test  stopped")
+            !             end if
+            !         end do
+            !     end do
+            ! end do
+            print *,'Press enter to execute FFTW inverse FFT'
+            read *
+            call img%bwd_ft()
+            print *,'Press enter to execute CUFFT inverse FFT'
+            read *
+            call img_2%ifft_pgi_cuda()
+
+            call gnufor_image(img%rmat(:,:,1), palette='gray')                               ! Show img_2
+            call gnufor_image(img_2%rmat(:,:,1), palette='gray')
+            print *," L1 norm FFTW and CUFFT ", img.lonesum.img_2
+            print *,'Press enter to compare FFTW vs FFT'
+            read *
+
+            do i=1,ldim(1)
+                VerbosePrint "In Image::ifft testing ",i
+                do j=1,ldim(2),2
+                    do k=1,ldim(3)
+                        if (abs( img%rmat(i,j,k) - img_2%rmat(i,j,k)) >= 1.e-06 )then
+                            print *,'wrong FFT i/j/k fftw /cufft', i,j,k,img%rmat(i,j,k) , img_2%rmat(i,j,k)
+                            call simple_stop("image FFT PGI test stopped")
+                        end if
+                    end do
+
+                end do
+            end do
+            VerbosePrint "In Image::ifft testing done"
+
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 7): testing fftshift'
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            passed = .false.
+            msk=50
+            call img%gauimg(10)
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 2):'
+            if( doplot ) call img%vis
+            write(*,'(a)') '**info(simple_image PGI unit_test, part 2):'
+            call img%serialize(pcavec1, msk)
+            call img%shift([-9.345,-5.786,0.])
+            if( doplot ) call img%vis
+            call img%shift([9.345,5.786,0.])
+            call img%serialize(pcavec2, msk)
+            if( doplot ) call img%vis
+            if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
+            if( .not. passed )  call simple_stop('origin shift test failed')
+
+        end subroutine test_image_pgi
+
+    end subroutine test_image_pgi_cuda
 
     !>  \brief  is a destructor
     subroutine kill( self )

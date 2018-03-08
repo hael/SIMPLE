@@ -3,7 +3,7 @@ module simple_fileio
 use simple_defs
 use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
-use simple_syslib, only: file_exists, is_open, is_file_open, is_io, alloc_errchk, &
+use simple_syslib, only: file_exists, is_open, is_file_open, is_io, allocchk, &
     &exec_cmdline, simple_stop, simple_error_check
 implicit none
 
@@ -22,7 +22,7 @@ integer, parameter :: MAX_UNIT_NUMBER = 1000
 contains
 
     !> \brief  is for checking file IO status
-    subroutine fileio_errmsg( message, iostat , die)
+    subroutine fileiochk( message, iostat , die)
         character(len=*), intent(in)              :: message  !< error message
         integer,          intent(inout), optional :: iostat   !< error status
         logical,          intent(in),    optional :: die      !< do you want to terminate or not
@@ -42,12 +42,12 @@ contains
             call simple_error_check(iostat_this)
             if(die_this)stop
         endif
-    end subroutine fileio_errmsg
+    end subroutine fileiochk
 
     !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
     !!
     !! Usage: if(.not.fopen(fnr, fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-    !!        call fileio_errmsg('In: commander_rec :: volassemble_eo', file_stat )
+    !!        call fileiochk('In: commander_rec :: eo_volassemble', file_stat )
     !!
     subroutine fopen(funit, file, status, action, iostat, access, form, recl, async, pad,&
         &decimal, round, delim, blank, convert, iomsg, position, errmsg)
@@ -77,7 +77,7 @@ contains
         & .or. present(position) .or. present(access) .or. present(decimal) .or. &
         present(round) .or. present(delim) .or. present(blank) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
-            call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen basic open "//trim(filename), iostat_this,.false.)
+            call fileiochk(trim(adjustl(errmsg_this))//" fopen basic open "//trim(filename), iostat_this,.false.)
             if(is_io(funit)) call simple_stop( "simple_fileio::fopen newunit returned "//int2str(funit) )
             return ! if ok
         end if
@@ -96,7 +96,7 @@ contains
             if (stringsAreEqual(status, 'REPLACE',.false.)) write(status_this ,'(A)') upperCase(status)
             if (stringsAreEqual(status, 'NEW',.false.)) write( status_this,'(A)')  upperCase(status)
         end if
-        ! ACTION: READ, WRITE, or READWRITE.
+        ! ACTION: READ, WRITE, or READWRITE (default).
         if (present(action))then
             if (stringsAreEqual(action, 'WRITE',.false.))  write(action_this ,'(A)') upperCase(action)
             if (stringsAreEqual(action, 'READ',.false.))  write(action_this ,'(A)') upperCase(action)
@@ -115,16 +115,16 @@ contains
                     trim(filename)," does not exist"
                 write( status_this,'(A)')  upperCase('NEW')
             end if
-
         end if
-        ! access: DIRECT (random access) or SEQUENTIAL
+        ! access: DIRECT (random access) or SEQUENTIAL  or STREAM (F2003)
         write(access_this ,'(A)') 'SEQUENTIAL'
         if (present(access))then
             if (stringsAreEqual(access, 'DIRECT',.false.))  write(access_this ,'(A)') upperCase(access)
             if (stringsAreEqual(access, 'STREAM',.false.))then
 #ifdef PGI
-                print *,"** Cannot 'stream' in current PGI version, using DIRECT"
-                write(access_this,'(A)')  upperCase(access)
+               ! print *,"** Cannot 'stream' in current PGI version, using DIRECT"
+                write(access_this,'(A)') upperCase(access)
+                if (stringsAreEqual(status_this,'NEW',.false.)) write( status_this,'(A)')  'UNKNOWN'
 #else
                 write(access_this ,'(A)') upperCase(access)
 #endif
@@ -177,7 +177,7 @@ contains
                     end if
                 end if
             end if
-            call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
+            call fileiochk(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
             if(present(iostat))iostat=iostat_this
             if(funit/=0 .and. is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
             return
@@ -243,7 +243,7 @@ contains
                 end if
             end if
         end if
-        call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.)
+        call fileiochk(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.)
         if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
@@ -310,7 +310,7 @@ contains
         if( file_exists(fname) )then
             tfile=fname
             call fopen(funit, tfile, status='unknown', action='read', iostat=io_status)
-            call fileio_errmsg(":nlines error opening file "//trim(tfile), io_status)
+            call fileiochk(":nlines error opening file "//trim(tfile), io_status)
             n = 0
             do
                 read(funit,*,IOSTAT=ios) junk
@@ -386,7 +386,7 @@ contains
         if(present(overwrite)) ovrwrite=overwrite
         if( file_exists(filein) )then
             if( file_exists(fileout) .and. (.not. ovrwrite) )&
-                call fileio_errmsg( " simple_rename failed to rename file,  designated output  filename already exists "//trim(fileout))
+                call fileiochk( " simple_rename failed to rename file,  designated output  filename already exists "//trim(fileout))
 #if defined(INTEL)
             file_status = rename(filein, fileout)
 #elif defined(PGI)
@@ -398,7 +398,7 @@ contains
         else
             call simple_stop( "simple_fileio:: simple_rename failed to rename file,  designated input filename doesn't exist "//trim(filein))
         end if
-         if(file_status /= 0) call fileio_errmsg( " simple_rename failed to rename file "//trim(filein), file_status)
+        if(file_status /= 0) call fileiochk( " simple_rename failed to rename file "//trim(filein), file_status)
     end subroutine simple_rename
 
     !> Make directory
@@ -407,10 +407,8 @@ contains
         integer :: iostat
         logical :: dir_e
         inquire( file=trim(adjustl(path)), exist=dir_e , iostat=iostat)
-        if ( dir_e ) then
-            !write(*,*) "simple_fileio::mkdir; directory already exists: ", trim(adjustl(path))
-        else
-            call exec_cmdline('mkdir -p '//trim(adjustl(path))//'|| true')
+        if (.not. dir_e ) then
+            call exec_cmdline('mkdir -p '//trim(adjustl(path)))
         end if
     end subroutine mkdir
 
@@ -421,7 +419,7 @@ contains
         if( file_exists(file) )then
             !call cpStr(file,tfile)
             call fopen(fnr,file,STATUS='OLD',IOSTAT=file_status)
-            call fileio_errmsg( "del_file failed to open file designated for deletion "//trim(file), file_status)
+            call fileiochk( "del_file failed to open file designated for deletion "//trim(file), file_status)
             if( file_status == 0 )then
                 call fclose_2(fnr, status='delete',errmsg="::fclose_1 failed in del_file "//trim(file))
             end if
@@ -459,12 +457,12 @@ contains
         integer :: ifile, fnr, ios
         names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
         call fopen(fnr, file=tabname, status='replace', action='write', iostat=ios)
-        call fileio_errmsg('simple_fileio :: make_filetable '//trim(tabname), ios)
+        call fileiochk('simple_fileio :: make_filetable '//trim(tabname), ios)
         do ifile=1,n
             write(fnr,'(a)') trim(names(ifile))
         end do
         call fclose_1( fnr, ios )
-        call fileio_errmsg(" Error closing file in ::make_filetable ",ios)
+        call fileiochk(" Error closing file in ::make_filetable ",ios)
     end subroutine make_filetable
 
     !> \brief  is for checking file kind
@@ -692,14 +690,14 @@ contains
         integer :: nl, funit, iline,io_stat
         nl = nlines(filetable)
         call fopen(funit,filetable,'old','unknown',io_stat)
-        call fileio_errmsg("read_filetable failed to open file "//trim(filetable),io_stat )
+        call fileiochk("read_filetable failed to open file "//trim(filetable),io_stat )
         allocate( filenames(nl), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk ('In: read_filetable; simple_fileio  ', alloc_stat)
+        if(alloc_stat /= 0) call allocchk ('In: read_filetable; simple_fileio  ', alloc_stat)
         do iline=1,nl
             read(funit,'(a256)') filenames(iline)
         end do
         call fclose_1(funit,io_stat)
-        call fileio_errmsg("read_filetable failed to close",io_stat)
+        call fileiochk("read_filetable failed to close",io_stat)
     end subroutine read_filetable
 
     !>  \brief  writes a filetable array to a text file
@@ -709,12 +707,12 @@ contains
         integer :: nl, funit, iline, io_stat
         nl = size(filenames)
         call fopen(funit,filetable, 'replace', 'unknown', io_stat)
-        call fileio_errmsg("write_filetable failed to open file "//filetable,io_stat )
+        call fileiochk("write_filetable failed to open file "//filetable,io_stat )
         do iline=1,nl
             write(funit,'(a)') trim(filenames(iline))
         end do
         call fclose_1(funit,io_stat)
-        call fileio_errmsg("write_filetable failed to close",io_stat)
+        call fileiochk("write_filetable failed to close",io_stat)
     end subroutine write_filetable
 
     !> \brief  for converting a file generated by txtfile2arr back to an array
@@ -725,9 +723,9 @@ contains
         if( file_exists(trim(fnam)) )then
             n = nlines(fnam)
             allocate( arr(n), stat=alloc_stat )
-            if(alloc_stat /= 0) call alloc_errchk('In: txtfile2rarr; simple_fileio  ', alloc_stat)
+            if(alloc_stat /= 0) call allocchk('In: txtfile2rarr; simple_fileio  ', alloc_stat)
             call fopen(funit,fnam,'old','unknown',io_stat)
-            call fileio_errmsg("txtfile2rarr failed to open  "//trim(fnam), io_stat)
+            call fileiochk("txtfile2rarr failed to open  "//trim(fnam), io_stat)
             do i=1,n
                 read(funit,*) arr(i)
             end do
@@ -752,32 +750,32 @@ contains
         if( file_exists(trim(file1)) ) n1 = nlines(file1)
         if( file_exists(trim(file2)) ) n2 = nlines(file2)
         allocate( arr(n1+n2), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk('In: merge_txtfiles; simple_fileio  ', alloc_stat)
+        if(alloc_stat /= 0) call allocchk('In: merge_txtfiles; simple_fileio  ', alloc_stat)
         if( here(1) )then
             call fopen(funit,file1,'old','unknown',io_stat)
-            call fileio_errmsg("merge_txtfiles failed "//trim(file1), io_stat)
+            call fileiochk("merge_txtfiles failed "//trim(file1), io_stat)
             cnt = 0
             do i=1,n1
                 cnt = cnt+1
                 read(funit,*) arr(cnt)
             end do
             call fclose_1(funit,io_stat)
-            call fileio_errmsg("merge_txtfiles failed to close "//trim(file1), io_stat)
+            call fileiochk("merge_txtfiles failed to close "//trim(file1), io_stat)
             if( .not. here(2) ) return
         else
             call fopen(funit,file2,'old','unknown',io_stat)
-            call fileio_errmsg("merge_txtfiles failed to open "//trim(file2), io_stat)
+            call fileiochk("merge_txtfiles failed to open "//trim(file2), io_stat)
             cnt = 0
             do i=1,n2
                 cnt = cnt+1
                 read(funit,*) arr(cnt)
             end do
             call fclose_1(funit,io_stat)
-            call fileio_errmsg("merge_txtfiles failed to close "//trim(file2), io_stat)
+            call fileiochk("merge_txtfiles failed to close "//trim(file2), io_stat)
             return
         endif
         call fopen(funit,file2,'old','unknown',io_stat)
-        call fileio_errmsg("merge_txtfiles failed to open "//trim(file2), io_stat)
+        call fileiochk("merge_txtfiles failed to open "//trim(file2), io_stat)
         do i=1,n2
             cnt = cnt+1
             read(funit,*, iostat=io_stat) arr(cnt)
@@ -793,10 +791,10 @@ contains
         if( file_exists(trim(fnam)) )then
             inquire(iolength=recsz) ival
             call fopen(funit,fnam,'OLD','unknown', io_stat,'direct','unformatted',recsz)
-            call fileio_errmsg("file2iarr fopen failed "//trim(fnam),io_stat)
+            call fileiochk("file2iarr fopen failed "//trim(fnam),io_stat)
             read(funit, rec=1) n
             allocate( arr(n), stat=alloc_stat )
-            if(alloc_stat /= 0) call alloc_errchk('In: file2iarr; simple_fileio  ', alloc_stat)
+            if(alloc_stat /= 0) call allocchk('In: file2iarr; simple_fileio  ', alloc_stat)
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do
@@ -817,7 +815,7 @@ contains
         rval = size(arr)
         funit=-1
         call fopen(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz)
-        call fileio_errmsg("arr2file_1 fopen failed "//trim(fnam),io_stat)
+        call fileiochk("arr2file_1 fopen failed "//trim(fnam),io_stat)
         write(funit, rec=1, iostat=io_stat) rval
         do i=1,size(arr)
             write(funit, rec=i+1) arr(i)
@@ -834,11 +832,11 @@ contains
         if( file_exists(trim(fnam)) )then
             inquire(iolength=recsz) rval
             call fopen(funit,fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
-            call fileio_errmsg("file2rarr fopen failed "//trim(fnam),io_stat)
+            call fileiochk("file2rarr fopen failed "//trim(fnam),io_stat)
             read(funit, rec=1,iostat=io_stat) rval
             n = nint(rval)
             allocate( arr(n), stat=alloc_stat )
-            if(alloc_stat /= 0) call alloc_errchk('In: file2arr; simple_fileio ', alloc_stat)
+            if(alloc_stat /= 0) call allocchk('In: file2arr; simple_fileio ', alloc_stat)
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do
@@ -857,7 +855,7 @@ contains
         inquire(iolength=recsz) ival
         ival = size(arr)
         call fopen(funit,fnam,'replace','unknown', io_stat,'direct','unformatted',recl=recsz)
-        call fileio_errmsg("arr2file_2 fopen failed "//trim(fnam),io_stat)
+        call fileiochk("arr2file_2 fopen failed "//trim(fnam),io_stat)
         write(funit, rec=1) ival
         do i=1,size(arr)
             write(funit, rec=i+1) arr(i)
@@ -874,13 +872,13 @@ contains
         dim1 = real(size(arr,dim=1))
         dim2 = real(size(arr,dim=2))
         call fopen(funit,fnam,'replace','write', io_stat, 'STREAM')
-        call fileio_errmsg("simple_fileio::arr2D2file fopen failed "//trim(fnam),io_stat)
+        call fileiochk("simple_fileio::arr2D2file fopen failed "//trim(fnam),io_stat)
         write(unit=funit,pos=1,iostat=io_stat) dim1
-        call fileio_errmsg('simple_fileio::arr2D2file: writing stream startbyte 1 to: '//trim(fnam), io_stat)
+        call fileiochk('simple_fileio::arr2D2file: writing stream startbyte 1 to: '//trim(fnam), io_stat)
         write(unit=funit,pos=5,iostat=io_stat) dim2
-        call fileio_errmsg('simple_fileio::arr2D2file: writing stream startbyte 5 to: '//trim(fnam), io_stat)
+        call fileiochk('simple_fileio::arr2D2file: writing stream startbyte 5 to: '//trim(fnam), io_stat)
         write(unit=funit,pos=9,iostat=io_stat) arr(:,:)
-        call fileio_errmsg('simple_fileio::arr2D2file: writing stream startbyte 9 to: '//trim(fnam), io_stat)
+        call fileiochk('simple_fileio::arr2D2file: writing stream startbyte 9 to: '//trim(fnam), io_stat)
         call fclose_1(funit,io_stat, errmsg=" arr2D2file Error closing file # "//int2str(funit))
     end subroutine arr2D2file
 
@@ -891,18 +889,18 @@ contains
         real    :: dim1r, dim2r
         integer :: dim1, dim2, funit, io_stat
         call fopen(funit,fname,'old','read',io_stat,'STREAM')
-        call fileio_errmsg("simple_fileio::file2arr2D fopen failed "//trim(fname),io_stat)
+        call fileiochk("simple_fileio::file2arr2D fopen failed "//trim(fname),io_stat)
         read(unit=funit,pos=1,iostat=io_stat) dim1r
-        call fileio_errmsg("simple_fileio::file2arr2D  reading stream startbyte 1 from: "// trim(fname), io_stat)
+        call fileiochk("simple_fileio::file2arr2D  reading stream startbyte 1 from: "// trim(fname), io_stat)
         read(unit=funit,pos=5,iostat=io_stat) dim2r
-        call fileio_errmsg("simple_fileio::file2arr2D  reading stream startbyte 5 from: "// trim(fname), io_stat)
+        call fileiochk("simple_fileio::file2arr2D  reading stream startbyte 5 from: "// trim(fname), io_stat)
         dim1 = nint(dim1r)
         dim2 = nint(dim2r)
         if( allocated(arr) ) deallocate(arr)
         allocate( arr(dim1,dim2), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk('In: simple_fileio:: file22Darr arr ', alloc_stat)
+        if(alloc_stat /= 0) call allocchk('In: simple_fileio:: file22Darr arr ', alloc_stat)
         read(unit=funit,pos=9,iostat=io_stat) arr(:,:)
-        call fileio_errmsg("simple_fileio::file2arr2D  reading stream startbyte 9 from: "// trim(fname), io_stat)
+        call fileiochk("simple_fileio::file2arr2D  reading stream startbyte 9 from: "// trim(fname), io_stat)
         call fclose_1(funit,io_stat, errmsg="Error closing file "//trim(fname))
     end function file2arr2D
 
@@ -912,7 +910,7 @@ contains
         character(len=*), intent(in) :: fname !< output filename
         integer :: i, funit, io_stat
         call fopen(funit, fname,'REPLACE', 'write', io_stat)
-        call fileio_errmsg("simple_fileio ::arr2txtfile, tried to open file "//trim(fname), io_stat )
+        call fileiochk("simple_fileio ::arr2txtfile, tried to open file "//trim(fname), io_stat )
         do i=1,size(arr)
             write(funit,*) arr(i)
         end do
@@ -930,10 +928,10 @@ contains
         character(len=100) :: io_message
 
         call fopen(filnum, fname, 'OLD', 'READ', io_stat, 'STREAM', convert='NATIVE')
-        call fileio_errmsg("Error opening file "//trim(fname) , io_stat)
+        call fileiochk("Error opening file "//trim(fname) , io_stat)
         read(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
         ! Check the read was successful
-        call fileio_errmsg('simple_fileio::read_raw_image; reading '//trim(fname)//&
+        call fileiochk('simple_fileio::read_raw_image; reading '//trim(fname)//&
             ' IO error message was: '// trim(io_message),io_stat)
         call fclose_1(filnum, io_stat,errmsg="Error closing file "//trim(fname))
     end subroutine read_raw_image
@@ -946,10 +944,10 @@ contains
         integer :: filnum, io_stat
         character(len=100) :: io_message
         call fopen(filnum,fname, 'REPLACE', 'WRITE', io_stat, 'STREAM')
-        call fileio_errmsg("Error opening file "//trim(fname), io_stat )
+        call fileiochk("Error opening file "//trim(fname), io_stat )
         write(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
         ! Check the write was successful
-        call fileio_errmsg('simple_fileio::write_raw_image; writing '//trim(fname)//&
+        call fileiochk('simple_fileio::write_raw_image; writing '//trim(fname)//&
             ' IO error message was: '// trim(io_message),io_stat)
         call fclose_1(filnum, io_stat,errmsg="Error closing file "//trim(fname))
     end subroutine write_raw_image

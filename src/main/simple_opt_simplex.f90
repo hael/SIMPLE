@@ -1,7 +1,8 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
 module simple_opt_simplex
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_optimizer, only: optimizer
+use simple_opt_spec, only: opt_spec
 implicit none
 
 public :: opt_simplex
@@ -30,7 +31,7 @@ contains
         real :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        allocchk("In: new_opt_simplex")
+        if(alloc_stat.ne.0)call allocchk("In: new_opt_simplex",alloc_stat)
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
@@ -40,7 +41,6 @@ contains
     subroutine simplex_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: amoeba
-        use simple_rnd,      only: ran3
         class(opt_simplex), intent(inout) :: self        !< instance
         class(opt_spec),    intent(inout) :: spec        !< specification
         class(*),           intent(inout) :: fun_self    !< self-pointer for cost function
@@ -104,7 +104,6 @@ contains
 
              !> \brief  initializes the simplex using randomized bounds
             subroutine init( limits )
-                use simple_rnd, only: ran3
                 real, intent(in) :: limits(spec%ndim,2)
                 integer :: i, j
                 ! first vertex is the best-so-far solution solution
@@ -130,15 +129,15 @@ contains
         alloc_stat=0
         if( allocated(self%p) )then
             deallocate(self%p, stat=alloc_stat)
-            allocchk("In: kill_opt_simplex p")
+            if(alloc_stat.ne.0)call allocchk("In: kill_simplex_opt p",alloc_stat)
         end if
         if( allocated(self%y) )then
             deallocate(self%y, stat=alloc_stat)
-            allocchk("In: kill_opt_simplex y ")
+            if(alloc_stat.ne.0)call allocchk("In: kill_simplex_opt y ",alloc_stat)
         end if
         if( allocated(self%pb) )then
             deallocate(self%pb, stat=alloc_stat)
-            allocchk("In: kill_opt_simplex pb ")
+            if(alloc_stat.ne.0)call allocchk("In: kill_simplex_opt pb ",alloc_stat)
         end if
         self%exists = .false.
     end subroutine kill_opt_simplex

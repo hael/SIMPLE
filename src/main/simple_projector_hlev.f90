@@ -4,7 +4,7 @@
 module simple_projector_hlev
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_image,      only: image
 use simple_oris,       only: oris
@@ -37,7 +37,7 @@ contains
             n = o%get_noris()
         endif
         allocate( imgs(n), imgs_pad(p%nthr), stat=alloc_stat )
-        allocchk('project; simple_projector')
+        if(alloc_stat.ne.0)call allocchk('project; simple_projector')
         ! construct thread safe images
         do i=1,n
             call imgs(i)%new([p%box,p%box,1], p%smpd, wthreads=.false.)

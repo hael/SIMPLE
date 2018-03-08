@@ -1,6 +1,6 @@
 ! iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_motion_correct_iter
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_params,       only: params
@@ -145,7 +145,7 @@ contains
             case('thumb')
                 allocate(moviename, source=trim(self%moviename_thumb))
             case DEFAULT
-                stop 'unsupported which flag; simple_motion_correct_iter :: get_moviename'
+                call simple_stop('unsupported which flag; simple_motion_correct_iter :: get_moviename')
         end select
     end function get_moviename
 

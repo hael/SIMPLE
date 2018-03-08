@@ -1,6 +1,6 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_strategy2D3D_common
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_cmdline,  only: cmdline
 use simple_build,    only: build
@@ -87,7 +87,6 @@ contains
     end subroutine read_imgbatch_2
 
     subroutine set_bp_range( b, p, cline )
-        use simple_math, only: calc_fourier_index
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -141,7 +140,8 @@ contains
                     ! low pass limit
                     p%kfromto(2) = calc_fourier_index(resarr(lp_ind), p%boxmatch, p%smpd)
                     if( p%kfromto(2) == 1 )then
-                        stop 'simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)'
+                        stop 
+                        call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
                     endif
                     ! set highest Fourier index for coarse grid search
                     p%kstop_grid   = get_lplim_at_corr(b%fsc(loc(1),:), 0.5)
@@ -185,7 +185,8 @@ contains
                 p%lp_dyn = p%lp
                 call b%a%set_all2single('lp',p%lp)
             case DEFAULT
-                stop 'Unsupported eo flag; simple_strategy2D3D_common'
+
+                call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
         end select
         ! set highest Fourier index for coarse grid search
         if( .not. kstop_grid_set )        p%kstop_grid = p%kfromto(2)
@@ -382,11 +383,11 @@ contains
         ! normalise
         call img_in%norm()
         ! move to Fourier space
-        call img_in%fwd_ft
+        call img_in%fft()
         ! deal with CTF
         select case(p%ctf)
             case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
-                stop 'ctf=mul is not supported; simple_strategy2D3D_common :: prepimg4align'
+                call simple_stop('ctf=mul is not supported; simple_strategy2D3D_common :: prepimg4align')
             case('no')   ! do nothing
             case('yes')  ! do nothing
             case('flip') ! flip back
@@ -410,7 +411,7 @@ contains
                 if( p%tfplan%l_phaseplate ) phshift = b%a%get(iptcl,'phshift')
                 call tfun%apply_serial(img_in, dfx, 'flip', dfy, angast, phshift)
             case DEFAULT
-                stop 'Unsupported ctf mode; simple_strategy2D3D_common :: prepimg4align'
+                call simple_stop('Unsupported ctf mode; simple_strategy2D3D_common :: prepimg4align')
         end select
         ! shell normalization & filter
         if( is3D )then

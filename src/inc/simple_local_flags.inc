@@ -42,3 +42,14 @@
 ! # define ErrorPrint(msg) write(*,'("Error in ",/,A,/," line ",I0,":",A)') __FILENAME__,__LINE__, msg
 ! #endif
 
+#ifdef PGI
+#define CheckLaunchError(s) if(cudaDeviceSynchronize().ge.0)then;\
+associate(i => cudaGetLastError());\
+if(i.ne.0)then;\
+write(*,"('Error ',a,', File: ',a,', Line: ',i0)")s,__FILE__,__LINE__;\
+write(*,"(4x,a)")cudaGetErrorString(i);\
+stop;endif;\
+end associate;endif
+#else
+#define CheckLaunchError(s)
+#endif

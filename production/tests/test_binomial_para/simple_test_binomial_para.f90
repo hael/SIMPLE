@@ -2,9 +2,8 @@
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 program test_binomial_para
-use simple_chash,   only: chash
-use simple_strings, only: int2str
-use simple_defs     ! use all in there
+include 'simple_lib.f08'
+
 implicit none
 
 integer,               parameter   :: NPARTS=10 

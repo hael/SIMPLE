@@ -21,10 +21,10 @@
 
 
 module simple_timer_profile_test
-#include "simple_lib.f08"
-   use simple_timer
-   implicit none
-   public:: exec_profiletest
+include 'simple_lib.f08'
+use simple_timer
+implicit none
+public:: exec_profiletest
 private
 #include "simple_local_flags.inc"
 #include "simple_timer.h"   
@@ -47,8 +47,8 @@ contains
       xx = 12.0_dp
       if (verbose) print *, 'Fortran Timer and Profiler'
 #ifdef PGI
-      print *, 'PGI cannot process block statements'
-      stop
+       print *, 'PGI cannot process block statements'
+       return
 #else
 
       call reset_timer()

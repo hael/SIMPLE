@@ -1,6 +1,6 @@
 ! utility for interpolating and integrating a real space grid
 module simple_intg_atompeak
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_atoms
 use simple_image,      only: image
 implicit none

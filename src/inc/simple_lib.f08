@@ -1,5 +1,3 @@
-
-#define allocchk(X) if(alloc_stat.ne.0)call alloc_errchk(X, alloc_stat, __FILENAME__, __LINE__)
 !! Simple cryo-EM core library
 use, intrinsic :: iso_fortran_env, stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
 use, intrinsic :: iso_c_binding

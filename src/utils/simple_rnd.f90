@@ -3,8 +3,7 @@
 module simple_rnd
 use simple_defs ! singleton
 use simple_math
-use simple_syslib, only: alloc_errchk
-!use simple_jiffys
+use simple_syslib, only: allocchk
 implicit none
 
 private :: idum, r8po_fa

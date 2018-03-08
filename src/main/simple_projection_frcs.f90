@@ -1,5 +1,5 @@
 module simple_projection_frcs
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_estimate_ssnr, only: resample_filter
 use simple_oris,          only: oris
 implicit none
@@ -54,7 +54,6 @@ contains
         integer,                intent(in)    :: box4frc_calc
         real,                   intent(in)    :: smpd
         integer, optional,      intent(in)    :: nstates
-        integer :: alloc_stat
         ! init
         call self%kill
         self%nprojs       = nprojs
@@ -73,7 +72,7 @@ contains
         self%headsz         = sizeof(self%file_header)
         ! alloc
         allocate( self%frcs(self%nstates,self%nprojs,self%filtsz), stat=alloc_stat)
-        call alloc_errchk('new; simple_projection_frcs', alloc_stat)
+        if(alloc_stat .ne. 0)call allocchk('new; simple_projection_frcs', alloc_stat)
         self%frcs   = 1.0
         self%exists = .true.
     end subroutine new
@@ -239,7 +238,7 @@ contains
         integer          :: funit, io_stat
         character(len=7) :: stat_str
         call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        call fileio_errmsg('projection_frcs; read; open for read '//trim(fname), io_stat)
+        call fileiochk('projection_frcs; read; open for read '//trim(fname), io_stat)
         read(unit=funit,pos=1) self%file_header
         ! re-create the object according to file_header info
         call self%new(nint(self%file_header(1)), nint(self%file_header(2)), self%file_header(3), nint(self%file_header(4)))
@@ -253,7 +252,7 @@ contains
         integer          :: funit, io_stat
         character(len=7) :: stat_str
         call fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        call fileio_errmsg('projection_frcs; write; open for write '//trim(fname), io_stat)
+        call fileiochk('projection_frcs; write; open for write '//trim(fname), io_stat)
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) self%frcs
         call fclose(funit, errmsg='projection_frcs; write; fhandle cose')

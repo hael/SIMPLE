@@ -1,10 +1,10 @@
 ! stack image processing routines for SPIDER/MRC files
 
 module simple_procimgfile
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_imghead, only: find_ldim_nptcls
-
+use simple_oris,    only: oris
 implicit none
 
 private :: raise_exception_imgfile
@@ -92,9 +92,6 @@ contains
     !>  \brief  is for making a stack of normalized vectors for PCA analysis
     !! \param fnameStack,fnamePatterns filenames for stacka and pattern
     subroutine make_pattern_stack( fnameStack, fnamePatterns, mskrad, D, recsz, avg, otab, hfun )
-        use simple_stat,         only: normalize, normalize_sigm
-        use simple_oris,         only: oris
-        use simple_math,         only: check4nans
         character(len=*),            intent(in)    :: fnameStack, fnamePatterns
         real,                        intent(in)    :: mskrad       !< mask radius
         integer,                     intent(out)   :: D, recsz     !< record size
@@ -114,19 +111,19 @@ contains
         call img%new(ldim,1.)
         D = img%get_npix(mskrad)
         allocate(pcavec(D), stat=alloc_stat)
-        allocchk('make_pattern_stack; simple_procimgfile, 1')
+        if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 1', alloc_stat)
         pcavec = 0.
         inquire(iolength=recsz) pcavec
         deallocate(pcavec)
         if( present(avg) )then
             allocate(avg(D), stat=alloc_stat)
-            allocchk('make_pattern_stack; simple_procimgfile, 2')
+            if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 2', alloc_stat)
             avg = 0.
         endif
         ! extract patterns and write to file
         call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
              access='direct', form='unformatted', recl=recsz, iostat=ier)
-        call fileio_errmsg('make_pattern_stack; simple_procimgfile', ier)
+        call fileiochk('make_pattern_stack; simple_procimgfile', ier)
         write(*,'(a)') '>>> MAKING PATTERN STACK'
         do i=1,n
             call progress(i,n)
@@ -163,7 +160,7 @@ contains
         if( present(avg) )then
             avg = avg/real(n)
             allocate(pcavec(D), stat=alloc_stat)
-            allocchk('make_pattern_stack; simple_procimgfile, 3')
+            if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 3', alloc_stat)
             do i=1,n
                 read(fnum,rec=i) pcavec
                 pcavec = pcavec-avg
@@ -172,7 +169,7 @@ contains
             deallocate(pcavec)
         endif
         call fclose(fnum,iostat=ier)
-        call fileio_errmsg('make_pattern_stack; simple_procimgfile', ier)
+        call fileiochk('make_pattern_stack; simple_procimgfile', ier)
         call img%kill
     end subroutine make_pattern_stack
 
@@ -603,7 +600,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'cure_imgfile' )
         call fopen(filnum,'cure_stats.txt',status='replace',iostat=io_stat)
-        call fileio_errmsg("cure_imgfile error", io_stat)
+        call fileiochk("cure_imgfile error", io_stat)
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> CURING IMAGES'
         do i=1,n
@@ -868,7 +865,6 @@ contains
     !! \param o orientation object used for ctf
     !!
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
-        use simple_math,  only: deg2rad
         use simple_oris,  only: oris
         use simple_ctf,   only: ctf
         character(len=*), intent(in)    :: fname2process, fname

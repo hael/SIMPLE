@@ -1,15 +1,13 @@
 module simple_volpft_srch_tester
+include 'simple_lib.f08'
 use simple_build,      only: build
 use simple_params,     only: params
 use simple_ori,        only: ori
 use simple_image,      only: image
-use simple_rnd,        only: ran3
 use simple_cmdline,    only: cmdline
 use simple_projector,  only: projector
 use simple_volpft_srch ! singleton
-use simple_defs        ! singleton
 use simple_gridding    ! singleton
-use simple_jiffys      ! singleton
 implicit none
 
 public :: exec_volpft_srch_test

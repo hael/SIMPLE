@@ -1,13 +1,11 @@
 ! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_refine3D
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
-use simple_qsys_funs       ! use all in there
-use simple_binoris_io      ! use all in there
 implicit none
 
 public :: npeaks_commander
@@ -66,7 +64,6 @@ contains
     end subroutine exec_npeaks
 
     subroutine exec_nspace(self,cline)
-        use simple_math, only: resang
         class(nspace_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(oris)   :: o
@@ -85,6 +82,7 @@ contains
 
     subroutine exec_refine3D_init( self, cline )
         ! use simple_strategy3D_matcher, only: gen_random_model
+        use simple_qsys_funs, only: qsys_job_finished
         class(refine3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)       :: p
@@ -106,7 +104,6 @@ contains
         ! end gracefully
         call qsys_job_finished( p, cline%get_carg('prg') )
         call simple_end('**** SIMPLE_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
-
 
         contains
 
@@ -170,6 +167,7 @@ contains
 
     subroutine exec_multiptcl_init( self, cline )
         use simple_rec_master, only: exec_rec_master
+        use simple_binoris_io, only: binwrite_oritab    ! use all in there
         class(multiptcl_init_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params) :: p
@@ -211,9 +209,7 @@ contains
     end subroutine exec_multiptcl_init
 
     subroutine exec_refine3D( self, cline )
-        use simple_math,               only: calc_lowpass_lim, calc_fourier_index
         use simple_strategy3D_matcher, only: refine3D_exec
-        use simple_strings,            only: str_has_substr
         class(prime3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)               :: p
@@ -288,7 +284,6 @@ contains
     end subroutine exec_rec_test
 
     subroutine exec_check_3Dconv( self, cline )
-        use simple_math,    only: rad2deg, get_lplim_at_corr
         class(check_3Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
@@ -301,7 +296,7 @@ contains
         limset = .false. ;  update_res = .false.
         if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates), stat=alloc_stat)
-            allocchk("In simple_commander_refine3D:: exec_check_3Dconv")
+            if(alloc_stat.ne.0)call allocchk("In simple_commander_refine3D:: exec_check3D_conv", alloc_stat)
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state

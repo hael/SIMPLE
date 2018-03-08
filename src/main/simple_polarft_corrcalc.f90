@@ -1,6 +1,7 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
 module simple_polarft_corrcalc
-#include "simple_lib.f08"
+include 'simple_lib.f08'
+
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
 use simple_fftw3
@@ -194,7 +195,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, nrefs, p, ptcl_mask, eoarr )
-        use simple_math,   only: rad2deg, is_even, round2even
         use simple_params, only: params
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs
@@ -269,7 +269,7 @@ contains
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                  &self%angtab(self%nrots), self%iseven(1:self%nptcls), stat=alloc_stat)
-        allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 1')
+        if(alloc_stat/=0)call allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 1')
         ang = twopi/real(self%nrots)
         do irot=1,self%nrots
             self%angtab(irot) = real(irot-1)*ang
@@ -281,7 +281,7 @@ contains
         end do
         ! index translation table
         allocate( self%pinds(p%fromp:p%top), source=0, stat=alloc_stat)
-        allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 2')
+        if(alloc_stat/=0)call allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 2')
         if( present(ptcl_mask) )then
             cnt = 0
             do i=p%fromp,p%top
@@ -313,7 +313,7 @@ contains
         endif
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        allocchk('shift argument transfer array; new; simple_polarft_corrcalc')
+         if(alloc_stat.ne.0)call allocchk('shift argument transfer array; new; simple_polarft_corrcalc')
         self%argtransf(:self%pftsz,:)   = &
             self%polar(:self%pftsz,:)   * &
             (PI/real(self%ldim(1) / 2))    ! x-part
@@ -344,7 +344,7 @@ contains
                 &self%heap_vars(ithr)%argmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &stat=alloc_stat)
         end do
-        allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
+         if(alloc_stat.ne.0)call allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
@@ -457,7 +457,6 @@ contains
         complex(sp),             intent(in)    :: comp
         self%pfts_ptcls(self%pinds(iptcl),irot,k) = comp
     end subroutine set_ptcl_fcomp
-
     !>  \brief  zeroes the iref reference
      !! \param iref reference index
     subroutine zero_ref( self, iref )
@@ -579,7 +578,6 @@ contains
         loc = minloc(dists)
         ind = loc(1)
     end function get_roind
-
     !>  \brief returns polar coordinate for rotation rot
     !!         and Fourier index k
     function get_coord( self, rot, k ) result( xy )
@@ -598,7 +596,7 @@ contains
         complex(sp), allocatable :: pft(:,:)
         allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_ptcls(self%pinds(iptcl),:,:), stat=alloc_stat)
-        allocchk("In: get_ptcl_pft; simple_polarft_corrcalc")
+        if(alloc_stat.ne.0)call allocchk("In: get_ptcl_pft; simple_polarft_corrcalc",alloc_stat)
     end function get_ptcl_pft
 
     !>  \brief  returns polar Fourier transform of reference iref
@@ -615,7 +613,7 @@ contains
             allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
             source=self%pfts_refs_odd(iref,:,:), stat=alloc_stat)
         endif
-        allocchk("In: get_ref_pft; simple_polarft_corrcalc")
+        if(alloc_stat.ne.0)call allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
     !>  \brief  returns whether objective function is cc/ccres
@@ -783,7 +781,7 @@ contains
         integer         :: iptcl
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(1:self%nptcls,self%pftsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2")
+        if(alloc_stat.ne.0)call allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2",alloc_stat)
         do iptcl=self%pfromto(1),self%pfromto(2)
             if( self%pinds(iptcl) > 0 )then
                 ctfparms = spproj%get_ctfparams( trim(oritype), iptcl )
@@ -993,7 +991,6 @@ contains
 
     !>  \brief  is for generating resolution dependent correlations
     subroutine genfrc( self, iref, i, irot, frc )
-        use simple_math, only: csq
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, i, irot
         real(sp),                 intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
@@ -1015,7 +1012,6 @@ contains
 
     !>  \brief  is for generating resolution dependent correlations with shift
     subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
-        use simple_math, only: csq
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, iptcl, irot
         real(sp),                 intent(in)    :: shvec(2)
@@ -1055,7 +1051,6 @@ contains
     end subroutine calc_frc
 
     subroutine gencorrs_cc_1( self, iref, iptcl, cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
@@ -1072,7 +1067,6 @@ contains
     end subroutine gencorrs_cc_1
 
     subroutine gencorrs_cc_2( self, iref, iptcl, kstop, cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
         real,                    intent(out)   :: cc(self%nrots)
@@ -1090,7 +1084,6 @@ contains
     end subroutine gencorrs_cc_2
 
     subroutine gencorrs_cc_3( self, iref, iptcl, shvec, cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1169,7 +1162,6 @@ contains
     end subroutine gencorrs_resnorm_2
 
     subroutine gencorrs_resnorm_3( self, iref, iptcl, shvec, cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1272,7 +1264,6 @@ contains
 
     !< brief  generates correlation for one specific rotation angle
     function gencorr_cc_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1307,7 +1298,6 @@ contains
 
     !< brief  generates correlation for one specific rotation angle, double precision
     function gencorr_cc_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1342,7 +1332,6 @@ contains
 
     !< brief  generates correlation for one specific rotation angle
     function gencorr_resnorm_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1383,7 +1372,6 @@ contains
 
     !< brief  generates correlation for one specific rotation angle, double precision
     function gencorr_resnorm_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1424,7 +1412,6 @@ contains
 
     !< brief  calculates correlations and gradient for origin shift
     subroutine gencorrs_cc_grad( self, iref, iptcl, shvec, cc, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1468,7 +1455,6 @@ contains
 
     !< brief  calculates only gradient for correlations
     subroutine gencorrs_cc_grad_only( self, iref, iptcl, shvec, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1523,7 +1509,6 @@ contains
 
     !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1538,7 +1523,6 @@ contains
 
     !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle
     subroutine gencorr_cc_grad_for_rot( self, iref, iptcl, shvec, irot, f, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1581,7 +1565,6 @@ contains
 
     !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
     subroutine gencorr_cc_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1624,7 +1607,6 @@ contains
 
     !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle
     subroutine gencorr_resnorm_grad_for_rot( self, iref, iptcl, shvec, irot, f, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1676,7 +1658,6 @@ contains
 
     !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
     subroutine gencorr_resnorm_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1728,7 +1709,6 @@ contains
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle
     subroutine gencorr_grad_only_for_rot( self, iref, iptcl, shvec, irot, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1743,7 +1723,6 @@ contains
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1758,7 +1737,6 @@ contains
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle
     subroutine gencorr_cc_grad_only_for_rot( self, iref, iptcl, shvec, irot, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1799,7 +1777,6 @@ contains
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
     subroutine gencorr_cc_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1840,7 +1817,6 @@ contains
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle
     subroutine gencorr_resnorm_grad_only_for_rot( self, iref, iptcl, shvec, irot, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
@@ -1888,7 +1864,6 @@ contains
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle
     subroutine gencorr_resnorm_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)

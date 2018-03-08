@@ -3,8 +3,8 @@
 module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
-    
+include 'simple_lib.f08'
+
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_params,     only: params
@@ -36,7 +36,6 @@ contains
 
     !> \brief  initialises the image polarizer
     subroutine init_polarizer( self, pftcc, alpha )
-        use simple_math,             only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
@@ -58,7 +57,7 @@ contains
                   &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen),&
                   &w(1:self%wdim,1:self%wdim), self%comps(1:self%wdim,1:self%wdim),&
                   &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), stat=alloc_stat)
-        allocchk('in simple_projector :: init_imgpolarizer')
+        if(alloc_stat.ne.0)call allocchk('in simple_projector :: init_imgpolarizer',alloc_stat)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
         do i=1,self%pdim(1)
@@ -95,13 +94,12 @@ contains
         allocate( self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),    source=self_in%polcyc2_mat )
         allocate( self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen), source=self_in%polweights_mat )
         allocate( self%comps(1:self%wdim,1:self%wdim),                                         source=cmplx(0.,0.) )
-        allocate( self%pft(self%pdim(1),self%pdim(2):self%pdim(3)),                            source=cmplx(0.,0.) )        
+        allocate( self%pft(self%pdim(1),self%pdim(2):self%pdim(3)),                            source=cmplx(0.,0.) )
     end subroutine copy_polarizer
 
     !> \brief  creates the polar Fourier transform
     !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize( self, pftcc, img_ind, isptcl, iseven )
-        use simple_math, only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(inout) :: self    !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled

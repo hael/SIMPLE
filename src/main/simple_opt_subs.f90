@@ -1,8 +1,9 @@
 ! generic optimisation subroutines
 module simple_opt_subs
-
-use simple_opt_spec, only: costfun
+include 'simple_lib.f08'
+use simple_opt_spec, only:  opt_spec, costfun
 implicit none
+
 
 logical :: warn=.false.
 
@@ -135,7 +136,6 @@ contains
             !!          the minimum is returned in xmin, and the minimum
             !!          function value is the returned function value
             function brent(ax,bx,cx,xmin) result(rbrent)
-                use simple_math, only: shft
                 real, intent(inout) :: ax,bx,cx
                 real, intent(out)   :: xmin
                 real, parameter :: CGOLD=.3819660, ZEPS=1e-10
@@ -350,7 +350,7 @@ contains
                         if(warn) write (*,*) 'itmax exceeded in amoeba; simple_opt_subs'
                         exit
                     endif
-                    ! Begin a new iteration. First extrapolate by a factor −1 through the face of the
+                    ! Begin a new iteration. First extrapolate by a factor -1 through the face of the
                     ! simplex across from the high point, i.e. reflect the simplex from the high point
                     ytry=amotry(-1.0)
                     iter=iter+1
@@ -364,7 +364,7 @@ contains
                         ysave=y(ihi)
                         ytry=amotry(0.5)
                         iter=iter+1
-                        if(ytry >= ysave)then ! can’t seem to get rid of that high point
+                        if(ytry >= ysave)then ! can't seem to get rid of that high point
                             p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
                             do i=1,ndim+1
                                 if(i /= ilo)then
@@ -436,7 +436,6 @@ contains
     !> \brief  check the vector with respect to the limits
     subroutine check_and_correct_vec( spec, vec, corrected )
         use simple_opt_spec, only: opt_spec
-        use simple_rnd,      only: ran3
         class(opt_spec), intent(in)    :: spec           !< specification
         real, intent(inout)            :: vec(spec%ndim) !< solution vector
         logical, intent(out), optional :: corrected   !< to indicate if vector was corrected

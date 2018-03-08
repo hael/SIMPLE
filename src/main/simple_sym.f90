@@ -1,8 +1,8 @@
 ! defines protein point-group symmetries
 
 module simple_sym
-#include "simple_lib.f08"
-use simple_oris,  only: oris
+include 'simple_lib.f08'
+use simple_oris,   only: oris
 use simple_ori,   only: ori
 implicit none
 
@@ -247,7 +247,6 @@ contains
     !>  \brief  determines euler distance and corresponding symmetrized
     !>          orientation between two orientations
     subroutine sym_dists( self, oref, oasym, osym, euldist, inplrotdist )
-        use simple_math, only: rad2deg
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref        !< is the untouched reference
         class(ori), intent(in)    :: oasym       !< is the orientation determined within assymetric unit
@@ -345,7 +344,6 @@ contains
 
     !>  \brief  is for retrieving nearest neighbors in symmetric cases
     subroutine nearest_proj_neighbors( self, os_asym_unit, k, nnmat )
-        use simple_math, only: hpsort
         class(sym),           intent(inout) :: self
         type(oris),           intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
         integer,              intent(inout) :: k
@@ -359,7 +357,7 @@ contains
         else
             n_os = os_asym_unit%get_noris()
             allocate( nnmat(n_os,k), dists(n_os), inds(n_os), stat=alloc_stat )
-            allocchk("In: nearest_proj_neighbors; simple_sym")
+            if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_sym")
             do i = 1, n_os
                 dists = pi
                 oasym = os_asym_unit%get_ori(i)
@@ -400,7 +398,7 @@ contains
             n_os = asym_os%get_noris()
             nsym = self%n
             allocate( nnmat(n_os,nsym), dists(n_os), stat=alloc_stat )
-            allocchk("In: nearest_proj_neighbors; simple_sym")
+            if(alloc_stat/=0)call allocchk("In: nearest_proj_neighbors; simple_sym")
             do i = 1, n_os
                 oasym = asym_os%get_ori(i)
                 do isym = 1, nsym
@@ -550,7 +548,6 @@ contains
 
     !>  \brief Sets the array of subgroups (character identifier) including itself
     subroutine set_subgrps( self )
-        use simple_math, only: is_even, hpsort
         class(sym), intent(inout) :: self
         real                      :: symorders(self%n)
         integer                   :: i, cnt, inds(self%n)
@@ -704,7 +701,7 @@ contains
             newmat(2,1) = sin(inrad)
             newmat(1,2) = -sin(inrad)
         else
-            stop 'Unsupported matrix spec; matcreate; simple_ori'
+            call simple_stop('Unsupported matrix spec; matcreate; simple_ori')
         endif
     end function matcreate
 

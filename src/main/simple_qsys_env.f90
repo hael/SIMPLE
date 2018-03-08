@@ -1,12 +1,11 @@
 ! batch-processing manager - environment module
 module simple_qsys_env
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup,parse_env_file
 use simple_map_reduce   ! use all in there
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
 use simple_qsys_ctrl,    only: qsys_ctrl
-use simple_chash,        only: chash
 use simple_params,       only: params
 
 implicit none
@@ -50,6 +49,7 @@ contains
         nparts = p_master%nparts
         select case(p_master%split_mode)
             case('even')
+                !$ allocate( self%parts(p_master%nptcls,2) )
                 self%parts = split_nobjs_even(p_master%nptcls, nparts)
                 partsz     = self%parts(1,2) - self%parts(1,1) + 1
             case('singles')

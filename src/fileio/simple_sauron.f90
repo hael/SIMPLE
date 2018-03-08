@@ -1,15 +1,12 @@
 ! SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
 ! provides support for one-line per one particle input/output
 module simple_sauron
-use simple_strings
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 
 contains
 
     subroutine sauron_line_parser( line, htab, chtab )
-        use simple_hash,    only: hash
-        use simple_chash,   only: chash
         character(len=*), intent(inout)    :: line
         class(hash),      intent(inout)    :: htab
         class(chash),     intent(inout)    :: chtab
@@ -20,7 +17,8 @@ contains
         integer :: nargs, iarg, nargs_pair, ival, io_stat
         allocate(line_trimmed, source=trim(line))
         call parsestr(line_trimmed,' ',args,nargs)
-        allocate(keys(nargs), vals(nargs))
+        allocate(keys(nargs), vals(nargs), stat=alloc_stat)
+        if(alloc_stat /= 0)call allocchk("simple_sauron::sauron_line_parser ",alloc_stat)
         do iarg=1,nargs
             args_pair(2) = args(iarg)
             call split_str(args_pair(2), '=', args_pair(1))

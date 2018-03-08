@@ -1,5 +1,5 @@
 program simple_test_srch
-use simple_rnd, only: seed_rnd
+include 'simple_lib.f08'
 ! use simple_prime2D_srch_tester
 use simple_optimiser_tester
 use simple_volpft_srch_tester

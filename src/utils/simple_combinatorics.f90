@@ -1,9 +1,6 @@
 ! combinatorics module
 module simple_combinatorics
-use simple_math
-use simple_rnd,      only: seed_rnd, irnd_uni_pair, irnd_uni
-use simple_ran_tabu, only: ran_tabu
-use simple_syslib,   only: alloc_errchk
+include 'simple_lib.f08'
 implicit none
 
 contains
@@ -29,7 +26,7 @@ contains
         end do
         ! set them
         allocate(disjoint(cnt), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk('In: combinatorics:: merge_into_disjoint_set ', alloc_stat)
+        if(alloc_stat /= 0) call allocchk('In: combinatorics:: merge_into_disjoint_set ', alloc_stat)
         isthere = .false.
         cnt     = 0
         do i=1,ndisjoint
@@ -62,7 +59,7 @@ contains
         norm       = real((nrepeats-1)*nptcls)
         score_best = 0.0
         allocate(labels_consensus(nrepeats,nptcls),counts(nlabels), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk('In: combinatorics::shc_aggregation ', alloc_stat)
+        if(alloc_stat /= 0) call allocchk('In: combinatorics::shc_aggregation ', alloc_stat)
         labels_backup = labels
         do irestart=1,nrepeats*nlabels
             if( DOPRINT ) write(*,'(a,1x,I5)') '>>> SHC AGGREGATION, RESTART ROUND:', irestart
@@ -119,15 +116,15 @@ contains
 
         if(allocated(labels_consensus)) then
             deallocate(labels_consensus, stat=alloc_stat )
-            if(alloc_stat /= 0) call alloc_errchk('In: combinatorics::shc_aggregation deallocating labels_consensus ', alloc_stat)
+            if(alloc_stat /= 0) call allocchk('In: combinatorics::shc_aggregation deallocating labels_consensus ', alloc_stat)
         end if
         if(allocated(counts)) then
             deallocate(counts, stat=alloc_stat )
-            if(alloc_stat /= 0) call alloc_errchk('In: combinatorics::shc_aggregation deallocating counts', alloc_stat)
+            if(alloc_stat /= 0) call allocchk('In: combinatorics::shc_aggregation deallocating counts', alloc_stat)
         end if
         if(allocated(labels_backup)) then
             deallocate(labels_backup, stat=alloc_stat )
-            if(alloc_stat /= 0) call alloc_errchk('In: combinatorics::shc_aggregation deallocating labels_backup', alloc_stat)
+            if(alloc_stat /= 0) call allocchk('In: combinatorics::shc_aggregation deallocating labels_backup', alloc_stat)
         end if
         contains
 
@@ -189,7 +186,7 @@ contains
                 if( present(rp_in) )then
                     rp = rp_in
                 else
-                    do 
+                    do
                         rp = irnd_uni_pair(nlabels)
                         if( count(labels(irep,:) == rp(1)) > 0 .and.&
                             count(labels(irep,:) == rp(2)) > 0 ) exit

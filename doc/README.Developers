@@ -369,16 +369,17 @@ CTFFIND4 Copyright 2014 Howard Hughes Medical Institute
 
 - simple_error_check -- gather relevant info, print stuff and will not stop
 - simple_stop   -- gather relevant info, print stuff and stop
-- alloc_errchk  -- jiffys only for progress and simple_end
+- allocchk      -- check allocate errors
+- simple_end
 - get_sys_error
 - all syscalls functions
 
 ** Universal File I/O
 
 - fopen  -- do not use "UNIT=",  return logical false on fail, user can then call fileio_errmsg to terminate
-- fclose -- same as fopen
-- fileio_errmsg -- wrapper for simple_error_check, will stop if necessary, if
-  you want to prevent termination use die=.false
+- fclose -- wrapper for file close
+- fileiochk -- wrapper for simple_error_check, will stop if necessary, if
+               you want to prevent termination use die=.false
 
 Former method:
 :-        fnr = get_fileunit()

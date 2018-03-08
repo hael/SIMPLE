@@ -1,11 +1,14 @@
 ! concrete commander: common-lines based clustering and search
-
 module simple_commander_comlin
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
+use simple_ori,            only: ori
+use simple_oris,           only: oris
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_sp_project,     only: sp_project
+use simple_comlin_srch     ! use all in there
 use simple_binoris_io      ! use all in there
 implicit none
 
@@ -22,21 +25,13 @@ contains
 
     !> for identification of the principal symmetry axis
     subroutine exec_symsrch( self, cline )
-        use simple_strings,        only: int2str_pad
-        use simple_oris,           only: oris
-        use simple_ori,            only: ori
-        use simple_projector_hlev, only: project
-        use simple_sp_project,     only: sp_project
-        use simple_comlin_srch     ! use all in there
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                 :: p
         type(build)                  :: b
         type(ori)                    :: symaxis, orientation
-
         class(oris), pointer         :: symaxes => null()
         type(sp_project)             :: spproj
-
         type(oris)                   :: os, oshift, orientation_best, tmp_os
         real,            allocatable :: corrs(:)
         integer,         allocatable :: order(:)

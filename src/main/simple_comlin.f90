@@ -1,6 +1,6 @@
 ! for calculation of common-line correlations
 module simple_comlin
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_image,  only: image
 use simple_oris,   only: oris
@@ -54,9 +54,9 @@ contains
         self%nptcls = a%get_noris()
         self%a      => a
         self%fpls   => fpls
-        ld_here     = fpls(1)%get_ldim()
+        ld_here     = self%fpls(1)%get_ldim() ! <-- PGI does not like the pointer after targeting
         self%xdim   = ld_here(1)/2
-        self%lims   = fpls(1)%get_clin_lims(lp)
+        self%lims   = self%fpls(1)%get_clin_lims(lp) ! <-- as above
     end subroutine new
 
     !>  \brief  is for calculating the joint common line correlation

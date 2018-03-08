@@ -4,7 +4,7 @@
 module simple_volpft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
     
 use simple_projector, only: projector
 use simple_sym,       only: sym
@@ -57,7 +57,7 @@ contains
         if( vol_ref.eqdims.vol_target )then
             ! all good
         else
-            stop 'The volumes to be matched are not of the same dimension; simple_volpft_corrcalc :: new'
+            call simple_stop('The volumes to be matched are not of the same dimension; simple_volpft_corrcalc :: new')
         endif
         ! set pointers
         ! we assume that the volumes have been masked and prepared with prep4cgrid
@@ -74,7 +74,7 @@ contains
         allocate( self%vpft_ref(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2)),&
                   self%vpft_target(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2)),&
                   self%locs_ref(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2),3), stat=alloc_stat)
-        allocchk("In: simple_volpft_corrcalc :: new")
+        if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
         ! generate sampling space
         do isym=1,self%nspace
             ! get symmetry rotation matrix

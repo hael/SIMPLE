@@ -1,16 +1,15 @@
 module simple_reconstructor_tester
-#include "simple_lib.f08"
-use simple_build,              only: build
-use simple_params,             only: params
-use simple_cmdline,            only: cmdline
-use simple_kbinterpol,         only: kbinterpol
-use simple_prep4cgrid,         only: prep4cgrid
-use simple_ori,                only: ori
-use simple_oris,               only: oris
-use simple_image,              only: image
+include 'simple_lib.f08'
+use simple_build,          only: build
+use simple_params,         only: params
+use simple_cmdline,        only: cmdline
+use simple_kbinterpol,     only: kbinterpol
+use simple_prep4cgrid,     only: prep4cgrid
+use simple_ori,            only: ori
+use simple_oris,           only: oris
+use simple_image,          only: image
 use simple_strategy2D3D_common ! use all in there
-use simple_timer               ! use all in there
-use simple_defs                ! use all in there
+
 implicit none
 
 public :: exec_old_school_rec, exec_rec_batch_gridprep

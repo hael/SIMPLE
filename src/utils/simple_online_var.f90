@@ -48,14 +48,14 @@ contains
         endif
         self%cnt = self%cnt+1.d0
     end subroutine add
-    
+
     !>  \brief  for re-setting the mean (needed for cyclic variables)
-    subroutine reset_mean( self, mean ) 
+    subroutine reset_mean( self, mean )
         class(online_var), intent(inout) :: self
         real(sp), intent(in)             :: mean !< new mean
         self%mean = dble(mean)
     end subroutine reset_mean
-    
+
     !>  \brief  finalizes the variance
     subroutine finalize( self )
         class(online_var), intent(inout) :: self
@@ -67,7 +67,7 @@ contains
             self%var = 0.d0
         endif
     end subroutine finalize
-    
+
     !>  \brief  4 serialization of the object
     function serialize( self ) result( arr )
         class(online_var), intent(in) :: self
@@ -77,7 +77,7 @@ contains
         arr(3) = self%var
         arr(4) = self%cnt
     end function serialize
-    
+
     !>  \brief  4 serialization of the object
     subroutine unserialize( self, arr )
         class(online_var), intent(inout) :: self
@@ -87,7 +87,7 @@ contains
         self%var  = arr(3)
         self%cnt  = arr(4)
     end subroutine unserialize
-    
+
     !>  \brief  2 get the real variance
     function get_var( self ) result( var )
         class(online_var), intent(inout) :: self
@@ -100,14 +100,14 @@ contains
             var = 0.
         endif
     end function get_var
-    
+
     !>  \brief  2 get the real mean
     function get_mean( self ) result( mean )
         class(online_var), intent(in) :: self
         real(sp) :: mean
         mean = real(self%mean)
     end function get_mean
-    
+
     !>  \brief  get mean and var
     function get_mean_var( self ) result( mv )
         class(online_var), intent(in) :: self
@@ -115,7 +115,7 @@ contains
         mv(1) = real(self%mean)
         mv(2) = real(self%var)
     end function get_mean_var
-    
+
     !>  \brief  is the unit test associated with this class
     subroutine test_online_var
         use simple_stat, only: moment

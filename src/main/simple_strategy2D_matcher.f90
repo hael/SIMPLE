@@ -2,12 +2,12 @@
 module simple_strategy2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
-use simple_polarft_corrcalc,      only: polarft_corrcalc
-use simple_ori,                   only: ori
-use simple_build,                 only: build
-use simple_params,                only: params
-use simple_cmdline,               only: cmdline
+include 'simple_lib.f08'
+use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_ori,              only: ori
+use simple_build,            only: build
+use simple_params,           only: params
+use simple_cmdline,          only: cmdline
 use simple_strategy2D,            only: strategy2D
 use simple_strategy2D_srch,       only: strategy2D_spec
 use simple_strategy2D_greedy,     only: strategy2D_greedy
@@ -16,9 +16,7 @@ use simple_strategy2D_stochastic, only: strategy2D_stochastic
 use simple_strategy2D_alloc       ! use all in there
 use simple_strategy2D3D_common    ! use all in there
 use simple_filterer               ! use all in there
-use simple_timer                  ! use all in there
 use simple_classaverager          ! use all in there
-
 implicit none
 
 public :: cluster2D_exec, preppftcc4align, pftcc
@@ -121,8 +119,8 @@ contains
         if( b%a%get_nevenodd() == 0 )then
             stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
         endif
-        if( .not. cline%defined('refs') ) stop 'need refs to be part of command line for cluster2D execution'
-        if( .not. file_exists(p%refs) )   stop 'input references (refs) does not exist in cwd'
+        if( .not. cline%defined('refs') )call simple_ stop('need refs to be part of command line for cluster2D execution')
+        if( .not. file_exists(p%refs) ) call simple_stop('input references (refs) does not exist in cwd')
         call cavger_read(p%refs, 'merged')
         if( file_exists(p%refs_even) )then
             call cavger_read(p%refs_even, 'even')
@@ -195,14 +193,15 @@ contains
         ! switch for polymorphic strategy2D construction
         select case(trim(p%neigh))
             case('yes')
-                allocate(strategy2D_neigh :: strategy2Dsrch(p%fromp:p%top))
+                allocate(strategy2D_neigh :: strategy2Dsrch(p%fromp:p%top), stat=alloc_stat)
             case DEFAULT
                 if( b%spproj%is_virgin_field('ptcl2D') )then
-                    allocate(strategy2D_greedy :: strategy2Dsrch(p%fromp:p%top))
+                    allocate(strategy2D_greedy :: strategy2Dsrch(p%fromp:p%top), stat=alloc_stat)
                 else
-                    allocate(strategy2D_stochastic :: strategy2Dsrch(p%fromp:p%top))
+                    allocate(strategy2D_stochastic :: strategy2Dsrch(p%fromp:p%top, stat=alloc_stat))
                 endif
         end select
+        if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2D objects ")
         ! actual construction
         cnt = 0
         do iptcl = p%fromp, p%top

@@ -1,13 +1,12 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
 module simple_commander_distr
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
 use simple_binoris,        only: binoris
-use simple_imghead,        only: find_ldim_nptcls
 implicit none
 
 public :: merge_algndocs_commander
@@ -50,6 +49,7 @@ contains
         character(len=STDLEN)      :: fname
         character(len=1024)        :: line
         p      = params(cline) ! parameters generated
+        !$ allocate(parts(p%nptcls,2))
         parts  = split_nobjs_even(p%nptcls, p%ndocs)
         if( cline%defined('numlen') )then
             numlen = p%numlen
@@ -130,7 +130,7 @@ contains
             case('.txt')
                 call fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
                 &action='write', position='append', access='sequential')
-                call fileio_errmsg("Error opening file"//trim(adjustl(p%outfile)), io_stat)
+                call fileiochk("Error opening file"//trim(adjustl(p%outfile)), io_stat)
                 do i=1,p%ndocs
                     fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//trim(METADATA_EXT)
                     nj = nlines(fname)
@@ -142,7 +142,7 @@ contains
                         stop 'number of lines in file not consistent with the size of the partition'
                     endif
                     call fopen(funit, file=fname, iostat=io_stat, status='old', action='read', access='sequential')
-                    call fileio_errmsg("Error opening file "//trim(adjustl(fname)), io_stat)
+                    call fileiochk("Error opening file "//trim(adjustl(fname)), io_stat)
                     do j=1,nj
                         read(funit,fmt='(A)') line
                         write(funit_merge,fmt='(A)') trim(line)
@@ -166,7 +166,7 @@ contains
         p      = params(cline) ! parameters generated
         nnmat  = merge_nnmat_from_parts(p%nptcls, p%nparts, p%nnn)            !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat)
-        call fileio_errmsg('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
+        call fileiochk('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) nnmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to nnmat.bin'
@@ -187,7 +187,7 @@ contains
         p      = params(cline) ! parameters generated
         simmat = merge_similarities_from_parts(p%nptcls, p%nparts)           !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
-        call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
+        call fileiochk('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'

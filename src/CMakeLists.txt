@@ -43,7 +43,7 @@ file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCO
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
 if ( USE_CUDA )
   file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.f[90][08]" PARENT_SCOPE)
-#  list(APPEND UTILS_src ${UTILS_src} ${CUDA_src})
+  list(APPEND UTILS_src ${UTILS_src} ${CUDA_src})
 ##  list(REMOVE_ITEM UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 ## else()
 ##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/utils/simple_timer_cuda.f90")
@@ -91,21 +91,14 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
     SOVERSION ${${PROJECT_NAME}_VERSION}
     )
 else()
-  if(BUILD_SHARED_LIBS)
-    add_library(${SIMPLELIB} SHARED ${SIMPLECORELIB})
-    SET_TARGET_PROPERTIES(${SIMPLELIB}
-      PROPERTIES
-      LINKER_LANGUAGE Fortran
-      SOVERSION ${${PROJECT_NAME}_VERSION}
-      )
-  else()
-    add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
-  endif()
+    add_library(${SIMPLELIB}  ${SIMPLECORELIB})
 endif()
 
 add_dependencies(${SIMPLELIB} simple_args)
 set_target_properties(${SIMPLELIB}
   PROPERTIES
+  LINKER_LANGUAGE Fortran
+  SOVERSION ${${PROJECT_NAME}_VERSION}
   VERSION ${${PROJECT_NAME}_VERSION}
   COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
   LINK_FLAGS "${OpenMP_Fortran_FLAGS}"

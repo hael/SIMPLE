@@ -1,6 +1,6 @@
 ! continuous function optimisation by differential evolution
 module simple_opt_de
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 implicit none
@@ -32,7 +32,6 @@ contains
 
     !> \brief  is a constructor
     subroutine new_de( self, spec )
-        use simple_syslib, only: alloc_errchk
         class(opt_de),   intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
         ! destruct if exists
@@ -62,7 +61,7 @@ contains
         end select
         ! allocate
         allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
-        allocchk("In: new_de; simple_opt_de")
+        if(alloc_stat.ne.0)call allocchk("In: new_de; simple_opt_de",alloc_stat)
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
     end subroutine new_de

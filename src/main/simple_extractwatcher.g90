@@ -1,12 +1,7 @@
 ! particles watcher for stream processing
-
 module simple_extractwatcher
-#include "simple_lib.f08"
-use simple_defs
-use simple_syslib
-use simple_fileio
+include 'simple_lib.f08'
 use simple_params, only: params
-use simple_timer
 implicit none
 
 public :: extractwatcher
@@ -200,15 +195,15 @@ contains
         if( .not.allocated(self%history) )then
             n = 0
             allocate(self%history(1), stat=alloc_stat)
-            allocchk("In: simple_moviewatcher%add2history 1")
+            if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 1",alloc_stat)
         else
             n = size(self%history)
             allocate(tmp_farr(n), stat=alloc_stat)
-            allocchk("In: simple_moviewatcher%add2history 2")
+            if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 2",alloc_stat)
             tmp_farr(:) = self%history
             deallocate(self%history)
             allocate(self%history(n+1), stat=alloc_stat)
-            allocchk("In: simple_moviewatcher%add2history 3")
+            if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 3",alloc_stat)
             self%history(:n) = tmp_farr
             deallocate(tmp_farr)
         endif

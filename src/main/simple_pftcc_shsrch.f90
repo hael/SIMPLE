@@ -1,6 +1,6 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain
 module simple_pftcc_shsrch
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_opt_spec,          only: opt_spec
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_opt_factory,       only: opt_factory

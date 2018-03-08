@@ -1,6 +1,6 @@
 ! for checking convergence
 module simple_convergence
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_oris,     only: oris
 use simple_params,   only: params

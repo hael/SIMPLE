@@ -1,7 +1,6 @@
 module simple_sp_project
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_ori,     only: ori
-use simple_imghead, only: find_ldim_nptcls
 use simple_oris,    only: oris
 use simple_binoris, only: binoris
 implicit none
@@ -215,6 +214,7 @@ contains
         class(cmdline),    intent(in)    :: cline
         character(len=STDLEN)            :: env_var
         character(len=:), allocatable    :: projname
+        integer :: iostat
         if( self%compenv%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -222,22 +222,22 @@ contains
         endif
         ! compenv has to be filled as strings as it is used as a string only dictionnary
         ! get from environment
-        env_var = trim(simple_getenv('SIMPLE_PATH'))
-        if( env_var.eq.'' )then
+        iostat = simple_getenv('SIMPLE_PATH', env_var)
+        if( iostat /= 0 )then
             write(*,*) 'ERROR! SIMPLE_PATH is not defined in your shell environment!'
             write(*,*) 'Please refer to installation documentation for correct system configuration'
             stop
         else
             call self%compenv%set(1, 'simple_path', trim(env_var))
         endif
-        env_var = trim(simple_getenv('SIMPLE_QSYS'))
-        if( env_var.eq.'' )then
+        iostat = simple_getenv('SIMPLE_QSYS', env_var)
+        if( iostat/=0 )then
             stop 'SIMPLE_QSYS is not defined in your environment.'
         else
             call self%compenv%set(1, 'qsys_name', trim(env_var))
         endif
-        env_var = trim(simple_getenv('SIMPLE_EMAIL'))
-        if( env_var.eq.'' ) env_var = 'my.name@uni.edu'
+        iostat = simple_getenv('SIMPLE_EMAIL', env_var)
+        if( iostat/=0 ) env_var = 'my.name@uni.edu'
         call self%compenv%set(1, 'user_email', trim(env_var))
         ! get from command line
         if( cline%defined('time_per_image') )then
@@ -750,7 +750,6 @@ contains
         integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer    :: nptcls, nptcls_part, numlen
         real       :: smpd, cs, kv, fraca
-        integer(4) :: rename_res
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk==0 )then
@@ -804,7 +803,7 @@ contains
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
             allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//'.'//trim(ext))
-            rename_res = rename(trim(stkpart), trim(dest_stkpart))
+            call simple_rename(trim(stkpart), trim(dest_stkpart))
             nptcls_part = parts(istk,2)-parts(istk,1)+1
             call self%os_stk%set(istk, 'ctf',   ctfstr)
             call self%os_stk%set(istk, 'cs',    cs)

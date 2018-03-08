@@ -72,7 +72,7 @@ open(MODULE, "> ".$tmp_argsfile) or die "Cannot open simple_args.f90\n";
 print MODULE "! for error checking of the SIMPLE command line arguments
 
 module simple_args
-#include \"simple_lib.f08\"
+include 'simple_lib.f08'
 implicit none
 
 public :: args, test_args
@@ -153,7 +153,7 @@ subroutine test_args()
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
     as = args()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
-    spath = simple_getenv(\"SIMPLE_PATH\")
+    io_stat = simple_getenv(\"SIMPLE_PATH\", spath)
     spath = trim(adjustl(spath))
     print *, 'get_environment_variable found SIMPLE_PATH ', trim(spath)
     print *, 'appending varlist '
@@ -179,7 +179,7 @@ subroutine test_args()
     endif
     n = nlines(vfilename)
     call fopen(funit, status='old', action='read', file=trim(adjustl(vfilename)), iostat=io_stat)
-    if(io_stat /= 0) call fileio_errmsg(\"simple_args::test  Unable to open \"//trim(vfilename),io_stat)
+    if(io_stat /= 0) call fileiochk(\"simple_args::test  Unable to open \"//trim(vfilename),io_stat)
     do i=1,n
         read(funit,*) arg
         if( as%is_present(arg) )then

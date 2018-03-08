@@ -1,7 +1,6 @@
 ! particle picker iterator
 module simple_picker_iter
-#include "simple_lib.f08"
-
+include 'simple_lib.f08'
 use simple_picker
 implicit none
 

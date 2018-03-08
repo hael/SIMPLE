@@ -1,8 +1,5 @@
 program simple_test_parse
-use simple_strings
-use simple_defs
-use simple_hash,  only: hash
-use simple_chash, only: chash
+include 'simple_lib.f08'
 use simple_sauron
 implicit none
 character(len=STDLEN) :: str

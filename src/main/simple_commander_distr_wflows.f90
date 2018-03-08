@@ -1,8 +1,7 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline
-use simple_chash,               only: chash
 use simple_qsys_env,            only: qsys_env
 use simple_build,               only: build
 use simple_params,              only: params
@@ -11,8 +10,8 @@ use simple_commander_cluster2D  ! use all in there
 use simple_commander_distr      ! use all in there
 use simple_commander_mask       ! use all in there
 use simple_commander_distr      ! use all in there
+use simple_commander_preprocess ! use all in there
 use simple_qsys_funs            ! use all in there
-use simple_binoris_io           ! use all in there
 implicit none
 
 public :: preprocess_distr_commander
@@ -238,7 +237,7 @@ contains
         p_master%nptcls = nseries
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts), stat=alloc_stat) ! -1. is default excluded value
-        allocchk("simple_commander_distr_wflows::motion_correct_tomo_moview_distr ")
+        if(alloc_stat.ne.0)call allocchk("simple_commander_distr_wflows::motion_correct_tomo_moview_distr ", alloc_stat)
         do ipart=1,p_master%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
@@ -588,7 +587,6 @@ contains
                     endif
                 endif
             end subroutine remap_empty_cavgs
-
     end subroutine exec_cluster2D_distr
 
     subroutine exec_refine3D_init_distr( self, cline )
@@ -642,9 +640,6 @@ contains
         use simple_commander_mask
         use simple_commander_rec
         use simple_commander_volops
-        use simple_oris,    only: oris
-        use simple_math,    only: calc_fourier_index, calc_lowpass_lim
-        use simple_strings, only: real2str
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
@@ -699,7 +694,8 @@ contains
         call cline_postprocess%set('mirr',  'no')
 
         ! for parallel volassemble over states
-        allocate(state_assemble_finished(p_master%nstates))
+        allocate(state_assemble_finished(p_master%nstates) , stat=alloc_stat)
+        if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_prime3D_distr state_assemble ",alloc_stat)
 
         ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,p_master%nstates
@@ -987,7 +983,6 @@ contains
 
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile,         only: nrtxtfile
-        use simple_strings,           only: real2str
         class(tseries_track_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(qsys_env)                :: qenv
@@ -1010,7 +1005,7 @@ contains
             ndatlines = boxfile%get_ndatalines()
             numlen    = len(int2str(ndatlines))
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            allocchk('In: simple_commander_tseries :: exec_tseries_track')
+            if(alloc_stat.ne.0)call allocchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
             do j=1,ndatlines
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))
@@ -1051,10 +1046,6 @@ contains
     subroutine exec_symsrch_distr( self, cline )
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
-        use simple_sym,     only: sym
-        use simple_ori,     only: ori
-        use simple_oris,    only: oris
-        use simple_strings, only: int2str_pad, int2str,real2str
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
@@ -1224,7 +1215,6 @@ contains
     end subroutine exec_symsrch_distr
 
     subroutine exec_scale_project_distr( self, cline )
-        use simple_map_reduce, only: split_nobjs_even
         class(scale_project_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(qsys_env)                     :: qenv

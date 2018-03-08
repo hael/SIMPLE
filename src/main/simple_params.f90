@@ -1,11 +1,10 @@
 ! provides global distribution of constants and derived constants
 module simple_params
-#include "simple_lib.f08"
-use simple_ori,         only: ori
-use simple_cmdline,     only: cmdline
-use simple_magic_boxes, only: find_magic_box
-use simple_imghead,     only: find_ldim_nptcls
-use simple_binoris,     only: binoris
+include 'simple_lib.f08'
+use simple_ori,            only: ori
+use simple_cmdline,        only: cmdline
+use simple_binoris,        only: binoris
+use simple_stktab_handler, only: stktab_handler
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none
@@ -405,8 +404,6 @@ contains
 
     !> \brief  is a constructor
     subroutine new( self, cline, allow_mix, del_scaled, spproj_a_seg )
-        use simple_math, only: round2even
-        use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: allow_mix, del_scaled
@@ -973,7 +970,6 @@ contains
                 self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
             end do
         endif
-
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
 !>>> START, PARALLELISATION-RELATED
@@ -1030,7 +1026,7 @@ contains
                     if( self%box /= self%box_original )then
                         write(*,*) 'original box:                ', self%box_original
                         write(*,*) 'box read from partial stack: ', self%box
-                        stop 'dim mismatch; simple_params :: new'
+                        call simple_stop('dim mismatch; simple_params :: new')
                     endif
                 endif
             endif
@@ -1120,7 +1116,7 @@ contains
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
                 write(*,*) 'file: ', trim(self%mskfile)
-                stop 'input mask file not in cwd'
+                call simple_stop('input mask file not in cwd')
             endif
         endif
         ! focused masking
@@ -1160,7 +1156,7 @@ contains
         ! box on the command line overrides all other ldim setters
         if( cline%defined('box')  ) self%ldim = [self%box,self%box,1]
         ! if CTF refinement
-        if( self%ctf .eq. 'refine' ) stop 'CTF refinement not yet implemented'
+        if( self%ctf .eq. 'refine' ) call simple_stop('CTF refinement not yet implemented')
         ! set eullims
         self%eullims(:,1) = 0.
         self%eullims(:,2) = 359.99
@@ -1179,8 +1175,8 @@ contains
             call find_ldim_nptcls(self%refs, lfoo, ncls)
             DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
-                if( ncls /= self%ncls ) stop 'inputtend number of clusters (ncls) not&
-                &consistent with the number of references in stack (p%refs)'
+                if( ncls /= self%ncls ) call simple_stop('inputtend number of clusters (ncls) not&
+                &consistent with the number of references in stack (p%refs)')
             else
                 self%ncls = ncls
             endif
@@ -1231,10 +1227,10 @@ contains
         self%l_dose_weight = .false.
         if( cline%defined('exp_time') .or. cline%defined('dose_rate') )then
             if( cline%defined('exp_time') .and. .not. cline%defined('dose_rate') )then
-                stop 'need dose_rate to be part of the command line! simple_params :: new'
+                call simple_stop('need dose_rate to be part of the command line! simple_params :: new')
             endif
             if( .not. cline%defined('exp_time') .and. cline%defined('dose_rate') )then
-                stop 'need exp_time to be part of the command line! simple_params :: new'
+                call simple_stop('need exp_time to be part of the command line! simple_params :: new')
             endif
             self%l_dose_weight = .true.
         endif
@@ -1299,10 +1295,10 @@ contains
                 filenam = cline%get_carg('vollist')
                 nl      = nlines(filenam)
                 call fopen(fnr, file=filenam, iostat=io_stat)
-                if(io_stat /= 0) call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
+                if(io_stat /= 0) call fileiochk("params ; read_vols error opening "//trim(filenam), io_stat)
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) nam
-                    if(io_stat /= 0) call fileio_errmsg("params ; read_vols error reading "//trim(filenam), io_stat)
+                    if(io_stat /= 0) call fileiochk("params ; read_vols error reading "//trim(filenam), io_stat)
                     if( nam .ne. '' )then
                         self%vols(i) = nam
                     endif
@@ -1316,10 +1312,10 @@ contains
                 filenam = cline%get_carg('msklist')
                 nl      = nlines(filenam)
                 call fopen(fnr, file=filenam, iostat=io_stat)
-                if(io_stat /= 0) call fileio_errmsg("params ; read_masks error opening "//trim(filenam), io_stat)
+                if(io_stat /= 0) call fileiochk("params ; read_masks error opening "//trim(filenam), io_stat)
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) nam
-                    if(io_stat /= 0) call fileio_errmsg("params ; read_masks error reading "//trim(filenam), io_stat)
+                    if(io_stat /= 0) call fileiochk("params ; read_masks error reading "//trim(filenam), io_stat)
                     if( nam .ne. '' )then
                         self%mskvols(i) = nam
                     endif
@@ -1360,7 +1356,7 @@ contains
                     endif
                     select case(file_descr)
                         case ('I')
-                            stop 'Support for IMAGIC files is not implemented!'
+                            call simple_stop('Support for IMAGIC files is not yet implemented!')
                         case ('M')
                             ! MRC files are supported
                             cntfile = cntfile+1
@@ -1371,7 +1367,7 @@ contains
                             checkupfile(cntfile) = 'S'
                         case ('N')
                             write(*,*) 'file: ', trim(file)
-                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                            call simple_stop('This file format is not supported by SIMPLE; simple_params::check_file')
                         case ('T','B','P','O')
                             ! text files are supported
                             ! binary files are supported
@@ -1379,7 +1375,7 @@ contains
                             ! *.simple project files are supported
                         case DEFAULT
                             write(*,*) 'file: ', trim(file)
-                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                            call simple_stop('This file format is not supported by SIMPLE; simple_params::check_file')
                     end select
                     DebugPrint file, '=', var
                 endif
@@ -1396,7 +1392,7 @@ contains
                                 ! all ok
                             else
                                 if( .not. allow_mix )then
-                                    stop 'The inputted file names have nonconforming format (mixed formats not yet allowed)!'
+                                    call simple_stop('The inputted file names have nonconforming format (mixed formats not yet allowed)!')
                                 endif
                             endif
                         end do
@@ -1407,7 +1403,7 @@ contains
                         case('S')
                             self%ext = '.spi'
                         case DEFAULT
-                            stop 'This file format is not supported by SIMPLE; check_file_formats; simple_params'
+                            call simple_stop('This file format is not supported by SIMPLE; check_file_formats; simple_params')
                     end select
                 endif
             end subroutine check_file_formats
@@ -1419,7 +1415,7 @@ contains
                 if( cntfile == 0 )then
                     if( cline%defined('filetab') )then
                         call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
-                        call fileio_errmsg("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
+                        call fileiochk("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
                         read(funit,'(a256)') fname
                         form = fname2format(fname)
                         call fclose(funit, &
@@ -1431,7 +1427,7 @@ contains
                                 self%ext = '.spi'
                             case DEFAULT
                                 write(*,*) 'format string is ', form
-                                stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_params'
+                                call simple_stop('This file format is not supported by SIMPLE; double_check_file_formats; simple_params')
                         end select
                     endif
                 endif
@@ -1495,7 +1491,7 @@ contains
                     else
                         write(*,'(a)')      'simple_params :: set_ldim_box_from_stk'
                         write(*,'(a,1x,a)') 'Stack file does not exist!', trim(stkfname)
-                        stop
+                        call simple_stop(" In simple_params set_ldim_box_from_stk")
                     endif
                 endif
             end subroutine set_ldim_box_from_stk

@@ -1,5 +1,5 @@
 module simple_ctf_estimate
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_ctf,      only: ctf
 use simple_opt_spec, only: opt_spec
@@ -352,7 +352,6 @@ contains
 
     !>  \brief  is for making a CTF power-spec image
     subroutine ctf2pspecimg( tfun, img, dfx, dfy, angast, add_phshift )
-        use simple_image, only: image
         class(ctf),     intent(inout) :: tfun        !< CTF object
         class(image),   intent(inout) :: img         !< image (output)
         real,           intent(in)    :: dfx         !< defocus x-axis
@@ -394,7 +393,6 @@ contains
 
     !>  \brief  is for making a CTF power-spec image
     subroutine ctf2pspecimgs( tfun, tfun_roavg, img, img_roavg, dfx, dfy, angast, add_phshift )
-        use simple_image, only: image
         class(ctf),     intent(inout) :: tfun, tfun_roavg !< CTF objects
         class(image),   intent(inout) :: img, img_roavg   !< image (outputs)
         real,           intent(in)    :: dfx              !< defocus x-axis

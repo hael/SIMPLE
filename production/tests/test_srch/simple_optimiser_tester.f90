@@ -1,8 +1,9 @@
 module simple_optimiser_tester
+include 'simple_lib.f08'
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
-use simple_defs         ! singleton
+
 implicit none
 
 public :: exec_optimiser_test
@@ -131,8 +132,6 @@ contains
 
     !>  \brief  master test routine
     subroutine test_all_optimizers
-        use simple_jiffys, only: progress
-        use simple_stat,   only: moment
         integer :: i, j, k, cnt, nfuns
         real    :: maxeval, neval
         logical :: err
@@ -199,7 +198,6 @@ contains
 
     !>  \brief  optimizer test routine, parameterized with respect to optimizer & testfunction
     subroutine test_optimizer( wopt, wfun, ndim )
-        use simple_rnd,  only: ran3
         use simple_testfuns
         integer, intent(in)         :: wopt, wfun, ndim !< which optimizer, which test function, dimension of problem
         procedure(testfun), pointer :: costfun_ptr      !< pointer 2 test function

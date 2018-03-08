@@ -1,5 +1,8 @@
 module simple_stktab_handler
 use simple_defs
+use simple_fileio
+use simple_imghead, only: find_ldim_nptcls
+
 implicit none
 
 public :: stktab_handler, test_stktab_handler
@@ -44,12 +47,10 @@ end type
 contains
 
     subroutine new( self, filetabname, part )
-        use simple_fileio,  only: read_filetable, fopen, fclose
-        use simple_imghead, only: find_ldim_nptcls 
         class(stktab_handler), target, intent(inout) :: self
         character(len=*),              intent(in)    :: filetabname
         integer, optional,             intent(in)    :: part
-        character(len=STDLEN), allocatable :: micnames(:) 
+        character(len=STDLEN), allocatable :: micnames(:)
         integer :: imic, ldim(3), pind_cnt, istart, istop, nptcls, iptcl, fnr, ppart
         ppart = 1
         if( present(part) ) ppart = part
@@ -151,7 +152,6 @@ contains
     end subroutine get_stkname_and_ind
 
     subroutine add_scale_tag( self )
-        use simple_fileio, only: fname2ext, add2fbody
         class(stktab_handler), intent(inout) :: self
         character(len=:), allocatable :: ext, newname
         integer :: imic
@@ -164,7 +164,6 @@ contains
     end subroutine add_scale_tag
 
     subroutine del_scale_tag( self )
-        use simple_fileio, only: fname2ext, del_from_fbody
         class(stktab_handler), intent(inout) :: self
         character(len=:), allocatable :: ext, newname
         integer :: imic
@@ -177,7 +176,6 @@ contains
     end subroutine del_scale_tag
 
     subroutine write_stktab( self, tabname )
-        use simple_fileio, only: fopen, fclose
         class(stktab_handler), intent(in) :: self
         character(len=*),      intent(in) :: tabname
         integer :: fnr, imic
@@ -189,7 +187,6 @@ contains
     end subroutine write_stktab
 
     subroutine del_stktab_files( self )
-        use simple_fileio, only: del_file
         class(stktab_handler), intent(in) :: self
         integer :: imic
         do imic=1,self%nmics
@@ -216,7 +213,6 @@ contains
     end subroutine kill
 
     subroutine test_stktab_handler
-        use simple_fileio, only: make_filenames
         character(len=STDLEN), allocatable :: names(:)
         type(stktab_handler) :: stkhandle
         integer, parameter   :: NMICS=10

@@ -13,12 +13,10 @@
 ! Public License.
 ! -----------------------------------------------------------------------------!
 program simple_test_timer
-use simple_defs
+include 'simple_lib.f08'
 use simple_timer_basic_test
 use simple_timer_profile_test
 use simple_cmdline, only: cmdline
-use simple_strings, only: str2real
-use simple_syslib
 implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime

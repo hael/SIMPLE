@@ -1,5 +1,5 @@
 program simple_test_imgfile
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_imgfile, only: imgfile
 use simple_imghead

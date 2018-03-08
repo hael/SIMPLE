@@ -10,8 +10,8 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
-#include "simple_lib.f08"
-use simple_imghead
+include 'simple_lib.f08'
+use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead ! dataRbytes, dataRinteger, dataRfloat
 use gnufor2
 implicit none
 
@@ -121,7 +121,7 @@ contains
 
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
-        class(imgfile),             intent(inout) :: self          !< Imagefile object 
+        class(imgfile),             intent(inout) :: self          !< Imagefile object
         logical, optional,          intent(in)    :: del_if_exists !< overwrite flag
         character(len=*), optional, intent(in)    :: rwaction      !< read/write flag
         character(len=9) :: rw_str
@@ -142,8 +142,8 @@ contains
         endif
         ! Get an IO unit number
         call fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,&
-             status=stat_str,iostat=ios)
-        call fileio_errmsg("imgfile::open_local fopen error",ios)
+            status=stat_str,iostat=ios)
+        call fileiochk("imgfile::open_local fopen error",ios)
         self%was_written_to = .false.
     end subroutine open_local
 
@@ -232,14 +232,12 @@ contains
     !>  \brief  reads a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rSlices( self, first_slice, last_slice, rarr )
-        use simple_math,   only: is_odd
-        use simple_imghead ! use all in there
 #ifdef PGI
         use ISO_C_BINDING
 #else
         use, intrinsic :: iso_c_binding
 #endif
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object 
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
@@ -302,16 +300,16 @@ contains
                 else
                     alloc_tmparr = .true.
                 endif
-                if( alloc_tmparr )then 
+                if( alloc_tmparr )then
                     allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                    call alloc_errchk("In simple_imgfile:: rSlices ;  Byte data ", alloc_stat)
+                    if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ;  Byte data ", alloc_stat)
                 endif
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
-                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran 
-                ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey 
-                ! at http://software.intel.com/en-us/forums/showthread.php?t=64400 Confusingly, the MRC format 
-                ! documentation implies that one should expect signed integers, which seems to be incorrect: 
-                ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that prior to IMOD 
+                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran
+                ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey
+                ! at http://software.intel.com/en-us/forums/showthread.php?t=64400 Confusingly, the MRC format
+                ! documentation implies that one should expect signed integers, which seems to be incorrect:
+                ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that prior to IMOD
                 ! 4.2.23, unsigned bytes were used and that one needs to inspect the imodStamp head to check
                 if( self%overall_head%pixIsSigned() )then
                     rarr(1:dims(1),:,:) = tmp_byte_array(:dims(1),:dims(2),:dims(3))
@@ -331,9 +329,9 @@ contains
                 else
                     alloc_tmparr = .true.
                 endif
-                if( alloc_tmparr )then 
+                if( alloc_tmparr )then
                     allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                    call alloc_errchk("In simple_imgfile:: rSlices ; 16-bit data ", alloc_stat )
+                     if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ; 16-bit data ", alloc_stat )
                 endif
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
                 if( self%overall_head%pixIsSigned() )then
@@ -343,7 +341,7 @@ contains
                         &int(huge(int(1,kind=2)), kind=4)))
                 endif
             case(4)
-                read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:) 
+                read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
             case DEFAULT
                 write(*,'(2a)') 'fname: ', trim(self%fname)
                 write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
@@ -360,14 +358,12 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
-        use simple_math,    only: is_odd, is_even
-        use simple_imghead  ! use all in there
 #ifdef PGI
         use ISO_C_BINDING
 #else
         use, intrinsic :: iso_c_binding
 #endif
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object 
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
@@ -488,7 +484,7 @@ contains
                 else if( self%isvol .and. is_ft .and. is_even(dims(1:2)) )then
                     call self%overall_head%setIform(-22)
                 else
-                    stop 'undefined file type, rwSlices; simple_imgfile'
+                    call simple_stop( 'undefined file type, rwSlices; simple_imgfile')
                 endif
         end select
         ! Remember that we wrote to the file
@@ -497,7 +493,7 @@ contains
 
     !>  \brief  Print out basic information about the file
     subroutine print_header( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object 
+        class(imgfile), intent(in) :: self   !< Imagefile object
         write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
         call self%overall_head%print_imghead()
         write(*,'(a)') ' '
@@ -505,7 +501,7 @@ contains
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object 
+        class(imgfile), intent(in) :: self   !< Imagefile object
         integer :: getDims(3)
         getDims = self%overall_head%getDims()
     end function getDims

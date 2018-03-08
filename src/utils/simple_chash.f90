@@ -1,8 +1,8 @@
 ! character hash
 module simple_chash
 use simple_defs
-use simple_syslib, only: is_open
-use simple_fileio, only: fopen, fileio_errmsg, fclose
+use simple_syslib, only: allocchk, is_open
+use simple_fileio, only: fopen, fileiochk, fclose
 use simple_strings
 use simple_ansi_ctrls
 implicit none
@@ -369,7 +369,8 @@ contains
             tmp%chash_index = self%chash_index
             tmp%exists      = .true.
             ! fill in keys
-            allocate(keys_sorted(self%chash_index))
+            allocate(keys_sorted(self%chash_index),stat=alloc_stat)
+            if(alloc_stat /= 0) call allocchk("In simple_chash::sort", alloc_stat)
             do ikey=1,self%chash_index
                 keys_sorted(ikey) = self%keys(ikey)%str
             end do
@@ -554,7 +555,7 @@ contains
         character(len=STDLEN)        :: val
         integer :: ios, pos, funit
         call fopen(funit, file=fname, iostat=ios, status='old')
-        call fileio_errmsg('simple_chash :: read; Error when opening file for reading: '//trim(fname), ios)
+        call fileiochk('simple_chash :: read; Error when opening file for reading: '//trim(fname), ios)
         do
             read(funit, '(a)', iostat=ios) buffer
             if ( ios == 0 ) then
@@ -579,7 +580,7 @@ contains
         character(len=*), intent(in) :: fname  !< name of file
         integer :: ios, funit
         call fopen(funit, fname, iostat=ios, status='replace')
-        call fileio_errmsg('simple_chash :: write; Error when opening file for writing: '&
+        call fileiochk('simple_chash :: write; Error when opening file for writing: '&
             //trim(fname), ios)
         call self%print_key_val_pairs(fhandle=funit)
         call fclose(funit, errmsg='simple_chash :: write; ')

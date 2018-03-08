@@ -1,8 +1,6 @@
 ! an orientation
 module simple_ori
-#include "simple_lib.f08"
-use simple_hash,   only: hash
-use simple_chash,  only: chash
+include 'simple_lib.f08'
 implicit none
 
 public :: ori, test_ori, test_ori_dists
@@ -288,7 +286,6 @@ contains
     !>  \brief  for generating a random rotation matrix
     subroutine rnd_romat( self )
         ! Fast Random Rotation Matrices, Arvo, Graphics Gems III, 1992
-        use simple_rnd, only: ran3
         class(ori), intent(inout) :: self
         real :: theta, phi, z, vx, vy, vz
         real :: r, st, ct, sx, sy
@@ -348,7 +345,6 @@ contains
 
     !>  \brief  for generating a random Euler angle neighbour to o_prev
     subroutine rnd_euler_2( self, o_prev, athres, proj )
-        use simple_math, only: deg2rad
         class(ori),        intent(inout) :: self   !< instance
         class(ori),        intent(in)    :: o_prev !< template ori
         real,              intent(in)    :: athres !< angle threshold in degrees
@@ -371,7 +367,6 @@ contains
 
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
-        use simple_rnd, only: ran3
         class(ori),     intent(inout) :: self
         real, optional, intent(in)    :: trs         !< threshold
         real, optional, intent(inout) :: eullims(3,2)!< Euler angles
@@ -399,7 +394,6 @@ contains
 
     !>  \brief  for generating random in-plane parameters
     subroutine rnd_inpl( self, trs )
-        use simple_rnd, only: ran3
         class(ori), intent(inout)  :: self
         real, intent(in), optional :: trs         !< threshold
         if( present(trs) )call self%rnd_shift(trs)
@@ -408,7 +402,6 @@ contains
 
     !>  \brief  for generating random in-plane parameters
     subroutine rnd_shift( self, trs )
-        use simple_rnd, only: ran3
         class(ori), intent(inout)  :: self
         real,       intent(in)     :: trs         !< threshold
         real :: x, y
@@ -626,7 +619,7 @@ contains
         is = .false.
         if( hash_found )then
             is = .true.
-            if( chash_found ) stop 'ERROR, ambigous keys; simple_ori :: key_is_real'
+            if( chash_found ) call simple_stop('ERROR, ambigous keys; simple_ori :: key_is_real')
         endif
     end function key_is_real
 
@@ -757,7 +750,6 @@ contains
     !>  combines 3d and 2d oris and flags for ptcl mirroring
     !! \param ori3d,ori2d,o_out ori class type rotational matrices
     subroutine compose3d2d( ori3d, ori2d, o_out )
-        use simple_math, only: make_transfmat, transfmat2inpls
         class(ori), intent(inout) :: ori3d, ori2d, o_out
         real                      :: ori3dx,ori3dy,x,y,e3,euls(3)
         real                      :: R3d(3,3), R2d(3,3), R(3,3)
@@ -793,7 +785,6 @@ contains
     end subroutine compose3d2d
 
     subroutine map3dshift22d( self, sh3d )
-        use simple_math, only: deg2rad
         class(ori), intent(inout) :: self
         real, intent(in)          :: sh3d(3) !< 3D shift
         real                      :: old_x,old_y,x,y,cx,cy
@@ -846,7 +837,6 @@ contains
     !!          can be equivalently accomplished by mirror('y')
     !!          the image after projection
     subroutine mirror2d( self )
-        use simple_math, only: rad2deg
         class(ori), intent(inout) :: self
         type(ori) :: old
         old = self
@@ -973,7 +963,7 @@ contains
             case('diverse')
                 call ospec%set_costfun(costfun_diverse_2)
             case DEFAULT
-                stop 'unsupported mode inputted; simple_ori :: ori_generator'
+                call simple_stop('unsupported mode inputted; simple_ori :: ori_generator')
         end select
         call opt%minimize(ospec, fun_self, dist)
         call oout%set_euler(ospec%x)
@@ -997,7 +987,7 @@ contains
     !>  \brief  this metric is measuring the frobenius deviation from the identity matrix .in.[0,2*sqrt(2)]
     !!          Larochelle, P.M., Murray, A.P., Angeles, J., A distance metric for finite
     !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des.
-    !!          129, 883–886 (2007)
+    !!          129, 883--886 (2007)
     !! \param self1,self2 ori class type rotational matrices
     pure real function geodesic_dist( self1, self2 )
         class(ori), intent(in) :: self1, self2
@@ -1028,7 +1018,6 @@ contains
     !>  \brief  calculates the distance (in radians) btw two Euler angles
     !! \param self1,self2 ori class type rotational matrices
     pure function euldist( self1, self2 ) result( dist )
-        use simple_math, only: myacos
         class(ori), intent(in) :: self1, self2
         real :: dist
         dist = myacos(dot_product(self1%normal,self2%normal))
@@ -1037,7 +1026,6 @@ contains
     !>  \brief  calculates the distance (in radians) btw all df:s
     !! \param self1,self2 ori class type rotaional matrices
     pure function inpldist( self1, self2 ) result( dist )
-        use simple_math, only: myacos, rotmat2d
         class(ori), intent(in) :: self1, self2
         real :: dist
         dist = ((self1.inplrotdist.self2)+(self1.euldist.self2))/2.
@@ -1046,7 +1034,6 @@ contains
     !>  \brief  calculates the distance (in radians) btw the in-plane rotations
     !! \param self1,self2 ori class type rotaional matrices
     pure function inplrotdist( self1, self2 ) result( dist )
-        use simple_math, only: myacos, rotmat2d
         class(ori), intent(in) :: self1, self2
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         u(1) = 0.
@@ -1101,7 +1088,6 @@ contains
 
     !>  \brief  returns a Spider format Euler triplet, given a rotation matrix
     pure function m2euler( mat ) result ( euls )
-        use simple_math, only: rad2deg, myacos
         real, intent(in), dimension(3,3) :: mat(3,3)
         real, dimension(3,3):: tmp, anticomp1z, anticomp2y, get_euler3eul
         real :: imagevec(3), absxy, mceul1deg, mceul2deg, phitmp, euls(3)
@@ -1211,7 +1197,6 @@ contains
 
     !>  \brief  uses an angular threshold
     function costfun_diverse_projdir( fun_self, vec, D ) result( dist )
-        use simple_math, only: rad2deg
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
@@ -1238,7 +1223,6 @@ contains
     ! UNIT TESTS
 
     subroutine test_ori_dists
-        use simple_math, only: rad2deg
         type(ori) :: o1, o2, omed
         real    :: frob_lim, dist, adist
         integer :: itst
@@ -1281,8 +1265,6 @@ contains
     subroutine test_ori
     ! this test only tests the Euler part of ori,
     ! the rest is tested in the oris class
-        use simple_stat, only: pearsn
-        use simple_math, only: rad2deg
         type(ori) :: e1, e2, e3
         real :: euls(3), normal(3), mat(3,3), normal2(3), dist
         logical :: passed
@@ -1296,19 +1278,19 @@ contains
         if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.001 )then
             passed = .true.
         endif
-        if( .not. passed ) stop 'Euler assignment/getters corrupt!'
+        if( .not. passed ) call simple_stop('Euler assignment/getters corrupt!')
         passed = .false.
         call e1%e1set(99.)
         call e1%e2set(98.)
         call e1%e3set(97.)
         euls = e1%get_euler()
         if( abs(euls(1)-99.+euls(2)-98.+euls(3)-97.) < 0.001 ) passed = .true.
-        if( .not. passed ) stop 'Euler e-setters corrupt!'
+        if( .not. passed ) call simple_stop('Euler e-setters corrupt!')
         passed = .false.
         call e1%set_euler([0.,0.,0.])
         normal = e1%get_normal()
         if( abs(normal(1))+abs(normal(2))+abs(normal(3)-1.)<3.*TINY ) passed = .true.
-        if( .not. passed ) stop 'Euler normal derivation corrupt!'
+        if( .not. passed ) call simple_stop('Euler normal derivation corrupt!')
         passed = .false.
         mat = e1%get_mat()
         if( abs(mat(1,1)-1.)+abs(mat(2,2)-1.)+abs(mat(3,3)-1.)<3.*TINY )then
@@ -1317,7 +1299,7 @@ contains
             mat(3,3) = 0.
             if( abs(sum(mat)) < TINY ) passed = .true.
         endif
-        if( .not. passed ) stop 'Euler rotation matrix derivation corrupt!'
+        if( .not. passed ) call simple_stop('Euler rotation matrix derivation corrupt!')
         passed = .false.
         call e2%set_euler([20.,20.,20.])
         e3 = e2
@@ -1333,7 +1315,7 @@ contains
         if( euls(1) < 20.0001 .and. euls(1) > 19.9999 .and.&
             euls(2) < 20.0001 .and. euls(2) > 19.9999 .and.&
             euls(3) < 20.0001 .and. euls(3) > 19.9999 ) passed = .true.
-        if( .not. passed ) stop 'Euler composer corrupt!'
+        if( .not. passed ) call simple_stop('Euler composer corrupt!')
         write(*,'(a)') 'SIMPLE_ORI_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ori
 

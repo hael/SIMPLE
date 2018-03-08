@@ -1,7 +1,6 @@
 ! routines for distributed SIMPLE execution
-
 module simple_map_reduce
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 implicit none
 private
@@ -17,7 +16,7 @@ contains
         integer, allocatable :: parts(:,:)
         integer :: nobjs_per_part, leftover, istop, istart, ipart, sszmax
         allocate(parts(nparts,2), stat=alloc_stat)
-        allocchk('In: simple_map_reduce :: split_nobjs_even')
+        if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce :: split_nobjs_even',alloc_stat)
         nobjs_per_part = nobjs/nparts
         DebugPrint   'nobjs_per_part: ', nobjs_per_part
         leftover = nobjs-nobjs_per_part*nparts
@@ -60,7 +59,7 @@ contains
         npairs = (nobjs*(nobjs-1))/2
         DebugPrint  'split_pairs_in_parts, npairs: ', npairs
         allocate( pairs(npairs,2), stat=alloc_stat )
-        allocchk('mapreduce ;split_pairs_in_parts  1')
+        if(alloc_stat.ne.0)call allocchk('mapreduce ;split_pairs_in_parts  1',alloc_stat)
         cnt = 0
         do i=1,nobjs-1
             do j=i+1,nobjs
@@ -76,14 +75,14 @@ contains
         do ipart=1,nparts
             call progress(ipart,nparts)
             allocate(fname, source='pairs_part' // int2str_pad(ipart,numlen) // '.bin', stat=alloc_stat)
-            allocchk("mapreduce ;split_pairs_in_parts creating fname ")
+            if(alloc_stat.ne.0)call allocchk("mapreduce ;split_pairs_in_parts creating fname ",alloc_stat)
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM',iostat=io_stat)
-            call fileio_errmsg('mapreduce ;split_pairs_in_parts '//trim(fname), io_stat)
+            call fileiochk('mapreduce ;split_pairs_in_parts '//trim(fname), io_stat)
             DebugPrint   'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
             write(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)
             ! Check if the write was successful
             if( io_stat .ne. 0 )&
-                call fileio_errmsg('mapreduce ;split_pairs_in_parts writing to '//trim(fname), io_stat)
+                call fileiochk('mapreduce ;split_pairs_in_parts writing to '//trim(fname), io_stat)
             call fclose(funit,errmsg='mapreduce ;split_pairs_in_parts ')
             deallocate(fname)
         end do
@@ -103,7 +102,7 @@ contains
         DebugPrint   'analysing this number of objects: ', nobjs
         DebugPrint   'analysing this number of pairs: ', npairs
         allocate( smat(nobjs,nobjs), pairs(npairs,2), stat=alloc_stat )
-        allocchk('In: simple_map_reduce::merge_similarities_from_parts, 1')
+        if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce::merge_similarities_from_parts, 1',alloc_stat)
         ! initialise similarities
         smat = -1.
         do i=1,nobjs
@@ -117,37 +116,37 @@ contains
             ! read the index mapping
             allocate(fname, source='pairs_part'//int2str_pad(ipart,numlen)//'.bin')
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
-            call fileio_errmsg("In map_reduce merge_similarities_from_parts opening "//trim(fname), io_stat)
+            call fileiochk("In map_reduce merge_similarities_from_parts opening "//trim(fname), io_stat)
             read(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)
             ! Check if the read was successful
             if( io_stat .ne. 0 )&
-                 call fileio_errmsg('**ERROR(merge_similarities_from_parts): I/O error when reading file: '&
+                 call fileiochk('**ERROR(merge_similarities_from_parts): I/O error when reading file: '&
                  //trim(fname),io_stat)
             call fclose(funit, errmsg="In map_reduce merge_similarities_from_parts closing "//trim(fname))
             deallocate(fname)
             ! retrieve the similarities
             DebugPrint   'allocating this number of similarities: ', parts(ipart,2)-parts(ipart,1)+1
             allocate(sims(parts(ipart,1):parts(ipart,2)), stat=alloc_stat)
-            allocchk("In: simple_map_reduce::merge_similarities_from_parts, sims(:) 2")
+            if(alloc_stat.ne.0)call allocchk("In: simple_map_reduce::merge_similarities_from_parts, sims(:) 2",alloc_stat)
             allocate(fname, source='similarities_part'//int2str_pad(ipart,numlen)//'.bin')
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
-            call fileio_errmsg("In map_reduce merge_rmat_from_parts opening "//trim(fname), io_stat)
+            call fileiochk("In map_reduce merge_rmat_from_parts opening "//trim(fname), io_stat)
             read(unit=funit,pos=1,iostat=io_stat) sims(parts(ipart,1):parts(ipart,2))
             ! check if the read was successful
             if( io_stat .ne. 0 )then
-               call fileio_errmsg('**ERROR(merge_similarities_from_parts): I/O error when reading file: '&
+               call fileiochk('**ERROR(merge_similarities_from_parts): I/O error when reading file: '&
                     //trim(fname),io_stat)
             endif
             call fclose(funit, errmsg="In map_reduce merge_similarities_from_parts opening "//trim(fname))
             deallocate(fname)
-            allocchk('In: simple_map_reduce::merge_similarities_from_parts dealloc')
+            if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce::merge_similarities_from_parts dealloc',alloc_stat)
             ! set the similarity matrix components
             do i=parts(ipart,1),parts(ipart,2)
                 smat(pairs(i,1),pairs(i,2)) = sims(i)
                 smat(pairs(i,2),pairs(i,1)) = sims(i)
             end do
             deallocate(sims)
-            allocchk('In: simple_map_reduce::merge_similarities_from_parts, 2')
+            if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce::merge_similarities_from_parts, 2',alloc_stat)
         end do
         deallocate(parts,pairs)
     end function merge_similarities_from_parts
@@ -162,7 +161,7 @@ contains
         integer :: numlen, ipart, funit, io_stat
         ! allocate nearest neighbour matrix
         allocate(nnmat(nobjs,nnn), stat=alloc_stat)
-        allocchk("In: simple_map_reduce :: merge_nnmat_from_parts")
+        if(alloc_stat.ne.0)call allocchk("In: simple_map_reduce :: merge_nnmat_from_parts",alloc_stat)
         ! repeat the generation of balanced partitions
         parts  = split_nobjs_even(nobjs, nparts)                                        !! realloc lhs
         numlen = len(int2str(nparts))
@@ -170,13 +169,13 @@ contains
 
         do ipart=1,nparts
             allocate(fname, source='nnmat_part'//int2str_pad(ipart,numlen)//'.bin')
-            allocchk('In: simple_map_reduce::merge_nnmat_from_parts, 1')
+            if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce::merge_nnmat_from_parts, 1',alloc_stat)
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
-            call fileio_errmsg("In map_reduce merge_nnmat_from_parts opening "//trim(fname), io_stat)
+            call fileiochk("In map_reduce merge_nnmat_from_parts opening "//trim(fname), io_stat)
             read(unit=funit,pos=1,iostat=io_stat) nnmat(parts(ipart,1):parts(ipart,2),:)
             ! check if the read was successful
             if( io_stat .ne. 0 )then
-               call fileio_errmsg('**ERROR(merge_nnmat_from_parts): I/O error when reading file: '&
+               call fileiochk('**ERROR(merge_nnmat_from_parts): I/O error when reading file: '&
                     //trim(fname),io_stat)
             endif
             call fclose(funit,errmsg="In map_reduce merge_nnmat_from_parts closing "//trim(fname))
@@ -197,20 +196,20 @@ contains
         integer :: numlen, ipart, funit, io_stat
         ! allocate merged matrix
         allocate(mat_merged(nobjs,ydim), stat=alloc_stat)
-        allocchk("In: simple_map_reduce :: merge_mat_from_parts")
+        if(alloc_stat.ne.0)call allocchk("In: simple_map_reduce :: merge_mat_from_parts",alloc_stat)
         ! repeat the generation of balanced partitions
         parts  = split_nobjs_even(nobjs, nparts)
         numlen = len(int2str(nparts))
         ! compress the partial matrices into a single matrix
         do ipart=1,nparts
             allocate(fname, source=trim(fbody)//int2str_pad(ipart,numlen)//'.bin', stat=alloc_stat)
-            allocchk("In: simple_map_reduce :: merge_mat_from_parts ")
+            if(alloc_stat.ne.0)call allocchk("In: simple_map_reduce :: merge_mat_from_parts ",alloc_stat)
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
-            call fileio_errmsg("In map_reduce merge_rmat_from_parts opening "//trim(fname), io_stat)
+            call fileiochk("In map_reduce merge_rmat_from_parts opening "//trim(fname), io_stat)
             read(unit=funit,pos=1,iostat=io_stat) mat_merged(parts(ipart,1):parts(ipart,2),:)
             ! check if the read was successful
             if( io_stat .ne. 0 )&
-                 call fileio_errmsg('**ERROR(merge_rmat_from_parts): I/O error when reading file: '&
+                 call fileiochk('**ERROR(merge_rmat_from_parts): I/O error when reading file: '&
                  //trim(fname),io_stat)
             call fclose(funit,errmsg="In map_reduce merge_rmat_from_parts opening "//trim(fname))
             deallocate(fname)

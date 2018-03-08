@@ -2,7 +2,7 @@
 module simple_atoms
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 public :: atoms
@@ -81,7 +81,7 @@ contains
             stop 'simple_atoms :: new_from_pdb'
         endif
         call fopen(filnum, status='OLD', action='READ', file=fname, iostat=io_stat)
-        call fileio_errmsg('new_from_pdb; simple_atoms opening '//trim(fname), io_stat)
+        call fileiochk('new_from_pdb; simple_atoms opening '//trim(fname), io_stat)
         ! first pass
         n = 0
         do i = 1, nl
@@ -114,7 +114,7 @@ contains
             &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
             &self%occupancy(i), self%beta(i)
             self%num(i) = num
-            call fileio_errmsg('new_from_pdb; simple_atoms error reading line '//trim(fname), io_stat)
+            call fileiochk('new_from_pdb; simple_atoms error reading line '//trim(fname), io_stat)
             self%het(i) = atom_field == 'HETATM'
         enddo
         ! done
@@ -137,7 +137,7 @@ contains
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
             self%altloc(n), self%resnum(n), stat=alloc_stat)
-        allocchk('new_instance :: simple_atoms')
+        if(alloc_stat.ne.0)call allocchk('new_instance :: simple_atoms', alloc_stat)
         self%name(:)    = '    '
         self%resname(:) = '   '
         self%chain(:)   = ' '
@@ -275,7 +275,7 @@ contains
         long  = self%n >= 99999
         if(.not.self%exists)stop 'Cannot write non existent atoms type; simple_atoms :: writePDB'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
-        call fileio_errmsg('writepdb; simple_atoms opening '//trim(fname), io_stat)
+        call fileiochk('writepdb; simple_atoms opening '//trim(fname), io_stat)
         do i = 1, self%n
             write(funit,'(A76)')pdbstr(i)
         enddo

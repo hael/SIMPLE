@@ -3,7 +3,8 @@
 module simple_projector
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
+
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_ori,        only: ori
@@ -46,7 +47,6 @@ contains
 
     !>  \brief  is a constructor of the expanded Fourier matrix
     subroutine expand_cmat( self, alpha )
-        use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
         real,             intent(in)    :: alpha !< oversampling factor
         integer, allocatable :: cyck(:), cycm(:), cych(:)
@@ -67,7 +67,7 @@ contains
                                 &cych(self%ldim_exp(1,1):self%ldim_exp(1,2)),&
                                 &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
                                 &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
-        allocchk("In: expand_cmat; simple_projector")
+        if(alloc_stat.ne.0)call allocchk("In: expand_cmat; simple_projector",alloc_stat)
         ! pre-compute addresses in 2nd and 3rd dimension
         do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
             cych(h) = h
@@ -183,7 +183,6 @@ contains
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftcc, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_math,             only: deg2rad
         class(projector),        intent(inout) :: self   !< projector object
         integer,                 intent(in)    :: iref   !< which reference
         class(ori),              intent(in)    :: e      !< orientation

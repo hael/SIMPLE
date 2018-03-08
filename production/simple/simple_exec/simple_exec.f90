@@ -1,8 +1,9 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
-#include "simple_lib.f08"
-use simple_cmdline, only: cmdline, cmdline_err
-use simple_user_interface
+include 'simple_lib.f08'
+
+use simple_user_interface, only: make_user_interface
+use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commander_checks
 use simple_commander_comlin
 use simple_commander_distr

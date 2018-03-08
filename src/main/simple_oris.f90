@@ -2,7 +2,7 @@
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_ran_tabu,    only: ran_tabu
 use simple_ori,         only: ori
@@ -231,10 +231,11 @@ contains
         call self%kill
         self%n = n
         allocate( self%o(self%n), stat=alloc_stat )
-        allocchk('new; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('new; simple_oris',alloc_stat)
         do i=1,n
             call self%o(i)%new
         end do
+        DebugPrint ' simple_oris::new initiated'
     end subroutine new
 
     !>  \brief  is a constructor
@@ -245,7 +246,7 @@ contains
         call self%kill
         self%n = n
         allocate( self%o(self%n), stat=alloc_stat )
-        allocchk('new_clean; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('new_clean; simple_oris',alloc_stat)
         do i=1,n
             call self%o(i)%new_ori_clean
         end do
@@ -316,10 +317,10 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori) :: o
-        if( self%n == 0 ) stop 'oris object does not exist; get_ori; simple_oris'
+        if( self%n == 0 ) call simple_stop('oris object does not exist; get_ori; simple_oris')
         if( i > self%n .or. i < 1 )then
             write(*,*) 'trying to get ori: ', i, ' among: ', self%n, ' oris'
-            stop 'i out of range; get_ori; simple_oris'
+            call simple_stop('i out of range; get_ori; simple_oris')
         endif
         o = self%o(i)
     end function get_ori
@@ -363,7 +364,7 @@ contains
         if( present(fromto) ) ffromto = fromto
         if(allocated(arr))deallocate(arr)
         allocate( arr(ffromto(1):ffromto(2)), stat=alloc_stat)
-        allocchk('get_all; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('get_all; simple_oris',alloc_stat)
         do i=ffromto(1),ffromto(2)
             arr(i) = self%o(i)%get(key)
         enddo
@@ -377,7 +378,7 @@ contains
         integer :: i
         if( allocated(vals) ) deallocate(vals)
         allocate( vals(self%n), stat=alloc_stat)
-        allocchk('getter_all_1; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('getter_all_1; simple_oris',alloc_stat)
         do i=1,self%n
             call self%o(i)%getter(key, vals(i))
         enddo
@@ -392,7 +393,7 @@ contains
         character(len=:), allocatable :: tmp
         if( allocated(vals) ) deallocate(vals)
         allocate( vals(self%n), stat=alloc_stat)
-        allocchk('getter_all_2; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('getter_all_2; simple_oris',alloc_stat)
         do i=1,self%n
             call self%o(i)%getter(key, tmp)
             vals(i) = tmp
@@ -502,7 +503,7 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pop with optional consider_w assumes w set'
+            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: get_pop with optional consider_w assumes w set')
         endif
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
@@ -536,7 +537,7 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pops with optional consider_w assumes w set'
+            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: get_pops with optional consider_w assumes w set')
         endif
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
@@ -546,7 +547,7 @@ contains
         endif
         if(allocated(pops))deallocate(pops)
         allocate(pops(n),source=0,stat=alloc_stat)
-        allocchk('In: get_pops, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: get_pops, module: simple_oris')
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
             myeo    = nint(self%o(i)%get('eo'))
@@ -582,7 +583,7 @@ contains
         if( size(mask) /= self%n )then
             print *, 'self%n:     ', self%n
             print *, 'size(mask): ', size(mask)
-            stop 'nonconforming mask size; oris :: compress'
+            call simple_stop('nonconforming mask size; oris :: compress')
         endif
         call os_tmp%new(count(mask))
         cnt = 0
@@ -606,12 +607,12 @@ contains
         integer              ::  n, nstates, iptcl
         nstates = self%get_n('state')
         if( which < 1 .or. which > nstates )then
-            stop 'which (state) is out of range; simple_oris::split_state'
+            call simple_stop('which (state) is out of range; simple_oris::split_state')
         endif
         call self%get_pinds(which, 'state', ptcls_in_which)
         n = size(ptcls_in_which)
         allocate(states(n), stat=alloc_stat)
-        allocchk("simple_oris::split_state")
+        if(alloc_stat.ne.0)call allocchk("simple_oris::split_state",alloc_stat)
         rt = ran_tabu(n)
         call rt%balanced(2, states)
         do iptcl=1,n
@@ -635,12 +636,12 @@ contains
         integer              ::  n, nmembers, iptcl
         nmembers = self%get_n('class')
         if( which < 1 .or. which > nmembers )then
-            stop 'which member is out of range; simple_oris :: split_class'
+            call simple_stop('which member is out of range; simple_oris :: split_class')
         endif
         call self%get_pinds(which, 'class', ptcls_in_which)
         n = size(ptcls_in_which)
         allocate(members(n), stat=alloc_stat)
-        allocchk("simple_oris::split_class")
+        if(alloc_stat.ne.0)call allocchk("simple_oris::split_class",alloc_stat)
         rt = ran_tabu(n)
         call rt%balanced(2, members)
         do iptcl=1,n
@@ -661,10 +662,10 @@ contains
         integer, allocatable       :: pops(:)
         integer :: ncls, loc(1), myncls, icls
         ncls = self%get_n('class')
-        if( ncls_target <= ncls ) stop 'Number of target classes cannot be <= original number'
+        if( ncls_target <= ncls ) call simple_stop('Number of target classes cannot be <= original number')
         ! calculate class populations
         allocate(pops(ncls_target),stat=alloc_stat)
-        allocchk('In: expand_classes, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: expand_classes, module: simple_oris',alloc_stat)
         pops = 0
         do icls=1,ncls
             pops(icls) = self%get_pop(icls, 'class')
@@ -698,7 +699,7 @@ contains
         if( present(fromtocls) )then
             if(allocated(fromtocls))deallocate(fromtocls)
             allocate(fromtoall(ncls,2), source=0, stat=alloc_stat)
-            allocchk("simple_oris:: fill_empty_classes fromtoall")
+            if(alloc_stat.ne.0)call allocchk("simple_oris:: fill_empty_classes fromtoall",alloc_stat)
         endif
         do icls = 1, ncls
             deallocate(pops, stat=alloc_stat)
@@ -712,7 +713,7 @@ contains
             call self%get_pinds(cls2split(1), 'class', inds2split, consider_w=.false.) ! needs to be false
             rt = ran_tabu(maxpop)
             allocate(membership(maxpop), stat=alloc_stat)
-            allocchk("simple_oris:: fill_empty_classes membership")
+            if(alloc_stat.ne.0)call allocchk("simple_oris:: fill_empty_classes membership",alloc_stat)
             call rt%balanced(2, membership)
             do i=1,maxpop
                 if(membership(i) == 2)cycle
@@ -731,7 +732,7 @@ contains
             n_incl = count(fromtoall(:,1)>0)
             if(n_incl>0)then
                 allocate(fromtocls(n_incl,2), stat=alloc_stat)
-                allocchk("simple_oris:: fill_empty_classes fromtocls")
+                if(alloc_stat.ne.0)call allocchk("simple_oris:: fill_empty_classes fromtocls",alloc_stat)
                 cnt = 0
                 do icls = 1,ncls
                     if( fromtoall(icls,1) > 0 )then
@@ -750,7 +751,7 @@ contains
         integer , allocatable :: clspops(:)
         ncls = self%get_n('class')
         allocate(clspops(ncls),stat=alloc_stat)
-        allocchk('In: remap_cls, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: remap_cls, module: simple_oris',alloc_stat)
         do icls=1,ncls
             clspops(icls) = self%get_pop(icls, 'class')
         end do
@@ -792,12 +793,13 @@ contains
         type(oris)        :: os_conf
         integer           :: inds(self%n), i, cnt
         if( .not. self%isthere('ow') )&
-        &stop 'orientation weights (ow) needs to be set; oris :: create_conforming_npeaks_set'
+        &call simple_stop('orientation weights (ow) needs to be set; oris :: create_conforming_npeaks_set')
         if( self%n == npeaks )then
             ! set is conforming
             os_conf = self
         else if( self%n > npeaks )then
             ! shrink set
+            !$ allocate(ows(self%n))
             ows  = self%get_all('ow')
             inds = (/(i,i=1,self%n)/)
             call hpsort(ows, inds)
@@ -822,6 +824,7 @@ contains
                 endif
             end do
         endif
+        if(allocated(ows))deallocate(ows)
     end function create_conforming_npeaks_set
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
@@ -837,13 +840,13 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pinds with optional consider_w assumes w set'
+            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: get_pinds with optional consider_w assumes w set')
         endif
         if( allocated(indices) )deallocate(indices)
         pop = self%get_pop(ind, label, cconsider_w )
         if( pop > 0 )then
             allocate( indices(pop), stat=alloc_stat )
-            allocchk('get_pinds; simple_oris')
+            if(alloc_stat.ne.0)call allocchk('get_pinds; simple_oris',alloc_stat)
             cnt = 0
             do i=1,self%n
                 mystate = nint(self%o(i)%get('state'))
@@ -910,7 +913,7 @@ contains
         endif
         if( pop > 0 )then
             allocate( vals(pop), stat=alloc_stat )
-            allocchk('get_arr; simple_oris')
+            if(alloc_stat.ne.0)call allocchk('get_arr; simple_oris',alloc_stat)
             cnt = 0
             do i=1,self%n
                 val = self%get(i, which)
@@ -1106,7 +1109,7 @@ contains
         character(len=:),      allocatable :: str
         integer :: i
         allocate(table(self%n), stat=alloc_stat)
-        allocchk('In: extract_table, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: extract_table, module: simple_oris',alloc_stat)
         do i=1,self%n
             call self%getter(i, which, str)
             table(i) = str
@@ -1146,7 +1149,7 @@ contains
                 if( n < 3 ) return
                 call os%new(n)
                 allocate( ws(n), dists(n), stat=alloc_stat )
-                allocchk( 'ang_sdev_state; simple_oris')
+                if(alloc_stat.ne.0)call allocchk( 'ang_sdev_state; simple_oris',alloc_stat)
                 ws    = 0.
                 dists = 0.
                 ! gather weights & oris
@@ -1187,10 +1190,10 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) stop 'ERROR, oris :: included with optional consider_w assumes w set'
+            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: included with optional consider_w assumes w set')
         endif
-        allocate(incl(self%n), stat=alloc_stat)
-        allocchk('In: included, module: simple_oris')
+        if(.not.allocated(incl))allocate(incl(self%n), stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk('In: included, module: simple_oris',alloc_stat)
         incl = .false.
         do i=1,self%n
             istate = nint(self%o(i)%get('state'))
@@ -1636,9 +1639,9 @@ contains
         integer   :: i
         logical   :: within_lims, found
         if( present(o_prev) .and. .not.present(thres) ) &
-            & stop 'Missing angular threshold in simple_oris::rnd_proj_space'
+            & call simple_stop('Missing angular threshold in simple_oris::rnd_proj_space')
         if( .not.present(o_prev) .and. present(thres) ) &
-            & stop 'Missing orientation in simple_oris::rnd_proj_space'
+            & call simple_stop('Missing orientation in simple_oris::rnd_proj_space')
         within_lims = .false.
         if( present(eullims) )within_lims = .true.
         call self%new(nsample)
@@ -1704,14 +1707,15 @@ contains
         character(len=*), intent(in)    :: state_or_class
         integer, allocatable :: parts(:,:)
         integer :: ipart, iptcl
+        !$ allocate(parts(self%n,2))
         parts = split_nobjs_even(self%n, nsplit)
         do ipart=1,nsplit
             do iptcl=parts(ipart,1),parts(ipart,2)
                 call self%o(iptcl)%set(trim(state_or_class), real(ipart))
             end do
         end do
-        deallocate(parts)
-    end subroutine ini_tseries
+        if(allocated(parts))deallocate(parts)
+        end subroutine ini_tseries
 
     !>  \brief  randomizes eulers in oris
     subroutine rnd_oris_discrete( self, discrete, nsym, eullims )
@@ -1819,7 +1823,7 @@ contains
         integer :: i, state
         if( nstates > 1 )then
             allocate( states(self%n), stat=alloc_stat )
-            allocchk("simple_oris::rnd_states")
+            if(alloc_stat.ne.0)call allocchk("simple_oris::rnd_states",alloc_stat)
             rt = ran_tabu(self%n)
             call rt%balanced(nstates, states)
             do i=1,self%n
@@ -1831,7 +1835,7 @@ contains
             call rt%kill
             deallocate(states)
         else if( nstates<=0)then
-            stop 'Invalid value for nstates; simple_oris :: rnd_states'
+            call simple_stop('Invalid value for nstates; simple_oris :: rnd_states')
         else
             ! nstates = 1; zero-preserving
             do i=1,self%n
@@ -1850,7 +1854,7 @@ contains
         integer :: i
         if( ncls > 1 )then
             allocate(classes(self%n), stat=alloc_stat)
-            allocchk("simple_oris::rnd_classes")
+            if(alloc_stat.ne.0)call allocchk("simple_oris::rnd_classes",alloc_stat)
             rt = ran_tabu(self%n)
             call rt%balanced(ncls, classes)
             do i=1,self%n
@@ -1865,15 +1869,18 @@ contains
     subroutine rnd_lps( self )
         class(oris), intent(inout) :: self
         integer :: i
+        DebugPrint " In oris:: rnd_lps"
         do i=1,self%n
             call self%o(i)%set('lp', ran3()*100.)
         end do
+DebugPrint " In oris:: rnd_lps done"
     end subroutine rnd_lps
 
     !>  \brief  randomizes correlations in oris
     subroutine rnd_corrs( self )
         class(oris), intent(inout) :: self
         integer :: i
+        DebugPrint " In oris:: rnd_corrs"
         do i=1,self%n
             call self%o(i)%set('corr', ran3())
         end do
@@ -2051,7 +2058,7 @@ contains
         endif
         io_message='No error'
         call fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message)
-        call fileio_errmsg("oris ; read ,Error when opening file for reading: "//trim(orifile)//':'//trim(io_message), file_stat)
+        call fileiochk("oris ; read ,Error when opening file for reading: "//trim(orifile)//':'//trim(io_message), file_stat)
         if( present(nst) ) nst = 0
         if( present(fromto) )then
             istart = fromto(1)
@@ -2127,7 +2134,7 @@ contains
         if( present(fromto) ) ffromto = fromto
         call fopen(fnr, orifile, status='REPLACE', action='WRITE',&
         &iostat=file_stat, iomsg=io_message)
-        call fileio_errmsg(' Error opening file for writing: '//trim(orifile)//' ; '//trim(io_message), file_stat)
+        call fileiochk(' Error opening file for writing: '//trim(orifile)//' ; '//trim(io_message), file_stat)
         cnt = 0
         do i=ffromto(1),ffromto(2)
             cnt = cnt + 1
@@ -2143,7 +2150,7 @@ contains
         integer,          intent(in)    :: i
         integer :: fnr, file_stat
         call fopen(fnr, orifile, status='UNKNOWN', action='WRITE', position='APPEND', iostat=file_stat)
-        call fileio_errmsg( 'In: write_2, module: simple_oris.f90  opening '//trim(orifile), file_stat )
+        call fileiochk( 'In: write_2, module: simple_oris.f90  opening '//trim(orifile), file_stat )
         call self%o(i)%write(fnr)
         call fclose(fnr, errmsg=' Error closing file for writing: '//trim(orifile))
     end subroutine write_2
@@ -2246,6 +2253,7 @@ contains
             med = 0.
             pop = self%get_pop(class, 'class')
             if( pop == 0 ) return
+            !$ allocate(vals(self%n))
             vals = self%get_arr(which, class)
             if( pop == 1 )then
                 med = vals(1)
@@ -2257,7 +2265,7 @@ contains
             endif
         else
             allocate( vals(self%n), stat=alloc_stat )
-            allocchk('In: median_1, module: simple_oris')
+            if(alloc_stat.ne.0)call allocchk('In: median_1, module: simple_oris',alloc_stat)
             vals = 0.
             do i=1,self%n
                 vals(i) = self%o(i)%get(which)
@@ -2265,8 +2273,8 @@ contains
         endif
         ! calculate median
         med = median_nocopy(vals)
-        deallocate(vals)
-    end function median_1
+        if(allocated(vals))deallocate(vals)
+        end function median_1
 
     !>  \brief  is for calculating variable statistics
     subroutine stats( self, which, ave, sdev, var, err )
@@ -2276,6 +2284,7 @@ contains
         logical,          intent(out)   :: err
         real, allocatable :: vals(:), all_vals(:)
         real, allocatable :: states(:)
+        !$ allocate(states(self%n), all_vals(self%n), vals(self%n))
         states   = self%get_all('state')
         all_vals = self%get_all(which)
         vals     = pack(all_vals, mask=(states > 0.5))
@@ -2291,7 +2300,7 @@ contains
         real, allocatable :: vals(:)
         integer           :: i, cnt, mystate
         allocate( vals(self%n), stat=alloc_stat )
-        allocchk('In: minmax, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: minmax, module: simple_oris',alloc_stat)
         vals = 0.
         ! fish values
         cnt = 0
@@ -2329,7 +2338,7 @@ contains
                 call self%o(k)%set_euler([rad2deg(psi),rad2deg(theta),0.])
             end do
         else
-            stop 'object nonexistent; spiral_1; simple_oris'
+            call simple_stop('object nonexistent; spiral_1; simple_oris')
         endif
     end subroutine spiral_1
 
@@ -2430,13 +2439,23 @@ contains
         class(oris), intent(inout) :: self
         real,    allocatable :: specscores(:)
         integer, allocatable :: inds(:)
-        integer :: i
+        integer :: i, nspecs
         allocate( inds(self%n), stat=alloc_stat )
-        allocchk('order; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
+        DebugPrint " In oris:: order allocated ?"
+        !$ allocate(specscores(self%n))
         specscores = self%get_all('specscore')
+        DebugPrint " In oris:: order allocated yes"
         inds = (/(i,i=1,self%n)/)
         call hpsort(specscores, inds)
         call reverse(inds)
+        DebugPrint " oris order sorted"
+        ! PGI fails if specscores is not deallocated
+        if(allocated(specscores))then
+            deallocate( specscores, stat=alloc_stat )
+            if(alloc_stat.ne.0)call allocchk('order; simple_oris dealloc ',alloc_stat)
+        end if
+        DebugPrint " oris order done"
     end function order
 
     !>  \brief  orders oris according to corr
@@ -2446,7 +2465,8 @@ contains
         integer, allocatable :: inds(:)
         integer :: i
         allocate( inds(self%n), stat=alloc_stat )
-        allocchk('order; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
+        !$ allocate(corrs(self%n))
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
         call hpsort(corrs, inds)
@@ -2459,9 +2479,9 @@ contains
         integer, allocatable :: inds(:)
         real    :: classpops(ncls)
         integer :: i
-        if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
+        if(ncls <= 0) call simple_stop('invalid number of classes; simple_oris%order_cls')
         allocate(inds(ncls), stat=alloc_stat)
-        allocchk('order_cls; simple_oris')
+        if(alloc_stat.ne.0)call allocchk('order_cls; simple_oris',alloc_stat)
         classpops = 0.0
         ! calculate class populations
         do i=1,ncls
@@ -2504,17 +2524,17 @@ contains
         real,    allocatable :: scores(:)
         integer :: i, j, n, pop
         logical :: uuse_specscore
-        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance_1 assumes w  set'
+        if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: balance_1 assumes w  set')
         uuse_specscore = .false.
         if( present(use_specscore) )then
             if( use_specscore )then
                 uuse_specscore = self%isthere('specscore')
             endif
         endif
-        if( .not. self%isthere('class') ) stop 'class label must be set; oris :: balance_1'
+        if( .not. self%isthere('class') ) call simple_stop('class label must be set; oris :: balance_1')
         n = self%get_n('class')
         allocate(included(self%n),stat=alloc_stat)
-        allocchk('In: balance, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: balance, module: simple_oris',alloc_stat)
         included = .false.
         do i=1,n ! n is number of classes
             ! get class population
@@ -2571,18 +2591,18 @@ contains
         logical, allocatable :: ptcl_mask(:), included(:)
         integer              :: i, j, n, pop, iptcl, icls, cnt
         logical              :: uuse_specscore
-        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance assumes w  set'
+        if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: balance assumes w  set')
         uuse_specscore = .false.
         if( present(use_specscore) )then
             if( use_specscore )then
                 uuse_specscore = self%isthere('specscore')
             endif
         endif
-        if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: balance'
+        if( .not. self%isthere('proj') ) call simple_stop('proj label must be set; oris :: balance')
         n = self%get_n('proj')
         ptcl_mask = self%included(consider_w=.true.)
         allocate(clustering(self%n), clustszs(nspace_bal), included(self%n), stat=alloc_stat)
-        allocchk('In oris :: balance')
+        if(alloc_stat.ne.0)call allocchk('In oris :: balance',alloc_stat)
         clustering = 0
         clustszs   = 0
         included   = .false.
@@ -2676,7 +2696,9 @@ contains
                     deallocate(specscores,weights)
                 enddo
             else
+                !$ allocate(specscores(self%n))
                 specscores = self%get_all('specscore')
+                !$ allocate(weights(self%n))
                 weights    = self%get_all('w')
                 where( weights < 0.5 )
                     specscores = 0.
@@ -2688,7 +2710,7 @@ contains
                 deallocate(specscores,weights)
             endif
         else
-            !stop 'specscore not part of oris; simple_oris :: calc_spectral_weights'
+            !call simple_stop('specscore not part of oris; simple_oris :: calc_spectral_weights')
         endif
     end subroutine calc_spectral_weights
 
@@ -2767,7 +2789,7 @@ contains
         real    :: dists(self%n), large
         integer :: loc(1), closest, i
         if( present(state) )then
-            if( state<0 )stop 'Invalid state in simple_oris%find_closest_proj'
+            if( state<0 )call simple_stop('Invalid state in simple_oris%find_closest_proj')
             dists(:) = huge(large)
             do i=1,self%n
                 if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).euldist.o_in
@@ -2804,7 +2826,7 @@ contains
         real     :: dists(self%n), large
         integer  :: loc(1), closest, i
         if( present(state) )then
-            if( state<0 )stop 'Invalid state in simple_oris%find_closest_proj'
+            if( state<0 )call simple_stop('Invalid state in simple_oris%find_closest_proj')
             dists(:) = huge(large)
             do i=1,self%n
                 if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).geod.o_in
@@ -2909,7 +2931,7 @@ contains
         call suboris%new(nsub)
         call suboris%spiral
         allocate( subspace_projs(nsub) ,stat=alloc_stat)
-        allocchk('In: create_proj_subspace_1, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_1, module: simple_oris',alloc_stat)
         do isub=1,nsub
             o = suboris%get_ori(isub)
             subspace_projs(isub) = self%find_closest_proj(o)
@@ -2929,7 +2951,7 @@ contains
         call suboris%new(nsub)
         call suboris%spiral(nsym, eullims)
         allocate( subspace_projs(nsub) , stat=alloc_stat)
-        allocchk('In: create_proj_subspace_2, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_2, module: simple_oris',alloc_stat)
         do isub=1,nsub
             o = suboris%get_ori(isub)
             subspace_projs(isub) = self%find_closest_proj(o)
@@ -2952,7 +2974,7 @@ contains
                 call self%o(i)%set('class', real(closest))
             end do
         else
-            stop 'the number of discrete oris is too large; discretize; simple_oris'
+            call simple_stop('the number of discrete oris is too large; discretize; simple_oris')
         endif
     end subroutine discretize
 
@@ -2964,10 +2986,10 @@ contains
         real      :: dists(self%n)
         integer   :: inds(self%n), i, j
         type(ori) :: o
-        if( k >= self%n ) stop 'need to identify fewer nearest_neighbors; simple_oris'
+        if( k >= self%n ) call simple_stop('need to identify fewer nearest_neighbors; simple_oris')
         if( allocated(nnmat) ) deallocate(nnmat)
         allocate( nnmat(self%n,k), stat=alloc_stat )
-        allocchk("In: nearest_neighbors; simple_oris")
+        if(alloc_stat.ne.0)call allocchk("In: nearest_neighbors; simple_oris",alloc_stat)
         do i=1,self%n
             o = self%get_ori(i)
             do j=1,self%n
@@ -3034,7 +3056,9 @@ contains
         integer :: n_incl, thresh_ind
         real    :: corr_bound
         ! grab relevant correlations
+        !$ allocate(corrs(self%n))
         corrs      = self%get_all('corr')
+        !$ allocate(incl(self%n))
         incl       = self%included()
         corrs_incl = pack(corrs, mask=incl)
         ! sort correlations & determine threshold
@@ -3197,7 +3221,6 @@ contains
     !!          orientations by maximizing the geodesic distance upon every
     !!          addition to the growing set
     subroutine gen_diverse( self )
-        use simple_jiffys, only: progress
         class(oris), intent(inout) :: self
         logical, allocatable       :: o_is_set(:)
         integer                    :: i
@@ -3205,7 +3228,7 @@ contains
         ! create the first diverse pair
         call o1%oripair_diverse(o2)
         allocate(o_is_set(self%n), stat=alloc_stat)
-        allocchk('In: gen_diverse, module: simple_oris')
+        if(alloc_stat.ne.0)call allocchk('In: gen_diverse, module: simple_oris',alloc_stat)
         o_is_set = .false.
         call self%set_ori(1,o1)
         call self%set_ori(2,o2)
@@ -3280,14 +3303,14 @@ contains
             allocate(class_part_of_set(self%n), stat=alloc_stat)
             class_part_of_set = .true.
         endif
-        allocchk('In: ori_generator, module: simple_oris part_of_set')
+        if(alloc_stat.ne.0)call allocchk('In: ori_generator, module: simple_oris part_of_set',alloc_stat)
         if( present(weights) )then
             allocate(class_weights(self%n), source=weights, stat=alloc_stat)
         else
             allocate(class_weights(self%n), stat=alloc_stat)
             class_weights = 1.0
         endif
-        allocchk('In: ori_generator, module: simple_oris weights')
+        if(alloc_stat.ne.0)call allocchk('In: ori_generator, module: simple_oris weights',alloc_stat)
         ! set globals
         ops => self
         call o_glob%new
@@ -3311,7 +3334,7 @@ contains
             case('diverse')
                 call ospec%set_costfun(costfun_diverse)
             case DEFAULT
-                stop 'unsupported mode inputted; simple_ori :: ori_generator'
+                call simple_stop('unsupported mode inputted; simple_ori :: ori_generator')
         end select
         call opt%minimize(ospec, fun_self, dist)
         call oout%set_euler(ospec%x)
@@ -3325,7 +3348,7 @@ contains
         real, allocatable :: smat(:,:)
         integer :: i, j
         allocate( smat(self%n,self%n), stat=alloc_stat )
-        allocchk("In: simple_oris :: gen_smat")
+        if(alloc_stat.ne.0)call allocchk("In: simple_oris :: gen_smat",alloc_stat)
         smat = 0.
         !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
         do i=1,self%n-1
@@ -3416,7 +3439,7 @@ contains
         real    :: dists(self1%n), vard, x
         logical :: err
         if( self1%n /= self2%n )then
-            stop 'cannot calculate distance between sets of different size; euldist_2; simple_oris'
+            call simple_stop('cannot calculate distance between sets of different size; euldist_2; simple_oris')
         endif
         mind = huge(x)
         maxd = -mind
@@ -3513,16 +3536,17 @@ contains
         integer, allocatable :: order(:)
         logical              :: passed
         write(*,'(a)') '**info(simple_oris_unit_test, part1): testing getters/setters'
+        debug=.true.
         os = oris(100)
         os2 = oris(100)
         passed = .false.
         if( os%get_noris() == 100 ) passed = .true.
-        if( .not. passed ) stop 'get_noris failed!'
+        if( .not. passed ) call simple_stop('get_noris failed!')
         passed = .false.
         call os%set_euler(1, [1.,2.,3.])
         euls = os%get_euler(1)
         if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.0001 ) passed = .true.
-        if( .not. passed ) stop 'get/set eulers failed!'
+        if( .not. passed ) call simple_stop('get/set eulers failed!')
         passed = .false.
         call os%e1set(1,4.)
         call os%e2set(1,5.)
@@ -3571,7 +3595,7 @@ contains
                 exit
             endif
         end do
-        if( .not. passed ) stop 'assignment test failed!'
+        if( .not. passed ) call simple_stop('assignment test failed!')
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing i/o'
         passed = .false.
         os = oris(100)
@@ -3582,12 +3606,12 @@ contains
         call os2%write('test_oris_rndoris_copy.txt')
         corr = corr_oris(os,os2)
         if( corr > 0.99 ) passed = .true.
-        if( .not. passed ) stop 'read/write failed'
+        if( .not. passed ) call simple_stop('read/write failed')
         passed = .false.
         call os%rnd_states(5)
         call os%write('test_oris_rndoris_rndstates.txt')
         if( corr_oris(os,os2) > 0.99 ) passed = .true.
-        if( .not. passed ) stop 'statedoc read/write failed!'
+        if( .not. passed ) call simple_stop('statedoc read/write failed!')
         write(*,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.
         call os%rnd_lps()
@@ -3595,13 +3619,17 @@ contains
         call os%spiral
         call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
         call os%rnd_corrs()
+        DebugPrint "simple_oris::test_oris rnd_corrs called"
+        !$ allocate(order(os%n))
         order = os%order()
+        DebugPrint "simple_oris::test_oris order called"
         if( doprint )then
             do i=1,100
                 call os%print_(order(i))
             end do
             write(*,*) 'median:', os%median('lp')
         endif
+        DebugPrint "simple_oris::test_oris order called"
         write(*,'(a)') '**info(simple_oris_unit_test, part4): testing destructor'
         call os%kill
         call os2%kill
@@ -3635,7 +3663,7 @@ contains
                 call self%o(i)%kill
             end do
             deallocate( self%o , stat=alloc_stat)
-            allocchk('In: kill, module: simple_oris o')
+            if(alloc_stat.ne.0)call allocchk('In: kill, module: simple_oris o')
             self%n = 0
         endif
     end subroutine kill

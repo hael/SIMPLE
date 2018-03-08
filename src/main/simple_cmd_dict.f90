@@ -1,8 +1,6 @@
 ! command line dictonary
 module simple_cmd_dict
-#include "simple_lib.f08"
-
-use simple_chash, only: chash
+include 'simple_lib.f08'
 implicit none
 
 public :: print_cmdline, test_cmd_dict, print_cmd_key_descr
@@ -281,7 +279,6 @@ contains
     end subroutine init_cmd_dict
 
     subroutine print_cmd_key_descr( fname )
-        use simple_strings, only: lexSort
         character(len=*), intent(in) :: fname
         ! initialise if needed
         if( .not. initialised ) call init_cmd_dict
@@ -292,7 +289,6 @@ contains
     end subroutine print_cmd_key_descr
 
     subroutine print_cmdline( keys_required, keys_optional, fhandle, distr )
-        use simple_strings, only: str_has_substr, lexSort
         character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
         integer,               optional, intent(in) :: fhandle
         logical,               optional, intent(in) :: distr
@@ -316,7 +312,8 @@ contains
             if( nreq > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'REQUIRED'
-                allocate(sorted_keys(nreq), source=keys_required)
+                allocate(sorted_keys(nreq), source=keys_required, stat=alloc_stat)
+                if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 1",alloc_stat)
                 call lexSort(sorted_keys)
                 call chdict%print_key_val_pairs(sorted_keys, fhandle)
                 deallocate(sorted_keys)
@@ -329,7 +326,8 @@ contains
             if( nopt > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'OPTIONAL'
-                allocate(sorted_keys(nopt), source=keys_optional)
+                allocate(sorted_keys(nopt), source=keys_optional, stat=alloc_stat)
+                if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 2",alloc_stat)
                 call lexSort(sorted_keys)
                 call chdict%print_key_val_pairs(sorted_keys, fhandle)
                 deallocate(sorted_keys)

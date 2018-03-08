@@ -3,10 +3,7 @@ module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
 use, intrinsic :: iso_c_binding
-#include "simple_lib.f08"
-!! import functions
-use simple_fftw3,      only: fftwf_alloc_real, fftwf_free
-use simple_timer,      only: tic, toc, timer_int_kind
+include 'simple_lib.f08'
 !! import classes
 use simple_ctf,        only: ctf
 use simple_ori,        only: ori
@@ -16,6 +13,7 @@ use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_sym,        only: sym
 use simple_sp_project, only: sp_project
+use simple_fftw3
 implicit none
 
 public :: reconstructor
@@ -67,9 +65,10 @@ type, extends(image) :: reconstructor
     procedure          :: compress_exp
     procedure          :: expand_exp
     ! SUMMATION
-    procedure          :: sum
+    procedure          :: sum_reduce
     ! RECONSTRUCTION
     procedure          :: rec
+
     ! DESTRUCTORS
     procedure          :: dealloc_exp
     procedure          :: dealloc_rho
@@ -87,8 +86,10 @@ contains
         real    :: inv1, inv2
         integer :: dim, h, k, sh
         logical :: l_expand
-        if(.not. self%exists()) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
-        if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
+        l_expand = .true.
+        if(.not. self%exists() ) call simple_stop('construct image before allocating rho; alloc_rho; simple_reconstructor')
+        if(      self%is_2d()  ) call simple_stop('only for volumes; alloc_rho; simple_reconstructor')
+        if( present(expand) )l_expand = expand
         call self%dealloc_rho
         l_expand = .true.
         if( present(expand) ) l_expand = expand
@@ -123,10 +124,12 @@ contains
             self%ldim_exp(2,:) = [-dim, dim]
             self%ldim_exp(3,:) = [-dim, dim]
             allocate(self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=cmplx(0.,0.))
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
+            if(alloc_stat.ne.0)call allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
             allocate(self%rho_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0.)
-        endif
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0., stat=alloc_stat)
+            if(alloc_stat.ne.0)call allocchk("In: alloc_rho; simple_reconstructor rho_exp")
+        end if
         ! build CTF related matrices
         if( self%ctfflag .ne. CTFFLAG_NO)then
             allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),        source=0.)
@@ -205,8 +208,10 @@ contains
             !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k) proc_bind(close)
             do h=self%ldim_exp(1,1),self%ldim_exp(1,2)
                 do k=self%ldim_exp(2,1),self%ldim_exp(2,2)
-                    self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2)) = w * self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
-                    self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))  = w * self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
+                    self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2)) = &
+                        w * self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
+                    self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))  = &
+                        w * self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
                 end do
             end do
             !$omp end parallel do
@@ -230,9 +235,10 @@ contains
         integer :: filnum, ierr
         call del_file(trim(kernam))
         call fopen(filnum, trim(kernam), status='NEW', action='WRITE', access='STREAM', iostat=ierr)
-        call fileio_errmsg( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
+        call fileiochk( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
         write(filnum, pos=1, iostat=ierr) self%rho
-        if( ierr .ne. 0 ) call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
+        if( ierr .ne. 0 ) &
+            call fileiochk('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
         call fclose(filnum,errmsg='simple_reconstructor ; write rho  fclose ')
     end subroutine write_rho
 
@@ -242,9 +248,11 @@ contains
         character(len=*),     intent(in)    :: kernam !< kernel name
         integer :: filnum, ierr
         call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM', iostat=ierr)
-        call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
+        call fileiochk('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
         read(filnum, pos=1, iostat=ierr) self%rho
-        if( ierr .ne. 0 ) call fileio_errmsg('simple_reconstructor::read_rho; simple_reconstructor reading '// trim(kernam), ierr)
+        if( ierr .ne. 0 ) &
+            call fileiochk('simple_reconstructor::read_rho; simple_reconstructor reading '&
+            &// trim(kernam), ierr)
         call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
     end subroutine read_rho
 
@@ -484,8 +492,8 @@ contains
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
                         phys  = W_img%comp_addr_phys([h,k,m])
-                        call W_img%set_cmat_at(phys,cmplx(0., 0.))
-                        call Wprev_img%set_cmat_at(phys,cmplx(0., 0.))
+                        call W_img%set_cmat_at(phys(1),phys(2),phys(3), cmplx(0., 0.))
+                        call Wprev_img%set_cmat_at(phys(1),phys(2),phys(3),cmplx(0., 0.))
                     end do
                 end do
             end do
@@ -500,7 +508,7 @@ contains
                     do k = self%lims(2,1),self%lims(2,2)
                         do m = self%lims(3,1),self%lims(3,2)
                             phys  = W_img%comp_addr_phys([h,k,m])
-                            call W_img%mul_cmat_at(self%rho(phys(1),phys(2),phys(3)), phys)
+                            call W_img%mul_cmat_at(phys(1),phys(2),phys(3), self%rho(phys(1),phys(2),phys(3)))
                         end do
                     end do
                 end do
@@ -523,7 +531,7 @@ contains
                             else
                                 val = min(val_prev/val, 1e20)
                             endif
-                            call W_img%set_cmat_at( phys, cmplx(val, 0.))
+                            call W_img%set_cmat_at( phys(1),phys(2),phys(3), cmplx(val, 0.))
                         end do
                     end do
                 end do
@@ -538,7 +546,7 @@ contains
                     do m = self%lims(3,1),self%lims(3,2)
                         phys   = W_img%comp_addr_phys([h, k, m])
                         invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
-                        call self%mul_cmat_at(invrho,phys)
+                        call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho)
                     end do
                 end do
             end do
@@ -552,9 +560,9 @@ contains
                     do m = self%lims(3,1),self%lims(3,2)
                         phys   = self%comp_addr_phys([h, k, m])
                         if( self%rho(phys(1),phys(2),phys(3)) < 1.e-20 )then
-                            call self%set_cmat_at(phys,cmplx(0.,0.))
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), cmplx(0.,0.) )
                         else
-                            call self%mul_cmat_at(1./self%rho(phys(1),phys(2),phys(3)), phys)
+                            call self%mul_cmat_at(phys(1),phys(2),phys(3), 1./self%rho(phys(1),phys(2),phys(3)))
                         endif
                     end do
                 end do
@@ -582,12 +590,12 @@ contains
                         phys(1) = h + 1
                         phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
                         phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
-                        call self%set_cmat_at(phys, self%cmat_exp(h,k,m))
+                        call self%set_cmat_at( phys(1),phys(2),phys(3), self%cmat_exp(h,k,m) )
                     else
                         phys(1) = -h + 1
                         phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
                         phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
-                        call self%set_cmat_at(phys, conjg(self%cmat_exp(h,k,m)))
+                        call self%set_cmat_at(phys(1),phys(2),phys(3), conjg(self%cmat_exp(h,k,m)))
                     endif
                     self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
                 end do
@@ -622,11 +630,11 @@ contains
     ! SUMMATION
 
     !> for summing reconstructors generated by parallel execution
-    subroutine sum( self, self_in )
-         class(reconstructor), intent(inout) :: self    !< this instance
+    subroutine sum_reduce( self, self_in )
+         class(reconstructor), intent(inout) :: self !< this instance
          class(reconstructor), intent(in)    :: self_in !< other instance
          call self%add_workshare(self_in, self%rho, self_in%rho)
-    end subroutine sum
+    end subroutine sum_reduce
 
     ! RECONSTRUCTION
 
@@ -688,6 +696,7 @@ contains
 
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
+                use simple_gridding,  only: prep4cgrid
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk
@@ -731,5 +740,6 @@ contains
         if(allocated(self%ctf_sqSpatFreq) ) deallocate(self%ctf_sqSpatFreq)
         if(allocated(self%ind_map)        ) deallocate(self%ind_map)
     end subroutine dealloc_rho
+
 
 end module simple_reconstructor

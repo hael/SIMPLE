@@ -1,6 +1,6 @@
 ! batch-processing manager - functions
 module simple_qsys_funs
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 interface qsys_watcher
@@ -67,19 +67,21 @@ contains
         call exec_cmdline(cmd)
         ! read in the pid
         call fopen(funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat)
-        call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
+        call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
         read(funit,'(a)') pid
         call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
         ! get a string that contains the directory it is running in with lsof -p
         cmd = 'lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt'
         call exec_cmdline(cmd)
         call fopen(funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat)
-        call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
+        call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
         read(funit,'(a)', iostat=file_stat) pid_dir
-        if(file_stat/=0)call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
+        if(file_stat/=0)call fileiochk("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
         call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
         ! get pwd
-        pwd = simple_getenv('PWD')
+        ios = simple_getenv('PWD',pwd)
+        pwd = trim(adjustl( pwd ))
+
         ! assert
         pos = index(pid_dir, '/') ! start of directory
         if( trim(pid_dir(pos:)) .eq. trim(pwd) )then
@@ -93,17 +95,16 @@ contains
     end subroutine terminate_if_prg_in_cwd
 
     subroutine parse_env_file( env )
-        use simple_chash, only: chash
         type(chash), intent(inout)    :: env
         character(len=STDLEN)         :: env_file, qsys_name
         character(len=:), allocatable :: simple_path, simple_path_env
-        integer :: i,funit, nl, file_stat
+        integer :: i,funit, nl, file_stat,ios
         env_file = './simple_distr_config.env'
         if( .not. file_exists(trim(env_file)) ) call autogen_env_file(env_file)
         call env%read( trim(env_file) )
         ! User keys
         if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'
-        simple_path = simple_getenv('SIMPLE_PATH')
+        ios = simple_getenv('SIMPLE_PATH',simple_path)
         if( allocated(simple_path) )then
             simple_path_env = env%get('simple_path')
             if( str_has_substr(simple_path, simple_path_env) .or. str_has_substr(simple_path_env, simple_path) )then
@@ -135,21 +136,20 @@ contains
     end subroutine parse_env_file
 
     subroutine autogen_env_file( env_file )
-        use simple_syslib, only: simple_getenv
         character(len=*), intent(in)  :: env_file
-        integer                       :: funit, file_stat
+        integer                       :: funit, file_stat, io_stat
         character(len=:), allocatable :: simple_path, simple_email, simple_qsys
-        simple_path = simple_getenv('SIMPLE_PATH')
+        io_stat = simple_getenv('SIMPLE_PATH',simple_path )
         if( .not. allocated(simple_path) )&
         stop 'need SIMPLE_PATH env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
-        simple_qsys = simple_getenv('SIMPLE_QSYS')
+        io_stat = simple_getenv('SIMPLE_QSYS',simple_qsys)
         if( .not. allocated(simple_qsys) )&
         stop 'need SIMPLE_QSYS env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
-        simple_email = simple_getenv('SIMPLE_EMAIL')
+        io_stat =  simple_getenv('SIMPLE_EMAIL',simple_email)
         if( .not. allocated(simple_email) ) allocate(simple_email, source='me.myself\uni.edu')
 
         call fopen(funit, status='replace', action='write', file=trim(env_file), iostat=file_stat)
-        call fileio_errmsg("autogen_env_file qsys_funs ", file_stat)
+        call fileiochk("autogen_env_file qsys_funs ", file_stat)
         write(funit,'(a)') '# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION'
         write(funit,'(a)') ''
         write(funit,'(a)') '# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY'
@@ -230,7 +230,6 @@ contains
 
     subroutine exec_simple_prg( exec_bin, cline )
         use simple_cmdline, only: cmdline
-        use simple_chash,   only: chash
         character(len=*),  intent(in) :: exec_bin
         class(cmdline),    intent(in) :: cline
         type(chash) :: job_descr

@@ -1,6 +1,6 @@
 ! downscaling of image stacks
 module simple_scaler
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline, only: cmdline
 implicit none
 

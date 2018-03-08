@@ -13,12 +13,9 @@
 ! Public License.
 ! -----------------------------------------------------------------------------!
 program simple_omp_timer_test
-use simple_defs
-use simple_timer
+include 'simple_lib.f08'
 use simple_timer_omp_test
 use simple_cmdline, only: cmdline
-use simple_strings, only: str2real
-use simple_syslib
 implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime

@@ -1,14 +1,14 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
-#include "simple_lib.f08"
+include 'simple_lib.f08'
+
+use simple_binoris_io      ! use all in there
+use simple_procimgfile     ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_imghead,        only: find_ldim_nptcls
 use simple_qsys_funs,      only: qsys_job_finished
-use simple_binoris_io      ! use all in there
-use simple_procimgfile     ! use all in there
 implicit none
 
 public :: binarise_commander
@@ -174,7 +174,7 @@ contains
             if( p%stats .eq. 'yes' )then
                 deallocate(corrs)
                 allocate(corrs(p%nptcls), stat=alloc_stat)
-                allocchk('In: simple_commander_imgproc::corrcompare 1 ')
+                if(alloc_stat.ne.0)call allocchk('In: simple_commander_imgproc::corrcompare 1 ',alloc_stat)
             endif
             do iptcl=1,p%nptcls
                 call b%img%read(p%stk, iptcl)
@@ -219,7 +219,7 @@ contains
                 call b%img%fsc(b%img_copy, corrs)
                 if( .not. allocated(corrs_sum) )then
                     allocate(corrs_sum(size(corrs)), stat=alloc_stat)
-                    allocchk('In: simple_commander_imgproc:: corrcompare , 2')
+                    if(alloc_stat.ne.0)call allocchk('In: simple_commander_imgproc:: corrcompare , 2',alloc_stat)
                     corrs_sum = 0.
                 endif
                 corrs_sum = corrs_sum+corrs
@@ -372,7 +372,7 @@ contains
         p = params(cline, .false.) ! constants & derived constants produced
         call b%build_general_tbox(p, cline, do3d=.false., nooritab=.true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        allocchk('In: simple_image_smat, 1')
+        if(alloc_stat.ne.0)call allocchk('In: simple_image_smat, 1',alloc_stat)
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
@@ -389,9 +389,9 @@ contains
             endif
         endif
         call fopen(funit, status='REPLACE', action='WRITE', file='img_smat.bin', access='STREAM',iostat=io_stat)
-        call fileio_errmsg("commander_imgproc; image_smat failed to open image_smat.bin ", io_stat)
+        call fileiochk("commander_imgproc; image_smat failed to open image_smat.bin ", io_stat)
         write(unit=funit,pos=1,iostat=io_stat) corrmat
-        call fileio_errmsg("commander_imgproc; image_smat failed to write image_smat.bin ", io_stat)
+        call fileiochk("commander_imgproc; image_smat failed to write image_smat.bin ", io_stat)
         call fclose(funit,errmsg="commander_imgproc; image_smat failed to close image_smat.bin ")
         ! end gracefully
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
@@ -728,7 +728,7 @@ contains
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
             allocate( pinds(p%nran), stat=alloc_stat )
-            allocchk('In: simple_commander; stackops')
+            if(alloc_stat.ne.0)call allocchk('In: simple_commander; stackops',alloc_stat)
             rt = ran_tabu(p%nptcls)
             call rt%ne_ran_iarr(pinds)
             if( cline%defined('oritab') .or. cline%defined('deftab') )then

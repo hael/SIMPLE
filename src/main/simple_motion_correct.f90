@@ -2,7 +2,7 @@
 module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_ft_expanded,  only: ft_expanded
 use simple_image,        only: image
 use simple_params,       only: params
@@ -258,15 +258,15 @@ contains
         allocate( movie_frames_ftexp(nframes), movie_frames_scaled(nframes),&
             movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
             opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
-            frameweights_saved(nframes), stat=alloc_stat )        
-        allocchk('motion_correct_init; simple_motion_correct')
-        corrmat = 0.
+            frameweights_saved(nframes), stat=alloc_stat )
+        if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct')
+a       corrmat = 0.
         corrs   = 0.
         call frame_tmp%new(ldim, smpd)
         ! allocate padded matrix
         winsz   = 2*HWINSZ+1
         allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz), stat=alloc_stat )
-        allocchk('motion_correct_init; simple_motion_correct, rmat_pad')
+        if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct, rmat_pad')
         ! calculate image sum and identify outliers
         if( doprint ) write(*,'(a)') '>>> READING & REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
         call tmpmovsum%new(ldim, smpd)
@@ -319,7 +319,7 @@ contains
         if( p%l_dose_weight )then
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
-            allocchk('motion_correct_init; simple_motion_correct, acc_doses')
+            if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct, acc_doses')
             kV = p%kv
             time_per_frame = p%exp_time/real(nframes)           ! unit: s
             dose_rate      = p%dose_rate
@@ -453,7 +453,6 @@ contains
     !> corrmat2weight
     !!
     subroutine corrmat2weights()
-        use simple_stat, only: corrs2weights
         integer :: iframe, jframe
         corrs = 0.
         !$omp parallel do schedule(static) default(shared) private(iframe,jframe) proc_bind(close)

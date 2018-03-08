@@ -2,7 +2,7 @@
 
 module simple_math
 use simple_defs
-use simple_syslib, only: alloc_errchk
+use simple_syslib, only: allocchk
 implicit none
 
 interface is_a_number
@@ -498,7 +498,7 @@ contains
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
         allocate(  mask(ndat), labels(ndat), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk("sortmeans; simple_math", alloc_stat)
+        if(alloc_stat /= 0) call allocchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
         dat_sorted = dat ! reallocation  dat_sorted(ndat),
         call hpsort(dat_sorted)
@@ -1099,7 +1099,7 @@ contains
         integer :: n, k, alloc_stat
         n = fdim(box) - 1
         allocate( res(n), stat=alloc_stat )
-        call alloc_errchk('In: get_res, module: simple_math', alloc_stat)
+        if(alloc_stat .ne. 0)call allocchk('In: get_res, module: simple_math', alloc_stat)
         do k=1,n
             res(k) = calc_lowpass_lim(k, box, smpd)
         end do
@@ -1507,7 +1507,7 @@ contains
         integer, intent(in) :: n          !< matrix size
         real, allocatable   :: a(:)
         allocate( a(n), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk("In: zeros_1; simple_math", alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: zeros_1; simple_math", alloc_stat)
         a = 0.
     end function zeros_1
 
@@ -1516,7 +1516,7 @@ contains
         integer, intent(in) :: n1, n2    !< matrix size
         real, allocatable   :: a(:,:)
         allocate( a(n1,n2), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk("In: zeros_2; simple_math", alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: zeros_2; simple_math", alloc_stat)
         a = 0.
     end function zeros_2
 
@@ -1782,7 +1782,7 @@ contains
     end subroutine eigsrt
 
     ! Given a matrix a[1..m][1..n], this routine computes its singular value decomposition, A =
-    ! U ·W ·V T . The matrix U replaces a on output. The diagonal matrix of singular values W is output
+    ! U W V T . The matrix U replaces a on output. The diagonal matrix of singular values W is output
     ! as a vector w[1..n]. The matrix V (not the transpose V T ) is output as v[1..n][1..n].
     subroutine svdcmp(a,m,n,mp,np,w,v)
       integer :: m,mp,n,np!,nmax
@@ -2158,7 +2158,7 @@ contains
         if( allocated(coords) ) deallocate(coords)
         if( allocated(angtab) ) deallocate(angtab)
         allocate( coords(nradial_lines,kfromto(1):kfromto(2),2), angtab(nradial_lines), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk("In: gen_polar_coords_1; simple_math coords/angtab alloc", alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: gen_polar_coords_1; simple_math coords/angtab alloc", alloc_stat)
         ang = twopi/real(nradial_lines)
         do i=1,nradial_lines
             angtab(i) = real(i-1)*ang
@@ -2181,7 +2181,7 @@ contains
         if( allocated(coords) ) deallocate(coords)
         if( allocated(angtab) ) deallocate(angtab)
         allocate( coords(nradial_lines,nk,2), angtab(nradial_lines), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk("In: gen_polar_coords_2; simple_math coords/angtab alloc", alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: gen_polar_coords_2; simple_math coords/angtab alloc", alloc_stat)
         ang = twopi/real(nradial_lines)
         do i=1,nradial_lines
             angtab(i) = real(i-1)*ang
@@ -2209,7 +2209,7 @@ contains
         n = size(xa)
         if( n /= size(ya) ) stop 'incompatible array sizes; ratint; simple_math'
         allocate(c(n), d(n), stat=alloc_stat)
-        if(alloc_stat /= 0) call alloc_errchk("In: ratint; simple_math", alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: ratint; simple_math", alloc_stat)
         ns = 1
         hh = abs(x-xa(1))
         do i=1,n
@@ -2247,8 +2247,8 @@ contains
             y = y+dy
         end do
         deallocate(c,d,stat=alloc_stat)
-        call alloc_errchk("In: ratint; simple_math", alloc_stat)
-    end subroutine ratint
+        if(alloc_stat .ne. 0)call allocchk("In: ratint; simple_math", alloc_stat)
+    end subroutine
 
     !>    quadratic interpolation in 2D, from spider
     function quadri(xx, yy, fdata, nx, ny) result(q)
@@ -2339,7 +2339,8 @@ contains
         logical, allocatable :: mask(:)
         integer :: n, ipeak, loc(1)
         n = size(vals)
-        allocate(peakpos(npeaks), mask(n))
+        allocate(peakpos(npeaks), mask(n),stat=alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: peakfinder; simple_math", alloc_stat)
         mask = .true.
         do ipeak=1,npeaks
             loc = maxloc(vals, mask=mask)
@@ -2789,7 +2790,7 @@ contains
             pos1 = nint(real(n)/2.)
             pos2 = pos1
         endif
-        copy = arr
+        copy = arr 
         if( pos1 == pos2 )then
             val  = selec(pos1,n,copy)
         else

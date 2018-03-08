@@ -1,6 +1,6 @@
 ! symmetry search routines
 module simple_symsrcher
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_cmdline, only: cmdline
 use simple_params,  only: params
@@ -28,7 +28,7 @@ contains
         real     :: cen1, cen2, sum1, sum2, sumvals
         real     :: minmax(2), width, height, sh1(3), ang
         if(p%pgrp(1:1).ne.'d' .and. p%pgrp(1:1).ne.'D')&
-        &stop 'only intended for symmetry of order D; simple_symsrcher%dsym_cylinder'
+        &call simple_stop('only intended for symmetry of order D; simple_symsrcher%dsym_cylinder')
         ! init
         noris = dsym_os%get_noris()
         allocate(corrs(noris),  source=-1.)

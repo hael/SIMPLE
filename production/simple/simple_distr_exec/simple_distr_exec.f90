@@ -1,11 +1,9 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program simple_distr_exec
-use simple_defs
+include 'simple_lib.f08'
 use simple_gen_doc
 use simple_user_interface, only: make_user_interface
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_strings,        only: str_has_substr
-use simple_fileio,         only: extract_abspath
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
@@ -44,17 +42,17 @@ type(scale_project_distr_commander)               :: xscale_project
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
-character(len=STDLEN) :: arg, prg, entire_line
+character(len=STDLEN) :: args, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
 
 ! parse command line
-call get_command_argument(1, arg, cmdlen, cmdstat)
+call get_command_argument(1, args, cmdlen, cmdstat)
 call get_command(entire_line)
 if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_distr_programs
-pos = index(arg, '=') ! position of '='
-call cmdline_err( cmdstat, cmdlen, arg, pos )
-prg = arg(pos+1:) ! this is the program name
+pos = index(args, '=') ! position of '='
+call cmdline_err( cmdstat, cmdlen, args, pos )
+prg = args(pos+1:) ! this is the program name
 ! make UI
 call make_user_interface
 

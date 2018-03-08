@@ -1,6 +1,6 @@
 ! concrete commander: checking routines
 module simple_commander_checks
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -65,7 +65,6 @@ contains
     subroutine exec_info_image( self, cline)
         use simple_image,   only: image
         use simple_imgfile, only: imgfile
-        use simple_imghead, only: find_ldim_nptcls
         class(info_image_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)      :: p

@@ -1,7 +1,8 @@
 ! batch-processing manager - Local system
 module simple_qsys_local
+include 'simple_lib.f08'
 use simple_qsys_base, only: qsys_base
-use simple_chash,     only: chash
+
 implicit none
 
 public :: qsys_local
@@ -20,7 +21,7 @@ type, extends(qsys_base) :: qsys_local
 end type qsys_local
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_local_env( self )
         class(qsys_local), intent(inout) :: self
@@ -29,7 +30,7 @@ contains
         ! define the environment:
         call self%env%push('qsys_submit_cmd', 'nohup')
     end subroutine new_local_env
-    
+
     !> \brief  is a getter
     function get_local_submit_cmd( self ) result( cmd )
         class(qsys_local), intent(in) :: self
@@ -43,7 +44,7 @@ contains
         class(chash),      intent(in) :: job_descr
         integer, optional, intent(in) :: fhandle
     end subroutine write_local_header
-    
+
     !> \brief  is a destructor
     subroutine kill_local_env( self )
         class(qsys_local), intent(inout) :: self

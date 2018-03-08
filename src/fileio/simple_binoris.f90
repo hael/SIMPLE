@@ -1,9 +1,12 @@
 ! for manging orientation data using binary files
 module simple_binoris
-use simple_defs   ! use all in there
-use simple_fileio ! use all in there
-use simple_oris,  only: oris
-#include "simple_lib.f08"
+use, intrinsic :: iso_c_binding
+use simple_defs    ! use all in there
+use simple_ori,    only: ori
+use simple_oris,   only: oris
+use simple_strings
+use simple_fileio
+use simple_syslib, only: allocchk
 implicit none
 
 public :: binoris
@@ -106,7 +109,7 @@ contains
                 if( .not. self%l_open )then
                     call fopen(tmpunit, trim(fname), access='STREAM', action='READWRITE',&
                         &status='UNKNOWN', form='UNFORMATTED', iostat=io_stat)
-                    call fileio_errmsg('binoris ; open_local '//trim(fname), io_stat)
+                    call fileiochk('binoris ; open_local '//trim(fname), io_stat)
                     self%funit  = tmpunit
                     self%l_open = .true.
                 endif
@@ -141,7 +144,7 @@ contains
         integer :: io_status
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_header'
         read(unit=self%funit,pos=1,iostat=io_status) self%header
-        if( io_status .ne. 0 ) call fileio_errmsg('binoris ::read_header, ERROR reading header bytes ', io_status)
+        if( io_status .ne. 0 ) call fileiochk('binoris ::read_header, ERROR reading header bytes ', io_status)
     end subroutine read_header
 
     subroutine write_header( self )
@@ -149,7 +152,7 @@ contains
         integer :: io_status
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_header'
         write(unit=self%funit,pos=1,iostat=io_status) self%header
-        if( io_status .ne. 0 ) call fileio_errmsg('binoris :: write_header, ERROR writing header bytes ', io_status)
+        if( io_status .ne. 0 ) call fileiochk('binoris :: write_header, ERROR writing header bytes ', io_status)
         if( DEBUG ) print *, 'wrote: ', sizeof(self%header), ' header bytes'
     end subroutine write_header
 
@@ -432,7 +435,6 @@ contains
     end subroutine read_segment_3
 
     subroutine read_segment_ctfparams_state_eo( self, isegment, os )
-        use simple_ori, only: ori
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
         class(oris),    intent(inout) :: os

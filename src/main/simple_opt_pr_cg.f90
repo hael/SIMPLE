@@ -1,11 +1,9 @@
 ! function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4
 
 module simple_opt_pr_cg
-#include "simple_lib.f08"
-
+include 'simple_lib.f08'
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
-use simple_math
 implicit none
 
 public :: opt_pr_cg
@@ -28,13 +26,12 @@ contains
     !> \brief  is a constructor
     subroutine new_opt_pr_cg( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_syslib,   only: alloc_errchk
         class(opt_pr_cg), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)  :: spec !< specification
         call self%kill
         allocate(self%x1(spec%ndim),self%x2(spec%ndim),self%p(spec%ndim),self%g0(spec%ndim),&
             & self%gradient(spec%ndim),stat=alloc_stat)
-        allocchk('In: new_opt_pr_cg; simple_opt_pr_cg')
+        if(alloc_stat.ne.0)call allocchk('In: new_pr_cg_opt; simple_opt_pr_cg')
         self%exists = .true.
     end subroutine
 
@@ -44,7 +41,7 @@ contains
         use simple_opt_subs, only: lnsrch
         class(opt_pr_cg), intent(inout) :: self        !< instance
         class(opt_spec),  intent(inout) :: spec        !< specification
-        class(*),         intent(inout) :: fun_self    !< self-pointer for cost function        
+        class(*),         intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)               :: lowest_cost !< minimum function value
         if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
             stop 'cost function not associated in opt_spec; pr_cg_minimize; simple_opt_pr_cg'
@@ -57,7 +54,7 @@ contains
         ! initialise nevals counters
         spec%nevals  = 0
         spec%ngevals = 0
-        call pr_cgmin        
+        call pr_cgmin
 
         contains
 
@@ -79,7 +76,7 @@ contains
                         write (*,*) 'simple_opt_pr_cg: error in minimizer routine'
                         return
                     end if
-                    status = test_gradient(self%gradient, real(spec%gtol, dp))                    
+                    status = test_gradient(self%gradient, real(spec%gtol, dp))
                     if ((global_debug).and.(global_verbose)) then
                         if (status == OPT_STATUS_SUCCESS) then
                             write (*,*) 'Minimum found at:'
@@ -91,7 +88,7 @@ contains
                     end if
                     if (associated(spec%opt_callback)) then
                         call spec%opt_callback(fun_self)
-                    end if                    
+                    end if
                 end do
                 if (status == OPT_STATUS_SUCCESS) then
                     spec%converged = .true.
@@ -167,9 +164,9 @@ contains
                     self%pnorm = g1norm
                 else
                     ! p' = g1 - beta * p
-                    self%g0 = self%g0 - self%gradient          ! g0' = g0 - g1 
-                    g0g1 = dot_product(self%g0, self%gradient) ! g1g0 = (g0-g1).g1 
-                    beta = g0g1 / (self%g0norm**2)             ! beta = -((g1 - g0).g1)/(g0.g0)                    
+                    self%g0 = self%g0 - self%gradient          ! g0' = g0 - g1
+                    g0g1 = dot_product(self%g0, self%gradient) ! g1g0 = (g0-g1).g1
+                    beta = g0g1 / (self%g0norm**2)             ! beta = -((g1 - g0).g1)/(g0.g0)
                     self%p = -beta * self%p
                     self%p = self%p + self%gradient
                     self%pnorm = norm_2(self%p)
@@ -182,7 +179,7 @@ contains
                     write (*,*) 'g: ', self%gradient
                 end if
                 status = OPT_STATUS_CONTINUE
-            end function pr_cg_iterate            
+            end function pr_cg_iterate
     end subroutine
 
     !> \brief  is a destructor

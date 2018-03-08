@@ -1,6 +1,6 @@
 ! window functions for Fourier interpolation
 module simple_winfuns
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 public :: winfuns

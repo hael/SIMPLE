@@ -1,11 +1,9 @@
 ! helper routines and definitions for certain optimizer routines (those taken from the gsl library)
 module simple_opt_helpers
-#include "simple_lib.f08"
-
-    use simple_math
-    implicit none
-    !< constants for return values
-    integer, parameter  :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
+include 'simple_lib.f08'
+implicit none
+!< constants for return values
+integer, parameter  :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
 contains
     subroutine take_step (x, p, step, lambda, x1)
         real(dp), intent(in) :: x(:), p(:), step, lambda
@@ -54,7 +52,7 @@ contains
 
     subroutine minimize(x, p, lambda, stepa, stepb, stepc, fa, fb, fc, &
         & x1, x2, gradient, step, f, gnorm, spec, fun_self)
-        use simple_opt_spec, only: opt_spec        
+        use simple_opt_spec, only: opt_spec
         real(dp), intent(in) :: x(:), p(:), lambda
         real(dp), intent(out) :: x1(:), x2(:), gradient(:), step, stepa, stepb, stepc, fa, fb, fc, f, gnorm
         class(opt_spec), intent(inout) :: spec
@@ -170,7 +168,7 @@ contains
             status = OPT_STATUS_CONTINUE
         end if
     end function test_gradient
-    
+
     logical function vect_equal_4( array1, array2 )
         real, intent(in) :: array1(:), array2(:)
         integer :: i
@@ -196,4 +194,3 @@ contains
     end function vect_equal
 
 end module simple_opt_helpers
-        

@@ -1,6 +1,7 @@
 ! centralised builder (the main object constructor in SIMPLE)
 module simple_build
-#include "simple_lib.f08"
+include 'simple_lib.f08'
+!!import classes
 use simple_cmdline,          only: cmdline
 use simple_comlin,           only: comlin
 use simple_image,            only: image
@@ -233,7 +234,7 @@ contains
             lfny_match = self%img_match%get_lfny(1)
             cyc_lims   = self%img_pad%loop_lims(3)
             allocate( self%fsc(p%nstates,lfny), stat=alloc_stat )
-            allocchk("In: build_general_tbox; simple_build, 1")
+            if(alloc_stat.ne.0)call allocchk("In: build_general_tbox; simple_build, 1", alloc_stat)
             self%fsc  = 0.
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
@@ -280,21 +281,30 @@ contains
         integer :: i
         call self%kill_comlin_tbox
         if( p%pgrp /= 'c1' )then ! set up symmetry functionality
+            DebugPrint 'build_comlin_tbox:  set up symmetry functionality'
             ! make object for symmetrized orientations
             call self%a%symmetrize(p%nsym)
+            DebugPrint 'build_comlin_tbox:  symmetrized orientations obj made'
             allocate( self%imgs_sym(1:p%nsym*p%nptcls), self%ref_imgs(p%nstates,p%nspace), stat=alloc_stat )
-            allocchk( 'build_comlin_tbox; simple_build, 1')
+            if(alloc_stat.ne.0)call allocchk( 'build_comlin_tbox; simple_build, 1', alloc_stat)
+            DebugPrint 'build_comlin_tbox: allocated imgs '
             do i=1,p%nptcls*p%nsym
-                call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd)
+               call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd)
             end do
+            DebugPrint 'build_comlin_tbox: sym ptcls created '
             self%clins = comlin(self%a, self%imgs_sym, p%lp)
+            DebugPrint 'build_comlin_tbox: comlin called '
         else ! set up assymetrical common lines-based alignment functionality
+            DebugPrint 'build_comlin_tbox:  set up assymetrical common lines mode'
             allocate( self%imgs(1:p%nptcls), stat=alloc_stat )
-            allocchk( 'build_comlin_tbox; simple_build, 2')
+            if(alloc_stat.ne.0)call allocchk( 'build_comlin_tbox; simple_build, 2', alloc_stat)
+            DebugPrint 'build_comlin_tbox: allocated imgs '
             do i=1,p%nptcls
                 call self%imgs(i)%new([p%box,p%box,1],p%smpd)
             end do
+            DebugPrint 'build_comlin_tbox: sym ptcls created '
             self%clins = comlin( self%a, self%imgs, p%lp )
+            DebugPrint 'build_comlin_tbox: comlin called '
         endif
         write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
         self%comlin_tbox_exists = .true.
@@ -388,7 +398,7 @@ contains
             if( self%spproj%os_cls3D%get_noris() == p%ncls )then
                 call self%spproj%os_cls3D%nearest_proj_neighbors(p%nnn, self%nnmat)
             else
-                stop 'size of os_cls3D segment of spproj does not conform with # clusters (ncls); build_strategy2D_tbox'
+               call simple_stop('simple_build::build_hadamard_prime2D_tbox size of os_cls3D segment of spproj does not conform with # clusters (ncls)')
             endif
         endif
         call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)
@@ -414,10 +424,10 @@ contains
         call self%raise_hard_ctf_exception(p)
         if( p%eo .ne. 'no' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-            allocchk('build_strategy3D_tbox; simple_build, 1')
+            if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 1', alloc_stat)
         else
             allocate( self%recvols(p%nstates), stat=alloc_stat )
-            allocchk('build_strategy3D_tbox; simple_build, 2')
+            if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
         endif
         if( p%neigh.eq.'yes' ) then
             nnn = p%nnn
@@ -460,7 +470,7 @@ contains
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
-        allocchk('build_strategy3D_tbox; simple_build, 2')
+        if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p, self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)

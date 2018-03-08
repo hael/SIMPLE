@@ -1,11 +1,10 @@
 ! function minimization by steepest descent algorithm, translated from gsl 2.4 (steepest_descent.c)
 
 module simple_opt_stde
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
-use simple_math
 implicit none
 
 public :: opt_stde
@@ -27,13 +26,12 @@ contains
     !> \brief  is a constructor
     subroutine new_opt_stde( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_syslib,   only: alloc_errchk
         class(opt_stde), intent(inout)  :: self !< instance
         class(opt_spec), intent(inout)  :: spec !< specification
         call self%kill
         allocate(self%x1(spec%ndim),self%g1(spec%ndim), self%gradient(spec%ndim), &
             & stat=alloc_stat)
-        allocchk('In: new_opt_stde; simple_opt_stde')
+        if(alloc_stat/=0)call allocchk('In: new_opt_stde; simple_opt_stde')
         self%exists = .true.
     end subroutine new_opt_stde
 

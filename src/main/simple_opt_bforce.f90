@@ -1,6 +1,6 @@
 ! brute force function minimisation
 module simple_opt_bforce
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_optimizer, only: optimizer
 implicit none
 
@@ -31,7 +31,7 @@ contains
         real                             :: x
         call self%kill
         allocate(self%pb(spec%ndim), self%pc(spec%ndim), stat=alloc_stat)
-        allocchk("In: new_opt_bforce")
+        if(alloc_stat.ne.0)call allocchk("In: new_opt_bforce", alloc_stat)
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&

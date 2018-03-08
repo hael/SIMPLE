@@ -2,7 +2,7 @@
 module simple_nrtxtfile
 use simple_defs
 use simple_strings, only: striscomment, cntrecsperline, strisblank ! use all in there
-use simple_fileio,  only: fopen, fclose, fileio_errmsg
+use simple_fileio,  only: fopen, fclose, fileiochk
 use simple_syslib,  only: is_open, simple_stop
 implicit none
 
@@ -53,8 +53,8 @@ contains
         ! if we are opening to read, work out the file details..
         if( self%access_type .eq. OPEN_TO_READ )then
             call fopen(tmpunit, file=self%fname, iostat=ios, status='old')
-            call fileio_errmsg("simple_nrtxtfile::new; Error when opening file for reading "//trim(self%fname),ios)
-            !! removed fclose check since fileio_errchk will stop if ios not 0
+            call fileiochk("simple_nrtxtfile::new; Error when opening file for reading "//trim(self%fname),ios)
+            !! removed fclose check since fileiochk will stop if ios not 0
 
             self%funit = tmpunit
             do
@@ -88,11 +88,11 @@ contains
         else if (self%access_type .eq. OPEN_TO_WRITE) then
 
             call fopen(self%funit, file=self%fname, iostat=ios, status='replace',iomsg=io_msg)
-            call fileio_errmsg("nrtxt::new Error when opening file "&
+            call fileiochk("nrtxt::new Error when opening file "&
                           //trim(self%fname)//' ; '//trim(io_msg),ios)
             ! if( ios .ne. 0 )then
             !     call fclose(self%funit,ios)
-            !     call fileio_errmsg("nrtxt::new Error when closing file "&
+            !     call fileiochk("nrtxt::new Error when closing file "&
             !               //trim(self%fname)//' ; '//trim(io_msg),ios)
             ! endif
             if (present(wanted_recs_per_line)) then
@@ -122,7 +122,7 @@ contains
         do
             read(self%funit, '(a)', iostat=ios, iomsg=io_message) buffer
             if( ios .ne. 0 )then
-                call fileio_errmsg('simple_nrtxtfile::readNextDataLine; Encountered iostat error: '//trim(io_message),ios)
+                call fileiochk('simple_nrtxtfile::readNextDataLine; Encountered iostat error: '//trim(io_message),ios)
             endif
             if( .not. strIsComment(buffer) .and. .not. strIsBlank(buffer) )then
                 buffer = trim(adjustl(buffer))
@@ -145,7 +145,7 @@ contains
         do record_counter = 1, self%recs_per_line
             write(self%funit, '(g14.7,a)', advance='no',iostat=ios) data_to_write(record_counter), ' '
             if( ios .ne. 0 )then
-                call fileio_errmsg('simple_nrtxtfile::writeNextDataLine; ',ios)
+                call fileiochk('simple_nrtxtfile::writeNextDataLine; ',ios)
             endif
         enddo
         ! finish the line
@@ -170,7 +170,7 @@ contains
         do record_counter = 1,self%recs_per_line
             write(self%funit, '(g14.7,a)', advance='no', iostat=ios) real(data_to_write(record_counter)), ' '
             if( ios .ne. 0 )then
-                call fileio_errmsg('simple_nrtxtfile::writeNextDataLine; Encountered error',ios)
+                call fileiochk('simple_nrtxtfile::writeNextDataLine; Encountered error',ios)
             endif
 
         enddo
@@ -191,7 +191,7 @@ contains
         ! write out the line..
         write(self%funit, '(2a)', iostat=ios) '# ', trim(adjustl(comment_to_write))
         if( ios .ne. 0 )then
-            call fileio_errmsg('simple_nrtxtfile::writeCommentLine; Encountered error',ios)
+            call fileiochk('simple_nrtxtfile::writeCommentLine; Encountered error',ios)
         endif
     end subroutine writeCommentLine
 

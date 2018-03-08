@@ -1,6 +1,6 @@
 ! ctf_estimate iterator
 module simple_ctf_estimate_iter
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 public :: ctf_estimate_iter
@@ -23,7 +23,7 @@ contains
         character(len=*),   intent(in)         :: moviename_forctf
         class(ori),         intent(inout)      :: orientation
         character(len=*),   intent(in)         :: dir_out
-        integer                       :: nframes, ldim(3), i
+        integer                       :: nframes, ldim(3)
         character(len=:), allocatable :: fname_diag
         type(image)                   :: micrograph, pspec_lower, pspec_upper, pspec_all
         real                          :: dfx, dfy, angast, phshift, cc, dferr, ctfscore

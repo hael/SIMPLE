@@ -1,10 +1,14 @@
 ! concrete commander: simulation routines
-
 module simple_commander_sim
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
+use simple_image,          only: image
+use simple_ori,            only: ori
+use simple_ctf,            only: ctf
+use simple_gridding,       only: prep4cgrid
+use simple_simulator,      only: simimg
 use simple_commander_base, only: commander_base
 implicit none
 
@@ -59,12 +63,6 @@ contains
     end subroutine exec_simulate_noise
 
     subroutine exec_simulate_particles( self, cline )
-        use simple_ori,        only: ori
-        use simple_rnd,        only: ran3
-        use simple_math,       only: deg2rad
-        use simple_gridding,   only: prep4cgrid
-        use simple_simulator,  only: simimg
-        use simple_ctf,        only: ctf
         use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
         class(simulate_particles_commander), intent(inout) :: self
@@ -163,11 +161,6 @@ contains
     end subroutine exec_simulate_particles
 
     subroutine exec_simulate_movie( self, cline )
-        use simple_ori,   only: ori
-        use simple_math,  only: deg2rad
-        use simple_image, only: image
-        use simple_rnd,   only: ran3
-        use simple_ctf,   only: ctf
         class(simulate_movie_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)         :: p
@@ -230,7 +223,7 @@ contains
         DebugPrint  'initialized shifts'
         ! generate shifts
         allocate( shifts(p%nframes,2), stat=alloc_stat )
-        allocchk('In: simple_simulate_movie; shifts')
+        if(alloc_stat.ne.0)call allocchk('In: simple_simulate_movie; shifts')
         x = 0.
         y = 0.
         do i=1,p%nframes
@@ -311,14 +304,13 @@ contains
 
             !> \brief  generate mutually exclusive positions
             function gen_ptcl_pos( npos, xdim, ydim, box ) result( pos )
-                use simple_rnd,    only: irnd_uni
                 integer, intent(in)           :: npos, xdim, ydim
                 integer, intent(in), optional :: box
                 integer, allocatable          :: pos(:,:)
                 logical                       :: occupied(xdim,ydim)
                 integer                       :: ix, iy, cnt, i, j
                 allocate( pos(npos,2), stat=alloc_stat )
-                allocchk("In: gen_ptcl_pos, simple_math")
+                if(alloc_stat.ne.0)call allocchk("In: gen_ptcl_pos, simple_math")
                 occupied = .false.
                 cnt = 0
                 do
@@ -355,8 +347,6 @@ contains
     end subroutine exec_simulate_movie
 
     subroutine exec_simulate_subtomogram( self, cline )
-        use simple_image,          only: image
-        use simple_ori,            only: ori
         use simple_projector_hlev, only: rotvol
         class(simulate_subtomogram_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline

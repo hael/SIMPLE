@@ -1,12 +1,12 @@
 
 program test_syslib
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 
 implicit none
 real :: hbwsize
-integer :: policy
-character(len=STDLEN), allocatable :: simple_path_str
+integer :: policy, io_stat
+character(len=STDLEN) :: simple_path_str
 integer(8) :: version(3)
 
 #if defined (PGI)
@@ -33,10 +33,14 @@ write(*,'(A,I0,A,I0,A,I0)') '    COMPILER VERSION: ', FC_COMPILER_VERSION(1), &
 
 print *, '>>> Syslib functions: '
 print *, '>>> Syslib function simple_getenv '
-simple_path_str = simple_getenv('SIMPLE_PATH')
-if(.not. allocated(simple_path_str)) stop 'SIMPLE_PATH not defined in shell env'
+io_stat = simple_getenv('SIMPLE_PATH',simple_path_str)
+if (io_stat /= 0) call simple_error_check()
+if(len_trim(simple_path_str)==0) then
+    print*,'SIMPLE_PATH not defined in shell env'
+end if
+
 print *, '>>> Syslib function simple_sleep '
-call simple_sleep(1) 
+call simple_sleep(1)
 print *, '>>> Syslib function print_compiler_info '
 call print_compiler_info()
 

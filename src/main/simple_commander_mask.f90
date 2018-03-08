@@ -1,6 +1,6 @@
 ! concrete commander: masking routines
 module simple_commander_mask
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build

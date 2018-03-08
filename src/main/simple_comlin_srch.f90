@@ -1,6 +1,6 @@
 ! for common-lines-based search
 module simple_comlin_srch
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_build,       only: build
 use simple_params,      only: params
 use simple_optimizer,   only: optimizer

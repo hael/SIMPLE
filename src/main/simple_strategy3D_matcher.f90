@@ -2,7 +2,7 @@
 module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_ori,                      only: ori
 use simple_oris,                     only: oris
@@ -22,7 +22,6 @@ use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
 use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
 use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
 use simple_strategy2D3D_common       ! use all in there
-use simple_timer                     ! use all in there
 implicit none
 
 public :: refine3D_exec!, gen_random_model
@@ -44,8 +43,6 @@ contains
 
     subroutine refine3D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs, only: qsys_job_finished
-        use simple_oris,      only: oris
-        use simple_fileio,    only: del_file
         use simple_sym,       only: sym
         use simple_image,     only: image
         class(build),  target, intent(inout) :: b
@@ -226,7 +223,7 @@ contains
         endif
         select case(trim(refine))
             case('snhc')
-                allocate(strategy3D_snhc_single :: strategy3Dsrch(p%fromp:p%top))
+                allocate(strategy3D_snhc_single :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case('single')
                 ! check if virgin
                 select case(trim(p%oritype))
@@ -245,18 +242,20 @@ contains
                     allocate(strategy3D_single        :: strategy3Dsrch(p%fromp:p%top))
                 endif
             case('multi')
-                allocate(strategy3D_multi         :: strategy3Dsrch(p%fromp:p%top))
+                allocate(strategy3D_multi         :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case('greedy_single')
-                allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top))
+                allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case('greedy_multi')
-                allocate(strategy3D_greedy_multi  :: strategy3Dsrch(p%fromp:p%top))
+                allocate(strategy3D_greedy_multi  :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case('cluster','clustersym','clusterdev')
-                allocate(strategy3D_cluster       :: strategy3Dsrch(p%fromp:p%top))
+                allocate(strategy3D_cluster       :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case DEFAULT
                 write(*,*) 'refine flag: ', trim(refine)
                 stop 'Refinement mode unsupported'
         end select
+        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::prime3D_exec strategy3D objects ",alloc_stat)
         ! actual construction
+
         cnt = 0
         do iptcl=p%fromp,p%top
             if( ptcl_mask(iptcl) )then
@@ -565,7 +564,6 @@ contains
             call b%imgbatch(imatch)%kill
         end do
         deallocate(match_imgs, b%imgbatch)
-
         DebugPrint '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 

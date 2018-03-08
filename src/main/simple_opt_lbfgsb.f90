@@ -1,7 +1,6 @@
 ! memory limited bound-constained BFGS optimiser
 module simple_opt_lbfgsb
-#include "simple_lib.f08"
-
+include 'simple_lib.f08'
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
 implicit none
@@ -24,7 +23,7 @@ type, extends(optimizer) :: opt_lbfgsb
     real(dp)               :: f
     real(dp)               :: dsave(24)
     integer,  allocatable  :: nbd(:), iwa(:)
-    real(dp), allocatable  ::  l(:), u(:), g(:), wa(:)    
+    real(dp), allocatable  ::  l(:), u(:), g(:), wa(:)
     logical                :: exists=.false.
 contains
     procedure :: new      => new_opt_lbfgsb
@@ -37,10 +36,9 @@ contains
     !> \brief  is a constructor
     subroutine new_opt_lbfgsb( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_syslib,   only: alloc_errchk
         class(opt_lbfgsb), intent(inout) :: self !< instance
         class(opt_spec),   intent(inout) :: spec !< specification
-        integer                          :: n, m        
+        integer                          :: n, m
         call self%kill
         n = spec%ndim
         m = spec%lbfgsb_m
@@ -83,17 +81,17 @@ contains
         subroutine lbfgsbmin
             self%task = 'START'
             do while(self%task(1:2) .eq. 'FG' .or. self%task .eq. 'NEW_X' .or. &
-                &    self%task .eq. 'START') 
-                !     This is the call to the L-BFGS-B code.                
+                &    self%task .eq. 'START')
+                !     This is the call to the L-BFGS-B code.
                 call setulb ( spec%ndim, spec%lbfgsb_m, spec%x_8, self%l, self%u, self%nbd, self%f, self%g, &
                     &         factr, pgtol, self%wa, self%iwa, self%task,  &
                     &         self%csave, self%lsave, self%isave, self%dsave      )
-                
+
                 if (self%task(1:2) .eq. 'FG') then
                     call spec%eval_fdf_8( fun_self, spec%x_8, self%f, self%g )
                 else if (self%task(1:5) .eq. 'NEW_X') then
                     ! the minimization routine has returned with a new iterate.
-                    ! At this point have the opportunity of stopping the iteration 
+                    ! At this point have the opportunity of stopping the iteration
                     ! or observing the values of certain parameters
                     if (associated(spec%opt_callback)) then
                         spec%x = real(spec%x_8)
@@ -105,36 +103,36 @@ contains
                 end if
             end do
             lowest_cost = real(self%f)
-            spec%x      = real(spec%x_8)          
+            spec%x      = real(spec%x_8)
         end subroutine lbfgsbmin
 
         !===========   L-BFGS-B (version 3.0.  April 25, 2011  ===================
         !
-        !     This is a modified version of L-BFGS-B. Minor changes in the updated 
-        !     code appear preceded by a line comment as follows 
-        !  
-        !     c-jlm-jn 
+        !     This is a modified version of L-BFGS-B. Minor changes in the updated
+        !     code appear preceded by a line comment as follows
+        !
+        !     c-jlm-jn
         !
         !     Major changes are described in the accompanying paper:
         !
-        !         Jorge Nocedal and Jose Luis Morales, Remark on "Algorithm 778: 
-        !         L-BFGS-B: Fortran Subroutines for Large-Scale Bound Constrained 
-        !         Optimization"  (2011). To appear in  ACM Transactions on 
+        !         Jorge Nocedal and Jose Luis Morales, Remark on "Algorithm 778:
+        !         L-BFGS-B: Fortran Subroutines for Large-Scale Bound Constrained
+        !         Optimization"  (2011). To appear in  ACM Transactions on
         !         Mathematical Software,
         !
-        !     The paper describes an improvement and a correction to Algorithm 778. 
-        !     It is shown that the performance of the algorithm can be improved 
-        !     significantly by making a relatively simple modication to the subspace 
-        !     minimization phase. The correction concerns an error caused by the use 
-        !     of routine dpmeps to estimate machine precision. 
+        !     The paper describes an improvement and a correction to Algorithm 778.
+        !     It is shown that the performance of the algorithm can be improved
+        !     significantly by making a relatively simple modication to the subspace
+        !     minimization phase. The correction concerns an error caused by the use
+        !     of routine dpmeps to estimate machine precision.
         !
-        !     The total work space **wa** required by the new version is 
-        ! 
-        !                  2*m*n + 11m*m + 5*n + 8*m 
+        !     The total work space **wa** required by the new version is
         !
-        !     the old version required 
+        !                  2*m*n + 11m*m + 5*n + 8*m
         !
-        !                  2*m*n + 12m*m + 4*n + 12*m 
+        !     the old version required
+        !
+        !                  2*m*n + 12m*m + 4*n + 12*m
         !
         !
         !            J. Nocedal  Department of Electrical Engineering and
@@ -142,13 +140,13 @@ contains
         !                        Northwestern University. Evanston, IL. USA
         !
         !
-        !           J.L Morales  Departamento de Matematicas, 
+        !           J.L Morales  Departamento de Matematicas,
         !                        Instituto Tecnologico Autonomo de Mexico
         !                        Mexico D.F. Mexico.
         !
-        !                        March  2011    
-        !                                                 
-        !============================================================================= 
+        !                        March  2011
+        !
+        !=============================================================================
         subroutine setulb(n, m, x, l, u, nbd, f, g, factr, pgtol, wa, iwa, &
             &             task, csave, lsave, isave, dsave)
             character :: task*60, csave*60
@@ -161,7 +159,7 @@ contains
             !
             !     Subroutine setulb
             !
-            !     This subroutine partitions the working arrays wa and iwa, and 
+            !     This subroutine partitions the working arrays wa and iwa, and
             !       then uses the limited memory BFGS method to solve the bound
             !       constrained optimization problem by calling mainlb.
             !       (The direct method will be used in the subspace minimization.)
@@ -222,10 +220,10 @@ contains
             !
             !                 max{|proj g_i | i = 1, ..., n} <= pgtol
             !
-            !         where pg_i is the ith component of the projected gradient.   
+            !         where pg_i is the ith component of the projected gradient.
             !       On exit pgtol is unchanged.
             !
-            !     wa is a double precision working array of length 
+            !     wa is a double precision working array of length
             !       (2mmax + 5)nmax + 12mmax^2 + 12mmax.
             !
             !     iwa is an integer working array of length 3nmax.
@@ -236,7 +234,7 @@ contains
             !     csave is a working string of characters of length 60.
             !
             !     lsave is a logical working array of dimension 4.
-            !       On exit with 'task' = NEW_X, the following information is 
+            !       On exit with 'task' = NEW_X, the following information is
             !                                                             available:
             !         If lsave(1) = .true.  then  the initial X has been replaced by
             !                                     its projection in the feasible set;
@@ -245,18 +243,18 @@ contains
             !                                     bounds;
             !
             !     isave is an integer working array of dimension 44.
-            !       On exit with 'task' = NEW_X, the following information is 
+            !       On exit with 'task' = NEW_X, the following information is
             !                                                             available:
-            !         isave(22) = the total number of intervals explored in the 
+            !         isave(22) = the total number of intervals explored in the
             !                         search of Cauchy points;
-            !         isave(26) = the total number of skipped BFGS updates before 
+            !         isave(26) = the total number of skipped BFGS updates before
             !                         the current iteration;
             !         isave(30) = the number of current iteration;
             !         isave(31) = the total number of BFGS updates prior the current
             !                         iteration;
             !         isave(33) = the number of intervals explored in the search of
             !                         Cauchy point in the current iteration;
-            !         isave(34) = the total number of function and gradient 
+            !         isave(34) = the total number of function and gradient
             !                         evaluations;
             !         isave(36) = the number of function value or gradient
             !                                  evaluations in the current iteration;
@@ -292,7 +290,7 @@ contains
             !
             !     Subprograms called:
             !
-            !       L-BFGS-B Library ... mainlb.    
+            !       L-BFGS-B Library ... mainlb.
             !
             !
             !     References:
@@ -382,7 +380,7 @@ contains
             !
             !     This subroutine solves bound constrained optimization problems by
             !       using the compact formula of the limited memory BFGS updates.
-            !       
+            !
             !     n is an integer variable.
             !       On entry n is the number of variables.
             !       On exit n is unchanged.
@@ -464,13 +462,13 @@ contains
             !       used to store the lower triangular part of
             !                 N = [Y' ZZ'Y   L_a'+R_z']
             !                     [L_a +R_z  S'AA'S   ]
-            !            
+            !
             !     z(n),r(n),d(n),t(n), xp(n),wa(8*m) are double precision working arrays.
             !       z  is used at different times to store the Cauchy point and
             !          the Newton point.
             !       xp is used to safeguard the projected Newton direction
             !
-            !     sg(m),sgo(m),yg(m),ygo(m) are double precision working arrays. 
+            !     sg(m),sgo(m),yg(m),ygo(m) are double precision working arrays.
             !
             !     index is an integer working array of dimension n.
             !       In subroutine freev, index is used to store the free and fixed
@@ -504,7 +502,7 @@ contains
             !
             !     Subprograms called
             !
-            !       L-BFGS-B Library ... cauchy, subsm, lnsrlb, formk, 
+            !       L-BFGS-B Library ... cauchy, subsm, lnsrlb, formk,
             !
             !        errclb, active, projgr,
             !
@@ -523,7 +521,7 @@ contains
             !       Subroutines for Large Scale Bound Constrained Optimization''
             !       Tech. Report, NAM-11, EECS Department, Northwestern University,
             !       1994.
-            ! 
+            !
             !       [3] R. Byrd, J. Nocedal and R. Schnabel "Representations of
             !       Quasi-Newton Matrices and their use in Limited Memory Methods'',
             !       Mathematical Programming 63 (1994), no. 4, pp. 129-156.
@@ -593,7 +591,7 @@ contains
                 call errclb(n,m,factr,l,u,nbd,task,info,k)
                 if (task(1:5) .eq. 'ERROR') return
                 ! Initialize iwhere & project x onto the feasible set.
-                call active(n,l,u,nbd,x,iwhere,prjctd,cnstnd,boxed) 
+                call active(n,l,u,nbd,x,iwhere,prjctd,cnstnd,boxed)
                 ! The end of the initialization.
             else
                 ! restore local variables.
@@ -645,7 +643,7 @@ contains
                 end if
             end if
             !  Compute f0 and g0.
-            task = 'FG_START' 
+            task = 'FG_START'
             ! return to the driver to calculate f and g; reenter at 111.
             goto 1000
 111         continue
@@ -660,7 +658,7 @@ contains
             ! ----------------- the beginning of the loop --------------------------
 222         continue
             iword = -1
-            if (.not. cnstnd .and. col .gt. 0) then 
+            if (.not. cnstnd .and. col .gt. 0) then
                 ! skip the search for GCP.
                 call dcopy(n,x,1,z,1)
                 wrk = updatd
@@ -676,7 +674,7 @@ contains
                 &            m,wy,ws,sy,wt,theta,col,head, &
                 &            wa(1),wa(2*m+1),wa(4*m+1),wa(6*m+1),nseg, &
                 &            sbgnrm, info, epsmch)
-            if (info .ne. 0) then 
+            if (info .ne. 0) then
                 ! singular triangular system detected; refresh the lbfgs memory.
                 info   = 0
                 col    = 0
@@ -687,7 +685,7 @@ contains
                 goto 222
             end if
             nintol = nintol + nseg
-            ! Count the entering and leaving variables for iter > 0; 
+            ! Count the entering and leaving variables for iter > 0;
             ! find the index set of free and active variables at the GCP.
             call freev(n,nfree,index,nenter,ileave,indx2, &
                 &           iwhere,wrk,updatd,cnstnd,iter)
@@ -723,11 +721,11 @@ contains
             call cmprlb(n,m,x,g,ws,wy,sy,wt,z,r,wa,index, &
                 &           theta,col,head,nfree,cnstnd,info)
             if (info .ne. 0) goto 444
-            !-jlm-jn call the direct method. 
+            !-jlm-jn call the direct method.
             call subsm( n, m, nfree, index, l, u, nbd, z, r, xp, ws, wy, &
                 &           theta, x, g, col, head, iword, wa, wn, info)
 444         continue
-            if (info .ne. 0) then 
+            if (info .ne. 0) then
                 ! singular triangular system detected;
                 ! refresh the lbfgs memory and restart the iteration.
                 info   = 0
@@ -784,7 +782,7 @@ contains
             else if (task(1:5) .eq. 'FG_LN') then
                 ! return to the driver for calculating f and g; reenter at 666.
                 goto 1000
-            else 
+            else
                 ! calculate and print out the quantities related to the new X.
                 iter = iter + 1
                 ! Compute the infinity norm of the projected (-)gradient.
@@ -812,7 +810,7 @@ contains
                 r(i) = g(i) - r(i)
             end do
             rr = ddot_lbfgsb(n,r,1,r,1)
-            if (stp .eq. one) then  
+            if (stp .eq. one) then
                 dr = gd - gdold
                 ddum = -gdold
             else
@@ -841,7 +839,7 @@ contains
             ! Cholesky factorize T to J*J' with
             ! J' stored in the upper triangular of wt.
             call formt(m,wt,sy,ss,col,theta,info)
-            if (info .ne. 0) then 
+            if (info .ne. 0) then
                 ! nonpositive definiteness in Cholesky factorization;
                 ! refresh the lbfgs memory and restart the iteration.
                 info = 0
@@ -865,35 +863,35 @@ contains
             lsave(2)  = cnstnd
             lsave(3)  = boxed
             lsave(4)  = updatd
-            isave(1)  = nintol 
-            isave(3)  = itfile 
-            isave(4)  = iback 
-            isave(5)  = nskip 
-            isave(6)  = head 
-            isave(7)  = col 
-            isave(8)  = itail 
-            isave(9)  = iter 
-            isave(10) = iupdat 
+            isave(1)  = nintol
+            isave(3)  = itfile
+            isave(4)  = iback
+            isave(5)  = nskip
+            isave(6)  = head
+            isave(7)  = col
+            isave(8)  = itail
+            isave(9)  = iter
+            isave(10) = iupdat
             isave(12) = nseg
-            isave(13) = nfgv 
-            isave(14) = info 
-            isave(15) = ifun 
-            isave(16) = iword 
-            isave(17) = nfree 
-            isave(18) = nact 
-            isave(19) = ileave 
-            isave(20) = nenter 
-            dsave(1)  = theta 
-            dsave(2)  = fold 
-            dsave(3)  = tol 
-            dsave(4)  = dnorm 
-            dsave(5)  = epsmch 
-            dsave(6)  = gd 
-            dsave(7)  = stpmx 
+            isave(13) = nfgv
+            isave(14) = info
+            isave(15) = ifun
+            isave(16) = iword
+            isave(17) = nfree
+            isave(18) = nact
+            isave(19) = ileave
+            isave(20) = nenter
+            dsave(1)  = theta
+            dsave(2)  = fold
+            dsave(3)  = tol
+            dsave(4)  = dnorm
+            dsave(5)  = epsmch
+            dsave(6)  = gd
+            dsave(7)  = stpmx
             dsave(8)  = sbgnrm
             dsave(9)  = stp
             dsave(10) = gdold
-            dsave(11) = dtd  
+            dsave(11) = dtd
         end subroutine mainlb
 
         subroutine active(n, l, u, nbd, x, iwhere, prjctd, cnstnd, boxed)
@@ -962,7 +960,7 @@ contains
                     if (nbd(i) .eq. 2 .and. u(i) - l(i) .le. zero) then
                         ! this variable is always fixed
                         iwhere(i) = 3
-                    else 
+                    else
                         iwhere(i) = 0
                     end if
                 end if
@@ -976,10 +974,10 @@ contains
             !
             !     Subroutine bmv
             !
-            !     This subroutine computes the product of the 2m x 2m middle matrix 
-            !       in the compact L-BFGS formula of B and a 2m vector v;  
+            !     This subroutine computes the product of the 2m x 2m middle matrix
+            !       in the compact L-BFGS formula of B and a 2m vector v;
             !       it returns the product in p.
-            !       
+            !
             !     m is an integer variable.
             !       On entry m is the maximum number of variable metric corrections
             !         used to define the limited memory matrix.
@@ -990,7 +988,7 @@ contains
             !       On exit sy is unchanged.
             !
             !     wt is a double precision array of dimension m x m.
-            !       On entry wt specifies the upper triangular matrix J' which is 
+            !       On entry wt specifies the upper triangular matrix J' which is
             !         the Cholesky factor of (thetaS'S+LD^(-1)L').
             !       On exit wt is unchanged.
             !
@@ -1052,12 +1050,12 @@ contains
                 p(i) = v(i)/sqrt(sy(i,i))
             end do
             !     PART II: solve [ -D^(1/2)   D^(-1/2)*L'  ] [ p1 ] = [ p1 ]
-            !                    [  0         J'           ] [ p2 ]   [ p2 ]. 
-            !       solve J^Tp2=p2. 
+            !                    [  0         J'           ] [ p2 ]   [ p2 ].
+            !       solve J^Tp2=p2.
             call dtrsl(wt,m,col,p(col+1),01,info)
             if (info .ne. 0) return
             !       compute p1=-D^(-1/2)(p1-D^(-1/2)L'p2)
-            !                 =-D^(-1/2)p1+D^(-1)L'p2.  
+            !                 =-D^(-1/2)p1+D^(-1)L'p2.
             do i = 1, col
                 p(i) = -p(i)/sqrt(sy(i,i))
             end do
@@ -1070,7 +1068,7 @@ contains
             end do
         end subroutine bmv
 
-        subroutine cauchy(n, x, l, u, nbd, g, iorder, iwhere, t, d, xcp, & 
+        subroutine cauchy(n, x, l, u, nbd, g, iorder, iwhere, t, d, xcp, &
             &                  m, wy, ws, sy, wt, theta, col, head, p, c, wbp, &
             &                  v, nseg, sbgnrm, info, epsmch)
             implicit none
@@ -1093,8 +1091,8 @@ contains
             !                  Q(x + s) = g's + 1/2 s'Bs
             !
             !       along the projected gradient direction P(x-tg,l,u).
-            !       The routine returns the GCP in xcp. 
-            !       
+            !       The routine returns the GCP in xcp.
+            !
             !     n is an integer variable.
             !       On entry n is the dimension of the problem.
             !       On exit n is unchanged.
@@ -1117,7 +1115,7 @@ contains
             !         nbd(i)=0 if x(i) is unbounded,
             !                1 if x(i) has only a lower bound,
             !                2 if x(i) has both lower and upper bounds, and
-            !                3 if x(i) has only an upper bound. 
+            !                3 if x(i) has only an upper bound.
             !       On exit nbd is unchanged.
             !
             !     g is a double precision array of dimension n.
@@ -1128,7 +1126,7 @@ contains
             !       iorder will be used to store the breakpoints in the piecewise
             !       linear path and free variables encountered. On exit,
             !         iorder(1),...,iorder(nleft) are indices of breakpoints
-            !                                which have not been encountered; 
+            !                                which have not been encountered;
             !         iorder(nleft+1),...,iorder(nbreak) are indices of
             !                                     encountered breakpoints; and
             !         iorder(nfree),...,iorder(n) are indices of variables which
@@ -1145,7 +1143,7 @@ contains
             !                 3   if x(i) is always fixed, i.e.,  u(i)=x(i)=l(i)
             !                 -1  if x(i) is always free, i.e., it has no bounds.
             !
-            !     t is a double precision working array of dimension n. 
+            !     t is a double precision working array of dimension n.
             !       t will be used to store the break points.
             !
             !     d is a double precision array of dimension n used to store
@@ -1155,7 +1153,7 @@ contains
             !       GCP on exit.
             !
             !     m is an integer variable.
-            !       On entry m is the maximum number of variable metric corrections 
+            !       On entry m is the maximum number of variable metric corrections
             !         used to define the limited memory matrix.
             !       On exit m is unchanged.
             !
@@ -1201,8 +1199,8 @@ contains
             !
             !     sg and yg are double precision arrays of dimension m.
             !       On entry sg  and yg store S'g and Y'g correspondingly.
-            !       On exit they are unchanged. 
-            ! 
+            !       On exit they are unchanged.
+            !
             !     sbgnrm is a double precision variable.
             !       On entry sbgnrm is the norm of the projected gradient at x.
             !       On exit sbgnrm is unchanged.
@@ -1214,7 +1212,7 @@ contains
             !                              used in routine bmv is singular.
             !
             !     Subprograms called:
-            ! 
+            !
             !       L-BFGS-B Library ... hpsolb, bmv.
             !
             !       Linpack ... dscal dcopy, daxpy.
@@ -1248,7 +1246,7 @@ contains
             logical  :: xlower,xupper,bnded
             integer  :: i,j,col2,nfree,nbreak,pointr
             integer  :: ibp,nleft,ibkmin,iter
-            real(dp) :: f1,f2,dt,dtm,tsum,dibp,zibp,dibp2,bkmin 
+            real(dp) :: f1,f2,dt,dtm,tsum,dibp,zibp,dibp2,bkmin
             real(dp) :: tu,tl,wmc,wmp,wmw,tj,tj0,neggi,sbgnrm
             real(dp) :: f2_org
             !     Check the status of the variables, reset iwhere(i) if necessary;
@@ -1272,8 +1270,8 @@ contains
             !     In the following loop we determine for each variable its bound
             !        status and its breakpoint, and update p accordingly.
             !        Smallest breakpoint is identified.
-            do i = 1, n 
-                neggi = -g(i)      
+            do i = 1, n
+                neggi = -g(i)
                 if (iwhere(i) .ne. 3 .and. iwhere(i) .ne. -1) then
                     !             if x(i) is not a constant and has bounds,
                     !             compute the difference between x(i) and its bounds.
@@ -1349,7 +1347,7 @@ contains
                 c(j) = zero
             end do
             !     Initialize derivative f2.
-            f2 =  -theta*f1 
+            f2 =  -theta*f1
             f2_org  =  f2
             if (col .gt. 0) then
                 call bmv(m,sy,wt,col,p,v,info)
@@ -1359,7 +1357,7 @@ contains
             dtm = -f1/f2
             tsum = zero
             nseg = 1
-            !     If there are no breakpoints, locate the GCP and return. 
+            !     If there are no breakpoints, locate the GCP and return.
             if (nbreak .eq. 0) goto 888
             nleft = nbreak
             iter = 1
@@ -1388,10 +1386,10 @@ contains
                 end if
                 call hpsolb(nleft,t,iorder,iter-2)
                 tj = t(nleft)
-                ibp = iorder(nleft)  
+                ibp = iorder(nleft)
             end if
             dt = tj - tj0
-            !     If a minimizer is within this interval, locate the GCP and return. 
+            !     If a minimizer is within this interval, locate the GCP and return.
             if (dtm .lt. dt) goto 888
             !     Otherwise fix one variable and
             !       reset the corresponding component of d to zero.
@@ -1437,9 +1435,9 @@ contains
                 call bmv(m,sy,wt,col,wbp,v,info)
                 if (info .ne. 0) return
                 wmc = ddot_lbfgsb(col2,c,1,v,1)
-                wmp = ddot_lbfgsb(col2,p,1,v,1) 
+                wmp = ddot_lbfgsb(col2,p,1,v,1)
                 wmw = ddot_lbfgsb(col2,wbp,1,v,1)
-                ! update p = p - dibp*wbp. 
+                ! update p = p - dibp*wbp.
                 call daxpy(col2,-dibp,wbp,1,p,1)
                 ! complete updating f1 and f2 while col > 0.
                 f1 = f1 + dibp*wmc
@@ -1449,7 +1447,7 @@ contains
             if (nleft .gt. 0) then
                 dtm = -f1/f2
                 goto 777
-                ! to repeat the loop for unsearched intervals. 
+                ! to repeat the loop for unsearched intervals.
             else if(bnded) then
                 f1 = zero
                 f2 = zero
@@ -1461,27 +1459,27 @@ contains
 888         continue
             if (dtm .le. zero) dtm = zero
             tsum = tsum + dtm
-            !     Move free variables (i.e., the ones w/o breakpoints) and 
+            !     Move free variables (i.e., the ones w/o breakpoints) and
             !       the variables whose breakpoints haven't been reached.
             call daxpy(n,tsum,d,1,xcp,1)
 999         continue
-            !     Update c = c + dtm*p = W'(x^c - x) 
+            !     Update c = c + dtm*p = W'(x^c - x)
             !       which will be used in computing r = Z'(B(x^c - x) + g).
             if (col .gt. 0) call daxpy(col2,dtm,p,1,c,1)
         end subroutine cauchy
 
-        subroutine cmprlb(n, m, x, g, ws, wy, sy, wt, z, r, wa, index, & 
+        subroutine cmprlb(n, m, x, g, ws, wy, sy, wt, z, r, wa, index, &
             &                 theta, col, head, nfree, cnstnd, info)
             logical  :: cnstnd
             integer  :: n, m, col, head, nfree, info, index(n)
             real(dp) :: theta
-            real(dp) :: x(n), g(n), z(n), r(n), wa(4*m) 
+            real(dp) :: x(n), g(n), z(n), r(n), wa(4*m)
             real(dp) :: ws(n, m), wy(n, m), sy(m, m), wt(m, m)
             !     ************
             !
-            !     Subroutine cmprlb 
+            !     Subroutine cmprlb
             !
-            !       This subroutine computes r=-Z'B(xcp-xk)-Z'g by using 
+            !       This subroutine computes r=-Z'B(xcp-xk)-Z'g by using
             !         wa(2m+1)=W'(xcp-x) from subroutine cauchy.
             !
             !     Subprograms called:
@@ -1502,7 +1500,7 @@ contains
             !     ************
             integer  :: i,j,k,pointr
             real(dp) :: a1,a2
-            if (.not. cnstnd .and. col .gt. 0) then 
+            if (.not. cnstnd .and. col .gt. 0) then
                 do i = 1, n
                     r(i) = -g(i)
                 end do
@@ -1516,7 +1514,7 @@ contains
                     info = -8
                     return
                 end if
-                pointr = head 
+                pointr = head
                 do j = 1, col
                     a1 = wa(j)
                     a2 = theta*wa(col + j)
@@ -1575,7 +1573,7 @@ contains
             end do
         end subroutine errclb
 
-        subroutine formk(n, nsub, ind, nenter, ileave, indx2, iupdat, & 
+        subroutine formk(n, nsub, ind, nenter, ileave, indx2, iupdat, &
             &            updatd, wn, wn1, m, ws, wy, sy, theta, col, &
             &            head, info)
             integer  :: n, nsub, m, col, head, nenter, ileave, iupdat
@@ -1585,7 +1583,7 @@ contains
             logical  :: updatd
             !     ************
             !
-            !     Subroutine formk 
+            !     Subroutine formk
             !
             !     This subroutine forms  the LEL^T factorization of the indefinite
             !
@@ -1607,31 +1605,31 @@ contains
             !
             !     ind is an integer array of dimension nsub.
             !       On entry ind specifies the indices of subspace variables.
-            !       On exit ind is unchanged. 
+            !       On exit ind is unchanged.
             !
             !     nenter is an integer variable.
-            !       On entry nenter is the number of variables entering the 
+            !       On entry nenter is the number of variables entering the
             !         free set.
-            !       On exit nenter is unchanged. 
+            !       On exit nenter is unchanged.
             !
             !     ileave is an integer variable.
             !       On entry indx2(ileave),...,indx2(n) are the variables leaving
             !         the free set.
-            !       On exit ileave is unchanged. 
+            !       On exit ileave is unchanged.
             !
             !     indx2 is an integer array of dimension n.
             !       On entry indx2(1),...,indx2(nenter) are the variables entering
             !         the free set, while indx2(ileave),...,indx2(n) are the
             !         variables leaving the free set.
-            !       On exit indx2 is unchanged. 
+            !       On exit indx2 is unchanged.
             !
             !     iupdat is an integer variable.
             !       On entry iupdat is the total number of BFGS updates made so far.
-            !       On exit iupdat is unchanged. 
+            !       On exit iupdat is unchanged.
             !
             !     updatd is a logical variable.
             !       On entry 'updatd' is true if the L-BFGS matrix is updatd.
-            !       On exit 'updatd' is unchanged. 
+            !       On exit 'updatd' is unchanged.
             !
             !     wn is a double precision array of dimension 2m x 2m.
             !       On entry wn is unspecified.
@@ -1641,7 +1639,7 @@ contains
             !                     [L_a -R_z           theta*S'AA'S ]
             !
             !     wn1 is a double precision array of dimension 2m x 2m.
-            !       On entry wn1 stores the lower triangular part of 
+            !       On entry wn1 stores the lower triangular part of
             !                     [Y' ZZ'Y   L_a'+R_z']
             !                     [L_a+R_z   S'AA'S   ]
             !         in the previous iteration.
@@ -1709,12 +1707,12 @@ contains
             integer  :: col2,pbegin,pend,dbegin,dend,upcl
             real(dp) :: temp1,temp2,temp3,temp4
             !     Form the lower triangular part of
-            !               WN1 = [Y' ZZ'Y   L_a'+R_z'] 
+            !               WN1 = [Y' ZZ'Y   L_a'+R_z']
             !                     [L_a+R_z   S'AA'S   ]
             !        where L_a is the strictly lower triangular part of S'AA'Y
             !              R_z is the upper triangular part of S'ZZ'Y.
             if (updatd) then
-                if (iupdat .gt. m) then 
+                if (iupdat .gt. m) then
                     ! shift old part of WN1.
                     do jy = 1, m - 1
                         js = m + jy
@@ -1731,7 +1729,7 @@ contains
                 iy = col
                 is = m + col
                 ipntr = head + col - 1
-                if (ipntr .gt. m) ipntr = ipntr - m    
+                if (ipntr .gt. m) ipntr = ipntr - m
                 jpntr = head
                 do jy = 1, col
                     js = m + jy
@@ -1755,7 +1753,7 @@ contains
                     jpntr = mod(jpntr,m) + 1
                 end do
                 ! put new column in block (2,1).
-                jy = col       
+                jy = col
                 jpntr = head + col - 1
                 if (jpntr .gt. m) jpntr = jpntr - m
                 ipntr = head
@@ -1776,7 +1774,7 @@ contains
             end if
             ! modify the old parts in blocks (1,1) and (2,2) due to changes
             ! in the set of free variables.
-            ipntr = head      
+            ipntr = head
             do iy = 1, upcl
                 is = m + iy
                 jpntr = head
@@ -1796,16 +1794,16 @@ contains
                         temp3 = temp3 + wy(k1,ipntr)*wy(k1,jpntr)
                         temp4 = temp4 + ws(k1,ipntr)*ws(k1,jpntr)
                     end do
-                    wn1(iy,jy) = wn1(iy,jy) + temp1 - temp3 
-                    wn1(is,js) = wn1(is,js) - temp2 + temp4 
+                    wn1(iy,jy) = wn1(iy,jy) + temp1 - temp3
+                    wn1(is,js) = wn1(is,js) - temp2 + temp4
                     jpntr = mod(jpntr,m) + 1
                 end do
                 ipntr = mod(ipntr,m) + 1
             end do
             ! modify the old parts in block (2,1).
-            ipntr = head      
+            ipntr = head
             do is = m + 1, m + upcl
-                jpntr = head 
+                jpntr = head
                 do jy = 1, upcl
                     temp1 = zero
                     temp3 = zero
@@ -1818,15 +1816,15 @@ contains
                         temp3 = temp3 + ws(k1,ipntr)*wy(k1,jpntr)
                     end do
                     if (is .le. jy + m) then
-                        wn1(is,jy) = wn1(is,jy) + temp1 - temp3  
+                        wn1(is,jy) = wn1(is,jy) + temp1 - temp3
                     else
-                        wn1(is,jy) = wn1(is,jy) - temp1 + temp3  
+                        wn1(is,jy) = wn1(is,jy) - temp1 + temp3
                     end if
                     jpntr = mod(jpntr,m) + 1
                 end do
                 ipntr = mod(ipntr,m) + 1
             end do
-            ! Form the upper triangle of WN = [D+Y' ZZ'Y/theta   -L_a'+R_z' ] 
+            ! Form the upper triangle of WN = [D+Y' ZZ'Y/theta   -L_a'+R_z' ]
             !                                 [-L_a +R_z        S'AA'S*theta]
             m2 = 2*m
             do iy = 1, col
@@ -1846,7 +1844,7 @@ contains
                 end do
                 wn(iy,iy) = wn(iy,iy) + sy(iy,iy)
             end do
-            ! Form the upper triangle of WN= [  LL'            L^-1(-L_a'+R_z')] 
+            ! Form the upper triangle of WN= [  LL'            L^-1(-L_a'+R_z')]
             !                                [(-L_a +R_z)L'^-1   S'AA'S*theta  ]
             ! first Cholesky factor (1,1) block of wn to get LL'
             !                          with L' stored in the upper triangle of wn.
@@ -1920,7 +1918,7 @@ contains
                     wt(i,j) = ddum + theta*ss(i,j)
                 end do
             end do
-            ! Cholesky factorize T to J*J' with 
+            ! Cholesky factorize T to J*J' with
             ! J' stored in the upper triangle of wt.
             call dpofa(wt,m,col,info)
             if (info .ne. 0) then
@@ -1928,14 +1926,14 @@ contains
             end if
         end subroutine formt
 
-        subroutine freev(n, nfree, index, nenter, ileave, indx2, & 
+        subroutine freev(n, nfree, index, nenter, ileave, indx2, &
             &                 iwhere, wrk, updatd, cnstnd, iter)
             integer :: n, nfree, nenter, ileave, iter
             integer :: index(n), indx2(n), iwhere(n)
             logical :: wrk, updatd, cnstnd
             !     ************
             !
-            !     Subroutine freev 
+            !     Subroutine freev
             !
             !     This subroutine counts the entering and leaving variables when
             !       iter > 0, and finds the index set of free and active variables
@@ -1946,7 +1944,7 @@ contains
             !     index is an integer array of dimension n
             !       for i=1,...,nfree, index(i) are the indices of free variables
             !       for i=nfree+1,...,n, index(i) are the indices of bound variables
-            !       On entry after the first iteration, index gives 
+            !       On entry after the first iteration, index gives
             !         the free variables at the previous iteration.
             !       On exit it gives the free variables based on the determination
             !         in cauchy using the array iwhere.
@@ -1957,7 +1955,7 @@ contains
             !          have changed status since the previous iteration.
             !       For i= 1,...,nenter, indx2(i) have changed from bound to free.
             !       For i= ileave+1,...,n, indx2(i) have changed from free to bound.
-            ! 
+            !
             !
             !                           *  *  *
             !
@@ -1994,7 +1992,7 @@ contains
             end if
             wrk = (ileave .lt. n+1) .or. (nenter .gt. 0) .or. updatd
             !     Find the index set of free and active variables at the GCP.
-            nfree = 0 
+            nfree = 0
             iact = n + 1
             do i = 1, n
                 if (iwhere(i) .le. 0) then
@@ -2012,11 +2010,11 @@ contains
             real(dp) :: t(n)
             !     ************
             !
-            !     Subroutine hpsolb 
+            !     Subroutine hpsolb
             !
             !     This subroutine sorts out the least element of t, and puts the
             !       remaining elements of t in a heap.
-            ! 
+            !
             !     n is an integer variable.
             !       On entry n is the dimension of the arrays t and iorder.
             !       On exit n is unchanged.
@@ -2067,7 +2065,7 @@ contains
                             t(i) = t(j)
                             iorder(i) = iorder(j)
                             i = j
-                            goto 10 
+                            goto 10
                         end if
                     end if
                     t(i) = ddum
@@ -2083,7 +2081,7 @@ contains
                 indxou = iorder(1)
                 ddum  = t(n)
                 indxin  = iorder(n)
-                !        Restore the heap 
+                !        Restore the heap
 30              continue
                 j = i+i
                 if (j .le. n-1) then
@@ -2097,7 +2095,7 @@ contains
                 end if
                 t(i) = ddum
                 iorder(i) = indxin
-                ! Put the least member in t(n). 
+                ! Put the least member in t(n).
                 t(n) = out
                 iorder(n) = indxou
             end if
@@ -2190,7 +2188,7 @@ contains
                 gdold=gd
                 if (gd .ge. zero) then
                     ! the directional derivative >=0.
-                    ! Line search is impossible.            
+                    ! Line search is impossible.
                     info = -4
                     return
                 end if
@@ -2201,7 +2199,7 @@ contains
                 task = 'FG_LNSRCH'
                 ifun = ifun + 1
                 nfgv = nfgv + 1
-                iback = ifun - 1 
+                iback = ifun - 1
                 if (stp .eq. one) then
                     call dcopy(n,z,1,x,1)
                 else
@@ -2214,7 +2212,7 @@ contains
             end if
         end subroutine lnsrlb
 
-        subroutine matupd(n, m, ws, wy, sy, ss, d, r, itail, & 
+        subroutine matupd(n, m, ws, wy, sy, ss, d, r, itail, &
             &                  iupdat, col, head, theta, rr, dr, stp, dtd)
             integer  :: n, m, itail, iupdat, col, head
             real(dp) :: theta, rr, dr, stp, dtd, d(n), r(n)
@@ -2326,9 +2324,9 @@ contains
             implicit none
             integer  :: n, m, nsub, col, head, iword, info
             integer  :: ind(nsub), nbd(n)
-            real(dp) :: theta 
+            real(dp) :: theta
             real(dp) :: l(n), u(n), x(n), d(n), xp(n), xx(n), gg(n)
-            real(dp) :: ws(n, m), wy(n, m) 
+            real(dp) :: ws(n, m), wy(n, m)
             real(dp) :: wv(2*m), wn(2*m, 2*m)
             !     **********************************************************************
             !
@@ -2339,7 +2337,7 @@ contains
             !      "Remark On Algorithm 788: L-BFGS-B: Fortran Subroutines for Large-Scale
             !       Bound Constrained Optimization". Decemmber 27, 2010.
             !
-            !             J.L. Morales  Departamento de Matematicas, 
+            !             J.L. Morales  Departamento de Matematicas,
             !                           Instituto Tecnologico Autonomo de Mexico
             !                           Mexico D.F.
             !
@@ -2350,13 +2348,13 @@ contains
             !                           January 17, 2011
             !
             !      **********************************************************************
-            !                           
+            !
             !
             !     Subroutine subsm
             !
             !     Given xcp, l, u, r, an index set that specifies
-            !       the active set at xcp, and an l-BFGS matrix B 
-            !       (in terms of WY, WS, SY, WT, head, col, and theta), 
+            !       the active set at xcp, and an l-BFGS matrix B
+            !       (in terms of WY, WS, SY, WT, head, col, and theta),
             !       this subroutine computes an approximate solution
             !       of the subspace problem
             !
@@ -2364,21 +2362,21 @@ contains
             !
             !             subject to l<=x<=u
             !                       x_i=xcp_i for all i in A(xcp)
-            !                     
-            !       along the subspace unconstrained Newton direction 
-            !       
+            !
+            !       along the subspace unconstrained Newton direction
+            !
             !          d = -(Z'BZ)^(-1) r.
             !
             !       The formula for the Newton direction, given the L-BFGS matrix
             !       and the Sherman-Morrison formula, is
             !
             !          d = (1/theta)r + (1/theta*2) Z'WK^(-1)W'Z r.
-            ! 
+            !
             !       where
             !                 K = [-D -Y'ZZ'Y/theta     L_a'-R_z'  ]
             !                     [L_a -R_z           theta*S'AA'S ]
             !
-            !     Note that this procedure for computing d differs 
+            !     Note that this procedure for computing d differs
             !     from that described in [1]. One can show that the matrix K is
             !     equal to the matrix M^[-1]N in that paper.
             !
@@ -2417,16 +2415,16 @@ contains
             !       On exit nbd is unchanged.
             !
             !     x is a double precision array of dimension n.
-            !       On entry x specifies the Cauchy point xcp. 
+            !       On entry x specifies the Cauchy point xcp.
             !       On exit x(i) is the minimizer of Q over the subspace of
-            !                                                        free variables. 
+            !                                                        free variables.
             !
             !     d is a double precision array of dimension n.
             !       On entry d is the reduced gradient of Q at xcp.
-            !       On exit d is the Newton direction of Q. 
+            !       On exit d is the Newton direction of Q.
             !
             !    xp is a double precision array of dimension n.
-            !       used to safeguard the projected Newton direction 
+            !       used to safeguard the projected Newton direction
             !
             !    xx is a double precision array of dimension n
             !       On entry it holds the current iterate
@@ -2469,7 +2467,7 @@ contains
             !     info is an integer variable.
             !       On entry info is unspecified.
             !       On exit info = 0       for normal return,
-            !                    = nonzero for abnormal return 
+            !                    = nonzero for abnormal return
             !                                  when the matrix K is ill-conditioned.
             !
             !     Subprograms called:
@@ -2497,11 +2495,11 @@ contains
             !
             !     ************
             integer  :: pointr,m2,col2,ibd,jy,js,i,j,k
-            real(dp) :: alpha, xk, dk, temp1, temp2 
+            real(dp) :: alpha, xk, dk, temp1, temp2
             real(dp) :: dd_p
             if (nsub .le. 0) return
             ! Compute wv = W'Zd.
-            pointr = head 
+            pointr = head
             do i = 1, col
                 temp1 = zero
                 temp2 = zero
@@ -2535,7 +2533,7 @@ contains
                 pointr = mod(pointr,m) + 1
             end do
             call dscal( nsub, one/theta, d, 1 )
-            ! 
+            !
             !-----------------------------------------------------------------
             !  Let us try the projection, d is the Newton direction
             iword = 0
@@ -2550,10 +2548,10 @@ contains
                     if ( nbd(k).eq.1 ) then         ! lower bounds only
                         x(k) = max( l(k), xk + dk )
                         if ( x(k).eq.l(k) ) iword = 1
-                    else 
-                        !     
+                    else
+                        !
                         if ( nbd(k).eq.2 ) then     ! upper and lower bounds
-                            xk   = max( l(k), xk + dk ) 
+                            xk   = max( l(k), xk + dk )
                             x(k) = min( u(k), xk )
                             if ( x(k).eq.l(k) .or. x(k).eq.u(k) ) iword = 1
                         else
@@ -2564,7 +2562,7 @@ contains
                             end if
                         end if
                     end if
-                    !            
+                    !
                 else                                ! free variables
                     x(k) = xk + dk
                 end if
@@ -2590,7 +2588,7 @@ contains
             !
             alpha = one
             temp1 = alpha
-            ibd   = 0 
+            ibd   = 0
             do i = 1, nsub
                 k = ind(i)
                 dk = d(i)
@@ -2647,17 +2645,17 @@ contains
             !     This subroutine finds a step that satisfies a sufficient
             !     decrease condition and a curvature condition.
             !
-            !     Each call of the subroutine updates an interval with 
-            !     endpoints stx and sty. The interval is initially chosen 
+            !     Each call of the subroutine updates an interval with
+            !     endpoints stx and sty. The interval is initially chosen
             !     so that it contains a minimizer of the modified function
             !
             !           psi(stp) = f(stp) - f(0) - ftol*stp*f'(0).
             !
             !     If psi(stp) <= 0 and f'(stp) >= 0 for some step, then the
-            !     interval is chosen so that it contains a minimizer of f. 
+            !     interval is chosen so that it contains a minimizer of f.
             !
-            !     The algorithm is designed to find a step that satisfies 
-            !     the sufficient decrease condition 
+            !     The algorithm is designed to find a step that satisfies
+            !     the sufficient decrease condition
             !
             !           f(stp) <= f(0) + ftol*stp*f'(0),
             !
@@ -2667,10 +2665,10 @@ contains
             !
             !     If ftol is less than gtol and if, for example, the function
             !     is bounded below, then there is always a step which satisfies
-            !     both conditions. 
+            !     both conditions.
             !
-            !     If no step can be found that satisfies both conditions, then 
-            !     the algorithm stops with a warning. In this case stp only 
+            !     If no step can be found that satisfies both conditions, then
+            !     the algorithm stops with a warning. In this case stp only
             !     satisfies the sufficient decrease condition.
             !
             !     A typical invocation of dcsrch has the following outline:
@@ -2679,7 +2677,7 @@ contains
             !  10 continue
             !        call dcsrch( ... )
             !        if (task .eq. 'FG') then
-            !           Evaluate the function and the gradient at stp 
+            !           Evaluate the function and the gradient at stp
             !           goto 10
             !           end if
             !
@@ -2693,32 +2691,32 @@ contains
             !
             !       f is a double precision variable.
             !         On initial entry f is the value of the function at 0.
-            !            On subsequent entries f is the value of the 
+            !            On subsequent entries f is the value of the
             !            function at stp.
             !         On exit f is the value of the function at stp.
             !
             !       g is a double precision variable.
             !         On initial entry g is the derivative of the function at 0.
-            !            On subsequent entries g is the derivative of the 
+            !            On subsequent entries g is the derivative of the
             !            function at stp.
             !         On exit g is the derivative of the function at stp.
             !
-            !       stp is a double precision variable. 
-            !         On entry stp is the current estimate of a satisfactory 
-            !            step. On initial entry, a positive initial estimate 
-            !            must be provided. 
+            !       stp is a double precision variable.
+            !         On entry stp is the current estimate of a satisfactory
+            !            step. On initial entry, a positive initial estimate
+            !            must be provided.
             !         On exit stp is the current estimate of a satisfactory step
             !            if task = 'FG'. If task = 'CONV' then stp satisfies
             !            the sufficient decrease and curvature condition.
             !
             !       ftol is a double precision variable.
-            !         On entry ftol specifies a nonnegative tolerance for the 
+            !         On entry ftol specifies a nonnegative tolerance for the
             !            sufficient decrease condition.
             !         On exit ftol is unchanged.
             !
             !       gtol is a double precision variable.
-            !         On entry gtol specifies a nonnegative tolerance for the 
-            !            curvature condition. 
+            !         On entry gtol specifies a nonnegative tolerance for the
+            !            curvature condition.
             !         On exit gtol is unchanged.
             !
             !       xtol is a double precision variable.
@@ -2740,7 +2738,7 @@ contains
             !         On initial entry task must be set to 'START'.
             !         On exit task indicates the required action:
             !
-            !            If task(1:2) = 'FG' then evaluate the function and 
+            !            If task(1:2) = 'FG' then evaluate the function and
             !            derivative at stp and call dcsrch again.
             !
             !            If task(1:4) = 'CONV' then the search is successful.
@@ -2756,7 +2754,7 @@ contains
             !            variable task contains additional information.
             !
             !       isave is an integer work array of dimension 2.
-            !         
+            !
             !       dsave is a double precision work array of dimension 13.
             !
             !     Subprograms called
@@ -2764,12 +2762,12 @@ contains
             !       MINPACK-2 ... dcstep
             !
             !     MINPACK-1 Project. June 1983.
-            !     Argonne National Laboratory. 
+            !     Argonne National Laboratory.
             !     Jorge J. More' and David J. Thuente.
             !
             !     MINPACK-2 Project. October 1993.
-            !     Argonne National Laboratory and University of Minnesota. 
-            !     Brett M. Averick, Richard G. Carter, and Jorge J. More'. 
+            !     Argonne National Laboratory and University of Minnesota.
+            !     Brett M. Averick, Richard G. Carter, and Jorge J. More'.
             !
             !     **********
             logical  :: brackt
@@ -2797,11 +2795,11 @@ contains
                 gtest = ftol*ginit
                 width = stpmax - stpmin
                 width1 = width/p5
-                ! The variables stx, fx, gx contain the values of the step, 
-                ! function, and derivative at the best step. 
-                ! The variables sty, fy, gy contain the value of the step, 
+                ! The variables stx, fx, gx contain the values of the step,
+                ! function, and derivative at the best step.
+                ! The variables sty, fy, gy contain the value of the step,
                 ! function, and derivative at sty.
-                ! The variables stp, f, g contain the values of the step, 
+                ! The variables stp, f, g contain the values of the step,
                 ! function, and derivative at stp.
                 stx = zero
                 fx = finit
@@ -2820,20 +2818,20 @@ contains
                 else
                     brackt = .false.
                 end if
-                stage = isave(2) 
-                ginit = dsave(1) 
-                gtest = dsave(2) 
-                gx = dsave(3) 
-                gy = dsave(4) 
-                finit = dsave(5) 
-                fx = dsave(6) 
-                fy = dsave(7) 
-                stx = dsave(8) 
-                sty = dsave(9) 
-                stmin = dsave(10) 
-                stmax = dsave(11) 
-                width = dsave(12) 
-                width1 = dsave(13) 
+                stage = isave(2)
+                ginit = dsave(1)
+                gtest = dsave(2)
+                gx = dsave(3)
+                gy = dsave(4)
+                finit = dsave(5)
+                fx = dsave(6)
+                fy = dsave(7)
+                stx = dsave(8)
+                sty = dsave(9)
+                stmin = dsave(10)
+                stmax = dsave(11)
+                width = dsave(12)
+                width1 = dsave(13)
             end if
             ! If psi(stp) <= 0 and f'(stp) >= 0 for some step, then the
             ! algorithm enters the second stage.
@@ -2849,7 +2847,7 @@ contains
             ! Test for termination.
             if (task(1:4) .eq. 'WARN' .or. task(1:4) .eq. 'CONV') goto 1000
             ! A modified function is used to predict the step during the
-            ! first stage if a lower function value has been obtained but 
+            ! first stage if a lower function value has been obtained but
             ! the decrease is not sufficient.
             if (stage .eq. 1 .and. f .le. fx .and. f .gt. ftest) then
                 ! Define the modified function and derivative values.
@@ -2930,12 +2928,12 @@ contains
             !     The parameter stx contains the step with the least function
             !     value. If brackt is set to .true. then a minimizer has
             !     been bracketed in an interval with endpoints stx and sty.
-            !     The parameter stp contains the current step. 
+            !     The parameter stp contains the current step.
             !     The subroutine assumes that if brackt is set to .true. then
             !
             !           min(stx,sty) < stp < max(stx,sty),
             !
-            !     and that the derivative at stx is negative in the direction 
+            !     and that the derivative at stx is negative in the direction
             !     of the step.
             !
             !     The subroutine statement is
@@ -2947,7 +2945,7 @@ contains
             !
             !       stx is a double precision variable.
             !         On entry stx is the best step obtained so far and is an
-            !            endpoint of the interval that contains the minimizer. 
+            !            endpoint of the interval that contains the minimizer.
             !         On exit stx is the updated best step.
             !
             !       fx is a double precision variable.
@@ -2955,16 +2953,16 @@ contains
             !         On exit fx is the function at stx.
             !
             !       dx is a double precision variable.
-            !         On entry dx is the derivative of the function at 
-            !            stx. The derivative must be negative in the direction of 
-            !            the step, that is, dx and stp - stx must have opposite 
+            !         On entry dx is the derivative of the function at
+            !            stx. The derivative must be negative in the direction of
+            !            the step, that is, dx and stp - stx must have opposite
             !            signs.
             !         On exit dx is the derivative of the function at stx.
             !
             !       sty is a double precision variable.
-            !         On entry sty is the second endpoint of the interval that 
+            !         On entry sty is the second endpoint of the interval that
             !            contains the minimizer.
-            !         On exit sty is the updated endpoint of the interval that 
+            !         On exit sty is the updated endpoint of the interval that
             !            contains the minimizer.
             !
             !       fy is a double precision variable.
@@ -2977,7 +2975,7 @@ contains
             !
             !       stp is a double precision variable.
             !         On entry stp is the current step. If brackt is set to .true.
-            !            then on input stp must be between stx and sty. 
+            !            then on input stp must be between stx and sty.
             !         On exit stp is a new trial step.
             !
             !       fp is a double precision variable.
@@ -3003,19 +3001,19 @@ contains
             !         On exit stpmax is unchanged.
             !
             !     MINPACK-1 Project. June 1983
-            !     Argonne National Laboratory. 
+            !     Argonne National Laboratory.
             !     Jorge J. More' and David J. Thuente.
             !
             !     MINPACK-2 Project. October 1993.
-            !     Argonne National Laboratory and University of Minnesota. 
+            !     Argonne National Laboratory and University of Minnesota.
             !     Brett M. Averick and Jorge J. More'.
             !
             !     **********
             real(dp) :: gamma,p,q,r,s,sgnd,stpc,stpf,stpq,theta
             sgnd = dp_var*(dx/abs(dx))
-            ! First case: A higher function value. The minimum is bracketed. 
-            ! If the cubic step is closer to stx than the quadratic step, the 
-            ! cubic step is taken, otherwise the average of the cubic and 
+            ! First case: A higher function value. The minimum is bracketed.
+            ! If the cubic step is closer to stx than the quadratic step, the
+            ! cubic step is taken, otherwise the average of the cubic and
             ! quadratic steps is taken.
             if (fp .gt. fx) then
                 theta = three*(fx - fp)/(stp - stx) + dx + dp_var
@@ -3033,9 +3031,9 @@ contains
                     stpf = stpc + (stpq - stpc)/two
                 end if
                 brackt = .true.
-                ! Second case: A lower function value and derivatives of opposite 
-                ! sign. The minimum is bracketed. If the cubic step is farther from 
-                ! stp than the secant step, the cubic step is taken, otherwise the 
+                ! Second case: A lower function value and derivatives of opposite
+                ! sign. The minimum is bracketed. If the cubic step is farther from
+                ! stp than the secant step, the cubic step is taken, otherwise the
                 ! secant step is taken.
             else if (sgnd .lt. zero) then
                 theta = three*(fx - fp)/(stp - stx) + dx + dp_var
@@ -3056,9 +3054,9 @@ contains
                 ! Third case: A lower function value, derivatives of the same sign,
                 ! and the magnitude of the derivative decreases.
             else if (abs(dp_var) .lt. abs(dx)) then
-                ! The cubic step is computed only if the cubic tends to infinity 
+                ! The cubic step is computed only if the cubic tends to infinity
                 ! in the direction of the step or if the minimum of the cubic
-                ! is beyond stp. Otherwise the cubic step is defined to be the 
+                ! is beyond stp. Otherwise the cubic step is defined to be the
                 ! secant step.
                 theta = three*(fx - fp)/(stp - stx) + dx + dp_var
                 s = max(abs(theta),abs(dx),abs(dp_var))
@@ -3078,8 +3076,8 @@ contains
                 end if
                 stpq = stp + (dp_var/(dp_var - dx))*(stx - stp)
                 if (brackt) then
-                    ! A minimizer has been bracketed. If the cubic step is 
-                    ! closer to stp than the secant step, the cubic step is 
+                    ! A minimizer has been bracketed. If the cubic step is
+                    ! closer to stp than the secant step, the cubic step is
                     ! taken, otherwise the secant step is taken.
                     if (abs(stpc-stp) .lt. abs(stpq-stp)) then
                         stpf = stpc
@@ -3092,8 +3090,8 @@ contains
                         stpf = max(stp+p66*(sty-stp),stpf)
                     end if
                 else
-                    ! A minimizer has not been bracketed. If the cubic step is 
-                    ! farther from stp than the secant step, the cubic step is 
+                    ! A minimizer has not been bracketed. If the cubic step is
+                    ! farther from stp than the secant step, the cubic step is
                     ! taken, otherwise the secant step is taken.
                     if (abs(stpc-stp) .gt. abs(stpq-stp)) then
                         stpf = stpc
@@ -3103,9 +3101,9 @@ contains
                     stpf = min(stpmax,stpf)
                     stpf = max(stpmin,stpf)
                 end if
-                ! Fourth case: A lower function value, derivatives of the same sign, 
-                ! and the magnitude of the derivative does not decrease. If the 
-                ! minimum is not bracketed, the step is either stpmin or stpmax, 
+                ! Fourth case: A lower function value, derivatives of the same sign,
+                ! and the magnitude of the derivative does not decrease. If the
+                ! minimum is not bracketed, the step is either stpmin or stpmax,
                 ! otherwise the cubic step is taken.
             else
                 if (brackt) then
@@ -3164,7 +3162,7 @@ contains
             !
             !       x is an input array of length n.
             !
-            !       incx is a positive integer variable that specifies the 
+            !       incx is a positive integer variable that specifies the
             !         stride of the vector.
             !
             !     Subprograms called
@@ -3585,7 +3583,7 @@ contains
         end subroutine dtrsl
 
     end subroutine lbfgsb_minimize
-           
+
     !> \brief  is a destructor
     subroutine kill_opt_lbfgsb( self )
         class(opt_lbfgsb), intent(inout) :: self !< instance

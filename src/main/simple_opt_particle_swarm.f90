@@ -1,7 +1,7 @@
 ! continuous particle swarm optimisation
 
 module simple_opt_particle_swarm
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 implicit none
@@ -34,7 +34,7 @@ contains
         call self%kill
         ! allocate
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
-        allocchk("In: new_opt_particle_swarm, 1")
+        if(alloc_stat.ne.0)call allocchk("In: new_particle_swarm, 1",alloc_stat)
         self%exists = .true. ! indicates existence
         if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
         DebugPrint 'created new particle swarm (instance)'
@@ -152,7 +152,7 @@ contains
         class(opt_particle_swarm), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%swarm, self%velocities, stat=alloc_stat)
-            allocchk("simple_opt_particle_swarm::kill")
+            if(alloc_stat.ne.0)call allocchk("simple_opt_particle_swarm::kill",alloc_stat)
             self%exists = .false.
         endif
     end subroutine kill_particle_swarm

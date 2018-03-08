@@ -1,11 +1,9 @@
 ! function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)
-
 module simple_opt_bfgs2
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
-use simple_math
 implicit none
 
 public :: opt_bfgs2
@@ -44,7 +42,6 @@ contains
     !> \brief  is a constructor
     subroutine new_opt_bfgs2( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_syslib,   only: alloc_errchk
         class(opt_bfgs2), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)  :: spec !< specification
         call self%kill
@@ -52,7 +49,7 @@ contains
             & self%gradient(spec%ndim), self%dx0(spec%ndim), self%dg0(spec%ndim),&
             & self%dx(spec%ndim), self%wrapper%x_alpha(spec%ndim), &
             & self%wrapper%g_alpha(spec%ndim), stat=alloc_stat)
-        allocchk('In: new_opt_bfgs2; simple_opt_bfgs2')
+        if(alloc_stat/=0)call allocchk('In: new_opt_bfgs2; simple_opt_bfgs2')
         self%exists = .true.
     end subroutine new_opt_bfgs2
 
@@ -75,7 +72,7 @@ contains
         spec%nevals  = 0
         spec%ngevals = 0
         call bfgs2min
-        
+
     contains
 
         !>  \brief  nonlinear conjugate gradient minimizer

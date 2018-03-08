@@ -1,11 +1,18 @@
 ! concrete commander: miscallenaous routines
 module simple_commander_misc
-#include "simple_lib.f08"
+include 'simple_lib.f08'
+use simple_binoris_io      ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_binoris_io      ! use all in there
+use simple_oris,           only: oris
+use simple_ori,            only: ori
+use simple_sym,            only: sym
+use simple_projector_hlev, only: rotvol
+use simple_sp_project,     only: sp_project
+use simple_image,          only: image
+
 implicit none
 
 public :: cluster_smat_commander
@@ -71,7 +78,6 @@ contains
 
     subroutine exec_cluster_smat( self, cline )
         use simple_cluster_shc,   only: cluster_shc
-        use simple_oris,          only: oris
         use simple_cluster_valid, only: cluster_valid
         class(cluster_smat_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -90,10 +96,10 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         ! obtain similarity matrix
         allocate(smat(p%nptcls,p%nptcls), stat=alloc_stat)
-        allocchk('In: simple_cluster_smat, 1')
+        if(alloc_stat.ne.0)call allocchk('In: simple_cluster_smat, 1',alloc_stat)
         smat = 1.
         call fopen(funit, status='OLD', action='READ', file=p%fname, access='STREAM',iostat=io_stat)
-        call fileio_errmsg('commander_misc; cluster_smat fopen', io_stat)
+        call fileiochk('commander_misc; cluster_smat fopen', io_stat)
         read(unit=funit,pos=1,iostat=io_stat) smat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', p%fname
@@ -101,7 +107,7 @@ contains
         endif
         call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
         allocate(validinds(2:p%ncls), stat=alloc_stat)
-        allocchk("In: simple_commander_misc:: cluster_smat")
+        if(alloc_stat.ne.0)call allocchk("In: simple_commander_misc:: cluster_smat",alloc_stat)
         validinds = 0
         ntot = (p%ncls-1)*NRESTARTS
         cnt = 0
@@ -176,7 +182,7 @@ contains
             call mol%new(p%pdbfile)
             natoms = mol%get_n()
             allocate(attribute(natoms), source=0.,stat=alloc_stat)
-            allocchk("In: simple_commander_misc:: exec_intgpeaks attribute")
+            if(alloc_stat.ne.0)call allocchk("In: simple_commander_misc:: exec_intgpeaks attribute")
             call set_intgvol(b%vol)
             do i = 1, natoms
                 xyz = mol%get_coord(i)
@@ -190,7 +196,7 @@ contains
             fbody = trim(get_fbody(trim(p%pdbfile), 'pdb'))
             csv_name = './'//trim(adjustl(fbody))//'_intg.csv'
             call fopen(fnr, FILE=csv_name, STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fileio_errmsg('commander_misc; exec_intgpeaks ', file_stat)
+            call fileiochk('commander_misc; exec_intgpeaks ', file_stat)
             do i = 1, natoms
                 write(fnr,'(I6,A1,I6,A1,F12.6)')i, ',', mol%get_num(i), ',', attribute(i)
             enddo
@@ -228,7 +234,6 @@ contains
 
     !> for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
-        use simple_image,         only: image
         use simple_estimate_ssnr, only: acc_dose2filter
         class(print_dose_weights_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -255,8 +260,6 @@ contains
 
     !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
-        use simple_math,  only: get_resolution
-        use simple_image, only: image
         class(print_fsc_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params)      :: p
@@ -281,7 +284,6 @@ contains
 
     !> for printing magic box sizes (fast FFT)
     subroutine exec_print_magic_boxes( self, cline )
-        use simple_magic_boxes, only: print_magic_box_range
         class(print_magic_boxes_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(params) :: p
@@ -321,12 +323,6 @@ contains
     !> for robust identifiaction of the symmetry axis
     !> of a map using image-to-volume simiarity validation of the axis
     subroutine exec_sym_aggregate( self, cline )
-        use simple_oris,           only: oris
-        use simple_ori,            only: ori
-        use simple_sym,            only: sym
-        use simple_image,          only: image
-        use simple_projector_hlev, only: rotvol
-        use simple_sp_project,     only: sp_project
         class(sym_aggregate_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)        :: cline_c1
@@ -401,7 +397,6 @@ contains
             end subroutine rec_vol
 
             subroutine find_sym_peaks(sym_axes, sym_peaks)
-                use simple_math, only: rad2deg
                 class(oris), intent(inout) :: sym_axes
                 class(oris), intent(out)   :: sym_peaks
                 integer, allocatable :: sort_inds(:)

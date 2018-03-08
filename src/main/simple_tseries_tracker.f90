@@ -1,10 +1,9 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
 
 module simple_tseries_tracker
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_image,   only: image
-use simple_imghead, only: find_ldim_nptcls
 implicit none
 
 public :: init_tracker, track_particle, write_tracked_series, kill_tracker
@@ -54,13 +53,13 @@ contains
         else
             write(*,*) 'ldim(3): ', ldim(3)
             write(*,*) 'nframes: ', n
-            stop 'simple_tseries_tracker :: init_tracker; assumes one frame per file'
+            call simple_stop('simple_tseries_tracker :: init_tracker; assumes one frame per file')
         endif
         nx = ldim(1) - box
         ny = ldim(2) - box
         ! construct
         allocate(particle_locations(nframes,2), stat=alloc_stat)
-        allocchk("In: simple_tseries_tracker :: init_tracker")
+        if(alloc_stat.ne.0)call allocchk("In: simple_tseries_tracker :: init_tracker",alloc_stat)
         particle_locations = 0
         call frame_img%new(ldim, smpd)
         call tmp_img%new([box,box,1], smpd)
@@ -107,7 +106,7 @@ contains
         integer :: funit, io_stat, iframe, xind, yind, i
         logical :: outside
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box',iostat=io_stat)
-        call fileio_errmsg("tseries tracker ; write_tracked_series ", io_stat)
+        call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
         do iframe=1,nframes
             xind = particle_locations(iframe,1)
             yind = particle_locations(iframe,2)
@@ -224,7 +223,7 @@ contains
 
     subroutine kill_tracker
         deallocate(particle_locations, framenames, stat=alloc_stat)
-        allocchk("simple_tseries_tracker::kill_tracker dealloc")
+        if(alloc_stat.ne.0)call allocchk("simple_tseries_tracker::kill_tracker dealloc",alloc_stat)
         call frame_img%kill
         call reference%kill
         call tmp_img%kill

@@ -1,7 +1,6 @@
 ! Fourier index iterator
 module simple_ftiter
-#include "simple_lib.f08"
-
+include 'simple_lib.f08'
 implicit none
 
 public :: ftiter, test_ftiter
@@ -211,7 +210,7 @@ contains
                         lims(3,2) = dynfind( self%dsteps(3), lp_dyn, self%lfnys(3) )
                     endif
                 case DEFAULT
-                     stop 'undefined mode; loop_lims; simple_ftiter'
+                     call simple_stop('undefined mode; loop_lims; simple_ftiter')
             end select
         else
             select case(mode)
@@ -240,7 +239,7 @@ contains
                     lims(3,1) = self%clogi_lbounds_all(3)
                     lims(3,2) = self%clogi_ubounds_all(3)
                 case DEFAULT
-                    stop 'undefined mode; loop_lims; simple_ftiter'
+                    call simple_stop('undefined mode; loop_lims; simple_ftiter')
             end select
         end if
     end function loop_lims
@@ -346,7 +345,7 @@ contains
                     logi = self%comp_addr_logi([i,j,k])
                     phys = self%comp_addr_phys(logi)
                     if (any([i,j,k] .ne. phys)) then
-                        stop 'failed complex phys->logi->phys address conversion test'
+                        call simple_stop('failed complex phys->logi->phys address conversion test')
                     endif
                 enddo
             enddo
@@ -358,7 +357,7 @@ contains
                     phys = self%comp_addr_phys([i,j,k])
                     logi = self%comp_addr_logi(phys)
                     if (any([i,j,k] .ne. logi)) then
-                        stop 'failed complex logi->phys->logi address conversion test'
+                        call simple_stop('failed complex logi->phys->logi address conversion test')
                     endif
                 enddo
             enddo
@@ -374,7 +373,7 @@ contains
                         write(*,'(a,3(i0,1x))') '          i,j,k   = ', i,j,k
                         write(*,'(a,3(i0,1x))') '     phys(i,j,k)  = ', phys
                         write(*,'(a,3(i0,1x))') 'logi(phys(i,j,k)) = ', logi
-                        stop 'failed complex logi->phys->logi address conversion test (with redundant voxels)'
+                        call simple_stop('failed complex logi->phys->logi address conversion test (with redundant voxels)')
                     endif
                 enddo
             enddo

@@ -1,6 +1,6 @@
 ! continuous adaptive 3D orientation search
 module simple_cont3D_ada_srch
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 
 use simple_params,           only: params

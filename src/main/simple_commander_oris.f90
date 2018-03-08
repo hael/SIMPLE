@@ -1,11 +1,12 @@
 ! concrete commander: operations on orientations
 module simple_commander_oris
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
+use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base
 use simple_nrtxtfile,      only: nrtxtfile
 use simple_binoris_io      ! use all in there
@@ -147,7 +148,8 @@ contains
                 stop 'simple_commander_oris :: exec_make_deftab'
             endif
             call b%a%new(ndatlines)
-            allocate( line(nrecs) )
+            allocate( line(nrecs), stat=alloc_stat)
+            if(alloc_stat /= 0)call allocchk("commander_oris:: makedeftab line",alloc_stat)
             do iptcl=1,ndatlines
                 call ctfparamfile%readNextDataLine(line)
                 select case(p%dfunit)
@@ -157,7 +159,7 @@ contains
                     case( 'microns' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported dfunit; simple_commander_oris :: exec_make_deftab'
+                        call simple_stop( 'unsupported dfunit; simple_commander_oris :: exec_make_deftab')
                 end select
                 select case(p%angastunit)
                     case( 'radians' )
@@ -165,7 +167,7 @@ contains
                     case( 'degrees' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported angastunit; simple_commander_oris :: exec_make_deftab'
+                        call simple_stop( 'unsupported angastunit; simple_commander_oris :: exec_make_deftab')
                 end select
                 select case(p%phshiftunit)
                     case( 'radians' )
@@ -173,7 +175,7 @@ contains
                     case( 'degrees' )
                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
                     case DEFAULT
-                        stop 'unsupported phshiftunit; simple_commander_oris :: exec_make_deftab'
+                        call simple_stop( 'unsupported phshiftunit; simple_commander_oris :: exec_make_deftab')
                 end select
                 call b%a%set(iptcl, 'smpd',  p%smpd )
                 call b%a%set(iptcl, 'kv',    p%kv   )
@@ -198,10 +200,6 @@ contains
 
     !> for making SIMPLE orientation/parameter files
     subroutine exec_make_oris( self, cline )
-        use simple_ori,           only: ori
-        use simple_oris,          only: oris
-        use simple_combinatorics, only: shc_aggregation
-        use simple_sp_project,    only: sp_project
         class(make_oris_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         character(len=STDLEN), allocatable :: oritabs(:)
@@ -293,7 +291,9 @@ contains
                     &simple_commander_oris :: make_oris'
                 endif
             end do
-            allocate(labels(noritabs,nl), consensus(nl), corrs(noritabs))
+            allocate(labels(noritabs,nl), consensus(nl), corrs(noritabs),stat=alloc_stat)
+            if(alloc_stat /= 0)call allocchk("commander_oris:: makeoris corrs,consensus",alloc_stat)
+
             call o%new(nl)
             do ioritab=1,noritabs
                 call binread_oritab(oritabs(ioritab), spproj, o, [1,nl])
@@ -327,11 +327,7 @@ contains
 
     !> for mapping parameters that have been obtained using class averages to the individual particle images
     subroutine exec_map2ptcls( self, cline )
-        use simple_oris,       only: oris
-        use simple_ori,        only: ori
         use simple_image,      only: image
-        use simple_imghead,    only: find_ldim_nptcls
-        use simple_sp_project, only: sp_project
         use simple_corrmat   ! use all in there
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -379,7 +375,8 @@ contains
             if( nlines_oritab /= nlines_deftab ) stop 'nr lines in oritab .ne. nr lines in deftab; must be congruent!'
         endif
         if( cline%defined('stk2') )then
-            allocate(imgs_sel(nsel), imgs_cls(p%ncls))
+            allocate(imgs_sel(nsel), imgs_cls(p%ncls),stat=alloc_stat)
+        if(alloc_stat /= 0)call allocchk("commander_oris::map2ptcls imgs_sel/cls",alloc_stat)
             ! read images
             do isel=1,nsel
                 call imgs_sel(isel)%new([p%box,p%box,1], p%smpd)
@@ -392,7 +389,8 @@ contains
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_cls, correlations)
             ! find selected clusters & map selected to original clusters & extract the particle indices
-            allocate(labeler(nsel), selected(p%ncls))
+            allocate(labeler(nsel), selected(p%ncls),stat=alloc_stat)
+            if(alloc_stat /= 0)call allocchk("commander_oris:: map2ptcls labeler, selected",alloc_stat)
             ! initialise selection array
             selected = .false.
             write(*,'(a)') '>>> MAPPING SELECTED TO ORIGINAL CLUSTERS'
@@ -413,7 +411,8 @@ contains
                 endif
             end do
         else
-            allocate(labeler(nsel))
+            allocate(labeler(nsel),stat=alloc_stat)
+            if(alloc_stat /= 0)call allocchk("commander_oris:: map2ptcls labeler",alloc_stat)
             do isel=1,nsel
                 call b%a%get_pinds(isel, 'class', labeler(isel)%particles)
             end do
@@ -457,8 +456,6 @@ contains
     end subroutine exec_map2ptcls
 
     subroutine exec_orisops(self,cline)
-        use simple_ori,  only: ori
-        use simple_math, only: normvec
         class(orisops_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(build)  :: b
@@ -703,8 +700,6 @@ contains
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )
-        use simple_oris,      only: oris
-        use simple_ori,       only: ori
         use simple_nrtxtfile, only: nrtxtfile
         class(rotmats2oris_commander),  intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -751,8 +746,6 @@ contains
     end subroutine exec_rotmats2oris
 
     subroutine exec_vizoris( self, cline )
-        use simple_oris,      only: oris
-        use simple_ori,       only: ori
         class(vizoris_commander),  intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)           :: b
@@ -786,7 +779,7 @@ contains
             ! Discretization of the projection directions
             ! init
             allocate(pops(p%nspace), source=0,stat=alloc_stat)
-            allocchk("In commander_oris:: vizoris allocating pops ")
+            if(alloc_stat.ne.0)call allocchk("In commander_oris:: vizoris allocating pops ", alloc_stat)
             ang = 3.6 / sqrt(real(p%nsym*p%nspace))
             maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
             ! projection direction attribution
@@ -804,7 +797,7 @@ contains
             ! output
             fname = trim(p%fbody)//'.bild'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname),iostat=io_stat)
-            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             ! header
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 10"
@@ -844,7 +837,7 @@ contains
             fname  = trim(p%fbody)//'_motion.bild'
             radius = 0.02
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
+            call fileiochk("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
             do i = 1, n
@@ -872,7 +865,7 @@ contains
             allocate(euldists(n), stat=alloc_stat)
             fname  = trim(p%fbody)//'_motion.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
                 o = b%a%get_ori(i)
                 if( i==1 )then
@@ -903,7 +896,7 @@ contains
             ! Rprev = o_prev%get_mat()
             ! fname = trim(p%fbody)//'_movie.cmd'
             ! call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            ! call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            ! call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             ! do i = 1, n
             !     o  = b%a%get_ori(i)
             !     Ri = o%get_mat()

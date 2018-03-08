@@ -3,7 +3,7 @@
 module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_image,  only: image
 
 implicit none
@@ -21,11 +21,11 @@ integer, allocatable :: pairs(:,:)
 integer              :: nptcls, ntot, npix, norig, nsel
 
 contains
-    
+
     subroutine calc_cartesian_corrmat_1( imgs, corrmat, msk, lp )
         type(image),       intent(inout) :: imgs(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
-        real, optional,    intent(in)    :: msk, lp 
+        real, optional,    intent(in)    :: msk, lp
         integer :: iptcl, jptcl, ipair, cnt
         nptcls = size(imgs)
         ! prep imgs for corrcalc
@@ -40,7 +40,7 @@ contains
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
-        allocchk('In: calc_cartesian_corrmat_1; simple_corrmat, 1')
+        if(alloc_stat.ne.0)call allocchk('In: calc_cartesian_corrmat_1; simple_corrmat, 1',alloc_stat)
         corrmat = 1.
         ntot = (nptcls*(nptcls-1))/2
         if( present(lp) )then ! Fourier correlation
@@ -56,29 +56,28 @@ contains
         else ! Real-space correlation
             ! first make the pairs to balance the parallel section
             allocate(pairs(ntot,2), stat=alloc_stat)
-            allocchk('In: calc_cartesian_corrmat_1; simple_corrmat, 2')
+            if(alloc_stat.ne.0)call allocchk('In: calc_cartesian_corrmat_1; simple_corrmat, 2',alloc_stat)
             cnt = 0
             do iptcl=1,nptcls-1
                 do jptcl=iptcl+1,nptcls
                     cnt = cnt+1
                     pairs(cnt,1) = iptcl
                     pairs(cnt,2) = jptcl
-                end do 
+                end do
             end do
             !$omp parallel do default(shared) private(ipair) schedule(static) proc_bind(close)
-            do ipair=1,ntot   
+            do ipair=1,ntot
                 corrmat(pairs(ipair,1),pairs(ipair,2))=&
                 imgs(pairs(ipair,1))%real_corr(imgs(pairs(ipair,2)))
-                corrmat(pairs(ipair,2),pairs(ipair,1)) = corrmat(pairs(ipair,1),pairs(ipair,2)) 
+                corrmat(pairs(ipair,2),pairs(ipair,1)) = corrmat(pairs(ipair,1),pairs(ipair,2))
             end do
             !$omp end parallel do
             deallocate(pairs)
             call mskimg%kill
         endif
     end subroutine calc_cartesian_corrmat_1
-    
+
     subroutine calc_cartesian_corrmat_2( imgs_sel, imgs_orig, corrmat, msk, lp )
-        use simple_magic_boxes, only: autoscale
         type(image),       intent(inout) :: imgs_sel(:), imgs_orig(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
         real, optional,    intent(in)    :: msk, lp
@@ -111,7 +110,7 @@ contains
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(nsel,norig), stat=alloc_stat)
-        allocchk('In: calc_cartesian_corrmat_2; simple_corrmat, 1')
+        if(alloc_stat.ne.0)call allocchk('In: calc_cartesian_corrmat_2; simple_corrmat, 1',alloc_stat)
         if( doftcalc )then ! Fourier correlation
             do isel=1,nsel
                 call progress(isel,nsel)
@@ -146,7 +145,7 @@ contains
         if( nptcls /= nrefs ) stop 'nptcls == nrefs in pftcc required; simple_corrmat :: calc_roinv_corrmat'
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
-        allocchk('In: calc_roinv_corrmat; simple_corrmat')
+        if(alloc_stat/=0)call allocchk('In: calc_roinv_corrmat; simple_corrmat')
         corrmat = 1.
         !$omp parallel do default(shared) schedule(guided) private(iref,iptcl,corrs,loc) proc_bind(close)
         do iref=1,nptcls - 1
@@ -156,7 +155,7 @@ contains
                 loc  = maxloc(corrs)
                 corrmat(iref,iptcl) = corrs(loc(1))
                 ! symmetrize
-                corrmat(iptcl,iref) = corrmat(iref,iptcl) 
+                corrmat(iptcl,iref) = corrmat(iref,iptcl)
             end do
         end do
         !$omp end parallel do

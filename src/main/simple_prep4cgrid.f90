@@ -1,5 +1,5 @@
 module simple_prep4cgrid
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 implicit none
@@ -33,7 +33,7 @@ contains
         class(image),      intent(in)    :: img
         class(kbinterpol), intent(in)    :: kbwin
         integer,           intent(in)    :: ldim_pd(3)
-        type(ftiter) :: fit 
+        type(ftiter) :: fit
         call self%kill
         ! set logical dimensions of images
         self%ldim    = img%get_ldim()

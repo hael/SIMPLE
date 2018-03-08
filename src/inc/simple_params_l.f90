@@ -4,7 +4,7 @@ use simple_defs         ! use all in there
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
 use simple_magic_boxes, only: find_magic_box
-use simple_fileio,      only: fopen, fclose, fileio_errmsg, nlines, fname2format,file_exists
+use simple_fileio,      only: fopen, fclose, fileiochk, nlines, fname2format,file_exists
 use simple_imghead,     only: find_ldim_nptcls
 use simple_binoris,     only: binoris
 use simple_strings,     only: str_has_substr, int2str, int2str_pad
@@ -1222,7 +1222,7 @@ contains
                 filenam = cline%get_carg('vollist')
                 nl      = nlines(filenam)
                 call fopen(fnr, file=filenam, iostat=io_stat)
-                call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
+                call fileiochk("params ; read_vols error opening "//trim(filenam), io_stat)
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) nam
                     if( nam .ne. '' )then
@@ -1327,7 +1327,7 @@ contains
                 if( cntfile == 0 )then
                     if( cline%defined('filetab') )then
                         call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
-                        call fileio_errmsg("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
+                        call fileiochk("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
                         read(funit,'(a256)') fname
                         form = fname2format(fname)
                         call fclose(funit, &

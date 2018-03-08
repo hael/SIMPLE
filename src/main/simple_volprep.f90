@@ -1,5 +1,5 @@
 module simple_volprep
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 contains
@@ -7,8 +7,6 @@ contains
     subroutine read_and_prep_vol( p, volfname, volprojobj )
         use simple_params,      only: params
         use simple_projector,   only: projector
-        use simple_magic_boxes, only: autoscale
-        use simple_imghead,     only: find_ldim_nptcls
         class(params),    intent(in)    :: p
         class(projector), intent(inout) :: volprojobj
         character(len=*), intent(in)    :: volfname

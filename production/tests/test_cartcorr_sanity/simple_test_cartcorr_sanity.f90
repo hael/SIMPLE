@@ -1,8 +1,7 @@
 program simple_test_cartcorr_sanity
+include 'simple_lib.f08'
 use simple_image,       only: image
 use simple_ft_expanded, only: ft_expanded
-use simple_rnd,         only: ran3
-use simple_defs
 implicit none
 #include "simple_local_flags.inc"
 

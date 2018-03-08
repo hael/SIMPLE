@@ -58,6 +58,13 @@ module simple_syslib
         pure subroutine date(str)
             character*(*), intent(out) :: str
         end subroutine date
+        pure real function etime(tarray)
+        real, intent(out) :: tarray(2)
+        end function
+
+        pure real function dtime(tarray)
+        real, intent(out) :: tarray(2)
+        end function
 
         subroutine exit(s)
             integer, intent(in) :: s
@@ -296,13 +303,6 @@ module simple_syslib
     private :: raise_sys_error
     ! private
 
-#ifdef PGI
-    ! include 'lib3f.h'
-    ! public :: exec_cmdline, simple_getenv, ls_mrcfiletab, ls_filetab, &
-    !    sys_del_files, sys_get_last_fname, simple_sleep, &
-    !     sys_merge_docs
-#endif
-
 contains
 
     !! ERROR Routines
@@ -311,13 +311,31 @@ contains
         character(len=*),      intent(in) :: msg
         character(len=*),      intent(in), optional :: f !< filename of caller
         integer,               intent(in), optional :: l !< line number from calling file
+        integer   :: last_err
         if(present(f).and.present(l))&
             write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
         write(stderr,'("Message: ",/,a,/)') trim(msg)
-        write(stderr,'(I0)') get_sys_error()
+        last_err = get_sys_error()
         stop
     end subroutine simple_stop
 
+#ifdef PGI
+    subroutine simple_cuda_stop (msg,f,l)
+        use cudafor
+        character(len=*),      intent(in) :: msg
+        character(len=*),      intent(in), optional :: f !< filename of caller
+        integer,               intent(in), optional :: l !< line number from calling file
+        integer   :: last_err
+        last_err = cudaGetLastError()
+        if ( last_err .ne. 0)then
+           write(*,"('CUDA Error ',a,', File: ',a,', Line: ',i0)")msg, f, l
+           write(*,"('Last CUDA Error :',i0)") last_err
+           write(*,"(4x,a)")cudaGetErrorString( last_err )
+           call simple_stop("In simple_syslib::simple_cuda_stop ",f,l)
+       end if
+
+    end subroutine simple_cuda_stop
+#endif
     function get_sys_error () result(err)
         integer :: err
         CHARACTER(len=100) :: msg
@@ -430,22 +448,22 @@ contains
             ! msg = gerror()
             ! write(stderr,'("SIMPLE_SYSLIB::SYSERROR ",I0)',advance='no') err
             ! write(stderr,*) trim(msg)
-
-            write(msg,'("SIMPLE_SYSLIB::SYSERROR ",I0)') err
-            call perror(msg)
+            write(msg,'("Last detected error (SIMPLE_SYSLIB::SYSERROR) ",I0,":")') err
+            call perror(trim(adjustl(msg)))
 #endif
         end if
     end function get_sys_error
 
     !> \brief  is for checking allocation
-    subroutine alloc_errchk( message, alloc_status, file,line, iomsg )
+    subroutine allocchk( message, alloc_err, file, line, iomsg )
         character(len=*), intent(in)           :: message
-        integer,          intent(in)           :: alloc_status
+        integer,          intent(in), optional :: alloc_err
         character(len=*), intent(in), optional :: file !< filename of caller
         integer,          intent(in), optional :: line !< line number from calling file
         character(len=*), intent(in), optional :: iomsg !< IO message
-        integer                                :: syserr
-
+        integer                                :: syserr, alloc_status
+        alloc_status=alloc_stat    !! global variable from simple_defs
+        if(present(alloc_err))alloc_status=alloc_err
         if (alloc_status/=0)then
             write(stderr,'(a)') 'ERROR: Allocation failure!'
             call simple_error_check(alloc_status)
@@ -455,12 +473,12 @@ contains
                 write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') file,line
             call simple_stop(message)
         endif
-    end subroutine alloc_errchk
+    end subroutine allocchk
 
     subroutine simple_error_check(io_stat, msg)
         integer,          intent(in), optional :: io_stat
         character(len=*), intent(in), optional :: msg
-        integer :: io_stat_this
+        integer :: io_stat_this, last_sys_error
         character(len=STDLEN ) :: newmsg
         if (present(io_stat))then
             io_stat_this = io_stat
@@ -496,27 +514,30 @@ contains
 
 
     !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline, waitflag )
+    subroutine exec_cmdline( cmdline, waitflag , suppress_errors)
         character(len=*),  intent(in) :: cmdline
-        logical, optional, intent(in) :: waitflag
-        character(len=STDLEN) :: cmsg
+        logical, optional, intent(in) :: waitflag, suppress_errors
+        character(len=STDLEN) :: cmsg, cmdmsg
+        character(13) :: suppress_msg="2>/dev/null"
         integer ::  cstat, exec_stat
         logical :: l_doprint, wwait
         l_doprint = .false.
         wwait     = .true.
         if( present(waitflag) ) wwait = waitflag
+        cmsg = trim(adjustl(cmdline))
+        if( present(suppress_errors) )   cmsg = trim(adjustl(cmsg // suppress_msg))
 #if defined(PGI)
         ! include 'lib3f.h'  ! PGI declares kill,wait here
-        exec_stat = system(trim(adjustl(cmdline)))
+        exec_stat = system(trim(adjustl(cmsg)))
         ! #elif defined(INTEL)
         !        exec_stat = system(trim(adjustl(cmdline)))
 #else
         !! GNU and INTEL
-        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmsg)
-        call raise_sys_error( cmdline, exec_stat, cstat, cmsg )
+        call execute_command_line( trim(adjustl(cmsg)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmdmsg)
+        call raise_sys_error( cmsg, exec_stat, cstat, cmdmsg )
 #endif
         if( l_doprint )then
-            write(*,*) 'command: ', trim(adjustl(cmdline))
+            write(*,*) 'command: ', trim(adjustl(cmsg))
             write(*,*) 'status of execution: ', exec_stat
         endif
     end subroutine exec_cmdline
@@ -540,38 +561,44 @@ contains
         ! if( err ) write(*,*) trim(adjustl(cmdmsg))
     end subroutine raise_sys_error
 
-    logical function simple_isenv (name)
+    !> isenv; return 0 if environment variable is present
+    function simple_isenv( name )  result( status )
         character(len=*), intent(in)  :: name
-        character(len=STDLEN)         :: value
-        integer status, length
-        call get_environment_variable( trim(name), value=value, length=length, status=status)
-        simple_isenv = (status == 0)
-    end function simple_isenv
-
-    character(len=STDLEN) function simple_getenv( name ) ! result( varval )
-        character(len=*), intent(in)  :: name
-        character(len=STDLEN)         :: value
-        character(len=:), allocatable :: varval
+        character(len=STDLEN) :: varval
         integer :: length, status
-        simple_getenv = ''
+        status=1
 #if defined(PGI)
-        call getenv( trim(name), value)
+        call getenv( trim(adjustl(name)), varval)
+        if(len_trim(varval) /= 0)   status=0
 #else
         !! Intel and GNU F2003 included
-        call get_environment_variable( trim(name), value=value, length=length, status=status)
+        call get_environment_variable( trim(adjustl(name)), status=status)
+#endif
+    end function simple_isenv
+
+    !> simple_getenv gets the environment variable string and status
+    function simple_getenv( name , retval, allowfail)  result( status )
+        character(len=*), intent(in)  :: name
+        character(len=STDLEN), intent(out)    :: retval
+        logical, intent(in),optional :: allowfail
+        integer :: length, status
+#if defined(PGI)
+        call getenv( trim(adjustl(name)), retval)
+#else
+        !! Intel and GNU F2003 included
+        call get_environment_variable( trim(name), value=retval, length=length, status=status)
         if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
         if( status ==  1 )then
             write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
+            retval = 'undefined'
             return
         endif
-        if( status ==  2 )then
-            write(*,*)'environment variables not supported by system; simple_syslib :: simple_getenv'
-            return
-        endif
-        if( length ==  0 .or. status /= 0 )return
+        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
+        if( length ==  0 .or. status /= 0 )then
+             retval=""
+           return
+       end if
 #endif
-
-        write(simple_getenv,'(A)') value
     end function simple_getenv
 
     subroutine simple_sleep( secs )
@@ -590,7 +617,7 @@ contains
 
     function simple_chmod(pathname, mode ) result( status )
         character(len=*), intent(in) :: pathname, mode
-        integer :: status
+        integer :: status, imode
 #if defined(INTEL)
         ! Function method
         status = chmod(pathname, mode)
@@ -602,7 +629,11 @@ contains
         ! if ( index(mode, 'r') /=0) imode=o'440'
         status = system("chmod "//trim(adjustl(mode))//" "//trim(adjustl(pathname)))
 #else
-        status= chmod(pathname, mode) !! intrinsic
+        imode = INT(o'000') ! convert symbolic to octal
+        if ( index(mode, 'x') /=0) imode=IOR(imode,INT(o'111'))
+        if ( index(mode, 'w') /=0) imode=IOR(imode,INT(o'222'))
+        if ( index(mode, 'r') /=0) imode=IOR(imode,INT(o'444'))
+        status = chmod(pathname, mode) !! intrinsic
 #endif
         if(status/=0)&
             call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname))
@@ -624,7 +655,7 @@ contains
 
 #if defined(GNU)
         allocate(buffer(13), source=0)
-        status =  stat(trim(adjustl(filename)), buffer)
+        status = stat(trim(adjustl(filename)), buffer)
 
 #elif defined(PGI)
 #include "simple_local_flags.inc"
@@ -656,8 +687,8 @@ contains
         !         CALL PXFINTGET (jhandle,'st_ino',buffer(2), ierror)    ! Inode number
         !         CALL PXFINTGET (jhandle,'st_mode' , buffer(3), ierror) !  File mode
         !         CALL PXFINTGET (jhandle,'st_nlink' ,buffer(4), ierror) ! Number of links
-        !         CALL PXFINTGET (jhandle,'st_uid' ,buffer(5), ierror)   ! Owner’s uid
-        !         CALL PXFINTGET (jhandle,'st_gid' ,buffer(6), ierror)   ! Owner’s gid
+        !         CALL PXFINTGET (jhandle,'st_uid' ,buffer(5), ierror)   ! Owner's uid
+        !         CALL PXFINTGET (jhandle,'st_gid' ,buffer(6), ierror)   ! Owner's gid
         !         buffer(7)=0 ! ID of device containing directory entry for file (0 if not available)
         !         CALL PXFINTGET (jhandle,'st_size',buffer(8), ierror)   ! File size (bytes)
         !         CALL PXFINTGET (jhandle,'st_atime',buffer(9), ierror)  ! Last access time
@@ -684,6 +715,7 @@ contains
             write(*,*) 'status of execution: ', status
         endif
     end subroutine simple_file_stat
+
     logical function is_io(unit)
          integer, intent(in) :: unit
          is_io=.false.
@@ -756,13 +788,9 @@ contains
     subroutine simple_chdir( newd )
         character(len=*), intent(in) :: newd   !< output pathname
         integer :: io_status
-#if defined(INTEL) || defined(PGI)
         io_status = chdir(newd)
         if(io_status /= 0) call simple_error_check(io_status, &
-            "syslib:: simple_getcwd failed to get path "//trim(newd))
-#else
-        call chdir(newd)
-#endif
+            "syslib:: simple_getcwd failed to change path "//trim(newd))
     end subroutine simple_chdir
 
     ! !>  \brief  get logical unit of file

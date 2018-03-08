@@ -1,6 +1,6 @@
 ! 3D reconstruction - master module
 module simple_rec_master
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_build,     only: build
 use simple_params,    only: params
 use simple_cmdline,   only: cmdline
@@ -25,7 +25,7 @@ contains
             case( 'no' )
                 call exec_rec( b, p, cline, fbody_in )
             case DEFAULT
-                stop 'unknonw eo flag; simple_rec_master :: exec_rec_master'
+                call simple_stop('unknonw eo flag; simple_rec_master :: exec_rec_master')
         end select
         if( cline%defined('mul') ) stop 'mul flag no longer supported; rec_master :: exec_rec_master'
     end subroutine exec_rec_master

@@ -1,8 +1,7 @@
 ! batch-processing manager - SLURM
 module simple_qsys_slurm
-use simple_defs
+include 'simple_lib.f08'
 use simple_qsys_base, only: qsys_base
-use simple_chash,     only: chash
 implicit none
 
 public :: qsys_slurm
@@ -25,7 +24,6 @@ contains
 
     !> \brief  is a constructor
     subroutine new_slurm_env( self )
-        use simple_fileio, only: mkdir
         class(qsys_slurm), intent(inout) :: self
         ! make the container
         call self%env%new(MAXENVITEMS)

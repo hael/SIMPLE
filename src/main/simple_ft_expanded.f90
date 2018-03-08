@@ -7,7 +7,7 @@
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_image,  only: image
 
@@ -79,7 +79,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new_1( self, img, hp, lp )
-        use simple_math, only: is_even
         class(ft_expanded), intent(inout) :: self
         class(image),       intent(inout) :: img
         real,               intent(in)    :: hp, lp
@@ -130,7 +129,7 @@ contains
                   self%transfmat(self%flims(1,1):self%flims(1,2),&
                                  self%flims(2,1):self%flims(2,2),&
                                  self%flims(3,1):self%flims(3,2), 3), stat=alloc_stat)
-        allocchk("In: new_1; simple_ft_expanded, 2")
+        if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded, 2",alloc_stat)
         self%cmat      = cmplx(0.,0.)
         self%transfmat = 0.
         hcnt = 0
@@ -306,7 +305,7 @@ contains
                       ft_exp_tmp_cmat12(   flims(1,1):flims(1,2),     &
                                            flims(2,1):flims(2,2) ),   &
                       stat=alloc_stat                               )
-            allocchk("In: allocate_shmat_2d_cmat2sh_2; simple_ft_expanded")
+            if(alloc_stat/=0)call allocchk("In: allocate_shmat_2d_cmat2sh_2; simple_ft_expanded")
         end if
     end subroutine allocate_tmpmats
 
@@ -382,7 +381,7 @@ contains
                                self1%flims(2,1):self1%flims(2,2),   &
                                self1%flims(3,1):self1%flims(3,2)),  &
                                stat=alloc_stat                      )
-            allocchk("In: corr_shifted; simple_ft_expanded")
+            if(alloc_stat.ne.0)call allocchk("In: corr_shifted; simple_ft_expanded",alloc_stat)
             shvec_here = shvec
             if( self1%ldim(3) == 1 ) shvec_here(3) = 0.
             !$omp parallel do collapse(3) schedule(static) default(shared) &

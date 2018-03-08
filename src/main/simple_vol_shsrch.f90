@@ -1,9 +1,10 @@
 ! Cartesian volume shift alignment based on band-pass limited cross-correlation
 module simple_vol_shsrch
+include 'simple_lib.f08'
 use simple_image,       only: image
 use simple_opt_spec,    only: opt_spec
 use simple_opt_simplex, only: opt_simplex
-use simple_defs         ! use all in there
+
 implicit none
 
 public :: vol_shsrch_init, vol_shsrch_minimize
@@ -46,7 +47,7 @@ contains
         call ospec%specify('simplex', 3, ftol=1e-4,&
         &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=30)
         call ospec%set_costfun(vol_shsrch_costfun)
-        ! generate the simplex optimizer object 
+        ! generate the simplex optimizer object
         call nlopt%new(ospec)
     end subroutine vol_shsrch_init
 
@@ -64,7 +65,7 @@ contains
                 return
             endif
         endif
-        cost = -vref%corr_shifted(vtarg, vec, lp_dyn=lp, hp_dyn=hp) 
+        cost = -vref%corr_shifted(vtarg, vec, lp_dyn=lp, hp_dyn=hp)
     end function vol_shsrch_costfun
 
     function vol_shsrch_minimize( ) result( cxyz )

@@ -1,6 +1,6 @@
 ! 2D/3D envelope and adaptive masking
 module simple_masker
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 
 use simple_image,  only: image
 use simple_ori,    only: ori
@@ -187,7 +187,6 @@ contains
 
     !>  \brief  is for binarizing the 3D image using thresholding
     subroutine bin_vol_thres( self )
-        use simple_math, only: nvoxfind
         class(masker), intent(inout) :: self
         integer :: nnvox
         call self%zero_below(self%pix_thres)

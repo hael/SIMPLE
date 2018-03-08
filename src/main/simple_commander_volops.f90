@@ -1,6 +1,6 @@
 ! concrete commander: operations on volumes
 module simple_commander_volops
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -9,7 +9,6 @@ use simple_image,          only: image
 use simple_projector_hlev, only: project, rotvol
 use simple_ori,            only: ori
 use simple_masker,         only:masker
-use simple_imghead,        only: find_ldim_nptcls
 implicit none
 
 public :: fsc_commander
@@ -223,7 +222,7 @@ contains
                 write(*,*) 'Molecular weight must be provided for auto-masking (MW)'
                 stop 'commander_volops :: postprocess'
             endif
-            call vol_copy%bwd_ft
+            call vol_copy%ifft()
             call mskvol%automask3D(p, vol_copy)
             call mskvol%write('automask'//p%ext)
             call b%vol%zero_background
@@ -330,7 +329,7 @@ contains
         DebugPrint   'number of volumes: ', nvols
         allocate(volnames(nvols))
         call fopen(funit_vols, status='old', file=p%vollist, iostat=io_stat)
-        call fileio_errmsg('volops; volaverager opening ', io_stat)
+        if(io_stat.ne.0) call fileiochk('volops; volaverager opening ', io_stat)
         write(*,'(a)') '>>> MAKING PATTERN STACK'
         do ivol=1,nvols
             read(funit_vols,'(a256)') volnames(ivol)
@@ -472,17 +471,17 @@ contains
             npairs = p%top-p%fromp+1
             DebugPrint 'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
-            allocchk('In: simple_volume_smat, 1')
+            if(alloc_stat.ne.0)call allocchk('In: simple_volume_smat, 1',alloc_stat)
             ! read the pairs
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
             if( .not. file_exists(fname) ) stop 'I/O error; simple_volume_smat'
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat)
-            call fileio_errmsg('volops; vol_smat opening ', io_stat)
+            if(io_stat/=0) call fileiochk('volops; vol_smat opening ', io_stat)
             DebugPrint   'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! Check if the read was successful
             if(io_stat/=0) then
-                call fileio_errmsg('**ERROR(simple_volume_smat): I/O error reading file: '//trim(fname), io_stat)
+                call fileiochk('**ERROR(simple_volume_smat): I/O error reading file: '//trim(fname), io_stat)
             endif
             call fclose(funit, errmsg='volops; vol_smat closing '//trim(fname))
             deallocate(fname)
@@ -501,20 +500,20 @@ contains
             DebugPrint   'did set this number of similarities: ', cnt
             ! write the similarities
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin',stat=alloc_stat)
-            allocchk( 'volops; volume smat ')
+            if(alloc_stat.ne.0)call allocchk( 'volops; volume smat ',alloc_stat)
             call fopen(funit, status='REPLACE', action='WRITE', &
                  file=fname, access='STREAM', iostat=io_stat)
-            call fileio_errmsg('volops; volume smat 2  opening ', io_stat)
+            if(io_stat/=0) call fileiochk('volops; volume smat 2  opening ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
             ! Check if the write was successful
             if(io_stat/=0) &
-                call fileio_errmsg('**ERROR(simple_volume_smat): I/O error writing file: '//trim(fname), io_stat)
+                call fileiochk('**ERROR(simple_volume_smat): I/O error writing file: '//trim(fname), io_stat)
             call fclose(funit, errmsg='volops; volume smat 2  closing ')
             deallocate(fname, corrs, pairs)
         else
             ! generate similarity matrix
             allocate(corrmat(nvols,nvols), corrs_avg(nvols), stat=alloc_stat)
-            allocchk('In: simple_volume_smat, 2')
+            if(alloc_stat.ne.0)call allocchk('In: simple_volume_smat, 2',alloc_stat)
             corrmat = -1.
             forall(i=1:nvols) corrmat(i,i) = 1.0
             cnt = 0
@@ -551,10 +550,10 @@ contains
             write(*,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
             call fopen(funit, status='REPLACE', action='WRITE', file='vol_smat.bin', &
                 &access='STREAM', iostat=io_stat)
-            call fileio_errmsg('volops; volume smat 3 opening ', io_stat)
+             if(io_stat/=0)call fileiochk('volops; volume smat 3 opening ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrmat
             if(io_stat/=0) &
-                call fileio_errmsg('**ERROR(simple_volume_smat): I/O error writing to vol_smat.bin', io_stat)
+                call fileiochk('**ERROR(simple_volume_smat): I/O error writing to vol_smat.bin', io_stat)
 
             call fclose(funit, errmsg='volops; volume smat 3 closing ')
             if(allocated(corrmat))deallocate(corrmat)

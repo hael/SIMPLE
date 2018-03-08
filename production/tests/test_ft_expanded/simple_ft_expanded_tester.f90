@@ -1,5 +1,5 @@
 module simple_ft_expanded_tester
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_ft_expanded, only: ft_expanded
 use simple_image,       only: image
 implicit none
@@ -40,7 +40,6 @@ contains
     end subroutine exec_ft_expanded_test
 
     subroutine setup_testenv
-        use simple_rnd, only: seed_rnd
         integer :: i
         call img%new(LDIM, SMPD)
         call img%square(SQRAD)
@@ -64,7 +63,6 @@ contains
     end subroutine setup_testenv
 
     subroutine test_shifted_correlator
-        use simple_rnd
         real    :: dist, corr, corravg, distavg
         integer :: itst
         real    :: shvec(3)
@@ -91,7 +89,6 @@ contains
         contains
 
             subroutine find_shift( dist, corr_best )
-                use simple_math, only: euclid
                 real, intent(out) :: dist, corr_best
                 type(ft_expanded) :: ftexp_trial
                 real    :: shvec(3), corr

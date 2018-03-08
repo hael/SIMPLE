@@ -13,8 +13,8 @@
 
 module simple_imghead
 use simple_defs
-use simple_syslib, only: alloc_errchk, file_exists
-use simple_fileio, only: fopen, fileio_errmsg, fclose, fname2format
+use simple_syslib, only: allocchk, file_exists
+use simple_fileio, only: fopen, fileiochk, fclose, fname2format
 use simple_strings, only: int2str
 implicit none
 
@@ -44,7 +44,6 @@ contains
     ! I/O
     procedure          :: print_imghead
     procedure          :: read
-    ! rocedure          :: read_dims
     procedure          :: write
     ! byte array conversions
     procedure, private :: transfer_obj2byte_array
@@ -205,8 +204,7 @@ contains
                 endif
                 if( .not. allocated(self%byte_array) )then
                     allocate(self%byte_array(llength),stat=alloc_stat)
-                    if(alloc_stat .ne. 0) &
-                         call alloc_errchk("simple_imghead::new byte_array ", alloc_stat)
+                    if(alloc_stat .ne. 0) call allocchk("simple_imghead::new byte_array ", alloc_stat)
                 endif
                 ! zero the byte array
                 self%byte_array = 0
@@ -313,7 +311,7 @@ contains
         select type( self )
             type is( SpiImgHead )
                 allocate(spihed(self%getLabbyt()/4), stat=alloc_stat)
-                if(alloc_stat/=0) call alloc_errchk("In simple_imghead::read spihed ", alloc_stat)
+                if(alloc_stat/=0) call allocchk("In simple_imghead::read spihed ", alloc_stat)
                 cnt = 0
                 do i=ppos,ppos+self%getLabbyt()-1,4
                     cnt = cnt+1
@@ -363,7 +361,7 @@ contains
                 deallocate(spihed)
             type is( MrcImgHead )
                 read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
-                call fileio_errmsg(" simple_imghead::read header bytes to disk , message "&
+                call fileiochk(" simple_imghead::read header bytes to disk , message "&
                     //trim(io_message),io_status)
                 call self%transfer_byte_array2obj
             class DEFAULT
@@ -441,8 +439,7 @@ contains
         type is( MrcImgHead )
             call self%transfer_obj2byte_array
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
-            call fileio_errmsg(" simple_imghead::write  writing header bytes to disk , unit "//int2str(lun),io_status)
-
+            call fileiochk(" simple_imghead::write  writing header bytes to disk , unit "//int2str(lun),io_status)
         class DEFAULT
             stop 'Format not supported; print; simle_imghead'
         end select
@@ -1088,7 +1085,7 @@ contains
         real,             intent(out) :: smpd
         logical,          intent(in)  :: doprint
         class(imghead), allocatable   :: hed
-        integer :: filnum,ios
+        integer :: filnum, ios
         ldim = 0
         smpd = 0.
         if( file_exists(fname) )then
@@ -1097,7 +1094,7 @@ contains
                     allocate(MrcImgHead :: hed)
                     call hed%new
                     call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
-                    call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call fileiochk(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
                     call fclose(filnum,errmsg=" get_mrcfile_info close error "//trim(fname))
                     ldim = hed%getDims()
@@ -1111,7 +1108,7 @@ contains
                     allocate(MrcImgHead :: hed)
                     call hed%new
                     call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
-                    call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call fileiochk(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
                     call fclose(filnum, errmsg=" get_mrcfile_info fclose error "//trim(fname))
                     if( doprint ) call hed%print_imghead
@@ -1135,29 +1132,33 @@ contains
         character(len=:), allocatable, intent(out) :: conv
         logical,                       intent(in)  :: doprint
         real    :: spihed(40)
-        integer :: filnum, cnt, i
+        integer :: filnum, cnt, i, ios
         if( file_exists(fname) )then
             if( fname2format(fname) .eq. 'S' )then
                 if( allocated(conv) ) deallocate(conv)
-                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
+                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios)
+                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                close(filnum)
+                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='NATIVE')
                     call print_spihed
                     return
                 endif
-                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') !
+                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
+                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                close(filnum)
+                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='BIG_ENDIAN')
                     call print_spihed
                     return
                 endif
-                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') !
+                call fopen(filnum, status='OLD', action='READ', file=fname,&
+                &access='STREAM', iostat=ios)
+                if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                close(filnum)
+                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='LITTLE_ENDIAN')
                     call print_spihed
@@ -1259,7 +1260,7 @@ contains
                 type is (MrcImgHead)
                     if( allocated(self%byte_array) )then
                         deallocate(self%byte_array, stat=alloc_stat)
-                        if(alloc_stat /= 0) call alloc_errchk('In: simple_imghead; kill ', alloc_stat)
+                        if(alloc_stat /= 0) call allocchk('In: simple_imghead; kill ', alloc_stat)
                     end if
                 type is (SpiImgHead)
                     return
@@ -1271,7 +1272,6 @@ contains
     end subroutine kill
 
     subroutine test_imghead
-        use simple_fileio, only: fopen, fclose, fileio_errmsg
         class(ImgHead), allocatable :: hed, hed2
         integer :: recsz, funit, ios
         write(*,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
@@ -1281,7 +1281,7 @@ contains
         recsz = 120*4
         call fopen(funit,file='test_imghed.spi',status='UNKNOWN',action='READWRITE',&
              access='STREAM',iostat=ios)
-        call fileio_errmsg("test_imghead fopen error",ios)
+        if(ios/=0)call fileiochk("test_imghead fopen error",ios)
         call hed%write(funit)
         call hed2%read(funit)
         call fclose(funit,ios,errmsg="test_imghead fclose error")

@@ -1,15 +1,16 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_cluster2D
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline
 use simple_params,              only: params
 use simple_build,               only: build
 use simple_commander_base,      only: commander_base
-use simple_imghead,             only: find_ldim_nptcls
 use simple_strategy2D3D_common, only: gen2Dclassdoc
 use simple_qsys_funs,           only: qsys_job_finished
 use simple_projection_frcs,     only: projection_frcs
 use simple_binoris_io           ! use all in there
+use simple_classaverager
+use simple_cluster_cavgs
 implicit none
 
 public :: make_cavgs_commander
@@ -48,7 +49,6 @@ end type cluster_cavgs_commander
 contains
 
     subroutine exec_make_cavgs( self, cline )
-        use simple_classaverager
         class(make_cavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params)  :: p
@@ -137,7 +137,6 @@ contains
     end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_classaverager
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params) :: p
@@ -200,7 +199,6 @@ contains
 
     subroutine exec_rank_cavgs( self, cline )
         use simple_oris, only: oris
-        use simple_math, only: hpsort
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
@@ -243,7 +241,6 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
-        use simple_cluster_cavgs
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params) :: p

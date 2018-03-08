@@ -1,9 +1,7 @@
 ! batch-processing manager - control module
 module simple_qsys_ctrl
-#include "simple_lib.f08"
-
+include 'simple_lib.f08'
 use simple_qsys_base,    only: qsys_base
-use simple_chash,        only: chash
 use simple_cmdline,      only: cmdline
 implicit none
 
@@ -101,7 +99,7 @@ contains
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
         integer, optional,        intent(in)    :: numlen           !< length of number string
-        integer :: ipart
+        integer :: ipart,iostat
         call self%kill
         self%stream                 =  stream
         self%exec_binary            =  exec_binary
@@ -126,7 +124,7 @@ contains
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)),&
                     self%stream_cline_submitted(fromto_part(1):fromto_part(2)), stat=alloc_stat)
-        allocchk("In: simple_qsys_ctrl :: new")
+        if(alloc_stat.ne.0)call allocchk("In: simple_qsys_ctrl :: new")
         if( self%stream )then
             self%jobs_done = .true.
         else
@@ -142,7 +140,8 @@ contains
             self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
         end do
         ! get pwd
-        self%pwd = trim(adjustl( simple_getenv('PWD') ))
+        iostat = simple_getenv('PWD',self%pwd)
+        self%pwd = trim(adjustl( self%pwd ))
         self%existence = .true.
     end subroutine new
 
@@ -258,7 +257,7 @@ contains
         integer :: ios, funit
         call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', &
             action='WRITE', iomsg=io_msg)
-        call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
+        call fileiochk('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
              //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
@@ -303,7 +302,7 @@ contains
         character(len=512) :: io_msg
         integer :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
-        call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when opening file: '&
+        call fileiochk('simple_qsys_ctrl :: generate_script_2; Error when opening file: '&
                  //trim(script_name)//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
@@ -599,12 +598,11 @@ contains
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
             self%cline_stacksz          =  0
-            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, &
-            self%jobs_submitted, stat=alloc_stat)
-            allocchk("simple_qsys_ctrl::kill deallocating ")
+            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted)
             if(allocated(self%stream_cline_stack))     deallocate(self%stream_cline_stack)
             if(allocated(self%stream_cline_submitted)) deallocate(self%stream_cline_submitted)
             if(allocated(self%stream_cline_done_stack))deallocate(self%stream_cline_done_stack)
+
             self%existence = .false.
 
         endif

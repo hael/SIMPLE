@@ -1,6 +1,7 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
-#include "simple_lib.f08"
+include 'simple_lib.f08'
+
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
@@ -83,7 +84,7 @@ contains
         call b%build_rec_eo_tbox(p)         ! reconstruction toolbox built
         call b%eorecvol%kill_exp            ! reduced meory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
-        allocchk("In: simple_volassemble_eo res05s res0143s")
+        if(alloc_stat.ne.0)call allocchk("In: simple_eo_volassemble res05s res0143s",alloc_stat)
         res0143s = 0.
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
@@ -117,7 +118,7 @@ contains
             do part=1,p%nparts
                 call eorecvol_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 ! sum the Fourier coefficients
-                call b%eorecvol%sum(eorecvol_read)
+                call b%eorecvol%sum_reduce(eorecvol_read)
             end do
             if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
@@ -279,7 +280,7 @@ contains
                 if( all(here) )then
                     call recvol_read%read(recnam)
                     call recvol_read%read_rho(kernam)
-                    call b%recvol%sum(recvol_read)
+                    call b%recvol%sum_reduce(recvol_read)
                 else
                     if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
                     if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'

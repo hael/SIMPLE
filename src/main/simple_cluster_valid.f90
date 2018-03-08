@@ -1,7 +1,7 @@
 ! cluster validation
 
 module simple_cluster_valid
-#include "simple_lib.f08"
+include 'simple_lib.f08'
     
 use simple_oris,   only: oris
 implicit none
@@ -66,20 +66,20 @@ contains
         self%ncls   = ncls
         self%ninds  = 2
         ! error check
-        if( self%nptcls < 2 ) stop 'number of objects (nptcls) has to be > 1; simple_cluster_valid::new'
-        if( self%ncls  < 2 )  stop 'number of classes (ncls) has to be > 1; simple_cluster_valid::new'
+        if( self%nptcls < 2 ) call simple_stop('number of objects (nptcls) has to be > 1; simple_cluster_valid::new')
+        if( self%ncls  < 2 )  call simple_stop('number of classes (ncls) has to be > 1; simple_cluster_valid::new')
         select case(which)
             case('state')
             case('class')
             case('subclass')
             case DEFAULT
-                stop 'unknown which tag, which=<state|class|subclass>; simple_cluster_valid::new'
+                call simple_stop('unknown which tag, which=<state|class|subclass>; simple_cluster_valid::new')
         end select
         ! allocate
         allocate( self%labels(self%nptcls), self%centers(self%ncls), self%maxdists(self%ncls),&
         self%avgdists(self%ncls), self%sepmat(self%ncls,self%ncls), self%mindists(self%ncls,self%ncls),&
         self%avgdists_cen(self%ncls), self%maxdists_cen(self%ncls), stat=alloc_stat )
-        allocchk( 'In: simple_cluster_valid::new')
+        if(alloc_stat.ne.0)call allocchk( 'In: simple_cluster_valid::new',alloc_stat)
         ! fill-up labels
         do iptcl=1,self%nptcls
             self%labels(iptcl) = nint(o%get(iptcl, which))
@@ -98,13 +98,13 @@ contains
         endif
         ! check presence or absence of S and D
         if( spresen .and. dpresen )then
-            stop 'Cannot use both similarity matrix (S) and distance marix (D)&
-            &for validation; simple_cluster_valid::new'
+            call simple_stop('Cannot use both similarity matrix (S) and distance marix (D)&
+            &for validation; simple_cluster_valid::new')
         else if( spresen .or. dpresen )then
             ! all fine
         else
-            stop 'Must have either similarity matrix (S) or distance marix (D)&
-            &for validation; simple_cluster_valid::new'
+            call simple_stop('Must have either similarity matrix (S) or distance marix (D)&
+            &for validation; simple_cluster_valid::new')
         endif
         self%exists = .true.
     end subroutine new
@@ -129,7 +129,7 @@ contains
         integer, allocatable :: arr(:)
         integer :: cnt, iptcl
         allocate( arr(pop), stat=alloc_stat )
-        allocchk( 'In: simple_cluster_valid::get_clsarr')
+        if(alloc_stat.ne.0)call allocchk( 'In: simple_cluster_valid::get_clsarr',alloc_stat)
         cnt = 0
         do iptcl=1,self%nptcls
             if( self%labels(iptcl) == class )then

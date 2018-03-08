@@ -1,4 +1,5 @@
 program simple_test_binoris
+include 'simple_lib.f08'
 use simple_oris,         only: oris
 use simple_map_reduce,   only: split_nobjs_even
 use simple_strings,      only: int2str

@@ -67,9 +67,9 @@ file(GLOB TESTDIRS
   "tests/test_*"
   )
 ## Uncomment the following block to remove ITEMS from the tests
-#list(REMOVE_ITEM TESTDIRS
-# "tests/test_img_export"
-#  )
+list(REMOVE_ITEM TESTDIRS
+ "tests/test_pgi"
+  )
 
 message( STATUS "Test directories ${TESTDIRS}")
 

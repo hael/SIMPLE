@@ -1,6 +1,6 @@
 ! command line parser
 module simple_cmdline
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmd_dict ! use all in there
 implicit none
 
@@ -300,7 +300,7 @@ contains
         character(len=STDLEN) :: str
         logical               :: vol_defined
         allocate( cmderr(self%ncheck), stat=alloc_stat )
-        allocchk('check; simple_cmdline')
+        if(alloc_stat.ne.0)call allocchk('check; simple_cmdline',alloc_stat)
         cmderr = .false.
         do i=1,self%ncheck
            cmderr(i) = .not. self%defined(self%checker(i))

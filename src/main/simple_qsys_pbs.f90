@@ -1,7 +1,7 @@
 ! batch-processing manager - PBS
 module simple_qsys_pbs
+include 'simple_lib.f08'
 use simple_qsys_base, only: qsys_base
-use simple_chash,     only: chash
 implicit none
 
 public :: qsys_pbs
@@ -53,7 +53,6 @@ contains
 
     !> \brief  writes the header instructions
     subroutine write_pbs_header( self, job_descr, fhandle )
-        use simple_strings, only: int2str, str2real
         class(qsys_pbs),   intent(in) :: self
         class(chash),      intent(in) :: job_descr
         integer, optional, intent(in) :: fhandle

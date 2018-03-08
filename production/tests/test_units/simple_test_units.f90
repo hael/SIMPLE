@@ -1,19 +1,18 @@
 program simple_test_units
-use simple_syslib        ! use all in there
-use simple_defs          ! use all in there
-use simple_testfuns      ! use all in there
-use simple_rnd           ! use all in there
-use simple_cmd_dict,     only: test_cmd_dict
-use simple_ftiter,       only: test_ftiter
-use simple_ori,          only: test_ori, test_ori_dists
-use simple_oris,         only: test_oris
-use simple_image,        only: test_image
-use simple_cluster_shc,  only: test_cluster_shc
-use simple_args,         only: test_args
-use simple_online_var,   only: test_online_var
-use simple_imghead,      only: test_imghead
-use simple_jiffys,       only: simple_end
-use simple_ftexp_shsrch, only: test_ftexp_shsrch
+include 'simple_lib.f08'
+use simple_testfuns          ! use all in there
+use simple_cmd_dict,         only: test_cmd_dict
+use simple_build,            only: test_build
+use simple_ftiter,           only: test_ftiter
+use simple_ori,              only: test_ori, test_ori_dists
+use simple_oris,             only: test_oris
+use simple_image,            only: test_image
+use simple_shc_cluster,      only: test_shc_cluster
+use simple_args,             only: test_args
+use simple_online_var,       only: test_online_var
+use simple_hash,             only: test_hash
+use simple_imghead,          only: test_imghead
+use simple_ftexp_shsrch,     only: test_ftexp_shsrch
 use simple_aff_prop,     only: test_aff_prop
 implicit none
 character(8)          :: datestr
@@ -27,15 +26,17 @@ call exec_cmdline( trim(command) )
 call simple_chdir(folder)
 call test_cmd_dict           ! pass with PGI
 call test_args               ! pass with PGI
-call test_ftiter             ! pass with PGI
+call test_online_var         ! pass with PGI
+call test_hash               ! pass with PGI
+call test_imghead            ! pass with PGI - 11/10/17
 call test_ori                ! pass with PGI
 call test_ori_dists          ! pass with PGI
 call test_oris(.false.)      ! pass with PGI
-call test_imghead            ! NOT HAPPY: seems to believe it is an imgheadrec
 call test_image(.false.)     ! NOT HAPPY
-call test_cluster_shc        ! pass with PGI
-call test_online_var         ! pass with PGI
 call test_ftexp_shsrch       ! pass with PGI
+call test_shc_cluster        ! pass with PGI
+call test_ftiter             ! pass with PGI
+call test_build              !  PGI happy after comlin fpls reference fixed  - 11/10/17
 ! LOCAL TESTFUNCTIONS
 call test_multinomal         ! pass with PGI
 call test_testfuns           ! pass with PGI
@@ -83,7 +84,7 @@ contains
         logical                     :: success
         class(*), pointer           :: fun_self => null()
         success = .false.
-        do i=1,20
+        do i=1, 20
             call get_testfun(i, 2, gmin, range, ptr)
             select case(i)
                 case(1)
@@ -142,7 +143,6 @@ contains
 
     subroutine test_euler_shift
         use simple_ori, only: ori
-        use simple_rnd, only: ran3
         type(ori) :: o
         integer   :: i
         real      :: euls(3), euls_shifted(3)
@@ -163,8 +163,6 @@ contains
     end subroutine
 
     subroutine simple_test_fit_line
-        use simple_math
-        use simple_rnd
         real    :: slope, intercept, datavec(100,2), corr, x
         integer :: i, j
         do i=1,10000

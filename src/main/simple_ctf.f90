@@ -9,7 +9,7 @@
 module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 public :: ctf, ctf_test
@@ -68,7 +68,6 @@ contains
 
     !>  \brief  initialise a CTF object with defocus/astigmatism params
     subroutine init( self, dfx, dfy, angast )
-        use simple_math, only: deg2rad
         class(ctf), intent(inout) :: self   !< instance
         real,       intent(in)    :: dfx    !< defocus x-axis (um)
         real,       intent(in)    :: dfy    !< defocus y-axis (um)
@@ -211,7 +210,8 @@ contains
         ! init object
         call self%init(dfx, ddfy, aangast)
         ! initialize
-        img      = cmplx(0.,0.)
+        call img%set_ft(.true.)
+        call img%set_cmat(cmplx(0.,0.))
         lims     = img%loop_lims(2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
@@ -282,11 +282,11 @@ contains
             call img_pd%new(ldim_pd, self%smpd)
             call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac, add_phshift)
             call img%pad_mirr(img_pd)
-            call img_pd%fwd_ft
+            call img_pd%fft()
             call img_pd%mul(ctfimg)
-            call img_pd%bwd_ft
+            call img_pd%ifft()
             call img_pd%clip(img)
-            call img_pd%kill
+            call img_pd%kill()
         endif
         call ctfimg%kill
     end subroutine apply
@@ -319,8 +319,8 @@ contains
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
                         tval      = self%eval(spaFreqSq, ang, add_phshift)
-                        phys = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(abs(tval), phys)
+                        phys      = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(phys(1),phys(2),phys(3), abs(tval))
                     end do
                 end do
             case('ctf')
@@ -331,8 +331,8 @@ contains
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
                         tval      = self%eval(spaFreqSq, ang, add_phshift)
-                        phys = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(tval, phys)
+                        phys      = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
                     end do
                 end do
             case('flip')
@@ -343,8 +343,8 @@ contains
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
                         tval      = self%eval(spaFreqSq, ang, add_phshift)
-                        phys = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(sign(1.,tval), phys)
+                        phys      = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(phys(1),phys(2),phys(3), sign(1.,tval))
                     end do
                 end do
             case('flipneg')
@@ -355,8 +355,8 @@ contains
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
                         tval      = self%eval(spaFreqSq, ang, add_phshift)
-                        phys = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(-sign(1.,tval), phys)
+                        phys      = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(phys(1),phys(2),phys(3), -sign(1.,tval))
                     end do
                 end do
             case('neg')
@@ -367,8 +367,8 @@ contains
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
                         tval      = self%eval(spaFreqSq, ang, add_phshift)
-                        phys = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(-tval, phys)
+                        phys      = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at( phys(1),phys(2),phys(3), -tval)
                     end do
                 end do
             case('square')
@@ -379,8 +379,8 @@ contains
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
                         tval      = self%eval(spaFreqSq, ang, add_phshift)
-                        phys = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(min(1.,max(tval**2.,0.001)), phys)
+                        phys      = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at( phys(1),phys(2),phys(3), min(1.,max(tval**2.,0.001)))
                     end do
                 end do
             case DEFAULT
@@ -424,9 +424,9 @@ contains
                 ! multiply image with tval
                 logi = [h,k,0]
                 phys = img%comp_addr_phys(logi)
-                call img%mul_cmat_at(tval, phys)
+                call img%mul_cmat_at(phys,tval)
                 ! shift image
-                call img%mul_cmat_at(img%oshift(logi,[x,y,0.]), phys)
+                call img%mul_cmat_at(phys(1),phys(2),phys(3), img%oshift(logi,[x,y,0.]))
             end do
         end do
     end subroutine apply_and_shift
@@ -439,7 +439,6 @@ contains
     !>  \brief This test compare ctf2img implementations
     subroutine ctf_test
         use simple_image, only: image
-        use simple_rnd,   only: ran3
         use simple_timer
         type(ctf)               :: tfun
         type(image)             :: img1, img2
@@ -485,6 +484,7 @@ contains
         enddo
         print *, 'err    : '  , err
         print *, 'time(s): ', toc(tctf)
+
 
         contains
 
@@ -554,6 +554,5 @@ contains
             end subroutine ctf2img_old
 
     end subroutine ctf_test
-
 
 end module simple_ctf

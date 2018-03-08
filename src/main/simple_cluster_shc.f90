@@ -1,9 +1,8 @@
 ! clustering of a similarity matrix using stochastic hill-climbing
 
 module simple_cluster_shc
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_oris, only: oris
-use simple_rnd,  only: irnd_uni
 implicit none
 
 public :: cluster_shc, test_cluster_shc
@@ -49,7 +48,7 @@ contains
             self%MINS = -1.
         endif
         allocate(self%labels(self%N), self%SPS(self%N), stat=alloc_stat)
-        allocchk('In: nsimple_cluster_shc::new')
+        if(alloc_stat.ne.0)call allocchk('In: nsimple_cluster_shc::new', alloc_stat)
         self%labels = 0
         self%SPS    = 0.
         self%existence = .true.
@@ -221,7 +220,7 @@ contains
             self%o_ptr => null()
             self%S     => null()
             deallocate( self%labels, self%SPS , stat=alloc_stat)
-            allocchk('In: nsimple_cluster_shc::kill ')
+            if(alloc_stat.ne.0)call allocchk('In: nsimple_cluster_shc::kill ', alloc_stat)
             self%existence = .false.
         endif
     end subroutine kill

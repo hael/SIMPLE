@@ -1,10 +1,9 @@
 module simple_classaverager
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_ctf,     only: ctf
 use simple_build,   only: build
 use simple_params,  only: params
 use simple_image,   only: image
-use simple_timer    ! use all in there
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_get_cavg, cavger_set_cavg, cavger_assemble_sums,&
@@ -92,7 +91,7 @@ contains
                 ! for the class average representation
                 ncls = min(NSPACE_BALANCE,p%nspace)
             case DEFAULT
-                stop 'unsupported which flag; simple_classaverager :: cavger_new'
+                call simple_stop('unsupported which flag; simple_classaverager :: new')
         end select
         ! work out range and partsz
         if( p%l_distr_exec )then
@@ -119,7 +118,7 @@ contains
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
         &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), stat=alloc_stat)
-        call alloc_errchk('cavger_new; simple_classaverager', alloc_stat)
+        if(alloc_stat .ne. 0)call allocchk('cavger_new; simple_classaverager', alloc_stat)
         do icls=1,ncls
             call cavgs_even(icls)%new(ldim,p%smpd,wthreads=.false.)
             call cavgs_odd(icls)%new(ldim,p%smpd,wthreads=.false.)
@@ -188,7 +187,7 @@ contains
                           precs(cnt)%ows(1),      precs(cnt)%e3s(1),&
                           precs(cnt)%shifts(1,2), precs(cnt)%inpl_inds(1),&
                           precs(cnt)%eos(1),      stat=alloc_stat )
-                call alloc_errchk('cavger_new; simple_classaverager, record arrays', alloc_stat)
+                if(alloc_stat .ne. 0)call allocchk('cavger_new; simple_classaverager, record arrays', alloc_stat)
                 precs(cnt)%classes(1)   = nint(spproj%os_ptcl2D%get(iptcl, 'class'))
                 precs(cnt)%inpl_inds(1) = nint(spproj%os_ptcl2D%get(iptcl, 'inpl'))
                 precs(cnt)%states(1)    = nint(spproj%os_ptcl2D%get(iptcl, 'state'))
@@ -229,7 +228,7 @@ contains
         if( allocated(iprecs) ) deallocate(iprecs)
         if( allocated(ioris)  ) deallocate(ioris)
         allocate(pinds(pop), iprecs(pop), ioris(pop), stat=alloc_stat)
-        call alloc_errchk('get_iprecs_ioris; simple_classaverager', alloc_stat)
+        if(alloc_stat .ne. 0)call allocchk('get_iprecs_ioris; simple_classaverager', alloc_stat)
         cnt = 0
         do iprec=1,partsz
             if( allocated(precs(iprec)%classes) )then
@@ -289,7 +288,7 @@ contains
             case('merged')
                 call img%copy(cavgs_merged(class))
             case DEFAULT
-                stop 'unsupported which flag; simple_classaverager :: cavger_get_cavg'
+                call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
         end select
     end subroutine cavger_get_cavg
 
@@ -306,7 +305,7 @@ contains
             case('merged')
                 call cavgs_merged(class)%copy(img)
             case DEFAULT
-                stop 'unsupported which flag; simple_classaverager :: cavger_set_cavg'
+                call simple_stop('unsupported which flag; simple_classaverager :: set_cavg')
         end select
     end subroutine cavger_set_cavg
 
@@ -401,6 +400,8 @@ contains
             rho_odd   = 0.
             ! batch planning
             nbatches = ceiling(real(icls_pop)/real(pp%nthr*BATCHTHRSZ))
+            !$ allocate(batches(icls_pop,2), stat=alloc_stat)
+            !$ if(alloc_stat.ne.0)call allocchk("In simple_classaverager::assemble_sums prealloc batches",alloc_stat)
             batches  = split_nobjs_even(icls_pop, nbatches)
             ! batch loop, prep
             do batch=1,nbatches
@@ -460,7 +461,7 @@ contains
                             rho_odd  = rho_odd + pw * rho
                     end select
                     ! reverse FFT and prepare for gridding
-                    call batch_imgs(i)%bwd_ft
+                    call batch_imgs(i)%ifft()
                     call gridprep%prep_serial(batch_imgs(i), cgrid_imgs(i))
                     ! rotation
                     mat = rotmat2d( -precs(iprec)%e3s(iori) )
@@ -524,13 +525,13 @@ contains
             call cls_imgsum_even%set_cmat(cmat_even)
             call cls_imgsum_odd%set_cmat(cmat_odd)
             ! real space & clipping
-            call cls_imgsum_even%bwd_ft
-            call cls_imgsum_odd%bwd_ft
+            call cls_imgsum_even%ifft()
+            call cls_imgsum_odd%ifft()
             call cls_imgsum_even%clip_inplace(ldim)
             call cls_imgsum_odd%clip_inplace(ldim)
             ! back to Fourier space
-            call cls_imgsum_even%fwd_ft
-            call cls_imgsum_odd%fwd_ft
+            call cls_imgsum_even%fft()
+            call cls_imgsum_odd%fft()
             ! updates cavgs & rhos
             if( do_frac_update )then
                 call cavgs_even(icls)%add_cmats_to_cmats(cavgs_odd(icls), ctfsqsums_even(icls), ctfsqsums_odd(icls),&
@@ -618,8 +619,8 @@ contains
                 call even_imgs(icls)%mask(pp%msk, 'soft')
                 call odd_imgs(icls)%mask(pp%msk, 'soft')
             endif
-            call even_imgs(icls)%fwd_ft
-            call odd_imgs(icls)%fwd_ft
+            call even_imgs(icls)%fft()
+            call odd_imgs(icls)%fft()
             call even_imgs(icls)%fsc(odd_imgs(icls), frc)
             find_plate = 0
             if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
@@ -627,14 +628,14 @@ contains
             ! average low-resolution info between eo pairs to keep things in register
             find = bp%projfrcs%estimate_find_for_eoavg(icls, 1)
             find = max(find, find_plate)
-            call cavgs_merged(icls)%fwd_ft
-            call cavgs_even(icls)%fwd_ft
-            call cavgs_odd(icls)%fwd_ft
+            call cavgs_merged(icls)%fft()
+            call cavgs_even(icls)%fft()
+            call cavgs_odd(icls)%fft()
             call cavgs_even(icls)%insert_lowres_serial(cavgs_merged(icls), find)
             call cavgs_odd(icls)%insert_lowres_serial(cavgs_merged(icls), find)
-            call cavgs_merged(icls)%bwd_ft
-            call cavgs_even(icls)%bwd_ft
-            call cavgs_odd(icls)%bwd_ft
+            call cavgs_merged(icls)%ifft()
+            call cavgs_even(icls)%ifft()
+            call cavgs_odd(icls)%ifft()
             ! destruct
             call even_imgs(icls)%kill
             call odd_imgs(icls)%kill
@@ -666,7 +667,7 @@ contains
                     call cavgs_merged(icls)%write(fname, icls)
                 end do
             case DEFAULT
-                stop 'unsupported which flag; simple_classaverager :: cavger_get_cavg'
+                call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
         end select
     end subroutine cavger_write
 
@@ -676,7 +677,7 @@ contains
         integer :: icls
         if( .not. file_exists(fname) )then
             write(*,*) 'file does not exist in cwd: ', trim(fname)
-            stop 'simple_classaverager :: read'
+            call simple_stop('simple_classaverager :: read')
         endif
         select case(which)
             case('even')
@@ -695,7 +696,7 @@ contains
                     call cavgs_merged(icls)%read(fname, icls)
                 end do
             case DEFAULT
-                stop 'unsupported which flag; simple_classaverager :: cavger_read'
+                call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
         end select
     end subroutine cavger_read
 
@@ -712,19 +713,11 @@ contains
             case('read')
                 if( .not. file_exists(cae) )then
                     write(*,*) 'File does not exists: ', trim(cae)
-                    stop 'In: simple_classaverager :: cavger_readwrite_partial_sums'
+                    call simple_stop('In: simple_classaverager :: assemble_sums_from_parts')
                 endif
                 if( .not. file_exists(cao) )then
                     write(*,*) 'File does not exists: ', trim(cao)
-                    stop 'In: simple_classaverager :: cavger_readwrite_partial_sums'
-                endif
-                if( .not. file_exists(cte) )then
-                    write(*,*) 'File does not exists: ', trim(cte)
-                    stop 'In: simple_classaverager :: cavger_readwrite_partial_sums'
-                endif
-                if( .not. file_exists(cto) )then
-                    write(*,*) 'File does not exists: ', trim(cto)
-                    stop 'In: simple_classaverager :: cavger_readwrite_partial_sums'
+                    call simple_stop('In: simple_classaverager :: assemble_sums_from_parts')
                 endif
                 do icls=1,ncls
                     call cavgs_even( icls)%read(cae, icls)

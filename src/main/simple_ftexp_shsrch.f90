@@ -1,6 +1,6 @@
 ! shift search using expanded Fourier transforms (used in motion_correct)
 module simple_ftexp_shsrch
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
@@ -165,7 +165,6 @@ contains
     end function ftexp_shsrch_minimize
 
     subroutine test_ftexp_shsrch
-        use simple_rnd, only: ran3
         type(image)       :: img_ref, img_ptcl
         type(ft_expanded) :: ftexp_ref, ftexp_ptcl
         real, parameter   :: TRS=5.0, lp=6., hp=100.

@@ -1,10 +1,8 @@
 program simple_test_ctf
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_ctf,   only: ctf
 use simple_image, only: image
-use simple_rnd,   only: ran3
 use simple_ctf_estimate
-use simple_timer
 implicit none
 ! erravg(microns):    3.46422195E-04
 ! errmax(microns):    1.91450119E-04

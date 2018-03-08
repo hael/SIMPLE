@@ -1,6 +1,6 @@
 ! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_image,   only: image
 implicit none
 
@@ -16,7 +16,7 @@ contains
         real    :: fsc
         nyq = size(corrs)
         allocate( ssnr(nyq),stat=alloc_stat)
-        allocchk("in simple_estimate_ssnr::fsc2ssnr ssnr ")
+        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::fsc2ssnr ssnr ",alloc_stat)
         do k=1,nyq
             fsc = min(abs(corrs(k)),0.999)
             ssnr(k) = (2.*fsc)/(1.-fsc)
@@ -30,7 +30,7 @@ contains
         integer :: nyq
         nyq = size(corrs)
         allocate( filt(nyq),stat=alloc_stat)
-        allocchk("in simple_estimate_ssnr::fsc2optlp filt ")
+        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::fsc2optlp filt ",alloc_stat)
         filt = 0.
         where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
         where( filt  > 0.9999 ) filt = 0.99999
@@ -53,7 +53,7 @@ contains
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( corrs(nyq),stat=alloc_stat)
-        allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ")
+        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ",alloc_stat)
         do k=1,nyq
             corrs(k) = ssnr(k)/(ssnr(k)+1.)
         end do
@@ -66,7 +66,7 @@ contains
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( w(nyq),stat=alloc_stat)
-        allocchk("in simple_estimate_ssnr::ssnr2optlp w ")
+        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2optlp w ",alloc_stat)
         do k=1,nyq
             w(k) = ssnr(k)/(ssnr(k)+1.)
         end do
@@ -84,7 +84,7 @@ contains
         integer :: find, sz
         sz = img%get_filtsz()
         allocate(filter(sz),stat=alloc_stat)
-        allocchk("simple_estimate_ssnr::acc_dose2filter ")
+        if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::acc_dose2filter ",alloc_stat)
         do find=1,sz
             filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
         end do
@@ -117,7 +117,6 @@ contains
 
         !> \brief  re-samples a filter array
     function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
-        use simple_math, only: find
         real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
         real, allocatable :: filt_resamp(:) !< output filter array
         integer :: filtsz_orig, filtsz_resamp, k, ind
@@ -125,7 +124,7 @@ contains
         filtsz_orig   = size(filt_orig)
         filtsz_resamp = size(res_new)
         allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
-        allocchk("simple_estimate_ssnr::resample_filter ")
+        if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::resample_filter ",alloc_stat)
         do k=1,filtsz_resamp
             call find(res_orig, filtsz_orig, res_new(k), ind, dist)
             filt_resamp(k) = filt_orig(ind)

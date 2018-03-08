@@ -1,15 +1,13 @@
 ! concrete commander: stream processing routines
 module simple_commander_stream_wflows
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,              only: cmdline
-use simple_chash,                only: chash
 use simple_params,               only: params
 use simple_commander_base,       only: commander_base
 use simple_commander_preprocess, only: preprocess_commander
 use simple_qsys_env,             only: qsys_env
-use simple_jiffys,               only: simple_end
 use simple_sp_project,           only: sp_project
-use simple_qsys_funs             ! use all in there
+use simple_qsys_funs,            only: qsys_cleanup
 implicit none
 
 public :: preprocess_stream_commander
@@ -159,15 +157,10 @@ contains
     end subroutine exec_preprocess_stream
 
     subroutine exec_cluster2D_stream_distr( self, cline )
-        use simple_defs_conv
-        use simple_timer
-        use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander, scale_project_distr_commander
+        use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander,scale_project_distr_commander
         use simple_oris,                   only: oris
         use simple_image,                  only: image
-        use simple_sp_project,             only: sp_project
-        use simple_binoris_io              ! use all in there
         use simple_commander_distr         ! use all in there
-        use simple_fileio                  ! use all in there
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         character(len=*), parameter   :: STK_FILETAB        = 'stkstreamtab.txt'
@@ -453,7 +446,6 @@ contains
             end subroutine remap_empty_classes
 
             subroutine map_new_ptcls
-                use simple_ran_tabu,        only: ran_tabu
                 use simple_projection_frcs, only: projection_frcs
                 type(ran_tabu)        :: rt
                 type(projection_frcs) :: frcs_prev, frcs
