@@ -147,10 +147,8 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
 mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
 
 find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
-    NAMES fftw3f_threads
-	  libfftw3f_threads libfftw3f-3_threads
-    fftw3f_omp
-	  libfftw3f_omp 	  libfftw3f-3_omp
+    NAMES fftw3f_threads libfftw3f_threads libfftw3f-3_threads
+    fftw3f_omp libfftw3f_omp  libfftw3f-3_omp
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
@@ -177,38 +175,42 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
 )
 mark_as_advanced( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES )
 
-find_library( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES
-    NAMES fftw3_threads
-	  libfftw3_threads
-    fftw3_omp
-	  libfftw3_omp
-    HINTS
-        ${FFTW_ROOT}/lib
-        ${FFTW_ROOT}/.libs
-        ${FFTW_ROOT}
-        ${FFTWDIR}/lib
-        $ENV{FFTW_ROOT}/lib
-        $ENV{FFTW_ROOT}/.libs
-        ENV FFTW_ROOT
-        $ENV{FFTWLIB}
-        $ENV{FFTWDIR}/lib
-        ENV FFTW_ROOT
-        ENV FFTWLIB
-    PATHS
-        ${FFTWDIR}/lib
-        /usr/lib
-        /usr/lib/x86_64-linux-gnu
-        /usr/local/lib               # Homebrew
-        /opt/local/lib               # Macports
-        /usr/opt/local/lib
-        /sw/lib                      # Fink
-        /usr/local/pgi/src/fftw/lib  # PGI local build
-        ${FFTWDIR}/lib
-    DOC "FFTW dynamic library -- double threaded"
-)
-mark_as_advanced( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES )
+# find_library( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES
+#     NAMES fftw3_threads
+# 	  libfftw3_threads
+#     fftw3_omp
+# 	  libfftw3_omp
+#     HINTS
+#         ${FFTW_ROOT}/lib
+#         ${FFTW_ROOT}/.libs
+#         ${FFTW_ROOT}
+#         ${FFTWDIR}/lib
+#         $ENV{FFTW_ROOT}/lib
+#         $ENV{FFTW_ROOT}/.libs
+#         ENV FFTW_ROOT
+#         $ENV{FFTWLIB}
+#         $ENV{FFTWDIR}/lib
+#         ENV FFTW_ROOT
+#         ENV FFTWLIB
+#     PATHS
+#         ${FFTWDIR}/lib
+#         /usr/lib
+#         /usr/lib/x86_64-linux-gnu
+#         /usr/local/lib               # Homebrew
+#         /opt/local/lib               # Macports
+#         /usr/opt/local/lib
+#         /sw/lib                      # Fink
+#         /usr/local/pgi/src/fftw/lib  # PGI local build
+#         ${FFTWDIR}/lib
+#     DOC "FFTW dynamic library -- double threaded"
+# )
+# mark_as_advanced( FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES )
 
-set(FFTW_LIBRARIES ${FFTW_SINGLE_PRECISION_LIBRARIES} ${FFTW_DOUBLE_PRECISION_LIBRARIES} ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES} ${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES})
+set(FFTW_LIBRARIES ${FFTW_SINGLE_PRECISION_LIBRARIES}
+  ${FFTW_DOUBLE_PRECISION_LIBRARIES}
+  ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES}
+  #${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}
+  )
 mark_as_advanced( FFTW_LIBRARIES )
 
 include( FindPackageHandleStandardArgs )
@@ -217,5 +219,5 @@ FIND_PACKAGE_HANDLE_STANDARD_ARGS( FFTW DEFAULT_MSG FFTW_LIBRARIES FFTW_INCLUDE_
 if( NOT FFTW_FOUND )
     message( STATUS "FindFFTW looked for single precision libraries named: fftw3f or libfftw3f-3" )
     message( STATUS "FindFFTW looked for double precision libraries named: fftw3 or libfftw3-3" )
-    message( STATUS "FindFFTW looked for double precision libraries named: fftw3f_threaded or libfftw3-3_threaded." )
+    message( STATUS "FindFFTW looked for single precision libraries named: fftw3f_threaded or libfftw3-3_threaded." )
 endif()
