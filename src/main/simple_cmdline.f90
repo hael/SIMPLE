@@ -431,21 +431,6 @@ contains
     end function get_rarg
 
     !> \brief for getting char args
-    ! pure function get_carg( self, key ) result( cval )
-    !     class(cmdline),   intent(in) :: self
-    !     character(len=*), intent(in) :: key
-    !     character(len=STDLEN) :: cval
-    !     integer :: i
-    !     cval = ''
-    !     do i=1,self%argcnt
-    !         if( trim(self%cmds(i)%key) .eq. trim(key) )then
-    !             cval = self%cmds(i)%carg
-    !             return
-    !         endif
-    !     end do
-    ! end function get_carg
-
-    !> \brief for getting char args
     pure function get_carg( self, key ) result( cval )
         class(cmdline),   intent(in) :: self
         character(len=*), intent(in) :: key

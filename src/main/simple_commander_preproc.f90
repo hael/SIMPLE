@@ -771,14 +771,14 @@ contains
         use simple_commander_volops,  only: project_commander
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline !< command line input
-        integer, parameter           :: NREFS=100, NPROJS=20
-        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(TXT_EXT)
-        type(params)                 :: p
-        type(build)                  :: b
-        type(cmdline)                :: cline_project
-        type(project_commander)      :: xproject
-        integer                      :: nrots, cnt, iref, irot
-        real                         :: ang, rot
+        integer,          parameter :: NREFS=100, NPROJS=20
+        character(len=*), parameter :: ORIFILE='pickrefs_oris'//trim(TXT_EXT)
+        type(params)                :: p
+        type(build)                 :: b
+        type(cmdline)               :: cline_project
+        type(project_commander)     :: xproject
+        integer                     :: nrots, cnt, iref, irot
+        real                        :: ang, rot
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') .or. cline%defined('vol1') )then

@@ -128,13 +128,13 @@ contains
 
     subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator, script_name )
         use simple_cmdline,   only: cmdline
-        class(qsys_env)            :: self
-        class(cmdline)             :: cline
-        character(len=*)           :: outfile
-        character(len=*), optional :: finish_indicator, script_name
-        character(len=STDLEN), parameter   :: script_name_default = 'simple_script_single'
-        type(chash)                        :: job_descr
-        character(len=:),      allocatable :: halt_ind, script_name_here
+        class(qsys_env)               :: self
+        class(cmdline)                :: cline
+        character(len=*)              :: outfile
+        character(len=*), optional    :: finish_indicator, script_name
+        character(len=*), parameter   :: script_name_default = 'simple_script_single'
+        type(chash)                   :: job_descr
+        character(len=:), allocatable :: halt_ind, script_name_here
         if( present(finish_indicator) )then
             allocate(halt_ind, source=trim(finish_indicator))
         endif

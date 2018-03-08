@@ -38,6 +38,9 @@ real(dp), parameter :: DSMALL       = 1e-6
 real(dp), parameter :: PISQR        = PI*PI
 real(sp), parameter :: ATHRES_LIM   = 5.
 
+! newline character
+character(len=*), parameter :: NEWLINE = new_line('a')
+
 ! plan for the CTF
 type :: ctfplan
     character(len=STDLEN) :: mode=''                !< astig/noastig

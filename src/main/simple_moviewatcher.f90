@@ -38,9 +38,9 @@ interface moviewatcher
     module procedure constructor
 end interface moviewatcher
 
-character(len=STDLEN), parameter   :: FILETABNAME = 'movieftab_preprocess_stream.txt'
-integer,               parameter   :: FAIL_THRESH = 50
-integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
+character(len=*), parameter :: FILETABNAME = 'movieftab_preprocess_stream.txt'
+integer,          parameter :: FAIL_THRESH = 50
+integer,          parameter :: FAIL_TIME   = 7200 ! 2 hours
 
 contains
 

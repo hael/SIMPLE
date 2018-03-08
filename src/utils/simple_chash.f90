@@ -4,6 +4,7 @@ use simple_defs
 use simple_syslib, only: is_open
 use simple_fileio, only: fopen, fileio_errmsg, fclose
 use simple_strings
+use simple_ansi_colors
 implicit none
 
 public :: chash
@@ -388,32 +389,39 @@ contains
     ! PRINTERS
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_1( self, key, maxlen, fhandle, advance )
-        class(chash), intent(in)      :: self
-        character(len=*),  intent(in) :: key
-        integer,           intent(in) :: maxlen
-        integer, optional, intent(in) :: fhandle
-        logical, optional, intent(in) :: advance
+    subroutine print_key_val_pair_1( self, key, maxlen, fhandle, advance, col )
+        class(chash),               intent(in) :: self
+        character(len=*),           intent(in) :: key
+        integer,                    intent(in) :: maxlen
+        integer,          optional, intent(in) :: fhandle
+        logical,          optional, intent(in) :: advance
+        character(len=*), optional, intent(in) :: col
+        character(len=:), allocatable :: ccol
         character(len=maxlen) :: key_padded
         integer               :: which
         logical               :: aadvance
         aadvance = .true.
         if( present(advance) ) aadvance = .false.
+        if( present(col) )then
+            allocate(ccol, source=trim(col))
+        else
+            allocate(ccol, source=C_WHITE)
+        endif
         which = self%lookup(key)
         if( which > 0 )then
             if( present(advance) )then
                 ! print one-liner (for command-line execution)
                 if( present(fhandle) )then
                     if( aadvance )then
-                        write(fhandle,'(a)') trim(key)//'='//trim(self%values(which)%str)
+                        write(fhandle,'(a)')              color(trim(key)//'='//trim(self%values(which)%str), ccol)
                     else
-                        write(fhandle,'(a)',advance='no') trim(key)//'='//trim(self%values(which)%str)//' '
+                        write(fhandle,'(a)',advance='no') color(trim(key)//'='//trim(self%values(which)%str)//' ', ccol)
                     endif
                 else
                     if( aadvance )then
-                        write(*,'(a)') trim(key)//'='//trim(self%values(which)%str)
+                        write(*,'(a)')              color(trim(key)//'='//trim(self%values(which)%str), ccol)
                     else
-                        write(*,'(a)',advance='no') trim(key)//'='//trim(self%values(which)%str)//' '
+                        write(*,'(a)',advance='no') color(trim(key)//'='//trim(self%values(which)%str)//' ', ccol)
                     endif
                 endif
             else
@@ -423,9 +431,9 @@ contains
                     key_padded = trim(key_padded)//' '
                 end do
                 if( present(fhandle) )then
-                    write(fhandle,'(a,1x,a)') key_padded, '= '//trim(self%values(which)%str)
+                    write(fhandle,'(a,1x,a)') color(key_padded, ccol), color('= '//trim(self%values(which)%str), ccol)
                 else
-                    write(*,'(a,1x,a)') key_padded, '= '//trim(self%values(which)%str)
+                    write(*,'(a,1x,a)')       color(key_padded, ccol), color('= '//trim(self%values(which)%str), ccol)
                 endif
             endif
         else
@@ -435,30 +443,39 @@ contains
     end subroutine print_key_val_pair_1
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle )
+    subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle, col )
         class(chash), intent(in)      :: self
-        integer,           intent(in) :: ikey
-        integer,           intent(in) :: maxlen
-        integer, optional, intent(in) :: fhandle
-        character(len=maxlen) :: key_padded
+        integer,                    intent(in) :: ikey
+        integer,                    intent(in) :: maxlen
+        integer,          optional, intent(in) :: fhandle
+        character(len=*), optional, intent(in) :: col
+        character(len=maxlen)         :: key_padded
+        character(len=:), allocatable :: ccol
+        if( present(col) )then
+            allocate(ccol, source=trim(col))
+        else
+            allocate(ccol, source=C_WHITE)
+        endif
         key_padded = trim(self%keys(ikey)%str)
         do while(len(key_padded) < maxlen)
             key_padded = trim(key_padded)//' '
         end do
         if( present(fhandle) .and. is_open(fhandle) )then
-            write(fhandle,'(a,1x,a)') key_padded, '= '//trim(self%values(ikey)%str)
+            write(fhandle,'(a,1x,a)') color(key_padded, ccol), color('= '//trim(self%values(ikey)%str), ccol)
         else
-            write(*,'(a,1x,a)') key_padded, '= '//trim(self%values(ikey)%str)
+            write(*,      '(a,1x,a)') color(key_padded, ccol), color('= '//trim(self%values(ikey)%str), ccol)
         endif
     end subroutine print_key_val_pair_2
 
     !>  \brief  pretty printing of all key-value pairs
-    subroutine print_key_val_pairs( self, keys2print, fhandle, oneline )
+    subroutine print_key_val_pairs( self, keys2print, fhandle, oneline, mask )
         class(chash),               intent(in) :: self
         character(len=*), optional, intent(in) :: keys2print(:)
         integer,          optional, intent(in) :: fhandle
         logical,          optional, intent(in) :: oneline
-        logical :: ooneline
+        logical,          optional, intent(in) :: mask(:) ! color mask, true -> C_RED, false -> C_YELLOW
+        logical, allocatable :: mmask(:)
+        logical :: ooneline, present_mask
         integer :: maxlen, ikey, sz, keylen
         maxlen  = 0
         ikey    = 0
@@ -466,12 +483,23 @@ contains
         keylen  = 0
         ooneline = .false.
         if( present(oneline) ) ooneline = oneline
+        present_mask = present(mask)
         if( present(keys2print) )then
             sz = size(keys2print)
+            if( present_mask )then
+                if( size(mask) /= sz ) stop 'Nonconforming sizes keys2print / mask; chash :: print_key_val_pairs'
+                allocate(mmask(sz), source=mask)
+            else
+                allocate(mmask(sz), source=.false.)
+            endif
             if( ooneline )then
                 ! non-advancing printing
                 do ikey=1,sz
-                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, advance=.false.)
+                    if( mmask(ikey) )then
+                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, advance=.false., col=C_RED)
+                    else
+                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, advance=.false., col=C_YELLOW)
+                    endif
                 end do
             else
                 ! find max key len in keys2print
@@ -482,11 +510,21 @@ contains
                 end do
                 ! print selected key-value pairs
                 do ikey=1,sz
-                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle )
+                    if( mmask(ikey) )then
+                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, col=C_RED)
+                    else
+                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, col=C_YELLOW)
+                    endif
                 end do
             endif
         else
             if( self%chash_index > 0 )then
+                if( present_mask )then
+                    if( size(mask) /= self%chash_index ) stop 'Nonconforming sizes self%chash_index / size(mask); chash :: print_key_val_pairs'
+                    allocate(mmask(self%chash_index), source=mask)
+                else
+                    allocate(mmask(self%chash_index), source=.false.)
+                endif
                 ! find max key len among all keys in chash
                 maxlen = 0
                 do ikey=1,self%chash_index
@@ -495,7 +533,11 @@ contains
                 end do
                 ! print all key-value pairs
                 do ikey=1,self%chash_index
-                    call self%print_key_val_pair_2(ikey, maxlen, fhandle )
+                    if( mmask(ikey) )then
+                        call self%print_key_val_pair_2(ikey, maxlen, fhandle, col=C_RED)
+                    else
+                        call self%print_key_val_pair_2(ikey, maxlen, fhandle, col=C_YELLOW)
+                    endif
                 end do
             endif
         endif

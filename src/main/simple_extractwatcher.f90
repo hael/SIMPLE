@@ -53,9 +53,9 @@ interface extractwatcher
     module procedure constructor
 end interface extractwatcher
 
-character(len=STDLEN), parameter   :: FILETABNAME = 'extractwatcher.txt'
-integer,               parameter   :: FAIL_THRESH = 50
-integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
+character(len=*), parameter   :: FILETABNAME = 'extractwatcher.txt'
+integer,          parameter   :: FAIL_THRESH = 50
+integer,          parameter   :: FAIL_TIME   = 7200 ! 2 hours
 
 contains
 

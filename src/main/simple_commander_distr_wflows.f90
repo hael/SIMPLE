@@ -1211,15 +1211,15 @@ contains
         integer                        :: i, comlin_srch_nproj, nl,  nbest_here
         integer                        :: bestloc(1), cnt, numlen
         character(len=STDLEN)          :: part_tab
-        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'           !<
-        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//trim(TXT_EXT) !<
-        character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'                !< symmetry axes doc (distributed mode)
-        character(len=32),   parameter :: SYMTAB       = 'symaxes'//trim(TXT_EXT)      !<
-        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks'//trim(TXT_EXT)     !< symmetry peaks to refine
-        character(len=32),   parameter :: SYMSHTAB     = 'sym_3dshift'//trim(TXT_EXT)  !< volume 3D shift
-        character(len=32),   parameter :: SYMPROJSTK   = 'sym_projs.mrc'               !< volume reference projections
-        character(len=32),   parameter :: SYMPROJTAB   = 'sym_projs'//trim(TXT_EXT)    !< volume reference projections doc
-        integer,             parameter :: NBEST = 30
+        character(len=*), parameter :: GRIDSYMFBODY = 'grid_symaxes_part'           !<
+        character(len=*), parameter :: GRIDSYMTAB   = 'grid_symaxes'//trim(TXT_EXT) !<
+        character(len=*), parameter :: SYMFBODY     = 'symaxes_part'                !< symmetry axes doc (distributed mode)
+        character(len=*), parameter :: SYMTAB       = 'symaxes'//trim(TXT_EXT)      !<
+        character(len=*), parameter :: SYMPEAKSTAB  = 'sympeaks'//trim(TXT_EXT)     !< symmetry peaks to refine
+        character(len=*), parameter :: SYMSHTAB     = 'sym_3dshift'//trim(TXT_EXT)  !< volume 3D shift
+        character(len=*), parameter :: SYMPROJSTK   = 'sym_projs.mrc'               !< volume reference projections
+        character(len=*), parameter :: SYMPROJTAB   = 'sym_projs'//trim(TXT_EXT)    !< volume reference projections doc
+        integer,          parameter :: NBEST = 30
         ! seed the random number generator
         call seed_rnd
         ! output command line executed

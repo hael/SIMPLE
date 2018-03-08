@@ -171,15 +171,15 @@ contains
         use simple_fileio                  ! use all in there
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=KEYLEN),   parameter :: STK_FILETAB     = 'stkstreamtab.txt'
-        character(len=KEYLEN),   parameter :: SCALE_FILETAB   = 'stkscale.txt'
-        character(len=KEYLEN),   parameter :: DEFTAB          = 'deftab'//trim(METADATA_EXT)
-        character(len=KEYLEN),   parameter :: FINALDOC        = 'cluster2Ddoc_final'//trim(METADATA_EXT)
-        integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000  ! # of ptcls required to turn on shift search
-        integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5     ! # of iterations prior to turn on shift search
-        integer,                 parameter :: CCRES_NPTCLS_LIM   = 10000 ! # of ptcls required to turn on objfun=ccres
-        integer,                 parameter :: WAIT_WATCHER       = 60    ! seconds prior to new stack detection
-        integer,                 parameter :: MAXNCLS            = 1000  ! maximum # of classes
+        character(len=*), parameter :: STK_FILETAB        = 'stkstreamtab.txt'
+        character(len=*), parameter :: SCALE_FILETAB      = 'stkscale.txt'
+        character(len=*), parameter :: DEFTAB             = 'deftab'//trim(METADATA_EXT)
+        character(len=*), parameter :: FINALDOC           = 'cluster2Ddoc_final'//trim(METADATA_EXT)
+        integer,          parameter :: SHIFTSRCH_PTCLSLIM = 2000  ! # of ptcls required to turn on shift search
+        integer,          parameter :: SHIFTSRCH_ITERLIM  = 5     ! # of iterations prior to turn on shift search
+        integer,          parameter :: CCRES_NPTCLS_LIM   = 10000 ! # of ptcls required to turn on objfun=ccres
+        integer,          parameter :: WAIT_WATCHER       = 60    ! seconds prior to new stack detection
+        integer,          parameter :: MAXNCLS            = 1000  ! maximum # of classes
         type(cluster2D_distr_commander)    :: xcluster2D_distr
         type(make_cavgs_distr_commander)   :: xmake_cavgs
         type(extractwatcher)               :: mic_watcher

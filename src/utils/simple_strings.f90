@@ -585,16 +585,21 @@ contains
     !>   the sorted array. The characters of
     !>         the elements of the string array are not modified. If blanks or punctuation characters are
     !>         to be ignored, this needs to be taken care of before calling.
-    subroutine lexSort( strArr, CaseSens )
+    subroutine lexSort( strArr, CaseSens, mask )
         character(len=*),  intent(inout) :: strArr(:)
         logical, optional, intent(in)    :: CaseSens  !< case-sensitive sorting
+        logical, optional, intent(inout) :: mask(:)
         integer, allocatable :: indexarray(:)
         integer              :: low, high, k
-        logical              :: LCaseSens
-        LCaseSens = .false.
+        logical              :: LCaseSens, present_mask
+        LCaseSens    = .false.
         if( present(CaseSens) ) LCaseSens = CaseSens
-        low  = 1
-        high = size(strArr)
+        low          = 1
+        high         = size(strArr)
+        present_mask = present(mask)
+        if( present_mask )then
+            if( size(mask) /= high ) stop 'Nonconforming sizes strArr & mask; strings :: lexSort'
+        endif
         allocate(indexarray(high), stat=alloc_stat)
         if( alloc_stat /= 0 ) then
             write(*,'(a)') 'ERROR: Allocation failure!'
@@ -604,6 +609,7 @@ contains
         indexarray = (/(k,k=low,high)/)
         call quicksort(low, high)
         strArr = strArr(indexarray)
+        if( present_mask ) mask = mask(indexarray)
         deallocate(indexarray)
 
       contains

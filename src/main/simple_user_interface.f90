@@ -46,6 +46,7 @@ type :: simple_program
     procedure, private :: set_input_2
     generic,   private :: set_input => set_input_1, set_input_2
     procedure          :: print_ui
+    procedure          :: print_cmdline
     procedure, private :: kill
     procedure          :: write2json
 
@@ -269,8 +270,8 @@ contains
     end subroutine set_input_2
 
     subroutine print_ui( self )
-        use simple_chash,   only: chash
-        use simple_strings, only: int2str
+        use simple_chash, only: chash
+        use simple_ansi_colors
         class(simple_program), intent(in) :: self
         type(chash) :: ch
         integer     :: i
@@ -284,25 +285,25 @@ contains
         call ch%print_key_val_pairs
         call ch%kill
         write(*,'(a)') ''
-        write(*,'(a)') '>>> IMAGE INPUT/OUTPUT'
+        write(*,'(a)') color('>>> IMAGE INPUT/OUTPUT',     C_BLUE)
         call print_param_hash(self%img_ios)
         write(*,'(a)') ''
-        write(*,'(a)') '>>> PARAMETER INPUT/OUTPUT'
+        write(*,'(a)') color('>>> PARAMETER INPUT/OUTPUT', C_BLUE)
         call print_param_hash(self%parm_ios)
         write(*,'(a)') ''
-        write(*,'(a)') '>>> ALTERNATIVE INPUTS'
+        write(*,'(a)') color('>>> ALTERNATIVE INPUTS',     C_BLUE)
         call print_param_hash(self%alt_ios)
         write(*,'(a)') ''
-        write(*,'(a)') '>>> SEARCH CONTROLS'
+        write(*,'(a)') color('>>> SEARCH CONTROLS',        C_BLUE)
         call print_param_hash(self%srch_ctrls)
         write(*,'(a)') ''
-        write(*,'(a)') '>>> FILTER CONTROLS'
+        write(*,'(a)') color('>>> FILTER CONTROLS',        C_BLUE)
         call print_param_hash(self%filt_ctrls)
         write(*,'(a)') ''
-        write(*,'(a)') '>>> MASK CONTROLS'
+        write(*,'(a)') color('>>> MASK CONTROLS',          C_BLUE)
         call print_param_hash(self%mask_ctrls)
         write(*,'(a)') ''
-        write(*,'(a)') '>>> COMPUTER CONTROLS'
+        write(*,'(a)') color('>>> COMPUTER CONTROLS',      C_BLUE)
         call print_param_hash(self%comp_ctrls)
 
         contains
@@ -331,6 +332,68 @@ contains
             end subroutine print_param_hash
 
     end subroutine print_ui
+
+    subroutine print_cmdline( self )
+        use simple_chash, only: chash
+        use simple_ansi_colors
+        use simple_strings, only: lexSort
+        class(simple_program), intent(in) :: self
+        type(chash) :: ch
+        integer     :: i
+        logical     :: l_distr_exec
+        l_distr_exec = self%executable .eq. 'simple_distr_exec'
+        write(*,'(a)') color('USAGE:', C_BLUE)
+        if( l_distr_exec )then
+            write(*,'(a)') color('bash-3.2$ simple_distr_exec prg=program key1=val1 key2=val2 ...', C_BLUE)
+        else
+            write(*,'(a)') color('bash-3.2$ simple_exec prg=program key1=val1 key2=val2 ...', C_BLUE)
+        endif
+        if( allocated(self%img_ios) ) write(*,'(a)') ''
+        if( allocated(self%img_ios) ) write(*,'(a)') color('>>> IMAGE INPUT/OUTPUT',     C_BLUE)
+        call print_param_hash(self%img_ios)
+        if( allocated(self%parm_ios) ) write(*,'(a)') ''
+        if( allocated(self%parm_ios) ) write(*,'(a)') color('>>> PARAMETER INPUT/OUTPUT', C_BLUE)
+        call print_param_hash(self%parm_ios)
+        write(*,'(a)') ''
+        write(*,'(a)') color('>>> ALTERNATIVE INPUTS',     C_BLUE)
+        call print_param_hash(self%alt_ios)
+        write(*,'(a)') ''
+        write(*,'(a)') color('>>> SEARCH CONTROLS',        C_BLUE)
+        call print_param_hash(self%srch_ctrls)
+        write(*,'(a)') ''
+        write(*,'(a)') color('>>> FILTER CONTROLS',        C_BLUE)
+        call print_param_hash(self%filt_ctrls)
+        write(*,'(a)') ''
+        write(*,'(a)') color('>>> MASK CONTROLS',          C_BLUE)
+        call print_param_hash(self%mask_ctrls)
+        write(*,'(a)') ''
+        write(*,'(a)') color('>>> COMPUTER CONTROLS',      C_BLUE)
+        call print_param_hash(self%comp_ctrls)
+
+        contains
+
+            subroutine print_param_hash( arr )
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                character(len=KEYLEN),    allocatable :: sorted_keys(:)
+                logical,                  allocatable :: required(:)
+                integer :: i, nparams
+                if( allocated(arr) )then
+                    nparams = size(arr)
+                    call ch%new(nparams)
+                    allocate(sorted_keys(nparams), required(nparams))
+                    do i=1,nparams
+                        call ch%push(arr(i)%key, arr(i)%descr_short)
+                        sorted_keys(i) = arr(i)%key
+                        required(i)    = arr(i)%required
+                    end do
+                    call lexSort(sorted_keys, mask=required)
+                    call ch%print_key_val_pairs(sorted_keys, mask=required)
+                    call ch%kill
+                    deallocate(sorted_keys, required)
+                endif
+            end subroutine print_param_hash
+
+    end subroutine print_cmdline
 
     subroutine kill( self )
         class(simple_program), intent(inout) :: self

@@ -208,11 +208,11 @@ contains
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
-        real,                  parameter :: CENLP=30.           !< consistency with prime3D
-        integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
-        integer,               parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
-        character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
+        real,             parameter :: CENLP=30.           !< consistency with prime3D
+        integer,          parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
+        integer,          parameter :: STATE=1, NPROJS_SYMSRCH=50
+        integer,          parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
+        character(len=*), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(symsrch_distr_commander) :: xsymsrch_distr
@@ -441,7 +441,7 @@ contains
         ! constants
         integer,          parameter :: MAXITS1 = 50
         integer,          parameter :: MAXITS2 = 40
-        character(len=2), parameter :: one     = '01'
+        character(len=*), parameter :: one     = '01'
         ! distributed commanders
         type(prime3D_distr_commander)        :: xprime3D_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
@@ -954,7 +954,7 @@ contains
             ! stash docs, volumes , etc.
             subroutine prime3d_cleanup
                 character(len=STDLEN) :: src, dist
-                character(len=2), parameter :: one = '01'
+                character(len=*), parameter :: one = '01'
                 character(len=3) :: str_iter
                 integer          :: it, rename_stat
                 dir = 'state_'//str_state//'/'
