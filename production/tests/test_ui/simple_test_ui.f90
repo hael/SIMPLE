@@ -21,4 +21,6 @@ call motion_correct%print_ui()
 call motion_correct%write2json()
 call preprocess%print_ui()
 call preprocess%write2json()
+call pick%print_ui()
+call pick%write2json()
 end program simple_test_ui

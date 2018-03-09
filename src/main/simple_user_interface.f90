@@ -5,7 +5,7 @@ implicit none
 public :: make_user_interface
 public :: cluster2D, cluster2D_stream, make_cavgs
 public :: refine3D, initial_3Dmodel
-public :: preprocess, extract, motion_correct
+public :: preprocess, extract, motion_correct, pick
 public :: postprocess
 private
 
@@ -61,6 +61,7 @@ type(simple_program), protected :: initial_3Dmodel
 type(simple_program), protected :: preprocess
 type(simple_program), protected :: extract
 type(simple_program), protected :: motion_correct
+type(simple_program), protected :: pick
 type(simple_program), protected :: postprocess
 type(simple_program), protected :: make_cavgs
 
@@ -108,6 +109,7 @@ contains
         call new_make_cavgs
         call new_motion_correct
         call new_preprocess
+        call new_pick
         ! ...
     end subroutine make_user_interface
 
@@ -751,7 +753,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'filetab', 'file', 'Movies list',&
-        &'List of movies to integerate', 'list input e.g. movs.txt', .true.)
+        &'List of movies to integerate', 'list input e.g. movs.txt', .false.)
         call preprocess%set_input('img_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
         call preprocess%set_input('img_ios', 3, 'dir_movies', 'file', 'Input movies directory',&
         & 'Where the movies to process will sequentially appear (streaming only)', 'e.g. data_xxx/ (streaming only)', .false.)
@@ -812,6 +814,35 @@ contains
         preprocess%comp_ctrls(1)%required = .true.
         call preprocess%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess
+
+    subroutine new_pick
+        ! PROGRAM SPECIFICATION
+        call pick%new(&
+        &'pick', & ! name
+        &'is a distributed workflow for template-based particle picking',&      ! descr_short
+        &'is a distributed workflow for template-based particle picking',&      ! descr_long
+        &'simple_distr_exec',&                                                  ! executable
+        &2, 1, 1, 13, 2, 0, 1)                                                 ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call pick%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
+        &'List of micrographs to process', 'list input e.g. intgs.txt', .true.)
+        call pick%set_input('img_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false.)
+        ! parameter input/output
+        call pick%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        call pick%set_input('alt_ios', 1, 'refs', 'file', 'Picking 2D references',&
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file containing references', .false.)
+        ! search controls
+        call pick%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false.)
+        call pick%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false.)
+        ! filter controls
+        call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call pick%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_pick
 
     subroutine new_postprocess
         ! PROGRAM SPECIFICATION
