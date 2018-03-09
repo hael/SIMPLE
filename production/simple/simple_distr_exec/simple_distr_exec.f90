@@ -111,9 +111,10 @@ select case(prg)
         keys_optional(33) = 'stream'
         keys_optional(34) = 'dir_movies'
         keys_optional(35) = 'filetab'
+        keys_optional(36) = 'opt'
         ! parse command line
         if( describe ) call print_doc_preprocess
-        call cline%parse(keys_required(:5), keys_optional(:33))
+        call cline%parse(keys_required(:5), keys_optional(:36))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
@@ -197,7 +198,7 @@ select case(prg)
     case( 'motion_correct' )
         !==Program motion_correct
         !
-        ! <motion_correct/begin>is a distributed workflow for movie alignment or motion_correctring based the same
+        ! <motion_correct/begin>is a distributed workflow for movie alignment or motion correction based on the same
         ! principal strategy as Grigorieffs program (hence the name). There are two important
         ! differences: automatic weighting of the frames using a correlation-based M-estimator and
         ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths

@@ -5,7 +5,7 @@ implicit none
 public :: make_user_interface
 public :: cluster2D, cluster2D_stream, make_cavgs
 public :: refine3D, initial_3Dmodel
-public :: extract, motion_correct
+public :: preprocess, extract, motion_correct
 public :: postprocess
 private
 
@@ -58,6 +58,7 @@ type(simple_program), protected :: cluster2D
 type(simple_program), protected :: cluster2D_stream
 type(simple_program), protected :: refine3D
 type(simple_program), protected :: initial_3Dmodel
+type(simple_program), protected :: preprocess
 type(simple_program), protected :: extract
 type(simple_program), protected :: motion_correct
 type(simple_program), protected :: postprocess
@@ -65,6 +66,7 @@ type(simple_program), protected :: make_cavgs
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: ctf
+type(simple_input_param) :: kv
 type(simple_input_param) :: deftab
 type(simple_input_param) :: filwidth
 type(simple_input_param) :: frac
@@ -105,6 +107,7 @@ contains
         call new_extract
         call new_make_cavgs
         call new_motion_correct
+        call new_preprocess
         ! ...
     end subroutine make_user_interface
 
@@ -147,6 +150,7 @@ contains
         call set_param(objfun,        'objfun',        'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
         call set_param(weights2D,     'weights2D',     'binary', '2D spectral weights', 'Wether to use 2D spectral weights(yes|no){no}', '(yes|no){no}', .false.)
         call set_param(remap_classes, 'remap_classes', 'binary', 'Whether to remap 2D references', 'Whether to remap the number of 2D references(yes|no){no}', '(yes|no){no}', .false.)
+        call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false.)
 
         contains
 
@@ -735,6 +739,80 @@ contains
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
     end subroutine new_initial_3Dmodel
 
+    subroutine new_preprocess
+        ! PROGRAM SPECIFICATION
+        call preprocess%new(&
+        &'preprocess', & ! name
+        &'is a program that performs for movie alignment',&                                 ! descr_short
+        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//&   ! descr_long
+        &' in sequence or streaming mode as the microscope collects the data',&
+        &'simple_distr_exec',&                                                              ! executable
+        &3, 14, 5, 13, 5, 0, 2)                                                               ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call preprocess%set_input('img_ios', 1, 'filetab', 'file', 'Movies list',&
+        &'List of movies to integerate', 'list input e.g. movs.txt', .true.)
+        call preprocess%set_input('img_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
+        call preprocess%set_input('img_ios', 3, 'dir_movies', 'file', 'Input movies directory',&
+        & 'Where the movies to process will sequentially appear (streaming only)', 'e.g. data_xxx/ (streaming only)', .false.)
+        ! parameter input/output
+        call preprocess%set_input('parm_ios', 1, smpd)
+        call preprocess%set_input('parm_ios', 2, kv)
+        preprocess%parm_ios(2)%required = .true.
+        call preprocess%set_input('parm_ios', 3, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false.)
+        call preprocess%set_input('parm_ios', 4, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false.)
+        call preprocess%set_input('parm_ios', 5, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false.)
+        call preprocess%set_input('parm_ios', 6, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false.)
+        call preprocess%set_input('parm_ios', 7, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false.)
+        call preprocess%set_input('parm_ios', 8, phaseplate)
+        call preprocess%set_input('parm_ios',11, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false.)
+        call preprocess%set_input('parm_ios',12, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false.)
+        call preprocess%set_input('parm_ios',13, 'dopick', 'binary', 'Picking on/off', 'Whether to perform automated picking(yes|no){yes}', '(yes|no){no}', .false.)
+        call preprocess%set_input('parm_ios',14, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false.)
+        ! alternative inputs
+        call preprocess%set_input('alt_ios', 1, 'refs', 'file', 'Picking 2D references',&
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file containing references', .false.)
+        call preprocess%set_input('alt_ios', 2, 'fbody', 'string', 'Template output micrograph name',&
+        &'Template output integrated movie name', 'e.g. mic_', .false.)
+        call preprocess%set_input('alt_ios', 3, 'pspecsz_motion_correct', 'num', 'Size of power spectrum for motion_correct',&
+        &'Size of power spectrum for motion_correct in pixels{512}', 'in pixels{512}', .false.)
+        call preprocess%set_input('alt_ios', 4, 'pspecsz_ctffind', 'num', 'Size of power spectrum for CTFFIND',&
+        &'Size of power spectrum for CTFFIND in pixels{512}', 'in pixels{512}', .false.)
+        call preprocess%set_input('alt_ios', 5, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        ! search controls
+        call preprocess%set_input('srch_ctrls', 1, trs)
+        call preprocess%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false.)
+        call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false.)
+        call preprocess%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false.)
+        call preprocess%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false.)
+        call preprocess%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas in motion_correct', '# of standard deviation threshold for outlier removal in motion_correct{6}', '{6}', .false.)
+        call preprocess%set_input('srch_ctrls', 7, 'dfmin', 'num', 'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false.)
+        call preprocess%set_input('srch_ctrls', 8, 'dfmax', 'num', 'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false.)
+        call preprocess%set_input('srch_ctrls', 9, 'dfstep', 'num', 'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false.)
+        call preprocess%set_input('srch_ctrls',10, 'astigtol', 'num', 'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.1}', 'in microns', .false.)
+        call preprocess%set_input('srch_ctrls',11, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false.)
+        call preprocess%set_input('srch_ctrls',12, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
+        & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false.)
+        call preprocess%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false.)
+        ! filter controls
+        call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false.)
+        call preprocess%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false.)
+        call preprocess%set_input('filt_ctrls', 3, 'lp_ctffind', 'num', 'Low-pass limit for CTF parameter estimation',&
+        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false.)
+        call preprocess%set_input('filt_ctrls', 4, 'hp_ctffind', 'num', 'High-pass limit for CTF parameter estimation',&
+        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false.)
+        call preprocess%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
+        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call preprocess%set_input('comp_ctrls', 1, nparts)
+        preprocess%comp_ctrls(1)%required = .true.
+        call preprocess%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_preprocess
+
     subroutine new_postprocess
         ! PROGRAM SPECIFICATION
         call postprocess%new(&
@@ -809,7 +887,7 @@ contains
         ! parameter input/output
         call motion_correct%set_input('parm_ios', 1, smpd)
         call motion_correct%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false.)
-        call motion_correct%set_input('parm_ios', 3, 'kv', 'num', 'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false.)
+        call motion_correct%set_input('parm_ios', 3, kv)
         call motion_correct%set_input('parm_ios', 4, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false.)
         call motion_correct%set_input('parm_ios', 5, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false.)
         call motion_correct%set_input('parm_ios', 6, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false.)
@@ -821,7 +899,7 @@ contains
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
         call motion_correct%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial iteration', 'Initial iteration', '...', .false.)
-        call motion_correct%set_input('srch_ctrls', 3, 'nfranesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false.)
+        call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false.)
         call motion_correct%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false.)
         call motion_correct%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false.)
         call motion_correct%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas', '# of standard deviation threshold for outlier removal', '{6}', .false.)
