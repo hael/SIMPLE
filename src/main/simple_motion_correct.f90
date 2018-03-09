@@ -36,7 +36,7 @@ integer                         :: nframes        = 0         !< number of frame
 integer                         :: fixed_frame    = 0         !< fixed frame of reference (0,0)
 integer                         :: ldim(3)        = [0,0,0]   !< logical dimension of frame
 integer                         :: ldim_scaled(3) = [0,0,0]   !< shrunken logical dimension of frame
-real                            :: maxshift       = 0.        !< maximum halfwidth shift
+real                            :: maxHWshift       = 0.      !< maximum halfwidth shift
 real                            :: hp             = 0.        !< high-pass limit
 real                            :: lp             = 0.        !< low-pass limit
 real                            :: resstep        = 0.        !< resolution step size (in angstrom)
@@ -83,8 +83,8 @@ contains
             return
         endif
         ! make search object ready
-        lims(:,1) = -maxshift
-        lims(:,2) =  maxshift
+        lims(:,1) = -maxHWshift
+        lims(:,2) =  maxHWshift
         if( str_has_substr(p%opt,'bfgs') ) then
             call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims, 'lbfgsb', &
                 motion_correct_ftol = p%motion_correctftol, motion_correct_gtol = p%motion_correctgtol)
@@ -245,7 +245,7 @@ contains
         DebugPrint 'logical dimension of frame: ',        ldim
         DebugPrint 'scaled logical dimension of frame: ', ldim_scaled
         DebugPrint 'number of frames: ',                  nframes
-        maxshift = p%trs/p%scale
+        maxHWshift = p%trs/p%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
         fixed_frame = nint(real(nframes)/2.)
         ! set reslims
@@ -260,7 +260,7 @@ contains
             opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
             frameweights_saved(nframes), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct')
-a       corrmat = 0.
+        corrmat = 0.
         corrs   = 0.
         call frame_tmp%new(ldim, smpd)
         ! allocate padded matrix
@@ -279,7 +279,7 @@ a       corrmat = 0.
         write(*,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
         if( any(outliers) )then ! remove the outliers & do the rest
             !$ allocate(rmat(ldim(1),ldim(2),ldim(3)), stat=alloc_stat)
-            !$ allocchk('motion_correct_init')
+            !$ if(alloc_stat/=0)call allocchk('motion_correct_init')
             do iframe=1,nframes
                 call progress(iframe, nframes)
                 call frame_tmp%read(movie_stack_fname, iframe)

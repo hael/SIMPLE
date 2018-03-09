@@ -399,7 +399,7 @@ contains
     end function file_size
 
     !> \brief  Rename or move file
-    subroutine simple_rename( filein, fileout , overwrite)
+    function simple_rename( filein, fileout , overwrite) result(file_status)
 #ifdef INTEL
         use ifport
 #elif PGI
@@ -408,11 +408,11 @@ contains
         character(len=*), intent(in) :: filein, fileout !< input filename
         logical, intent(in), optional :: overwrite
         integer :: file_status
-        logical :: ovrwrite
-        ovrwrite=.true.
-        if(present(overwrite)) ovrwrite=overwrite
+        logical :: force_overwrite
+        force_overwrite=.true.
+        if(present(overwrite)) force_overwrite=overwrite
         if( file_exists(filein) )then
-            if( file_exists(fileout) .and. (.not. ovrwrite) )&
+            if( file_exists(fileout) .and. (.not. force_overwrite) )&
                 call fileiochk( " simple_rename failed to rename file,  designated output  filename already exists "//trim(fileout))
 #if defined(INTEL)
             file_status = rename(filein, fileout)
@@ -426,7 +426,7 @@ contains
             call simple_stop( "simple_fileio::simple_rename, designated input filename doesn't exist "//trim(filein))
         end if
         if(file_status /= 0) call fileiochk( " simple_rename failed to rename file "//trim(filein), file_status)
-    end subroutine simple_rename
+    end function simple_rename
 
     !> Make directory
     subroutine mkdir( path )
@@ -435,7 +435,7 @@ contains
         logical :: dir_e
         inquire( file=trim(adjustl(path)), exist=dir_e , iostat=iostat)
         if (.not. dir_e ) then
-            call exec_cmdline('mkdir -p '//trim(adjustl(path)))
+            call exec_cmdline('mkdir -p '//trim(adjustl(path))//' || true')
         end if
     end subroutine mkdir
 

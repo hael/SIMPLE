@@ -2,15 +2,13 @@ program simple_test_units
 include 'simple_lib.f08'
 use simple_testfuns          ! use all in there
 use simple_cmd_dict,         only: test_cmd_dict
-use simple_build,            only: test_build
 use simple_ftiter,           only: test_ftiter
 use simple_ori,              only: test_ori, test_ori_dists
 use simple_oris,             only: test_oris
 use simple_image,            only: test_image
-use simple_shc_cluster,      only: test_shc_cluster
+use simple_cluster_shc,      only: test_cluster_shc
 use simple_args,             only: test_args
 use simple_online_var,       only: test_online_var
-use simple_hash,             only: test_hash
 use simple_imghead,          only: test_imghead
 use simple_ftexp_shsrch,     only: test_ftexp_shsrch
 use simple_aff_prop,     only: test_aff_prop
@@ -27,16 +25,14 @@ call simple_chdir(folder)
 call test_cmd_dict           ! pass with PGI
 call test_args               ! pass with PGI
 call test_online_var         ! pass with PGI
-call test_hash               ! pass with PGI
 call test_imghead            ! pass with PGI - 11/10/17
 call test_ori                ! pass with PGI
 call test_ori_dists          ! pass with PGI
 call test_oris(.false.)      ! pass with PGI
 call test_image(.false.)     ! NOT HAPPY
 call test_ftexp_shsrch       ! pass with PGI
-call test_shc_cluster        ! pass with PGI
+call test_cluster_shc        ! pass with PGI
 call test_ftiter             ! pass with PGI
-call test_build              !  PGI happy after comlin fpls reference fixed  - 11/10/17
 ! LOCAL TESTFUNCTIONS
 call test_multinomal         ! pass with PGI
 call test_testfuns           ! pass with PGI

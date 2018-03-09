@@ -311,7 +311,7 @@ contains
                     pixel = NINT( (2**24) * (in_buffer(i+1,j+1)-lo)/(hi-lo),kind=4)
 
                     self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
-                    self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , z'000000ff') ,kind=c_char)
+                    self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , z'000000ff') ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
                     DebugPrint (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i)*c + (j) * w * c+ 1)
                 else
@@ -536,7 +536,8 @@ contains
         status          = 1
         bmp_size        = width * height * pixel_size
         !        allocate(int32_buffer(bmp_size))
-        simple_path_str = simple_getenv('SIMPLE_PATH')
+        status = simple_getenv('SIMPLE_PATH', simple_path_str)
+        if(status/=0) call simple_stop(" SIMPLE_PATH not found in environment ")
         print *,"test_jpg_export: Starting"
         allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")
         allocate(cmd, source="cp "//trim(adjustl(testimg))//" ./; convert testimg.jpg -colorspace Gray  test.jpg")

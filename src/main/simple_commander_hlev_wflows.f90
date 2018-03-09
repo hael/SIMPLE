@@ -239,7 +239,7 @@ contains
         integer               :: ncavgs, orig_box, box, istk
         character(len=2)      :: str_state
         character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
-        character(len=STDLEN) :: vol_iter
+        integer               :: status
         logical               :: srch4symaxis, doautoscale
         ! set cline defaults
         call cline%set('eo', 'no')
@@ -432,7 +432,7 @@ contains
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
             call xreconstruct3D%execute(cline_reconstruct3D)
-            call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
+            status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
             ! refinement step needs to use iter dependent vol/oritab
             call cline_refine3D_refine%set('vol1', trim(vol_iter))
@@ -469,9 +469,9 @@ contains
             ! re-reconstruct volume
             call cline_reconstruct3D%set('projfile',WORK_PROJFILE)
             call xreconstruct3D%execute(cline_reconstruct3D)
-            call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+            status=simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         else
-            call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
+            status=simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
         endif
         call work_proj%kill()
         ! update the original project cls3D segment with orientations
@@ -645,13 +645,13 @@ contains
             call cline%set('pgrp', 'c1')
         endif
         call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
-        rename_stat = rename(trim(VOL_FBODY)//one//p_master%ext, trim(CLUSTER3D_VOL)//p_master%ext)
+        rename_stat = simple_rename(trim(VOL_FBODY)//one//p_master%ext, trim(CLUSTER3D_VOL)//p_master%ext)
         if( p_master%eo .ne. 'no' )then
-            rename_stat = rename(trim(VOL_FBODY)//one//'_even'//p_master%ext, trim(CLUSTER3D_VOL)//'_even'//p_master%ext)
-            rename_stat = rename(trim(VOL_FBODY)//one//'_odd'//p_master%ext,  trim(CLUSTER3D_VOL)//'_odd'//p_master%ext)
-            rename_stat = rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
-            rename_stat = rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
-            rename_stat = rename(trim(ANISOLP_FBODY)//one//p_master%ext, trim(CLUSTER3D_ANISOLP)//p_master%ext)
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//p_master%ext, trim(CLUSTER3D_VOL)//'_even'//p_master%ext)
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//p_master%ext,  trim(CLUSTER3D_VOL)//'_odd'//p_master%ext)
+            rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
+            rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
+            rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//p_master%ext, trim(CLUSTER3D_ANISOLP)//p_master%ext)
         endif
         ! THis is experimental to keep FCs & RHO matrices from mixed model
         ! do ipart = 1, p_master%nparts
@@ -885,34 +885,34 @@ contains
                         print *, 'File missing: ', trim(fname)
                         error = .true.
                     else
-                        rename_stat = rename(fname, dir//trim(fname))
+                        rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                     ! FRC
                     fname = trim(FRCS_FBODY)//str_state//BIN_EXT
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        rename_stat = rename(fname, dir//trim(fname))
+                        rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                     ! aniso
                     fname = trim(ANISOLP_FBODY)//str_state//p_master%ext
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        rename_stat = rename(fname, dir//trim(fname))
+                        rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                     ! e/o
                     fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_even')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        rename_stat = rename(fname, dir//trim(fname))
+                        rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                     fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_odd')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        rename_stat = rename(fname, dir//trim(fname))
+                        rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                 endif
                 ! volume
@@ -922,7 +922,7 @@ contains
                 else
                     fname = trim(p_master%vols(state))
                     p_master%vols(state) = dir//trim(fname) ! name change
-                    rename_stat = rename(fname, p_master%vols(state))
+                    rename_stat = simple_rename(fname, p_master%vols(state))
                 endif
             endif
             ! mask volume
@@ -1051,11 +1051,11 @@ contains
                         dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p_master%ext
                         rename_stat = simple_rename(src, dist)
                         src = 'RESOLUTION_STATE'//one//'_ITER'//str_iter
-                        rename_stat = rename(src, dir//src)
+                        rename_stat = simple_rename(src, dir//src)
                     endif
                     ! orientation document
                     src = trim(REFINE3D_ITER_FBODY)//str_iter//trim(METADATA_EXT)
-                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                 enddo
                 ! resolution measures
                 if( p_master%eo.ne.'no')then

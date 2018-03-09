@@ -1,9 +1,9 @@
 module simple_prime3D_srch_tester
 include 'simple_lib.f08'
-use simple_hadamard_common    ! singleton
-use simple_hadamard3D_matcher ! singleton
+use simple_strategy2D3D_common    ! singleton
+use simple_strategy3D_matcher ! singleton
 use simple_cmdline            ! singleton
-use simple_prime3D_srch,       only: prime3D_srch
+use simple_strategy3D_srch,       only: strategy3D_srch
 use simple_oris,               only: oris
 use simple_ori,                only: ori
 use simple_build,              only: build
@@ -38,7 +38,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
     !     type(cmdline) :: cline_local
-    !     ! refine = no; nstates=1; 
+    !     ! refine = no; nstates=1;
     !     write(*,*)'>>> REFINE=NO; NSTATES=1'
     !     cline_local = cline
     !     call cline_local%set('refine', 'no')
@@ -57,8 +57,8 @@ contains
     !     call test_prep4srch
     !     call test_prepcorr4srch
     !     call test_prep_reforis( cline_local )
-    !     call shutdown_testenv        
-    !     ! ! refine = no; nstates=4; 
+    !     call shutdown_testenv
+    !     ! ! refine = no; nstates=4;
     !     write(*,*)'>>> REFINE=NO; NSTATES=',NSTATES
     !     cline_local = cline
     !     call cline_local%set('refine', 'no')
@@ -123,7 +123,7 @@ contains
     !     !call o_ptcls%rnd_inpls
     !     call o_ptcls%set_all2single('lp',LPLIM)
     !     call o_ptcls%write( orisname )
-    !     VerbosePrint 'orientations generated' 
+    !     VerbosePrint 'orientations generated'
     !     ! create parameters and build
     !     p = params(cline)                     ! parameters generated
     !     ! instantiates builder
@@ -174,7 +174,7 @@ contains
     !     ! because of the use simple_hadamard3D_matcher statement in the top
     !     ! now instantiatable, so create it
     !     ! call primesrch3D%new(pftcc, b%a, b%e, p)
-    !     VerbosePrint 'end setup_testenv' 
+    !     VerbosePrint 'end setup_testenv'
     ! end subroutine setup_testenv
 
     ! subroutine test_prep4srch
@@ -187,7 +187,7 @@ contains
     !     ! do i=1,NPROJS
     !     !     call primesrch3D%new(i, pftcc, b%a, b%e, p)
     !     !     o = b%a%get_ori(i)
-    !     !     o_saved = o 
+    !     !     o_saved = o
     !     !     call o%rnd_inpl( p%trs )
     !     !     call o%set('proj',real(i))
     !     !     state = nint(o%get('state'))
@@ -207,7 +207,7 @@ contains
     !     !     call b%a%set_ori(i,o_saved)
     !     ! enddo
     !     ! other cases
-    !     VerbosePrint 'end setup_prep4srch' 
+    !     VerbosePrint 'end setup_prep4srch'
     ! end subroutine test_prep4srch
 
     ! subroutine test_prepcorr4srch
@@ -233,7 +233,7 @@ contains
     !     !                     stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 1'
     !     !                 endif
     !     !             else
-                        
+
     !     !                 if( corr < 0.99 )then
     !     !                     print *, 'corr = ', corr
     !     !                     stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 2'
@@ -252,7 +252,7 @@ contains
     !     !         endif
     !     !     enddo
     !     ! endif
-    !     VerbosePrint 'end setup_prepcorr4srch' 
+    !     VerbosePrint 'end setup_prepcorr4srch'
     ! end subroutine test_prepcorr4srch
 
     ! subroutine test_prep_reforis( cline)
@@ -266,7 +266,7 @@ contains
     !     select case(p%refine)
     !         case('no','shc')
     !             ! if( p%nstates==1 )then
-    !             ! 
+    !             !
     !             ! else
     !             !     test_os = oris( p%nspace*p%nstates )
     !             !     do iptcl=1,p%nptcls
@@ -315,11 +315,11 @@ contains
     !             !         enddo
     !             !         deallocate( srch_order )
     !             !     enddo
-    !             ! endif    
+    !             ! endif
     !         case DEFAULT
     !             stop 'not implemented yet'
     !     end select
-    !     VerbosePrint 'end prep_reforis' 
+    !     VerbosePrint 'end prep_reforis'
     ! end subroutine test_prep_reforis
 
     ! subroutine shutdown_testenv

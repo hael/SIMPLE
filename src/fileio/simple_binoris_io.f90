@@ -3,7 +3,7 @@ module simple_binoris_io
 use simple_defs
 use simple_ori,        only: ori
 use simple_oris,       only: oris
-use simple_fileio,     only: file_exists, nlines, fileio_errmsg, fname2format
+use simple_fileio,     only: file_exists, nlines, fileiochk, fname2format
 use simple_strings,    only: str_has_substr
 use simple_sp_project, only: sp_project
 implicit none

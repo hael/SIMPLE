@@ -1,6 +1,6 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preprocess
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline
 use simple_params,              only: params
 use simple_build,               only: build
@@ -603,15 +603,13 @@ contains
             if(io_stat/=0) then
                 call fileiochk('**ERROR(simple_commander_preprocess): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
-
             call fclose(funit,errmsg='simple_commander_preprocess ; error when closing corrmat_select.bin  ')
         else
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
             call fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
-
-            call fileiochk('simple_commander_preproc ; error when opening corrmat_select.bin  ', io_stat)
+            call fileiochk('simple_commander_preprocess ; error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the write was successful
             if(io_stat/=0) then
@@ -638,7 +636,7 @@ contains
             call fileiochk('simple_commander_preprocess ; fopen error when opening '//trim(p%outfile), io_stat)
             call mkdir(p%dir_select)
             call mkdir(p%dir_reject)
-            ! write outoput & move files
+             ! write outoput & move files
             do iimg=1,nall
                 if( lselected(iimg) )then
                     write(funit,'(a)') trim(adjustl(imgnames(iimg)))
@@ -674,7 +672,7 @@ contains
         type(build)                 :: b
         type(cmdline)               :: cline_project
         type(project_commander)     :: xproject
-        integer                     :: nrots, cnt, iref, irot
+        integer                     :: nrots, cnt, iref, irot, status
         real                        :: ang, rot
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
@@ -715,7 +713,7 @@ contains
             if( p%pcontrast .eq. 'black' )then
                 call neg_imgfile('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
             else
-                call simple_rename('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext)
+                status= simple_rename('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext)
             endif
         else
             stop 'need input volume (vol1) or class averages (stk) to generate picking references'

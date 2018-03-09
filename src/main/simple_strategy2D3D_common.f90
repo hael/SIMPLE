@@ -140,7 +140,7 @@ contains
                     ! low pass limit
                     p%kfromto(2) = calc_fourier_index(resarr(lp_ind), p%boxmatch, p%smpd)
                     if( p%kfromto(2) == 1 )then
-                        stop 
+                        stop
                         call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
                     endif
                     ! set highest Fourier index for coarse grid search
@@ -480,7 +480,7 @@ contains
                 sharg = arg(xyz_in)
                 if( sharg > CENTHRESH )then
                     ! apply shift and do NOT update the corresponding class parameters
-                    call img_in%fft()
+                    call img_in%fwd_ft
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
@@ -488,7 +488,7 @@ contains
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
-                    call img_in%fft()
+                    call img_in%fwd_ft
                     call img_in%shift2Dserial(xyz(1:2))
                     call b%a%add_shift2class(icls, -xyz(1:2))
                 endif
@@ -499,13 +499,13 @@ contains
             ! anisotropic matched filter
             call b%projfrcs%frc_getter(icls, p%hpind_fsc, p%tfplan%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                call img_in%fwd_ft ! needs to be here in case the shift was never applied (above)
                 call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
                 call img_in%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space before clipping
-        call img_in%ifft()
+        call img_in%bwd_ft
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
@@ -515,7 +515,7 @@ contains
             call img_out%mask(p%msk, 'soft')
         endif
         ! move to Fourier space
-        call img_out%fft()
+        call img_out%fwd_ft
     end subroutine prep2Dref
 
     !>  \brief prepares a 2D class document with class index, resolution,
@@ -662,7 +662,7 @@ contains
             xyz = 0.
             return
         endif
-        call b%vol%fft()
+        call b%vol%fwd_ft
         if( p%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         call b%vol%shift([xyz(1),xyz(2),xyz(3)]) ! performs shift
         ! map back to particle oritentations
@@ -687,7 +687,7 @@ contains
         call b%vol%read(volfname)
         call b%vol%norm() ! because auto-normalisation on read is taken out
         if( do_center )then
-            call b%vol%fft()
+            call b%vol%fwd_ft
             call b%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
@@ -700,12 +700,12 @@ contains
             endif
             if( file_exists(fname_vol_filter) )then
                 call b%vol2%read(fname_vol_filter)
-                call b%vol%fft() ! needs to be here in case the shift was never applied (above)
+                call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
                 call b%vol%shellnorm_and_apply_filter(b%vol2)
             else
                 ! matched filter based on Rosenthal & Henderson, 2003
                 if( any(b%fsc(s,:) > 0.143) )then
-                    call b%vol%fft() ! needs to be here in case the shift was never applied (above)
+                    call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
                     filter = fsc2optlp(b%fsc(s,:))
                     call b%vol%shellnorm_and_apply_filter(filter)
                 endif
@@ -776,7 +776,7 @@ contains
                 if( present(which_iter) )then
                     ! post-process volume
                     pprocvol = add2fbody(trim(p%vols(s)), p%ext, '_pproc')
-                    call b%vol%fft()
+                    call b%vol%fwd_ft
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
                     call b%vol%ifft()
@@ -831,18 +831,18 @@ contains
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                  ! need to put the sum back at lowres for the eo pairs
-                call b%vol%fft()
+                call b%vol%fwd_ft
                 call b%vol2%zero_and_unflag_ft
                 call b%vol2%read(p%vols_even(s))
-                call b%vol2%fft()
+                call b%vol2%fwd_ft
                 call b%vol2%insert_lowres(b%vol, find4eoavg)
-                call b%vol2%ifft()
+                call b%vol2%bwd_ft
                 call b%vol2%write(p%vols_even(s), del_if_exists=.true.)
                 call b%vol2%zero_and_unflag_ft
                 call b%vol2%read(p%vols_odd(s))
-                call b%vol2%fft()
+                call b%vol2%fwd_ft
                 call b%vol2%insert_lowres(b%vol, find4eoavg)
-                call b%vol2%ifft()
+                call b%vol2%bwd_ft
                 call b%vol2%write(p%vols_odd(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
@@ -900,8 +900,8 @@ contains
         allocate(frc(even_imgs(1)%get_filtsz()))
         !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)
         do iproj=1,NSPACE_BALANCE
-            call even_imgs(iproj)%fft()
-            call odd_imgs(iproj)%fft()
+            call even_imgs(iproj)%fwd_ft
+            call odd_imgs(iproj)%fwd_ft
             call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)
             if( p%tfplan%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
             call projfrcs%set_frc(iproj, frc, state)

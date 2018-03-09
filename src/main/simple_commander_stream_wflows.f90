@@ -4,9 +4,11 @@ include 'simple_lib.f08'
 use simple_cmdline,              only: cmdline
 use simple_params,               only: params
 use simple_commander_base,       only: commander_base
-use simple_commander_preprocess, only: preprocess_commander
-use simple_qsys_env,             only: qsys_env
+use simple_oris,                 only: oris
+use simple_image,                only: image
 use simple_sp_project,           only: sp_project
+use simple_binoris_io              ! use all in there
+use simple_qsys_env,             only: qsys_env
 use simple_qsys_funs,            only: qsys_cleanup
 implicit none
 

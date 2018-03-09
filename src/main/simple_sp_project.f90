@@ -222,7 +222,7 @@ contains
         endif
         ! compenv has to be filled as strings as it is used as a string only dictionnary
         ! get from environment
-        iostat = simple_getenv('SIMPLE_PATH', env_var)
+        iostat  = simple_getenv('SIMPLE_PATH', env_var)
         if( iostat /= 0 )then
             write(*,*) 'ERROR! SIMPLE_PATH is not defined in your shell environment!'
             write(*,*) 'Please refer to installation documentation for correct system configuration'
@@ -230,10 +230,11 @@ contains
         else
             call self%compenv%set(1, 'simple_path', trim(env_var))
         endif
-        iostat = simple_getenv('SIMPLE_QSYS', env_var)
-        if( iostat/=0 )then
+        iostat  = simple_getenv('SIMPLE_QSYS', env_var)
+        if( iostat /= 0 )then
             stop 'SIMPLE_QSYS is not defined in your environment.'
         else
+            iostat  = simple_getenv('SIMPLE_QSYS', env_var)
             call self%compenv%set(1, 'qsys_name', trim(env_var))
         endif
         iostat = simple_getenv('SIMPLE_EMAIL', env_var)

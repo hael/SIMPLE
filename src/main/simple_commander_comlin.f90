@@ -7,6 +7,7 @@ use simple_oris,           only: oris
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_projector_hlev, only: project
 use simple_sp_project,     only: sp_project
 use simple_comlin_srch     ! use all in there
 use simple_binoris_io      ! use all in there
@@ -39,10 +40,10 @@ contains
         integer                      :: bestloc(1), nbest_here, noris
         real                         :: shvec(3)
         character(len=STDLEN)        :: fname_finished
-        character(len=*), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
-        character(len=*), parameter :: SYMPROJSTK = 'sym_projs.mrc'
-        character(len=*), parameter :: SYMPROJTAB = 'sym_projs'//trim(TXT_EXT)
-        integer,          parameter :: NBEST = 30
+        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
+        character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
+        character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//trim(TXT_EXT)
+        integer,           parameter :: NBEST = 30
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         p = params(cline)                                                 ! parameters generated

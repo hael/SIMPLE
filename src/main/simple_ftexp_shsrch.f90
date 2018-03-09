@@ -120,15 +120,15 @@ contains
     !> Main search routine
     function ftexp_shsrch_minimize( prev_corr, prev_shift ) result( cxy )
         real, optional, intent(in) :: prev_corr, prev_shift(2)
-        real :: cxy(3), maxshift, maxlim, lims(2,2)
+        real :: cxy(3), max_shift, maxlim, lims(2,2)
         class(*), pointer :: fun_self => null()
         if( present(prev_shift) )then
-            maxshift = maxval(abs(prev_shift))
+            max_shift = maxval(abs(prev_shift))
             maxlim   = maxval(abs(ospec%limits))
-            if( maxshift > maxlim )then
+            if( max_shift > maxlim )then
                 ! re-specify the limits
-                lims(:,1) = -maxshift
-                lims(:,2) = maxshift
+                lims(:,1) = -max_shift
+                lims(:,2) = max_shift
                 call ospec%specify(opt_str, 2, ftol=motion_correctftol, gtol=motion_correctgtol, limits=lims, nrestarts=nrestarts)
                 ! set optimizer cost function
                 if( opt_str == 'lbfgsb' ) then

@@ -313,8 +313,8 @@ contains
     subroutine sum_reduce( self, self_in )
          class(reconstructor_eo), intent(inout) :: self
          class(reconstructor_eo), intent(in)    :: self_in
-         call self%even%sum(self_in%even)
-         call self%odd%sum(self_in%odd)
+         call self%even%sum_reduce(self_in%even)
+         call self%odd%sum_reduce(self_in%odd)
     end subroutine sum_reduce
 
     !>  \brief compress e/o
