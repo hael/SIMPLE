@@ -5,7 +5,7 @@ implicit none
 public :: make_user_interface
 public :: cluster2D, cluster2D_stream, make_cavgs
 public :: refine3D, initial_3Dmodel
-public :: preprocess, extract, motion_correct, pick
+public :: preprocess, extract, motion_correct, pick, ctf_estimate
 public :: postprocess
 private
 
@@ -61,6 +61,7 @@ type(simple_program), protected :: initial_3Dmodel
 type(simple_program), protected :: preprocess
 type(simple_program), protected :: extract
 type(simple_program), protected :: motion_correct
+type(simple_program), protected :: ctf_estimate
 type(simple_program), protected :: pick
 type(simple_program), protected :: postprocess
 type(simple_program), protected :: make_cavgs
@@ -72,6 +73,7 @@ type(simple_input_param) :: deftab
 type(simple_input_param) :: filwidth
 type(simple_input_param) :: frac
 type(simple_input_param) :: hp
+type(simple_input_param) :: lp
 type(simple_input_param) :: inner
 type(simple_input_param) :: maxits
 type(simple_input_param) :: msk
@@ -110,6 +112,7 @@ contains
         call new_motion_correct
         call new_preprocess
         call new_pick
+        call new_ctf_estimate
         ! ...
     end subroutine make_user_interface
 
@@ -131,6 +134,7 @@ contains
         &'max shift per iteration in pixels', .false.)
         call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false.)
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false.)
+        call set_param(lp,            'hp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'high-pass limit in Angstroms', .false.)
         call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true.)
         call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
         &'inner mask radius in pixels', .false.)
@@ -814,6 +818,48 @@ contains
         preprocess%comp_ctrls(1)%required = .true.
         call preprocess%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess
+
+    subroutine new_ctf_estimate
+        ! PROGRAM SPECIFICATION
+        call ctf_estimate%new(&
+        &'ctf_estimate', & ! name
+        &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_short
+        &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_long
+        &'simple_distr_exec',&                                                 ! executable
+        &1, 5, 2, 4, 2, 0, 2)                                                ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call ctf_estimate%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
+        &'List of micrographs', 'list input e.g. mics.txt', .true.)
+        ! parameter input/output
+        call ctf_estimate%set_input('parm_ios', 1, smpd)
+        call ctf_estimate%set_input('parm_ios', 2, kv)
+        ctf_estimate%parm_ios(2)%required = .true.
+        call ctf_estimate%set_input('parm_ios', 3, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false.)
+        ctf_estimate%parm_ios(3)%required = .true.
+        call ctf_estimate%set_input('parm_ios', 4, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false.)
+        ctf_estimate%parm_ios(4)%required = .true.
+        call ctf_estimate%set_input('parm_ios', 5, phaseplate)
+        ! alternative inputs
+        call ctf_estimate%set_input('alt_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
+        call ctf_estimate%set_input('alt_ios', 2, 'pspecsz', 'num', 'Size of power spectrum',&
+        &'Size of power spectrum image in pixels{512}', 'in pixels{512}', .false.)
+        ! search controls
+        call ctf_estimate%set_input('srch_ctrls', 1, 'dfmin', 'num', 'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false.)
+        call ctf_estimate%set_input('srch_ctrls', 2, 'dfmax', 'num', 'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false.)
+        call ctf_estimate%set_input('srch_ctrls', 3, 'dfstep', 'num', 'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false.)
+        call ctf_estimate%set_input('srch_ctrls', 4, 'astigtol', 'num', 'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.1}', 'in microns', .false.)
+        ! filter controls
+        call ctf_estimate%set_input('filt_ctrls', 1, lp)
+        call ctf_estimate%set_input('filt_ctrls', 2, hp)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call ctf_estimate%set_input('comp_ctrls', 1, nparts)
+        ctf_estimate%comp_ctrls(1)%required = .true.
+        call ctf_estimate%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_ctf_estimate
+
 
     subroutine new_pick
         ! PROGRAM SPECIFICATION

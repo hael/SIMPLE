@@ -23,4 +23,6 @@ call preprocess%print_ui()
 call preprocess%write2json()
 call pick%print_ui()
 call pick%write2json()
+call ctf_estimate%print_ui()
+call ctf_estimate%write2json()
 end program simple_test_ui
