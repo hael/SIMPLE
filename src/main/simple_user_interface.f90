@@ -3,9 +3,10 @@ use simple_defs
 implicit none
 
 public :: make_user_interface
-public :: cluster2D, refine3D, initial_3Dmodel, make_cavgs
-public :: cavgassemble
-public :: extract, map2ptcls, postprocess, scale
+public :: cluster2D, cluster2D_stream, make_cavgs
+public :: refine3D, initial_3Dmodel
+public :: extract, motion_correct
+public :: postprocess
 private
 
 logical, parameter :: DEBUG = .false.
@@ -54,13 +55,12 @@ end type simple_program
 
 ! declare protected program specifications here
 type(simple_program), protected :: cluster2D
+type(simple_program), protected :: cluster2D_stream
 type(simple_program), protected :: refine3D
 type(simple_program), protected :: initial_3Dmodel
 type(simple_program), protected :: extract
-type(simple_program), protected :: map2ptcls
+type(simple_program), protected :: motion_correct
 type(simple_program), protected :: postprocess
-type(simple_program), protected :: scale
-type(simple_program), protected :: cavgassemble
 type(simple_program), protected :: make_cavgs
 
 ! declare common params here, with name same as flag
@@ -98,14 +98,13 @@ contains
     subroutine make_user_interface
         call set_common_params
         call new_cluster2D
+        call new_cluster2D_stream
         call new_refine3D
         call new_initial_3Dmodel
         call new_postprocess
         call new_extract
-        call new_scale
-        call new_map2ptcls
-        call new_cavgassemble
         call new_make_cavgs
+        call new_motion_correct
         ! ...
     end subroutine make_user_interface
 
@@ -639,6 +638,60 @@ contains
         call cluster2D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cluster2D
 
+    subroutine new_cluster2D_stream
+        ! PROGRAM SPECIFICATION
+        call cluster2D_stream%new(&
+        &'cluster2D_stream',& ! name
+        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
+        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
+        &'simple_distr_exec',&                                                  ! executable
+        &1, 3, 0, 6, 5, 3, 2)                                                   ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cluster2D_stream%set_input('img_ios', 1, 'dir_ptcls', 'file', 'Particles directory',&
+        &'Directory where particles and CTF parameters are automatically detected', 'e.g. extract/', .true.)
+        ! parameter input/output
+        call cluster2D_stream%set_input('parm_ios', 1, ctf)
+        call cluster2D_stream%set_input('parm_ios', 2, smpd)
+        call cluster2D_stream%set_input('parm_ios', 3, phaseplate)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        call cluster2D_stream%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting # of classes',&
+        &'Minimum number of class averagages to initiate 2D classification', '', .true.)
+        cluster2D_stream%srch_ctrls(1)%required = .true.
+        call cluster2D_stream%set_input('srch_ctrls', 2, 'nptcls_per_cls', 'num', '# Particles per class',&
+        &'Number of incoming particles for which one new class average is generated', '', .true.)
+        cluster2D_stream%srch_ctrls(2)%required = .true.
+        call cluster2D_stream%set_input('srch_ctrls', 3, trs)
+        call cluster2D_stream%set_input('srch_ctrls', 4, objfun)
+        call cluster2D_stream%set_input('srch_ctrls', 5, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
+        &'(yes|no){yes}', .false.)
+        call cluster2D_stream%set_input('srch_ctrls', 6, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false.)
+        ! filter controls
+        call cluster2D_stream%set_input('filt_ctrls', 1, hp)
+        call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false.)
+        call cluster2D_stream%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
+        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false.)
+        call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
+        &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
+        '(yes|no){yes}', .false.)
+        call cluster2D_stream%set_input('filt_ctrls', 5, 'weights2D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
+        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
+        ! mask controls
+        call cluster2D_stream%set_input('mask_ctrls', 1, msk)
+        call cluster2D_stream%set_input('mask_ctrls', 2, inner)
+        call cluster2D_stream%set_input('mask_ctrls', 3, filwidth)
+        ! computer controls
+        call cluster2D_stream%set_input('comp_ctrls', 1, nparts)
+        cluster2D_stream%comp_ctrls(1)%required = .true.
+        call cluster2D_stream%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_cluster2D_stream
+
     subroutine new_initial_3Dmodel
         ! PROGRAM SPECIFICATION
         call initial_3Dmodel%new(&
@@ -732,6 +785,59 @@ contains
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess
 
+    subroutine new_motion_correct
+        ! PROGRAM SPECIFICATION
+        call motion_correct%new(&
+        &'motion_correct', & ! name
+        &'is a program that performs for movie alignment',&                                     ! descr_short
+        &'is a distributed workflow for movie alignment or or motion correction based on the same&
+        & principal strategy as Grigorieffs program (hence the name). There are two important&
+        & differences: automatic weighting of the frames using a correlation-based M-estimator and&
+        & continuous optimisation of the shift parameters. Input is a textfile with absolute paths&
+        & to movie files in addition to a few input parameters, some of which deserve a comment. If&
+        & dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
+        & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
+        & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
+        & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
+        & contiguous subset of frames will be averaged without any dose-weighting applied.',&   ! descr_long
+        &'simple_distr_exec',&                                                                  ! executable
+        &1, 6, 3, 6, 2, 0, 2)                                                                   ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call motion_correct%set_input('img_ios', 1, 'filetab', 'file', 'Movies list',&
+        &'List of movies to integerate', 'list input e.g. movs.txt', .true.)
+        ! parameter input/output
+        call motion_correct%set_input('parm_ios', 1, smpd)
+        call motion_correct%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false.)
+        call motion_correct%set_input('parm_ios', 3, 'kv', 'num', 'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false.)
+        call motion_correct%set_input('parm_ios', 4, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false.)
+        call motion_correct%set_input('parm_ios', 5, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false.)
+        call motion_correct%set_input('parm_ios', 6, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false.)
+        ! alternative inputs
+        call motion_correct%set_input('alt_ios', 1, 'fbody', 'string', 'Template output micrograph name',&
+        &'Template output integrated movie name', 'e.g. mic_', .false.)
+        call motion_correct%set_input('alt_ios', 2, 'pspecsz', 'num', 'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false.)
+        call motion_correct%set_input('alt_ios', 3, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        ! search controls
+        call motion_correct%set_input('srch_ctrls', 1, trs)
+        call motion_correct%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial iteration', 'Initial iteration', '...', .false.)
+        call motion_correct%set_input('srch_ctrls', 3, 'nfranesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false.)
+        call motion_correct%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false.)
+        call motion_correct%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false.)
+        call motion_correct%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas', '# of standard deviation threshold for outlier removal', '{6}', .false.)
+        ! filter controls
+        call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false.)
+        call motion_correct%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false.)        ! mask controls
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call motion_correct%set_input('comp_ctrls', 1, nparts)
+        motion_correct%comp_ctrls(1)%required = .true.
+        call motion_correct%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_motion_correct
+
     subroutine new_extract
         ! PROGRAM SPECIFICATION
         call extract%new(&
@@ -772,124 +878,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_extract
-
-    subroutine new_scale
-        ! PROGRAM SPECIFICATION
-        call scale%new(&
-        &'scale', & ! name
-        &'is a program for re-scaling MRC & SPIDER stacks and volumes',&                        ! descr_short
-        &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
-        &'simple_exec',&                                                                        ! executable
-        &3, 5, 3, 0, 0, 1, 1)                                                                   ! # entries in each group
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call scale%set_input('img_ios', 1, stk)
-        scale%img_ios(1)%required = .false.
-        call scale%set_input('img_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
-        &'input volume e.g. recvol.mrc', .false.)
-        call scale%set_input('img_ios', 3, 'filetab', 'file', 'Stacks list',&
-        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false.)
-        ! parameter input/output
-        call scale%set_input('parm_ios', 1, smpd)
-        call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'in pixels', .false.)
-        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1)', '(0-1)', .false.)
-        call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false.)
-        call scale%set_input('parm_ios', 5, 'clip', 'num', 'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false.)
-        ! alternative inputs
-        call scale%set_input('alt_ios', 1, 'outvol', 'file', 'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false.)
-        call scale%set_input('alt_ios', 2, 'outstk', 'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false.)
-        call scale%set_input('alt_ios', 3, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false.)
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        call scale%set_input('mask_ctrls', 1, msk)
-        scale%mask_ctrls(1)%required = .false.
-        ! computer controls
-        call scale%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_scale
-
-    subroutine new_map2ptcls
-        ! PROGRAM SPECIFICATION
-        call map2ptcls%new(&
-        &'map2ptcls', &                                            ! name
-        &'is a program for mapping parameters that have been obtained using class averages to &
-        & the individual particle images',&                        ! descr_short
-        &'is a program for mapping parameters that have been obtained using class averages to &
-        & the individual particle images',&                         ! descr_long
-        &'simple_exec',&                                            ! executable
-        &4, 4, 1, 0, 0, 0, 1)                                       ! # entries in each group
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call map2ptcls%set_input('img_ios', 1, stk)
-        scale%img_ios(1)%required = .false.
-        call map2ptcls%set_input('img_ios', 2, stktab)
-        scale%img_ios(2)%required = .false.
-        call map2ptcls%set_input('img_ios', 3, 'stk2', 'file', 'Stack of selected class-averages', 'Stack of selected class-averages',&
-        &'input volume e.g. selected.mrc', .false.)
-        call map2ptcls%set_input('img_ios', 4, 'stk3', 'file', 'Stack of original class-averages', 'Can be identical to stk2',&
-        &'input volume e.g. cavgs_iter016_ranked.mrc', .true.)
-        ! parameter input/output
-        call map2ptcls%set_input('parm_ios', 1, 'oritab', 'file', '2D Orientation and CTF parameters file for stk3',&
-         '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .true.)
-        call map2ptcls%set_input('parm_ios', 2, 'oritab3D', 'file', '3D Orientations file for stk2',&
-         '3D Orientations file for stk2 in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false.)
-        call map2ptcls%set_input('parm_ios', 3, 'deftab', 'file', 'CTF parameter file', 'CTF parameter file congruent with stk/stktab &
-        &in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values','.simple|.txt parameter file', .false.)
-        call map2ptcls%set_input('parm_ios', 4, 'mul', 'num', 'Shift multiplication factor{1}', 'Origin shift multiplication factor{1}','(0-1){1}', .false.)
-        ! alternative inputs
-        call map2ptcls%set_input('alt_ios', 1, outfile)
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call map2ptcls%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_map2ptcls
-
-    subroutine new_cavgassemble
-        ! PROGRAM SPECIFICATION
-        call cavgassemble%new(&
-        &'cavgassemble', &     ! name
-        &'is a program that assembles class averages generated by cluster2D',&  ! descr_short
-        &'is a program that assembles class averages when the clustering&
-        & program (cluster2D) has been executed in distributed mode',&          ! descr_long
-        &'simple_private_exec',&                                                ! executable
-        &3, 5, 1, 0, 0, 0, 2)                                                   ! # entries in each group
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call cavgassemble%set_input('img_ios', 1, stk)
-        call cavgassemble%set_input('img_ios', 2, stktab)
-        call cavgassemble%set_input('img_ios', 3, 'refs', 'file', '2D references',&
-        &'2D references', 'xxx.mrc file containing references', .false.)
-        ! parameter input/output
-        call cavgassemble%set_input('parm_ios', 1, smpd)
-        call cavgassemble%set_input('parm_ios', 2, ncls)
-        cavgassemble%parm_ios(2)%required = .true.
-        call cavgassemble%set_input('parm_ios', 3, ctf)
-        call cavgassemble%set_input('parm_ios', 4, phaseplate)
-        call cavgassemble%set_input('parm_ios', 5, 'oritab', 'file', '2D Orientation and CTF parameters',&
-         '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .true.)
-        ! alternative inputs
-        call cavgassemble%set_input('alt_ios', 1, 'which_iter', 'num', 'Iteration #',&
-        &'Iteration #', '...', .false.)
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call cavgassemble%set_input('comp_ctrls', 1, nparts)
-        cavgassemble%comp_ctrls(1)%required = .true.
-        call cavgassemble%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_cavgassemble
 
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION
@@ -932,45 +920,5 @@ contains
         make_cavgs%comp_ctrls(1)%required = .true.
         call make_cavgs%set_input('comp_ctrls', 2, nthr)
     end subroutine new_make_cavgs
-
-    ! subroutine new_make_cavgs
-    !     ! PROGRAM SPECIFICATION
-    !     call make_cavgs%new(&
-    !     &'make_cavgs', &     ! name
-    !     &'is used to produce  class averages',&     ! descr_short
-    !     &'is used to produce class averages or initial random references&
-    !     &for cluster2D execution',&                 ! descr_long
-    !     &'simple_private_exec',&                    ! executable
-    !     &3, 6, 4, 0, 0, 1, 1)                       ! # entries in each group
-    !     ! INPUT PARAMETER SPECIFICATIONS
-    !     ! image input/output
-    !     call make_cavgs%set_input('img_ios', 1, stk)
-    !     call make_cavgs%set_input('img_ios', 2, stktab)
-    !     call make_cavgs%set_input('img_ios', 3, 'refs', 'file', 'Output 2D references',&
-    !     &'Output 2D references', 'xxx.mrc file containing references', .false.)
-    !     ! parameter input/output
-    !     call make_cavgs%set_input('parm_ios', 1, smpd)
-    !     make_cavgs%parm_ios(1)%required = .true.
-    !     call make_cavgs%set_input('parm_ios', 2, ncls)
-    !     call make_cavgs%set_input('parm_ios', 3, ctf)
-    !     call make_cavgs%set_input('parm_ios', 4, phaseplate)
-    !     call make_cavgs%set_input('parm_ios', 5, deftab)
-    !     call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D Orientation and CTF parameters',&
-    !      '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
-    !     &'.simple|.txt parameter file', .false.)
-    !     ! alternative inputs
-    !     call make_cavgs%set_input('alt_ios', 1, 'mul', 'num', 'Shift multiplication factor{1}', 'Origin shift multiplication factor{1}','(0-1){1}', .false.)
-    !     call make_cavgs%set_input('alt_ios', 2, outfile)
-    !     call make_cavgs%set_input('alt_ios', 3, weights2D)
-    !     call make_cavgs%set_input('alt_ios', 4, remap_classes)
-    !     ! search controls
-    !     ! <empty>
-    !     ! filter controls
-    !     ! <empty>
-    !     ! mask controls
-    !     call make_cavgs%set_input('mask_ctrls', 1, filwidth)
-    !     ! computer controls
-    !     call make_cavgs%set_input('comp_ctrls', 2, nthr)
-    ! end subroutine new_make_cavgs
 
 end module simple_user_interface

@@ -499,10 +499,11 @@ contains
         call cline_refine3D2%set('refine', 'multi')
         call cline_refine3D1%set('dynlp', 'no')
         call cline_refine3D1%delete('oritab2')
+        call cline_refine3D1%delete('update_frac')
         call cline_refine3D1%set('frcs', 'cluster3D_frcs.bin') !! mixed model FRCs
         call cline_refine3D2%set('dynlp', 'no')
         call cline_refine3D2%delete('oritab2')
-        if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.2)
+        if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
         call cline_postprocess%set('prg', 'postprocess')
