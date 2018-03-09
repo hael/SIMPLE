@@ -1,6 +1,10 @@
 ! routines for distributed SIMPLE execution
 module simple_map_reduce
-include 'simple_lib.f08'
+ use simple_defs
+ use simple_strings, only:int2str, int2str_pad
+ use simple_syslib, only: allocchk
+ use simple_fileio, only: fopen, fileiochk, fclose
+ use simple_jiffys, only: progress
 
 implicit none
 private

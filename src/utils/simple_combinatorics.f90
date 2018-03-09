@@ -1,6 +1,8 @@
 ! combinatorics module
 module simple_combinatorics
-include 'simple_lib.f08'
+use simple_defs
+use simple_syslib, only: allocchk
+use simple_rnd, only: seed_rnd, irnd_uni, irnd_uni_pair
 implicit none
 
 contains
