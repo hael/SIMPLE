@@ -200,7 +200,7 @@ contains
         ! EXTREMAL LOGICS
         do_extr  = .false.
         select case(trim(p%refine))
-        case('cluster','clusterdev','clustersym')
+            case('cluster','clusterdev','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
                 zero_pop    = count(.not.b%a%included(consider_w=.false.))

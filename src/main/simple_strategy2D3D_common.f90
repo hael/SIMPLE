@@ -436,8 +436,8 @@ contains
         real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
         real      :: x, y, dfx, dfy, angast, phshift
         integer   :: ifrc, state
-        x     = b%a%get(iptcl, 'x')
-        y     = b%a%get(iptcl, 'y')
+        x = b%a%get(iptcl, 'x')
+        y = b%a%get(iptcl, 'y')
         ! normalise
         call img_in%norm()
         ! move to Fourier space
@@ -486,12 +486,7 @@ contains
             endif
         endif
         if( ifrc > 0 )then
-            if( str_has_substr(p%refine, 'cluster' ) )then
-                state = 1
-            else
-                state = b%a%get_state(iptcl)
-            endif
-            call b%projfrcs%frc_getter(ifrc, p%hpind_fsc, p%tfplan%l_phaseplate, frc, state)
+            call b%projfrcs%frc_getter(ifrc, p%hpind_fsc, p%tfplan%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
                 call img_in%shellnorm_and_apply_filter_serial(filter)
