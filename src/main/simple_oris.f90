@@ -1230,7 +1230,7 @@ contains
         allocate( states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
         do iptcl=fromto(1),fromto(2)
             if( self%o(iptcl)%isthere('updatecnt') )then
-                counts(iptcl) = self%o(i)%get('updatecnt')
+                counts(iptcl) = self%o(iptcl)%get('updatecnt')
             else
                 counts(iptcl) = 0
             endif
