@@ -1224,18 +1224,18 @@ contains
         logical,              intent(out)   :: mask(fromto(1):fromto(2))
         real,    allocatable :: counts(:), states(:)
         integer, allocatable :: inds_here(:)
-        integer :: i, cnt
+        integer :: i, iptcl, cnt
         real    :: val
         ! gather info
         allocate( states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
-        do i=fromto(1),fromto(2)
-            if( self%o(i)%isthere('updatecnt') )then
-                counts(i) = self%o(i)%get('updatecnt')
+        do iptcl=fromto(1),fromto(2)
+            if( self%o(iptcl)%isthere('updatecnt') )then
+                counts(iptcl) = self%o(i)%get('updatecnt')
             else
-                counts(i) = 0
+                counts(iptcl) = 0
             endif
-            states(i)    = self%o(i)%get('state')
-            inds_here(i) = i
+            states(iptcl)    = self%o(iptcl)%get('state')
+            inds_here(iptcl) = iptcl
         end do
         ! order counts
         call hpsort(counts, inds_here)
@@ -1244,22 +1244,19 @@ contains
         ! allocate output index array
         if( allocated(inds) ) deallocate(inds)
         allocate( inds(nsamples) )
-        ! sample
-        cnt = 0
-        do i=fromto(1),fromto(2)
-            if( states(i) > 0.5 )then
-                cnt = cnt + 1
-                inds(cnt) = inds_here(i)
+        ! update mask, index range & count
+        mask = .false.
+        cnt  = 0
+        do i = fromto(1),fromto(2)
+            iptcl = inds_here(i)
+            if( states(iptcl) > 0.5 )then
+                cnt         = cnt + 1
+                inds(cnt)   = iptcl
+                mask(iptcl) = .true.
+                val         = self%o(iptcl)%get('updatecnt')
+                call self%o(iptcl)%set('updatecnt', val+1.0)
             endif
             if( cnt == nsamples ) exit
-        end do
-        ! increment update counter and set mask
-        mask = .false.
-        do i=1,nsamples
-            val = self%o(inds(i))%get('updatecnt')
-            val = val + 1.0
-            call self%o(inds(i))%set('updatecnt', val)
-            mask(inds(i)) = .true.
         end do
     end subroutine sample4update_and_incrcnt
 
