@@ -131,7 +131,7 @@ type :: oris
     procedure          :: split_class
     procedure          :: expand_classes
     procedure          :: fill_empty_classes
-    procedure          :: remap_classes
+    procedure          :: remap_cls
     procedure          :: create_conforming_npeaks_set
     procedure          :: merge_classes
     procedure          :: round_shifts
@@ -720,14 +720,14 @@ contains
         endif
     end subroutine fill_empty_classes
 
-    !>  \brief  for remapping classes after exclusion
-    subroutine remap_classes( self )
+    !>  \brief  for remapping clusters after exclusion
+    subroutine remap_cls( self )
         class(oris), intent(inout) :: self
         integer :: ncls, clsind_remap, pop, icls, iptcl, old_cls
         integer , allocatable :: clspops(:)
         ncls = self%get_n('class')
         allocate(clspops(ncls),stat=alloc_stat)
-        allocchk('In: remap_classes, module: simple_oris')
+        allocchk('In: remap_cls, module: simple_oris')
         do icls=1,ncls
             clspops(icls) = self%get_pop(icls, 'class')
         end do
@@ -757,7 +757,7 @@ contains
             end do
         endif
         deallocate(clspops)
-    end subroutine remap_classes
+    end subroutine remap_cls
 
     !>  \brief  is for contracting/expanding the ori set in self to make
     !!          a set of conforming size

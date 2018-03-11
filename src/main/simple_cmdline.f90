@@ -61,15 +61,12 @@ contains
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
-        DebugPrint ' command_argument_count: ', cmdargcnt
         if( present(keys_required) )then
             if( str_has_substr(self%entire_line,'prg=') )then
-                nreq = size(keys_required)+1 ! +1 because prg part of command line
+                nreq = size(keys_required) + 1 ! +1 because prg part of command line
             else
                 nreq = size(keys_required)
             endif
-            DebugPrint ' # keys required:        ', nreq
-            DebugPrint ' command_argument_count: ', cmdargcnt
             if( cmdargcnt < nreq )then
                 call print_cmdline(keys_required, keys_optional, distr=distr_exec)
                 stop

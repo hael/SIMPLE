@@ -2,11 +2,7 @@ module simple_user_interface
 use simple_defs
 implicit none
 
-public :: make_user_interface
-public :: cluster2D, cluster2D_stream, make_cavgs
-public :: refine3D, initial_3Dmodel
-public :: preprocess, extract, motion_correct, pick, ctf_estimate
-public :: postprocess
+public :: simple_program, make_user_interface, get_prg_ptr
 private
 
 logical, parameter :: DEBUG = .false.
@@ -21,6 +17,7 @@ type simple_input_param
 end type simple_input_param
 
 type :: simple_program
+    private
     character(len=:), allocatable :: name
     character(len=:), allocatable :: descr_short
     character(len=:), allocatable :: descr_long
@@ -48,28 +45,27 @@ type :: simple_program
     generic,   private :: set_input => set_input_1, set_input_2
     procedure          :: print_ui
     procedure          :: print_cmdline
-    procedure, private :: kill
     procedure          :: write2json
+    procedure, private :: kill
 end type simple_program
 
 ! declare protected program specifications here
-type(simple_program), protected :: cluster2D
-type(simple_program), protected :: cluster2D_stream
-type(simple_program), protected :: refine3D
-type(simple_program), protected :: initial_3Dmodel
-type(simple_program), protected :: preprocess
-type(simple_program), protected :: extract
-type(simple_program), protected :: motion_correct
-type(simple_program), protected :: ctf_estimate
-type(simple_program), protected :: pick
-type(simple_program), protected :: postprocess
-type(simple_program), protected :: make_cavgs
+type(simple_program), target :: cluster2D
+type(simple_program), target :: cluster2D_stream
+type(simple_program), target :: refine3D
+type(simple_program), target :: initial_3Dmodel
+type(simple_program), target :: preprocess
+type(simple_program), target :: extract
+type(simple_program), target :: motion_correct
+type(simple_program), target :: ctf_estimate
+type(simple_program), target :: pick
+type(simple_program), target :: postprocess
+type(simple_program), target :: make_cavgs
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: ctf
 type(simple_input_param) :: kv
 type(simple_input_param) :: deftab
-type(simple_input_param) :: filwidth
 type(simple_input_param) :: frac
 type(simple_input_param) :: hp
 type(simple_input_param) :: lp
@@ -86,7 +82,7 @@ type(simple_input_param) :: oritab
 type(simple_input_param) :: outfile
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
-type(simple_input_param) :: remap_classes
+type(simple_input_param) :: remap_cls
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
 type(simple_input_param) :: stk
@@ -97,7 +93,7 @@ type(simple_input_param) :: weights2D
 
 contains
 
-    ! class methods
+    ! public class methods
 
     subroutine make_user_interface
         call set_common_params
@@ -115,6 +111,40 @@ contains
         ! ...
     end subroutine make_user_interface
 
+    subroutine get_prg_ptr( which_program, ptr2prg )
+        character(len=*), intent(in)   :: which_program
+        class(simple_program), pointer :: ptr2prg
+        select case(trim(which_program))
+            case('cluster2D')
+                ptr2prg => cluster2D
+            case('cluster2D_stream')
+                ptr2prg => cluster2D_stream
+            case('refine3D')
+                ptr2prg => refine3D
+            case('initial_3Dmodel')
+                ptr2prg => initial_3Dmodel
+            case('preprocess')
+                ptr2prg => preprocess
+            case('extract')
+                ptr2prg => extract
+            case('motion_correct')
+                ptr2prg => motion_correct
+            case('ctf_estimate') 
+                ptr2prg => ctf_estimate
+            case('pick')
+                ptr2prg => pick
+            case('postprocess')
+                ptr2prg => postprocess
+            case('make_cavgs')
+                ptr2prg => make_cavgs
+            case DEFAULT
+                write(*,*) 'which program flag: ', trim(which_program), ' unsupported'
+                stop 'simple_user_interface :: get_prg_ptr'
+        end select
+    end subroutine get_prg_ptr
+
+    ! private class methods
+
     subroutine set_common_params
         call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false.)
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false.)
@@ -130,14 +160,13 @@ contains
         &'.simple|.txt parameter file', .false.)
         call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous solution', 'start iterations from here', .false.)
         call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
-        &'max shift per iteration in pixels', .false.)
+        &'max shift per iteration in pixels{5}', .false.)
         call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false.)
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false.)
         call set_param(lp,            'hp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'high-pass limit in Angstroms', .false.)
         call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true.)
         call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
         &'inner mask radius in pixels', .false.)
-        call set_param(filwidth,      'filwidth',      'num',    'Width of filament (in A)', 'Width of filament in Angstroms','in Angstroms', .false.)
         call set_param(ncls,          'ncls',          'num', 'Number of 2D clusters', 'Number of groups to sort the particles &
         &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .false.)
         call set_param(nparts,        'nparts',        'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
@@ -145,16 +174,17 @@ contains
         call set_param(nthr,          'nthr',          'num',    'Number of threads per part', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .false.)
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
-        &rate(0.1-0.5){1.}', 'update this fraction per iter{1.0}', .false.)
+        &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false.)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
-        'fraction of particles used{1.0}', .false.)
+        'fraction of particles used(0.1-0.9){1.0}', .false.)
         call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false.)
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true.)
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
-        &used in discrete 3D orientation search', '# projections used', .false.)
+        &used in discrete 3D orientation search', '# projections used{2500}', .false.)
         call set_param(objfun,        'objfun',        'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
-        call set_param(weights2D,     'weights2D',     'binary', '2D spectral weights', 'Wether to use 2D spectral weights(yes|no){no}', '(yes|no){no}', .false.)
-        call set_param(remap_classes, 'remap_classes', 'binary', 'Whether to remap 2D references', 'Whether to remap the number of 2D references(yes|no){no}', '(yes|no){no}', .false.)
+        call set_param(weights2D,     'weights2D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
+        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
+        call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false.)
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false.)
 
         contains
@@ -172,377 +202,6 @@ contains
             end subroutine set_param
 
     end subroutine set_common_params
-
-    ! instance methods
-
-    subroutine new( self, name, descr_short, descr_long, executable, n_img_ios, n_parm_ios,&
-        &n_alt_ios, n_srch_ctrls, n_filt_ctrls, n_mask_ctrls, n_comp_ctrls )
-        class(simple_program), intent(inout) :: self
-        character(len=*),      intent(in)    :: name, descr_short, descr_long, executable
-        integer,               intent(in)    :: n_img_ios, n_parm_ios, n_alt_ios, n_srch_ctrls
-        integer,               intent(in)    :: n_filt_ctrls, n_mask_ctrls, n_comp_ctrls
-        call self%kill
-        allocate(self%name,        source=trim(name)       )
-        allocate(self%descr_short, source=trim(descr_short))
-        allocate(self%descr_long,  source=trim(descr_long) )
-        allocate(self%executable,  source=trim(executable) )
-        if( n_img_ios    > 0 ) allocate(self%img_ios(n_img_ios)      )
-        if( n_parm_ios   > 0 ) allocate(self%parm_ios(n_parm_ios)    )
-        if( n_alt_ios    > 0 ) allocate(self%alt_ios(n_alt_ios)      )
-        if( n_srch_ctrls > 0 ) allocate(self%srch_ctrls(n_srch_ctrls))
-        if( n_filt_ctrls > 0 ) allocate(self%filt_ctrls(n_filt_ctrls))
-        if( n_mask_ctrls > 0 ) allocate(self%mask_ctrls(n_mask_ctrls))
-        if( n_comp_ctrls > 0 ) allocate(self%comp_ctrls(n_comp_ctrls))
-        self%exists = .true.
-    end subroutine new
-
-    subroutine set_input_1( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder, required )
-        class(simple_program), target, intent(inout) :: self
-        character(len=*),              intent(in)    :: which
-        integer,                       intent(in)    :: i
-        character(len=*),              intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
-        logical,                       intent(in)    :: required
-        select case(trim(which))
-            case('img_ios')
-                call set(self%img_ios, i)
-            case('parm_ios')
-                call set(self%parm_ios, i)
-            case('alt_ios')
-                call set(self%alt_ios, i)
-            case('srch_ctrls')
-                call set(self%srch_ctrls, i)
-            case('filt_ctrls')
-                call set(self%filt_ctrls, i)
-            case('mask_ctrls')
-                call set(self%mask_ctrls, i)
-            case('comp_ctrls')
-                call set(self%comp_ctrls, i)
-            case DEFAULT
-                write(*,*) 'which field selector: ', trim(which)
-                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_1'
-        end select
-
-        contains
-
-            subroutine set( arr, i )
-                type(simple_input_param), intent(inout) :: arr(i)
-                integer,                  intent(in)  :: i
-                allocate(arr(i)%key,               source=trim(key))
-                allocate(arr(i)%keytype,           source=trim(keytype))
-                allocate(arr(i)%descr_short,       source=trim(descr_short))
-                allocate(arr(i)%descr_long,        source=trim(descr_long))
-                allocate(arr(i)%descr_placeholder, source=trim(descr_placeholder))
-                arr(i)%required = required
-            end subroutine set
-
-    end subroutine set_input_1
-
-    subroutine set_input_2( self, which, i, param )
-        class(simple_program), target, intent(inout) :: self
-        character(len=*),              intent(in)    :: which
-        integer,                       intent(in)    :: i
-        type(simple_input_param),      intent(in)    :: param
-        select case(trim(which))
-            case('img_ios')
-                call set(self%img_ios, i)
-            case('parm_ios')
-                call set(self%parm_ios, i)
-            case('alt_ios')
-                call set(self%alt_ios, i)
-            case('srch_ctrls')
-                call set(self%srch_ctrls, i)
-            case('filt_ctrls')
-                call set(self%filt_ctrls, i)
-            case('mask_ctrls')
-                call set(self%mask_ctrls, i)
-            case('comp_ctrls')
-                call set(self%comp_ctrls, i)
-            case DEFAULT
-                write(*,*) 'which field selector: ', trim(which)
-                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_2'
-        end select
-
-        contains
-
-            subroutine set( arr, i )
-                type(simple_input_param), intent(inout) :: arr(i)
-                integer,                  intent(in)  :: i
-                allocate(arr(i)%key,               source=trim(param%key))
-                allocate(arr(i)%keytype,           source=trim(param%keytype))
-                allocate(arr(i)%descr_short,       source=trim(param%descr_short))
-                allocate(arr(i)%descr_long,        source=trim(param%descr_long))
-                allocate(arr(i)%descr_placeholder, source=trim(param%descr_placeholder))
-                arr(i)%required = param%required
-            end subroutine set
-
-    end subroutine set_input_2
-
-    subroutine print_ui( self )
-        use simple_chash, only: chash
-        use simple_ansi_ctrls
-        class(simple_program), intent(in) :: self
-        type(chash) :: ch
-        integer     :: i
-        write(*,'(a)') ''
-        write(*,'(a)') '>>> PROGRAM INFO'
-        call ch%new(4)
-        call ch%push('name',        self%name)
-        call ch%push('descr_short', self%descr_short)
-        call ch%push('descr_long',  self%descr_long)
-        call ch%push('executable',  self%executable)
-        call ch%print_key_val_pairs
-        call ch%kill
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('>>> IMAGE INPUT/OUTPUT',     C_UNDERLINED)
-        call print_param_hash(self%img_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('>>> PARAMETER INPUT/OUTPUT', C_UNDERLINED)
-        call print_param_hash(self%parm_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('>>> ALTERNATIVE INPUTS',     C_UNDERLINED)
-        call print_param_hash(self%alt_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('>>> SEARCH CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%srch_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('>>> FILTER CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%filt_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('>>> MASK CONTROLS',          C_UNDERLINED)
-        call print_param_hash(self%mask_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('>>> COMPUTER CONTROLS',      C_UNDERLINED)
-        call print_param_hash(self%comp_ctrls)
-
-        contains
-
-            subroutine print_param_hash( arr )
-                type(simple_input_param), allocatable, intent(in) :: arr(:)
-                integer :: i
-                if( allocated(arr) )then
-                    do i=1,size(arr)
-                        write(*,'(a,1x,i3)') '>>> PARAMETER #', i
-                        call ch%new(6)
-                        call ch%push('key',               arr(i)%key)
-                        call ch%push('keytype',           arr(i)%keytype)
-                        call ch%push('descr_short',       arr(i)%descr_short)
-                        call ch%push('descr_long',        arr(i)%descr_long)
-                        call ch%push('descr_placeholder', arr(i)%descr_placeholder)
-                        if( arr(i)%required )then
-                            call ch%push('required', 'T')
-                        else
-                            call ch%push('required', 'F')
-                        endif
-                        call ch%print_key_val_pairs
-                        call ch%kill
-                    end do
-                endif
-            end subroutine print_param_hash
-
-    end subroutine print_ui
-
-    subroutine print_cmdline( self )
-        use simple_chash, only: chash
-        use simple_ansi_ctrls
-        use simple_strings, only: lexSort
-        class(simple_program), intent(in) :: self
-        type(chash) :: ch
-        integer     :: i
-        logical     :: l_distr_exec
-        l_distr_exec = self%executable .eq. 'simple_distr_exec'
-
-        write(*,'(a)') format_str('USAGE', C_UNDERLINED)
-        if( l_distr_exec )then
-            write(*,'(a)') format_str('bash-3.2$ simple_distr_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
-        else
-            write(*,'(a)') format_str('bash-3.2$ simple_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
-        endif
-        write(*,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
-
-        if( allocated(self%img_ios) )    write(*,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
-        call print_param_hash(self%img_ios)
-
-        if( allocated(self%parm_ios) )   write(*,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
-        call print_param_hash(self%parm_ios)
-
-        if( allocated(self%alt_ios) )    write(*,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
-        call print_param_hash(self%alt_ios)
-
-        if( allocated(self%srch_ctrls) ) write(*,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%srch_ctrls)
-
-        if( allocated(self%filt_ctrls) ) write(*,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
-        call print_param_hash(self%filt_ctrls)
-
-        if( allocated(self%mask_ctrls) ) write(*,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
-        call print_param_hash(self%mask_ctrls)
-
-        if( allocated(self%comp_ctrls) ) write(*,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
-        call print_param_hash(self%comp_ctrls)
-
-        contains
-
-            subroutine print_param_hash( arr )
-                type(simple_input_param), allocatable, intent(in) :: arr(:)
-                character(len=KEYLEN),    allocatable :: sorted_keys(:), rearranged_keys(:)
-                logical,                  allocatable :: required(:)
-                integer,                  allocatable :: inds(:)
-                integer :: i, nparams, nreq, iopt
-                if( allocated(arr) )then
-                    nparams = size(arr)
-                    call ch%new(nparams)
-                    allocate(sorted_keys(nparams), rearranged_keys(nparams), required(nparams))
-                    do i=1,nparams
-                        call ch%push(arr(i)%key, arr(i)%descr_short//'; '//arr(i)%descr_placeholder)
-                        sorted_keys(i) = arr(i)%key
-                        required(i)    = arr(i)%required
-                    end do
-                    call lexSort(sorted_keys, inds=inds)
-                    required = required(inds)
-                    if( any(required) )then
-                        ! fish out the required ones
-                        nreq = 0
-                        do i=1,nparams
-                            if( required(i) )then
-                                nreq = nreq + 1
-                                rearranged_keys(nreq) = sorted_keys(i)
-                            endif
-                        enddo
-                        ! fish out the optional ones
-                        iopt = nreq
-                        do i=1,nparams
-                            if( .not. required(i) )then
-                                iopt = iopt + 1 
-                                rearranged_keys(iopt) = sorted_keys(i)
-                            endif
-                        end do
-                        ! replace string array
-                        sorted_keys = rearranged_keys
-                        ! modify logical mask
-                        required(:nreq)     = .true.
-                        required(nreq + 1:) = .false.
-                    endif
-                    call ch%print_key_val_pairs(sorted_keys, mask=required)
-                    call ch%kill
-                    deallocate(sorted_keys, required)
-                endif
-            end subroutine print_param_hash
-
-    end subroutine print_cmdline
-
-    subroutine kill( self )
-        class(simple_program), intent(inout) :: self
-        integer :: i, sz
-        if( self%exists )then
-            deallocate(self%name, self%descr_short, self%descr_long, self%executable)
-            call dealloc_field(self%img_ios)
-            call dealloc_field(self%parm_ios)
-            call dealloc_field(self%alt_ios)
-            call dealloc_field(self%srch_ctrls)
-            call dealloc_field(self%filt_ctrls)
-            call dealloc_field(self%mask_ctrls)
-            call dealloc_field(self%comp_ctrls)
-            self%exists = .false.
-        endif
-
-        contains
-
-            subroutine dealloc_field( arr )
-                type(simple_input_param), allocatable, intent(inout) :: arr(:)
-                if( allocated(arr) )then
-                    sz = size(arr)
-                    do i=1,sz
-                        if( allocated(arr(i)%key)               ) deallocate(arr(i)%key              )
-                        if( allocated(arr(i)%keytype)           ) deallocate(arr(i)%keytype          )
-                        if( allocated(arr(i)%descr_short)       ) deallocate(arr(i)%descr_short      )
-                        if( allocated(arr(i)%descr_long)        ) deallocate(arr(i)%descr_long       )
-                        if( allocated(arr(i)%descr_placeholder) ) deallocate(arr(i)%descr_placeholder)
-                    end do
-                    deallocate(arr)
-                endif
-            end subroutine dealloc_field
-
-    end subroutine kill
-
-    subroutine write2json( self )
-        use json_module
-        use simple_strings, only: int2str
-        class(simple_program), intent(in) :: self
-        type(json_core)           :: json
-        type(json_value), pointer :: pjson, program
-        ! JSON init
-        call json%initialize()
-        call json%create_object(pjson,'')
-        call json%create_object(program, trim(self%name))
-        call json%add(pjson, program)
-        ! program section
-        call json%add(program, 'name',        self%name)
-        call json%add(program, 'descr_short', self%descr_short)
-        call json%add(program, 'descr_long',  self%descr_long)
-        call json%add(program, 'executable',  self%executable)
-        ! all sections
-        call create_section( 'image input/output',     self%img_ios )
-        call create_section( 'parameter input/output', self%parm_ios )
-        call create_section( 'alternative inputs',     self%alt_ios )
-        call create_section( 'search controls',        self%srch_ctrls )
-        call create_section( 'filter controls',        self%filt_ctrls )
-        call create_section( 'mask controls',          self%mask_ctrls )
-        call create_section( 'computer controls',      self%comp_ctrls )
-        ! write & clean
-        call json%print(pjson, trim(adjustl(self%name))//'.json')
-        if( json%failed() )then
-            print *, 'json input/output error for program: ', trim(self%name)
-            stop
-        endif
-        call json%destroy(pjson)
-
-        contains
-
-            subroutine create_section( name, arr )
-                use simple_strings, only: split, parsestr
-                character(len=*),          intent(in) :: name
-                type(simple_input_param), allocatable, intent(in) :: arr(:)
-                type(json_value), pointer :: entry, section, options
-                character(len=STDLEN)     :: options_str, before
-                character(len=KEYLEN)     :: args(8)
-                integer                   :: i, j, sz, nargs
-                logical :: found, param_is_multi, param_is_binary, exception
-                call json%create_array(section, trim(name))
-                if( allocated(arr) )then
-                    sz = size(arr)
-                    do i=1,sz
-                        call json%create_object(entry, trim(arr(i)%key))
-                        call json%add(entry, 'key', trim(arr(i)%key))
-                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
-                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
-                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
-                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
-                        call json%add(entry, 'required', arr(i)%required)
-                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
-                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
-                        if( param_is_multi .or. param_is_binary )then
-                            options_str = trim(arr(i)%descr_placeholder)
-                            call split( options_str, '(', before )
-                            call split( options_str, ')', before )
-                            call parsestr(before, '|', args, nargs)
-                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
-                            if( exception )then
-                                write(*,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
-                                write(*,*)trim(arr(i)%descr_placeholder)
-                                stop
-                            endif
-                            call json%add(entry, 'options', args(1:nargs))
-                            do j = 1, nargs
-                                call json%update(entry, 'options['//int2str(j)//']', trim(args(j)), found)
-                            enddo
-                        endif
-                        call json%add(section, entry)
-                    enddo
-                endif
-                call json%add(pjson, section)
-            end subroutine create_section
-
-    end subroutine write2json
 
     subroutine new_refine3D
         ! PROGRAM SPECIFICATION
@@ -583,7 +242,7 @@ contains
         '# states to reconstruct', .false.)
         call refine3D%set_input('srch_ctrls', 11, objfun)
         call refine3D%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
-        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}', .false.)
+        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false.)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -604,7 +263,7 @@ contains
         call refine3D%set_input('mask_ctrls', 3, mskfile)
         call refine3D%set_input('mask_ctrls', 4, 'focusmsk', 'num', 'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular &
         &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false.)
-        call refine3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false. )
+        call refine3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false. )
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts)
         call refine3D%set_input('comp_ctrls', 2, nthr)
@@ -625,7 +284,7 @@ contains
         call cluster2D%set_input('img_ios', 1, stk)
         call cluster2D%set_input('img_ios', 2, stktab)
         call cluster2D%set_input('img_ios', 3, 'refs', 'file', 'Initial references',&
-        &'Initial 2D references used to bootstrap the search', 'xxx.mrc file containing references', .false.)
+        &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false.)
         ! parameter input/output
         call cluster2D%set_input('parm_ios', 1, ctf)
         call cluster2D%set_input('parm_ios', 2, smpd)
@@ -664,8 +323,7 @@ contains
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false.)
-        call cluster2D%set_input('filt_ctrls', 7, 'weights2D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
+        call cluster2D%set_input('filt_ctrls', 7, weights2D)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -681,7 +339,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 3, 0, 6, 5, 3, 2)                                                   ! # entries in each group
+        &1, 3, 0, 6, 5, 2, 2)                                                   ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D_stream%set_input('img_ios', 1, 'dir_ptcls', 'file', 'Particles directory',&
@@ -693,11 +351,11 @@ contains
         ! alternative inputs
         !<empty>
         ! search controls
-        call cluster2D_stream%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting # of classes',&
-        &'Minimum number of class averagages to initiate 2D classification', '', .true.)
+        call cluster2D_stream%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting number of clusters',&
+        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true.)
         cluster2D_stream%srch_ctrls(1)%required = .true.
-        call cluster2D_stream%set_input('srch_ctrls', 2, 'nptcls_per_cls', 'num', '# Particles per class',&
-        &'Number of incoming particles for which one new class average is generated', '', .true.)
+        call cluster2D_stream%set_input('srch_ctrls', 2, 'nptcls_per_cls', 'num', 'Particles per cluster',&
+        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true.)
         cluster2D_stream%srch_ctrls(2)%required = .true.
         call cluster2D_stream%set_input('srch_ctrls', 3, trs)
         call cluster2D_stream%set_input('srch_ctrls', 4, objfun)
@@ -716,12 +374,10 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false.)
-        call cluster2D_stream%set_input('filt_ctrls', 5, 'weights2D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
+        call cluster2D_stream%set_input('filt_ctrls', 5, weights2D)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, msk)
         call cluster2D_stream%set_input('mask_ctrls', 2, inner)
-        call cluster2D_stream%set_input('mask_ctrls', 3, filwidth)
         ! computer controls
         call cluster2D_stream%set_input('comp_ctrls', 1, nparts)
         cluster2D_stream%comp_ctrls(1)%required = .true.
@@ -740,7 +396,7 @@ contains
 
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call initial_3Dmodel%set_input('img_ios', 1, stk)
+        call initial_3Dmodel%set_input('img_ios', 1, 'stk', 'file', 'Class averages image stack', 'Class averages image stack', 'xxx.mrc file with class averages', .true.)
         ! parameter input/output
         call initial_3Dmodel%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -803,7 +459,7 @@ contains
         call preprocess%set_input('parm_ios',14, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false.)
         ! alternative inputs
         call preprocess%set_input('alt_ios', 1, 'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file containing references', .false.)
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false.)
         call preprocess%set_input('alt_ios', 2, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false.)
         call preprocess%set_input('alt_ios', 3, 'pspecsz_motion_correct', 'num', 'Size of power spectrum for motion_correct',&
@@ -904,7 +560,7 @@ contains
         call pick%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         call pick%set_input('alt_ios', 1, 'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file containing references', .false.)
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false.)
         ! search controls
         call pick%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false.)
         call pick%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false.)
@@ -1064,17 +720,17 @@ contains
         ! PROGRAM SPECIFICATION
         call make_cavgs%new(&
         &'make_cavgs', &     ! name
-        &'is used to produce  class averages',&     ! descr_short
+        &'is used to produce class averages',&     ! descr_short
         &'is used to produce class averages or initial random references&
-        &for cluster2D execution',&                 ! descr_long
-        &'simple_distr_exec',&                      ! executable
-        &3, 6, 4, 0, 0, 1, 2)                       ! # entries in each group
+        &for cluster2D execution',&                ! descr_long
+        &'simple_distr_exec',&                     ! executable
+        &3, 6, 4, 0, 0, 1, 2)                      ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, stk)
         call make_cavgs%set_input('img_ios', 2, stktab)
         call make_cavgs%set_input('img_ios', 3, 'refs', 'file', 'Output 2D references',&
-        &'Output 2D references', 'xxx.mrc file containing references', .false.)
+        &'Output 2D references', 'xxx.mrc file with references', .false.)
         ! parameter input/output
         call make_cavgs%set_input('parm_ios', 1, smpd)
         make_cavgs%parm_ios(1)%required = .true.
@@ -1082,24 +738,396 @@ contains
         call make_cavgs%set_input('parm_ios', 3, ctf)
         call make_cavgs%set_input('parm_ios', 4, phaseplate)
         call make_cavgs%set_input('parm_ios', 5, deftab)
-        call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D Orientation and CTF parameters',&
+        call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D orientation and CTF parameters',&
          '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
         &'.simple|.txt parameter file', .false.)
         ! alternative inputs
-        call make_cavgs%set_input('alt_ios', 1, 'mul', 'num', 'Shift multiplication factor{1}', 'Origin shift multiplication factor{1}','(0-1){1}', .false.)
+        call make_cavgs%set_input('alt_ios', 1, 'mul', 'num', 'Shift multiplication factor',&
+        &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false.)
         call make_cavgs%set_input('alt_ios', 2, outfile)
         call make_cavgs%set_input('alt_ios', 3, weights2D)
-        call make_cavgs%set_input('alt_ios', 4, remap_classes)
+        call make_cavgs%set_input('alt_ios', 4, remap_cls)
         ! search controls
         ! <empty>
         ! filter controls
         ! <empty>
         ! mask controls
-        call make_cavgs%set_input('mask_ctrls', 1, filwidth)
+        ! <empty>
         ! computer controls
         call make_cavgs%set_input('comp_ctrls', 1, nparts)
         make_cavgs%comp_ctrls(1)%required = .true.
         call make_cavgs%set_input('comp_ctrls', 2, nthr)
     end subroutine new_make_cavgs
+
+    ! instance methods
+
+    subroutine new( self, name, descr_short, descr_long, executable, n_img_ios, n_parm_ios,&
+        &n_alt_ios, n_srch_ctrls, n_filt_ctrls, n_mask_ctrls, n_comp_ctrls )
+        class(simple_program), intent(inout) :: self
+        character(len=*),      intent(in)    :: name, descr_short, descr_long, executable
+        integer,               intent(in)    :: n_img_ios, n_parm_ios, n_alt_ios, n_srch_ctrls
+        integer,               intent(in)    :: n_filt_ctrls, n_mask_ctrls, n_comp_ctrls
+        call self%kill
+        allocate(self%name,        source=trim(name)       )
+        allocate(self%descr_short, source=trim(descr_short))
+        allocate(self%descr_long,  source=trim(descr_long) )
+        allocate(self%executable,  source=trim(executable) )
+        if( n_img_ios    > 0 ) allocate(self%img_ios(n_img_ios)      )
+        if( n_parm_ios   > 0 ) allocate(self%parm_ios(n_parm_ios)    )
+        if( n_alt_ios    > 0 ) allocate(self%alt_ios(n_alt_ios)      )
+        if( n_srch_ctrls > 0 ) allocate(self%srch_ctrls(n_srch_ctrls))
+        if( n_filt_ctrls > 0 ) allocate(self%filt_ctrls(n_filt_ctrls))
+        if( n_mask_ctrls > 0 ) allocate(self%mask_ctrls(n_mask_ctrls))
+        if( n_comp_ctrls > 0 ) allocate(self%comp_ctrls(n_comp_ctrls))
+        self%exists = .true.
+    end subroutine new
+
+    subroutine set_input_1( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder, required )
+        class(simple_program), target, intent(inout) :: self
+        character(len=*),              intent(in)    :: which
+        integer,                       intent(in)    :: i
+        character(len=*),              intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
+        logical,                       intent(in)    :: required
+        select case(trim(which))
+            case('img_ios')
+                call set(self%img_ios, i)
+            case('parm_ios')
+                call set(self%parm_ios, i)
+            case('alt_ios')
+                call set(self%alt_ios, i)
+            case('srch_ctrls')
+                call set(self%srch_ctrls, i)
+            case('filt_ctrls')
+                call set(self%filt_ctrls, i)
+            case('mask_ctrls')
+                call set(self%mask_ctrls, i)
+            case('comp_ctrls')
+                call set(self%comp_ctrls, i)
+            case DEFAULT
+                write(*,*) 'which field selector: ', trim(which)
+                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_1'
+        end select
+
+        contains
+
+            subroutine set( arr, i )
+                type(simple_input_param), intent(inout) :: arr(i)
+                integer,                  intent(in)  :: i
+                allocate(arr(i)%key,               source=trim(key))
+                allocate(arr(i)%keytype,           source=trim(keytype))
+                allocate(arr(i)%descr_short,       source=trim(descr_short))
+                allocate(arr(i)%descr_long,        source=trim(descr_long))
+                allocate(arr(i)%descr_placeholder, source=trim(descr_placeholder))
+                arr(i)%required = required
+            end subroutine set
+
+    end subroutine set_input_1
+
+    subroutine set_input_2( self, which, i, param )
+        class(simple_program), target, intent(inout) :: self
+        character(len=*),              intent(in)    :: which
+        integer,                       intent(in)    :: i
+        type(simple_input_param),      intent(in)    :: param
+        select case(trim(which))
+            case('img_ios')
+                call set(self%img_ios, i)
+            case('parm_ios')
+                call set(self%parm_ios, i)
+            case('alt_ios')
+                call set(self%alt_ios, i)
+            case('srch_ctrls')
+                call set(self%srch_ctrls, i)
+            case('filt_ctrls')
+                call set(self%filt_ctrls, i)
+            case('mask_ctrls')
+                call set(self%mask_ctrls, i)
+            case('comp_ctrls')
+                call set(self%comp_ctrls, i)
+            case DEFAULT
+                write(*,*) 'which field selector: ', trim(which)
+                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_2'
+        end select
+
+        contains
+
+            subroutine set( arr, i )
+                type(simple_input_param), intent(inout) :: arr(i)
+                integer,                  intent(in)  :: i
+                allocate(arr(i)%key,               source=trim(param%key))
+                allocate(arr(i)%keytype,           source=trim(param%keytype))
+                allocate(arr(i)%descr_short,       source=trim(param%descr_short))
+                allocate(arr(i)%descr_long,        source=trim(param%descr_long))
+                allocate(arr(i)%descr_placeholder, source=trim(param%descr_placeholder))
+                arr(i)%required = param%required
+            end subroutine set
+
+    end subroutine set_input_2
+
+    subroutine print_ui( self )
+        use simple_chash, only: chash
+        use simple_ansi_ctrls
+        class(simple_program), intent(in) :: self
+        type(chash) :: ch
+        integer     :: i
+        write(*,'(a)') ''
+        write(*,'(a)') '>>> PROGRAM INFO'
+        call ch%new(4)
+        call ch%push('name',        self%name)
+        call ch%push('descr_short', self%descr_short)
+        call ch%push('descr_long',  self%descr_long)
+        call ch%push('executable',  self%executable)
+        call ch%print_key_val_pairs
+        call ch%kill
+        write(*,'(a)') ''
+        write(*,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
+        call print_param_hash(self%img_ios)
+        write(*,'(a)') ''
+        write(*,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
+        call print_param_hash(self%parm_ios)
+        write(*,'(a)') ''
+        write(*,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
+        call print_param_hash(self%alt_ios)
+        write(*,'(a)') ''
+        write(*,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
+        call print_param_hash(self%srch_ctrls)
+        write(*,'(a)') ''
+        write(*,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
+        call print_param_hash(self%filt_ctrls)
+        write(*,'(a)') ''
+        write(*,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
+        call print_param_hash(self%mask_ctrls)
+        write(*,'(a)') ''
+        write(*,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
+        call print_param_hash(self%comp_ctrls)
+
+        contains
+
+            subroutine print_param_hash( arr )
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                integer :: i
+                if( allocated(arr) )then
+                    do i=1,size(arr)
+                        write(*,'(a,1x,i3)') '>>> PARAMETER #', i
+                        call ch%new(6)
+                        call ch%push('key',               arr(i)%key)
+                        call ch%push('keytype',           arr(i)%keytype)
+                        call ch%push('descr_short',       arr(i)%descr_short)
+                        call ch%push('descr_long',        arr(i)%descr_long)
+                        call ch%push('descr_placeholder', arr(i)%descr_placeholder)
+                        if( arr(i)%required )then
+                            call ch%push('required', 'T')
+                        else
+                            call ch%push('required', 'F')
+                        endif
+                        call ch%print_key_val_pairs
+                        call ch%kill
+                    end do
+                endif
+            end subroutine print_param_hash
+
+    end subroutine print_ui
+
+    subroutine print_cmdline( self )
+        use simple_chash, only: chash
+        use simple_ansi_ctrls
+        use simple_strings, only: lexSort
+        class(simple_program), intent(in) :: self
+        type(chash) :: ch
+        integer     :: i
+        logical     :: l_distr_exec
+        l_distr_exec = self%executable .eq. 'simple_distr_exec'
+
+        write(*,'(a)') format_str('USAGE', C_UNDERLINED)
+        if( l_distr_exec )then
+            write(*,'(a)') format_str('bash-3.2$ simple_distr_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
+        else
+            write(*,'(a)') format_str('bash-3.2$ simple_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
+        endif
+        write(*,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
+
+        if( allocated(self%img_ios) )    write(*,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
+        call print_param_hash(self%img_ios)
+
+        if( allocated(self%parm_ios) )   write(*,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
+        call print_param_hash(self%parm_ios)
+
+        if( allocated(self%alt_ios) )    write(*,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
+        call print_param_hash(self%alt_ios)
+
+        if( allocated(self%srch_ctrls) ) write(*,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
+        call print_param_hash(self%srch_ctrls)
+
+        if( allocated(self%filt_ctrls) ) write(*,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
+        call print_param_hash(self%filt_ctrls)
+
+        if( allocated(self%mask_ctrls) ) write(*,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
+        call print_param_hash(self%mask_ctrls)
+
+        if( allocated(self%comp_ctrls) ) write(*,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
+        call print_param_hash(self%comp_ctrls)
+
+        contains
+
+            subroutine print_param_hash( arr )
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                character(len=KEYLEN),    allocatable :: sorted_keys(:), rearranged_keys(:)
+                logical,                  allocatable :: required(:)
+                integer,                  allocatable :: inds(:)
+                integer :: i, nparams, nreq, iopt
+                if( allocated(arr) )then
+                    nparams = size(arr)
+                    call ch%new(nparams)
+                    allocate(sorted_keys(nparams), rearranged_keys(nparams), required(nparams))
+                    do i=1,nparams
+                        call ch%push(arr(i)%key, arr(i)%descr_short//'; '//arr(i)%descr_placeholder)
+                        sorted_keys(i) = arr(i)%key
+                        required(i)    = arr(i)%required
+                    end do
+                    call lexSort(sorted_keys, inds=inds)
+                    required = required(inds)
+                    if( any(required) )then
+                        ! fish out the required ones
+                        nreq = 0
+                        do i=1,nparams
+                            if( required(i) )then
+                                nreq = nreq + 1
+                                rearranged_keys(nreq) = sorted_keys(i)
+                            endif
+                        enddo
+                        ! fish out the optional ones
+                        iopt = nreq
+                        do i=1,nparams
+                            if( .not. required(i) )then
+                                iopt = iopt + 1 
+                                rearranged_keys(iopt) = sorted_keys(i)
+                            endif
+                        end do
+                        ! replace string array
+                        sorted_keys = rearranged_keys
+                        ! modify logical mask
+                        required(:nreq)     = .true.
+                        required(nreq + 1:) = .false.
+                    endif
+                    call ch%print_key_val_pairs(sorted_keys, mask=required)
+                    call ch%kill
+                    deallocate(sorted_keys, required)
+                endif
+            end subroutine print_param_hash
+
+    end subroutine print_cmdline
+
+    subroutine write2json( self )
+        use json_module
+        use simple_strings, only: int2str
+        class(simple_program), intent(in) :: self
+        type(json_core)           :: json
+        type(json_value), pointer :: pjson, program
+        ! JSON init
+        call json%initialize()
+        call json%create_object(pjson,'')
+        call json%create_object(program, trim(self%name))
+        call json%add(pjson, program)
+        ! program section
+        call json%add(program, 'name',        self%name)
+        call json%add(program, 'descr_short', self%descr_short)
+        call json%add(program, 'descr_long',  self%descr_long)
+        call json%add(program, 'executable',  self%executable)
+        ! all sections
+        call create_section( 'image input/output',     self%img_ios )
+        call create_section( 'parameter input/output', self%parm_ios )
+        call create_section( 'alternative inputs',     self%alt_ios )
+        call create_section( 'search controls',        self%srch_ctrls )
+        call create_section( 'filter controls',        self%filt_ctrls )
+        call create_section( 'mask controls',          self%mask_ctrls )
+        call create_section( 'computer controls',      self%comp_ctrls )
+        ! write & clean
+        call json%print(pjson, trim(adjustl(self%name))//'.json')
+        if( json%failed() )then
+            print *, 'json input/output error for program: ', trim(self%name)
+            stop
+        endif
+        call json%destroy(pjson)
+
+        contains
+
+            subroutine create_section( name, arr )
+                use simple_strings, only: split, parsestr
+                character(len=*),          intent(in) :: name
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                type(json_value), pointer :: entry, section, options
+                character(len=STDLEN)     :: options_str, before
+                character(len=KEYLEN)     :: args(8)
+                integer                   :: i, j, sz, nargs
+                logical :: found, param_is_multi, param_is_binary, exception
+                call json%create_array(section, trim(name))
+                if( allocated(arr) )then
+                    sz = size(arr)
+                    do i=1,sz
+                        call json%create_object(entry, trim(arr(i)%key))
+                        call json%add(entry, 'key', trim(arr(i)%key))
+                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
+                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
+                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
+                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
+                        call json%add(entry, 'required', arr(i)%required)
+                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
+                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
+                        if( param_is_multi .or. param_is_binary )then
+                            options_str = trim(arr(i)%descr_placeholder)
+                            call split( options_str, '(', before )
+                            call split( options_str, ')', before )
+                            call parsestr(before, '|', args, nargs)
+                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
+                            if( exception )then
+                                write(*,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
+                                write(*,*)trim(arr(i)%descr_placeholder)
+                                stop
+                            endif
+                            call json%add(entry, 'options', args(1:nargs))
+                            do j = 1, nargs
+                                call json%update(entry, 'options['//int2str(j)//']', trim(args(j)), found)
+                            enddo
+                        endif
+                        call json%add(section, entry)
+                    enddo
+                endif
+                call json%add(pjson, section)
+            end subroutine create_section
+
+    end subroutine write2json
+
+    subroutine kill( self )
+        class(simple_program), intent(inout) :: self
+        integer :: i, sz
+        if( self%exists )then
+            deallocate(self%name, self%descr_short, self%descr_long, self%executable)
+            call dealloc_field(self%img_ios)
+            call dealloc_field(self%parm_ios)
+            call dealloc_field(self%alt_ios)
+            call dealloc_field(self%srch_ctrls)
+            call dealloc_field(self%filt_ctrls)
+            call dealloc_field(self%mask_ctrls)
+            call dealloc_field(self%comp_ctrls)
+            self%exists = .false.
+        endif
+
+        contains
+
+            subroutine dealloc_field( arr )
+                type(simple_input_param), allocatable, intent(inout) :: arr(:)
+                if( allocated(arr) )then
+                    sz = size(arr)
+                    do i=1,sz
+                        if( allocated(arr(i)%key)               ) deallocate(arr(i)%key              )
+                        if( allocated(arr(i)%keytype)           ) deallocate(arr(i)%keytype          )
+                        if( allocated(arr(i)%descr_short)       ) deallocate(arr(i)%descr_short      )
+                        if( allocated(arr(i)%descr_long)        ) deallocate(arr(i)%descr_long       )
+                        if( allocated(arr(i)%descr_placeholder) ) deallocate(arr(i)%descr_placeholder)
+                    end do
+                    deallocate(arr)
+                endif
+            end subroutine dealloc_field
+
+    end subroutine kill
 
 end module simple_user_interface

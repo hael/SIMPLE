@@ -71,7 +71,7 @@ type :: params
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
     character(len=3)      :: readwrite='no'
-    character(len=3)      :: remap_classes='no'
+    character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
     character(len=3)      :: rm_outliers='yes'    !< remove outliers{yes}
@@ -317,7 +317,6 @@ type :: params
     real    :: eps=0.003           !< learning rate{0.003}
     real    :: eullims(3,2)=0.
     real    :: exp_time=2.0        !< exposure time(in s)
-    real    :: filwidth=0.         !< width of filament (in A)
     real    :: fny=0.
     real    :: focusmsk=0.         !< spherical msk for use with focused refinement
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
@@ -373,21 +372,21 @@ type :: params
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
-    logical :: cyclic(7)       = .false.
-    logical :: l_distr_exec    = .false.
-    logical :: l_match_filt    = .true.
-    logical :: l_doshift       = .false.
-    logical :: l_focusmsk      = .false.
-    logical :: l_autoscale     = .false.
-    logical :: l_dose_weight   = .false.
-    logical :: l_frac_update   = .false.
-    logical :: l_innermsk      = .false.
-    logical :: l_pick          = .false.
-    logical :: l_remap_classes = .false.
-    logical :: l_stktab_input  = .false.
-    logical :: l_cc_objfun     = .true.
-    logical :: l_cc_bfac       = .true.
-    logical :: l_dev           = .false.
+    logical :: cyclic(7)      = .false.
+    logical :: l_distr_exec   = .false.
+    logical :: l_match_filt   = .true.
+    logical :: l_doshift      = .false.
+    logical :: l_focusmsk     = .false.
+    logical :: l_autoscale    = .false.
+    logical :: l_dose_weight  = .false.
+    logical :: l_frac_update  = .false.
+    logical :: l_innermsk     = .false.
+    logical :: l_pick         = .false.
+    logical :: l_remap_cls    = .false.
+    logical :: l_stktab_input = .false.
+    logical :: l_cc_objfun    = .true.
+    logical :: l_cc_bfac      = .true.
+    logical :: l_dev          = .false.
   contains
     procedure :: new
 end type params
@@ -539,7 +538,7 @@ contains
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
-        call check_carg('remap_classes',  self%remap_classes)
+        call check_carg('remap_cls',      self%remap_cls)
         call check_carg('restart',        self%restart)
         call check_carg('rm_outliers',    self%rm_outliers)
         call check_carg('rnd',            self%rnd)
@@ -713,7 +712,6 @@ contains
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
         call check_rarg('exp_time',       self%exp_time)
-        call check_rarg('filwidth',       self%filwidth)
         call check_rarg('focusmsk',       self%focusmsk)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
@@ -1152,9 +1150,9 @@ contains
                 self%ncls = ncls
             endif
         endif
-        ! set remap_classes flag
-        self%l_remap_classes = .false.
-        if( self%remap_classes .eq. 'yes' ) self%l_remap_classes = .true.
+        ! set remap_clusters flag
+        self%l_remap_cls = .false.
+        if( self%remap_cls .eq. 'yes' ) self%l_remap_cls = .true.
         ! set nbest to 20% of ncls (if present) or 20% of NSPACE_BALANCE
         if( cline%defined('ncls') )then
             self%nbest = max(1,nint(real(self%ncls)*0.2))

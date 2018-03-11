@@ -1,28 +1,53 @@
 program simple_test_ui
 use simple_user_interface ! use all in there
 implicit none
+class(simple_program), pointer :: ptr2prg
+
 call make_user_interface
-! call cluster2D%print_ui()
-call cluster2D%print_cmdline
-! call cluster2D%write2json()
-! call cluster2D_stream%print_ui()
-! call cluster2D_stream%write2json()
-! call refine3D%print_ui()
-! call refine3D%write2json()
-! call initial_3Dmodel%print_ui()
-! call initial_3Dmodel%write2json()
-! call postprocess%print_ui()
-! call postprocess%write2json()
-! call extract%print_ui()
-! call extract%write2json()
-! call make_cavgs%print_ui()
-! call make_cavgs%write2json()
-! call motion_correct%print_ui()
-! call motion_correct%write2json()
-! call preprocess%print_ui()
-! call preprocess%write2json()
-! call pick%print_ui()
-! call pick%write2json()
-! call ctf_estimate%print_ui()
-! call ctf_estimate%write2json()
+
+! call get_prg_ptr('cluster2D', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('cluster2D_stream', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('refine3D', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('initial_3Dmodel', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+call get_prg_ptr('preprocess', ptr2prg)
+call ptr2prg%print_cmdline()
+call ptr2prg%write2json()
+
+! call get_prg_ptr('extract', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('motion_correct', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('ctf_estimate', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('pick', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('postprocess', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+! call get_prg_ptr('make_cavgs', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+
 end program simple_test_ui

@@ -59,8 +59,8 @@ contains
         call b%build_strategy2D_tbox(p)             ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
-        if( cline%defined('oritab') .and. p%l_remap_classes )then
-            call b%a%remap_classes()
+        if( cline%defined('oritab') .and. p%l_remap_cls )then
+            call b%a%remap_cls()
             ncls_in_oritab = b%a%get_n('class')
             if( cline%defined('ncls') )then
                 if( p%ncls < ncls_in_oritab ) stop 'ERROR, inputted ncls < ncls_in_oritab; not allowed!'
@@ -117,19 +117,8 @@ contains
         call cavger_new(b, p, 'class')
         ! transfer ori data to object
         call cavger_transf_oridat(b%a)
-        if( cline%defined('filwidth') )then
-            ! filament option
-            if( p%l_distr_exec)then
-                stop 'filwidth mode not implemented for distributed mode; simple_commander_cluster2D.f90; exec_make_cavgs'
-            endif
-            call b%img%bin_filament(p%filwidth)
-            do icls=1,p%ncls
-                call cavger_set_cavg(icls, 'merged', b%img)
-            end do
-        else
-            ! standard cavg assembly
-            call cavger_assemble_sums( .false. )
-        endif
+        ! standard cavg assembly
+        call cavger_assemble_sums( .false. )
         ! write sums
         if( p%l_distr_exec)then
             call cavger_readwrite_partial_sums('write')

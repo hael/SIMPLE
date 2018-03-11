@@ -368,7 +368,7 @@ contains
             endif
             p%box = ldim2(1)
         else
-            call b%a%remap_classes()
+            call b%a%remap_cls()
             p%ncls = b%a%get_n('class')
             nsel   = p%ncls
         endif
