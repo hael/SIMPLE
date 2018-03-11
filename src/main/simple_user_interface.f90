@@ -50,7 +50,6 @@ type :: simple_program
     procedure          :: print_cmdline
     procedure, private :: kill
     procedure          :: write2json
-
 end type simple_program
 
 ! declare protected program specifications here
@@ -280,7 +279,7 @@ contains
 
     subroutine print_ui( self )
         use simple_chash, only: chash
-        use simple_ansi_colors
+        use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         type(chash) :: ch
         integer     :: i
@@ -294,25 +293,25 @@ contains
         call ch%print_key_val_pairs
         call ch%kill
         write(*,'(a)') ''
-        write(*,'(a)') color('>>> IMAGE INPUT/OUTPUT',     C_BLUE)
+        write(*,'(a)') format_str('>>> IMAGE INPUT/OUTPUT',     C_UNDERLINED)
         call print_param_hash(self%img_ios)
         write(*,'(a)') ''
-        write(*,'(a)') color('>>> PARAMETER INPUT/OUTPUT', C_BLUE)
+        write(*,'(a)') format_str('>>> PARAMETER INPUT/OUTPUT', C_UNDERLINED)
         call print_param_hash(self%parm_ios)
         write(*,'(a)') ''
-        write(*,'(a)') color('>>> ALTERNATIVE INPUTS',     C_BLUE)
+        write(*,'(a)') format_str('>>> ALTERNATIVE INPUTS',     C_UNDERLINED)
         call print_param_hash(self%alt_ios)
         write(*,'(a)') ''
-        write(*,'(a)') color('>>> SEARCH CONTROLS',        C_BLUE)
+        write(*,'(a)') format_str('>>> SEARCH CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%srch_ctrls)
         write(*,'(a)') ''
-        write(*,'(a)') color('>>> FILTER CONTROLS',        C_BLUE)
+        write(*,'(a)') format_str('>>> FILTER CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%filt_ctrls)
         write(*,'(a)') ''
-        write(*,'(a)') color('>>> MASK CONTROLS',          C_BLUE)
+        write(*,'(a)') format_str('>>> MASK CONTROLS',          C_UNDERLINED)
         call print_param_hash(self%mask_ctrls)
         write(*,'(a)') ''
-        write(*,'(a)') color('>>> COMPUTER CONTROLS',      C_BLUE)
+        write(*,'(a)') format_str('>>> COMPUTER CONTROLS',      C_UNDERLINED)
         call print_param_hash(self%comp_ctrls)
 
         contains
@@ -344,58 +343,85 @@ contains
 
     subroutine print_cmdline( self )
         use simple_chash, only: chash
-        use simple_ansi_colors
+        use simple_ansi_ctrls
         use simple_strings, only: lexSort
         class(simple_program), intent(in) :: self
         type(chash) :: ch
         integer     :: i
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_distr_exec'
-        write(*,'(a)') color('USAGE:', C_BLUE)
+
+        write(*,'(a)') format_str('USAGE', C_UNDERLINED)
         if( l_distr_exec )then
-            write(*,'(a)') color('bash-3.2$ simple_distr_exec prg=program key1=val1 key2=val2 ...', C_BLUE)
+            write(*,'(a)') format_str('bash-3.2$ simple_distr_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
         else
-            write(*,'(a)') color('bash-3.2$ simple_exec prg=program key1=val1 key2=val2 ...', C_BLUE)
+            write(*,'(a)') format_str('bash-3.2$ simple_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
         endif
-        if( allocated(self%img_ios) ) write(*,'(a)') ''
-        if( allocated(self%img_ios) ) write(*,'(a)') color('>>> IMAGE INPUT/OUTPUT',     C_BLUE)
+        write(*,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
+
+        if( allocated(self%img_ios) )    write(*,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
         call print_param_hash(self%img_ios)
-        if( allocated(self%parm_ios) ) write(*,'(a)') ''
-        if( allocated(self%parm_ios) ) write(*,'(a)') color('>>> PARAMETER INPUT/OUTPUT', C_BLUE)
+
+        if( allocated(self%parm_ios) )   write(*,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
         call print_param_hash(self%parm_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') color('>>> ALTERNATIVE INPUTS',     C_BLUE)
+
+        if( allocated(self%alt_ios) )    write(*,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
         call print_param_hash(self%alt_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') color('>>> SEARCH CONTROLS',        C_BLUE)
+
+        if( allocated(self%srch_ctrls) ) write(*,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%srch_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') color('>>> FILTER CONTROLS',        C_BLUE)
+
+        if( allocated(self%filt_ctrls) ) write(*,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%filt_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') color('>>> MASK CONTROLS',          C_BLUE)
+
+        if( allocated(self%mask_ctrls) ) write(*,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
         call print_param_hash(self%mask_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') color('>>> COMPUTER CONTROLS',      C_BLUE)
+
+        if( allocated(self%comp_ctrls) ) write(*,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
         call print_param_hash(self%comp_ctrls)
 
         contains
 
             subroutine print_param_hash( arr )
                 type(simple_input_param), allocatable, intent(in) :: arr(:)
-                character(len=KEYLEN),    allocatable :: sorted_keys(:)
+                character(len=KEYLEN),    allocatable :: sorted_keys(:), rearranged_keys(:)
                 logical,                  allocatable :: required(:)
-                integer :: i, nparams
+                integer,                  allocatable :: inds(:)
+                integer :: i, nparams, nreq, iopt
                 if( allocated(arr) )then
                     nparams = size(arr)
                     call ch%new(nparams)
-                    allocate(sorted_keys(nparams), required(nparams))
+                    allocate(sorted_keys(nparams), rearranged_keys(nparams), required(nparams))
                     do i=1,nparams
-                        call ch%push(arr(i)%key, arr(i)%descr_short)
+                        call ch%push(arr(i)%key, arr(i)%descr_short//'; '//arr(i)%descr_placeholder)
                         sorted_keys(i) = arr(i)%key
                         required(i)    = arr(i)%required
                     end do
-                    call lexSort(sorted_keys, mask=required)
+                    call lexSort(sorted_keys, inds=inds)
+                    required = required(inds)
+                    if( any(required) )then
+                        ! fish out the required ones
+                        nreq = 0
+                        do i=1,nparams
+                            if( required(i) )then
+                                nreq = nreq + 1
+                                rearranged_keys(nreq) = sorted_keys(i)
+                            endif
+                        enddo
+                        ! fish out the optional ones
+                        iopt = nreq
+                        do i=1,nparams
+                            if( .not. required(i) )then
+                                iopt = iopt + 1 
+                                rearranged_keys(iopt) = sorted_keys(i)
+                            endif
+                        end do
+                        ! replace string array
+                        sorted_keys = rearranged_keys
+                        ! modify logical mask
+                        required(:nreq)     = .true.
+                        required(nreq + 1:) = .false.
+                    endif
                     call ch%print_key_val_pairs(sorted_keys, mask=required)
                     call ch%kill
                     deallocate(sorted_keys, required)

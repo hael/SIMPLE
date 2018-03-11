@@ -1,13 +1,13 @@
-program simple_test_ansi_colors
-  use simple_ansi_colors
+program simple_test_ansi_format_strs
+  use simple_ansi_ctrls
   use simple_defs
   implicit none
   print '(a)', &
-       color('Red',     c_red)     // NEWLINE // &
-       color('Green',   c_green)   // NEWLINE // &
-       color('Yellow',  c_yellow)  // NEWLINE // &
-       color('Blue',    c_blue)    // NEWLINE // &
-       color('Magenta', c_magenta) // NEWLINE // &
-       color('Cyan',    c_cyan)    // NEWLINE // &
-       color('White',   c_white)
-end program simple_test_ansi_colors
+       format_str('Red',     C_RED)     // NEWLINE // &
+       format_str('Green',   C_GREEN)   // NEWLINE // &
+       format_str('Yellow',  C_YELLOW)  // NEWLINE // &
+       format_str('Blue',    C_BLUE)    // NEWLINE // &
+       format_str('Magenta', C_MAGENTa) // NEWLINE // &
+       format_str('Cyan',    C_CYAN)    // NEWLINE // &
+       format_str('White',   C_WHITE)
+end program simple_test_ansi_format_strs
