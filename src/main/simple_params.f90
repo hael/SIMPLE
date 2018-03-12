@@ -146,7 +146,7 @@ type :: params
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
-    character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
+    character(len=STDLEN) :: ctf_estimate_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
     character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN) :: pdbfile=''           !< PDB file
@@ -258,7 +258,7 @@ type :: params
     integer :: ppca=0
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: pspecsz_motion_correct=512  !< size of power spectrum 4 motion_correct(in pixels)
-    integer :: pspecsz_ctffind=512
+    integer :: pscpecsz_ctf_estimate=512
     integer :: ptcl=1
     integer :: recl_cgrid=-1
     integer :: ring1=2
@@ -330,13 +330,13 @@ type :: params
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
-    real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
+    real    :: hp_ctfestimate=30.      !< high-pass limit 4 ctf_estimate(in A)
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
     real    :: lp=20.              !< low-pass limit(in A)
-    real    :: lp_ctffind=5.0      !< low-pass limit 4 ctffind(in A)
+    real    :: lp_ctf_estimate=5.0      !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.3      !< corr criterion low-pass limit assignment(0.143-0.5){0.3}
     real    :: lplims2D(3)
@@ -571,7 +571,7 @@ contains
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
         call check_file('classdoc',       self%classdoc,     'T')
-        call check_file('ctffind_doc',    self%ctffind_doc,  'T', 'O')
+        call check_file('ctf_estimate_doc',    self%ctf_estimate_doc,  'T', 'O')
         call check_file('comlindoc',      self%comlindoc,    'T')
         call check_file('deftab',         self%deftab,       'T', 'O')
         call check_file('doclist',        self%doclist,      'T')
@@ -662,7 +662,7 @@ contains
         call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('pspecsz_motion_correct', self%pspecsz_motion_correct)
-        call check_iarg('pspecsz_ctffind', self%pspecsz_ctffind)
+        call check_iarg('pscpecsz_ctf_estimate', self%pscpecsz_ctf_estimate)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
         call check_iarg('startit',        self%startit)
@@ -721,13 +721,13 @@ contains
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)
         call check_rarg('hp',             self%hp)
-        call check_rarg('hp_ctffind',     self%hp_ctffind)
+        call check_rarg('hp_ctfestimate',     self%hp_ctfestimate)
         call check_rarg('hp_fsc',         self%hp_fsc)
         call check_rarg('inner',          self%inner)
         call check_rarg('kv',             self%kv)
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
-        call check_rarg('lp_ctffind',     self%lp_ctffind)
+        call check_rarg('lp_ctf_estimate',     self%lp_ctf_estimate)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
@@ -769,13 +769,13 @@ contains
                 write(*,*) 'WARNING! Could not set unidoc to oritab because oritab is defined'
             endif
         endif
-        ! put ctffind_doc (if defined) as oritab
-        if( cline%defined('ctffind_doc') )then
+        ! put ctf_estimate_doc (if defined) as oritab
+        if( cline%defined('ctf_estimate_doc') )then
             if( .not. cline%defined('oritab') )then
-                call cline%set('oritab', self%ctffind_doc)
-                self%oritab = self%ctffind_doc
+                call cline%set('oritab', self%ctf_estimate_doc)
+                self%oritab = self%ctf_estimate_doc
             else
-                write(*,*) 'WARNING! Could not set ctffind_doc to oritab because oritab is defined'
+                write(*,*) 'WARNING! Could not set ctf_estimate_doc to oritab because oritab is defined'
             endif
         endif
         ! make all programs have the simple_prefix

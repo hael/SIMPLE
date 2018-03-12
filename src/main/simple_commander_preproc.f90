@@ -14,7 +14,6 @@ use simple_ori,                 only: ori
 use simple_imghead,             only: find_ldim_nptcls
 use simple_corrmat,             only: calc_cartesian_corrmat
 use simple_motion_correct_iter, only: motion_correct_iter
-use simple_ctffind_iter,        only: ctffind_iter
 use simple_ctf_estimate_iter,   only: ctf_estimate_iter
 use simple_picker_iter,         only: picker_iter
 use simple_qsys_funs,           only: qsys_job_finished
@@ -26,7 +25,6 @@ public :: select_frames_commander
 public :: boxconvs_commander
 public :: powerspecs_commander
 public :: motion_correct_commander
-public :: ctffind_commander
 public :: ctf_estimate_commander
 public :: select_commander
 public :: make_pickrefs_commander
@@ -55,10 +53,6 @@ type, extends(commander_base) :: motion_correct_commander
   contains
     procedure :: execute      => exec_motion_correct
 end type motion_correct_commander
-type, extends(commander_base) :: ctffind_commander
-  contains
-    procedure :: execute      => exec_ctffind
-end type ctffind_commander
 type, extends(commander_base) :: ctf_estimate_commander
   contains
     procedure :: execute      => exec_ctf_estimate
@@ -209,9 +203,9 @@ contains
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')    !! realloc warning
             moviename_intg   = mciter%get_moviename('intg')
-            p%pspecsz        = p%pspecsz_ctffind
-            p%hp             = p%hp_ctffind
-            p%lp             = p%lp_ctffind
+            p%pspecsz        = p%pscpecsz_ctf_estimate
+            p%hp             = p%hp_ctfestimate
+            p%lp             = p%lp_ctf_estimate
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni, output_dir_ctf_estimate)
             if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
             ! picker
@@ -540,61 +534,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
-
-    subroutine exec_ctffind( self, cline )
-        class(ctffind_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline  !< command line input
-        type(params)                       :: p
-        type(ctffind_iter)                 :: cfiter
-        character(len=STDLEN), allocatable :: movienames_forctf(:)
-        character(len=:),      allocatable :: fname_ctffind_output
-        character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
-        type(oris)            :: os
-        integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
-        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
-        call read_filetable(p%filetab, movienames_forctf)
-        nmovies = size(movienames_forctf)
-        if( p%l_distr_exec )then
-            allocate(fname_ctffind_output, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT))
-            ! determine loop range
-            if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = p%fromp
-                fromto(2) = p%top
-            else
-                stop 'fromp & top args need to be defined in parallel execution; simple_ctffind'
-            endif
-        else
-            if(p%stream.eq.'yes')then
-                ! determine loop range
-                fromto(1) = 1
-                fromto(2) = 1
-                movie_name  = remove_abspath(trim(movienames_forctf(1)))
-                movie_ext   = fname2ext(trim(movie_name))
-                movie_fbody = get_fbody(trim(movie_name), trim(movie_ext))
-                allocate(fname_ctffind_output, source='ctffind_output_'//trim(movie_fbody)//trim(METADATA_EXT))
-            else
-                ! determine loop range
-                fromto(1) = 1
-                if( cline%defined('startit') ) fromto(1) = p%startit
-                fromto(2) = nmovies
-                allocate(fname_ctffind_output, source='ctffind_output'//trim(METADATA_EXT))
-            endif
-        endif
-        ntot = fromto(2) - fromto(1) + 1
-        call os%new(ntot)
-        ! loop over exposures (movies)
-        movie_counter = 0
-        do imovie=fromto(1),fromto(2)
-            call cfiter%iterate(p, imovie, movie_counter, movienames_forctf(imovie),fname_ctffind_output, os)
-            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
-        end do
-        call os%write(fname_ctffind_output)
-        call os%kill
-        deallocate(fname_ctffind_output)
-        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_ctffind' )
-        ! end gracefully
-        call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
-    end subroutine exec_ctffind
 
     subroutine exec_ctf_estimate( self, cline )
         class(ctf_estimate_commander), intent(inout) :: self

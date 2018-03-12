@@ -26,7 +26,6 @@ type(select_frames_commander)        :: xselect_frames
 type(boxconvs_commander)             :: xboxconvs
 type(powerspecs_commander)           :: xpowerspecs
 type(motion_correct_commander)       :: xmotion_correct
-type(ctffind_commander)              :: xctffind
 type(ctf_estimate_commander)         :: xctf_estimate
 type(pick_commander)                 :: xpick
 
@@ -129,7 +128,7 @@ select case(prg)
     case( 'preprocess' )
         !==Program preprocess
         !
-        ! <preprocess/begin>is a program that executes motion_correct, ctffind and pick in sequence
+        ! <preprocess/begin>is a program that executes motion_correct, ctf_estimate and pick in sequence
         ! <preprocess/end>
         !
         ! set required keys
@@ -148,15 +147,15 @@ select case(prg)
         keys_optional(7)   = 'lpstop'
         keys_optional(8)   = 'trs'
         keys_optional(9)   = 'pspecsz_motion_correct'
-        keys_optional(10)  = 'pspecsz_ctffind'
+        keys_optional(10)  = 'pscpecsz_ctf_estimate'
         keys_optional(11)  = 'numlen'
         keys_optional(12)  = 'startit'
         keys_optional(13)  = 'scale'
         keys_optional(14)  = 'nframesgrp'
         keys_optional(15)  = 'fromf'
         keys_optional(16)  = 'tof'
-        keys_optional(17)  = 'hp_ctffind'
-        keys_optional(18)  = 'lp_ctffind'
+        keys_optional(17)  = 'hp_ctfestimate'
+        keys_optional(18)  = 'lp_ctf_estimate'
         keys_optional(19)  = 'lp_pick'
         keys_optional(20)  = 'dfmin'
         keys_optional(21)  = 'dfmax'
@@ -177,9 +176,9 @@ select case(prg)
         if( .not. cline%defined('lpstart')               ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')                ) call cline%set('lpstop',            8.)
         if( .not. cline%defined('pspecsz_motion_correct')) call cline%set('pspecsz_motion_correct',  512.)
-        if( .not. cline%defined('pspecsz_ctffind')       ) call cline%set('pspecsz_ctffind', 512.)
-        if( .not. cline%defined('hp_ctffind')            ) call cline%set('hp_ctffind',       30.)
-        if( .not. cline%defined('lp_ctffind')            ) call cline%set('lp_ctffind',        5.)
+        if( .not. cline%defined('pscpecsz_ctf_estimate')       ) call cline%set('pscpecsz_ctf_estimate', 512.)
+        if( .not. cline%defined('hp_ctfestimate')            ) call cline%set('hp_ctfestimate',       30.)
+        if( .not. cline%defined('lp_ctf_estimate')            ) call cline%set('lp_ctf_estimate',        5.)
         if( .not. cline%defined('lp_pick')               ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('outfile')               ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         if( .not. cline%defined('pcontrast')             ) call cline%set('pcontrast',    'black')
@@ -292,34 +291,6 @@ select case(prg)
         if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         ! execute
         call xmotion_correct%execute(cline)
-    case( 'ctffind' )
-        !==Program ctffind
-        !
-        ! <ctffind/begin>is a wrapper program for CTFFIND4 (Grigorieff lab)<ctffind/end>
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'kv'
-        keys_required(4) = 'cs'
-        keys_required(5) = 'fraca'
-        ! set optional keys
-        keys_optional(1) = 'pspecsz'
-        keys_optional(2) = 'hp'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'dfmin'
-        keys_optional(5) = 'dfmax'
-        keys_optional(6) = 'dfstep'
-        keys_optional(7) = 'astigtol'
-        keys_optional(8) = 'phaseplate'
-        ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:8))
-        ! set defaults
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
-        ! execute
-        call xctffind%execute(cline)
     case( 'ctf_estimate' )
         !==Program ctf_estimate
         !
@@ -349,10 +320,10 @@ select case(prg)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         ! execute
         call xctf_estimate%execute(cline)
-    case( 'motion_correct_ctffind' )
-        !==Program motion_correct_ctffind
+    case( 'motion_correct_ctf_estimate' )
+        !==Program motion_correct_ctf_estimate
         !
-        ! <motion_correct_ctffind/begin>is a pipelined motion_correct + ctffind program<motion_correct_ctffind/end>
+        ! <motion_correct_ctf_estimate/begin>is a pipelined motion_correct + ctf_estimate program<motion_correct_ctf_estimate/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -393,9 +364,9 @@ select case(prg)
         if( .not. cline%defined('lpstart')                ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')                 ) call cline%set('lpstop',            8.)
         if( .not. cline%defined('pspecsz_motion_correct') ) call cline%set('pspecsz_motion_correct',  512.)
-        if( .not. cline%defined('pspecsz_ctffind')        ) call cline%set('pspecsz_ctffind', 512.)
-        if( .not. cline%defined('hp_ctffind')             ) call cline%set('hp_ctffind',       30.)
-        if( .not. cline%defined('lp_ctffind')             ) call cline%set('lp_ctffind',        5.)
+        if( .not. cline%defined('pscpecsz_ctf_estimate')  ) call cline%set('pscpecsz_ctf_estimate', 512.)
+        if( .not. cline%defined('hp_ctfestimate')         ) call cline%set('hp_ctfestimate',       30.)
+        if( .not. cline%defined('lp_ctf_estimate')        ) call cline%set('lp_ctf_estimate',        5.)
         if( .not. cline%defined('outfile')                ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         if( .not. cline%defined('opt')                    ) call cline%set('opt', 'simplex')
         ! execute

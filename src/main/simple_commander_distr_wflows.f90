@@ -16,11 +16,10 @@ use simple_qsys_funs            ! use all in there
 use simple_binoris_io           ! use all in there
 implicit none
 
-public :: motion_correct_ctffind_distr_commander
+public :: motion_correct_ctf_estimate_distr_commander
 public :: motion_correct_distr_commander
 public :: motion_correct_tomo_distr_commander
 public :: powerspecs_distr_commander
-public :: ctffind_distr_commander
 public :: ctf_estimate_distr_commander
 public :: pick_distr_commander
 public :: make_cavgs_distr_commander
@@ -33,10 +32,10 @@ public :: symsrch_distr_commander
 public :: scale_stk_parts_commander
 private
 
-type, extends(commander_base) :: motion_correct_ctffind_distr_commander
+type, extends(commander_base) :: motion_correct_ctf_estimate_distr_commander
   contains
-    procedure :: execute      => exec_motion_correct_ctffind_distr
-end type motion_correct_ctffind_distr_commander
+    procedure :: execute      => exec_motion_correct_ctf_estimate_distr
+end type motion_correct_ctf_estimate_distr_commander
 type, extends(commander_base) :: motion_correct_distr_commander
   contains
     procedure :: execute      => exec_motion_correct_distr
@@ -49,10 +48,6 @@ type, extends(commander_base) :: powerspecs_distr_commander
   contains
     procedure :: execute      => exec_powerspecs_distr
 end type powerspecs_distr_commander
-type, extends(commander_base) :: ctffind_distr_commander
-  contains
-    procedure :: execute      => exec_ctffind_distr
-end type ctffind_distr_commander
 type, extends(commander_base) :: ctf_estimate_distr_commander
   contains
     procedure :: execute      => exec_ctf_estimate_distr
@@ -96,10 +91,10 @@ end type scale_stk_parts_commander
 
 contains
 
-    subroutine exec_motion_correct_ctffind_distr( self, cline )
+    subroutine exec_motion_correct_ctf_estimate_distr( self, cline )
         use simple_commander_preprocess
-        class(motion_correct_ctffind_distr_commander), intent(inout) :: self
-        class(cmdline),                                intent(inout) :: cline
+        class(motion_correct_ctf_estimate_distr_commander), intent(inout) :: self
+        class(cmdline),                                     intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)                  :: cline_merge_algndocs
         type(qsys_env)                 :: qenv
@@ -148,8 +143,8 @@ contains
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_CTFFIND NORMAL STOP ****')
-    end subroutine exec_motion_correct_ctffind_distr
+        call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_CTF_ESTIMATE NORMAL STOP ****')
+    end subroutine exec_motion_correct_ctf_estimate_distr
 
     subroutine exec_motion_correct_distr( self, cline )
         class(motion_correct_distr_commander), intent(inout) :: self
@@ -296,45 +291,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs_distr
-
-    subroutine exec_ctffind_distr( self, cline )
-        class(ctffind_distr_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(merge_algndocs_commander) :: xmerge_algndocs
-        type(cmdline)                  :: cline_merge_algndocs
-        type(params)                   :: p_master
-        type(chash)                    :: job_descr
-        type(qsys_env)                 :: qenv
-        ! seed the random number generator
-        call seed_rnd
-        ! output command line executed
-        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-        write(*,*) trim(cmdline_glob)
-        ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
-        ! make master parameters
-        p_master = params(cline)
-        p_master%nptcls = nlines(p_master%filetab)
-        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-        ! prepare merge_algndocs command line
-        cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.                    )
-        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part' )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged'//trim(METADATA_EXT) )
-        ! setup the environment for distributed execution
-        call qenv%new(p_master)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        ! merge docs
-        call xmerge_algndocs%execute( cline_merge_algndocs )
-        ! clean
-        call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
-    end subroutine exec_ctffind_distr
 
     subroutine exec_ctf_estimate_distr( self, cline )
         class(ctf_estimate_distr_commander), intent(inout) :: self

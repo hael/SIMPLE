@@ -277,7 +277,7 @@ select case(prg)
         keys_optional(1) = 'unidoc'
         keys_optional(2) = 'filetab'
         keys_optional(3) = 'boxtab'
-        keys_optional(4) = 'ctffind_doc'
+        keys_optional(4) = 'ctf_esitnate_doc'
         keys_optional(5) = 'pcontrast'
         keys_optional(6) = 'box'
         keys_optional(7) = 'outside'

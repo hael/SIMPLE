@@ -39,8 +39,6 @@ contains
         !call del_files('ctfsqsums_even_part',        p%nparts, ext=p%ext )
         !call del_files('ctfsqsums_odd_part',         p%nparts, ext=p%ext )
         call del_files('distr_simple_script_',       p%nparts)
-        call del_files('ctffind_output_part',        p%nparts, ext=trim(METADATA_EXT))
-        call del_files('ctffind_ctrl_file_part',     p%nparts, ext=trim(TXT_EXT))
         ! state and part numbered files
         do istate=1,MAXS
             ! allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE))

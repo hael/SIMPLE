@@ -33,7 +33,7 @@ contains
         write(*,'(A)', advance='no') ' Relion. The program creates one stack per movie frame as well as a stack of cor'
         write(*,'(A)', advance='no') 'rected framesums. In addition to single-particle image stacks, the program produ'
         write(*,'(A)', advance='no') 'ces a parameter file extract_params.ext that can be used in conjunction with oth'
-        write(*,'(A)') 'er SIMPLE programs. We obtain CTF parameters with CTFFIND4'
+        write(*,'(A)') 'er SIMPLE programs. We obtain CTF parameters with ctf_estimate'
         stop
     end subroutine print_doc_extract
 
@@ -301,11 +301,6 @@ contains
         stop
     end subroutine print_doc_ctf_estimate
 
-    subroutine print_doc_ctffind
-        write(*,'(A)') 'is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)'
-        stop
-    end subroutine print_doc_ctffind
-
     subroutine print_doc_initial_3Dmodel
         write(*,'(A)', advance='no') 'is a distributed workflow for generating an initial 3D model from class averages'
         write(*,'(A)') ' obtained with cluster2D'
@@ -334,10 +329,10 @@ contains
         stop
     end subroutine print_doc_motion_correct
 
-    subroutine print_doc_motion_correct_ctffind
-        write(*,'(A)') 'is a pipelined distributed workflow: motion_correct + ctffind program'
+    subroutine print_doc_motion_correct_ctf_estimate
+        write(*,'(A)') 'is a pipelined distributed workflow: motion_correct + ctf_estimate program'
         stop
-    end subroutine print_doc_motion_correct_ctffind
+    end subroutine print_doc_motion_correct_ctf_estimate
 
     subroutine print_doc_motion_correct_tomo
         write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or motion_correctring of tomograph'
@@ -363,7 +358,7 @@ contains
     end subroutine print_doc_powerspecs
 
     subroutine print_doc_preprocess
-        write(*,'(A)', advance='no') 'is a distributed workflow that executes motion_correct, ctffind and pick in sequ'
+        write(*,'(A)', advance='no') 'is a distributed workflow that executes motion_correct, ctf_estiamte and pick in sequ'
         write(*,'(A)') 'ence and in streaming mode as the microscope collects the data'
         stop
     end subroutine print_doc_preprocess
@@ -475,11 +470,10 @@ contains
         write(*,'(A)') 'cluster3D_refine'
         write(*,'(A)') 'comlin_smat'
         write(*,'(A)') 'ctf_estimate'
-        write(*,'(A)') 'ctffind'
         write(*,'(A)') 'initial_3Dmodel'
         write(*,'(A)') 'make_cavgs'
         write(*,'(A)') 'motion_correct'
-        write(*,'(A)') 'motion_correct_ctffind'
+        write(*,'(A)') 'motion_correct_ctf_estimate'
         write(*,'(A)') 'motion_correct_tomo'
         write(*,'(A)') 'pick'
         write(*,'(A)') 'powerspecs'

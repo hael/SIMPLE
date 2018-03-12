@@ -129,7 +129,7 @@ contains
                 ptr2prg => extract
             case('motion_correct')
                 ptr2prg => motion_correct
-            case('ctf_estimate') 
+            case('ctf_estimate')
                 ptr2prg => ctf_estimate
             case('pick')
                 ptr2prg => pick
@@ -435,14 +435,10 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//&   ! descr_long
         &' in sequence or streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &3, 14, 5, 13, 5, 0, 2)                                                               ! # entries in each group
+        &1, 17, 2, 13, 5, 0, 2)                                                             ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess%set_input('img_ios', 1, 'filetab', 'file', 'Movies list',&
-        &'List of movies to integerate', 'list input e.g. movs.txt', .false.)
-        call preprocess%set_input('img_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
-        call preprocess%set_input('img_ios', 3, 'dir_movies', 'file', 'Input movies directory',&
-        & 'Where the movies to process will sequentially appear (streaming only)', 'e.g. data_xxx/ (streaming only)', .false.)
+        call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1, smpd)
         call preprocess%set_input('parm_ios', 2, kv)
@@ -453,20 +449,24 @@ contains
         call preprocess%set_input('parm_ios', 6, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false.)
         call preprocess%set_input('parm_ios', 7, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false.)
         call preprocess%set_input('parm_ios', 8, phaseplate)
-        call preprocess%set_input('parm_ios',11, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false.)
-        call preprocess%set_input('parm_ios',12, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false.)
-        call preprocess%set_input('parm_ios',13, 'dopick', 'binary', 'Picking on/off', 'Whether to perform automated picking(yes|no){yes}', '(yes|no){no}', .false.)
-        call preprocess%set_input('parm_ios',14, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false.)
-        ! alternative inputs
-        call preprocess%set_input('alt_ios', 1, 'refs', 'file', 'Picking 2D references',&
+        call preprocess%set_input('parm_ios', 9, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false.)
+        call preprocess%set_input('parm_ios',10, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false.)
+        call preprocess%set_input('parm_ios',11, 'dopick', 'binary', 'Picking on/off', 'Whether to perform automated picking(yes|no){yes}', '(yes|no){no}', .false.)
+        call preprocess%set_input('parm_ios',12, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false.)
+        call preprocess%set_input('parm_ios',13, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false.)
-        call preprocess%set_input('alt_ios', 2, 'fbody', 'string', 'Template output micrograph name',&
+        call preprocess%set_input('parm_ios',14, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false.)
-        call preprocess%set_input('alt_ios', 3, 'pspecsz_motion_correct', 'num', 'Size of power spectrum for motion_correct',&
+        call preprocess%set_input('parm_ios',15, 'pspecsz_motion_correct', 'num', 'Size of power spectrum for motion_correct',&
         &'Size of power spectrum for motion_correct in pixels{512}', 'in pixels{512}', .false.)
-        call preprocess%set_input('alt_ios', 4, 'pspecsz_ctffind', 'num', 'Size of power spectrum for CTFFIND',&
-        &'Size of power spectrum for CTFFIND in pixels{512}', 'in pixels{512}', .false.)
-        call preprocess%set_input('alt_ios', 5, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        call preprocess%set_input('parm_ios',16, 'pscpecsz_ctf_estimate', 'num', 'Size of power spectrum for ctf_estimate',&
+        &'Size of power spectrum for ctf_estimate in pixels{512}', 'in pixels{512}', .false.)
+        call preprocess%set_input('parm_ios',17, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        ! alternative inputs
+        call preprocess%set_input('alt_ios', 1, 'filetab', 'file', 'Movies list',&
+        &'List of movies to integerate', 'list input e.g. movs.txt', .false.)
+        call preprocess%set_input('alt_ios', 2, 'dir_movies', 'file', 'Input movies directory',&
+        & 'Where the movies to process will sequentially appear (streaming only)', 'e.g. data_xxx/ (streaming only)', .false.)
         ! search controls
         call preprocess%set_input('srch_ctrls', 1, trs)
         call preprocess%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false.)
@@ -487,9 +487,9 @@ contains
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false.)
         call preprocess%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false.)
-        call preprocess%set_input('filt_ctrls', 3, 'lp_ctffind', 'num', 'Low-pass limit for CTF parameter estimation',&
+        call preprocess%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
         & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false.)
-        call preprocess%set_input('filt_ctrls', 4, 'hp_ctffind', 'num', 'High-pass limit for CTF parameter estimation',&
+        call preprocess%set_input('filt_ctrls', 4, 'hp_ctfestimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false.)
         call preprocess%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
         & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false.)
@@ -508,7 +508,7 @@ contains
         &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_long
         &'simple_distr_exec',&                                                 ! executable
-        &1, 5, 2, 4, 2, 0, 2)                                                ! # entries in each group
+        &1, 7, 0, 4, 2, 0, 2)                                                ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ctf_estimate%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
@@ -522,10 +522,11 @@ contains
         call ctf_estimate%set_input('parm_ios', 4, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false.)
         ctf_estimate%parm_ios(4)%required = .true.
         call ctf_estimate%set_input('parm_ios', 5, phaseplate)
-        ! alternative inputs
-        call ctf_estimate%set_input('alt_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
-        call ctf_estimate%set_input('alt_ios', 2, 'pspecsz', 'num', 'Size of power spectrum',&
+        call ctf_estimate%set_input('parm_ios', 6, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
+        call ctf_estimate%set_input('parm_ios', 7, 'pspecsz', 'num', 'Size of power spectrum',&
         &'Size of power spectrum image in pixels{512}', 'in pixels{512}', .false.)
+        ! alternative inputs
+        ! <empty>
         ! search controls
         call ctf_estimate%set_input('srch_ctrls', 1, 'dfmin', 'num', 'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false.)
         call ctf_estimate%set_input('srch_ctrls', 2, 'dfmax', 'num', 'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false.)
@@ -542,7 +543,6 @@ contains
         call ctf_estimate%set_input('comp_ctrls', 2, nthr)
     end subroutine new_ctf_estimate
 
-
     subroutine new_pick
         ! PROGRAM SPECIFICATION
         call pick%new(&
@@ -550,17 +550,18 @@ contains
         &'is a distributed workflow for template-based particle picking',&      ! descr_short
         &'is a distributed workflow for template-based particle picking',&      ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &2, 1, 1, 13, 2, 0, 1)                                                 ! # entries in each group
+        &1, 3, 0, 2, 1, 0, 1)                                                 ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
         &'List of micrographs to process', 'list input e.g. intgs.txt', .true.)
-        call pick%set_input('img_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false.)
         ! parameter input/output
         call pick%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        call pick%set_input('alt_ios', 1, 'refs', 'file', 'Picking 2D references',&
+        call pick%set_input('parm_ios', 2, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false.)
+        call pick%set_input('parm_ios', 3, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false.)
+        ! alternative inputs
+        ! <empty>
         ! search controls
         call pick%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false.)
         call pick%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false.)
@@ -638,7 +639,7 @@ contains
         & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
         & contiguous subset of frames will be averaged without any dose-weighting applied.',&   ! descr_long
         &'simple_distr_exec',&                                                                  ! executable
-        &1, 6, 3, 6, 2, 0, 2)                                                                   ! # entries in each group
+        &1, 9, 0, 6, 2, 0, 2)                                                                   ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'filetab', 'file', 'Movies list',&
@@ -650,11 +651,12 @@ contains
         call motion_correct%set_input('parm_ios', 4, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false.)
         call motion_correct%set_input('parm_ios', 5, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false.)
         call motion_correct%set_input('parm_ios', 6, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false.)
-        ! alternative inputs
-        call motion_correct%set_input('alt_ios', 1, 'fbody', 'string', 'Template output micrograph name',&
+        call motion_correct%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false.)
-        call motion_correct%set_input('alt_ios', 2, 'pspecsz', 'num', 'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false.)
-        call motion_correct%set_input('alt_ios', 3, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        call motion_correct%set_input('parm_ios', 8, 'pspecsz', 'num', 'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false.)
+        call motion_correct%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        ! alternative inputs
+        ! <empty>
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
         call motion_correct%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial iteration', 'Initial iteration', '...', .false.)
@@ -686,26 +688,26 @@ contains
         & program produces a parameter files that should be concatenated for use in&
         & conjunction with other SIMPLE programs.',&
         &'simple_exec',&                                                                        ! executable
-        &0, 6, 3, 0, 0, 0, 0)                                                                   ! # entries in each group
+        &0, 7, 2, 0, 0, 0, 0)                                                                   ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call extract%set_input('parm_ios', 1, smpd)
-        call extract%set_input('parm_ios', 2, 'unidoc', 'file', 'Unified resources doc', 'Unified resources doc&
-        & mapping micrographs, box files & CTF parameters', 'input unidoc e.g. unidoc_001.txt', .false.)
-        call extract%set_input('parm_ios', 3, 'ctffind_doc', 'file', 'CTFFIND CTF parameters', 'list of per-micrograph &
-        & CTFFIND CTF parameters to transfer', 'list input *.txt', .false.)
+        call extract%set_input('parm_ios', 2, 'dir', 'string', 'Ouput directory',&
+        &'Ouput directory for single-particle images & CTF parameters', '...', .false.)
+        call extract%set_input('parm_ios', 3, 'ctf_estimate_doc', 'file', 'ctf_estimate CTF parameters', 'list of per-micrograph &
+        & ctf_estimate CTF parameters to transfer', 'list input *.txt', .false.)
         call extract%set_input('parm_ios', 4, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false.)
         call extract%set_input('parm_ios', 5, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false.)
         call extract%set_input('parm_ios', 6, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false.)
+        call extract%set_input('parm_ios', 7, 'boxtab', 'file', 'List of boxes',&
+        &'List of single-particles boxes (EMAN format)', 'list input e.g. boxes.txt', .false.)
         ! alternative inputs
         call extract%set_input('alt_ios', 1, 'filetab', 'file', 'Micrographs list',&
         &'List of integrated micrographs', 'list input e.g. mics.txt', .false.)
-        call extract%set_input('alt_ios', 2, 'boxtab', 'file', 'List of boxes',&
-        &'List of single-particles boxes (EMAN format)', 'list input e.g. boxes.txt', .false.)
-        call extract%set_input('alt_ios', 3, 'dir', 'string', 'Ouput directory',&
-        &'Ouput directory for single-particle images & CTF parameters', '...', .false.)
+        call extract%set_input('alt_ios', 2, 'unidoc', 'file', 'Unified resources doc', 'Unified resources doc&
+        & mapping micrographs, box files & CTF parameters', 'input unidoc e.g. unidoc_001.txt', .false.)
         ! search controls
         ! <empty>
         ! filter controls
@@ -724,7 +726,7 @@ contains
         &'is used to produce class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &3, 6, 4, 0, 0, 1, 2)                      ! # entries in each group
+        &3,10, 0, 0, 0, 0, 2)                      ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, stk)
@@ -741,12 +743,13 @@ contains
         call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D orientation and CTF parameters',&
          '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
         &'.simple|.txt parameter file', .false.)
-        ! alternative inputs
-        call make_cavgs%set_input('alt_ios', 1, 'mul', 'num', 'Shift multiplication factor',&
+        call make_cavgs%set_input('parm_ios', 7, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false.)
-        call make_cavgs%set_input('alt_ios', 2, outfile)
-        call make_cavgs%set_input('alt_ios', 3, weights2D)
-        call make_cavgs%set_input('alt_ios', 4, remap_cls)
+        call make_cavgs%set_input('parm_ios', 8, outfile)
+        call make_cavgs%set_input('parm_ios', 9, weights2D)
+        call make_cavgs%set_input('parm_ios',10, remap_cls)
+        ! alternative inputs
+        ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
@@ -998,7 +1001,7 @@ contains
                         iopt = nreq
                         do i=1,nparams
                             if( .not. required(i) )then
-                                iopt = iopt + 1 
+                                iopt = iopt + 1
                                 rearranged_keys(iopt) = sorted_keys(i)
                             endif
                         end do

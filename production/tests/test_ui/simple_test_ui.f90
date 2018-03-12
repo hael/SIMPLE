@@ -21,9 +21,9 @@ call make_user_interface
 ! call ptr2prg%print_cmdline()
 ! call ptr2prg%write2json()
 
-call get_prg_ptr('preprocess', ptr2prg)
-call ptr2prg%print_cmdline()
-call ptr2prg%write2json()
+! call get_prg_ptr('preprocess', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
 
 ! call get_prg_ptr('extract', ptr2prg)
 ! call ptr2prg%print_cmdline()
@@ -32,7 +32,7 @@ call ptr2prg%write2json()
 ! call get_prg_ptr('motion_correct', ptr2prg)
 ! call ptr2prg%print_cmdline()
 ! call ptr2prg%write2json()
-
+!
 ! call get_prg_ptr('ctf_estimate', ptr2prg)
 ! call ptr2prg%print_cmdline()
 ! call ptr2prg%write2json()

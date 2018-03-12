@@ -16,23 +16,23 @@ private
         enumerator :: NONE=-1, NO=0, YES,  BOTH, MAYBE
     end enum
     type, public :: YESORNO
-        private 
-        integer(kind(NO)) :: m_yesorno = NO 
+        private
+        integer(kind(NO)) :: m_yesorno = NO
     end type YESORNO
     !! EM file format
     enum, bind(c)
         enumerator :: MRC=0, SPIDER , IMAGIC
     end enum
     type, public :: file_format
-        private 
-        integer(kind(MRC)) :: m_fileformat = MRC 
+        private
+        integer(kind(MRC)) :: m_fileformat = MRC
     end type file_format
     !! Angle unit
     enum, bind(c)
         enumerator :: RADIANS,DEGREES
     end enum
     type, public :: ANGLEUNIT
-        private 
+        private
         integer(kind(RADIANS)) :: m_angle = DEGREES
     end type
     !! Mask type
@@ -40,7 +40,7 @@ private
         enumerator :: SOFT, HARD
     end enum
     type, public :: MASKTYPE
-        private 
+        private
         integer(kind(SOFT)) :: m_msktype = SOFT
     end type
     !! AutoMask type
@@ -48,7 +48,7 @@ private
         enumerator :: NOAUTOMASK=0, YESAUTOMASK, CAVG
     end enum
     type, public :: AUTOMASKTYPE
-        private 
+        private
         integer(kind(NOAUTOMASK)) :: m_automsktype = NOAUTOMASK
     end type
     !! Defocus unit
@@ -56,15 +56,15 @@ private
         enumerator :: MICRONS, ANGSTROMS
     end enum
     type, public :: DEFOCUSUNIT
-        private 
+        private
         integer(kind(MICRONS)) :: m_dfunit = MICRONS
     end type
     !! Box type
     enum, bind(c)
-        enumerator :: EMANBOX, EMAN2BOX,NULLBOX 
+        enumerator :: EMANBOX, EMAN2BOX,NULLBOX
     end enum
     type, public :: boxtype
-        private 
+        private
         integer(kind()) :: m_boxtype=EMANBOX
     end type boxtype
 
@@ -73,19 +73,19 @@ private
         enumerator :: EULER, SHIFT, EULSHIFT, ALL
     end enum
     type, public :: docktype
-        private 
+        private
         integer(kind(EULER)) :: m_docktype=EULER
     end type docktype
 
     !! CTF flag type
-    enum, bind(c) 
+    enum, bind(c)
         enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP=3
     end enum
     type :: CTFFLAGTYPE
         private
         integer(kind(CTFFLAG_NO)) :: m_ctfflag=CTFFLAG_NO
     end type CTFFLAGTYPE
-    enum, bind(c) 
+    enum, bind(c)
         enumerator :: CTFMODE_ABS , CTFMODE_CTF , CTFMODE_FLIP , CTFMODE_FLIPNEG, CTFMODE_NEG, CTFMODE_SQUARE
     end enum
     type :: CTFMODETYPE
@@ -97,25 +97,25 @@ private
         enumerator :: POWELL,SIMPLEX,OASIS,BFORCE,PSO,DE
     end enum
     type, public :: opttype
-        private 
+        private
         integer(kind(POWELL)) :: m_opt=SIMPLEX
-    end type 
+    end type
     !! Power spectrum
     enum, bind(c)
         enumerator :: ampPS,squarePS,phasePS,realPS,logPS,sqrtPS
     end enum
     type, public :: speckindtype
-        private 
+        private
         integer(kind()) :: m_speckind= sqrtPS
     end type speckindtype
-    
-   
+
+
     !! Split mode
     enum, bind(c)
         enumerator :: EVEN, ODD
     end enum
     type, public :: splitmode
-        private 
+        private
         integer(kind(EVEN)) :: m_splitmode= EVEN
     end type splitmode
     !! Refine
@@ -123,7 +123,7 @@ private
         enumerator :: NOREFINE, HET, SHC, SNHC, SHCNEIGH, GREEDY, NEIGH, GREEDY, GREEDYNEIGH, EXP_REFINE
     end enum
     type, public :: refinetype
-        private 
+        private
         integer(kind(NOREFINE)) :: m_refine= NOREFINE
     end type refinetype
 
@@ -132,9 +132,9 @@ private
         enumerator :: SIGMFUN,TANHFUN,LINFUN
     end enum
     type, public :: hfuntype
-        private 
+        private
         integer(kind(SIGMFUN)) :: m_hfun=SIGMFUN
-    end type 
+    end type
 
 
 !> global parameters
@@ -243,7 +243,7 @@ type :: params
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
-    character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
+    character(len=STDLEN) :: ctf_estimate_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: refs_msk=''
@@ -269,13 +269,13 @@ type :: params
     type(DEFOCUSUNIT) :: dfunit=MICRONS     !< defocus unit (A|microns){microns}
     type(docktype) :: dockmode = EULER
 
-   
+
 !    character(len=STDLEN) :: endian='native'      !< endiannesss of files(big|little|native){native}
-   
+
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: extrmode='all'
-    
+
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
 
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
@@ -376,7 +376,7 @@ type :: params
     integer :: ppca=0
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: pspecsz_motion_correct=512  !< size of power spectrum 4 motion_correct(in pixels)
-    integer :: pspecsz_ctffind=1024
+    integer :: pscpecsz_ctf_estimate=1024
     integer :: ptcl=1
     integer :: ring1=2
     integer :: ring2=0
@@ -442,14 +442,14 @@ type :: params
     real    :: ftol=1e-6
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
-    real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
+    real    :: hp_ctfestimate=30.      !< high-pass limit 4 ctf_estimate(in A)
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
     real    :: lp_grid=20.
     real    :: lp=20.              !< low-pass limit(in A)
-    real    :: lp_ctffind=5.0      !< low-pass limit 4 ctffind(in A)
+    real    :: lp_ctf_estimate=5.0      !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplims2D(3)
     real    :: lpmed=20.
@@ -491,9 +491,9 @@ type :: params
     logical :: doshift         = .false.
     logical :: l_envmsk        = .false.
     logical :: l_autoscale     = .false.
-    logical :: l_dose_weight   = .false. 
+    logical :: l_dose_weight   = .false.
     logical :: l_frac_update   = .false.
-    logical :: l_innermsk      = .false. 
+    logical :: l_innermsk      = .false.
     logical :: l_pick          = .false.
     logical :: l_remap_classes = .false.
   contains
@@ -663,7 +663,7 @@ contains
         call check_file('boxfile',        self%boxfile,'T')
         call check_file('boxtab',         self%boxtab,'T')
         call check_file('clsdoc',         self%clsdoc,'S','T')
-        call check_file('ctffind_doc',    self%ctffind_doc, 'T', 'B')
+        call check_file('ctf_estimate_doc',    self%ctf_estimate_doc, 'T', 'B')
         call check_file('comlindoc',      self%comlindoc,'T')
         call check_file('deftab',         self%deftab, 'T', 'B')
         call check_file('doclist',        self%doclist,'T')
@@ -749,7 +749,7 @@ contains
         call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('pspecsz_motion_correct', self%pspecsz_motion_correct)
-        call check_iarg('pspecsz_ctffind', self%pspecsz_ctffind)
+        call check_iarg('pscpecsz_ctf_estimate', self%pscpecsz_ctf_estimate)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
         call check_iarg('startit',        self%startit)
@@ -807,12 +807,12 @@ contains
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)
         call check_rarg('hp',             self%hp)
-        call check_rarg('hp_ctffind',     self%hp_ctffind)
+        call check_rarg('hp_ctfestimate',     self%hp_ctfestimate)
         call check_rarg('inner',          self%inner)
         call check_rarg('kv',             self%kv)
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
-        call check_rarg('lp_ctffind',     self%lp_ctffind)
+        call check_rarg('lp_ctf_estimate',     self%lp_ctf_estimate)
         call check_rarg('lp_grid',        self%lp_grid)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lpstart',        self%lpstart)
@@ -853,13 +853,13 @@ contains
                 write(*,*) 'WARNING! Could not set unidoc to oritab because oritab is defined'
             endif
         endif
-        ! put ctffind_doc (if defined) as oritab
-        if( cline%defined('ctffind_doc') )then
+        ! put ctf_estimate_doc (if defined) as oritab
+        if( cline%defined('ctf_estimate_doc') )then
             if( .not. cline%defined('oritab') )then
-                call cline%set('oritab', self%ctffind_doc)
-                self%oritab = self%ctffind_doc
+                call cline%set('oritab', self%ctf_estimate_doc)
+                self%oritab = self%ctf_estimate_doc
             else
-                write(*,*) 'WARNING! Could not set ctffind_doc to oritab because oritab is defined'
+                write(*,*) 'WARNING! Could not set ctf_estimate_doc to oritab because oritab is defined'
             endif
         endif
         ! make all programs have the simple_prefix
@@ -924,7 +924,7 @@ contains
                     call bos%open(self%oritab)
                     self%nptcls = bos%get_n_records()
                     call bos%close
-                endif            
+                endif
             endif
         else if( self%refs .ne. '' )then
             if( file_exists(self%refs) )then
