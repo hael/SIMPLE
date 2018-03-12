@@ -53,11 +53,15 @@ call make_user_interface
 ! call ptr2prg%print_cmdline()
 ! call ptr2prg%write2json()
 
-call get_prg_ptr('scale', ptr2prg)
-call ptr2prg%print_cmdline()
-call ptr2prg%write2json()
+! call get_prg_ptr('scale', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+!
+! call get_prg_ptr('mask', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
 
-call get_prg_ptr('mask', ptr2prg)
+call get_prg_ptr('volops', ptr2prg)
 call ptr2prg%print_cmdline()
 call ptr2prg%write2json()
 

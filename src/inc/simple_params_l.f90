@@ -375,8 +375,6 @@ type :: params
     integer :: pcasz=0
     integer :: ppca=0
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
-    integer :: pspecsz_motion_correct=512  !< size of power spectrum 4 motion_correct(in pixels)
-    integer :: pscpecsz_ctf_estimate=1024
     integer :: ptcl=1
     integer :: ring1=2
     integer :: ring2=0
@@ -748,8 +746,6 @@ contains
         call check_iarg('part',           self%part)
         call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)
-        call check_iarg('pspecsz_motion_correct', self%pspecsz_motion_correct)
-        call check_iarg('pscpecsz_ctf_estimate', self%pscpecsz_ctf_estimate)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
         call check_iarg('startit',        self%startit)

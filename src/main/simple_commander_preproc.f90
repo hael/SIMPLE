@@ -191,7 +191,6 @@ contains
         ! loop over exposures (movies)
         do imovie=fromto(1),fromto(2)
             p%smpd    = smpd_original
-            p%pspecsz = p%pspecsz_motion_correct
             if( ntot == 1 )then
                 movie_ind = p%part ! streaming mode
             else
@@ -206,7 +205,6 @@ contains
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')    !! realloc warning
             moviename_intg   = mciter%get_moviename('intg')
-            p%pspecsz        = p%pscpecsz_ctf_estimate
             p%hp             = p%hp_ctfestimate
             p%lp             = p%lp_ctf_estimate
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni, output_dir_ctf_estimate)

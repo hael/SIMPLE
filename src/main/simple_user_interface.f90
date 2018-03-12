@@ -13,6 +13,8 @@ type simple_input_param
     character(len=:), allocatable :: descr_short
     character(len=:), allocatable :: descr_long
     character(len=:), allocatable :: descr_placeholder
+    character(len=:), allocatable :: cval_default
+    real                          :: rval_default = 0.
     logical :: required = .true.
 end type simple_input_param
 
@@ -42,7 +44,8 @@ type :: simple_program
     procedure, private :: new
     procedure, private :: set_input_1
     procedure, private :: set_input_2
-    generic,   private :: set_input => set_input_1, set_input_2
+    procedure, private :: set_input_3
+    generic,   private :: set_input => set_input_1, set_input_2, set_input_3
     procedure          :: print_ui
     procedure          :: print_cmdline
     procedure          :: print_prg_descr_long
@@ -67,18 +70,29 @@ type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: mask
 type(simple_program), target :: scale
+type(simple_program), target :: volops
 
 ! declare common params here, with name same as flag
+type(simple_input_param) :: astigtol
+type(simple_input_param) :: bfac
+type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
+type(simple_input_param) :: fraca
 type(simple_input_param) :: kv
 type(simple_input_param) :: deftab
+type(simple_input_param) :: dfmin
+type(simple_input_param) :: dfmax
+type(simple_input_param) :: dfstep
 type(simple_input_param) :: frac
 type(simple_input_param) :: hp
 type(simple_input_param) :: lp
+type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: inner
 type(simple_input_param) :: maxits
+type(simple_input_param) :: mirr
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
+type(simple_input_param) :: mw
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nparts
 type(simple_input_param) :: ncls
@@ -87,8 +101,10 @@ type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: outer
 type(simple_input_param) :: outfile
+type(simple_input_param) :: outvol
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
+type(simple_input_param) :: pspecsz
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
@@ -97,6 +113,11 @@ type(simple_input_param) :: stktab
 type(simple_input_param) :: trs
 type(simple_input_param) :: update_frac
 type(simple_input_param) :: weights2D
+
+interface set_param
+    module procedure set_param_1
+    module procedure set_param_2
+end interface set_param
 
 contains
 
@@ -118,6 +139,7 @@ contains
         call new_postprocess
         call new_mask
         call new_scale
+        call new_volops
         ! ...
     end subroutine make_user_interface
 
@@ -153,6 +175,8 @@ contains
                 ptr2prg => mask
             case('scale')
                 ptr2prg => scale
+            case('volops')
+                ptr2prg => volops
             case DEFAULT
                 write(*,*) 'which program flag: ', trim(which_program), ' unsupported'
                 stop 'simple_user_interface :: get_prg_ptr'
@@ -179,64 +203,90 @@ contains
     ! private class methods
 
     subroutine set_common_params
-        call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false.)
-        call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false.)
+        call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
+        call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF correction', 'Contrast Transfer Function correction; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
-        &'(yes|no|flip){no}', .true.)
-        call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true.)
-        call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false.)
+        &'(yes|no|flip){no}', .true., 'no')
+        call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
-        &'.simple|.txt parameter file', .false.)
+        &'.simple|.txt parameter file', .false., 'deftab'//trim(METADATA_EXT))
         call set_param(oritab,        'oritab',        'file',   'Orientation and CTF parameter file', 'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false.)
+        &'.simple|.txt parameter file', .false., 'oritab'//trim(METADATA_EXT))
         call set_param(outfile,       'outfile',       'file',   'Output orientation and CTF parameter file', 'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false.)
-        call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous solution', 'start iterations from here', .false.)
+        &'.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
+        call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous solution', 'start iterations from here', .false., 1.0)
         call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
-        &'max shift per iteration in pixels{5}', .false.)
-        call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false.)
-        call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false.)
-        call set_param(lp,            'hp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'high-pass limit in Angstroms', .false.)
-        call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true.)
+        &'max shift per iteration in pixels{5}', .false., 0.0)
+        call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
+        call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
+        call set_param(lp,            'hp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'high-pass limit in Angstroms', .false., 20.)
+        call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true., 0.)
         call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
-        &'inner mask radius in pixels', .false.)
+        &'inner mask radius in pixels', .false., 0.)
         call set_param(ncls,          'ncls',          'num', 'Number of 2D clusters', 'Number of groups to sort the particles &
-        &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .false.)
+        &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .false., 200.)
         call set_param(nparts,        'nparts',        'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
-        &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true.)
+        &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per part', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
-        &logical threads in a socket.', '# shared-memory CPU threads', .false.)
+        &logical threads in a socket.', '# shared-memory CPU threads', .false., 1.0)
         call set_param(outer,         'outer',         'num',    'Outer mask radius', 'Outer mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
-        &'outer mask radius in pixels', .false.)
+        &'outer mask radius in pixels', .false., 0.)
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
-        &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false.)
+        &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
-        'fraction of particles used(0.1-0.9){1.0}', .false.)
-        call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false.)
-        call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true.)
+        'fraction of particles used(0.1-0.9){1.0}', .false., 1.0)
+        call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
+        call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
-        &used in discrete 3D orientation search', '# projections used{2500}', .false.)
-        call set_param(objfun,        'objfun',        'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false.)
+        &used in discrete 3D orientation search', '# projections used{2500}', .false., 2500.)
+        call set_param(objfun,        'objfun',        'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
         call set_param(weights2D,     'weights2D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
-        call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false.)
-        call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false.)
-
-        contains
-
-            subroutine set_param( self, key, keytype, descr_short, descr_long, descr_placeholder, required )
-                type(simple_input_param), intent(inout) :: self
-                character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
-                logical,                  intent(in)    :: required
-                allocate(self%key,               source=trim(key))
-                allocate(self%keytype,           source=trim(keytype))
-                allocate(self%descr_short,       source=trim(descr_short))
-                allocate(self%descr_long,        source=trim(descr_long))
-                allocate(self%descr_placeholder, source=trim(descr_placeholder))
-                self%required = required
-            end subroutine set_param
-
+        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false., 300.)
+        call set_param(lplim_crit,    'lplim_crit',    'num', 'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
+        &'low-pass FSC criterion(0.143-0.5){0.3}', .false., 0.3)
+        call set_param(cs,            'cs',            'num', 'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false., 2.7)
+        call set_param(fraca,         'fraca',         'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false., 0.1)
+        call set_param(pspecsz,       'pspecsz',       'num', 'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false., 512.)
+        call set_param(dfmin,         'dfmin',         'num', 'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false., 0.5)
+        call set_param(dfmax,         'dfmax',         'num', 'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false., 5.0)
+        call set_param(dfstep,        'dfstep',        'num', 'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false., 0.05)
+        call set_param(astigtol,      'astigtol',      'num', 'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns',  .false., 0.05)
+        call set_param(mw,            'mw',            'num', 'Molecular weight','Molecular weight in kDa', 'in kDa', .false., 0.)
+        call set_param(mirr,          'mirr',          'multi', 'Perform mirroring', 'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false., 'no')
+        call set_param(bfac,          'bfac',          'num', 'B-factor for sharpening','B-factor for sharpening in Angstroms^2', 'B-factor in Angstroms^2', .false., 200.)
+        call set_param(outvol,        'outvol',        'file', 'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
     end subroutine set_common_params
+
+    subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
+        type(simple_input_param), intent(inout) :: self
+        character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
+        logical,                  intent(in)    :: required
+        real,                     intent(in)    :: default_value
+        allocate(self%key,               source=trim(key))
+        allocate(self%keytype,           source=trim(keytype))
+        allocate(self%descr_short,       source=trim(descr_short))
+        allocate(self%descr_long,        source=trim(descr_long))
+        allocate(self%descr_placeholder, source=trim(descr_placeholder))
+        self%required = required
+        if( .not. self%required ) self%rval_default = default_value
+    end subroutine set_param_1
+
+    subroutine set_param_2( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
+        type(simple_input_param), intent(inout) :: self
+        character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
+        logical,                  intent(in)    :: required
+        character(len=*),         intent(in)    :: default_value
+        allocate(self%key,               source=trim(key))
+        allocate(self%keytype,           source=trim(keytype))
+        allocate(self%descr_short,       source=trim(descr_short))
+        allocate(self%descr_long,        source=trim(descr_long))
+        allocate(self%descr_placeholder, source=trim(descr_placeholder))
+        self%required = required
+        if( .not. self%required ) allocate(self%cval_default, source=trim(default_value))
+    end subroutine set_param_2
 
     subroutine new_refine3D
         ! PROGRAM SPECIFICATION
@@ -252,7 +302,7 @@ contains
         call refine3D%set_input('img_ios', 1, stk)
         call refine3D%set_input('img_ios', 2, stktab)
         call refine3D%set_input('img_ios', 3, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
-        & sections for particle image matching', 'input volume e.g. recvol.mrc', .false.)
+        & sections for particle image matching', 'input volume e.g. recvol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
         call refine3D%set_input('parm_ios', 1, ctf)
         call refine3D%set_input('parm_ios', 2, smpd)
@@ -266,39 +316,38 @@ contains
         call refine3D%set_input('srch_ctrls', 2, startit)
         call refine3D%set_input('srch_ctrls', 3, trs)
         call refine3D%set_input('srch_ctrls', 4, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false.)
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call refine3D%set_input('srch_ctrls', 5, maxits)
         call refine3D%set_input('srch_ctrls', 6, update_frac)
         call refine3D%set_input('srch_ctrls', 7, frac)
         call refine3D%set_input('srch_ctrls', 8, pgrp)
         call refine3D%set_input('srch_ctrls', 9, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
-        &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false.)
+        &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false., 200.)
         call refine3D%set_input('srch_ctrls', 10, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
-        '# states to reconstruct', .false.)
+        '# states to reconstruct', .false., 1.0)
         call refine3D%set_input('srch_ctrls', 11, objfun)
         call refine3D%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
-        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false.)
+        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false.)
-        call refine3D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false.)
+        &Angstroms{30}', .false., 30.)
+        call refine3D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
         call refine3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
-        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false.)
-        call refine3D%set_input('filt_ctrls', 5, 'lplim_crit', 'num', 'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
-        &'low-pass FSC criterion(0.143-0.5){0.3}', .false.)
+        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
+        call refine3D%set_input('filt_ctrls', 5, lplim_crit)
         call refine3D%set_input('filt_ctrls', 6, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false.)
+        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
         call refine3D%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
+        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)
         call refine3D%set_input('mask_ctrls', 3, mskfile)
         call refine3D%set_input('mask_ctrls', 4, 'focusmsk', 'num', 'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular &
-        &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false.)
-        call refine3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false. )
+        &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
+        call refine3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts)
         call refine3D%set_input('comp_ctrls', 2, nthr)
@@ -323,7 +372,7 @@ contains
         call cluster3D%set_input('parm_ios', 4, oritab)
         cluster3D%parm_ios(4)%required = .true.
         call cluster3D%set_input('parm_ios', 5, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to separate',&
-        '# states to separate', .true.)
+        '# states to separate', .true., 2.0)
         ! alternative inputs
         !<empty>
         ! search controls
@@ -334,25 +383,24 @@ contains
         call cluster3D%set_input('srch_ctrls', 5, pgrp)
         call cluster3D%set_input('srch_ctrls', 6, objfun)
         call cluster3D%set_input('srch_ctrls', 7, 'refine', 'binary', 'Refinement mode', 'Refinement mode(cluster|clustersym)&
-        &){cluster}', '(cluster|clustersym){cluster}', .false.)
+        &){cluster}', '(cluster|clustersym){cluster}', .false., 'cluster')
         ! filter controls
         call cluster3D%set_input('filt_ctrls', 1, hp)
-        call cluster3D%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false.)
+        call cluster3D%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
         call cluster3D%set_input('filt_ctrls', 3, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
-        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false.)
-        call cluster3D%set_input('filt_ctrls', 4, 'lplim_crit', 'num', 'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
-        &'low-pass FSC criterion(0.143-0.5){0.3}', .false.)
+        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
+        call cluster3D%set_input('filt_ctrls', 4, lplim_crit)
         call cluster3D%set_input('filt_ctrls', 5, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false.)
+        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
         call cluster3D%set_input('filt_ctrls', 6, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false.)
+        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call cluster3D%set_input('mask_ctrls', 1, msk)
         call cluster3D%set_input('mask_ctrls', 2, inner)
         call cluster3D%set_input('mask_ctrls', 3, mskfile)
         call cluster3D%set_input('mask_ctrls', 4, 'focusmsk', 'num', 'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular &
-        &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false.)
-        call cluster3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false. )
+        &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
+        call cluster3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         ! computer controls
         call cluster3D%set_input('comp_ctrls', 1, nparts)
         call cluster3D%set_input('comp_ctrls', 2, nthr)
@@ -373,7 +421,7 @@ contains
         call cluster2D%set_input('img_ios', 1, stk)
         call cluster2D%set_input('img_ios', 2, stktab)
         call cluster2D%set_input('img_ios', 3, 'refs', 'file', 'Initial references',&
-        &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false.)
+        &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc')
         ! parameter input/output
         call cluster2D%set_input('parm_ios', 1, ctf)
         call cluster2D%set_input('parm_ios', 2, smpd)
@@ -389,11 +437,11 @@ contains
         call cluster2D%set_input('srch_ctrls', 3, trs)
         call cluster2D%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
-        &'(yes|no){yes}', .false.)
+        &'(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('srch_ctrls', 5, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false.)
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('srch_ctrls', 6, 'dyncls', 'binary', 'Dynamic reallocation of clusters', 'Dynamic reallocation of clusters &
-        &that fall below a minimum population by randomization(yes|no){yes}', '(yes|no){yes}', .false.)
+        &that fall below a minimum population by randomization(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('srch_ctrls', 7, maxits)
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
         call cluster2D%set_input('srch_ctrls', 9, frac)
@@ -401,17 +449,17 @@ contains
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false.)
+        &Angstroms{30}', .false., 30.)
         call cluster2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
-        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false.)
+        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
         call cluster2D%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &few iterations of search, before the automatic scheme kicks in. Also controls the degree of downsampling in the first &
-        phase', 'initial low-pass limit in Angstroms', .false.)
+        phase', 'initial low-pass limit in Angstroms', .false., 15.)
         call cluster2D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
-        &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false.)
+        &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
-        '(yes|no){yes}', .false.)
+        '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, weights2D)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
@@ -432,7 +480,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D_stream%set_input('img_ios', 1, 'dir_ptcls', 'file', 'Particles directory',&
-        &'Directory where particles and CTF parameters are automatically detected', 'e.g. extract/', .true.)
+        &'Directory where particles and CTF parameters are automatically detected', 'e.g. extract/', .true., '')
         ! parameter input/output
         call cluster2D_stream%set_input('parm_ios', 1, ctf)
         call cluster2D_stream%set_input('parm_ios', 2, smpd)
@@ -441,28 +489,28 @@ contains
         !<empty>
         ! search controls
         call cluster2D_stream%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting number of clusters',&
-        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true.)
+        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
         cluster2D_stream%srch_ctrls(1)%required = .true.
         call cluster2D_stream%set_input('srch_ctrls', 2, 'nptcls_per_cls', 'num', 'Particles per cluster',&
-        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true.)
+        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true., 200.)
         cluster2D_stream%srch_ctrls(2)%required = .true.
         call cluster2D_stream%set_input('srch_ctrls', 3, trs)
         call cluster2D_stream%set_input('srch_ctrls', 4, objfun)
         call cluster2D_stream%set_input('srch_ctrls', 5, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
-        &'(yes|no){yes}', .false.)
+        &'(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('srch_ctrls', 6, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false.)
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
         call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false.)
+        &Angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
-        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false.)
+        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
-        '(yes|no){yes}', .false.)
+        '(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('filt_ctrls', 5, weights2D)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, msk)
@@ -484,7 +532,7 @@ contains
 
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call initial_3Dmodel%set_input('img_ios', 1, 'stk', 'file', 'Class averages image stack', 'Class averages image stack', 'xxx.mrc file with class averages', .true.)
+        call initial_3Dmodel%set_input('img_ios', 1, 'stk', 'file', 'Class averages image stack', 'Class averages image stack', 'xxx.mrc file with class averages', .true., '')
         ! parameter input/output
         call initial_3Dmodel%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -492,24 +540,24 @@ contains
         ! search controls
         call initial_3Dmodel%set_input('srch_ctrls', 1, nspace)
         call initial_3Dmodel%set_input('srch_ctrls', 2, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false.)
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call initial_3Dmodel%set_input('srch_ctrls', 3, maxits)
         call initial_3Dmodel%set_input('srch_ctrls', 4, update_frac)
         call initial_3Dmodel%set_input('srch_ctrls', 5, frac)
         call initial_3Dmodel%set_input('srch_ctrls', 6, pgrp)
         call initial_3Dmodel%set_input('srch_ctrls', 7, 'pgrp_known', 'binary', 'Point-group applied directly', 'Point-group applied direclty rather than first doing a reconstruction &
-        &in c1 and searching for the symmerty axis(yes|no){no}', '(yes|no){no}', .false.)
+        &in c1 and searching for the symmerty axis(yes|no){no}', '(yes|no){no}', .false., 'no')
         call initial_3Dmodel%set_input('srch_ctrls', 8, objfun)
         call initial_3Dmodel%set_input('srch_ctrls', 9, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false.)
+        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
-        call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false.)
-        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false.)
+        call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
+        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
-        call initial_3Dmodel%set_input('mask_ctrls', 3, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false. )
+        call initial_3Dmodel%set_input('mask_ctrls', 3, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
         ! computer controls
         call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
@@ -523,63 +571,60 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//&   ! descr_long
         &' in sequence or streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 16, 2, 13, 5, 0, 2)                                                             ! # entries in each group
+        &1, 15, 2, 13, 5, 0, 2)                                                             ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
+        call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1, smpd)
         call preprocess%set_input('parm_ios', 2, kv)
         preprocess%parm_ios(2)%required = .true.
-        call preprocess%set_input('parm_ios', 3, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false.)
-        call preprocess%set_input('parm_ios', 4, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false.)
-        call preprocess%set_input('parm_ios', 5, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false.)
-        call preprocess%set_input('parm_ios', 6, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false.)
-        call preprocess%set_input('parm_ios', 7, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false.)
+        call preprocess%set_input('parm_ios', 3, cs)
+        call preprocess%set_input('parm_ios', 4, fraca)
+        call preprocess%set_input('parm_ios', 5, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
+        call preprocess%set_input('parm_ios', 6, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess%set_input('parm_ios', 7, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
         call preprocess%set_input('parm_ios', 8, phaseplate)
-        call preprocess%set_input('parm_ios', 9, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false.)
-        call preprocess%set_input('parm_ios',10, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false.)
-        call preprocess%set_input('parm_ios',11, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false.)
+        call preprocess%set_input('parm_ios', 9, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call preprocess%set_input('parm_ios',10, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false., 'no')
+        call preprocess%set_input('parm_ios',11, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
         call preprocess%set_input('parm_ios',12, 'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false.)
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
         call preprocess%set_input('parm_ios',13, 'fbody', 'string', 'Template output micrograph name',&
-        &'Template output integrated movie name', 'e.g. mic_', .false.)
-        call preprocess%set_input('parm_ios',14, 'pspecsz_motion_correct', 'num', 'Size of power spectrum for motion_correct',&
-        &'Size of power spectrum for motion_correct in pixels{512}', 'in pixels{512}', .false.)
-        call preprocess%set_input('parm_ios',15, 'pscpecsz_ctf_estimate', 'num', 'Size of power spectrum for ctf_estimate',&
-        &'Size of power spectrum for ctf_estimate in pixels{512}', 'in pixels{512}', .false.)
-        call preprocess%set_input('parm_ios',16, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
+        call preprocess%set_input('parm_ios',14, pspecsz)
+        call preprocess%set_input('parm_ios',15, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
         ! alternative inputs
         call preprocess%set_input('alt_ios', 1, 'filetab', 'file', 'Movies list',&
-        &'List of movies to integerate', 'list input e.g. movs.txt', .false.)
+        &'List of movies to integerate', 'list input e.g. movies.txt', .false., 'movies.txt')
         call preprocess%set_input('alt_ios', 2, 'dir_movies', 'file', 'Input movies directory',&
-        & 'Where the movies to process will sequentially appear (streaming only)', 'e.g. data_xxx/ (streaming only)', .false.)
+        & 'Where the movies to process will sequentially appear (streaming only)', 'e.g. data_xxx/ (streaming only)', .false., '')
         ! search controls
         call preprocess%set_input('srch_ctrls', 1, trs)
-        call preprocess%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false.)
-        call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false.)
-        call preprocess%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false.)
-        call preprocess%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false.)
-        call preprocess%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas in motion_correct', '# of standard deviation threshold for outlier removal in motion_correct{6}', '{6}', .false.)
-        call preprocess%set_input('srch_ctrls', 7, 'dfmin', 'num', 'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false.)
-        call preprocess%set_input('srch_ctrls', 8, 'dfmax', 'num', 'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false.)
-        call preprocess%set_input('srch_ctrls', 9, 'dfstep', 'num', 'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false.)
-        call preprocess%set_input('srch_ctrls',10, 'astigtol', 'num', 'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.1}', 'in microns', .false.)
-        call preprocess%set_input('srch_ctrls',11, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false.)
+        call preprocess%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false., 1.0)
+        call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call preprocess%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false., 1.0)
+        call preprocess%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false., 1.0)
+        call preprocess%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas in motion_correct', '# of standard deviation threshold for outlier removal in motion_correct{6}', '{6}', .false., 6.)
+        call preprocess%set_input('srch_ctrls', 7, dfmin)
+        call preprocess%set_input('srch_ctrls', 8, dfmax)
+        call preprocess%set_input('srch_ctrls', 9, dfstep)
+        call preprocess%set_input('srch_ctrls',10, astigtol)
+        call preprocess%set_input('srch_ctrls',11, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
         call preprocess%set_input('srch_ctrls',12, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
-        & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false.)
-        call preprocess%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false.)
+        & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call preprocess%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false.)
+        &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
         call preprocess%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false.)
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
         call preprocess%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
-        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false.)
+        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
         call preprocess%set_input('filt_ctrls', 4, 'hp_ctfestimate', 'num', 'High-pass limit for CTF parameter estimation',&
-        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false.)
+        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
         call preprocess%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
-        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false.)
+        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -598,26 +643,25 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ctf_estimate%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
-        &'List of micrographs', 'list input e.g. mics.txt', .true.)
+        &'List of micrographs', 'list input e.g. mics.txt', .true., 'mics.txt')
         ! parameter input/output
         call ctf_estimate%set_input('parm_ios', 1, smpd)
         call ctf_estimate%set_input('parm_ios', 2, kv)
         ctf_estimate%parm_ios(2)%required = .true.
-        call ctf_estimate%set_input('parm_ios', 3, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false.)
+        call ctf_estimate%set_input('parm_ios', 3, cs)
         ctf_estimate%parm_ios(3)%required = .true.
-        call ctf_estimate%set_input('parm_ios', 4, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false.)
+        call ctf_estimate%set_input('parm_ios', 4, fraca)
         ctf_estimate%parm_ios(4)%required = .true.
         call ctf_estimate%set_input('parm_ios', 5, phaseplate)
-        call ctf_estimate%set_input('parm_ios', 6, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false.)
-        call ctf_estimate%set_input('parm_ios', 7, 'pspecsz', 'num', 'Size of power spectrum',&
-        &'Size of power spectrum image in pixels{512}', 'in pixels{512}', .false.)
+        call ctf_estimate%set_input('parm_ios', 6, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. ctf_estimate/', .false., 'ctf_estimate')
+        call ctf_estimate%set_input('parm_ios', 7, pspecsz)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call ctf_estimate%set_input('srch_ctrls', 1, 'dfmin', 'num', 'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false.)
-        call ctf_estimate%set_input('srch_ctrls', 2, 'dfmax', 'num', 'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false.)
-        call ctf_estimate%set_input('srch_ctrls', 3, 'dfstep', 'num', 'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false.)
-        call ctf_estimate%set_input('srch_ctrls', 4, 'astigtol', 'num', 'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.1}', 'in microns', .false.)
+        call ctf_estimate%set_input('srch_ctrls', 1, dfmin)
+        call ctf_estimate%set_input('srch_ctrls', 2, dfmax)
+        call ctf_estimate%set_input('srch_ctrls', 3, dfstep)
+        call ctf_estimate%set_input('srch_ctrls', 4, astigtol)
         ! filter controls
         call ctf_estimate%set_input('filt_ctrls', 1, lp)
         call ctf_estimate%set_input('filt_ctrls', 2, hp)
@@ -639,19 +683,19 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
-        &'List of micrographs to process', 'list input e.g. intgs.txt', .true.)
+        &'List of micrographs to process', 'list input e.g. intgs.txt', .true., '')
         ! parameter input/output
         call pick%set_input('parm_ios', 1, smpd)
         call pick%set_input('parm_ios', 2, 'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false.)
-        call pick%set_input('parm_ios', 3, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false.)
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., '')
+        call pick%set_input('parm_ios', 3, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false.)
-        call pick%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false.)
+        call pick%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
+        call pick%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         ! filter controls
-        call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false.)
+        call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -678,32 +722,32 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'filetab', 'file', 'Movies list',&
-        &'List of movies to integerate', 'list input e.g. movs.txt', .true.)
+        &'List of movies to integerate', 'list input e.g. movs.txt', .true., '')
         ! parameter input/output
         call motion_correct%set_input('parm_ios', 1, smpd)
-        call motion_correct%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false.)
+        call motion_correct%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
         call motion_correct%set_input('parm_ios', 3, kv)
-        call motion_correct%set_input('parm_ios', 4, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false.)
-        call motion_correct%set_input('parm_ios', 5, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false.)
-        call motion_correct%set_input('parm_ios', 6, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false.)
+        call motion_correct%set_input('parm_ios', 4, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
+        call motion_correct%set_input('parm_ios', 5, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call motion_correct%set_input('parm_ios', 6, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.)
         call motion_correct%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
-        &'Template output integrated movie name', 'e.g. mic_', .false.)
-        call motion_correct%set_input('parm_ios', 8, 'pspecsz', 'num', 'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false.)
-        call motion_correct%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false.)
+        &'Template output integrated movie name', 'e.g. mic_', .false., '')
+        call motion_correct%set_input('parm_ios', 8, pspecsz)
+        call motion_correct%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
-        call motion_correct%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial iteration', 'Initial iteration', '...', .false.)
-        call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false.)
-        call motion_correct%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false.)
-        call motion_correct%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false.)
-        call motion_correct%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas', '# of standard deviation threshold for outlier removal', '{6}', .false.)
+        call motion_correct%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial iteration', 'Initial iteration', '...', .false., 1.)
+        call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call motion_correct%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false., 1.)
+        call motion_correct%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false., 1.)
+        call motion_correct%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas', '# of standard deviation threshold for outlier removal', '{6}', .false., 6.)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false.)
+        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
         call motion_correct%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false.)        ! mask controls
+        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 8.)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -729,19 +773,19 @@ contains
         ! parameter input/output
         call extract%set_input('parm_ios', 1, smpd)
         call extract%set_input('parm_ios', 2, 'dir', 'string', 'Ouput directory',&
-        &'Ouput directory for single-particle images & CTF parameters', '...', .false.)
+        &'Ouput directory for single-particle images & CTF parameters', 'e.g. extract/', .false., 'extract')
         call extract%set_input('parm_ios', 3, 'ctf_estimate_doc', 'file', 'ctf_estimate CTF parameters', 'list of per-micrograph &
-        & ctf_estimate CTF parameters to transfer', 'list input *.txt', .false.)
-        call extract%set_input('parm_ios', 4, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false.)
-        call extract%set_input('parm_ios', 5, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false.)
-        call extract%set_input('parm_ios', 6, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false.)
+        & ctf_estimate CTF parameters to transfer', 'list input *.txt', .false., '')
+        call extract%set_input('parm_ios', 4, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call extract%set_input('parm_ios', 5, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call extract%set_input('parm_ios', 6, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
         call extract%set_input('parm_ios', 7, 'boxtab', 'file', 'List of boxes',&
-        &'List of single-particles boxes (EMAN format)', 'list input e.g. boxes.txt', .false.)
+        &'List of single-particles boxes (EMAN format)', 'list input e.g. boxes.txt', .false., '')
         ! alternative inputs
         call extract%set_input('alt_ios', 1, 'filetab', 'file', 'Micrographs list',&
-        &'List of integrated micrographs', 'list input e.g. mics.txt', .false.)
+        &'List of integrated micrographs', 'list input e.g. mics.txt', .false., '')
         call extract%set_input('alt_ios', 2, 'unidoc', 'file', 'Unified resources doc', 'Unified resources doc&
-        & mapping micrographs, box files & CTF parameters', 'input unidoc e.g. unidoc_001.txt', .false.)
+        & mapping micrographs, box files & CTF parameters', 'input unidoc e.g. unidoc_001.txt', .false., '')
         ! search controls
         ! <empty>
         ! filter controls
@@ -766,7 +810,7 @@ contains
         call make_cavgs%set_input('img_ios', 1, stk)
         call make_cavgs%set_input('img_ios', 2, stktab)
         call make_cavgs%set_input('img_ios', 3, 'refs', 'file', 'Output 2D references',&
-        &'Output 2D references', 'xxx.mrc file with references', .false.)
+        &'Output 2D references', 'xxx.mrc file with references', .false., '')
         ! parameter input/output
         call make_cavgs%set_input('parm_ios', 1, smpd)
         make_cavgs%parm_ios(1)%required = .true.
@@ -776,9 +820,9 @@ contains
         call make_cavgs%set_input('parm_ios', 5, deftab)
         call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D orientation and CTF parameters',&
          '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false.)
+        &'.simple|.txt parameter file', .false., '')
         call make_cavgs%set_input('parm_ios', 7, 'mul', 'num', 'Shift multiplication factor',&
-        &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false.)
+        &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
         call make_cavgs%set_input('parm_ios', 8, outfile)
         call make_cavgs%set_input('parm_ios', 9, weights2D)
         call make_cavgs%set_input('parm_ios',10, remap_cls)
@@ -806,7 +850,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process', &
-        & 'input volume e.g. recvol.mrc', .true.)
+        & 'input volume e.g. recvol.mrc', .true., '')
         ! parameter input/output
         call postprocess%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -816,31 +860,29 @@ contains
         ! filter controls
         call postprocess%set_input('filt_ctrls', 1, hp)
         call postprocess%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false.)
-        call postprocess%set_input('filt_ctrls', 3, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false.)
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+        call postprocess%set_input('filt_ctrls', 3, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
         call postprocess%set_input('filt_ctrls', 4, 'vol_filt', 'file', 'Input filter volume', 'Input filter volume',&
-        & 'input filter volume e.g. aniso_optlp_state01.mrc', .false.)
+        & 'input filter volume e.g. aniso_optlp_state01.mrc', .false., '')
         call postprocess%set_input('filt_ctrls', 5, 'fsc', 'file', 'Binary file with FSC info', 'Binary file with FSC info&
-        & for filtering', 'input binary file e.g. fsc_state01.bin', .false.)
-        call postprocess%set_input('filt_ctrls', 6, 'bfac', 'num', 'B-factor for sharpening',&
-        &'B-factor for sharpening in Angstroms^2', 'B-factor in Angstroms^2', .false.)
-        call postprocess%set_input('filt_ctrls', 7, 'mirr', 'multi', 'Perform mirroring',&
-        &'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false.)
+        & for filtering', 'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin')
+        call postprocess%set_input('filt_ctrls', 6, bfac)
+        call postprocess%set_input('filt_ctrls', 7, mirr)
         ! mask controls
         call postprocess%set_input('mask_ctrls', 1, msk)
         call postprocess%set_input('mask_ctrls', 2, inner)
         call postprocess%set_input('mask_ctrls', 3, mskfile)
         call postprocess%set_input('mask_ctrls', 4, 'binwidth', 'num', 'Envelope binary layers width',&
-        &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false.)
+        &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
         call postprocess%set_input('mask_ctrls', 5, 'thres', 'num', 'Volume threshold',&
-        &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false.)
+        &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
         call postprocess%set_input('mask_ctrls', 6, 'automsk', 'binary', 'Perform envelope masking',&
-        &'Whether to generate an envelope mask(yes|no){no}', '(yes|no){no}', .false.)
-        call postprocess%set_input('mask_ctrls', 7, 'mw', 'num', 'Molecular weight','Molecular weight in kDa', 'in kDa', .false.)
+        &'Whether to generate an envelope mask(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call postprocess%set_input('mask_ctrls', 7, mw)
         call postprocess%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
-        &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false. )
+        &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
         call postprocess%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
-        &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false. )
+        &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
         ! computer controls
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess
@@ -858,7 +900,7 @@ contains
         ! image input/output
         call mask%set_input('img_ios', 1, stk)
         call mask%set_input('img_ios', 2, 'vol1', 'file', 'Volume', 'Volume to mask', &
-        & 'input volume e.g. recvol.mrc', .false.)
+        & 'input volume e.g. recvol.mrc', .false., '')
         ! parameter input/output
         call mask%set_input('parm_ios', 1, smpd)
         call mask%set_input('parm_ios', 2, oritab)
@@ -869,7 +911,7 @@ contains
         ! <empty>
         ! filter controls
         call mask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false.)
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
         ! mask controls
         call mask%set_input('mask_ctrls', 1, msk)
         mask%mask_ctrls(1)%required = .false.
@@ -877,18 +919,18 @@ contains
         call mask%set_input('mask_ctrls', 3, outer)
         call mask%set_input('mask_ctrls', 4, mskfile)
         call mask%set_input('mask_ctrls', 5, 'msktype', 'binary', 'Mask type',&
-        &'Type of mask to use(soft|hard){soft}', '(soft|hard){soft}', .false.)
+        &'Type of mask to use(soft|hard){soft}', '(soft|hard){soft}', .false., 'soft')
         call mask%set_input('mask_ctrls', 6, 'automsk', 'multi', 'Perform 2D envelope masking',&
-        &'Whether to perform 2D envelope masking(cavg|no){no}', '(cavg|no){no}', .false.)
-        call mask%set_input('mask_ctrls', 7, 'mw', 'num', 'Molecular weight','Molecular weight in kDa', 'in kDa', .false.)
+        &'Whether to perform 2D envelope masking(cavg|no){no}', '(cavg|no){no}', .false., 'no')
+        call mask%set_input('mask_ctrls', 7, mw)
         call mask%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
-        &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false. )
+        &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
         call mask%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
-        &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false. )
+        &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
         call mask%set_input('mask_ctrls',10, 'taper_edges', 'binary', 'Taper edges',&
-        &'Whether to taper the edges of image/volume(yes|no){no}', '(yes|no){no}', .false.)
+        &'Whether to taper the edges of image/volume(yes|no){no}', '(yes|no){no}', .false., 'no')
         call mask%set_input('mask_ctrls',11, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
-        &'PDB file used to determine the mask', 'e.g. molecule.pdb', .false.)
+        &'PDB file used to determine the mask', 'e.g. molecule.pdb', .false., '')
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_mask
@@ -906,18 +948,18 @@ contains
         call scale%set_input('img_ios', 1, stk)
         scale%img_ios(1)%required = .false.
         call scale%set_input('img_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
-        &'input volume e.g. recvol.mrc', .false.)
+        &'input volume e.g. recvol.mrc', .false., '')
         call scale%set_input('img_ios', 3, 'filetab', 'file', 'Stacks list',&
-        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false.)
+        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false., '')
         ! parameter input/output
         call scale%set_input('parm_ios', 1, smpd)
-        call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'in pixels', .false.)
-        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1)', '(0-1)', .false.)
-        call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false.)
-        call scale%set_input('parm_ios', 5, 'clip', 'num', 'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false.)
-        call scale%set_input('parm_ios', 6, 'outvol', 'file', 'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false.)
-        call scale%set_input('parm_ios', 7, 'outstk', 'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false.)
-        call scale%set_input('parm_ios', 8, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false.)
+        call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'in pixels', .false., 0.)
+        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
+        call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
+        call scale%set_input('parm_ios', 5, 'clip', 'num', 'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
+        call scale%set_input('parm_ios', 6, outvol)
+        call scale%set_input('parm_ios', 7, 'outstk', 'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
+        call scale%set_input('parm_ios', 8, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -930,6 +972,48 @@ contains
         ! computer controls
         call scale%set_input('comp_ctrls', 1, nthr)
     end subroutine new_scale
+
+    subroutine new_volops
+        ! PROGRAM SPECIFICATION
+        call volops%new(&
+        &'volops',& ! name
+        &'is a program for standard volume editing',&                                             ! descr_short
+        &'provides standard single-particle image processing routines to MRC or SPIDER volumes',& ! descr_long
+        &'simple_exec',&                                                                          ! executable
+        &1,13, 2, 0, 2, 0, 1)                                                                     ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call volops%set_input('img_ios', 1, outvol)
+        ! ! parameter input/output
+        call volops%set_input('parm_ios', 1, smpd)
+        volops%parm_ios(1)%required = .false.
+        call volops%set_input('parm_ios', 2, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call volops%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast','Invert volume contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call volops%set_input('parm_ios', 4, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal to noise ratio(0.)', .false., 0.)
+        call volops%set_input('parm_ios', 5, mirr)
+        call volops%set_input('parm_ios', 6, bfac)
+        call volops%set_input('parm_ios', 7, 'e1', 'num', 'Rotation along alpha','Alpha Euler angle', 'in degrees', .false., 0.)
+        call volops%set_input('parm_ios', 8, 'e2', 'num', 'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
+        call volops%set_input('parm_ios', 9, 'e3', 'num', 'Rotation along Psi','Psi Euler angle', 'in degrees', .false., 0.)
+        call volops%set_input('parm_ios',10, 'xsh', 'num', 'Translation along x-axis','Shift along X in pixels', 'in pixels', .false., 0.)
+        call volops%set_input('parm_ios',11, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0.)
+        call volops%set_input('parm_ios',12, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)
+        call volops%set_input('parm_ios',13, outfile)
+        ! alternative inputs
+        call volops%set_input('alt_ios', 1, 'vol1', 'file', 'Volume', 'Volume to mask', &
+        & 'input volume e.g. recvol.mrc', .false., '')
+        call volops%set_input('alt_ios', 2, 'vollist', 'file', 'Volumes list', 'List of volumes', &
+        & 'volumes list e.g. e.g. vols.txt', .false., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call volops%set_input('filt_ctrls', 1, lp)
+        call volops%set_input('filt_ctrls', 2, hp)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call volops%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_volops
 
     ! instance methods
 
@@ -954,12 +1038,13 @@ contains
         self%exists = .true.
     end subroutine new
 
-    subroutine set_input_1( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder, required )
+    subroutine set_input_1( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
         class(simple_program), target, intent(inout) :: self
         character(len=*),              intent(in)    :: which
         integer,                       intent(in)    :: i
         character(len=*),              intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
         logical,                       intent(in)    :: required
+        real,                          intent(in)    :: default_value
         select case(trim(which))
             case('img_ios')
                 call set(self%img_ios, i)
@@ -991,11 +1076,55 @@ contains
                 allocate(arr(i)%descr_long,        source=trim(descr_long))
                 allocate(arr(i)%descr_placeholder, source=trim(descr_placeholder))
                 arr(i)%required = required
+                if( .not. arr(i)%required ) arr(i)%rval_default = default_value
             end subroutine set
 
     end subroutine set_input_1
 
-    subroutine set_input_2( self, which, i, param )
+    subroutine set_input_2( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
+        class(simple_program), target, intent(inout) :: self
+        character(len=*),              intent(in)    :: which
+        integer,                       intent(in)    :: i
+        character(len=*),              intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
+        logical,                       intent(in)    :: required
+        character(len=*),              intent(in)    :: default_value
+        select case(trim(which))
+            case('img_ios')
+                call set(self%img_ios, i)
+            case('parm_ios')
+                call set(self%parm_ios, i)
+            case('alt_ios')
+                call set(self%alt_ios, i)
+            case('srch_ctrls')
+                call set(self%srch_ctrls, i)
+            case('filt_ctrls')
+                call set(self%filt_ctrls, i)
+            case('mask_ctrls')
+                call set(self%mask_ctrls, i)
+            case('comp_ctrls')
+                call set(self%comp_ctrls, i)
+            case DEFAULT
+                write(*,*) 'which field selector: ', trim(which)
+                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_2'
+        end select
+
+        contains
+
+            subroutine set( arr, i )
+                type(simple_input_param), intent(inout) :: arr(i)
+                integer,                  intent(in)  :: i
+                allocate(arr(i)%key,               source=trim(key))
+                allocate(arr(i)%keytype,           source=trim(keytype))
+                allocate(arr(i)%descr_short,       source=trim(descr_short))
+                allocate(arr(i)%descr_long,        source=trim(descr_long))
+                allocate(arr(i)%descr_placeholder, source=trim(descr_placeholder))
+                arr(i)%required = required
+                if( .not. arr(i)%required ) allocate(arr(i)%cval_default, source=trim(default_value))
+            end subroutine set
+
+    end subroutine set_input_2
+
+    subroutine set_input_3( self, which, i, param )
         class(simple_program), target, intent(inout) :: self
         character(len=*),              intent(in)    :: which
         integer,                       intent(in)    :: i
@@ -1033,7 +1162,7 @@ contains
                 arr(i)%required = param%required
             end subroutine set
 
-    end subroutine set_input_2
+    end subroutine set_input_3
 
     subroutine print_ui( self )
         use simple_chash, only: chash

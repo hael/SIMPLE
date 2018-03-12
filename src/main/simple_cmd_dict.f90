@@ -202,8 +202,6 @@ contains
         call chdict%push('projfile',      'SIMPLE *.simple project file')
         call chdict%push('projname',      'Project name (for creation of projname.simple)')
         call chdict%push('pspecsz',       'size of power spectrum(in pixels)')
-        call chdict%push('pscpecsz_ctf_estimate','size of power spectrum 4 ctf_estimate(in pixels)')
-        call chdict%push('pspecsz_motion_correct','size of power spectrum 4 motion_correct(in pixels)')
         call chdict%push('qsys_partition', 'Name of target partition of distributed computer system (SLURM/PBS)')
         call chdict%push('qsys_qos',      'job scheduling priority (SLURM/PBS)')
         call chdict%push('qsys_reservation', 'Name of reserved target partition of distributed computer system (SLURM/PBS)')

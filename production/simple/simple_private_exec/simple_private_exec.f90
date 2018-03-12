@@ -146,43 +146,41 @@ select case(prg)
         keys_optional(6)   = 'lpstart'
         keys_optional(7)   = 'lpstop'
         keys_optional(8)   = 'trs'
-        keys_optional(9)   = 'pspecsz_motion_correct'
-        keys_optional(10)  = 'pscpecsz_ctf_estimate'
-        keys_optional(11)  = 'numlen'
-        keys_optional(12)  = 'startit'
-        keys_optional(13)  = 'scale'
-        keys_optional(14)  = 'nframesgrp'
-        keys_optional(15)  = 'fromf'
-        keys_optional(16)  = 'tof'
-        keys_optional(17)  = 'hp_ctfestimate'
-        keys_optional(18)  = 'lp_ctf_estimate'
-        keys_optional(19)  = 'lp_pick'
-        keys_optional(20)  = 'dfmin'
-        keys_optional(21)  = 'dfmax'
-        keys_optional(22)  = 'dfstep'
-        keys_optional(23)  = 'astigtol'
-        keys_optional(24)  = 'phaseplate'
-        keys_optional(25)  = 'thres'
-        keys_optional(26)  = 'rm_outliers'
-        keys_optional(27)  = 'nsig'
-        keys_optional(28)  = 'dopick'
-        keys_optional(29)  = 'ndev'
-        keys_optional(30)  = 'pcontrast'
-        keys_optional(31)  = 'ctfreslim'
+        keys_optional(9)   = 'pspecsz'
+        keys_optional(10)  = 'numlen'
+        keys_optional(11)  = 'startit'
+        keys_optional(12)  = 'scale'
+        keys_optional(13)  = 'nframesgrp'
+        keys_optional(14)  = 'fromf'
+        keys_optional(15)  = 'tof'
+        keys_optional(16)  = 'hp_ctfestimate'
+        keys_optional(17)  = 'lp_ctf_estimate'
+        keys_optional(18)  = 'lp_pick'
+        keys_optional(19)  = 'dfmin'
+        keys_optional(20)  = 'dfmax'
+        keys_optional(21)  = 'dfstep'
+        keys_optional(22)  = 'astigtol'
+        keys_optional(23)  = 'phaseplate'
+        keys_optional(24)  = 'thres'
+        keys_optional(25)  = 'rm_outliers'
+        keys_optional(26)  = 'nsig'
+        keys_optional(27)  = 'dopick'
+        keys_optional(28)  = 'ndev'
+        keys_optional(29)  = 'pcontrast'
+        keys_optional(30)  = 'ctfreslim'
         ! parse command line
         call cline%parse_oldschool(keys_required(:5), keys_optional(:31))
         ! set defaults
-        if( .not. cline%defined('trs')                   ) call cline%set('trs',               5.)
-        if( .not. cline%defined('lpstart')               ) call cline%set('lpstart',          15.)
-        if( .not. cline%defined('lpstop')                ) call cline%set('lpstop',            8.)
-        if( .not. cline%defined('pspecsz_motion_correct')) call cline%set('pspecsz_motion_correct',  512.)
-        if( .not. cline%defined('pscpecsz_ctf_estimate')       ) call cline%set('pscpecsz_ctf_estimate', 512.)
-        if( .not. cline%defined('hp_ctfestimate')            ) call cline%set('hp_ctfestimate',       30.)
-        if( .not. cline%defined('lp_ctf_estimate')            ) call cline%set('lp_ctf_estimate',        5.)
-        if( .not. cline%defined('lp_pick')               ) call cline%set('lp_pick',          20.)
-        if( .not. cline%defined('outfile')               ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
-        if( .not. cline%defined('pcontrast')             ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('opt')                   ) call cline%set('opt',        'simplex')
+        if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',           8.)
+        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',        512.)
+        if( .not. cline%defined('hp_ctfestimate')  ) call cline%set('hp_ctfestimate',  30.)
+        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         20.)
+        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
         call xpreprocess%execute(cline)
     case( 'select_frames' )
         !==Program select_frames
@@ -358,17 +356,16 @@ select case(prg)
         ! parse command line
         call cline%parse_oldschool(keys_required(:5), keys_optional(:23))
         ! set defaults
-        call cline%set('dopick', 'no'     )
-        call cline%set('prg',    'preprocess')
-        if( .not. cline%defined('trs')                    ) call cline%set('trs',               5.)
-        if( .not. cline%defined('lpstart')                ) call cline%set('lpstart',          15.)
-        if( .not. cline%defined('lpstop')                 ) call cline%set('lpstop',            8.)
-        if( .not. cline%defined('pspecsz_motion_correct') ) call cline%set('pspecsz_motion_correct',  512.)
-        if( .not. cline%defined('pscpecsz_ctf_estimate')  ) call cline%set('pscpecsz_ctf_estimate', 512.)
-        if( .not. cline%defined('hp_ctfestimate')         ) call cline%set('hp_ctfestimate',       30.)
-        if( .not. cline%defined('lp_ctf_estimate')        ) call cline%set('lp_ctf_estimate',        5.)
-        if( .not. cline%defined('outfile')                ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
-        if( .not. cline%defined('opt')                    ) call cline%set('opt', 'simplex')
+        call cline%set('dopick', 'no')
+        call cline%set('prg', 'preprocess')
+        if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',           8.)
+        if( .not. cline%defined('pscpecsz')        ) call cline%set('pscpecsz',       512.)
+        if( .not. cline%defined('hp_ctfestimate')  ) call cline%set('hp_ctfestimate',  30.)
+        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
+        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
+        if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
         ! execute
         call xpreprocess%execute(cline)
     case( 'pick' )
