@@ -40,7 +40,6 @@ type :: params
     character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
     character(len=3)      :: dopca='yes'
-    character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dryrun='no'          !< no 3D search and reconstruction, for profiling only
     character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
@@ -381,7 +380,6 @@ type :: params
     logical :: l_dose_weight  = .false.
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
-    logical :: l_pick         = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_stktab_input = .false.
     logical :: l_cc_objfun    = .true.
@@ -489,7 +487,6 @@ contains
         call check_carg('dockmode',       self%dockmode)
         call check_carg('dev',            self%dev)
         call check_carg('dopca',          self%dopca)
-        call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
         call check_carg('dryrun',         self%dryrun)
         call check_carg('dynlp',          self%dynlp)
@@ -1207,9 +1204,6 @@ contains
         self%tfplan%flag         = self%ctf
         self%tfplan%l_phaseplate = .false.
         if( self%phaseplate .eq. 'yes' ) self%tfplan%l_phaseplate = .true.
-        ! set logical pick flag
-        self%l_pick = .false.
-        if( self%dopick .eq. 'yes' ) self%l_pick = .true.
         ! set default nnn value to 10% of the search space
         if( .not. cline%defined('nnn') )then
             self%nnn = nint(0.1 * real(self%nspace))

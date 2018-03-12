@@ -47,10 +47,17 @@ contains
         character(len=:),      allocatable :: output_dir_picker, output_dir_unidoc, fbody
         character(len=STDLEN)              :: movie
         integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter
+        logical                            :: l_pick
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master  = params(cline)
+        ! picking
+        if( cline%defined('refs') )then
+            l_pick = .true.
+        else
+            l_pick = .false.
+        endif
         ! output directories
         if( cline%defined('dir') )then
             output_dir = trim(p_master%dir)//'/'
@@ -64,7 +71,7 @@ contains
         call mkdir(output_dir_ctf_estimate)
         call mkdir(output_dir_motion_correct)
         call mkdir(output_dir_unidoc)
-        if( p_master%l_pick )then
+        if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
             output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
             call mkdir(output_dir_picker)

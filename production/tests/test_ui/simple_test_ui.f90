@@ -49,5 +49,16 @@ call make_user_interface
 ! call ptr2prg%print_cmdline()
 ! call ptr2prg%write2json()
 
+! call get_prg_ptr('cluster3D', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
+
+call get_prg_ptr('scale', ptr2prg)
+call ptr2prg%print_cmdline()
+call ptr2prg%write2json()
+
+call get_prg_ptr('mask', ptr2prg)
+call ptr2prg%print_cmdline()
+call ptr2prg%write2json()
 
 end program simple_test_ui

@@ -98,6 +98,7 @@ contains
         real         :: smpd_original, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
+        logical      :: l_pick
         p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
@@ -105,8 +106,10 @@ contains
         if( p%tomo .eq. 'yes' )then
             stop 'tomography mode (tomo=yes) not yet supported!'
         endif
-        if( p%l_pick .and. .not. cline%defined('refs'))then
-            stop 'need references for picker or turn off picking with dopick=no'
+        if( cline%defined('refs') )then
+            l_pick = .true.
+        else
+            l_pick = .false.
         endif
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
@@ -132,7 +135,7 @@ contains
         call mkdir(output_dir_ctf_estimate)
         call mkdir(output_dir_motion_correct)
         call mkdir(output_dir_unidoc)
-        if( p%l_pick )then
+        if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
             output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
             call mkdir(output_dir_picker)
@@ -209,7 +212,7 @@ contains
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni, output_dir_ctf_estimate)
             if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
             ! picker
-            if( p%l_pick )then
+            if( l_pick )then
                 movie_counter = movie_counter - 1
                 p%lp          = p%lp_pick
                 call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out, output_dir_picker)
@@ -219,7 +222,7 @@ contains
             endif
             if( p%stream .eq. 'yes' )then
                 ! extract particles & params
-                if( p%l_pick )then
+                if( l_pick )then
                     cline_extract = cline
                     call cline_extract%set('dir',       trim(output_dir_extract))
                     call cline_extract%set('smpd',      p%smpd)

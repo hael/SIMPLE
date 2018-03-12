@@ -463,7 +463,7 @@ contains
         cline_check2D_conv     = cline
         cline_cavgassemble     = cline
         cline_merge_algndocs   = cline
-        cline_make_cavgs        = cline
+        cline_make_cavgs       = cline
 
         ! initialise static command line parameters and static job description parameters
         call cline_merge_algndocs%set('fbody',  trim(ALGN_FBODY)     )
