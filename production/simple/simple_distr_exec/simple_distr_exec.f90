@@ -2,9 +2,10 @@
 program simple_distr_exec
 use simple_defs
 use simple_gen_doc
-use simple_cmdline, only: cmdline,cmdline_err
-use simple_strings, only: str_has_substr
-use simple_fileio,  only: extract_abspath
+use simple_user_interface, only: make_user_interface
+use simple_cmdline,        only: cmdline, cmdline_err
+use simple_strings,        only: str_has_substr
+use simple_fileio,         only: extract_abspath
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
@@ -58,62 +59,14 @@ call cmdline_err( cmdstat, cmdlen, arg, pos )
 prg = arg(pos+1:) ! this is the program name
 if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
 
+call make_user_interface
+
 select case(prg)
 
     ! PRE-PROCESSING STREAM, LINKING MOTION_CORRECT + CTF_ESTIMATE + PICK
 
     case( 'preprocess' )
-        !==Program preprocess
-        !
-        ! <preprocess/begin>is a distributed workflow that executes motion_correct, ctf_estimate and pick in sequence
-        ! and in streaming mode as the microscope collects the data <preprocess/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'kv'
-        keys_required(3)  = 'cs'
-        keys_required(4)  = 'fraca'
-        keys_required(5)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'refs'
-        keys_optional(3)  = 'fbody'
-        keys_optional(4)  = 'dose_rate'
-        keys_optional(5)  = 'exp_time'
-        keys_optional(6)  = 'lpstart'
-        keys_optional(7)  = 'lpstop'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'pspecsz_motion_correct'
-        keys_optional(10) = 'pscpecsz_ctf_estimate'
-        keys_optional(11) = 'numlen'
-        keys_optional(12) = 'startit'
-        keys_optional(13) = 'scale'
-        keys_optional(14) = 'nframesgrp'
-        keys_optional(15) = 'fromf'
-        keys_optional(16) = 'tof'
-        keys_optional(17) = 'hp_ctfestimate'
-        keys_optional(18) = 'lp_ctf_estimate'
-        keys_optional(19) = 'lp_pick'
-        keys_optional(20) = 'dfmin'
-        keys_optional(21) = 'dfmax'
-        keys_optional(22) = 'dfstep'
-        keys_optional(23) = 'astigtol'
-        keys_optional(24) = 'phaseplate'
-        keys_optional(25) = 'thres'
-        keys_optional(26) = 'rm_outliers'
-        keys_optional(27) = 'nsig'
-        keys_optional(28) = 'dopick'
-        keys_optional(29) = 'ndev'
-        keys_optional(30) = 'box_extract'
-        keys_optional(31) = 'pcontrast'
-        keys_optional(32) = 'dir'
-        keys_optional(33) = 'stream'
-        keys_optional(34) = 'dir_movies'
-        keys_optional(35) = 'filetab'
-        keys_optional(36) = 'opt'
-        ! parse command line
-        if( describe ) call print_doc_preprocess
-        call cline%parse(keys_required(:5), keys_optional(:36))
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
@@ -177,7 +130,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(23) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_motion_correct_ctf_estimate
-        call cline%parse(keys_required(:6), keys_optional(:23))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
         call cline%set('prg',    'preprocess')
@@ -195,45 +148,7 @@ case( 'motion_correct_ctf_estimate' )
     ! MOTION_CORRECT_MOVIES
 
     case( 'motion_correct' )
-        !==Program motion_correct
-        !
-        ! <motion_correct/begin>is a distributed workflow for movie alignment or motion correction based on the same
-        ! principal strategy as Grigorieffs program (hence the name). There are two important
-        ! differences: automatic weighting of the frames using a correlation-based M-estimator and
-        ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths
-        ! to movie files in addition to a few input parameters, some of which deserve a comment. If
-        ! dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly
-        ! (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to
-        ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will
-        ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a
-        ! contiguous subset of frames will be averaged without any dose-weighting applied.
-        ! <motion_correct/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'filetab'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'fbody'
-        keys_optional(3)  = 'dose_rate'
-        keys_optional(4)  = 'exp_time'
-        keys_optional(5)  = 'lpstart'
-        keys_optional(6)  = 'lpstop'
-        keys_optional(7)  = 'trs'
-        keys_optional(8)  = 'kv'
-        keys_optional(9)  = 'pspecsz'
-        keys_optional(10) = 'numlen'
-        keys_optional(11) = 'startit'
-        keys_optional(12) = 'scale'
-        keys_optional(13) = 'nframesgrp'
-        keys_optional(14) = 'fromf'
-        keys_optional(15) = 'tof'
-        keys_optional(16) = 'nsig'
-        keys_optional(17) = 'dir'
-        ! parse command line
-        if( describe ) call print_doc_motion_correct
-        call cline%parse(keys_required(:3), keys_optional(:17))
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   15.)
@@ -271,7 +186,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(12) = 'dir'
         ! parse command line
         if( describe ) call print_doc_motion_correct_tomo
-        call cline%parse(keys_required(:3), keys_optional(:12))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',       5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
@@ -300,7 +215,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(4) = 'clip'
         ! parse command line
         if( describe ) call print_doc_powerspecs
-        call cline%parse(keys_required(:4), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
         ! set defaults
         call cline%set('nthr', 1.0)
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
@@ -311,30 +226,7 @@ case( 'motion_correct_ctf_estimate' )
     ! CTF_ESTIMATE
 
     case( 'ctf_estimate' )
-        !==Program ctf_estimate
-        !
-        ! <ctf_estimate/begin>is a distributed SIMPLE workflow for fitting the CTF<ctf_estimate/end>
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'kv'
-        keys_required(4) = 'cs'
-        keys_required(5) = 'fraca'
-        keys_required(6) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'pspecsz'
-        keys_optional(3) = 'hp'
-        keys_optional(4) = 'lp'
-        keys_optional(5) = 'dfmin'
-        keys_optional(6) = 'dfmax'
-        keys_optional(7) = 'astigtol'
-        keys_optional(8) = 'phaseplate'
-        keys_optional(9) = 'dir'
-        ! parse command line
-        if( describe ) call print_doc_ctf_estimate
-        call cline%parse(keys_required(:6), keys_optional(:9))
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',   512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',         30.)
@@ -345,56 +237,14 @@ case( 'motion_correct_ctf_estimate' )
     ! PARTICLE PICKER
 
     case( 'pick' )
-        !==Program pick
-        !
-        ! <pick/begin>is a distributed workflow for template-based particle picking<pick/end>
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'refs'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'lp'
-        keys_optional(3) = 'thres'
-        keys_optional(4) = 'ndev'
-        keys_optional(5) = 'dir'
-        ! parse command line
-        if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:4), keys_optional(:5))
+        call cline%parse()
         ! execute
         call xpick_distr%execute(cline)
 
     ! CLUSTER2D
 
     case( 'make_cavgs' )
-        !==Program make_cavgs
-        !
-        ! <make_cavgs/begin>is a distributed workflow used for producing class averages or
-        ! initial random references for cluster2D execution. <make_cavgs/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'ctf'
-        keys_required(3)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncls'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'oritab'
-        keys_optional(5)  = 'filwidth'
-        keys_optional(6)  = 'mul'
-        keys_optional(7)  = 'outfile'
-        keys_optional(8)  = 'refs'
-        keys_optional(9)  = 'remap_classes'
-        keys_optional(10) = 'weights2D'
-        keys_optional(11) = 'stk'
-        keys_optional(12) = 'stktab'
-        keys_optional(13) = 'phaseplate'
-        ! parse command line
-        if( describe ) call print_doc_make_cavgs
-        call cline%parse(keys_required(:3), keys_optional(:13))
+        call cline%parse()
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -406,42 +256,7 @@ case( 'motion_correct_ctf_estimate' )
         ! execute
         call xmake_cavgs_distr%execute(cline)
     case( 'cluster2D' )
-        !==Program cluster2D
-        !
-        ! <cluster2D/begin>is a distributed workflow implementing a reference-free 2D alignment/clustering
-        ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<cluster2D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'ncls'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'refs'
-        keys_optional(4)  = 'oritab'
-        keys_optional(5)  = 'hp'
-        keys_optional(6)  = 'lp'
-        keys_optional(7)  = 'lpstart'
-        keys_optional(8)  = 'lpstop'
-        keys_optional(9)  = 'cenlp'
-        keys_optional(10) = 'trs'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'startit'
-        keys_optional(13) = 'maxits'
-        keys_optional(14) = 'center'
-        keys_optional(15) = 'autoscale'
-        keys_optional(16) = 'weights2D'
-        keys_optional(17) = 'match_filt'
-        keys_optional(18) = 'stk'
-        keys_optional(19) = 'stktab'
-        keys_optional(20) = 'dyncls'
-        keys_optional(21) = 'phaseplate'
-        ! documentation
-        ! if( describe ) call print_doc_cluster2D
-        call cline%parse( keys_required(:5), keys_optional(:21) )
+        call cline%parse()
         ! sanity checks
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -459,37 +274,7 @@ case( 'motion_correct_ctf_estimate' )
         ! execute
         call xcluster2D_distr%execute(cline)
     case( 'cluster2D_stream' )
-        !==Program cluster2D_stream
-        !
-        ! <cluster2D_stream/begin>is a distributed workflow implementing reference-free 2D alignment/clustering
-        ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<cluster2D_stream/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'nparts'
-        keys_required(5)  = 'dir_ptcls'
-        keys_required(6)  = 'ncls_start'
-        keys_required(7)  = 'nptcls_per_cls'
-        ! set optional keys
-        keys_optional(1)  = 'match_filt'
-        keys_optional(2)  = 'nthr'
-        keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'lp'
-        keys_optional(5)  = 'cenlp'
-        keys_optional(6)  = 'trs'
-        keys_optional(7)  = 'inner'
-        keys_optional(8)  = 'width'
-        keys_optional(9)  = 'filwidth'
-        keys_optional(10) = 'center'
-        keys_optional(11) = 'phaseplate'
-        keys_optional(12) = 'autoscale'
-        keys_optional(13) = 'weights2D'
-        keys_optional(14) = 'objfun'
-        ! documentation
-        ! if( describe ) call print_doc_cluster2D_stream
-        call cline%parse( keys_required(:7), keys_optional(:14) )
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',       8.)
@@ -528,7 +313,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(10) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:5), keys_optional(:10))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -538,58 +323,7 @@ case( 'motion_correct_ctf_estimate' )
         ! execute
         call xprime3D_init_distr%execute( cline )
     case( 'refine3D' )
-        !==Program refine3D
-        !
-        ! <refine3D/begin>is a distributed workflow for ab inito reconstruction/refinement based on
-        ! probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model
-        ! generation for Single-particle cryo-Electron microscopy. There are a daunting number of
-        ! options in refine3D. If you are processing class averages we recommend that you instead
-        ! use the simple_distr_exec prg=initial_3Dmodel route for executing refine3D. Automated
-        ! workflows for single- and multi-particle refinement using refine3D are planned for the
-        ! next release (3.0)<refine3D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'vol1'
-        keys_optional(4)  = 'oritab'
-        keys_optional(5)  = 'trs'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'cenlp'
-        keys_optional(9) = 'objfun'
-        keys_optional(10) = 'focusmsk'
-        keys_optional(11) = 'lpstop'
-        keys_optional(12) = 'lplim_crit'
-        keys_optional(13) = 'eo'
-        keys_optional(14) = 'refine'
-        keys_optional(15) = 'frac'
-        keys_optional(16) = 'mskfile'
-        keys_optional(17) = 'inner'
-        keys_optional(18) = 'width'
-        keys_optional(19) = 'nspace'
-        keys_optional(20) = 'nstates'
-        keys_optional(21) = 'startit'
-        keys_optional(22) = 'maxits'
-        keys_optional(23) = 'shbarrier'
-        keys_optional(24) = 'noise'
-        keys_optional(25) = 'nnn'
-        keys_optional(26) = 'center'
-        keys_optional(27) = 'stk'
-        keys_optional(28) = 'stktab'
-        keys_optional(29) = 'weights3D'
-        keys_optional(30) = 'phaseplate'
-        keys_optional(31) = 'update_frac'
-        ! documentation
-        ! if( describe ) call print_doc_refine3D
-        ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:32) )
+        call cline%parse()
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -637,7 +371,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(9)  = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_reconstruct3D
-        call cline%parse(keys_required(:6), keys_optional(:9))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:9))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -681,7 +415,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(5) = 'center'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:8), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:8), keys_optional(:5))
         ! sanity check
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         ! set defaults
@@ -716,7 +450,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(3) = 'cenlp'
         ! parse command line
         if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:5), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
         ! set defaults
         call cline%set('nthr', 1.0)
         if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
@@ -728,34 +462,7 @@ case( 'motion_correct_ctf_estimate' )
     ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
 
     case( 'initial_3Dmodel' )
-        !==Program initial_3Dmodel
-        !
-        ! <initial_3Dmodel/begin>is a distributed workflow for generating an initial
-        ! 3D model from class averages obtained with cluster2D<initial_3Dmodel/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'hp'
-        keys_optional(3)  = 'lpstart'
-        keys_optional(4)  = 'lpstop'
-        keys_optional(5)  = 'frac'
-        keys_optional(6)  = 'inner'
-        keys_optional(7)  = 'width'
-        keys_optional(8)  = 'nspace'
-        keys_optional(9)  = 'autoscale'
-        keys_optional(10) = 'pgrp_known'
-        keys_optional(11) = 'center'
-        keys_optional(12) = 'update_frac'
-        keys_optional(13) = 'objfun'
-        ! parse command line
-        if( describe ) call print_doc_initial_3Dmodel
-        call cline%parse(keys_required(:5), keys_optional(:13))
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
@@ -793,7 +500,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(16) = 'refine'
         ! parse command line
         ! if( describe ) call print_doc_cluster3D
-        call cline%parse(keys_required(:7), keys_optional(:16))
+        call cline%parse_oldschool(keys_required(:7), keys_optional(:16))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -839,7 +546,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(17) = 'update_frac'
         ! parse command line
         ! if( describe ) call print_doc_cluster3D_refine
-        call cline%parse(keys_required(:6), keys_optional(:17))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:17))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -868,7 +575,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(3) = 'nparts'
         ! parse command line
         if( describe ) call print_doc_scale_stk_parts
-        call cline%parse(keys_required(:2), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
         ! sanity check
         if( cline%defined('nparts') .or. cline%defined('stktab') )then
             ! all ok

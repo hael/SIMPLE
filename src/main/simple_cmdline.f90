@@ -19,11 +19,13 @@ end type cmdarg
 type cmdline
     integer                   :: NMAX=60
     type(cmdarg)              :: cmds(60)
-    character(len=32)         :: checker(60)
+    character(len=KEYLEN)     :: checker(60)
     character(len=LONGSTRLEN) :: entire_line=''
-    integer                   :: argcnt=0, totlen=0, ncheck=0
+    integer                   :: argcnt=0, ncheck=0
 contains
     procedure          :: parse
+    procedure          :: parse_oldschool
+    procedure          :: parse_command_line_value
     procedure, private :: copy
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -46,16 +48,87 @@ end type cmdline
 contains
 
     !> \brief for parsing the command line arguments passed as key=val
-    subroutine parse( self, keys_required, keys_optional )
-        use simple_args,  only: args
+    subroutine parse( self )
+        use simple_args, only: args
+        use simple_user_interface ! use all in there
+        class(cmdline), intent(inout)  :: self
+        type(str4arr), allocatable     :: keys_required(:)
+        type(args)                     :: allowed_args
+        class(simple_program), pointer :: ptr2prg => null()
+        character(len=STDLEN)          :: arg
+        integer :: i, cmdstat, cmdlen, ikey, pos, nreq, nargs_required, sz_keys_req
+        ! parse command line
+        self%argcnt = command_argument_count()
+        call get_command(self%entire_line)
+        cmdline_glob = trim(self%entire_line)
+        ! parse program name
+        call get_command_argument(1, arg, cmdlen, cmdstat)
+        pos = index(arg, '=') ! position of '='
+        call cmdline_err( cmdstat, cmdlen, arg, pos )
+        if( str_has_substr(arg(pos+1:), 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
+        ! obtain pointer to the program in the simple_user_interface specification
+        call get_prg_ptr(arg(pos+1:), ptr2prg)
+        ! list programs if so instructed
+        if( str_has_substr(self%entire_line, 'prg=list') )then
+            if( ptr2prg%is_distr() )then
+                call list_distr_prgs_in_ui
+                stop
+            else
+                call list_shmem_prgs_in_ui
+                stop
+            endif
+        endif
+        ! describe program if so instructed
+        if( str_has_substr(self%entire_line, 'describe=yes') )then
+            call ptr2prg%print_prg_descr_long()
+            stop
+        endif
+        ! get required keys
+        keys_required = ptr2prg%get_required_keys()
+        ! check that we got them all or inform user
+        if( allocated(keys_required) )then
+            sz_keys_req    = size(keys_required)
+            nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
+        else
+            sz_keys_req    = 0
+            nargs_required = 1
+        endif
+        if( self%argcnt < nargs_required )then
+            call ptr2prg%print_cmdline()
+            stop
+        else
+            ! indicate which variables are required
+            if( sz_keys_req > 0 )then
+                do ikey=1,sz_keys_req
+                    call self%checkvar(keys_required(ikey)%str, ikey)
+                end do
+            endif
+        endif
+        allowed_args = args()
+        do i=1,self%argcnt
+            call get_command_argument(i, arg, cmdlen, cmdstat)
+            if( cmdstat == -1 )then
+                write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
+                write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+                write(*,*) 'which likely exceeds the length limit STDLEN'
+                write(*,*) 'Create a symbolic link with shorter name in the cwd'
+                stop
+            endif
+            call self%parse_command_line_value(i, arg, allowed_args)
+        end do
+        if( sz_keys_req > 0 ) call self%check
+    end subroutine parse
+
+    !> \brief for parsing the command line arguments passed as key=val
+    subroutine parse_oldschool( self, keys_required, keys_optional )
+        use simple_args, only: args
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
-        character(len=STDLEN) :: arg
+        character(len=STDLEN) :: arg, exec_name
         type(args)            :: allowed_args
-        integer               :: i, ri, cmdstat, cmdlen, cntbin, ikey
-        integer               :: cnttxt, io_stat, nreq, cmdargcnt, funit
+        integer               :: i, cmdstat, cmdlen, ikey
+        integer               :: nreq, cmdargcnt
         logical               :: distr_exec
-        character(len=STDLEN) :: exec_name
         call getarg(0,exec_name)
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt = command_argument_count()
@@ -83,101 +156,55 @@ contains
             endif
         endif
         allowed_args = args()
-        self%totlen  = 0
         self%argcnt  = command_argument_count()
-        cntbin       = 0
-        cnttxt       = 0
         do i=1,self%argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
-                write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
+                write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(*,*) 'which likely exceeds the length limit STDLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
-            self%totlen = self%totlen+cmdlen+1
-            call parse_local(arg)
+            call self%parse_command_line_value(i, arg, allowed_args)
         end do
-        if( present(keys_required) )then
-            DebugPrint ' reached checker'
-            call self%check
-        endif
+        if( present(keys_required) ) call self%check
+    end subroutine parse_oldschool
 
-    contains
-
-        subroutine parse_local( arg )
-            character(len=*) :: arg
-            integer          :: pos1
-            pos1 = index(arg, '=') ! position of '='
-            ! parse everyting containing '='
-            if( pos1 /= 0 )then
-                self%cmds(i)%key = arg(:pos1-1) ! KEY
-                if( .not. allowed_args%is_present(self%cmds(i)%key) )then
-                    write(*,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
-                    write(*,'(a)') 'Perhaps you have misspelled?'
-                    stop
-                endif
-                if( index(arg(pos1+1:), '/') /= 0  )then
-                    ! directory or absolute path
+    subroutine parse_command_line_value( self, i, arg, allowed_args )
+        use simple_args, only: args
+        class(cmdline),   intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: arg
+        class(args),      intent(in)    :: allowed_args
+        character(len=:), allocatable   :: form
+        integer :: pos1, io_stat, ri
+        pos1 = index(arg, '=') ! position of '='
+        ! parse everyting containing '='
+        if( pos1 /= 0 )then
+            self%cmds(i)%key = arg(:pos1-1) ! KEY
+            if( .not. allowed_args%is_present(self%cmds(i)%key) )then
+                write(*,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
+                write(*,'(a)') 'Perhaps you have misspelled?'
+                stop
+            endif
+            form = str2format(arg(pos1+1:))
+            select case(form)
+                case('file', 'dir', 'char')
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.spi') /= 0 )then
-                    ! SPIDER image file
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.mrc') /= 0 )then
-                    ! MRC image file
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.map') /= 0 )then
-                    ! MRC/CCP4 images file
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.ctf') /= 0 )then
-                    ! MRC file with CTF info
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.bin') /= 0 )then
-                    ! generic binary file
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.simple') /= 0 )then
-                    ! simple binary project file
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.txt') /= 0 )then
-                    ! text file
-                    cnttxt = cnttxt+1
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.asc') /= 0 )then
-                    ! text file
-                    cnttxt = cnttxt+1
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.log') /= 0 )then
-                    stop '.log files are obsolete!'
-                else if( index(arg(pos1+1:), '.dat') /= 0 )then
-                    ! text file
-                    cnttxt = cnttxt+1
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.box') /= 0 )then
-                    ! text file with box coordinates
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.pdb') /= 0 )then
-                    ! PDB file
-                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
-                else if( index(arg(pos1+1:), '.') /= 0 )then
-                    ! real number
+                case('real')
                     self%cmds(i)%rarg = str2real(adjustl(arg(pos1+1:)))
-                else
+                case('int')
                     call str2int(adjustl(arg(pos1+1:)), io_stat, ri )
-                    if( io_stat==0 )then
+                    if( io_stat == 0 )then
                         self%cmds(i)%rarg = real(ri)
                     else
                         self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     endif
-                endif
-                self%cmds(i)%defined = .true.
-                DebugPrint  'parse_local: key|cval|rval|defined: '
-                DebugPrint  trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg),&
-                &self%cmds(i)%rarg, self%cmds(i)%defined
-            endif
-        end subroutine parse_local
-
-    end subroutine parse
+            end select
+            self%cmds(i)%defined = .true.
+        endif
+    end subroutine parse_command_line_value
 
     !>  \brief  private copier
     subroutine copy( self, self2copy )
@@ -192,7 +219,6 @@ contains
         self%checker(:)  = self2copy%checker(:)
         self%entire_line = self2copy%entire_line
         self%argcnt      = self2copy%argcnt
-        self%totlen      = self2copy%totlen
         self%ncheck      = self2copy%ncheck
     end subroutine copy
 
@@ -360,8 +386,7 @@ contains
                     self%cmds(i)%carg = adjustl(arg)
                 endif
             endif
-            self%cmds(i)%key = trim(key)
-            self%totlen = self%totlen + len_trim( adjustl(arg) )
+            self%cmds(i)%key     = trim(key)
             self%cmds(i)%defined = .true.
         end do
         call h%kill
@@ -463,14 +488,14 @@ contains
         endif
     end subroutine gen_job_descr
 
-    ! EXCEPTION-HANDLING JIFFYS
+    ! EXCEPTION-HANDLING
 
     !> \brief  is for raising command line exception
     subroutine cmdline_err( cmdstat, cmdlen, arg, pos )
         integer, intent(in)          :: cmdstat, cmdlen, pos
         character(len=*), intent(in) :: arg
         if( cmdstat == -1 )then
-            write(*,*) 'ERROR! while parsing the command line; simple_exec'
+            write(*,*) 'ERROR! while parsing the command line'
             write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
             write(*,*) 'which likely exeeds the lenght limit STDLEN'
             write(*,*) 'Create a symbolic link with shorter name in the cwd'

@@ -15,7 +15,7 @@ if( command_argument_count() < 1 )then
     write(*,'(a)') 'simple_test_speed nthr=<number of threads> [verbose=<yes|no{no}>]'
     stop
 endif
-call cline%parse
+call cline%parse_oldschool
 call cline%checkvar('nthr', 1)
 call cline%check
 be_verbose = .false.

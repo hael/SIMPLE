@@ -2,7 +2,7 @@ module simple_user_interface
 use simple_defs
 implicit none
 
-public :: simple_program, make_user_interface, get_prg_ptr
+public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
 private
 
 logical, parameter :: DEBUG = .false.
@@ -45,7 +45,10 @@ type :: simple_program
     generic,   private :: set_input => set_input_1, set_input_2
     procedure          :: print_ui
     procedure          :: print_cmdline
+    procedure          :: print_prg_descr_long
     procedure          :: write2json
+    procedure          :: get_required_keys
+    procedure          :: is_distr
     procedure, private :: kill
 end type simple_program
 
@@ -155,6 +158,23 @@ contains
                 stop 'simple_user_interface :: get_prg_ptr'
         end select
     end subroutine get_prg_ptr
+
+    subroutine list_distr_prgs_in_ui
+        write(*,'(A)') cluster2D%name
+        write(*,'(A)') cluster2D_stream%name
+        write(*,'(A)') ctf_estimate%name
+        write(*,'(A)') initial_3Dmodel%name
+        write(*,'(A)') make_cavgs%name
+        write(*,'(A)') motion_correct%name
+        write(*,'(A)') pick%name
+        write(*,'(A)') preprocess%name
+        write(*,'(A)') refine3D%name
+    end subroutine list_distr_prgs_in_ui
+
+    subroutine list_shmem_prgs_in_ui
+        write(*,'(A)') extract%name
+        write(*,'(A)') postprocess%name
+    end subroutine list_shmem_prgs_in_ui
 
     ! private class methods
 
@@ -1168,6 +1188,11 @@ contains
 
     end subroutine print_cmdline
 
+    subroutine print_prg_descr_long( self )
+        class(simple_program), intent(in) :: self
+        write(*,'(a)') self%descr_long
+    end subroutine print_prg_descr_long
+
     subroutine write2json( self )
         use json_module
         use simple_strings, only: int2str
@@ -1247,6 +1272,61 @@ contains
             end subroutine create_section
 
     end subroutine write2json
+
+    function get_required_keys( self ) result( keys )
+        class(simple_program), intent(in) :: self
+        type(str4arr), allocatable :: keys(:)
+        integer :: nreq, ireq
+        ! count # required
+        nreq = nreq_counter(self%img_ios) + nreq_counter(self%parm_ios)   + nreq_counter(self%alt_ios)    +&
+        &nreq_counter(self%srch_ctrls)    + nreq_counter(self%filt_ctrls) + nreq_counter(self%mask_ctrls) +&
+        &nreq_counter(self%comp_ctrls)
+        ! extract keys
+        if( nreq > 0 )then
+            allocate(keys(nreq))
+            ireq = 0
+            call key_extractor(self%img_ios)
+            call key_extractor(self%parm_ios)
+            call key_extractor(self%alt_ios)
+            call key_extractor(self%srch_ctrls)
+            call key_extractor(self%filt_ctrls)
+            call key_extractor(self%mask_ctrls)
+            call key_extractor(self%comp_ctrls)
+        endif
+
+        contains
+
+            function nreq_counter( arr ) result( nreq )
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                integer :: nreq, i
+                nreq = 0
+                if( allocated(arr) )then
+                    do i=1,size(arr)
+                        if( arr(i)%required ) nreq = nreq + 1
+                    end do
+                endif
+            end function nreq_counter
+
+            subroutine key_extractor( arr )
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                integer :: i
+                if( allocated(arr) )then
+                    do i=1,size(arr)
+                        if( arr(i)%required )then
+                            ireq = ireq + 1
+                            allocate(keys(ireq)%str, source=arr(i)%key)
+                        endif
+                    end do
+                endif
+            end subroutine key_extractor
+
+    end function get_required_keys
+
+    logical function is_distr( self )
+        use simple_strings, only: str_has_substr
+        class(simple_program), intent(in) :: self
+        is_distr = str_has_substr(self%executable, 'distr')
+    end function is_distr
 
     subroutine kill( self )
         class(simple_program), intent(inout) :: self

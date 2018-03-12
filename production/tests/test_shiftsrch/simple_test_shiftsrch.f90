@@ -21,7 +21,7 @@ if( command_argument_count() < 3 )then
     write(*,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
     stop
 endif
-call cline%parse
+call cline%parse_oldschool
 call cline%checkvar('stk',  1)
 call cline%checkvar('msk',  2)
 call cline%checkvar('smpd', 3)
@@ -103,10 +103,10 @@ do i=1,8
         do ysh=-2,2
             call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
             corr  = maxval(corrs)
-            
+
             print *, 'corr: ', corr, xsh, ysh
-            
-            if( corr > corrmax )then 
+
+            if( corr > corrmax )then
                 corrmax = corr
                 xbest   = xsh
                 ybest   = ysh

@@ -18,7 +18,7 @@ if( command_argument_count() < 3 )then
     write(*,'(a)') ' smpd=<sampling distance(in A)>'
     stop
 endif
-call cline%parse
+call cline%parse_oldschool
 call cline%checkvar('stk',  1)
 call cline%checkvar('msk',  2)
 call cline%checkvar('smpd', 3)
@@ -71,4 +71,3 @@ print *, 'time of fft_mod: ', toc(tfft)
 ! print *, 'errmax: ', errmax
 ! print *, 'erravg: ', erravg
 end program simple_test_gencorrs_fft
-

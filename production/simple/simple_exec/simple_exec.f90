@@ -1,8 +1,9 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
 #include "simple_lib.f08"
-use simple_cmdline, only: cmdline, cmdline_err
 use simple_gen_doc
+use simple_user_interface, only: make_user_interface
+use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commander_checks
 use simple_commander_comlin
 use simple_commander_distr
@@ -86,6 +87,9 @@ pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
 if( str_has_substr(prg, 'simple') ) stop 'giving program names with simple* prefix is depreciated'
+
+call make_user_interface
+
 select case(prg)
 
     ! SIMULATOR PROGRAMS
@@ -100,7 +104,7 @@ select case(prg)
         keys_required(2) = 'nptcls'
         ! parse command line
         if( describe ) call print_doc_simulate_noise
-        call cline%parse(keys_required(:2))
+        call cline%parse_oldschool(keys_required(:2))
         ! execute
         call xsimulate_noise%execute(cline)
     case( 'simulate_particles' )
@@ -146,7 +150,7 @@ select case(prg)
         keys_optional(21) = 'bfacerr'
         ! parse command line
         if( describe ) call print_doc_simulate_particles
-        call cline%parse(keys_required(:5), keys_optional(:21))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:21))
         ! set defaults
         call cline%set('nspace', cline%get_rarg('nptcls'))
         if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
@@ -187,7 +191,7 @@ select case(prg)
         keys_optional(10) = 'bfac'
         ! parse command line
         if( describe ) call print_doc_simulate_movie
-        call cline%parse(keys_required(:6), keys_optional(:10))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      3.)
         if( .not. cline%defined('ctf')     ) call cline%set('ctf',   'yes')
@@ -213,7 +217,7 @@ select case(prg)
         keys_optional(1) = 'nthr'
         ! parse command line
         if( describe ) call print_doc_simulate_subtomogram
-        call cline%parse(keys_required(:4), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
         ! execute
         call xsimulate_subtomogram%execute(cline)
     case( 'select' )
@@ -234,7 +238,7 @@ select case(prg)
         keys_optional(7) = 'dir_reject'
         ! parse command line
         if( describe ) call print_doc_select
-        call cline%parse(keys_required(:2), keys_optional(:7))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('outfile') )  call cline%set('outfile', 'selected_lines.txt')
         ! execute
@@ -254,37 +258,14 @@ select case(prg)
         keys_optional(4) = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_make_pickrefs
-        call cline%parse(keys_required(:1), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('pcontrast')) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('pgrp')     ) call cline%set('pgrp',      'd1'   )
         ! execute
         call xmake_pickrefs%execute(cline)
     case( 'extract' )
-        !==Program extract
-        !
-        ! <extract/begin>is a program that extracts particle images from integrated movies.
-        ! Boxfiles are assumed to be in EMAN format but we provide a conversion script
-        ! (relion2emanbox.pl) for *.star files containing particle coordinates obtained
-        ! with Relion. In addition to one single-particle image stack per micrograph, the
-        ! program produces a parameter files that should be concatenated for use in
-        ! conjunction with other SIMPLE programs.
-        ! <extract/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'unidoc'
-        keys_optional(2) = 'filetab'
-        keys_optional(3) = 'boxtab'
-        keys_optional(4) = 'ctf_esitnate_doc'
-        keys_optional(5) = 'pcontrast'
-        keys_optional(6) = 'box'
-        keys_optional(7) = 'outside'
-        keys_optional(8) = 'dir'
-        ! parse command line
-        if( describe ) call print_doc_extract
-        call cline%parse(keys_required(:1),keys_optional(:8))
+        call cline%parse()
         ! parse command line
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         ! execute
@@ -313,7 +294,7 @@ select case(prg)
         keys_optional(4) = 'objfun'
         ! parse command line
         ! if( describe ) call print_doc_cluster_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:4))
         ! execute
         call xcluster_cavgs%execute(cline)
 
@@ -352,7 +333,7 @@ select case(prg)
         keys_optional(21) = 'center'
         ! parse command line
         if( describe ) call print_doc_mask
-        call cline%parse( keys_required(:1), keys_optional(:21))
+        call cline%parse_oldschool( keys_required(:1), keys_optional(:21))
         ! execute
         call xmask%execute(cline)
     case( 'info_image' )
@@ -370,7 +351,7 @@ select case(prg)
         keys_optional(4) = 'endian'
         ! parse command line
         if( describe ) call print_doc_info_image
-        call cline%parse(keys_required(:1), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
         ! execute
         call xinfo_image%execute(cline)
     case( 'info_stktab' )
@@ -382,7 +363,7 @@ select case(prg)
         keys_required(1) = 'stktab'
         ! parse command line
         ! if( describe ) call print_doc_info_stktab
-        call cline%parse(keys_required(:1))
+        call cline%parse_oldschool(keys_required(:1))
         ! execute
         call xinfo_stktab%execute(cline)
 
@@ -402,7 +383,7 @@ select case(prg)
         keys_optional(1) = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_fsc
-        call cline%parse(keys_required(:4), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
         ! execute
         call xfsc%execute(cline)
     case( 'center' )
@@ -420,39 +401,13 @@ select case(prg)
         keys_optional(3) = 'cenlp'
         ! parse command line
         if( describe ) call print_doc_center
-        call cline%parse(keys_required(:2), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         ! execute
         call xcenter%execute(cline)
     case( 'postprocess' )
-        !==Program postprocess
-        !
-        ! <postprocess/begin>is a program for post-processing of volumes.
-        ! Use program volops to estimate the B-factor with the Guinier plot
-        ! <postprocess/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'vol1'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        ! set optional keys
-        keys_optional(1)  = 'fsc'
-        keys_optional(2)  = 'lp'
-        keys_optional(3)  = 'mw'
-        keys_optional(4)  = 'bfac'
-        keys_optional(5)  = 'automsk'
-        keys_optional(6)  = 'amsklp'
-        keys_optional(7)  = 'edge'
-        keys_optional(8)  = 'binwidth'
-        keys_optional(9)  = 'thres'
-        keys_optional(10) = 'mskfile'
-        keys_optional(11) = 'vol_filt'
-        keys_optional(12) = 'inner'
-        keys_optional(13) = 'mirr'
-        ! parse command line
-        if( describe ) call print_doc_postprocess
-        call cline%parse(keys_required(:3), keys_optional(:13))
+        call cline%parse()
         ! execute
         call xpostprocess%execute(cline)
     case( 'project' )
@@ -485,7 +440,7 @@ select case(prg)
         keys_optional(10) = 'msk'
         ! parse command line
         if( describe ) call print_doc_project
-        call cline%parse(keys_required(:2), keys_optional(:10))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
@@ -521,7 +476,7 @@ select case(prg)
         keys_optional(20) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_volops
-        call cline%parse(keys_optional=keys_optional(:20))
+        call cline%parse_oldschool(keys_optional=keys_optional(:20))
         if( .not.cline%defined('vol1') .and. .not.cline%defined('vollist') )&
             &stop 'Input volume required!'
         ! execute
@@ -542,7 +497,7 @@ select case(prg)
         keys_optional(4) = 'outvol'
         ! parse command line
         if( describe ) call print_doc_convert
-        call cline%parse(keys_optional=keys_optional(:4))
+        call cline%parse_oldschool(keys_optional=keys_optional(:4))
         ! execute
         call xconvert%execute(cline)
     case( 'ctfops' )
@@ -563,7 +518,7 @@ select case(prg)
         keys_optional(6) = 'bfac'
         ! parse command line
         if( describe ) call print_doc_ctfops
-        call cline%parse(keys_required(:2), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('stk') ) call cline%set('box', 256.)
         ! execute
@@ -590,7 +545,7 @@ select case(prg)
         keys_optional(11) = 'width'
         ! parse command line
         if( describe ) call print_doc_filter
-        call cline%parse(keys_required(:1), keys_optional(:11))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:11))
         ! execute
         call xfilter%execute(cline)
     case( 'normalize' )
@@ -613,7 +568,7 @@ select case(prg)
         keys_optional(6) = 'nthr'
         ! parse command line
         ! if( describe ) call print_doc_normalize
-        call cline%parse(keys_required(:1), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:6))
         ! execute
         call xnormalize%execute(cline)
     case( 'scale' )
@@ -638,7 +593,7 @@ select case(prg)
         keys_optional(11) = 'outstk2'
         ! parse command line
         if( describe ) call print_doc_scale
-        call cline%parse(keys_required(:1),keys_optional(:11))
+        call cline%parse_oldschool(keys_required(:1),keys_optional(:11))
         ! execute
         call xscale%execute(cline)
     case( 'stack' )
@@ -660,7 +615,7 @@ select case(prg)
         keys_optional(7) = 'endian'
         ! parse command line
         if( describe ) call print_doc_stack
-        call cline%parse(keys_required(:3), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:6))
         ! execute
         call xstack%execute(cline)
     case( 'stackops' )
@@ -707,7 +662,7 @@ select case(prg)
         keys_optional(25) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:1),keys_optional(:25) )
+        call cline%parse_oldschool( keys_required(:1),keys_optional(:25) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -729,7 +684,7 @@ select case(prg)
         keys_optional(1) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_print_cmd_dict
-        call cline%parse(keys_optional=keys_optional(:1))
+        call cline%parse_oldschool(keys_optional=keys_optional(:1))
         ! execute
         call xprint_cmd_dict%execute(cline)
     case( 'print_fsc' )
@@ -743,7 +698,7 @@ select case(prg)
         keys_required(3)  = 'fsc'
         ! parse command line
         if( describe ) call print_doc_print_fsc
-        call cline%parse(keys_required(:3))
+        call cline%parse_oldschool(keys_required(:3))
         ! execute
         call xprint_fsc%execute(cline)
     case( 'print_magic_boxes' )
@@ -756,7 +711,7 @@ select case(prg)
         keys_required(2) = 'moldiam'
         ! parse command line
         if( describe ) call print_doc_print_magic_boxes
-        call cline%parse(keys_required(:2))
+        call cline%parse_oldschool(keys_required(:2))
         ! execute
         call xprint_magic_boxes%execute(cline)
     case( 'shift' )
@@ -774,7 +729,7 @@ select case(prg)
         keys_optional(3) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_shift
-        call cline%parse(keys_required(:3), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! execute
         call xshift%execute(cline)
 
@@ -806,7 +761,7 @@ select case(prg)
         keys_optional(8) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_make_deftab
-        call cline%parse(keys_required(:5),keys_optional(:8))
+        call cline%parse_oldschool(keys_required(:5),keys_optional(:8))
         ! execute
         call xmake_deftab%execute(cline)
     case( 'make_oris' )
@@ -849,7 +804,7 @@ select case(prg)
         keys_optional(21) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_make_oris
-        call cline%parse(keys_required(:1),keys_optional(:21))
+        call cline%parse_oldschool(keys_required(:1),keys_optional(:21))
         ! execute
         call xmake_oris%execute(cline)
     case( 'map2ptcls' )
@@ -872,7 +827,7 @@ select case(prg)
         keys_optional(7) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_map2ptcls
-        call cline%parse(keys_required(:3), keys_optional(:7))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
         ! execute
@@ -924,7 +879,7 @@ select case(prg)
         keys_optional(26) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_orisops
-        call cline%parse(keys_optional=keys_optional(:26))
+        call cline%parse_oldschool(keys_optional=keys_optional(:26))
         ! execute
         call xorisops%execute(cline)
     case( 'oristats' )
@@ -960,7 +915,7 @@ select case(prg)
         keys_optional(18) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:18) )
+        call cline%parse_oldschool( keys_required(:1), keys_optional(:18) )
         ! set defaults
         if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
         ! execute
@@ -980,7 +935,7 @@ select case(prg)
         keys_optional(4) = 'oritype'
         ! parse command line
         if( describe ) call print_doc_vizoris
-        call cline%parse( keys_required(:1), keys_optional(:4) )
+        call cline%parse_oldschool( keys_required(:1), keys_optional(:4) )
         ! execute
         call xvizoris%execute(cline)
 

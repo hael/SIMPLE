@@ -170,7 +170,7 @@ select case(prg)
         keys_optional(30)  = 'pcontrast'
         keys_optional(31)  = 'ctfreslim'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:31))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('trs')                   ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')               ) call cline%set('lpstart',          15.)
@@ -199,7 +199,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'startit'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:1))
         ! execute
         call xselect_frames%execute(cline)
     case( 'boxconvs' )
@@ -216,7 +216,7 @@ select case(prg)
         keys_optional(3) = 'boxconvsz'
         keys_optional(4) = 'startit'
         ! parse command line
-        call cline%parse(keys_required(:1), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('boxconvsz') ) call cline%set('boxconvsz', 512.)
         ! execute
@@ -239,7 +239,7 @@ select case(prg)
         keys_optional(7) = 'lp'
         keys_optional(8) = 'clip'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:8))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
@@ -282,7 +282,7 @@ select case(prg)
         keys_optional(17) = 'outfile'
         keys_optional(18) = 'dir'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:18))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:18))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
@@ -313,7 +313,7 @@ select case(prg)
         keys_optional(8) = 'phaseplate'
         keys_optional(9) = 'dir'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:9))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
@@ -356,7 +356,7 @@ select case(prg)
         keys_optional(22) = 'astigtol'
         keys_optional(23) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:23))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
         call cline%set('prg',    'preprocess')
@@ -387,7 +387,7 @@ select case(prg)
         keys_optional(4) = 'ndev'
         keys_optional(5) = 'dir'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! execute
         call xpick%execute(cline)
 
@@ -418,7 +418,7 @@ select case(prg)
         keys_optional(13) = 'stktab'
         keys_optional(14) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:15))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:15))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -465,7 +465,7 @@ select case(prg)
         keys_optional(22) = 'phaseplate'
         keys_optional(23) = 'objfun'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:23))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:23))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -501,7 +501,7 @@ select case(prg)
         keys_optional(5) = 'stktab'
         keys_optional(6) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:6))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -530,7 +530,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'lp'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
         ! set defaults
         if( .not. cline%defined('lp') ) call cline%set('lp', 20.)
         ! execute
@@ -549,7 +549,7 @@ select case(prg)
         keys_optional(1) = 'outstk'
         keys_optional(2) = 'classdoc'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:2))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
         ! execute
         call xrank_cavgs%execute(cline)
 
@@ -582,7 +582,7 @@ select case(prg)
         keys_optional(4) = 'box'
         keys_optional(5) = 'moldiam'
         ! parse command line
-        call cline%parse(keys_required(:1), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:5))
         ! execute
         call xresrange%execute(cline)
     case( 'npeaks' )
@@ -600,7 +600,7 @@ select case(prg)
         keys_optional(2) = 'moldiam'
         keys_optional(3) = 'pgrp'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! set defaults
         if( .not. cline%defined('lp') )     call cline%set('lp',       20.)
         ! execute
@@ -614,7 +614,7 @@ select case(prg)
         ! set required keys
         keys_required(1)  = 'moldiam'
         ! parse command line
-        call cline%parse(keys_required=keys_required(:1))
+        call cline%parse_oldschool(keys_required=keys_required(:1))
         ! execute
         call xnspace%execute(cline)
     case( 'prime3D_init' )
@@ -643,7 +643,7 @@ select case(prg)
         keys_optional(10) = 'stktab'
         keys_optional(11) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:11))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:11))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -685,7 +685,7 @@ select case(prg)
         keys_optional(15) = 'stktab'
         keys_optional(16) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:16))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:16))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -742,7 +742,7 @@ select case(prg)
         keys_optional(29) = 'stktab'
         keys_optional(30) = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:30))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:30))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -772,7 +772,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:1))
         ! execute
         call xrec_test%execute(cline)
     case( 'check3D_conv' )
@@ -805,7 +805,7 @@ select case(prg)
         keys_optional(5) = 'find'
         keys_optional(6) = 'refine'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('lp') .and. .not.cline%defined('lp') )call cline%set('lp', 20.)
         ! execute
@@ -841,7 +841,7 @@ select case(prg)
         keys_optional(4) = 'nspace'
         keys_optional(5) = 'center'
         ! parse command line
-        call cline%parse(keys_required(:7), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:7), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('nspace') )then
             call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
@@ -878,7 +878,7 @@ select case(prg)
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         ! parse command line
-        call cline%parse(keys_required(:9), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:9), keys_optional(:3))
         ! set defaults
         call cline%set('eo','no')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
@@ -901,7 +901,7 @@ select case(prg)
         keys_optional(3) = 'outfile'
         keys_optional(4) = 'outvol'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         ! execute
@@ -919,7 +919,7 @@ select case(prg)
         keys_required(2) = 'msk'
         keys_required(3) = 'mskfile'
         ! parse command line
-        call cline%parse(keys_required(:3))
+        call cline%parse_oldschool(keys_required(:3))
         ! execute
         call xresmask%execute(cline)
 
@@ -956,7 +956,7 @@ select case(prg)
         keys_optional(8)  = 'stktab'
         keys_optional(9)  = 'phaseplate'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:9))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:9))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -991,7 +991,7 @@ select case(prg)
         keys_optional(5) = 'stk'
         keys_optional(6) = 'stktab'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:6))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -1020,7 +1020,7 @@ select case(prg)
         keys_optional(4) = 'stk'
         keys_optional(5) = 'stktab'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -1042,7 +1042,7 @@ select case(prg)
         keys_optional(1) = 'stk'
         keys_optional(2) = 'vol1'
         ! parse command line
-        call cline%parse( keys_optional=keys_optional(:2))
+        call cline%parse_oldschool( keys_optional=keys_optional(:2))
         ! execute
         call xcheck_box%execute(cline)
     case( 'check_nptcls' )
@@ -1054,7 +1054,7 @@ select case(prg)
         ! set optional keys
         keys_required(1) = 'stk'
         ! parse command line
-        call cline%parse(keys_required(:1))
+        call cline%parse_oldschool(keys_required(:1))
         ! execute
         call xcheck_nptcls%execute(cline)
 
@@ -1084,7 +1084,7 @@ select case(prg)
         keys_optional(12) = 'inner'
         keys_optional(13) = 'mirr'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:13))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:13))
         ! execute
         call xpostprocess%execute(cline)
     case( 'project' )
@@ -1116,7 +1116,7 @@ select case(prg)
         keys_optional(9)  = 'top'
         keys_optional(10) = 'msk'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:10))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
@@ -1135,7 +1135,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
         ! execute
         call xvolaverager%execute(cline)
     case( 'volume_smat' )
@@ -1153,7 +1153,7 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'hp'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:2))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:2))
         ! execute
         call xvolume_smat%execute(cline)
     case( 'dock_volpair' )
@@ -1173,7 +1173,7 @@ select case(prg)
         keys_optional(2) = 'dockmode'
         keys_optional(3) = 'outvol'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
         ! execute
         call xdock_volpair%execute(cline)
 
@@ -1200,7 +1200,7 @@ select case(prg)
         keys_optional(10) = 'outstk'
         keys_optional(11) = 'outstk2'
         ! parse command line
-        call cline%parse(keys_required(:1),keys_optional(:11))
+        call cline%parse_oldschool(keys_required(:1),keys_optional(:11))
         ! execute
         call xscale%execute(cline)
     case( 'binarise' )
@@ -1220,7 +1220,7 @@ select case(prg)
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
         ! parse command line
-        call cline%parse(keys_optional=keys_optional(:10))
+        call cline%parse_oldschool(keys_optional=keys_optional(:10))
         ! execute
         call xbinarise%execute(cline)
     case( 'corrcompare' )
@@ -1238,7 +1238,7 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'smpd'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
         ! execute
         call xcorrcompare%execute(cline)
      case( 'image_diff' )
@@ -1256,7 +1256,7 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'smpd'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
         ! execute
         call ximage_diff%execute(cline)
     case( 'image_smat' )
@@ -1275,7 +1275,7 @@ select case(prg)
         keys_optional(3) = 'hp'
         keys_optional(4) = 'nthr'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
         ! execute
         call ximage_smat%execute(cline)
 
@@ -1296,7 +1296,7 @@ select case(prg)
         keys_optional(2) = 'neg'
         keys_optional(3) = 'outstk'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! execute
         call xmasscen%execute(cline)
     case( 'cluster_smat' )
@@ -1314,7 +1314,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
         ! execute
         call xcluster_smat%execute(cline)
     case( 'intgpeaks' )
@@ -1331,7 +1331,7 @@ select case(prg)
         keys_optional(2) = 'msk'
         keys_optional(3) = 'inner'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! execute
         call xintgpeaks%execute(cline)
     case( 'print_dose_weights' )
@@ -1348,7 +1348,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'kv'
         ! parse command line
-        call cline%parse(keys_required(:5),keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:5),keys_optional(:1))
         ! execute
         call xprint_dose_weights%execute(cline)
     case( 'res' )
@@ -1361,7 +1361,7 @@ select case(prg)
         keys_required(2) = 'find'
         keys_required(3) = 'box'
         ! parse command line
-        call cline%parse(keys_required(:3))
+        call cline%parse_oldschool(keys_required(:3))
         !execute
         call xres%execute(cline)
 
@@ -1379,7 +1379,7 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'oritype'
         ! parse command line
-        call cline%parse(keys_required(:2), keys_optional(:2))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
         ! execute
         call xcluster_oris%execute(cline)
     case( 'map2ptcls_doc' )
@@ -1397,7 +1397,7 @@ select case(prg)
        keys_optional(4) = 'outfile'
        keys_optional(5) = 'mul'
        ! parse command line
-       call cline%parse(keys_required(:1), keys_optional(:5))
+       call cline%parse_oldschool(keys_required(:1), keys_optional(:5))
        ! set defaults
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
        ! execute
@@ -1414,7 +1414,7 @@ select case(prg)
         keys_optional(1)  = 'outfile'
         keys_optional(2)  = 'oritype'
         ! parse command line
-        call cline%parse( keys_required(:1), keys_optional(:2) )
+        call cline%parse_oldschool( keys_required(:1), keys_optional(:2) )
         ! set defaults
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         ! execute
@@ -1428,7 +1428,7 @@ select case(prg)
         keys_required(1) = 'oritab'
         keys_required(2) = 'projfile'
         keys_required(3) = 'oritype'
-        call cline%parse(keys_required(:3))
+        call cline%parse_oldschool(keys_required(:3))
         ! execute
         call xtxt2project%execute(cline)
     case( 'project2txt' )
@@ -1441,7 +1441,7 @@ select case(prg)
         keys_required(2) = 'oritype'
         ! set optional keys
         keys_optional(1)  = 'outfile'
-        call cline%parse(keys_required(:2), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
         ! execute
         call xproject2txt%execute(cline)
     case( 'manage_project' )
@@ -1477,7 +1477,7 @@ select case(prg)
         keys_optional(25) = 'filetab'
         keys_optional(26) = 'ctf'
         ! parse command line
-        call cline%parse(keys_optional= keys_optional(:26))
+        call cline%parse_oldschool(keys_optional= keys_optional(:26))
         ! set defaults
         if( .not. cline%defined('ctf') ) call cline%set('ctf', 'yes')
         ! execute
@@ -1489,7 +1489,7 @@ select case(prg)
         !
         ! Required keys
         keys_required(1) = 'projfile'
-        call cline%parse(keys_required(:1))
+        call cline%parse_oldschool(keys_required(:1))
         ! execute
         call xprint_project_info%execute(cline)
 
@@ -1506,7 +1506,7 @@ select case(prg)
         keys_required(2) = 'smpd'
         keys_required(3) = 'nframesgrp'
         ! parse command line
-        call cline%parse(keys_required(:3))
+        call cline%parse_oldschool(keys_required(:3))
         ! execute
         call xtseries_extract%execute(cline)
     case( 'tseries_track' )
@@ -1529,7 +1529,7 @@ select case(prg)
         keys_optional(7) = 'neg'
         keys_optional(8) = 'cenlp'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:8))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
         if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
@@ -1556,7 +1556,7 @@ select case(prg)
         keys_optional(5) = 'deftab'
         keys_optional(6) = 'outstk'
         ! parse command line
-        call cline%parse(keys_required(:3), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('hp')    ) call cline%set('hp',    5.0)
         if( .not. cline%defined('lp')    ) call cline%set('lp',    1.1)
@@ -1576,7 +1576,7 @@ select case(prg)
         keys_required(4) = 'chunksz'
         keys_required(5) = 'stepsz'
         ! parse command line
-        call cline%parse(keys_required(:5))
+        call cline%parse_oldschool(keys_required(:5))
         ! execute
         call xtseries_split%execute(cline)
 
@@ -1597,7 +1597,7 @@ select case(prg)
         keys_optional(1) = 'numlen'
         keys_optional(2) = 'oritype' ! needs to be required when we move to *.simple format
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:2))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:2))
         ! execute
         call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )
@@ -1611,7 +1611,7 @@ select case(prg)
         keys_required(2) = 'nparts'
         keys_required(3) = 'nnn'
         ! parse command line
-        call cline%parse( keys_required(:3) )
+        call cline%parse_oldschool( keys_required(:3) )
         ! execute
         call xmerge_nnmat%execute(cline)
     case( 'merge_similarities' )
@@ -1625,7 +1625,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nparts'
         ! parse command line
-        call cline%parse(keys_required(:1), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:1))
         ! execute
         call xmerge_similarities%execute(cline)
     case( 'split_pairs' )
@@ -1638,7 +1638,7 @@ select case(prg)
         keys_required(1) = 'nptcls'
         keys_required(2) = 'nparts'
         ! parse command line
-        call cline%parse(keys_required(:2))
+        call cline%parse_oldschool(keys_required(:2))
         ! execute
         call xsplit_pairs%execute(cline)
     case( 'split' )
@@ -1655,7 +1655,7 @@ select case(prg)
         keys_optional(3) = 'nparts'
         keys_optional(4) = 'neg'
         ! parse command line
-        call cline%parse(keys_required(:1), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

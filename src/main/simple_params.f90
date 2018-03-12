@@ -153,7 +153,7 @@ type :: params
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
-    character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
+    character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
