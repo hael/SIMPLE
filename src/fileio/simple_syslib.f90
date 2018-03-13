@@ -1,6 +1,15 @@
 !!
 !! System library functions and error checking
 !!
+!! Error routines:   simple_stop, allocchk, simple_error_check, raise_sys_error
+!! System routines:  exec_cmdline, simple_sleep, simple_isenv simple_getcwd, simple_chdir simple_chmod
+!! File routines:    simple_file_stat, wait_for_closure is_io is_open file_exists is_file_open
+!! Memory routines:  simple_mem_usage, simple_dump_mem_usage
+
+!! Function:  get_sys_error simple_getenv  get_lunit cpu_usage get_process_id
+
+
+!! New OS calls:  simple_list_dirs, simple_list_files, simple_del_dir, simple_del_files
 
 module simple_syslib
     use simple_defs
@@ -59,12 +68,12 @@ module simple_syslib
             character*(*), intent(out) :: str
         end subroutine date
         pure real function etime(tarray)
-        real, intent(out) :: tarray(2)
-        end function
+            real, intent(out) :: tarray(2)
+        end function etime
 
         pure real function dtime(tarray)
-        real, intent(out) :: tarray(2)
-        end function
+            real, intent(out) :: tarray(2)
+        end function dtime
 
         subroutine exit(s)
             integer, intent(in) :: s
@@ -303,6 +312,16 @@ module simple_syslib
     private :: raise_sys_error
     ! private
 
+
+    interface
+        ! rmdir    CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
+        ! On  success,  zero is returned.  On error, -1 is returned, and errno is
+        ! set appropriately.
+        integer function rmdir(dirname) result(status) bind(C, name="rmdir")
+            use, intrinsic :: iso_c_binding
+            character(c_char),dimension(*),intent(in)  ::  dirname
+        end function rmdir
+    end interface
 contains
 
     !! ERROR Routines
@@ -319,29 +338,10 @@ contains
         stop
     end subroutine simple_stop
 
-#ifdef PGI
-    subroutine simple_cuda_stop (msg,f,l)
-        use cudafor
-        character(len=*),      intent(in) :: msg
-        character(len=*),      intent(in), optional :: f !< filename of caller
-        integer,               intent(in), optional :: l !< line number from calling file
-        integer   :: last_err
-        last_err = cudaGetLastError()
-        if ( last_err .ne. 0)then
-           write(*,"('CUDA Error ',a,', File: ',a,', Line: ',i0)")msg, f, l
-           write(*,"('Last CUDA Error :',i0)") last_err
-           write(*,"(4x,a)")cudaGetErrorString( last_err )
-           call simple_stop("In simple_syslib::simple_cuda_stop ",f,l)
-       end if
-
-    end subroutine simple_cuda_stop
-#endif
-
     function get_sys_error () result(err)
         integer :: err
-        CHARACTER(len=100) :: msg
+        character(len=100) :: msg
         err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
-
         if( err < 0)then !! PGI likes to use negative error numbers
             !#ifdef PGI
             !            msg = gerror()
@@ -563,10 +563,11 @@ contains
     end subroutine raise_sys_error
 
     !> isenv; return 0 if environment variable is present
-    function simple_isenv( name )  result( status )
+    logical function simple_isenv( name )
         character(len=*), intent(in)  :: name
         character(len=STDLEN) :: varval
         integer :: length, status
+        simple_isenv=.false.
         status=1
 #if defined(PGI)
         call getenv( trim(adjustl(name)), varval)
@@ -575,6 +576,7 @@ contains
         !! Intel and GNU F2003 included
         call get_environment_variable( trim(adjustl(name)), status=status)
 #endif
+        if(status==0) simple_isenv=.true.
     end function simple_isenv
 
     !> simple_getenv gets the environment variable string and status
@@ -596,20 +598,21 @@ contains
         endif
         if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
         if( length ==  0 .or. status /= 0 )then
-             retval=""
-           return
-       end if
+            retval=""
+            return
+        end if
 #endif
     end function simple_getenv
 
     subroutine simple_sleep( secs )
         integer, intent(in) :: secs
+        integer(dp) :: longtime
 #if defined(INTEL)
         integer  :: msecs
-        msecs = 1000*secs
+        msecs = 1000*INT(secs)
         call sleepqq(msecs)  !! milliseconds
 #else
-        call sleep(secs) !! intrinsic
+        call sleep(INT(secs)) !! intrinsic
 #endif
     end subroutine simple_sleep
 
@@ -672,10 +675,10 @@ contains
         !allocate(buffer(13), source=0)
         status = STAT (trim(adjustl(filename)) , buffer)
         if (.NOT. status) then
-             call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename))
-             print *, buffer
-          end if
-         if(.not.currently_opened) close(funit)
+            call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename))
+            print *, buffer
+        end if
+        if(.not.currently_opened) close(funit)
         ! integer(4) :: ierror, fsize
         ! integer(jhandle_size) :: jhandle
         ! fsize=len_trim(adjustl(filename))
@@ -717,10 +720,59 @@ contains
         endif
     end subroutine simple_file_stat
 
+    !> file list command based on flibs-0.9
+    subroutine simple_file_list( pattern, list )
+        character(len=*), intent(in)            :: pattern
+        character(len=*), pointer, dimension(:) :: list
+
+        character(len=STDLEN)                      :: tmpfile
+        character(len=STDLEN)                      :: cmd
+        character(len=1)                        :: line
+        character(len=len(pattern))             :: prefix
+        integer                                 :: luntmp
+        integer                                 :: i, ierr, count
+
+        tmpfile =  trim(tempdir)//'__filelist__'
+        cmd = '/bin/ls ' // trim(pattern) // ' ' // trim(redirect) // trim(tmpfile) &
+            // ' ' // suppress_msg
+
+        call exec_cmdline( cmd )
+
+        open(newunit = luntmp, file = tmpfile)
+
+        !
+        ! First count the number of files, then allocate and fill the array
+        !
+        count = 0
+        do
+            read( luntmp, '(a)', iostat = ierr ) line
+
+            if ( ierr == 0 ) then
+                count = count + 1
+            else
+                exit
+            endif
+        enddo
+
+        rewind( luntmp )
+
+        allocate( list(count) )
+
+        do i = 1,count
+            read( luntmp, '(a)' ) list(i)
+
+        enddo
+
+        close( luntmp, status = 'delete' )
+
+    end subroutine simple_file_list
+
+
+
     logical function is_io(unit)
-         integer, intent(in) :: unit
-         is_io=.false.
-         if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
+        integer, intent(in) :: unit
+        is_io=.false.
+        if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
     end function is_io
 
     !>  \brief  check whether a IO unit is currently opened
@@ -782,17 +834,30 @@ contains
         integer :: io_status
         io_status = getcwd(cwd)
         if(io_status /= 0) call simple_error_check(io_status, &
-             "syslib:: simple_getcwd failed to get path "//trim(cwd))
+            "syslib:: simple_getcwd failed to get path "//trim(cwd))
     end subroutine simple_getcwd
 
     !> \brief  Change working directory
     subroutine simple_chdir( newd )
         character(len=*), intent(in) :: newd   !< output pathname
         integer :: io_status
+        logical :: dir_e
+        inquire(file=newd, exist=dir_e)
         io_status = chdir(newd)
         if(io_status /= 0) call simple_error_check(io_status, &
             "syslib:: simple_getcwd failed to change path "//trim(newd))
     end subroutine simple_chdir
+
+    !> \brief  Remove directory
+    subroutine simple_rmdir( d )
+        character(len=*), intent(in) :: d
+        integer :: io_status
+        logical :: dir_e
+        inquire(file=d, exist=dir_e)
+        io_status = rmdir(d)
+        if(io_status /= 0) call simple_error_check(io_status, &
+            "syslib:: simple_getcwd failed to remove "//trim(d))
+    end subroutine simple_rmdir
 
     ! !>  \brief  get logical unit of file
     ! integer function get_lunit( fname )
@@ -909,13 +974,13 @@ contains
 #endif
 
 #ifdef GNU
-    CHARACTER(*), PARAMETER :: compilation_cmd = COMPILER_OPTIONS()
-    CHARACTER(*), PARAMETER :: compiler_ver = COMPILER_VERSION()
+        character(*), parameter :: compilation_cmd = compiler_options()
+        character(*), parameter :: compiler_ver = compiler_version()
 #endif
 
-    integer , intent (in), optional :: file_unit
-    integer  :: file_unit_op
-    integer       :: status
+        integer , intent (in), optional :: file_unit
+        integer  :: file_unit_op
+        integer       :: status
 
 
         if (present(file_unit)) then
@@ -1004,17 +1069,17 @@ contains
     ! Suggestion from https://stackoverflow.com/a/30241280
     subroutine simple_mem_usage(valueRSS,valuePeak,valueSize,valueHWM)
         implicit none
-        integer, intent(out) :: valueRSS
-        integer, intent(out), optional :: valuePeak
-        integer, intent(out), optional :: valueSize
-        integer, intent(out), optional :: valueHWM
+        integer(kind=8), intent(out) :: valueRSS
+        integer(kind=8), intent(out), optional :: valuePeak
+        integer(kind=8), intent(out), optional :: valueSize
+        integer(kind=8), intent(out), optional :: valueHWM
 
         character(len=200):: filename=' '
         character(len=80) :: line
         character(len=8)  :: pid_char=' '
         integer :: pid,unit
-        logical :: ifxst
-
+        logical :: ifxst, debug
+        debug=.false.
         valueRSS=-1    ! return negative number if not found
 
         !--- get process ID
@@ -1022,10 +1087,10 @@ contains
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
-
+        if(debug) print *,'simple_mem_usage:debug:  Fetching ', trim(filename)
         !--- read system file
 
-        inquire (file=filename,exist=ifxst)
+        inquire (file=trim(filename),exist=ifxst)
         if (.not.ifxst) then
             write (*,*) 'system file does not exist'
             return
@@ -1038,6 +1103,8 @@ contains
                 read (unit,'(a)',end=110) line
                 if (line(1:7).eq.'VmPeak:') then
                     read (line(8:),*) valuePeak
+                    if(debug) print *,'simple_mem_usage:debug:  Peak ', valuePeak
+                    exit
                 endif
             enddo
 110         continue
@@ -1047,6 +1114,8 @@ contains
                 read (unit,'(a)',end=120) line
                 if (line(1:7).eq.'VmSize:') then
                     read (line(8:),*) valueSize
+                    if(debug) print *,'simple_mem_usage:debug:  VM Size ', valueSize
+                    exit
                 endif
             enddo
 120         continue
@@ -1056,6 +1125,8 @@ contains
                 read (unit,'(a)',end=130) line
                 if (line(1:6).eq.'VmHWM:') then
                     read (line(7:),*) valueHWM
+                    if(debug) print *,'simple_mem_usage:debug:  peak RAM ', valueHWM
+                    exit
                 endif
             enddo
 130         continue
@@ -1064,12 +1135,12 @@ contains
             read (unit,'(a)',end=140) line
             if (line(1:6).eq.'VmRSS:') then
                 read (line(7:),*) valueRSS
+                if(debug) print *,'simple_mem_usage:debug: RSS ', valueRSS
                 exit
             endif
         enddo
 140     continue
         close(unit)
-
         return
     end subroutine simple_mem_usage
 

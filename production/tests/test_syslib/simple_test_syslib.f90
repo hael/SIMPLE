@@ -14,9 +14,9 @@ implicit none
 
 real :: hbwsize
 integer :: policy, io_stat
-character(len=STDLEN) :: simple_path_str
+character(len=STDLEN) :: simple_path_str, cur_working_dir
 integer(8) :: version(3)
-
+integer(8) :: vmRSS, vmHWM, vmPeak, vmSize
 
 #if defined (PGI)
     print *, '  PGI  COMPILER identified. '
@@ -48,10 +48,38 @@ if(len_trim(simple_path_str)==0) then
     print*,'SIMPLE_PATH not defined in shell env'
 end if
 
+
+print *, '>>> Syslib function simple_getcwd'
+call simple_getcwd (cur_working_dir)
+print *, '     simple_getcwd returned ', cur_working_dir
+
+print *, '>>> Syslib function simple_mkdir '
+call simple_mkdir('test_syslib')
+print *, '>>> Syslib function simple_rmdir '
+call simple_rmdir('test_syslib')
+
+print *, '>>> Syslib function simple_isenv '
+if( simple_isenv('SIMPLE_PATH') )then
+    print *, '     simple_isenv found SIMPLE_PATH'
+else
+    print *, '     simple_isenv failed to find SIMPLE_PATH'
+end if
+
+
 print *, '>>> Syslib function simple_sleep '
 call simple_sleep(1)
 print *, '>>> Syslib function print_compiler_info '
 call print_compiler_info()
+
+print *, '>>> Syslib function simple_mem_usage '
+call simple_mem_usage(vmRSS, vmPeak, vmSize, vmHWM)
+print *, '>>> Syslib Memory Usage'
+print *, '>>>    vmRSS (Resident set size, i.e. current RAM used) ', vmRSS, 'kB'
+print *, '>>>    vmHWM (High water mark RSS, max RAM by process ) ', vmHWM, 'kB'
+print *, '>>>    vmSize (total shared Memory of process)          ', vmSize, 'kB'
+print *, '>>>    vmPeak (peak vmSize)                             ', vmPeak, 'kB'
+print *, '>>> Syslib function simple_dump_mem_usage '
+call simple_dump_mem_usage()
 
 ! print *, '>>> Syslib function print_fftw_version '
 ! call print_fftw_version()
