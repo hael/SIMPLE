@@ -169,7 +169,7 @@ select case(prg)
         keys_optional(29)  = 'pcontrast'
         keys_optional(30)  = 'ctfreslim'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:31))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
