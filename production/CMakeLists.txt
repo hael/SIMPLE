@@ -69,16 +69,25 @@ file(GLOB TESTDIRS
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
+  list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
+  list(REMOVE_ITEM TESTDIRS "tests/test_cufft")
 endif()
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_intel")
 endif()
-if (NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
-else()
-  list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
-  list(REMOVE_ITEM TESTDIRS "tests/test_cufft")
-endif()
+
+# if(USE_OPENACC)
+#   message(STATUS "Searching for BLAS to test OpenACC")
+#   set(BLA_F95 ON)
+#   set(BLA_VENDOR "ATLAS")
+#   find_package(BLAS QUIET)
+#   if (BLAS_FOUND AND USE_OPENACC)
+#     message(STATUS "Adding BLAS library to tests: L${BLAS_LINKER_FLAGS} ${BLAS_blas_LIBRARY}")
+#     endif()
+# endif()
+
+
 message( STATUS "Test directories ${TESTDIRS}")
 
 foreach(TESTNAME ${TESTDIRS})
@@ -92,19 +101,29 @@ foreach(TESTNAME ${TESTDIRS})
 
     add_executable(${TESTEXE} ${TESTSOURCES})
     target_link_libraries(${TESTEXE} ${EXTRA_LIBS})
+
     if(USE_OPENMP)
       if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-	set_target_properties(${TESTEXE} PROPERTIES
+	      set_target_properties(${TESTEXE} PROPERTIES
           COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
           LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
           LANGUAGE Fortran)
       else()
-	set_target_properties(${TESTEXE} PROPERTIES
+	      set_target_properties(${TESTEXE} PROPERTIES
           COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} -fno-range-check"
           LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
           LANGUAGE Fortran)
       endif()
     endif(USE_OPENMP)
+    # if(BLAS_FOUND AND USE_OPENACC)
+    #   message(STATUS "Adding  ${BLAS_blas_LIBRARY} library to ${TESTEXE}")
+    #   target_link_libraries(${TESTEXE} ${BLAS_blas_LIBRARY})
+    #   set_target_properties(${TESTEXE} PROPERTIES
+    #     COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} -fno-range-check"
+    #     LINK_FLAGS "${OpenMP_Fortran_FLAGS} -L${BLAS_LINKER_FLAGS}"
+    #     LANGUAGE Fortran)
+    # else()
+   # endif()
     install(TARGETS ${TESTEXE}
       ARCHIVE DESTINATION ${CMAKE_INSTALL_BINDIR}
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
