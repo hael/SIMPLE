@@ -140,6 +140,8 @@ character(len=LONGSTRLEN) :: cmdline_glob              !< global command line st
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
 integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100
 
+
+
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION
 integer, parameter :: img_kind = DP

@@ -7,8 +7,8 @@
   character(len=STDLEN) :: SIMPLE_LIB_VERSION="@SIMPLE_VERSION@"     !< simple version
   character(len=STDLEN) :: SIMPLE_GIT_VERSION="@SIMPLE_GIT_VERSION@" !< git hash
   character(len=STDLEN) :: SIMPLE_SOURCE_PATH="@CMAKE_SOURCE_DIR@"   !< source dir
-  character(len=STDLEN) :: SIMPLE_BUILD_PATH="@CMAKE_BINARY_DIR@"    !< where SIMPLE was built 
-  character(len=STDLEN) :: SIMPLE_PATH="@CMAKE_INSTALL_PREFIX@"         !< installation dir
+  character(len=STDLEN) :: SIMPLE_BUILD_PATH="@CMAKE_BINARY_DIR@"    !< where SIMPLE was built
+  character(len=STDLEN) :: SIMPLE_PATH="@CMAKE_INSTALL_PREFIX@"      !< installation dir
 
 #ifdef INTEL
   character(len=STDLEN) :: FC_COMPILER= "Intel ifort 64"
@@ -22,3 +22,14 @@
 #else
 # error 'Compiler must be GNU, Intel or PGI'
 #endif
+
+character(len=10), parameter          :: system_type   = "unix"
+character(len=1),  parameter          :: dir_separator = "/"
+character(len=50), parameter :: rmdir_force   = "/bin/rm --dir --force --recursive --preserve-root"
+character(len=20), parameter :: bg_cmd_prefix = "nohup"
+character(len=20), parameter :: bg_cmd_suffix = "&"
+character(len=20), parameter :: redirect      = ">"
+character(len=20), parameter :: suppress_msg  = "2>/dev/null"
+character(len=20), parameter :: tempdir       = "/tmp/"
+character(len=20), parameter :: ls_command    = "/bin/ls "
+character(len=50), parameter :: list_subdirs = "find . -maxdepth 1 -type d -print0"
