@@ -241,6 +241,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}  " )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        " ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${EXTRA_FLAGS} ")
+
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT} \
  ${EXTRA_FLAGS} \
 -O0 -g -pedantic  -Wextra -Wvector-operation-performance \
@@ -300,13 +301,29 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   #############################################
   #
   ## Portland Group fortran
+  ## NVIDIA PGI Linux compiler
   #
   #############################################
   message(STATUS "NVIDIA PGI Linux compiler")
   set(PGICOMPILER ON)
   set(USE_LINK_TIME_OPTIMISATION ON)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
-  # NVIDIA PGI Linux compiler
+ if(PGI_CHECKING)
+     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign  -Minfo=all,ftn -Mneginfo=all")
+  endif()
+  if (USE_OPENACC_ONLY)
+   set(EXTRA_FLAGS "${EXTRA_FLAGS}  -acc")
+    add_definitions(" -DUSE_OPENACC ")
+   else()
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -mp")
+  endif()
+ if(PGI_EXTRA_FAST)
+     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
+  endif()
+
+  if(PGI_CUDA_IOMUTEX)
+     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Miomutex")
+  endif()
 #  set(CMAKE_AR                           "pgfortran")
   set(CMAKE_CPP_COMPILER                 "cpp -C -CC -E ")
   set(CMAKE_CPP_COMPILER_FLAGS           "  ")
@@ -429,13 +446,6 @@ endif(USE_LINK_TIME_OPTIMISATION)
 #     )
 # endif()
 
-# # Fast math code
-# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#   Fortran
-#   "-fastmath"        # Intel
-#   "-ffast-math"      # GNU
-#   "-Mcuda=fastmath"  # Portland Group
-#   )
 
 # # Vectorize code
 if (USE_FAST_MATH_OPTIMISATION)
@@ -445,6 +455,7 @@ if (USE_FAST_MATH_OPTIMISATION)
     "/Ofast"     # Intel Windows
     "-Ofast"            # GNU
     )
+  # Fast math code
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-fastmath"        # Intel

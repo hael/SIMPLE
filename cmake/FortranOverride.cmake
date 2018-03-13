@@ -160,9 +160,9 @@ message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
   set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                 # preprocessor flags
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
-  set(warn     "-Wall")
-  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
+  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")   # language style
+  set(warn     "-Wall  -Warray-bounds -Wcharacter-truncation -Wline-truncation")                 # warnings
+  set(checks   "-fcheck=all -fcheck-array-temporaries -frange-check -fstack-check -fbounds-check") # checks
   set(forspeed "-O3")                                                                           # optimisation
   set(forpar   "-fopenmp  -Wp,-fopenmp")                                                        # parallel flags
   set(target   "${GNUNATIVE} -fPIC -mcmodel=medium")                                            # target platform

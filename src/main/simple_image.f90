@@ -5772,21 +5772,24 @@ contains
     !> \brief gauimg  just a Gaussian fun for testing purposes
     !! \param wsz window size
     !!
-    subroutine gauimg( self, wsz )
+    subroutine gauimg( self, wsz , alpha )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: wsz
-        real    :: x, y, z, xw, yw, zw
+        real, intent(in), optional  :: alpha
+        real    :: x, y, z, xw, yw, zw, a
         integer :: i, j, k
+        a = 0.5
+        if(present(alpha)) a= alpha
         x = -real(self%ldim(1))/2.
         do i=1,self%ldim(1)
-            xw = gauwfun(x, 0.5*real(wsz))
+            xw = gauwfun(x, a*real(wsz))
             y = -real(self%ldim(2))/2.
             do j=1,self%ldim(2)
-                yw = gauwfun(y, 0.5*real(wsz))
+                yw = gauwfun(y, a*real(wsz))
                 z = -real(self%ldim(3))/2.
                 do k=1,self%ldim(3)
                     if( self%ldim(3) > 1 )then
-                        zw = gauwfun(z, 0.5*real(wsz))
+                        zw = gauwfun(z, a*real(wsz))
                     else
                         zw = 1.
                     endif

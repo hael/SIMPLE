@@ -548,7 +548,7 @@ contains
         simple_isenv = (status == 0)
     end function simple_isenv
 
-        character(len=STDLEN) function simple_getenv( name ) ! result( varval )
+    character(len=STDLEN) function simple_getenv( name ) ! result( varval )
         character(len=*), intent(in)  :: name
         character(len=STDLEN)         :: value
         character(len=:), allocatable :: varval
@@ -1059,8 +1059,8 @@ contains
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        command = 'cat '//trim(filename)//' | '//' grep -E "^(VmPeak|VmSize|VmHWM|VmRSS):" | '//&
-        &' awk "{print $2}" |xargs echo '
+        command = 'grep -E "^(VmPeak|VmSize|VmHWM|VmRSS):"<'//trim(filename)//'|awk {a[NR-1]=$2}END{print a[0],a[1],a[2],a[3]} '
+!!         | awk {a[NR-1]=$2} END{print a[0],a[1],a[2],a[3]}
         if(present(dump_file)) command = trim(command)//' >> '//trim(dump_file)
         call exec_cmdline(trim(command))
         !  omp end critical
