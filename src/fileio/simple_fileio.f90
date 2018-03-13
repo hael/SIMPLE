@@ -429,7 +429,7 @@ contains
     end function simple_rename
 
     !> Make directory
-    subroutine mkdir( path )
+    subroutine simple_mkdir_old( path )
         character(len=*), intent(in) :: path
         integer :: iostat
         logical :: dir_e
@@ -437,7 +437,7 @@ contains
         if (.not. dir_e ) then
             call exec_cmdline('mkdir -p '//trim(adjustl(path))//' || true')
         end if
-    end subroutine mkdir
+    end subroutine simple_mkdir_old
 
     !> \brief  is for deleting a file
     subroutine del_file( file )

@@ -22,7 +22,7 @@ program simple_test_fileio
     call date_and_time(date=datestr)
     folder = trim('./SIMPLE_TEST_FILEIO_'//datestr)
     command = 'mkdir ' // trim( folder )//'|| true'
-    call exec_cmdline( trim(command) )
+    call simple_mkdir( trim(folder), ignore=.false. )
     call simple_chdir( trim(folder) )
 
 #if defined(PGI)

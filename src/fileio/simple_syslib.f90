@@ -321,7 +321,12 @@ module simple_syslib
             use, intrinsic :: iso_c_binding
             character(c_char),dimension(*),intent(in)  ::  dirname
         end function rmdir
+        integer function mkdir(dirname) result(status) bind(C, name="mkdir")
+            use, intrinsic :: iso_c_binding
+            character(c_char),dimension(*),intent(in)  ::  dirname
+        end function mkdir
     end interface
+
 contains
 
     !! ERROR Routines
@@ -721,9 +726,9 @@ contains
     end subroutine simple_file_stat
 
     !> file list command based on flibs-0.9
-    subroutine simple_file_list( pattern, list )
+    subroutine simple_filetmp_list( pattern, list )
         character(len=*), intent(in)            :: pattern
-        character(len=*), pointer, dimension(:) :: list
+        character(len=*), intent(out), pointer :: list(:)
 
         character(len=STDLEN)                      :: tmpfile
         character(len=STDLEN)                      :: cmd
@@ -733,7 +738,7 @@ contains
         integer                                 :: i, ierr, count
 
         tmpfile =  trim(tempdir)//'__filelist__'
-        cmd = '/bin/ls ' // trim(pattern) // ' ' // trim(redirect) // trim(tmpfile) &
+        cmd = trim(pattern) // ' ' // trim(redirect) // trim(tmpfile) &
             // ' ' // suppress_msg
 
         call exec_cmdline( cmd )
@@ -765,8 +770,21 @@ contains
 
         close( luntmp, status = 'delete' )
 
-    end subroutine simple_file_list
+    end subroutine simple_filetmp_list
 
+    function simple_list_dirs(path) result(list)
+        character(len=*),  intent(in)            :: path
+        character(len=STDLEN),pointer :: list(:)
+        call simple_chdir(path)
+        call simple_filetmp_list(trim(list_subdirs), list)
+    end function simple_list_dirs
+
+    function simple_list_files(path) result(list)
+        character(len=*), intent(in)            ::path
+        character(len=STDLEN), pointer :: list(:)
+        call simple_chdir(path)
+        call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
+    end function simple_list_files
 
 
     logical function is_io(unit)
@@ -838,15 +856,39 @@ contains
     end subroutine simple_getcwd
 
     !> \brief  Change working directory
-    subroutine simple_chdir( newd )
+    subroutine simple_chdir( newd , status )
         character(len=*), intent(in) :: newd   !< output pathname
+        integer, intent(out), optional :: status
         integer :: io_status
         logical :: dir_e
+        if(present(status)) status =1
         inquire(file=newd, exist=dir_e)
-        io_status = chdir(newd)
-        if(io_status /= 0) call simple_error_check(io_status, &
-            "syslib:: simple_getcwd failed to change path "//trim(newd))
+        if(dir_e) then
+            io_status = chdir(newd)
+            if(io_status /= 0) call simple_error_check(io_status, &
+                "syslib:: simple_chdir failed to change path "//trim(newd))
+        else
+            call simple_stop("syslib:: simple_chdir directory does not exist ")
+        endif
+        if(present(status)) status = io_status
     end subroutine simple_chdir
+
+    !> \brief  Make directory -- fail when ignore is false
+    subroutine simple_mkdir( d , ignore)
+        character(len=*), intent(in) :: d
+        logical, intent(in), optional:: ignore
+        integer :: io_status
+        logical :: dir_e, ignore_here
+        ignore_here = .true.
+        inquire(file=d, exist=dir_e)
+        if(.not. dir_e) then
+            io_status = mkdir(d)
+            if(.not. ignore_here)then
+                if(io_status /= 0) call simple_error_check(io_status, &
+                    "syslib:: simple_mkdir failed to create "//trim(d))
+            endif
+        end if
+    end subroutine simple_mkdir
 
     !> \brief  Remove directory
     subroutine simple_rmdir( d )
@@ -854,9 +896,11 @@ contains
         integer :: io_status
         logical :: dir_e
         inquire(file=d, exist=dir_e)
-        io_status = rmdir(d)
-        if(io_status /= 0) call simple_error_check(io_status, &
-            "syslib:: simple_getcwd failed to remove "//trim(d))
+        if(dir_e) then
+            io_status = rmdir(d)
+            if(io_status /= 0) call simple_error_check(io_status, &
+                "syslib:: simple_getcwd failed to remove "//trim(d))
+        end if
     end subroutine simple_rmdir
 
     ! !>  \brief  get logical unit of file
