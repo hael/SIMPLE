@@ -327,8 +327,8 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
 #  set(CMAKE_AR                           "pgfortran")
   set(CMAKE_CPP_COMPILER                 "cpp -C -CC -E ")
   set(CMAKE_CPP_COMPILER_FLAGS           "  ")
-  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS}")
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        "${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_DEBUG_INIT} -Mneginfo=all")
@@ -342,8 +342,8 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   # default PGI library
   set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
   set(CUDA_rt_LIBRARY  /usr/lib/x86_64-linux-gnu/librt.so)
-  ## PGI does not have the OpenMP proc_bind option
-  add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in PGI  OMP
+  ## PGI 16.10 does not have the OpenMP proc_bind option
+  # add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in PGI  OMP
 
   if (PGI_LARGE_FILE_SUPPORT)
     set(CMAKE_EXE_LINKER_FLAGS          "-Mlfs ${CMAKE_EXE_LINKER_FLAGS}")
@@ -351,10 +351,12 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
 #  if (PGI_EXTRACT_ALL)
 #    set(CMAKE_Fortran_FLAGS           " -Minline ${CMAKE_Fortran_FLAGS}")
 #  endif()
-#  if (PGI_CUDA_MANAGED_MEMORY)
-#    set(CMAKE_Fortran_FLAGS           "-ta=nvidia:managed ${CMAKE_Fortran_FLAGS}")
-#  endif()
-
+   if (PGI_CUDA_MANAGED_MEMORY)
+     set(CMAKE_Fortran_FLAGS           "-ta=nvidia:managed ${CMAKE_Fortran_FLAGS}")
+   endif()
+   if (PGI_CUDA_PINNED_MEMORY)
+     set(CMAKE_Fortran_FLAGS           "-ta=nvidia:pinned ${CMAKE_Fortran_FLAGS}")
+   endif()
   # #  add_definitions("-module ${CMAKE_Fortran_MODULE_DIRECTORY}") # pgc++ doesn't have -module
   #   set(CMAKE_SHARED_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} ${EXTRA_LIBS}  -module ${CMAKE_Fortran_MODULE_DIRECTORY}")
   #   set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS_INIT} ${EXTRA_LIBS}  -module ${CMAKE_Fortran_MODULE_DIRECTORY}")
@@ -567,16 +569,24 @@ endif()
 if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
   # Append MKL FFTW interface libs
   # https://software.intel.com/en-us/articles/intel-mkl-main-libraries-contain-fftw3-interfaces
+  # https://software.intel.com/en-us/articles/intel-mkl-link-line-advisor
   set(MKLROOT $ENV{MKLROOT})
   if( NOT "${MKLROOT}" STREQUAL "")
-    if(BUILD_SHARED_LIBS)
-      set(EXTRA_LIBS   ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lm -ldl)
+    if(SIMPLE_INTEL_8byte_INTERFACE)
+      set(INTEL_INTERFACE "ilp64")  # 8 byte integer interface
     else()
-      set(EXTRA_LIBS    ${EXTRA_LIBS} -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl)
+    # default interface
+      set(INTEL_INTERFACE "lp64") # 4 byte integer interface
+    endif()
+
+    if(BUILD_SHARED_LIBS)
+      set(EXTRA_LIBS ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -limf -lmkl_intel_${INTEL_INTERFACE} -lmkl_intel_thread -lmkl_core -lmkl_rt -liomp5 -lpthread -lm -ldl )
+    else()
+     set(EXTRA_LIBS ${EXTRA_LIBS} -Wl,--start-group  ${MKLROOT}/lib/intel64/libmkl_cdft_core.a  ${MKLROOT}/lib/intel64/libmkl_blas95_${INTEL_INTERFACE}.a ${MKLROOT}/lib/intel64/libmkl_intel_${INTEL_INTERFACE}.a ${MKLROOT}/lib/intel64/libmkl_gf_lp64.a  ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -L${MKLROOT}/lib/intel64/ -liomp5 -lpthread -lm -ldl)
     endif()
     set(BUILD_NAME "${BUILD_NAME}_MKL" )
   else()
-    message( FATAL_ERROR "MKLROOT undefined. Set Intel MKL environment variables by sourcing the relevant shell script (typically in /opt/intel/bin), for example: source /opt/intel/bin/compilervars.sh intel64")
+    message( FATAL_ERROR "MKLROOT undefined. Set Intel MKL environment variables by sourcing the relevant shell script (typically in /opt/intel/bin), for example: source /opt/intel/bin/compilervars.sh intel64 lp64; source /opt/intel/bin/compilervars.sh intel64 lp64")
   endif()
 else()
   if (FFTW_DIR)
@@ -593,10 +603,6 @@ else()
   endif()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
 endif()
-
-
-
-
 
 #
 #  JPEG, TIFF, PNG img support through LibGD
@@ -645,6 +651,9 @@ if(USE_PROFILING)
   SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg -fno-omit-frame-pointer")
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -fno-omit-frame-pointer")
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -fno-omit-frame-pointer")
+  if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+      string(REGEX REPLACE "-f[pP][iI][cC]" " " CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}")
+  endif()
 endif()
 # Option for code coverage
 #if(VERBOSE OR ${BUILD_WITH_COVERAGE})
