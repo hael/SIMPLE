@@ -214,129 +214,6 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 #  "/O2" # Intel Windows
 #  )
 
-#####################
-### RELEASE FLAGS ###
-#####################
-
-# Unroll loops
-#message(STATUS "Testing flags unroll")
-if(ENABLE_AGGRESSIVE_OPTIMISATION)
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-  Fortran
-  "-unroll-aggressive"        # Intel
-  "-funroll-all-loops"        # GNU, Intel, Clang
-  "/unroll"                   # Intel Windows
-  "-Munroll "                 # Portland Group
-  )
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-  Fortran
-  "-inline-level=2"           # Intel
-  "-finline-functions"        # GNU, Intel, Clang
-  "/unroll"                   # Intel Windows
-  "-Minline=maxsize=100,reshape,smallsize=10"      # Portland Group
-  )
-endif()
-if(ENABLE_LINK_TIME_OPTIMISATION)
-  # Interprocedural (link-time) optimizations
-  # See IPO performance issues https://software.intel.com/en-us/node/694501
-  #  may need to use -ipo-separate in case of multi-file problems),  using the -ffat-lto-objects compiler option is provided for GCC compatibility
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-ipo-separate -ffat-lto-object"   # Intel (Linux OS X)
-    "/Qipo-separate"                   # Intel Windows
-    "-flto "                           # GNU
-    "-Mipa=fast,libinline,vestigial,reaggregation"    # Portland Group
-    )
-
-  #Profile optimizations
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-ip-dir=.profiling"           # Intel
-    "/Qip-dir=_profiling"          # Intel Windows
-    "-fprofile-dir=.profiling" # GNU
-    "-Mpfo "# PGI
-    )
-endif(ENABLE_LINK_TIME_OPTIMISATION)
-#if(ENABLE_AUTOMATIC_VECTORIZATION)
-#   # Interprocedural (link-time) optimizations
-#   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#     Fortran
-#     "-m"              # Intel ( may need to use -ipo-separate in case of multi-file problems)
-#     "/Qipo"             # Intel Windows
-#     "-flto "            # GNU
-#     "-Mvect"    # Portland Group
-#     )
-# endif()
-
-# # Fast math code
-# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#   Fortran
-#   "-fastmath"        # Intel
-#   "-ffast-math"      # GNU
-#   "-Mcuda=fastmath"  # Portland Group
-#   )
-
-# # Vectorize code
-if (ENABLE_FAST_MATH_OPTIMISATION)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-fast"             # Intel, PGI
-    "/Ofast"     # Intel Windows
-    "-Ofast"            # GNU
-    )
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-fastmath"        # Intel
-    "-ffast-math"      # GNU
-    "-Mcuda=fastmath"  # Portland Group
-    )
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-ffp-contract=fast"              # GNU
-    "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"        # Portland Group
-    )   # PGI
-endif(ENABLE_FAST_MATH_OPTIMISATION)
-
-if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-# Auto parallelize
- if (ENABLE_AUTO_PARALLELISE)
-   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-     Fortran
-     "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
-     "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
-     "-Mconcur=bind,allcores,cncall"                            # PGI
-     )
- endif()
-endif()
-# Auto parallelize with OpenACC
-if (USE_OPENACC)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-acc"                 # PGI
-    "-fopenacc"            # GNU
-    "/acc"
-    )
-endif()
-
-# # Instrumentation
-# if (USE_INSTRUMENTATION)
-# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#   Fortran
-#   "-Minstrument -Mpfi"      # PGI
-#   "-finstrument "           # GNU
-#   )
-# endif()
-
-# Profile-feedback optimisation
-if(USE_PROFILE_OPTIMISATION)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-Mpfo"                 # PGI
-    "-fpfo "                # GNU
-    "-prof-gen"             # Intel (Linux, OS X)
-    "/Qprof-gen"            # Intel (Windows)
-    )
-endif()
 
 
 #############################################
@@ -428,7 +305,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   #############################################
   message(STATUS "NVIDIA PGI Linux compiler")
   set(PGICOMPILER ON)
-  set(ENABLE_LINK_TIME_OPTIMISATION ON)
+  set(USE_LINK_TIME_OPTIMISATION ON)
   if(PGI_CHECKING)
      set (EXTRA_FLAGS "${EXTRA_FLAGS} -Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign  -Minfo=all,ftn -Mneginfo=all")
   endif()
@@ -442,16 +319,19 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
      set (EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
   endif()
 
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
+  if(PGI_CUDA_IOMUTEX)
+     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Miomutex")
+  endif()
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
 #  set(CMAKE_AR                           "pgfortran")
   set(CMAKE_CPP_COMPILER                 "pgcc -E ")
   set(CMAKE_CPP_COMPILER_FLAGS           "  ")
-  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} ${CMAKE_Fortran_FLAGS}")
-  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS_DEBUG} ${CMAKE_Fortran_FLAGS}")
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS}")
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}  ${CMAKE_Fortran_FLAGS_DEBUG} ${CMAKE_Fortran_FLAGS}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        "${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${CMAKE_Fortran_FLAGS}")
-  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_DEBUG_INIT}  -Mneginfo=all")
+  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_DEBUG_INIT} -Mneginfo=all")
   set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_Fortran_FLAGS} ${CMAKE_EXE_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft")
   set(CMAKE_SHARED_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft")
   set(CMAKE_STATIC_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} ")
@@ -467,9 +347,6 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
 
   if (PGI_LARGE_FILE_SUPPORT)
     set(CMAKE_EXE_LINKER_FLAGS          "-Mlfs ${CMAKE_EXE_LINKER_FLAGS}")
-  endif()
-  if(PGI_CUDA_IOMUTEX)
-     set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Miomutex")
   endif()
 
 
