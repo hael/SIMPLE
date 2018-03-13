@@ -46,7 +46,7 @@ contains
         call self%env%push('job_time',              '#SBATCH --time')
         ! standard error & output folder
         stderrout = './'//trim(STDERROUT_DIR)
-        call mkdir(stderrout)
+        call simple_mkdir(stderrout)
     end subroutine new_slurm_env
 
     !> \brief  is a getter

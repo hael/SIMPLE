@@ -11,7 +11,6 @@ use simple_nrtxtfile,           only: nrtxtfile
 use simple_imgfile,             only: imgfile
 use simple_oris,                only: oris
 use simple_ori,                 only: ori
-use simple_imghead,             only: find_ldim_nptcls
 use simple_corrmat,             only: calc_cartesian_corrmat
 use simple_motion_correct_iter, only: motion_correct_iter
 use simple_ctf_estimate_iter,   only: ctf_estimate_iter
@@ -644,6 +643,7 @@ contains
                 else
                     io_stat = simple_rename(trim(adjustl(imgnames(iimg))),trim(adjustl(p%dir_reject)))
                 endif
+                if(io_stat/=0) call fileiochk('simple_commander_preprocess ; failed mv '//trim(adjustl(imgnames(iimg))))
             end do
             call fclose(funit,errmsg='simple_commander_preprocess ; fopen error when closing '//trim(p%outfile))
             deallocate(imgnames)

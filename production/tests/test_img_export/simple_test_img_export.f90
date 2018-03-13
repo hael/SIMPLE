@@ -1,6 +1,6 @@
  !! Modified by Michael Eager, Feb 2018
 program simple_test_img_export
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_jpg, only : test_jpg_export
 use simple_test_export_jpg, only : test_jpg_image
 use simple_test_export_libgd, only : test_png_io, test_jpeg_io, create_raw_png_tmp
@@ -32,12 +32,13 @@ endif
 call seed_rnd
 call date_and_time(date=datestr)
 folder = trim('SIMPLE_TEST_PNG_'//datestr)
-command = 'mkdir ' // trim( folder )//'|| true'
-call exec_cmdline( trim(command) )
+call simple_mkdir( trim(folder), ignore=.false. )
 call simple_chdir( trim(folder) )
+
 call test_pnm_io
 call test_jpg_image(.true.)
 call test_jpg_export
+
 #ifdef _LIBGD
  !   call test_jpeg_io
  !   call test_png_io

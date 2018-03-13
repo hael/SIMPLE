@@ -7537,412 +7537,412 @@ contains
         logical, intent(in)  :: doplot
         write(*,'(a)') '**info(simple_image_unit_test): testing square dimensions'
         call test_image_local( 100, 100, 100, doplot )
-!        write(*,'(a)') '**info(simple_image_unit_test): testing non-square dimensions'
-!        call test_image_local( 120, 90, 80, doplot )
+        !        write(*,'(a)') '**info(simple_image_unit_test): testing non-square dimensions'
+        !        call test_image_local( 120, 90, 80, doplot )
         write(*,'(a)') 'SIMPLE_IMAGE_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 
-        contains
+    contains
 
-            subroutine test_image_local( ld1, ld2, ld3, doplot )
-                integer, intent(in)  :: ld1, ld2, ld3
-                logical, intent(in)  :: doplot
-                type(image)          :: img, img_2, img_3, img_4, img3d
-                type(image)          :: imgs(20)
-                integer              :: i, j, k, cnt, ldim(3)
-                real                 :: input, msk, ave, sdev, med, xyz(3)
-                real                 :: corr, corr_lp, maxv, minv
-                real, allocatable    :: pcavec1(:), pcavec2(:)
-                real                 :: smpd=2.
-                logical              :: passed, test(6)
+        subroutine test_image_local( ld1, ld2, ld3, doplot )
+            integer, intent(in)  :: ld1, ld2, ld3
+            logical, intent(in)  :: doplot
+            type(image)          :: img, img_2, img_3, img_4, img3d
+            type(image)          :: imgs(20)
+            integer              :: i, j, k, cnt, ldim(3)
+            real                 :: input, msk, ave, sdev, med, xyz(3)
+            real                 :: corr, corr_lp, maxv, minv
+            real, allocatable    :: pcavec1(:), pcavec2(:)
+            real                 :: smpd=2.
+            logical              :: passed, test(6)
 
-                write(*,'(a)') '**info(simple_image_unit_test, part 1): testing basal constructors'
-                call img%new([ld1,ld2,1], 1.)
-                call img_3%new([ld1,ld2,1], 1.)
-                call img3d%new([ld1,ld2,ld3], 1.)
-                if( .not. img%exists() ) stop 'ERROR, in constructor or in exists function, 1'
-                if( .not. img3d%exists() ) stop 'ERROR, in constructor or in exists function, 2'
+            write(*,'(a)') '**info(simple_image_unit_test, part 1): testing basal constructors'
+            call img%new([ld1,ld2,1], 1.)
+            call img_3%new([ld1,ld2,1], 1.)
+            call img3d%new([ld1,ld2,ld3], 1.)
+            if( .not. img%exists() ) stop 'ERROR, in constructor or in exists function, 1'
+            if( .not. img3d%exists() ) stop 'ERROR, in constructor or in exists function, 2'
 
-                write(*,'(a)') '**info(simple_image_unit_test, part 2): testing getters/setters'
-                passed = .true.
-                cnt = 1
-                do i=1,ld1
-                    do j=1,ld2
+            write(*,'(a)') '**info(simple_image_unit_test, part 2): testing getters/setters'
+            passed = .true.
+            cnt = 1
+            do i=1,ld1
+                do j=1,ld2
+                    input = real(cnt)
+                    call img%set([i,j,1], input)
+                    if( img%get([i,j,1]) /= input) passed = .false.
+                    do k=1,ld3
                         input = real(cnt)
-                        call img%set([i,j,1], input)
-                        if( img%get([i,j,1]) /= input) passed = .false.
-                        do k=1,ld3
-                            input = real(cnt)
-                            call img3d%set([i,j,k],input)
-                            if( img3d%get([i,j,k]) /= input) passed = .false.
-                            cnt = cnt+1
-                        end do
-                    end do
-                end do
-                if( .not. passed )  stop 'getters/setters test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 3): testing serialization'
-                passed = .false.
-                msk = 50.
-                img_2 = img
-                call img%ran
-                if( doplot ) call img%vis
-                call img%serialize(pcavec1, msk)
-                img = 0.
-                call img%serialize(pcavec1, msk)
-                if( doplot ) call img%vis
-                call img_2%serialize(pcavec1, msk)
-                call img_2%serialize(pcavec2, msk)
-                if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-                if( .not. passed ) stop 'serialization test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 4): testing checkups'
-                test(1) = img%even_dims()
-                if( ld1 == ld2 )then
-                    test(2) = img%square_dims()
-                else
-                    test(2) = .not. img%square_dims()
-                endif
-                test(3) = img.eqdims.img_2
-                test(4) = img.eqsmpd.img_2
-                test(5) = img%is_2d()
-                test(6) = .not. img%is_3d()
-                passed = all(test)
-                if( .not. passed ) stop 'checkups test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 5): testing arithmetics'
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                passed = .false.
-                msk = 50.
-                call img%ran
-                call img%serialize(pcavec1, msk)
-                img_2 = img
-                call img_2%serialize(pcavec2, msk)
-                if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-                if( .not. passed ) stop 'polymorphic assignment test 1 failed'
-                passed = .false.
-                img = 5.
-                img_2 = 10.
-                img_3 = img_2-img
-                call img%serialize(pcavec1, msk)
-                call img_3%serialize(pcavec2, msk)
-                if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-                if( .not. passed ) stop 'overloaded subtraction test failed'
-                passed = .false.
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                img = 5.
-                img_2 = 10.
-                img_3 = 15.
-                img_4 = img + img_2
-                call img_3%serialize(pcavec1, msk)
-                call img_4%serialize(pcavec2, msk)
-                if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-                if( .not. passed ) stop 'overloaded addition test failed'
-                passed = .false.
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                img = 5.
-                img_2 = 2.
-                img_3 = 10.
-                img_4 = img*img_2
-                call img_3%serialize(pcavec1, msk)
-                call img_4%serialize(pcavec2, msk)
-                if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-                if( .not. passed ) stop 'overloaded multiplication test failed'
-                passed = .false.
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                img_4 = img_3/img_2
-                call img%serialize(pcavec1, msk)
-                call img_4%serialize(pcavec2, msk)
-                if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-                if( .not. passed ) stop 'overloaded division test failed'
-                passed = .false.
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                img = 0.
-                img_2 = 5.
-                img_3 = 1.
-                do i=1,5
-                    call img%add(img_3 )
-                end do
-                call img_2%serialize(pcavec1, msk)
-                call img%serialize(pcavec2, msk)
-                if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-                if( .not. passed ) stop 'summation test failed'
-                passed = .false.
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                do i=1,5
-                    call img%subtr(img_3)
-                end do
-                img_2 = 0.
-                call img_2%serialize(pcavec1, msk)
-                call img%serialize(pcavec2, msk)
-                if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-                if( .not. passed ) stop 'subtraction test failed'
-                passed = .false.
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                img_2 = 5.
-                img_3 = 1.
-                call img_2%div(5.)
-                call img_2%serialize(pcavec1, msk)
-                call img_3%serialize(pcavec2, msk)
-                if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-                if( .not. passed ) stop 'constant division test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
-                passed = .false.
-                call img%gauran( 5., 15. )
-                call img%stats( 'foreground', ave, sdev, maxv, minv, 40., med )
-                if( ave >= 4. .and. ave <= 6. .and. sdev >= 14. .and.&
-                sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
-                if( .not. passed )  stop 'stats test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 7): testing origin shift'
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                passed = .false.
-                msk=50
-                call img%gauimg(10)
-                if( doplot ) call img%vis
-                call img%serialize(pcavec1, msk)
-                call img%shift([-9.345,-5.786,0.])
-                if( doplot ) call img%vis
-                call img%shift([9.345,5.786,0.])
-                call img%serialize(pcavec2, msk)
-                if( doplot ) call img%vis
-                if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-                if( .not. passed )  stop 'origin shift test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 8): testing masscen'
-                passed = .false.
-                msk = 50
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                call img%square( 10 )
-                if( doplot ) call img%vis
-                call img%serialize(pcavec1, msk)
-                call img%shift([10.,5.,0.])
-                if( doplot ) call img%vis
-                xyz = img%masscen()
-                call img%shift([real(int(xyz(1))),real(int(xyz(2))),0.])
-                if( doplot ) call img%vis
-                call img%serialize(pcavec2, msk)
-                if( pearsn(pcavec1, pcavec2) > 0.9 ) passed = .true.
-                print *,'determined shift:', xyz
-                if( .not. passed ) stop 'masscen test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 9): testing lowpass filter'
-                call img%square( 10 )
-                if( doplot ) call img%vis
-                call img%bp(0., 5.)
-                if( doplot ) call img%vis
-                call img%bp(0., 10.)
-                if( doplot ) call img%vis
-                call img%bp(0., 20.)
-                if( doplot ) call img%vis
-                call img%bp(0., 30.)
-                if( doplot ) call img%vis
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 10): testing spherical mask'
-                call img%ran
-                if( doplot ) call img%vis
-                call img%mask(35.,'hard')
-                if( doplot ) call img%vis
-                call img%ran
-                call img%mask(35.,'soft')
-                if( doplot ) call img%vis
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 11): testing padding/clipping'
-                passed = .false.
-                msk = 50
-                if( allocated(pcavec1) ) deallocate(pcavec1)
-                if( allocated(pcavec2) ) deallocate(pcavec2)
-                call img%ran
-                call img%serialize(pcavec1, msk)
-                if( doplot ) call img%vis
-                call img_2%new([2*ld1,2*ld2,1],1.)
-                call img%pad(img_2)
-                if( doplot ) call img_2%vis
-                call img_3%new([ld1,ld2,1],1.)
-                call img%clip(img_3)
-                call img_3%serialize(pcavec2, msk)
-                if( doplot ) call img_3%vis
-                if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-                if( .not. passed ) stop 'padding/clipping test failed'
-                call img%square(10)
-                if( doplot ) call img%vis
-                call img%fft()
-                call img%pad(img_2)
-                call img_2%ifft()
-                if( doplot ) call img_2%vis
-                call img_2%square(20)
-                if( doplot ) call img_2%vis
-                call img_2%fft()
-                call img_2%clip(img)
-                call img%ifft()
-                if( doplot ) call img%vis
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'
-                cnt = 0
-                call img_3%square(20)
-                if( ld1 == ld2 )then
-                    call img_4%new([ld1,ld2,1], 1.)
-                    do i=0,360,30
-                        call img_3%rtsq(real(i), 0., 0., img_4)
+                        call img3d%set([i,j,k],input)
+                        if( img3d%get([i,j,k]) /= input) passed = .false.
                         cnt = cnt+1
-                        if( doplot ) call img_4%vis
                     end do
-                endif
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 14): testing binary imgproc routines'
-                passed = .false.
-                call img%gauimg(20)
-                call img%norm_bin
-                if( doplot ) call img%vis
-                call img%bin(0.5)
-                if( doplot ) call img%vis
-                call img%gauimg(20)
-                call img%bin(500)
-                if( doplot ) call img%vis
-                do i=1,10
-                    call img%grow_bin()
                 end do
-                if( doplot ) call img%vis
+            end do
+            if( .not. passed )  stop 'getters/setters test failed'
 
-                write(*,'(a)') '**info(simple_image_unit_test, part 15): testing auto correlation function'
+            write(*,'(a)') '**info(simple_image_unit_test, part 3): testing serialization'
+            passed = .false.
+            msk = 50.
+            img_2 = img
+            call img%ran
+            if( doplot ) call img%vis
+            call img%serialize(pcavec1, msk)
+            img = 0.
+            call img%serialize(pcavec1, msk)
+            if( doplot ) call img%vis
+            call img_2%serialize(pcavec1, msk)
+            call img_2%serialize(pcavec2, msk)
+            if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
+            if( .not. passed ) stop 'serialization test failed'
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 4): testing checkups'
+            test(1) = img%even_dims()
+            if( ld1 == ld2 )then
+                test(2) = img%square_dims()
+            else
+                test(2) = .not. img%square_dims()
+            endif
+            test(3) = img.eqdims.img_2
+            test(4) = img.eqsmpd.img_2
+            test(5) = img%is_2d()
+            test(6) = .not. img%is_3d()
+            passed = all(test)
+            if( .not. passed ) stop 'checkups test failed'
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 5): testing arithmetics'
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            passed = .false.
+            msk = 50.
+            call img%ran
+            call img%serialize(pcavec1, msk)
+            img_2 = img
+            call img_2%serialize(pcavec2, msk)
+            if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
+            if( .not. passed ) stop 'polymorphic assignment test 1 failed'
+            passed = .false.
+            img = 5.
+            img_2 = 10.
+            img_3 = img_2-img
+            call img%serialize(pcavec1, msk)
+            call img_3%serialize(pcavec2, msk)
+            if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
+            if( .not. passed ) stop 'overloaded subtraction test failed'
+            passed = .false.
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            img = 5.
+            img_2 = 10.
+            img_3 = 15.
+            img_4 = img + img_2
+            call img_3%serialize(pcavec1, msk)
+            call img_4%serialize(pcavec2, msk)
+            if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
+            if( .not. passed ) stop 'overloaded addition test failed'
+            passed = .false.
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            img = 5.
+            img_2 = 2.
+            img_3 = 10.
+            img_4 = img*img_2
+            call img_3%serialize(pcavec1, msk)
+            call img_4%serialize(pcavec2, msk)
+            if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
+            if( .not. passed ) stop 'overloaded multiplication test failed'
+            passed = .false.
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            img_4 = img_3/img_2
+            call img%serialize(pcavec1, msk)
+            call img_4%serialize(pcavec2, msk)
+            if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
+            if( .not. passed ) stop 'overloaded division test failed'
+            passed = .false.
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            img = 0.
+            img_2 = 5.
+            img_3 = 1.
+            do i=1,5
+                call img%add(img_3 )
+            end do
+            call img_2%serialize(pcavec1, msk)
+            call img%serialize(pcavec2, msk)
+            if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
+            if( .not. passed ) stop 'summation test failed'
+            passed = .false.
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            do i=1,5
+                call img%subtr(img_3)
+            end do
+            img_2 = 0.
+            call img_2%serialize(pcavec1, msk)
+            call img%serialize(pcavec2, msk)
+            if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
+            if( .not. passed ) stop 'subtraction test failed'
+            passed = .false.
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            img_2 = 5.
+            img_3 = 1.
+            call img_2%div(5.)
+            call img_2%serialize(pcavec1, msk)
+            call img_3%serialize(pcavec2, msk)
+            if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
+            if( .not. passed ) stop 'constant division test failed'
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
+            passed = .false.
+            call img%gauran( 5., 15. )
+            call img%stats( 'foreground', ave, sdev, maxv, minv, 40., med )
+            if( ave >= 4. .and. ave <= 6. .and. sdev >= 14. .and.&
+                sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
+            if( .not. passed )  stop 'stats test failed'
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 7): testing origin shift'
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            passed = .false.
+            msk=50
+            call img%gauimg(10)
+            if( doplot ) call img%vis
+            call img%serialize(pcavec1, msk)
+            call img%shift([-9.345,-5.786,0.])
+            if( doplot ) call img%vis
+            call img%shift([9.345,5.786,0.])
+            call img%serialize(pcavec2, msk)
+            if( doplot ) call img%vis
+            if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
+            if( .not. passed )  stop 'origin shift test failed'
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 8): testing masscen'
+            passed = .false.
+            msk = 50
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            call img%square( 10 )
+            if( doplot ) call img%vis
+            call img%serialize(pcavec1, msk)
+            call img%shift([10.,5.,0.])
+            if( doplot ) call img%vis
+            xyz = img%masscen()
+            call img%shift([real(int(xyz(1))),real(int(xyz(2))),0.])
+            if( doplot ) call img%vis
+            call img%serialize(pcavec2, msk)
+            if( pearsn(pcavec1, pcavec2) > 0.9 ) passed = .true.
+            print *,'determined shift:', xyz
+            if( .not. passed ) stop 'masscen test failed'
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 9): testing lowpass filter'
+            call img%square( 10 )
+            if( doplot ) call img%vis
+            call img%bp(0., 5.)
+            if( doplot ) call img%vis
+            call img%bp(0., 10.)
+            if( doplot ) call img%vis
+            call img%bp(0., 20.)
+            if( doplot ) call img%vis
+            call img%bp(0., 30.)
+            if( doplot ) call img%vis
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 10): testing spherical mask'
+            call img%ran
+            if( doplot ) call img%vis
+            call img%mask(35.,'hard')
+            if( doplot ) call img%vis
+            call img%ran
+            call img%mask(35.,'soft')
+            if( doplot ) call img%vis
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 11): testing padding/clipping'
+            passed = .false.
+            msk = 50
+            if( allocated(pcavec1) ) deallocate(pcavec1)
+            if( allocated(pcavec2) ) deallocate(pcavec2)
+            call img%ran
+            call img%serialize(pcavec1, msk)
+            if( doplot ) call img%vis
+            call img_2%new([2*ld1,2*ld2,1],1.)
+            call img%pad(img_2)
+            if( doplot ) call img_2%vis
+            call img_3%new([ld1,ld2,1],1.)
+            call img%clip(img_3)
+            call img_3%serialize(pcavec2, msk)
+            if( doplot ) call img_3%vis
+            if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
+            if( .not. passed ) stop 'padding/clipping test failed'
+            call img%square(10)
+            if( doplot ) call img%vis
+            call img%fft()
+            call img%pad(img_2)
+            call img_2%ifft()
+            if( doplot ) call img_2%vis
+            call img_2%square(20)
+            if( doplot ) call img_2%vis
+            call img_2%fft()
+            call img_2%clip(img)
+            call img%ifft()
+            if( doplot ) call img%vis
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'
+            cnt = 0
+            call img_3%square(20)
+            if( ld1 == ld2 )then
+                call img_4%new([ld1,ld2,1], 1.)
+                do i=0,360,30
+                    call img_3%rtsq(real(i), 0., 0., img_4)
+                    cnt = cnt+1
+                    if( doplot ) call img_4%vis
+                end do
+            endif
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 14): testing binary imgproc routines'
+            passed = .false.
+            call img%gauimg(20)
+            call img%norm_bin
+            if( doplot ) call img%vis
+            call img%bin(0.5)
+            if( doplot ) call img%vis
+            call img%gauimg(20)
+            call img%bin(500)
+            if( doplot ) call img%vis
+            do i=1,10
+                call img%grow_bin()
+            end do
+            if( doplot ) call img%vis
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 15): testing auto correlation function'
+            call img%square( 10 )
+            if( doplot ) call img%vis
+            call img%acf
+            if( doplot ) call img%vis
+            call img%square( 10 )
+            call img%shift([5.,-5.,0.])
+            if( doplot ) call img%vis
+            call img%acf
+            if( doplot ) call img%vis
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 16): testing correlation functions'
+            passed = .false.
+            ldim = [100,100,1]
+            call img%new(ldim, smpd)
+            call img_2%new(ldim, smpd)
+            call img%gauimg(10)
+            call img%fft()
+            call img_2%gauimg(13)
+            call img_2%fft()
+            corr = img%corr(img_2)
+            corr_lp = img%corr(img_2,20.)
+            if( corr > 0.96 .and. corr < 0.98 .and. corr_lp > 0.96 .and. corr_lp < 0.98 ) passed = .true.
+            if( .not. passed ) stop 'corr test failed'
+
+            write(*,'(a)') '**info(simple_image_unit_test, part 17): testing downscaling'
+            if( ld1 == ld2 )then
+                call img%gauimg(20)
+                if( doplot )  call img%vis
+                if( doplot ) call img_2%vis
+            endif
+
+            if( img%square_dims() )then
+                write(*,'(a)') '**info(simple_image_unit_test, part 19): testing rotational averager'
                 call img%square( 10 )
                 if( doplot ) call img%vis
-                call img%acf
-                if( doplot ) call img%vis
-                call img%square( 10 )
-                call img%shift([5.,-5.,0.])
-                if( doplot ) call img%vis
-                call img%acf
-                if( doplot ) call img%vis
+                call img%roavg(5,img_2)
+                if( doplot ) call img_2%vis
+            endif
 
-                write(*,'(a)') '**info(simple_image_unit_test, part 16): testing correlation functions'
-                passed = .false.
-                ldim = [100,100,1]
-                call img%new(ldim, smpd)
-                call img_2%new(ldim, smpd)
-                call img%gauimg(10)
-                call img%fft()
-                call img_2%gauimg(13)
-                call img_2%fft()
-                corr = img%corr(img_2)
-                corr_lp = img%corr(img_2,20.)
-                if( corr > 0.96 .and. corr < 0.98 .and. corr_lp > 0.96 .and. corr_lp < 0.98 ) passed = .true.
-                if( .not. passed ) stop 'corr test failed'
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 17): testing downscaling'
-                if( ld1 == ld2 )then
-                    call img%gauimg(20)
-                    if( doplot )  call img%vis
-                    if( doplot ) call img_2%vis
-                endif
-
-                if( img%square_dims() )then
-                    write(*,'(a)') '**info(simple_image_unit_test, part 19): testing rotational averager'
-                    call img%square( 10 )
-                    if( doplot ) call img%vis
-                    call img%roavg(5,img_2)
-                    if( doplot ) call img_2%vis
-                endif
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 20): testing the read/write capabilities'
-                ! create a square
-                ldim = [120,120,1]
-                call img%new(ldim, smpd)
-                call img%square(20)
-                ! write stacks of 5 squares
-                do i=1,5
-                    call img%write('squares_spider.spi',i)
-                    call img%write('squares_mrc.mrc',i)
-                end do
-                ! convert the squares from SPIDER to MRC & vice versa
-                do i=1,5
-                    call img%read('squares_spider.spi',i)
-                    call img%write('squares_spider_converted.mrc',i)
-                    call img%read('squares_mrc.mrc',i)
-                    call img%write('squares_mrc_converted.spi',i)
-                end do
-                ! test SPIDER vs. MRC & converted vs. nonconverted
-                do i=1,20
-                    call imgs(i)%new(ldim, smpd)
-                end do
-                cnt = 0
-                do i=1,5
-                    cnt = cnt+1
-                    call imgs(cnt)%read('squares_spider.spi',i)
-                end do
-                do i=1,5
-                    cnt = cnt+1
-                    call imgs(cnt)%read('squares_spider_converted.mrc',i)
-                end do
-                do i=1,5
-                    cnt = cnt+1
-                    call imgs(cnt)%read('squares_mrc.mrc',i)
-                end do
-                do i=1,5
-                    cnt = cnt+1
-                    call imgs(cnt)%read('squares_mrc_converted.spi',i)
-                end do
-                do i=1,19
-                    do j=i+1,20
-                        corr = imgs(i)%corr(imgs(j))
-                        if( corr < 0.99999 )then
-                           call simple_stop('SPIDER vs. MRC & converted vs. nonconverted test failed',&
+            write(*,'(a)') '**info(simple_image_unit_test, part 20): testing the read/write capabilities'
+            ! create a square
+            ldim = [120,120,1]
+            call img%new(ldim, smpd)
+            call img%square(20)
+            ! write stacks of 5 squares
+            do i=1,5
+                call img%write('squares_spider.spi',i)
+                call img%write('squares_mrc.mrc',i)
+            end do
+            ! convert the squares from SPIDER to MRC & vice versa
+            do i=1,5
+                call img%read('squares_spider.spi',i)
+                call img%write('squares_spider_converted.mrc',i)
+                call img%read('squares_mrc.mrc',i)
+                call img%write('squares_mrc_converted.spi',i)
+            end do
+            ! test SPIDER vs. MRC & converted vs. nonconverted
+            do i=1,20
+                call imgs(i)%new(ldim, smpd)
+            end do
+            cnt = 0
+            do i=1,5
+                cnt = cnt+1
+                call imgs(cnt)%read('squares_spider.spi',i)
+            end do
+            do i=1,5
+                cnt = cnt+1
+                call imgs(cnt)%read('squares_spider_converted.mrc',i)
+            end do
+            do i=1,5
+                cnt = cnt+1
+                call imgs(cnt)%read('squares_mrc.mrc',i)
+            end do
+            do i=1,5
+                cnt = cnt+1
+                call imgs(cnt)%read('squares_mrc_converted.spi',i)
+            end do
+            do i=1,19
+                do j=i+1,20
+                    corr = imgs(i)%corr(imgs(j))
+                    if( corr < 0.99999 )then
+                        call simple_stop('SPIDER vs. MRC & converted vs. nonconverted test failed',&
                             __FILENAME__,__LINE__)
-                        endif
-                    end do
+                    endif
                 end do
-                ! create a cube
-                ldim = [120,120,120]
-                call img%new(ldim, smpd)
-                call img%square(20)
-                ! write volume files
-                do i=1,5
-                    call img%write('cube_spider.spi')
-                    call img%write('cube_mrc.mrc')
+            end do
+            ! create a cube
+            ldim = [120,120,120]
+            call img%new(ldim, smpd)
+            call img%square(20)
+            ! write volume files
+            do i=1,5
+                call img%write('cube_spider.spi')
+                call img%write('cube_mrc.mrc')
+            end do
+            ! convert the cubes from SPIDER to MRC & vice versa
+            do i=1,5
+                call img%read('cube_spider.spi')
+                call img%write('cube_spider_converted.mrc')
+                call img%read('cube_mrc.mrc')
+                call img%write('cube_mrc_converted.spi')
+            end do
+            ! test SPIDER vs. MRC & converted vs. nonconverted
+            do i=1,4
+                call imgs(i)%new(ldim, smpd)
+                call imgs(i)%read('cube_spider.spi')
+                call imgs(i)%read('cube_spider_converted.mrc')
+                call imgs(i)%read('cube_mrc.mrc')
+                call imgs(i)%read('cube_mrc_converted.spi')
+            end do
+            do i=1,3
+                do j=i+1,4
+                    corr = imgs(i)%corr(imgs(j))
+                    if( corr < 0.99999 )then
+                        call simple_stop('SPIDER vs. MRC & converted vs. nonconverted test failed', &
+                            & __FILENAME__,__LINE__)
+                    endif
                 end do
-                ! convert the cubes from SPIDER to MRC & vice versa
-                do i=1,5
-                    call img%read('cube_spider.spi')
-                    call img%write('cube_spider_converted.mrc')
-                    call img%read('cube_mrc.mrc')
-                    call img%write('cube_mrc_converted.spi')
-                end do
-                ! test SPIDER vs. MRC & converted vs. nonconverted
-                do i=1,4
-                    call imgs(i)%new(ldim, smpd)
-                    call imgs(i)%read('cube_spider.spi')
-                    call imgs(i)%read('cube_spider_converted.mrc')
-                    call imgs(i)%read('cube_mrc.mrc')
-                    call imgs(i)%read('cube_mrc_converted.spi')
-                end do
-                do i=1,3
-                    do j=i+1,4
-                        corr = imgs(i)%corr(imgs(j))
-                        if( corr < 0.99999 )then
-                         call simple_stop('SPIDER vs. MRC & converted vs. nonconverted test failed', &
-                           & __FILENAME__,__LINE__)
-                        endif
-                    end do
-                end do
+            end do
 
-                write(*,'(a)') '**info(simple_image_unit_test, part 21): testing destructor'
-                passed = .false.
-                call img%kill()
-                call img3d%kill()
-                test(1) = .not. img%exists()
-                test(2) = .not. img3d%exists()
-                passed = all(test)
-                if( .not. passed )  stop 'destructor test failed'
-            end subroutine test_image_local
+            write(*,'(a)') '**info(simple_image_unit_test, part 21): testing destructor'
+            passed = .false.
+            call img%kill()
+            call img3d%kill()
+            test(1) = .not. img%exists()
+            test(2) = .not. img3d%exists()
+            passed = all(test)
+            if( .not. passed )  stop 'destructor test failed'
+        end subroutine test_image_local
 
     end subroutine test_image
 

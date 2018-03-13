@@ -860,7 +860,7 @@ contains
             if( l_singlestate .and. state.ne.p_master%state )cycle
             str_state = int2str_pad(state,2)
             dir = 'state_'//str_state//'/'
-            call mkdir(dir)
+            call simple_mkdir(dir)
             ! preps individual documents
             spproj_state%os_ptcl3D = spproj_master%os_ptcl3D
             os_state => spproj_state%os_ptcl3D
@@ -1032,7 +1032,7 @@ contains
                 character(len=3) :: str_iter
                 integer          :: it, rename_stat
                 dir = 'state_'//str_state//'/'
-                call mkdir(dir)
+                call simple_mkdir(dir)
                 do it = 1, iter
                     str_iter = int2str_pad(it,3)
                     ! volumes

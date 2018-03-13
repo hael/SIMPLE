@@ -31,7 +31,7 @@ call pftcc%new(p%nptcls, p)
 call b%img_match%init_polarizer(pftcc, p%alpha)
 do iptcl=1,p%nptcls
     call b%img_match%read(p%stk, iptcl)
-    call b%img_match%fwd_ft
+    call b%img_match%fft()
     ! transfer to polar coordinates
     call b%img_match%polarize(pftcc, iptcl, isptcl=.false., iseven=.true.)
     call b%img_match%polarize(pftcc, iptcl, .true., .true.)
