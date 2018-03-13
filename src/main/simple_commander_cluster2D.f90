@@ -211,10 +211,11 @@ contains
         call cavger_calc_and_write_frcs_and_eoavg(p%frcs)
         ! classdoc gen needs to be after calc of FRCs
         if( cline%defined('which_iter') )then
-            call gen2Dclassdoc( b, p, 'classdoc_'//int2str_pad(p%which_iter,3)//'.txt')
+            call gen2Dclassdoc( b, p, 'classdoc_'//int2str_pad(p%which_iter,3)//METADATA_EXT)
         else
-            call gen2Dclassdoc( b, p, 'classdoc.txt')
+            call gen2Dclassdoc( b, p, 'classdoc'//METADATA_EXT)
         endif
+        ! write references
         call cavger_write(trim(p%refs),      'merged')
         call cavger_write(trim(p%refs_even), 'even'  )
         call cavger_write(trim(p%refs_odd),  'odd'   )

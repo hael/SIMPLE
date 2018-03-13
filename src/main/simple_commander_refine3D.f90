@@ -1,5 +1,5 @@
 ! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
-module simple_commander_prime3D
+module simple_commander_refine3D
 #include "simple_lib.f08"
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
@@ -276,7 +276,7 @@ contains
         limset = .false. ;  update_res = .false.
         if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates), stat=alloc_stat)
-            allocchk("In simple_commander_prime3D:: exec_check3D_conv")
+            allocchk("In simple_commander_refine3D:: exec_check3D_conv")
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state
@@ -355,4 +355,4 @@ contains
         call simple_end('**** SIMPLE_CHECK3D_CONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check3D_conv
 
-end module simple_commander_prime3D
+end module simple_commander_refine3D

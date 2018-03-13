@@ -916,12 +916,13 @@ contains
 
     ! writers
 
-    subroutine write( self, fname, fromto )
+    subroutine write( self, fname, fromto, isegment )
         class(sp_project), intent(inout) :: self
         character(len=*), optional, intent(in) :: fname
         integer,          optional, intent(in) :: fromto(2)
+        integer,          optional, intent(in) :: isegment
         character(len=:), allocatable :: projfile
-        integer :: isegment
+        integer :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
                 write(*,*) 'fname: ', trim(fname)
@@ -932,9 +933,13 @@ contains
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
         call self%bos%open(projfile, del_if_exists=.true.)
-        do isegment=1,MAXN_OS_SEG
+        if( present(isegment) )then
             call self%segwriter(isegment, fromto)
-        end do
+        else
+            do iseg=1,MAXN_OS_SEG
+                call self%segwriter(iseg, fromto)
+            end do
+        endif
         ! update header
         call self%bos%write_header
         call self%bos%close

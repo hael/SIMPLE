@@ -641,7 +641,7 @@ contains
     end subroutine exec_cluster2D_distr
 
     subroutine exec_prime3D_init_distr( self, cline )
-        use simple_commander_prime3D
+        use simple_commander_refine3D
         use simple_commander_rec
         class(prime3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -687,7 +687,7 @@ contains
     end subroutine exec_prime3D_init_distr
 
     subroutine exec_prime3D_distr( self, cline )
-        use simple_commander_prime3D
+        use simple_commander_refine3D
         use simple_commander_mask
         use simple_commander_rec
         use simple_commander_volops

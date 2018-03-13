@@ -133,7 +133,6 @@ contains
             scale_stage2 = scobj%get_scaled_var('scale')
             call scobj%scale_distr_exec
             ! prepare stage 2 input -- shift modulation
-
             call spproj%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os)
             call binread_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
             call os%mul_shifts(scale_stage2/scale_stage1)
@@ -191,7 +190,7 @@ contains
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//p_master%ext
         call cline_rank_cavgs%set('oritab',   trim(finaldoc))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-        call cline_rank_cavgs%set('classdoc', 'classdoc_'//int2str_pad(last_iter,3)//'.txt')
+        call cline_rank_cavgs%set('classdoc', 'classdoc_'//int2str_pad(last_iter,3)//METADATA_EXT)
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup

@@ -590,6 +590,7 @@ contains
         select case(trim(METADATA_EXT))
             case('.simple')
                 classdoc => b%spproj%os_cls2D
+                call classdoc%new_clean(p%ncls)
             case DEFAULT
                 call cdoc%new_clean(p%ncls)
                 classdoc => cdoc

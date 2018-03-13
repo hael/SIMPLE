@@ -336,7 +336,7 @@ contains
         if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
-        call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top])
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top], isegment=PTCL3D_SEG)
         p%oritab = p%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION

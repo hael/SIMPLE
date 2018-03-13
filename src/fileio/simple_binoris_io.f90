@@ -74,14 +74,15 @@ contains
         end select
     end function binread_nlines
 
-    subroutine binwrite_oritab( fname, spproj, a, fromto )
+    subroutine binwrite_oritab( fname, spproj, a, fromto, isegment )
         character(len=*),  intent(in)    :: fname
         class(sp_project), intent(inout) :: spproj
         class(oris),       intent(inout) :: a
         integer,           intent(in)    :: fromto(2)
+        integer, optional, intent(in)    :: isegment
         select case(fname2format(fname))
             case('O')
-                call spproj%write(fname, fromto)
+                call spproj%write(fname, fromto, isegment)
             case('T')
                 call a%write(fname, fromto)
             case DEFAULT

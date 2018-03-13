@@ -33,7 +33,7 @@ contains
     !>  \brief  random seed
     subroutine seed_rnd
         integer :: i, n, clock
-        integer, dimension(:), allocatable :: seed
+        integer, allocatable :: seed(:)
         call random_seed(size = n)
         allocate(seed(n))
         call system_clock(count=clock)
@@ -66,11 +66,9 @@ contains
         integer, intent(in) :: n
         real, allocatable   :: a(:)
         integer             :: i
-        allocate( a(n), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk("In: randn_1; simple_rnd", alloc_stat)
-        do i=1,n
-            a(i) = -1.+2.*ran3()
-        end do
+        allocate( a(n) )
+        call random_number(a)
+        a = a * 2. - 1.
     end function randn_1
 
     !>  \brief  returns a random matrix [-1,1]
@@ -79,13 +77,9 @@ contains
         integer, intent(in) :: n1, n2
         real, allocatable   :: a(:,:)
         integer             :: i, j
-        allocate( a(n1,n2), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk("In: randn_2; simple_rnd", alloc_stat)
-        do i=1,n1
-            do j=1,n2
-                a(i,j) = -1.+2.*ran3()
-            end do
-        end do
+        allocate( a(n1,n2) )
+        call random_number(a)
+        a = a * 2. - 1.
     end function randn_2
 
     !>  \brief  is for generating a Bernoulli random number _b_,
@@ -164,7 +158,7 @@ contains
             stop 'probability distribution does not sum up to 1.; multinomal_many; simple_rnd;'
         endif
         do j=1,nsamples
-            do 
+            do
                 ismp = sample()
                 if( mask(ismp) ) exit
             end do
@@ -183,7 +177,7 @@ contains
                 enddo
                 i = i + fromto(1) - 1
                 ! to deal with numerical instability
-                if( i < fromto(1) ) i = fromto(1) 
+                if( i < fromto(1) ) i = fromto(1)
                 if( i > fromto(2) ) i = fromto(2)
                 sample = i
             end function sample
@@ -222,7 +216,7 @@ contains
     function gasdev_2( mean, stdev ) result( harvest )
         real, intent(in) :: mean, stdev
         real             :: harvest
-        harvest = stdev*gasdev( )+mean
+        harvest = stdev * gasdev( ) + mean
     end function gasdev_2
 
     !>  \brief  random number generator yielding normal distribution with
@@ -234,11 +228,11 @@ contains
         real               :: harvest
         integer, parameter :: maxits=500
         integer            :: cnt
-        harvest = limits(2)+99.
+        harvest = limits(2) + 99.
         cnt = 0
         do while( harvest < limits(1) .or. harvest > limits(2) )
             harvest = gasdev( mean, stdev )
-            cnt = cnt+1
+            cnt = cnt + 1
             if( cnt == maxits )then
                 write(*,*) 'WARNING! gasdev_3 exceeding maxits; simple_rnd'
                 return
@@ -401,7 +395,7 @@ contains
         real, intent(in)     :: corr_prev
         real    :: diffs(ncorrs)
         logical :: avail(ncorrs)
-        integer :: this 
+        integer :: this
         this  = 0
         diffs = corrs-corr_prev
         avail = .true.
