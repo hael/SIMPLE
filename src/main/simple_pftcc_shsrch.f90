@@ -32,7 +32,6 @@ contains
 
     !> Shift search constructor
     subroutine new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
-        use simple_projector, only: projector
         class(pftcc_shsrch),             intent(inout) :: self           !< instance
         class(polarft_corrcalc), target, intent(in)    :: pftcc          !< correlator
         real,                            intent(in)    :: lims(:,:)      !< limits for barrier constraint

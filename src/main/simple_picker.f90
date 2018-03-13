@@ -107,7 +107,7 @@ contains
             call refs_refine(iref)%prenorm4real_corr(sxx_refine(iref))
         end do
         ! pre-process micrograph
-        call micrograph%fwd_ft
+        call micrograph%fft()
         ! call micrograph%bp(hp, lp)
         call mic_shrunken%new(ldim_shrink, smpd_shrunken)
         call mic_shrunken_refine%new(ldim_shrink_refine, smpd_shrunken_refine)

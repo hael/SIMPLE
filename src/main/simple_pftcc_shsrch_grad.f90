@@ -21,7 +21,7 @@ type :: pftcc_shsrch_grad
     integer                          :: maxits       = 100     !< max # iterations
     logical                          :: shbarr       = .true.  !< shift barrier constraint or not
     integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search
-    real                             :: maxshift     = 0.      !< maximal shift
+    real                             :: max_shift     = 0.      !< maximal shift
     integer                          :: max_evals    = 5       !< max # inplrot/shsrch cycles
   contains
     procedure          :: new         => grad_shsrch_new

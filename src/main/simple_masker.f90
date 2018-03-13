@@ -158,7 +158,7 @@ contains
         ! multiply with mask
         call vol_inout%ifft()
         call vol_inout%mul(self)
-        if(was_ft) call vol_inout%fwd_ft
+        if(was_ft) call vol_inout%fft()
         ! focusmsk
         minmax = distimg%minmax()
         write(*,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+p%edge

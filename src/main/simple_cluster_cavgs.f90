@@ -251,7 +251,7 @@ contains
                 call match_imgs(iptcl)%mask(p%msk, 'soft')
             endif
             ! move to Fourier space
-            call match_imgs(iptcl)%fwd_ft
+            call match_imgs(iptcl)%fft()
             ! transfer to polar coordinates
             call match_imgs(iptcl)%polarize(pftcc, iptcl, isptcl=.false., iseven=.true. )
             ! put in both even and odd positions

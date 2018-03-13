@@ -73,7 +73,7 @@ use simple_syslib, only: simple_isenv
  integer, parameter  :: Nc=35
  character(len=Nc)  :: f_result
 !***********************************************************************************
- if(simple_isenv('DISPLAY') /= 0) then
+ if(simple_isenv('DISPLAY')) then
      f_result = 'dumb'
      return
  endif

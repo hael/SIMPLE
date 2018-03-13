@@ -252,7 +252,7 @@ contains
         ! make and open a stack for the movie frames
         DebugPrint  'made stack for output movie frames'
         write(*,'(a)') '>>> GENERATING MOVIE FRAMES'
-        call base_image%fwd_ft
+        call base_image%fft()
         do i=1,p%nframes
             call progress(i,p%nframes)
             ! shift base image

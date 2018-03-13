@@ -41,7 +41,7 @@ type :: image
     integer                                :: array_shape(3)       !< shape of complex array
     logical                                :: wthreads  = .false.  !< with threads flag
     logical                                :: existence = .false.  !< indicates existence
-  contains
+contains
     ! CONSTRUCTORS
     procedure          :: new
     procedure          :: construct_thread_safe_tmp_imgs
@@ -230,11 +230,11 @@ type :: image
     procedure, private :: shellnorm_and_apply_filter_1
     procedure, private :: shellnorm_and_apply_filter_2
     generic            :: shellnorm_and_apply_filter =>&
-            &shellnorm_and_apply_filter_1, shellnorm_and_apply_filter_2
+        &shellnorm_and_apply_filter_1, shellnorm_and_apply_filter_2
     procedure, private :: shellnorm_and_apply_filter_serial_1
     procedure, private :: shellnorm_and_apply_filter_serial_2
     generic            :: shellnorm_and_apply_filter_serial =>&
-            &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
+        &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: gen_lpfilt
@@ -388,9 +388,9 @@ contains
     !!
     !!\return new image object
     subroutine new( self, ldim, smpd, wthreads )
-    !! have to have a type-bound constructor here because we get a sigbus error with the function construct
-    !! "program received signal sigbus: access to an undefined portion of a memory object."
-    !! this seems to be related to how the cstyle-allocated matrix is referenced by the gfortran compiler
+        !! have to have a type-bound constructor here because we get a sigbus error with the function construct
+        !! "program received signal sigbus: access to an undefined portion of a memory object."
+        !! this seems to be related to how the cstyle-allocated matrix is referenced by the gfortran compiler
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd
@@ -859,17 +859,17 @@ contains
             endif
             self%ft = .false.
             select case(form)
-                case('M')
-                    call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
-                    ! data type: 0 image: signed 8-bit bytes rante -128 to 127
-                    !            1 image: 16-bit halfwords
-                    !            2 image: 32-bit reals (DEFAULT MODE)
-                    !            3 transform: complex 16-bit integers
-                    !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
-                    mode = ioimg%getMode()
-                    if( mode == 3 .or. mode == 4 ) self%ft = .true.
-                case('F','S')
-                    call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
+            case('M')
+                call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
+                ! data type: 0 image: signed 8-bit bytes rante -128 to 127
+                !            1 image: 16-bit halfwords
+                !            2 image: 32-bit reals (DEFAULT MODE)
+                !            3 transform: complex 16-bit integers
+                !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
+                mode = ioimg%getMode()
+                if( mode == 3 .or. mode == 4 ) self%ft = .true.
+            case('F','S')
+                call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
             end select
         else
             call simple_stop('ERROR, image need to be constructed before read/write; open; simple_image')
@@ -912,34 +912,34 @@ contains
             form = fname2format(fname)
         endif
         select case(form)
-            case('M', 'F', 'S')
-                call self%open(fname, ioimg, formatchar, readhead, rwaction='READ')
-            case DEFAULT
-                write(*,*) 'Trying to read from file: ', trim(fname)
-                stop 'ERROR, unsupported file format; read; simple_image'
+        case('M', 'F', 'S')
+            call self%open(fname, ioimg, formatchar, readhead, rwaction='READ')
+        case DEFAULT
+            write(*,*) 'Trying to read from file: ', trim(fname)
+            stop 'ERROR, unsupported file format; read; simple_image'
         end select
         call exception_handler(ioimg)
         call read_local(ioimg)
 
     contains
 
-            !> read_local
-            !! \param ioimg Image file object
-            !!
-            subroutine read_local( ioimg )
-                class(imgfile) :: ioimg
-                ! work out the slice range
-                if( isvol )then
-                    if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; read; simple_image'
-                    first_slice = 1
-                    last_slice = ldim(3)
-                else
-                    first_slice = ii
-                    last_slice = ii
-                endif
-                call ioimg%rSlices(first_slice,last_slice,self%rmat)
-                call ioimg%close
-            end subroutine read_local
+        !> read_local
+        !! \param ioimg Image file object
+        !!
+        subroutine read_local( ioimg )
+            class(imgfile) :: ioimg
+            ! work out the slice range
+            if( isvol )then
+                if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; read; simple_image'
+                first_slice = 1
+                last_slice = ldim(3)
+            else
+                first_slice = ii
+                last_slice = ii
+            endif
+            call ioimg%rSlices(first_slice,last_slice,self%rmat)
+            call ioimg%close
+        end subroutine read_local
 
         !> exception_handler
         !! \param ioimg Image file object
@@ -1946,7 +1946,7 @@ contains
         if( present(sect) ) sect_here = sect
         geomorsphr_here=.true.
         if (present(geomorsphr))geomorsphr_here=geomorsphr
-        if( simple_isenv('DISPLAY') /= 0) return
+        if( simple_isenv('DISPLAY')) return
         if( self%ft )then
             if( self%ldim(3) == 1 ) sect_here = 0
             !$ allocate(fplane(self%ldim(1)+1,self%ldim(2)+1), stat=alloc_stat)
@@ -3313,7 +3313,7 @@ contains
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( add_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
-        &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
+            &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk('grow_bins; simple_image 1')
         ! template matrix
         template = .true.
@@ -3387,7 +3387,7 @@ contains
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( sub_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
-        &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
+            &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk('shrink_bins; simple_image 1')
         ! template matrix
         template = .true.
@@ -3730,117 +3730,117 @@ contains
         counts = 0.
         lims   = self%fit%loop_lims(2)
         select case(which)
-            case('real')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+        case('real')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('power')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+            end do
+        case('power')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('sqrt')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + sqrt(csq(self%cmat(phys(1),phys(2),phys(3))))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+            end do
+        case('sqrt')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + sqrt(csq(self%cmat(phys(1),phys(2),phys(3))))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('log')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + log(csq(self%cmat(phys(1),phys(2),phys(3))))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+            end do
+        case('log')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + log(csq(self%cmat(phys(1),phys(2),phys(3))))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('absreal')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+            end do
+        case('absreal')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('absimag')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + abs(aimag(self%cmat(phys(1),phys(2),phys(3))))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+            end do
+        case('absimag')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + abs(aimag(self%cmat(phys(1),phys(2),phys(3))))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('abs')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + cabs(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+            end do
+        case('abs')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + cabs(self%cmat(phys(1),phys(2),phys(3)))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('phase')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + phase_angle(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh) + 1.
-                        end do
+            end do
+        case('phase')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + phase_angle(self%cmat(phys(1),phys(2),phys(3)))
+                        counts(sh) = counts(sh) + 1.
                     end do
                 end do
-            case('count')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh == 0 .or. sh > lfny ) cycle
-                            spec(sh) = spec(sh) + 1.
-                            counts(sh) = counts(sh)+1.
-                        end do
+            end do
+        case('count')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > lfny ) cycle
+                        spec(sh) = spec(sh) + 1.
+                        counts(sh) = counts(sh)+1.
                     end do
                 end do
-            case DEFAULT
-                write(*,*) 'Spectrum kind: ', trim(which)
-                call simple_stop('Unsupported spectrum kind; simple_image; spectrum', __FILENAME__,__LINE__)
+            end do
+        case DEFAULT
+            write(*,*) 'Spectrum kind: ', trim(which)
+            call simple_stop('Unsupported spectrum kind; simple_image; spectrum', __FILENAME__,__LINE__)
         end select
         if( which .ne. 'count' .and. nnorm )then
             where(counts > 0.)
@@ -3867,7 +3867,7 @@ contains
         endif
         avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-avg
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-avg
         call self%fft()
         lfny  = self%get_lfny(1)
         lims  = self%fit%loop_lims(2)
@@ -3927,7 +3927,7 @@ contains
                 do l=lims(3,1),lims(3,2)
                     sh   = nint(hyp(real(h),real(k),real(l)))
                     phys = self%fit%comp_addr_phys([h,k,l])
-                     ! set filter weight
+                    ! set filter weight
                     if( sh > filtsz )then
                         fwght = 0.
                     else if( sh == 0 )then
@@ -3953,7 +3953,7 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
     end subroutine shellnorm_and_apply_filter_serial_1
 
-     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
+    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
     !!         subtracted in real-space) and applying a filter function
     subroutine shellnorm_and_apply_filter_serial_2( self, filter )
         class(image), intent(inout) :: self, filter
@@ -4014,7 +4014,7 @@ contains
                 do l=lims(3,1),lims(3,2)
                     sh   = nint(hyp(real(h),real(k),real(l)))
                     phys = self%fit%comp_addr_phys([h,k,l])
-                     ! set filter weight
+                    ! set filter weight
                     if( sh > filtsz )then
                         fwght = 0.
                     else if( sh == 0 )then
@@ -4041,7 +4041,7 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
     end subroutine shellnorm_and_apply_filter_1
 
-     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
+    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
     !!         subtracted in real-space) and applying a filter function
     subroutine shellnorm_and_apply_filter_2( self, filter )
         class(image), intent(inout) :: self, filter
@@ -4149,7 +4149,7 @@ contains
                         else if(freq .le. hplim_freq + wwidth) then
                             w = (1.-cos(((freq-hplim_freq)/wwidth)*pi))/2.
                             self%cmat(phys(1),phys(2),phys(3)) = &
-                            &self%cmat(phys(1),phys(2),phys(3)) * w
+                                &self%cmat(phys(1),phys(2),phys(3)) * w
                         endif
                     endif
                     if( dolp )then
@@ -4158,7 +4158,7 @@ contains
                         else if(freq .ge. lplim_freq - wwidth)then
                             w = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
                             self%cmat(phys(1),phys(2),phys(3)) = &
-                            &self%cmat(phys(1),phys(2),phys(3)) * w
+                                &self%cmat(phys(1),phys(2),phys(3)) * w
                         endif
                     endif
                 end do
@@ -4447,39 +4447,39 @@ contains
             end select
         else
             select case(which)
-                case('median')
-                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
-                    do i=1,self%ldim(1)
-                        do j=1,self%ldim(2)
-                            do k=1,self%ldim(3)
-                                pixels = self%win2arr(i, j, k, winsz)
-                                img_filt%rmat(i,j,k) = median_nocopy(pixels)
-                            end do
+            case('median')
+                !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)
+                    do j=1,self%ldim(2)
+                        do k=1,self%ldim(3)
+                            pixels = self%win2arr(i, j, k, winsz)
+                            img_filt%rmat(i,j,k) = median_nocopy(pixels)
                         end do
                     end do
-                    !$omp end parallel do
-                case('average')
-                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
-                    do i=1,self%ldim(1)
-                        do j=1,self%ldim(2)
-                            do k=1,self%ldim(3)
-                                pixels = self%win2arr(i, j, k, winsz)
-                                img_filt%rmat(i,j,k) = sum(pixels)/rn
-                            end do
+                end do
+                !$omp end parallel do
+            case('average')
+                !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)
+                    do j=1,self%ldim(2)
+                        do k=1,self%ldim(3)
+                            pixels = self%win2arr(i, j, k, winsz)
+                            img_filt%rmat(i,j,k) = sum(pixels)/rn
                         end do
                     end do
-                    !$omp end parallel do
-                case('bman')
-                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
-                    do i=1,self%ldim(1)
-                        do j=1,self%ldim(2)
-                            do k=1,self%ldim(3)
-                                pixels = self%win2arr(i, j, k, winsz)
-                                img_filt%rmat(i,j,k) = sum(pixels * wfvals) / norm
-                            end do
+                end do
+                !$omp end parallel do
+            case('bman')
+                !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)
+                    do j=1,self%ldim(2)
+                        do k=1,self%ldim(3)
+                            pixels = self%win2arr(i, j, k, winsz)
+                            img_filt%rmat(i,j,k) = sum(pixels * wfvals) / norm
                         end do
                     end do
-                    !$omp end parallel do
+                end do
+                !$omp end parallel do
             case DEFAULT
                 call simple_stop('unknown filter type; simple_image :: real_space_filter')
             end select
@@ -5216,7 +5216,7 @@ contains
                     if( sh == 0 .or. sh > n ) cycle
                     ! real part of the complex mult btw self1 and targ*
                     corrs(sh) = corrs(sh)+&
-                    real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
+                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
                     sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
                     sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
                 end do
@@ -5645,14 +5645,14 @@ contains
         integer :: starts(3), stops(3)
         real    :: med
         pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+            &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
         !$omp parallel workshare proc_bind(close)
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
@@ -5671,13 +5671,13 @@ contains
         integer :: starts(3), stops(3)
         real    :: med
         pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+            &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
@@ -5695,13 +5695,13 @@ contains
         integer :: starts(3), stops(3)
         real    :: med
         pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+            &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
@@ -5752,11 +5752,11 @@ contains
             if(allocated(smooth_avg_curr_edge_start)) deallocate(smooth_avg_curr_edge_start)
             if(allocated(smooth_avg_curr_edge_stop))  deallocate(smooth_avg_curr_edge_stop)
             allocate( avg_curr_edge_start(self%ldim(dim2),self%ldim(dim3)),&
-                      avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
-                      avg_curr_edge_avg(self%ldim(dim2),self%ldim(dim3)),&
-                      smooth_avg_curr_edge_start(self%ldim(dim2),self%ldim(dim3)),&
-                      smooth_avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
-                      stat=alloc_stat)
+                avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
+                avg_curr_edge_avg(self%ldim(dim2),self%ldim(dim3)),&
+                smooth_avg_curr_edge_start(self%ldim(dim2),self%ldim(dim3)),&
+                smooth_avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
+                stat=alloc_stat)
             if(alloc_stat/=0)call allocchk("In simple_image::taper_edges avg_curr etc.")
             avg_curr_edge_start        = 0.0e0
             avg_curr_edge_stop         = 0.0e0
@@ -6121,19 +6121,19 @@ contains
                     inds(2) = min(max(1,k+mk+1),self%ldim(2))
                     inds(3) = min(max(1,l+ml+1),self%ldim(3))
                     select case(which)
-                        case ('real')
-                            call img%set(inds,real(comp))
-                        case('power')
-                            call img%set(inds,csq(comp))
-                        case('sqrt')
-                            call img%set(inds,sqrt(csq(comp)))
-                        case ('log')
-                            call img%set(inds,log(csq(comp)))
-                        case('phase')
-                            call img%set(inds,phase_angle(comp))
-                        case DEFAULT
-                            write(*,*) 'Usupported mode: ', trim(which)
-                            stop 'simple_image :: ft2img'
+                    case ('real')
+                        call img%set(inds,real(comp))
+                    case('power')
+                        call img%set(inds,csq(comp))
+                    case('sqrt')
+                        call img%set(inds,sqrt(csq(comp)))
+                    case ('log')
+                        call img%set(inds,log(csq(comp)))
+                    case('phase')
+                        call img%set(inds,phase_angle(comp))
+                    case DEFAULT
+                        write(*,*) 'Usupported mode: ', trim(which)
+                        stop 'simple_image :: ft2img'
                     end select
                 end do
             end do
@@ -6201,10 +6201,10 @@ contains
         verbose=.true.
         if(debug)t1=tic()
         ! synchronise
-!        istat=cudaDeviceSynchronize()
-!        if(istat.ne.0)then
-!            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
-!        endif
+        !        istat=cudaDeviceSynchronize()
+        !        if(istat.ne.0)then
+        !            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
+        !        endif
 
         ! Allocate arrays on the host
         allocate(coutput(ldim(1),ldim(2),ldim(3)),stat=istat)
