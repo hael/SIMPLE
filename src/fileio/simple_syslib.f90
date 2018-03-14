@@ -321,11 +321,20 @@ module simple_syslib
             use, intrinsic :: iso_c_binding
             character(c_char),dimension(*),intent(in)  ::  dirname
         end function rmdir
-        integer function mkdir(dirname) result(status) bind(C, name="mkdir")
-            use, intrinsic :: iso_c_binding
-            character(c_char),dimension(*),intent(in)  ::  dirname
-        end function mkdir
+        ! integer function makedir(dirname) result(status) bind(C, name="makedir")
+        !     use, intrinsic :: iso_c_binding
+        !     character(c_char),dimension(*),intent(in)  ::  dirname
+        ! end function makedir
     end interface
+    interface
+    function mkdir(path,mode) bind(c,name="mkdir")
+      use, intrinsic :: iso_c_binding
+      integer(c_int) :: mkdir
+      character(kind=c_char,len=1) :: path(*)
+      integer(c_int16_t), value :: mode
+    end function mkdir
+end interface
+
 
 contains
 
@@ -725,68 +734,6 @@ contains
         endif
     end subroutine simple_file_stat
 
-    !> file list command based on flibs-0.9
-    subroutine simple_filetmp_list( pattern, list )
-        character(len=*), intent(in)            :: pattern
-        character(len=*), intent(out), pointer :: list(:)
-
-        character(len=STDLEN)                      :: tmpfile
-        character(len=STDLEN)                      :: cmd
-        character(len=1)                        :: line
-        character(len=len(pattern))             :: prefix
-        integer                                 :: luntmp
-        integer                                 :: i, ierr, count
-
-        tmpfile =  trim(tempdir)//'__filelist__'
-        cmd = trim(pattern) // ' ' // trim(redirect) // trim(tmpfile) &
-            // ' ' // suppress_msg
-
-        call exec_cmdline( cmd )
-
-        open(newunit = luntmp, file = tmpfile)
-
-        !
-        ! First count the number of files, then allocate and fill the array
-        !
-        count = 0
-        do
-            read( luntmp, '(a)', iostat = ierr ) line
-
-            if ( ierr == 0 ) then
-                count = count + 1
-            else
-                exit
-            endif
-        enddo
-
-        rewind( luntmp )
-
-        allocate( list(count) )
-
-        do i = 1,count
-            read( luntmp, '(a)' ) list(i)
-
-        enddo
-
-        close( luntmp, status = 'delete' )
-
-    end subroutine simple_filetmp_list
-
-    function simple_list_dirs(path) result(list)
-        character(len=*),  intent(in)            :: path
-        character(len=STDLEN),pointer :: list(:)
-        call simple_chdir(path)
-        call simple_filetmp_list(trim(list_subdirs), list)
-    end function simple_list_dirs
-
-    function simple_list_files(path) result(list)
-        character(len=*), intent(in)            ::path
-        character(len=STDLEN), pointer :: list(:)
-        call simple_chdir(path)
-        call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
-    end function simple_list_files
-
-
     logical function is_io(unit)
         integer, intent(in) :: unit
         is_io=.false.
@@ -850,21 +797,38 @@ contains
     subroutine simple_getcwd( cwd )
         character(len=*), intent(inout) :: cwd   !< output pathname
         integer :: io_status
-        io_status = getcwd(cwd)
+#if defined(INTEL)
+            io_status = GETCWD(cwd)
+#else
+            io_status = getcwd(trim(cwd))
+#endif
         if(io_status /= 0) call simple_error_check(io_status, &
             "syslib:: simple_getcwd failed to get path "//trim(cwd))
     end subroutine simple_getcwd
 
     !> \brief  Change working directory
-    subroutine simple_chdir( newd , status )
+    subroutine simple_chdir( newd , oldd, status )
         character(len=*), intent(in) :: newd   !< output pathname
+        character(len=*), intent(out), optional :: oldd
         integer, intent(out), optional :: status
+         character(len=STDLEN) :: olddir
         integer :: io_status
-        logical :: dir_e
-        if(present(status)) status =1
+        logical :: dir_e, qq
+        if(present(status)) status = 1
+        if(present(oldd))then
+            call simple_getcwd(olddir)
+            oldd = trim(olddir)
+        endif
+
         inquire(file=newd, exist=dir_e)
         if(dir_e) then
+#if defined(INTEL)
+            qq =  changedirqq(d)
+            io_status = INT(qq)
+#else
             io_status = chdir(newd)
+#endif
+
             if(io_status /= 0) call simple_error_check(io_status, &
                 "syslib:: simple_chdir failed to change path "//trim(newd))
         else
@@ -875,33 +839,128 @@ contains
 
     !> \brief  Make directory -- fail when ignore is false
     subroutine simple_mkdir( d , ignore)
+        use iso_c_binding
         character(len=*), intent(in) :: d
         logical, intent(in), optional:: ignore
+        character(len=:), allocatable :: path
         integer :: io_status
-        logical :: dir_e, ignore_here
-        ignore_here = .true.
-        inquire(file=d, exist=dir_e)
+        logical :: dir_e, ignore_here, qq
+        ignore_here = .false.
+        inquire(file=trim(d), exist=dir_e)
         if(.not. dir_e) then
-            io_status = mkdir(d)
+#if defined(INTEL)
+            allocate(path, source=trim(d))
+            qq =  makedirqq(path)
+            io_status = INT(qq)
+#elif defined(GNU)
+            allocate(path, source=trim(d)//c_null_char)
+            !o_status = makedir(path) !trim(d)//c_null_char)
+            io_status= mkdir(path, int(o'777',c_int16_t))
+#elif defined(PGI)
+            allocate(path, source=trim(d))
+            io_status = makedir(path)
+#endif
+            deallocate(path)
             if(.not. ignore_here)then
                 if(io_status /= 0) call simple_error_check(io_status, &
                     "syslib:: simple_mkdir failed to create "//trim(d))
             endif
+        else
+            if(global_verbose) print *," Directory ", d, " already exists, simple_mkdir ignoring request"
         end if
     end subroutine simple_mkdir
 
     !> \brief  Remove directory
     subroutine simple_rmdir( d )
         character(len=*), intent(in) :: d
+        character(len=:), allocatable :: path
         integer :: io_status
-        logical :: dir_e
+        logical :: dir_e, qq
         inquire(file=d, exist=dir_e)
         if(dir_e) then
+#if defined(INTEL)
+            allocate(path, source=trim(d))
+            qq =  deldirqq(d)
+            io_status = INT(qq)
+#elif defined(GNU)
+            allocate(path, source=trim(d)//c_null_char)
+            io_status = rmdir(path)
+#elif defined(PGI)
+            allocate(path, source=trim(d))
             io_status = rmdir(d)
+#endif
+            deallocate(path)
             if(io_status /= 0) call simple_error_check(io_status, &
-                "syslib:: simple_getcwd failed to remove "//trim(d))
+                "syslib:: simple_rmdir failed to remove "//trim(d))
+        else
+            print *," Directory ", d, " does not exists, simple_rmdir ignoring request"
         end if
     end subroutine simple_rmdir
+
+    !> file list command based on flibs-0.9
+    subroutine simple_filetmp_list( pattern, list )
+        character(len=*), intent(in)            :: pattern
+        character(len=*), intent(out), pointer :: list(:)
+        character(len=STDLEN)                      :: tmpfile
+        character(len=STDLEN)                      :: cmd
+        character(len=1)                        :: line
+        character(len=len(pattern))             :: prefix
+        integer                                 :: luntmp
+        integer                                 :: i, ierr, count
+#if _DEBUG
+        print*,"simple_filetmp_list creating tmp file __simple_filelist__"
+#endif
+
+        tmpfile =  trim(tempdir)//'__simple_filelist__'
+        cmd = trim(pattern) // ' ' // trim(redirect) // trim(tmpfile) &
+            // ' ' // suppress_msg
+
+        call exec_cmdline( cmd )
+#if _DEBUG
+        print*,"simple_filetmp_list reading __simple_filelist__"
+#endif
+        open(newunit = luntmp, file = tmpfile)
+        !
+        ! First count the number of files, then allocate and fill the array
+        !
+        count = 0
+        do
+            read( luntmp, '(a)', iostat = ierr ) line
+            if ( ierr == 0 ) then
+                count = count + 1
+            else
+                exit
+            endif
+        enddo
+        rewind( luntmp )
+        allocate( list(count) )
+        do i = 1,count
+            read( luntmp, '(a)' ) list(i)
+        enddo
+        close( luntmp, status = 'delete' )
+#if _DEBUG
+        print*,"simple_filetmp_list done "
+#endif
+    end subroutine simple_filetmp_list
+
+    function simple_list_dirs(path) result(list)
+        character(len=*),  intent(in)            :: path
+        character(len=STDLEN),pointer :: list(:)
+        character(len=STDLEN) :: cur
+        call simple_chdir(path, cur)
+        call simple_filetmp_list(trim(list_subdirs), list)
+        call simple_chdir(cur)
+    end function simple_list_dirs
+
+    function simple_list_files(path) result(list)
+        character(len=*), intent(in)            ::path
+        character(len=STDLEN), pointer :: list(:)
+        character(len=STDLEN) :: cur
+        call simple_chdir(path, cur)
+        call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
+        call simple_chdir(cur)
+    end function simple_list_files
+
 
     ! !>  \brief  get logical unit of file
     ! integer function get_lunit( fname )

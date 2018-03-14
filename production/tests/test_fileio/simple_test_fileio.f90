@@ -7,9 +7,8 @@ program simple_test_fileio
     implicit none
     type( image )         :: cube, img
     real                  :: smpd
-    integer               :: box, nspace, msk, i,j,istat,ios,fid
+    integer               :: box, nspace, msk, i,j,istat
     integer               :: un, u(1200)
-    character             :: c
     character(len=8)      :: datestr
     character(len=STDLEN) :: folder, cmd
     character(len=300)    :: command
@@ -18,11 +17,16 @@ program simple_test_fileio
     real(dp) :: tmp(5)
     integer(int32) :: ii
     real, dimension(10) :: a, b
+    global_verbose=.true.
     call seed_rnd
     call date_and_time(date=datestr)
     folder = trim('./SIMPLE_TEST_FILEIO_'//datestr)
     command = 'mkdir ' // trim( folder )//'|| true'
-    call simple_mkdir( trim(folder), ignore=.false. )
+    call simple_mkdir( trim(folder) )
+    call simple_mkdir( trim(folder) ) !! double checking creation to print ignore statement
+    print *," Listing of ", folder
+    call system(trim('ls -al '//folder))
+    print *," Changing directory to ", folder
     call simple_chdir( trim(folder) )
 
 #if defined(PGI)
