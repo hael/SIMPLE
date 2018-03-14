@@ -40,6 +40,9 @@ add_custom_target(simple_gen_doc_f90
 
 file(GLOB DEFS_src "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
 file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCOPE)
+# list(APPEND FILEIO_src
+#    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_posix.c"
+#    )
 file(GLOB IMGOPS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
 if ( USE_CUDA )
