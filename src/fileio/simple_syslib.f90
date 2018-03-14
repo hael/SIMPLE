@@ -8,8 +8,8 @@
 
 !! Function:  get_sys_error simple_getenv  get_lunit cpu_usage get_process_id
 
-
-!! New OS calls:  simple_list_dirs, simple_list_files, simple_del_dir, simple_del_files
+!! New interface: get_file_list, get_subdir_list, subprocess, glob_file_list, show_dir_content_recursive
+!! New OS calls:  simple_list_dirs, simple_list_files, simple_del_dir, simple_del_files, exec_subprocess
 
 module simple_syslib
     use simple_defs
@@ -327,15 +327,44 @@ module simple_syslib
         ! end function makedir
     end interface
     interface
-    function mkdir(path,mode) bind(c,name="mkdir")
-      use, intrinsic :: iso_c_binding
-      integer(c_int) :: mkdir
-      character(kind=c_char,len=1) :: path(*)
-      integer(c_int16_t), value :: mode
-    end function mkdir
-end interface
-
-
+        function mkdir(path,mode) bind(c,name="mkdir")
+            use, intrinsic :: iso_c_binding
+            integer(c_int) :: mkdir
+            character(kind=c_char,len=1),dimension(*),intent(in) :: path
+            integer(c_int16_t), value :: mode
+        end function mkdir
+    end interface
+    !> SIMPLE_POSIX.c commands
+    interface
+        function get_file_list(path, results) bind(c,name="get_file_list")
+            use, intrinsic :: iso_c_binding
+            integer(c_int) :: get_file_list                           !> return number of elements in results
+            character(kind=c_char,len=1),dimension(*),intent(in)   :: path
+            character(kind=c_char,len=1),dimension(*), intent(out) :: results(*)
+        end function
+        function glob_file_list(av, results) bind(c,name="glob_file_list")
+            use, intrinsic :: iso_c_binding
+            integer(c_int) ::glob_file_list                           !> return number of elements in results
+            character(kind=c_char,len=1),dimension(*),intent(in)    :: av  !> glob string
+            character(kind=c_char,len=1), dimension(*), intent(out) :: results(*)
+        end function
+         function get_subdir_list(path, results) bind(c,name="get_subdir_list")
+            use, intrinsic :: iso_c_binding
+            integer(c_int) :: get_subdir_list                      !> return number of elements in results
+            character(kind=c_char,len=1),dimension(*),intent(in)   :: path
+            character(kind=c_char,len=1),dimension(*), intent(out) :: results(*)
+        end function
+        subroutine show_dir_content_recursive(path) bind(c,name="show_dir_content_recursive")
+            use, intrinsic :: iso_c_binding
+            character(kind=c_char,len=1),dimension(*),intent(in) :: path
+        end subroutine
+        function subprocess(cmd,args) bind(c,name="subprocess")
+            use, intrinsic :: iso_c_binding
+            integer(c_int) :: subprocess                                  !> return PID of forked process
+            character(kind=c_char,len=1),dimension(*),intent(in) :: cmd   !> executable path
+            character(kind=c_char,len=1),dimension(*),intent(in) :: args  !> arguments
+        end function
+    end interface
 contains
 
     !! ERROR Routines
@@ -557,6 +586,24 @@ contains
         endif
     end subroutine exec_cmdline
 
+
+    !>  Wrapper for simple_posix's subprocess : this uses system fork & execp
+    subroutine exec_subprocess( cmdline, pid)
+        character(len=*),  intent(in) :: cmdline
+        integer, intent(out) :: pid
+        character(len=STDLEN) :: tmp
+        character(len=STDLEN), allocatable :: cmdexec, cmdargs
+        integer :: pos, cmdlen
+        tmp = trim(adjustl(cmdline))
+        pos = INDEX(trim(tmp),' ')
+        cmdlen = LEN_TRIM(tmp)
+        if(pos == 0 .or. pos > cmdlen) call simple_stop("exec_subprocess called with invalid command "//trim(cmdline))
+        allocate(cmdexec, source=tmp(1:pos-1)//c_null_char)
+        allocate(cmdargs, source=tmp(pos:)//c_null_char)
+        pid = subprocess( cmdexec , cmdargs )
+        deallocate(cmdexec, cmdargs)
+    end subroutine exec_subprocess
+
     !>  Handles error from system call
     subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
         integer,               intent(in) :: exitstat, cmdstat
@@ -645,13 +692,14 @@ contains
         ! if ( index(mode, 'x') /=0) imode=o'110'
         ! if ( index(mode, 'w') /=0) imode=o'220'
         ! if ( index(mode, 'r') /=0) imode=o'440'
-        status = system("chmod "//trim(adjustl(mode))//" "//trim(adjustl(pathname)))
+        !status = system("chmod "//trim(adjustl(mode))//" "//trim(adjustl(pathname)))
+        status = chmod(pathname, mode)
 #else
         imode = INT(o'000') ! convert symbolic to octal
         if ( index(mode, 'x') /=0) imode=IOR(imode,INT(o'111'))
         if ( index(mode, 'w') /=0) imode=IOR(imode,INT(o'222'))
         if ( index(mode, 'r') /=0) imode=IOR(imode,INT(o'444'))
-        status = chmod(pathname, mode) !! intrinsic
+        status = chmod(pathname, mode) !! intrinsic GNU
 #endif
         if(status/=0)&
             call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname))
@@ -798,9 +846,9 @@ contains
         character(len=*), intent(inout) :: cwd   !< output pathname
         integer :: io_status
 #if defined(INTEL)
-            io_status = GETCWD(cwd)
+        io_status = GETCWD(cwd)
 #else
-            io_status = getcwd(trim(cwd))
+        io_status = getcwd(trim(cwd))
 #endif
         if(io_status /= 0) call simple_error_check(io_status, &
             "syslib:: simple_getcwd failed to get path "//trim(cwd))
@@ -811,7 +859,7 @@ contains
         character(len=*), intent(in) :: newd   !< output pathname
         character(len=*), intent(out), optional :: oldd
         integer, intent(out), optional :: status
-         character(len=STDLEN) :: olddir
+        character(len=STDLEN) :: olddir
         integer :: io_status
         logical :: dir_e, qq
         if(present(status)) status = 1
@@ -836,6 +884,17 @@ contains
         endif
         if(present(status)) status = io_status
     end subroutine simple_chdir
+
+    !> Make directory
+    subroutine simple_mkdir_old( path )
+        character(len=*), intent(in) :: path
+        integer :: iostat
+        logical :: dir_e
+        inquire( file=trim(adjustl(path)), exist=dir_e , iostat=iostat)
+        if (.not. dir_e ) then
+            call exec_cmdline('mkdir -p '//trim(adjustl(path))//' | true')
+        end if
+    end subroutine simple_mkdir_old
 
     !> \brief  Make directory -- fail when ignore is false
     subroutine simple_mkdir( d , ignore)
@@ -911,7 +970,7 @@ contains
         print*,"simple_filetmp_list creating tmp file __simple_filelist__"
 #endif
 
-        tmpfile =  trim(tempdir)//'__simple_filelist__'
+        tmpfile = '__simple_filelist__'
         cmd = trim(pattern) // ' ' // trim(redirect) // trim(tmpfile) &
             // ' ' // suppress_msg
 
@@ -947,19 +1006,74 @@ contains
         character(len=*),  intent(in)            :: path
         character(len=STDLEN),pointer :: list(:)
         character(len=STDLEN) :: cur
+        character(len=:), allocatable :: thispath
+        integer :: num_dirs
         call simple_chdir(path, cur)
-        call simple_filetmp_list(trim(list_subdirs), list)
+     !   call simple_filetmp_list(trim(list_subdirs), list)
+        allocate(thispath, source=trim(path)//c_null_char)
+        num_dirs = get_subdir_list(thispath, list)
         call simple_chdir(cur)
+        deallocate(thispath)
     end function simple_list_dirs
 
     function simple_list_files(path) result(list)
         character(len=*), intent(in)            ::path
         character(len=STDLEN), pointer :: list(:)
         character(len=STDLEN) :: cur
+        character(len=:), allocatable :: thispath
+        integer :: num_files
         call simple_chdir(path, cur)
-        call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
+        ! call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
+        allocate(thispath, source=trim(path)//c_null_char)
+        num_files = get_file_list(thispath, list)
         call simple_chdir(cur)
+        deallocate(thispath)
     end function simple_list_files
+
+    !> \brief  is for deleting a file
+    subroutine del_file( file )
+        character(len=*), intent(in) :: file !< input filename
+        integer :: fnr, file_status
+        if( file_exists(file) )then
+            !call cpStr(file,tfile)
+            open(newunit=fnr,file=file,STATUS='OLD',IOSTAT=file_status)
+            if( file_status == 0 )then
+                close(fnr, status='delete',IOSTAT=file_status)
+                if(file_status /=0) call simple_stop("simple_syslib::del_file failed to close file "//trim(file))
+            end if
+        endif
+    end subroutine del_file
+
+    !> generic deletion of files using POSIX glob
+    function simple_del_files(path, glob, dlist) result(glob_elems)
+        character(len=*), intent(in), optional   ::path
+        character(len=*), intent(in), optional   ::glob
+        character(len=*), intent(out), optional :: dlist(:)
+        character(len=STDLEN), allocatable :: list(:)
+        character(len=STDLEN) :: cur, thispath
+        character(len=:), allocatable :: thisglob
+        integer :: i, glob_elems
+        thispath="./"
+        if(present(path)) thispath=path
+        if(present(glob))then
+            allocate(thisglob, source=trim(glob)//c_null_char)
+        else
+            allocate(thisglob, source=""//c_null_char)
+        endif
+        call simple_chdir(path, cur)
+        glob_elems =  glob_file_list(thisglob, list)  ! simple_posix.c
+        if (size(list) /= glob_elems) then
+            do i=1,glob_elems
+                call del_file(list(i))
+            enddo
+        else
+            print *,"simple_syslib::simple_del_files no files matching ", trim(thisglob)
+        endif
+        call simple_chdir(cur)
+        if(present(dlist)) dlist = list
+        deallocate(list)
+        deallocate(thisglob)
+    end function simple_del_files
 
 
     ! !>  \brief  get logical unit of file

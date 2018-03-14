@@ -4,7 +4,7 @@ use simple_defs
 use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
 use simple_syslib, only: file_exists, is_open, is_file_open, is_io, allocchk, &
-    &exec_cmdline, simple_stop, simple_error_check
+    &exec_cmdline, simple_stop, simple_error_check, del_file, simple_list_files
 implicit none
 
 interface arr2file
@@ -428,49 +428,6 @@ contains
         if(file_status /= 0) call fileiochk( " simple_rename failed to rename file "//trim(filein), file_status)
     end function simple_rename
 
-    !> Make directory
-    subroutine simple_mkdir_old( path )
-        character(len=*), intent(in) :: path
-        integer :: iostat
-        logical :: dir_e
-        inquire( file=trim(adjustl(path)), exist=dir_e , iostat=iostat)
-        if (.not. dir_e ) then
-            call exec_cmdline('mkdir -p '//trim(adjustl(path))//' || true')
-        end if
-    end subroutine simple_mkdir_old
-
-    !> \brief  is for deleting a file
-    subroutine del_file( file )
-        character(len=*), intent(in) :: file !< input filename
-        integer :: fnr, file_status
-        if( file_exists(file) )then
-            !call cpStr(file,tfile)
-            call fopen(fnr,file,STATUS='OLD',IOSTAT=file_status)
-            call fileiochk( "del_file failed to open file designated for deletion "//trim(file), file_status)
-            if( file_status == 0 )then
-                call fclose_2(fnr, status='delete',errmsg="::fclose_1 failed in del_file "//trim(file))
-            end if
-        endif
-    end subroutine del_file
-
-    !> \brief  is for deleting consequtively numbered files with padded number strings
-    subroutine del_files( body, n, ext, numlen, suffix )
-        character(len=*),           intent(in) :: body !< input filename body
-        integer,                    intent(in) :: n    !< total num for del, formatted as body[n].ext
-        character(len=*), optional, intent(in) :: ext  !< input filename extension
-        integer,          optional, intent(in) :: numlen !< number length
-        character(len=*), optional, intent(in) :: suffix !< file suffix
-        character(len=STDLEN), allocatable :: names(:)
-        integer :: ifile
-        if( present(ext) )then
-            names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
-        else
-            names = make_dirnames( body, n, numlen=numlen)
-        endif
-        do ifile=1,n
-            if( file_exists(names(ifile)) ) call del_file(names(ifile))
-        end do
-    end subroutine del_files
 
     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
     subroutine make_filetable( tabname, n, body, ext, numlen, suffix )
@@ -666,6 +623,25 @@ contains
             endif
         end do
     end function make_filenames
+
+    !> \brief  is for deleting consequtively numbered files with padded number strings
+    subroutine del_files( body, n, ext, numlen, suffix )
+        character(len=*),           intent(in) :: body !< input filename body
+        integer,                    intent(in) :: n    !< total num for del, formatted as body[n].ext
+        character(len=*), optional, intent(in) :: ext  !< input filename extension
+        integer,          optional, intent(in) :: numlen !< number length
+        character(len=*), optional, intent(in) :: suffix !< file suffix
+        character(len=STDLEN), allocatable :: names(:)
+        integer :: ifile
+        if( present(ext) )then
+            names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
+        else
+            names = make_dirnames( body, n, numlen=numlen)
+        endif
+        do ifile=1,n
+            if( file_exists(names(ifile)) ) call del_file(names(ifile))
+        end do
+    end subroutine del_files
 
     !>  \brief Return a one letter code for the file format designated by the extension in the fname
     !!         if .mrc: M
@@ -1002,7 +978,7 @@ contains
             if( file_exists(tmpfile) ) call del_file(tmpfile)
         end if
         cmd = 'ls -tr ' // ' ' // trim(dir) // ' ' // trim(redirect) // tmpfile
-        call system( cmd )
+        call exec_cmdline( cmd )
         open( newunit = luntmp, file = tmpfile )
         !
         ! First count the number of files, then allocate and fill the array
@@ -1047,20 +1023,20 @@ contains
         call exec_cmdline(cmd)
     end subroutine ls_filetab
 
-    subroutine sys_del_files( fbody, ext )
-        character(len=*),      intent(in)  :: fbody, ext
-        character(len=STDLEN), allocatable :: fnames(:)
-        character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_del_files.txt'
-        integer :: i, last
-        call ls_filetab(fbody, ext, ftab) ! filetable written to disc
-        call read_filetable(ftab, fnames) ! filetable read back in
-        last = size(fnames)
-        do i=1,last
-            call del_file(fnames(i))
-        end do
-        call del_file(ftab)
-        deallocate(fnames)
-    end subroutine sys_del_files
+    ! subroutine sys_del_files( fbody, ext )
+    !     character(len=*),      intent(in)  :: fbody, ext
+    !     character(len=STDLEN), allocatable :: fnames(:)
+    !     character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_del_files.txt'
+    !     integer :: i, last
+    !     call ls_filetab(fbody, ext, ftab) ! filetable written to disc
+    !     call read_filetable(ftab, fnames) ! filetable read back in
+    !     last = size(fnames)
+    !     do i=1,last
+    !         call del_file(fnames(i))
+    !     end do
+    !     call del_file(ftab)
+    !     deallocate(fnames)
+    ! end subroutine sys_del_files
 
     function get_last_fname( fbody, ext ) result( fname )
         character(len=*),      intent(in)  :: fbody, ext
