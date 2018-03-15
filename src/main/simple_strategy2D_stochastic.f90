@@ -130,7 +130,6 @@ contains
             if( do_inplsrch )then
                 call self%s%inpl_srch
             endif
-            call self%s%fit_bfac
             if( .not. is_a_number(self%s%best_corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_strategy2D_srch :: stochastic_srch'
                 print *, self%s%iptcl, self%s%best_class, self%s%best_corr, self%s%best_rot

@@ -54,7 +54,6 @@ type strategy2D_srch
     procedure :: prep4srch
     procedure :: inpl_srch
     procedure :: calc_corr
-    procedure :: fit_bfac
     procedure :: store_solution
     procedure :: kill
 end type strategy2D_srch
@@ -123,10 +122,9 @@ contains
         self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
         ! B-factor memoization
         if( self%pftcc_ptr%objfun_is_ccres() )then
-            if( .not. self%a_ptr%isthere(self%iptcl, 'bfac') )then
-                bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
-                call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
-            endif
+            bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
+            call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
+            call self%a_ptr%set(self%iptcl, 'bfac', bfac)
         endif
         if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
@@ -166,15 +164,6 @@ contains
         endif
         if( DEBUG ) print *, '>>> strategy2D_srch::FINISHED CALC_CORR'
     end subroutine calc_corr
-
-    subroutine fit_bfac( self )
-        class(strategy2D_srch), intent(inout) :: self
-        real :: bfac
-        if( self%pftcc_ptr%objfun_is_ccres() )then
-            bfac = self%pftcc_ptr%fit_bfac(self%best_class, self%iptcl, self%best_rot, self%best_shvec)
-            call self%a_ptr%set(self%iptcl, 'bfac',  bfac )
-        endif
-    end subroutine fit_bfac
 
     subroutine store_solution( self )
         use simple_ori,  only: ori

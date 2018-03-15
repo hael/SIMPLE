@@ -53,7 +53,6 @@ contains
             end do
             self%s%nrefs_eval = self%s%nrefs
             call self%s%inpl_srch
-            call self%s%fit_bfac
             call self%s%store_solution
         else
             call self%s%a_ptr%reject(self%s%iptcl)

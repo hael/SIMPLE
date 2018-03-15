@@ -272,8 +272,6 @@ contains
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
-        ! memoize B-factors
-        if( p%objfun.eq.'ccres' ) call pftcc%memoize_bfacs(b%a)
         ! search
         call del_file(p%outfile)
 

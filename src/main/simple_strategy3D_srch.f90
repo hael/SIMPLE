@@ -159,10 +159,9 @@ contains
         self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! B-factor memoization
         if( self%pftcc_ptr%objfun_is_ccres() )then
-            if( .not. self%a_ptr%isthere(self%iptcl, 'bfac') )then
-                bfac = self%pftcc_ptr%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
-                call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
-            endif
+            bfac = self%pftcc_ptr%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
+            call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
+            call self%a_ptr%set(self%iptcl, 'bfac', bfac)
         endif
         ! prep corr
         call self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl, corrs)
