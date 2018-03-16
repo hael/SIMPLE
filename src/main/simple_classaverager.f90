@@ -104,18 +104,10 @@ contains
         endif
         partsz = count(pptcl_mask)
         ! CTF logics
-        select case(p%ctf)
-            case('no')
-                ctfflag%flag = CTFFLAG_NO
-            case('yes')
-                ctfflag%flag = CTFFLAG_YES
-            case('mul')
-                stop 'ERROR ctf=mul deprecated; simple_classaverager :: cavger_new'
-            case('flip')
-                ctfflag%flag = CTFFLAG_FLIP
-        end select
+        ctfflag%flag = b%spproj%get_ctfflag_type('ptcl2D')
         ! set phaseplate flag
-        phaseplate    = p%tfplan%l_phaseplate
+        phaseplate = b%spproj%has_phaseplate('ptcl2D')
+        ! phaseplate    = p%tfplan%l_phaseplate
         ! smpd
         smpd          = p%smpd
         ! set ldims

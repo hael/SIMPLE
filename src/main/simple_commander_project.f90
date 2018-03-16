@@ -120,9 +120,13 @@ contains
             ndatlines = binread_nlines(p, p%oritab)
             call os%new_clean(ndatlines)
             call binread_oritab(p%oritab, spproj, os, [1,ndatlines])
+            if( .not. cline%defined('ctf') )then
+                if( os%isthere('dfx') .or. os%isthere('kv') .or. os%isthere('cs'))stop 'CTF argument is required when inputting a DEFTAB'
+            endif
             call spproj%kill ! for safety
         endif
         if( inputted_deftab )then
+            if( .not. cline%defined('ctf') )stop 'CTF argument is required when inputting a DEFTAB'
             ndatlines = binread_nlines(p, p%deftab)
             call os%new_clean(ndatlines)
             call binread_oritab(p%deftab, spproj, os, [1,ndatlines])
@@ -175,9 +179,10 @@ contains
                 endif
             end do
         endif
-        if( n_ori_inputs > 1 )then
+        if( n_ori_inputs == 1 )then
             ! sampling distance
             if( cline%defined('smpd') )then
+                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('smpd', p%smpd)
             else
                 do i=1,ndatlines
@@ -190,6 +195,7 @@ contains
             endif
             ! acceleration voltage
             if( cline%defined('kv') )then
+                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('kv', p%kv)
             else
                 do i=1,ndatlines
@@ -202,6 +208,7 @@ contains
             endif
             ! spherical aberration
             if( cline%defined('cs') )then
+                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('cs', p%cs)
             else
                 do i=1,ndatlines
@@ -214,6 +221,7 @@ contains
             endif
             ! fraction of amplitude contrast
             if( cline%defined('fraca') )then
+                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('fraca', p%fraca)
             else
                 do i=1,ndatlines
@@ -235,26 +243,11 @@ contains
                 end do
             endif
             ! ctf flag
-            if( cline%defined('ctf') )then
-                call os%set_all2single('ctf', trim(p%ctf))
-            else
-                do i=1,ndatlines
-                    if( .not. os%isthere(i, 'ctf') )then
-                        call os%set(i, 'ctf', 'yes')
-                    endif
-                end do
-            endif
+            if( cline%defined('ctf') ) call os%set_all2single('ctf', trim(p%ctf))
         endif
 
         ! PROJECT FILE MANAGEMENT
-        if( cline%defined('projfile') )then
-            projfile = cline%get_carg('projfile')
-            if( .not. file_exists(projfile) )then
-                write(*,*) 'The inputted project file (projfile): ', trim(projfile)
-                stop 'does not exist in cwd; commander_project :: exec_manage_project'
-                call spproj%read(projfile)
-            endif
-        endif
+        if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
 
         ! STACK INPUT MANAGEMENT
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -282,9 +275,11 @@ contains
         if( cline%defined('stk') )then
             if( n_ori_inputs < 1 )then
                 if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance in A) input required when importing class averages; commander_project :: exec_manage_project'
-                call spproj%add_single_stk(p%stk, smpd=p%smpd)
-            else 
-                call spproj%add_single_stk(p%stk, os=os)
+                call spproj%add_single_stk(p%stk, p%smpd, p%imgkind)
+            else
+                if( cline%defined('smpd') )then
+                    call spproj%add_single_stk(p%stk, p%smpd, p%imgkind, os=os)
+                endif
             endif
         endif
         ! add list of stacks (stktab) if present

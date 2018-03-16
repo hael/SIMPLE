@@ -15,7 +15,8 @@ use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
-use simple_binoris_io       ! use all in there
+use simple_binoris_io        ! use all in there
+use simple_user_interface    ! use all in there
 implicit none
 
 public :: build
@@ -25,6 +26,7 @@ private
 type :: build
     ! GENERAL TOOLBOX
     type(sp_project)                    :: spproj             !< centralised single-particle project meta-data handler
+    class(simple_program), pointer      :: ptr2prg => null()  !< pointer to user interface of program being executed
     class(oris), pointer                :: a => null()        !< pointer to field in spproj
     type(oris)                          :: e, e_bal           !< discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
@@ -91,7 +93,7 @@ contains
         class(cmdline),       intent(inout) :: cline
         logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
         integer :: lfny,  lfny_match, cyc_lims(3,2)
-        logical :: ddo3d, fforce_ctf
+        logical :: ddo3d, fforce_ctf, metadata_read
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -100,6 +102,7 @@ contains
         ! seed the random number generator
         call seed_rnd
         DebugPrint   'seeded random number generator'
+
         ! set up symmetry functionality
         call self%se%new(trim(p%pgrp))
         p%nsym    = self%se%get_nsym()
@@ -114,6 +117,9 @@ contains
             case(PTCL2D_SEG)
                 call self%spproj%os_ptcl2D%new(p%nptcls)
                 self%a => self%spproj%os_ptcl2D
+            case(CLS2D_SEG)
+                call self%spproj%os_cls2D%new(p%nptcls)
+                self%a => self%spproj%os_cls2D
             case(CLS3D_SEG)
                 call self%spproj%os_cls3D%new(p%nptcls)
                 self%a => self%spproj%os_cls3D
@@ -125,12 +131,49 @@ contains
                 call self%spproj%os_ptcl3D%new(p%nptcls)
                 self%a => self%spproj%os_ptcl3D
         end select
-        if( present(nooritab) )then
-            call self%a%spiral(p%nsym, p%eullims)
+        ! meta data input
+        ! obtain pointer to the program in the simple_user_interface specification
+        call get_prg_ptr(trim(p%prg), self%ptr2prg)
+        ! read from project file
+        metadata_read = .false.
+        if( cline%defined('projfile') )then
+            if( .not. file_exists(p%projfile) )then
+                write(*,*) 'project file not in exec dir: ', trim(p%projfile)
+                stop 'ERROR! build :: build_general_tbox'
+            endif
+            metadata_read = .true.
+        else if( associated(self%ptr2prg) )then
+            if( self%ptr2prg%requires_sp_project() )metadata_read = .true.
+        endif
+        if( metadata_read )then
+            if( cline%defined('projfile') )call self%spproj%read(p%projfile)
+            ! ctf planning
+            p%tfplan%mode = self%spproj%get_ctfmode(p%oritype)
+            DebugPrint 'did set ctfmode'
         else
-            ! we need the oritab to override the deftab in order not to loose parameters
-            if( p%deftab /= '' ) call binread_ctfparams_state_eo(p%deftab,  self%spproj, self%a, [1,p%nptcls])
-            if( p%oritab /= '' ) call binread_oritab(p%oritab,              self%spproj, self%a, [1,p%nptcls])
+            ! revert to oldschool logic
+            if( present(nooritab) )then
+                call self%a%spiral(p%nsym, p%eullims)
+            else
+                ! we need the oritab to override the deftab in order not to loose parameters
+                if( p%deftab /= '' ) call binread_ctfparams_state_eo(p%deftab,  self%spproj, self%a, [1,p%nptcls])
+                if( p%oritab /= '' ) call binread_oritab(p%oritab,              self%spproj, self%a, [1,p%nptcls])
+                DebugPrint 'read deftab'
+            endif
+            ! ctf planning
+            if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then
+                p%tfplan%mode = 'astig'
+            else if( self%a%isthere('dfx') )then
+                p%tfplan%mode = 'noastig'
+            else
+                p%tfplan%mode = 'no'
+            endif
+            if( p%tfplan%flag .ne. 'no' .and. p%tfplan%mode .eq. 'no' )then
+                write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
+                write(*,'(a)') 'but your input orientation table lacks defocus values'
+            endif
+            !DebugPrint 'did set ctfmode'
+            if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         endif
         if( self%a%get_n('state') > 1 )then
             if( .not. cline%defined('nstates') )then
@@ -138,19 +181,6 @@ contains
             endif
         endif
         DebugPrint 'created & filled object for orientations'
-        DebugPrint 'read deftab'
-        if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then
-            p%tfplan%mode = 'astig'
-        else if( self%a%isthere('dfx') )then
-            p%tfplan%mode = 'noastig'
-        else
-            p%tfplan%mode = 'no'
-        endif
-        if( p%tfplan%flag .ne. 'no' .and. p%tfplan%mode .eq. 'no' )then
-            write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
-            write(*,'(a)') 'but your input orientation table lacks defocus values'
-        endif
-        DebugPrint 'did set number of dimensions and ctfmode'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction spaces
         call self%e%new( p%nspace )

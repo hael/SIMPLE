@@ -399,60 +399,44 @@ contains
         call b%build_general_tbox(p, cline)  ! general objects built
         ! reallocate vol (boxmatch issue)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        if( .not.cline%defined('vollist') )then
-            inquire(FILE=p%vols(1), EXIST=here)
-            if( here )then
-                call b%vol%read(p%vols(1))
-            else
-                stop 'vol1 does not exists in cwd'
-            endif
-            if( p%guinier .eq. 'yes' )then
-                if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
-                if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
-                if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
-                p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
-                write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
-            else
-                if( cline%defined('neg')  )then
-                    call b%vol%neg()
-                end if
-                if( cline%defined('snr') )then
-                    call b%vol%add_gauran(p%snr)
-                end if
-                if( cline%defined('mirr') )then
-                    call b%vol%mirror(p%mirr)
-                end if
-                if( cline%defined('bfac') )then
-                    call b%vol%apply_bfac(p%bfac)
-                end if
-                if( cline%defined('e1') .or. cline%defined('e2') .or. cline%defined('e3') )then
-                    if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for volume rotation'
-                    if( .not. cline%defined('msk')  ) stop 'need msk (mask radius) input for volume rotation'
-                    call o%new
-                    call o%set_euler([p%e1,p%e2,p%e3])
-                    shvec   = [p%xsh,p%ysh,p%zsh]
-                    vol_rot = rotvol(b%vol, o, p, shvec)
-                    b%vol   = vol_rot
-                endif
-                if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
-                    call b%vol%shift([p%xsh,p%ysh,p%zsh])
-                endif
-                call b%vol%write(p%outvol, del_if_exists=.true.)
-            endif
+        inquire(FILE=p%vols(1), EXIST=here)
+        if( here )then
+            call b%vol%read(p%vols(1))
         else
-            ! for serialization of multiple volumes
-            call fopen(funit, p%outfile, status='replace', action='write', access='sequential', iostat=iostat)
-            call fileio_errmsg("simple_commander_volops::exec_volops opening "//trim(p%outfile),iostat)
-            nvols  = nlines(cline%get_carg('vollist'))
-            npix   = b%vol%get_npix(p%msk)
-            do i = 1, nvols
-                call progress(i, nvols)
-                call b%vol%read(p%vols(i))
-                call b%vol%serialize( serialvol, p%msk )
-                write(funit, '(*(F8.3))')serialvol
-                deallocate(serialvol)
-            enddo
-            call fclose(funit, errmsg="simple_commander_volops::exec_volops closing "//trim(p%outfile))
+            stop 'vol1 does not exists in cwd'
+        endif
+        if( p%guinier .eq. 'yes' )then
+            if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
+            if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
+            if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
+            p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
+            write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
+        else
+            if( cline%defined('neg')  )then
+                call b%vol%neg()
+            end if
+            if( cline%defined('snr') )then
+                call b%vol%add_gauran(p%snr)
+            end if
+            if( cline%defined('mirr') )then
+                call b%vol%mirror(p%mirr)
+            end if
+            if( cline%defined('bfac') )then
+                call b%vol%apply_bfac(p%bfac)
+            end if
+            if( cline%defined('e1') .or. cline%defined('e2') .or. cline%defined('e3') )then
+                if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for volume rotation'
+                if( .not. cline%defined('msk')  ) stop 'need msk (mask radius) input for volume rotation'
+                call o%new
+                call o%set_euler([p%e1,p%e2,p%e3])
+                shvec   = [p%xsh,p%ysh,p%zsh]
+                vol_rot = rotvol(b%vol, o, p, shvec)
+                b%vol   = vol_rot
+            endif
+            if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
+                call b%vol%shift([p%xsh,p%ysh,p%zsh])
+            endif
+            call b%vol%write(p%outvol, del_if_exists=.true.)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')

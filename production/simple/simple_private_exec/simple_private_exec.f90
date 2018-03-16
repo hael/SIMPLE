@@ -396,32 +396,18 @@ select case(prg)
         ! <make_cavgs/begin>is used  to produce class averages or initial random references
         ! for cluster2D execution. <make_cavgs/end>
         !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncls'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'oritab'
-        keys_optional(5)  = 'filwidth'
-        keys_optional(6)  = 'mul'
-        keys_optional(7)  = 'tseries'
-        keys_optional(8)  = 'outfile'
-        keys_optional(9)  = 'refs'
-        keys_optional(10) = 'remap_classes'
-        keys_optional(11) = 'weights2D'
-        keys_optional(12) = 'stk'
-        keys_optional(13) = 'stktab'
-        keys_optional(14) = 'phaseplate'
+        keys_optional(3)  = 'filwidth'
+        keys_optional(4)  = 'mul'
+        keys_optional(5)  = 'tseries'
+        keys_optional(6)  = 'outfile'
+        keys_optional(7)  = 'refs'
+        keys_optional(8)  = 'remap_cls'
+        keys_optional(9)  = 'weights2D'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:15))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_optional=keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
@@ -433,14 +419,13 @@ select case(prg)
         ! probabilistic ab initio 3D reconstruction algorithm<cluster2D/end>
         !
         ! set required keys
-        keys_required(1)  = 'smpd'
+        keys_required(1)  = 'projfile'
         keys_required(2)  = 'msk'
         keys_required(3)  = 'ncls'
-        keys_required(4)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'oritab'
+        keys_optional(2)  = 'objfun'
+        keys_optional(3)  = 'phaseplate'
         keys_optional(4)  = 'refs'
         keys_optional(5)  = 'hp'
         keys_optional(6)  = 'lp'
@@ -456,19 +441,9 @@ select case(prg)
         keys_optional(16) = 'weights2D'
         keys_optional(17) = 'refine'
         keys_optional(18) = 'match_filt'
-        keys_optional(19) = 'stk'
-        keys_optional(20) = 'stktab'
-        keys_optional(21) = 'dyncls'
-        keys_optional(22) = 'phaseplate'
-        keys_optional(23) = 'objfun'
+        keys_optional(19) = 'dyncls'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:23))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:19))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
@@ -485,26 +460,14 @@ select case(prg)
         ! program (cluster2D) has been executed in distributed mode<cavgassemble/end>
         !
         ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'oritab'
-        keys_required(3) = 'nparts'
-        keys_required(4) = 'ctf'
-        keys_required(5) = 'ncls'
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'nparts'
+        keys_required(3) = 'ncls'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'which_iter'
-        keys_optional(3) = 'refs'
-        keys_optional(4) = 'stk'
-        keys_optional(5) = 'stktab'
-        keys_optional(6) = 'phaseplate'
+        keys_optional(2) = 'refs'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:6))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:2))
         ! execute
         call xcavgassemble%execute(cline)
     case( 'check2D_conv' )
@@ -520,16 +483,9 @@ select case(prg)
         ! searched to find an improving solution<check2D_conv/end>
         !
         ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'box'
-        keys_required(3) = 'oritab'
-        keys_required(4) = 'nptcls'
-        ! set optional keys
-        keys_optional(1) = 'lp'
+        keys_required(1) = 'projfile'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
-        ! set defaults
-        if( .not. cline%defined('lp') ) call cline%set('lp', 20.)
+        call cline%parse_oldschool(keys_required(:1))
         ! execute
         call xcheck2D_conv%execute(cline)
     case( 'rank_cavgs' )
@@ -540,13 +496,14 @@ select case(prg)
         ! generated by cluster2D<rank_cavgs/end>
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'oritab'
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'stk'
         ! set optional keys
         keys_optional(1) = 'outstk'
-        keys_optional(2) = 'classdoc'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
+        ! set defaults
+        call cline%set('oritype', 'cls2D')
         ! execute
         call xrank_cavgs%execute(cline)
 
@@ -1447,10 +1404,10 @@ select case(prg)
         ! </begin></end>
         !
         ! set optional keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'cs'
-        keys_required(3)  = 'kv'
-        keys_required(4)  = 'fraca'
+        keys_optional(1)  = 'smpd'
+        keys_optional(2)  = 'cs'
+        keys_optional(3)  = 'kv'
+        keys_optional(4)  = 'fraca'
         keys_optional(5)  = 'projfile'
         keys_optional(6)  = 'projname'
         keys_optional(7)  = 'phaseplate'
@@ -1474,9 +1431,9 @@ select case(prg)
         keys_optional(25) = 'filetab'
         keys_optional(26) = 'ctf'
         ! parse command line
-        call cline%parse_oldschool(keys_optional= keys_optional(:26))
+        call cline%parse_oldschool(keys_optional=keys_optional(:26))
         ! set defaults
-        if( .not. cline%defined('ctf') ) call cline%set('ctf', 'yes')
+        ! if( .not. cline%defined('ctf') ) call cline%set('ctf', 'yes')
         ! execute
         call xmanage_project%execute(cline)
     case( 'print_project_info' )
@@ -1589,12 +1546,12 @@ select case(prg)
         keys_required(1) = 'fbody'
         keys_required(2) = 'nptcls'
         keys_required(3) = 'ndocs'
-        keys_required(4) = 'outfile'
         ! set optional keys
-        keys_optional(1) = 'numlen'
-        keys_optional(2) = 'oritype' ! needs to be required when we move to *.simple format
+        keys_optional(1) = 'projfile'
+        keys_optional(2) = 'numlen'
+        keys_optional(3) = 'oritype' ! needs to be required when we move to *.simple format
         ! parse command line
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:2))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! execute
         call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )
@@ -1646,19 +1603,13 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'smpd'
+        keys_required(2) = 'stk'
         ! set optional keys
-        keys_optional(1) = 'stk'
-        keys_optional(2) = 'stktab'
-        keys_optional(3) = 'nparts'
-        keys_optional(4) = 'neg'
+        keys_optional(1) = 'nparts'
+        keys_optional(2) = 'neg'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
+
         ! execute
         call xsplit%execute(cline)
     case DEFAULT

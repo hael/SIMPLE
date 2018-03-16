@@ -129,6 +129,7 @@ contains
     !>  \brief  is a constructor
     subroutine new_ori( self )
         class(ori), intent(inout) :: self
+        call self%kill
         self%htab = hash()
         call self%set_euler([0.,0.,0.])
         call self%htab%set('e1',0.)
@@ -148,6 +149,7 @@ contains
     !>  \brief  is a constructor
     subroutine new_ori_clean( self )
         class(ori), intent(inout) :: self
+        call self%kill
         self%htab  = hash()
         self%chtab = chash()
         self%existence = .true.
@@ -437,6 +439,7 @@ contains
         class(ori),       intent(inout) :: self
         character(len=*), intent(inout) :: line
         logical :: isthere(3)
+        call self%new_ori_clean
         call sauron_line_parser(line, self%htab, self%chtab)
         isthere(1) = self%htab%isthere('e1')
         isthere(2) = self%htab%isthere('e2')

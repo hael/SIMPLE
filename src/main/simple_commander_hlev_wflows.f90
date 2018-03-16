@@ -56,141 +56,138 @@ contains
         ! command lines
         type(cmdline) :: cline_cluster2D_stage1
         type(cmdline) :: cline_cluster2D_stage2
-        type(cmdline) :: cline_scalerefs
+        type(cmdline) :: cline_scalerefs, cline_scale1, cline_scale2
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
+        type(scale_stk_parts_commander) :: xscale_distr
         character(len=STDLEN) :: scaled_stktab
-        character(len=STDLEN) :: finaldoc, finalcavgs, finalcavgs_ranked
+        character(len=STDLEN) :: finalcavgs, finalcavgs_ranked
+        character(len=:), allocatable :: projfile_sc, stk
         class(oris), pointer  :: os => null()
-        type(sp_project)      :: spproj
-        type(scaler)          :: scobj
+        type(sp_project)      :: spproj, spproj_sc
         type(params)          :: p_master
         character(len=STDLEN) :: refs_sc
         real                  :: scale_stage1, scale_stage2
-        integer               :: nparts, last_iter_stage1, last_iter_stage2, last_iter
+        integer               :: istk, nparts, last_iter_stage1, last_iter_stage2, last_iter
+        logical               :: scaling
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        ! parameters
         p_master = params(cline, del_scaled=.true.)
         nparts   = p_master%nparts
-        if( .not. cline%defined('stktab') )then
-            ! split stack
-            call xsplit%execute(cline)
-        endif
         if( p_master%l_autoscale )then
+            ! remove possible objfun flag from cline
+            call cline%delete('objfun')
+            ! SPLITTING
+            call spproj%read( p_master%projfile )
+            call spproj%split_stk(p_master%nparts)
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
+            cline_cluster2D_stage1 = cline
+            call cline_cluster2D_stage1%delete('update_frac')   ! no incremental learning in stage 1
+            call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
+            call cline_cluster2D_stage1%delete('automsk')
+            call cline_cluster2D_stage1%set('objfun', 'cc')     ! goal function is standard cross-correlation
+            ! Scaling
+            call spproj%gen_projfile4scale( p_master%smpd_targets2D(1), projfile_sc,&
+                &cline_cluster2D_stage1, cline_scale1)
+            call spproj%kill
+            scale_stage1 = cline_scale1%get_rarg('scale')
+            scaling      = trim(projfile_sc) /= p_master%projfile
+            if( scaling )then
+                call xscale_distr%execute( cline_scale1 )
+                ! scale references
+                if( cline%defined('refs') )then
+                    call cline_scalerefs%set('stk', cline%get_carg('refs'))
+                    refs_sc = trim(cline_scalerefs%get_carg('refs')) //trim(SCALE_SUFFIX)//p_master%ext
+                    call cline_scalerefs%set('outstk', trim(refs_sc))
+                    call cline_scalerefs%set('smpd', cline%get_rarg('smpd'))
+                    call cline_scalerefs%set('newbox', cline_scale1%get_rarg('newbox'))
+                    call xscale%execute(cline_scalerefs)
+                    call cline_cluster2D_stage1%set('refs',trim(refs_sc))
+                endif
+            endif
+            ! execution
+            call xcluster2D_distr%execute(cline_cluster2D_stage1)
+            last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
+            ! update original project
+            if( scaling )then
+                call spproj_sc%read_segment( 'ptcl2D', projfile_sc )
+                call spproj_sc%os_ptcl2D%mul_shifts( 1./scale_stage1 )
+                call spproj%read( p_master%projfile )
+                spproj%os_ptcl2D = spproj_sc%os_ptcl2D
+                call spproj%write()
+                call spproj%kill()
+                ! clean stacks
+                call spproj_sc%read_segment( 'stk', projfile_sc )
+                do istk=1,spproj_sc%os_stk%get_noris()
+                    call spproj_sc%os_stk%getter(istk, 'stk', stk)
+                    call del_file(trim(stk))
+                enddo
+                call spproj_sc%kill()
+                call del_file(trim(projfile_sc))
+            endif
+            deallocate(projfile_sc)
             ! Stage 2: refinement stage, less down-scaling, no extremal updates, incremental
             !          learning for acceleration, objective function is resolution weighted
             !          cross-correlation with automtic fitting of B-factors
-            ! remove possible objfun flag from cline
-            call cline%delete('objfun')
-            ! auto-scaling prep (cline is modified by scobj%init)
-            call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(1))
-            scale_stage1 = scobj%get_scaled_var('scale')
-            ! scale images in parallel
-            call scobj%scale_distr_exec
-            if( cline%defined('stktab') )then
-                ! updates command lines
-                scaled_stktab = add2fbody(p_master%stktab, trim(TXT_EXT), SCALE_SUFFIX)
-                ! update stktab
-                call p_master%stkhandle%add_scale_tag
-                call p_master%stkhandle%write_stktab(trim(scaled_stktab))
-            endif
-            ! execute stage 1
-            cline_cluster2D_stage1 = cline
-            ! no incremental learning in stage 1
-            if( p_master%l_frac_update )then
-                call cline_cluster2D_stage1%delete('update_frac')
-                call cline_cluster2D_stage1%set('maxits', real(MAX_EXTRLIM2D))
-            else
-                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
-            endif
-            if( cline%defined('stktab') )then
-                call cline_cluster2D_stage1%set('stktab', trim(scaled_stktab))
-            endif
-            if( cline%defined('refs') )then
-                ! scale references
-                call cline_scalerefs%set('stk', cline%get_carg('refs'))
-                refs_sc = trim(cline_scalerefs%get_carg('refs')) // '_sc'//p_master%ext
-                call cline_scalerefs%set('outstk', trim(refs_sc))
-                call cline_scalerefs%set('smpd', cline%get_rarg('smpd'))
-                call cline_scalerefs%set('newbox', scobj%get_scaled_var('box'))
-                call xscale%execute(cline_scalerefs)
-                call cline_cluster2D_stage1%set('refs',trim(refs_sc))
-            endif
-            call cline_cluster2D_stage1%delete('automsk')
-            call cline_cluster2D_stage1%set('objfun', 'cc') ! goal function is standard cross-correlation
-            call xcluster2D_distr%execute(cline_cluster2D_stage1)
-            last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
-            finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATA_EXT)
-            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
-            ! prepare stage 2 input -- re-scale
-            call scobj%uninit(cline) ! puts back the old command line
-            call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(2))
-            scale_stage2 = scobj%get_scaled_var('scale')
-            call scobj%scale_distr_exec
-            ! prepare stage 2 input -- shift modulation
-            call spproj%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os)
-            call binread_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
-            call os%mul_shifts(scale_stage2/scale_stage1)
-            call binwrite_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
-            ! prepare stage 2 input -- command line
             cline_cluster2D_stage2 = cline
-            call cline_cluster2D_stage2%delete('refs')
-            ! if automsk .eq. yes, we need to replace it with cavg
-            if( p_master%automsk .eq. 'yes' )then
-                call cline_cluster2D_stage2%set('automsk', 'cavg')
-            endif
-            if( cline%defined('stktab') )then
-                call cline_cluster2D_stage2%set('stktab', trim(scaled_stktab))
-            endif
-            call cline_cluster2D_stage2%delete('deftab')
-            call cline_cluster2D_stage2%set('oritab',  trim(finaldoc))
+            if( p_master%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             call cline_cluster2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
+            ! Scaling
+            call spproj%read( p_master%projfile )
+            call spproj%gen_projfile4scale( p_master%smpd_targets2D(2), projfile_sc,&
+                &cline_cluster2D_stage2, cline_scale2)
+            call spproj%kill
+            scale_stage2 = cline_scale2%get_rarg('scale')
+            scaling      = trim(projfile_sc) /= p_master%projfile
+            if( scaling ) call xscale_distr%execute( cline_scale2 )
+            ! execution
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
             last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
-            finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
-            last_iter        = last_iter_stage2 ! for ranking
-            if( cline%defined('stktab') )then
-                ! delete downscaled stack parts & stktab (we are done with them)
-                call del_file(trim(scaled_stktab))
-                call p_master%stkhandle%del_stktab_files
-                ! put back original stktab
-                call p_master%stkhandle%del_scale_tag
-            else
-                ! delete downscaled stack parts (we are done with them)
-                call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
+            ! Updates project and references
+            if( scaling )then
+                ! shift modulation
+                call spproj_sc%read_segment( 'ptcl2D', projfile_sc )
+                call spproj_sc%os_ptcl2D%mul_shifts( 1./scale_stage2 )
+                call spproj%read( p_master%projfile )
+                spproj%os_ptcl2D = spproj_sc%os_ptcl2D
+                call spproj%write()
+                call spproj%kill()
+                ! clean stacks
+                call spproj_sc%read_segment( 'stk', projfile_sc )
+                do istk=1,spproj_sc%os_stk%get_noris()
+                    call spproj_sc%os_stk%getter(istk, 'stk', stk)
+                    call del_file(trim(stk))
+                enddo
+                call spproj_sc%kill()
+                call del_file(trim(projfile_sc))
+                ! original scale references
+                cline_make_cavgs = cline
+                call cline_make_cavgs%delete('autoscale')
+                call cline_make_cavgs%delete('balance')
+                call cline_make_cavgs%set('prg',      'make_cavgs')
+                call cline_make_cavgs%set('projfile', p_master%projfile)
+                call cline_make_cavgs%set('nparts',   real(nparts))
+                call cline_make_cavgs%set('refs',     trim(finalcavgs))
+                call xmake_cavgs%execute(cline_make_cavgs)
             endif
-            ! re-generate class averages at original sampling
-            call scobj%uninit(cline) ! puts back the old command line
-            call binread_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
-            call os%mul_shifts(1./scale_stage2)
-            call binwrite_oritab(finaldoc, spproj, os, [1,p_master%nptcls])
-            cline_make_cavgs = cline
-            call cline_make_cavgs%delete('autoscale')
-            call cline_make_cavgs%delete('balance')
-            call cline_make_cavgs%set('prg',    'make_cavgs')
-            call cline_make_cavgs%set('oritab', trim(finaldoc))
-            call cline_make_cavgs%set('nparts', real(nparts))
-            call cline_make_cavgs%set('refs',   trim(finalcavgs))
-            call xmake_cavgs%execute(cline_make_cavgs)
-        else ! no auto-scaling
+        else
+            ! no auto-scaling
             call xcluster2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
-            finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
             last_iter        = last_iter_stage2 ! for ranking
         endif
         ! ranking
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//p_master%ext
-        call cline_rank_cavgs%set('oritab',   trim(finaldoc))
+        call cline_rank_cavgs%set('projfile', trim(p_master%projfile))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-        call cline_rank_cavgs%set('classdoc', 'classdoc_'//int2str_pad(last_iter,3)//METADATA_EXT)
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup

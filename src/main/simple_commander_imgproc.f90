@@ -564,11 +564,7 @@ contains
                 if( p%clip < p%box )then
                     call b%vol%clip(vol2)
                 else
-                    if( cline%defined('msk') )then
-                        call b%vol%stats( 'background', ave, sdev, var, med, p%msk )
-                    else
-                        call b%vol%stats( 'background', ave, sdev, var, med )
-                    endif
+                    call b%vol%stats( 'background', ave, sdev, var, med )
                     call b%vol%pad(vol2, backgr=med)
                 endif
                 call b%vol%copy(vol2)

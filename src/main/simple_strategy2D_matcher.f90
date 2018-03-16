@@ -42,7 +42,6 @@ contains
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs,    only: qsys_job_finished
-        use simple_procimgfile,  only: random_selection_from_imgfile, copy_imgfile
         use simple_binoris_io,   only: binwrite_oritab
         class(build),  target, intent(inout) :: b
         class(params), target, intent(inout) :: p
@@ -55,7 +54,7 @@ contains
         type(strategy2D_spec)      :: strategy2Dspec
         integer :: iptcl, icls, i, j, fnr, cnt
         real    :: corr_bound, frac_srch_space, skewness, extr_thresh
-        logical :: l_do_read, doprint, l_partial_sums, l_extr, l_frac_update
+        logical :: doprint, l_partial_sums, l_extr, l_frac_update
 
         if( L_BENCH )then
             t_init = tic()
@@ -122,53 +121,22 @@ contains
 
         ! PREP REFERENCES
         call cavger_new(b, p, 'class', ptcl_mask)
-        l_do_read = .true.
-        if( p%l_distr_exec )then
-            if( b%a%get_nevenodd() == 0 )then
-                stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
-            endif
-            if( .not. cline%defined('refs') )&
-            &stop 'need refs to be part of command line for distributed cluster2D execution'
-        else
-            if( b%a%get_nevenodd() == 0 )then
-                call b%a%partition_eo
-            endif
-            if( which_iter == p%startit )then
-                if( .not. cline%defined('refs') .and. cline%defined('oritab') )then
-                    ! we make references
-                    call cavger_transf_oridat(b%a)
-                    call cavger_assemble_sums( .false. )
-                    l_do_read = .false.
-                else if( cline%defined('refs') )then
-                    ! do nothing
-                else
-                    ! we randomly select particle images as initial references
-                    p%refs      = 'start2Drefs'//p%ext
-                    p%refs_even = 'start2Drefs_even'//p%ext
-                    p%refs_odd  = 'start2Drefs_odd'//p%ext
-                    if( cline%defined('stktab') )then
-                        call random_selection_from_imgfile(p%stktab, p%refs, p%ncls, p%box, p%smpd, b%a%included())
-                    else
-                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, b%a%included())
-                    endif
-                    call copy_imgfile(trim(p%refs), trim(p%refs_even), p%smpd, [1,p%ncls])
-                    call copy_imgfile(trim(p%refs), trim(p%refs_odd),  p%smpd, [1,p%ncls])
-                endif
-            endif
+        if( b%a%get_nevenodd() == 0 )then
+            stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
         endif
-        if( l_do_read )then
-            if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
-            call cavger_read(p%refs,      'merged')
-            if( file_exists(p%refs_even) )then
-                call cavger_read(p%refs_even, 'even'  )
-            else
-                call cavger_read(p%refs, 'even'  )
-            endif
-            if( file_exists(p%refs_odd) )then
-                call cavger_read(p%refs_odd,  'odd'   )
-            else
-                call cavger_read(p%refs,  'odd'   )
-            endif
+        if( .not. cline%defined('refs') )&
+        &stop 'need refs to be part of command line for distributed cluster2D execution'
+        if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
+        call cavger_read(p%refs,      'merged')
+        if( file_exists(p%refs_even) )then
+            call cavger_read(p%refs_even, 'even'  )
+        else
+            call cavger_read(p%refs, 'even'  )
+        endif
+        if( file_exists(p%refs_odd) )then
+            call cavger_read(p%refs_odd,  'odd'   )
+        else
+            call cavger_read(p%refs,  'odd'   )
         endif
 
         ! SETUP WEIGHTS
@@ -206,7 +174,7 @@ contains
         else
             ! defaults to unitary weights
             call b%a%set_all2single('w', 1.0)
-            ! call b%a%set_all2single('w', p%frac)
+            ! call b%a%set_all2single('w', p%frac) ! should be done by class
         endif
 
         ! READ FOURIER RING CORRELATIONS
@@ -233,9 +201,6 @@ contains
 
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
-        if( .not. p%l_distr_exec )then
-            p%outfile = 'cluster2Ddoc_'//int2str_pad(which_iter,3)//trim(METADATA_EXT)
-        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! array allocation for strategy2D
@@ -245,7 +210,7 @@ contains
             case('yes')
                 allocate(strategy2D_neigh :: strategy2Dsrch(p%fromp:p%top))
             case DEFAULT
-                if( p%oritab .eq. '' )then
+                if( b%spproj%is_virgin_field('ptcl2D') )then
                     allocate(strategy2D_greedy :: strategy2Dsrch(p%fromp:p%top))
                 else
                     allocate(strategy2D_stochastic :: strategy2Dsrch(p%fromp:p%top))
@@ -269,12 +234,11 @@ contains
             endif
         end do
         ! memoize CTF matrices
-        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
+        if( b%spproj%get_ctfflag('ptcl2D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl2D')
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
-        ! search
-        call del_file(p%outfile)
 
+        ! SEARCH
         if( L_BENCH ) t_align = tic()
         if( L_BENCH_CLUSTER2D )then
             rt_refloop_sum = 0.
@@ -287,7 +251,8 @@ contains
            call strategy2Dsrch(iptcl)%srch
         end do
         !$omp end parallel do
-        ! clean
+
+        ! CLEAN-UP
         call clean_strategy2D()
         call pftcc%kill
         do i=1,nptcls2update
@@ -298,16 +263,6 @@ contains
         if( L_BENCH ) rt_align = toc(t_align)
         DebugPrint ' strategy2D_matcher; completed alignment'
 
-        ! REMAPPING OF HIGHEST POPULATED CLASSES
-        ! needs to be here since parameters just updated
-        if( p%dyncls.eq.'yes' )then
-            if( p%l_distr_exec )then
-                ! this is done in the distributed workflow
-            else
-                call b%a%fill_empty_classes(p%ncls)
-            endif
-        endif
-
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top], isegment=PTCL2D_SEG)
         p%oritab = p%outfile
@@ -317,32 +272,15 @@ contains
         call cavger_transf_oridat( b%a )
         call cavger_assemble_sums( l_partial_sums )
         ! write results to disk
-        if( p%l_distr_exec )then
-            call cavger_readwrite_partial_sums('write')
-        else
-            p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
-            call cavger_calc_and_write_frcs_and_eoavg(p%frcs)
-            call gen2Dclassdoc( b, p, 'classdoc_'//int2str_pad(which_iter,3)//'.txt')
-            p%refs      = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
-            p%refs_even = 'cavgs_iter'//int2str_pad(which_iter,3)//'_even'//p%ext
-            p%refs_odd  = 'cavgs_iter'//int2str_pad(which_iter,3)//'_odd'//p%ext
-            call cavger_write(p%refs,      'merged')
-            call cavger_write(p%refs_even, 'even'  )
-            call cavger_write(p%refs_odd,  'odd'   )
-        endif
+        call cavger_readwrite_partial_sums('write')
         call cavger_kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
 
-        ! REPORT CONVERGENCE
-        if( p%l_distr_exec )then
-            call qsys_job_finished(p, 'simple_strategy2D_matcher :: cluster2D_exec')
-        else
-            converged = b%conv%check_conv2D()
-        endif
+        call qsys_job_finished(p, 'simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.
-            if( p%l_distr_exec .and. p%part /= 1 ) doprint = .false.
+            if( p%part /= 1 ) doprint = .false.
             if( doprint )then
                 benchfname = 'HADAMARD2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
@@ -365,7 +303,7 @@ contains
         endif
         if( L_BENCH_CLUSTER2D )then
             doprint = .true.
-            if( p%l_distr_exec .and. p%part /= 1 ) doprint = .false.
+            if( p%part /= 1 ) doprint = .false.
             if( doprint )then
                 benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
@@ -392,7 +330,6 @@ contains
         integer   :: batchlims(2), imatch, batchsz_max, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING CLUSTER2D SEARCH ENGINE'
         ! create the polarft_corrcalc object
         call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
@@ -407,7 +344,6 @@ contains
         end do
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
         !$omp schedule(static) proc_bind(close)
         do icls=1,p%ncls

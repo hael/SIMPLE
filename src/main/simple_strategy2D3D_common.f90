@@ -578,46 +578,28 @@ contains
 
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         poulation, average correlation and weight
-    subroutine gen2Dclassdoc( b, p, fname )
+    subroutine gen2Dclassdoc( b, p )
         class(build), target, intent(inout) :: b
         class(params),        intent(inout) :: p
-        character(len=*),     intent(in)    :: fname
         integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143
-        class(oris), pointer :: classdoc=>null()
-        type(oris),  target  :: cdoc
-        select case(trim(METADATA_EXT))
-            case('.simple')
-                classdoc => b%spproj%os_cls2D
-                call classdoc%new_clean(p%ncls)
-            case DEFAULT
-                call cdoc%new_clean(p%ncls)
-                classdoc => cdoc
-        end select
+        call b%spproj%os_cls2D%new_clean(p%ncls)
         call b%a%get_pops(pops, 'class', maxn=p%ncls)
         do icls=1,p%ncls
             call b%projfrcs%estimate_res(icls, frc05, frc0143)
             pop = pops(icls)
-            call classdoc%set(icls, 'class', real(icls))
-            call classdoc%set(icls, 'pop',   real(pop))
-            call classdoc%set(icls, 'res',   frc0143)
+            call b%spproj%os_cls2D%set(icls, 'class', real(icls))
+            call b%spproj%os_cls2D%set(icls, 'pop',   real(pop))
+            call b%spproj%os_cls2D%set(icls, 'res',   frc0143)
             if( pop > 1 )then
-                call classdoc%set(icls, 'corr',  b%a%get_avg('corr', class=icls))
-                call classdoc%set(icls, 'w',     b%a%get_avg('w',    class=icls))
+                call b%spproj%os_cls2D%set(icls, 'corr',  b%a%get_avg('corr', class=icls))
+                call b%spproj%os_cls2D%set(icls, 'w',     b%a%get_avg('w',    class=icls))
             else
-                call classdoc%set(icls, 'corr', -1.0)
-                call classdoc%set(icls, 'w',     0.0)
+                call b%spproj%os_cls2D%set(icls, 'corr', -1.0)
+                call b%spproj%os_cls2D%set(icls, 'w',     0.0)
             endif
         end do
-        select case(trim(METADATA_EXT))
-            case('.simple')
-                classdoc => null()
-            case DEFAULT
-                call classdoc%write(fname)
-                call cdoc%kill
-                classdoc => null()
-        end select
         deallocate(pops)
     end subroutine gen2Dclassdoc
 

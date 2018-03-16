@@ -38,6 +38,8 @@ type :: simple_program
     type(simple_input_param), allocatable :: mask_ctrls(:)
     ! computer controls
     type(simple_input_param), allocatable :: comp_ctrls(:)
+    ! simple project dependence flag
+    logical :: sp_required = .false.
     ! existence flag
     logical :: exists = .false.
   contains
@@ -52,6 +54,7 @@ type :: simple_program
     procedure          :: write2json
     procedure          :: get_required_keys
     procedure          :: is_distr
+    procedure          :: requires_sp_project
     procedure, private :: kill
 end type simple_program
 
@@ -104,6 +107,7 @@ type(simple_input_param) :: outfile
 type(simple_input_param) :: outvol
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
+type(simple_input_param) :: projfile
 type(simple_input_param) :: pspecsz
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: smpd
@@ -178,8 +182,7 @@ contains
             case('volops')
                 ptr2prg => volops
             case DEFAULT
-                write(*,*) 'which program flag: ', trim(which_program), ' unsupported'
-                stop 'simple_user_interface :: get_prg_ptr'
+                ptr2prg => null()
         end select
     end subroutine get_prg_ptr
 
@@ -203,6 +206,7 @@ contains
     ! private class methods
 
     subroutine set_common_params
+        call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .false., 'myproject.simple')
         call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF correction', 'Contrast Transfer Function correction; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
@@ -295,20 +299,13 @@ contains
         &'3D volume refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D volume refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                             ! executable
-        &3, 5, 0, 12, 7, 5, 2)                                                                              ! # entries in each group
-
+        &1, 0, 0, 12, 7, 5, 2, .true.)                                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call refine3D%set_input('img_ios', 1, stk)
-        call refine3D%set_input('img_ios', 2, stktab)
-        call refine3D%set_input('img_ios', 3, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
+        call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
         & sections for particle image matching', 'input volume e.g. recvol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
-        call refine3D%set_input('parm_ios', 1, ctf)
-        call refine3D%set_input('parm_ios', 2, smpd)
-        call refine3D%set_input('parm_ios', 3, phaseplate)
-        call refine3D%set_input('parm_ios', 4, deftab)
-        call refine3D%set_input('parm_ios', 5, oritab)
+        !<empty>
         ! alternative inputs
         !<empty>
         ! search controls
@@ -360,18 +357,12 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
-        &2, 5, 0, 7, 6, 5, 2)                                                     ! # entries in each group
+        &0, 1, 0, 7, 6, 5, 2, .true.)                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cluster3D%set_input('img_ios', 1, stk)
-        call cluster3D%set_input('img_ios', 2, stktab)
+        ! <empty>
         ! parameter input/output
-        call cluster3D%set_input('parm_ios', 1, ctf)
-        call cluster3D%set_input('parm_ios', 2, smpd)
-        call cluster3D%set_input('parm_ios', 3, phaseplate)
-        call cluster3D%set_input('parm_ios', 4, oritab)
-        cluster3D%parm_ios(4)%required = .true.
-        call cluster3D%set_input('parm_ios', 5, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to separate',&
+        call cluster3D%set_input('parm_ios', 1, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to separate',&
         '# states to separate', .true., 2.0)
         ! alternative inputs
         !<empty>
@@ -414,22 +405,16 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &3, 5, 0, 9, 7, 2, 2)                                                   ! # entries in each group
+        &1, 0, 1, 10, 7, 2, 2, .true.)                                          ! # entries in each group
 
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cluster2D%set_input('img_ios', 1, stk)
-        call cluster2D%set_input('img_ios', 2, stktab)
-        call cluster2D%set_input('img_ios', 3, 'refs', 'file', 'Initial references',&
+        call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
         &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc')
         ! parameter input/output
-        call cluster2D%set_input('parm_ios', 1, ctf)
-        call cluster2D%set_input('parm_ios', 2, smpd)
-        call cluster2D%set_input('parm_ios', 3, phaseplate)
-        call cluster2D%set_input('parm_ios', 4, deftab)
-        call cluster2D%set_input('parm_ios', 5, oritab)
+        ! <empty>
         ! alternative inputs
-        !<empty>
+        call cluster2D%set_input('alt_ios', 1, projfile)
         ! search controls
         call cluster2D%set_input('srch_ctrls', 1, ncls)
         cluster2D%srch_ctrls(1)%required = .true.
@@ -445,6 +430,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 7, maxits)
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
         call cluster2D%set_input('srch_ctrls', 9, frac)
+        call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function Angstroms^2', 'B-factor in Angstroms^2 (>0.0)', .false., 1000.)
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -476,15 +462,13 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 3, 0, 6, 5, 2, 2)                                                   ! # entries in each group
+        &1, 0, 0, 6, 5, 2, 2, .true.)                                           ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D_stream%set_input('img_ios', 1, 'dir_ptcls', 'file', 'Particles directory',&
         &'Directory where particles and CTF parameters are automatically detected', 'e.g. extract/', .true., '')
         ! parameter input/output
-        call cluster2D_stream%set_input('parm_ios', 1, ctf)
-        call cluster2D_stream%set_input('parm_ios', 2, smpd)
-        call cluster2D_stream%set_input('parm_ios', 3, phaseplate)
+        !<empty>
         ! alternative inputs
         !<empty>
         ! search controls
@@ -528,13 +512,12 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                          ! descr_long
         &'simple_distr_exec',&                                                          ! executable
-        &1, 1, 0, 9, 3, 3, 2)                                                           ! # entries in each group
-
+        &1, 1, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call initial_3Dmodel%set_input('img_ios', 1, 'stk', 'file', 'Class averages image stack', 'Class averages image stack', 'xxx.mrc file with class averages', .true., '')
         ! parameter input/output
-        call initial_3Dmodel%set_input('parm_ios', 1, smpd)
+        !<empty>
         ! alternative inputs
         !<empty>
         ! search controls
@@ -568,37 +551,28 @@ contains
         call preprocess%new(&
         &'preprocess', & ! name
         &'is a program that performs for movie alignment',&                                 ! descr_short
-        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//&   ! descr_long
+        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence or streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 15, 2, 13, 5, 0, 2)                                                             ! # entries in each group
+        &1, 10, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
         ! parameter input/output
-        call preprocess%set_input('parm_ios', 1, smpd)
-        call preprocess%set_input('parm_ios', 2, kv)
-        preprocess%parm_ios(2)%required = .true.
-        call preprocess%set_input('parm_ios', 3, cs)
-        call preprocess%set_input('parm_ios', 4, fraca)
-        call preprocess%set_input('parm_ios', 5, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call preprocess%set_input('parm_ios', 6, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-        call preprocess%set_input('parm_ios', 7, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
-        call preprocess%set_input('parm_ios', 8, phaseplate)
-        call preprocess%set_input('parm_ios', 9, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
-        call preprocess%set_input('parm_ios',10, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false., 'no')
-        call preprocess%set_input('parm_ios',11, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess%set_input('parm_ios',12, 'refs', 'file', 'Picking 2D references',&
+        call preprocess%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
+        call preprocess%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess%set_input('parm_ios', 3, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
+        call preprocess%set_input('parm_ios', 4, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call preprocess%set_input('parm_ios', 5, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false., 'no')
+        call preprocess%set_input('parm_ios', 6, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess%set_input('parm_ios', 7, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
-        call preprocess%set_input('parm_ios',13, 'fbody', 'string', 'Template output micrograph name',&
+        call preprocess%set_input('parm_ios', 8, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess%set_input('parm_ios',14, pspecsz)
-        call preprocess%set_input('parm_ios',15, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
+        call preprocess%set_input('parm_ios', 9, pspecsz)
+        call preprocess%set_input('parm_ios',10, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
         ! alternative inputs
-        call preprocess%set_input('alt_ios', 1, 'filetab', 'file', 'Movies list',&
-        &'List of movies to integerate', 'list input e.g. movies.txt', .false., 'movies.txt')
-        call preprocess%set_input('alt_ios', 2, 'dir_movies', 'file', 'Input movies directory',&
-        & 'Where the movies to process will sequentially appear (streaming only)', 'e.g. data_xxx/ (streaming only)', .false., '')
+        !<empty>
         ! search controls
         call preprocess%set_input('srch_ctrls', 1, trs)
         call preprocess%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false., 1.0)
@@ -639,22 +613,13 @@ contains
         &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_long
         &'simple_distr_exec',&                                                 ! executable
-        &1, 7, 0, 4, 2, 0, 2)                                                ! # entries in each group
+        &0, 2, 0, 4, 2, 0, 2, .true.)                                          ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call ctf_estimate%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
-        &'List of micrographs', 'list input e.g. mics.txt', .true., 'mics.txt')
+        ! <empty>
         ! parameter input/output
-        call ctf_estimate%set_input('parm_ios', 1, smpd)
-        call ctf_estimate%set_input('parm_ios', 2, kv)
-        ctf_estimate%parm_ios(2)%required = .true.
-        call ctf_estimate%set_input('parm_ios', 3, cs)
-        ctf_estimate%parm_ios(3)%required = .true.
-        call ctf_estimate%set_input('parm_ios', 4, fraca)
-        ctf_estimate%parm_ios(4)%required = .true.
-        call ctf_estimate%set_input('parm_ios', 5, phaseplate)
-        call ctf_estimate%set_input('parm_ios', 6, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. ctf_estimate/', .false., 'ctf_estimate')
-        call ctf_estimate%set_input('parm_ios', 7, pspecsz)
+        call ctf_estimate%set_input('parm_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. ctf_estimate/', .false., 'ctf_estimate')
+        call ctf_estimate%set_input('parm_ios', 2, pspecsz)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -679,16 +644,14 @@ contains
         &'is a distributed workflow for template-based particle picking',&      ! descr_short
         &'is a distributed workflow for template-based particle picking',&      ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 3, 0, 2, 1, 0, 1)                                                 ! # entries in each group
+        &0, 2, 0, 2, 1, 0, 1, .true.)                                           ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pick%set_input('img_ios', 1, 'filetab', 'file', 'Micrographs list',&
-        &'List of micrographs to process', 'list input e.g. intgs.txt', .true., '')
+        ! <empty>
         ! parameter input/output
-        call pick%set_input('parm_ios', 1, smpd)
-        call pick%set_input('parm_ios', 2, 'refs', 'file', 'Picking 2D references',&
+        call pick%set_input('parm_ios', 1, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., '')
-        call pick%set_input('parm_ios', 3, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
+        call pick%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -718,22 +681,19 @@ contains
         & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
         & contiguous subset of frames will be averaged without any dose-weighting applied.',&   ! descr_long
         &'simple_distr_exec',&                                                                  ! executable
-        &1, 9, 0, 6, 2, 0, 2)                                                                   ! # entries in each group
+        &0, 7, 0, 6, 2, 0, 2, .true.)                                                           ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call motion_correct%set_input('img_ios', 1, 'filetab', 'file', 'Movies list',&
-        &'List of movies to integerate', 'list input e.g. movs.txt', .true., '')
+        ! <empty>
         ! parameter input/output
-        call motion_correct%set_input('parm_ios', 1, smpd)
-        call motion_correct%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
-        call motion_correct%set_input('parm_ios', 3, kv)
-        call motion_correct%set_input('parm_ios', 4, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
-        call motion_correct%set_input('parm_ios', 5, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-        call motion_correct%set_input('parm_ios', 6, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.)
-        call motion_correct%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
+        call motion_correct%set_input('parm_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
+        call motion_correct%set_input('parm_ios', 2, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
+        call motion_correct%set_input('parm_ios', 3, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call motion_correct%set_input('parm_ios', 4, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.)
+        call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., '')
-        call motion_correct%set_input('parm_ios', 8, pspecsz)
-        call motion_correct%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 0.)
+        call motion_correct%set_input('parm_ios', 6, pspecsz)
+        call motion_correct%set_input('parm_ios', 7, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -766,26 +726,18 @@ contains
         & program produces a parameter files that should be concatenated for use in&
         & conjunction with other SIMPLE programs.',&
         &'simple_exec',&                                                                        ! executable
-        &0, 7, 2, 0, 0, 0, 0)                                                                   ! # entries in each group
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                                           ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call extract%set_input('parm_ios', 1, smpd)
-        call extract%set_input('parm_ios', 2, 'dir', 'string', 'Ouput directory',&
+        call extract%set_input('parm_ios', 1, 'dir', 'string', 'Ouput directory',&
         &'Ouput directory for single-particle images & CTF parameters', 'e.g. extract/', .false., 'extract')
-        call extract%set_input('parm_ios', 3, 'ctf_estimate_doc', 'file', 'ctf_estimate CTF parameters', 'list of per-micrograph &
-        & ctf_estimate CTF parameters to transfer', 'list input *.txt', .false., '')
-        call extract%set_input('parm_ios', 4, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
-        call extract%set_input('parm_ios', 5, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
-        call extract%set_input('parm_ios', 6, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call extract%set_input('parm_ios', 7, 'boxtab', 'file', 'List of boxes',&
-        &'List of single-particles boxes (EMAN format)', 'list input e.g. boxes.txt', .false., '')
+        call extract%set_input('parm_ios', 2, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call extract%set_input('parm_ios', 3, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call extract%set_input('parm_ios', 4, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
-        call extract%set_input('alt_ios', 1, 'filetab', 'file', 'Micrographs list',&
-        &'List of integrated micrographs', 'list input e.g. mics.txt', .false., '')
-        call extract%set_input('alt_ios', 2, 'unidoc', 'file', 'Unified resources doc', 'Unified resources doc&
-        & mapping micrographs, box files & CTF parameters', 'input unidoc e.g. unidoc_001.txt', .false., '')
+        ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
@@ -804,28 +756,17 @@ contains
         &'is used to produce class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &3,10, 0, 0, 0, 0, 2)                      ! # entries in each group
+        &1, 4, 0, 0, 0, 0, 2, .true.)              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call make_cavgs%set_input('img_ios', 1, stk)
-        call make_cavgs%set_input('img_ios', 2, stktab)
-        call make_cavgs%set_input('img_ios', 3, 'refs', 'file', 'Output 2D references',&
+        call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
         &'Output 2D references', 'xxx.mrc file with references', .false., '')
         ! parameter input/output
-        call make_cavgs%set_input('parm_ios', 1, smpd)
-        make_cavgs%parm_ios(1)%required = .true.
-        call make_cavgs%set_input('parm_ios', 2, ncls)
-        call make_cavgs%set_input('parm_ios', 3, ctf)
-        call make_cavgs%set_input('parm_ios', 4, phaseplate)
-        call make_cavgs%set_input('parm_ios', 5, deftab)
-        call make_cavgs%set_input('parm_ios', 6, 'oritab', 'file', '2D orientation and CTF parameters',&
-         '2D Orientation and CTF parameters file in plain text (.txt) or SIMPLE project (*.simple) format',&
-        &'.simple|.txt parameter file', .false., '')
-        call make_cavgs%set_input('parm_ios', 7, 'mul', 'num', 'Shift multiplication factor',&
+        call make_cavgs%set_input('parm_ios', 1, ncls)
+        call make_cavgs%set_input('parm_ios', 2, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
-        call make_cavgs%set_input('parm_ios', 8, outfile)
-        call make_cavgs%set_input('parm_ios', 9, weights2D)
-        call make_cavgs%set_input('parm_ios',10, remap_cls)
+        call make_cavgs%set_input('parm_ios', 3, weights2D)
+        call make_cavgs%set_input('parm_ios', 4, remap_cls)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -846,7 +787,7 @@ contains
         &'is a program for post-processing of volumes',&                            ! descr_short
         &'Use program volops to estimate the B-factor with the Guinier plot',&      ! descr_long
         &'simple_exec',&                                                            ! executable
-        &1, 1, 0, 0, 7, 9, 1)                                                       ! # entries in each group
+        &1, 1, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process', &
@@ -895,18 +836,18 @@ contains
         &'If you want to mask your images with a spherical mask with a soft &
         & falloff, set msk to the radius in pixels',&                               ! descr_long
         &'simple_exec',&                                                            ! executable
-        &2, 3, 0, 0, 1,11, 1)                                                       ! # entries in each group
+        &0, 3, 2, 0, 1,11, 1, .false.)                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call mask%set_input('img_ios', 1, stk)
-        call mask%set_input('img_ios', 2, 'vol1', 'file', 'Volume', 'Volume to mask', &
-        & 'input volume e.g. recvol.mrc', .false., '')
+        ! <empty>
         ! parameter input/output
         call mask%set_input('parm_ios', 1, smpd)
         call mask%set_input('parm_ios', 2, oritab)
         call mask%set_input('parm_ios', 3, outfile)
         ! alternative inputs
-        ! <empty>
+        call mask%set_input('alt_ios', 1, stk)
+        call mask%set_input('alt_ios', 2, 'vol1', 'file', 'Volume', 'Volume to mask', &
+        & 'input volume e.g. recvol.mrc', .false., '')
         ! search controls
         ! <empty>
         ! filter controls
@@ -942,15 +883,10 @@ contains
         &'is a program for re-scaling MRC & SPIDER stacks and volumes',&                        ! descr_short
         &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &3, 8, 0, 0, 0, 1, 1)                                                                   ! # entries in each group
+        &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call scale%set_input('img_ios', 1, stk)
-        scale%img_ios(1)%required = .false.
-        call scale%set_input('img_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
-        &'input volume e.g. recvol.mrc', .false., '')
-        call scale%set_input('img_ios', 3, 'filetab', 'file', 'Stacks list',&
-        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false., '')
+        ! <empty>
         ! parameter input/output
         call scale%set_input('parm_ios', 1, smpd)
         call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'in pixels', .false., 0.)
@@ -961,14 +897,18 @@ contains
         call scale%set_input('parm_ios', 7, 'outstk', 'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call scale%set_input('parm_ios', 8, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false., '')
         ! alternative inputs
-        ! <empty>
+        call scale%set_input('alt_ios', 1, stk)
+        scale%alt_ios(1)%required = .false.
+        call scale%set_input('alt_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
+        &'input volume e.g. recvol.mrc', .false., '')
+        call scale%set_input('alt_ios', 3, 'filetab', 'file', 'Stacks list',&
+        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false., '')
         ! search controls
         ! <empty>
         ! filter controls
         ! <empty>
         ! mask controls
-        call scale%set_input('mask_ctrls', 1, msk)
-        scale%mask_ctrls(1)%required = .false.
+        ! <empty>
         ! computer controls
         call scale%set_input('comp_ctrls', 1, nthr)
     end subroutine new_scale
@@ -980,10 +920,12 @@ contains
         &'is a program for standard volume editing',&                                             ! descr_short
         &'provides standard single-particle image processing routines to MRC or SPIDER volumes',& ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &1,13, 2, 0, 2, 0, 1)                                                                     ! # entries in each group
+        &2, 13, 0, 0, 2, 0, 1, .false.)                                                            ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call volops%set_input('img_ios', 1, outvol)
+        call volops%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to mask', &
+        & 'input volume e.g. recvol.mrc', .false., '')
+        call volops%set_input('img_ios', 2, outvol)
         ! ! parameter input/output
         call volops%set_input('parm_ios', 1, smpd)
         volops%parm_ios(1)%required = .false.
@@ -1000,10 +942,7 @@ contains
         call volops%set_input('parm_ios',12, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)
         call volops%set_input('parm_ios',13, outfile)
         ! alternative inputs
-        call volops%set_input('alt_ios', 1, 'vol1', 'file', 'Volume', 'Volume to mask', &
-        & 'input volume e.g. recvol.mrc', .false., '')
-        call volops%set_input('alt_ios', 2, 'vollist', 'file', 'Volumes list', 'List of volumes', &
-        & 'volumes list e.g. e.g. vols.txt', .false., '')
+        ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
@@ -1018,11 +957,12 @@ contains
     ! instance methods
 
     subroutine new( self, name, descr_short, descr_long, executable, n_img_ios, n_parm_ios,&
-        &n_alt_ios, n_srch_ctrls, n_filt_ctrls, n_mask_ctrls, n_comp_ctrls )
+        &n_alt_ios, n_srch_ctrls, n_filt_ctrls, n_mask_ctrls, n_comp_ctrls, sp_required )
         class(simple_program), intent(inout) :: self
         character(len=*),      intent(in)    :: name, descr_short, descr_long, executable
         integer,               intent(in)    :: n_img_ios, n_parm_ios, n_alt_ios, n_srch_ctrls
         integer,               intent(in)    :: n_filt_ctrls, n_mask_ctrls, n_comp_ctrls
+        logical,               intent(in)    :: sp_required
         call self%kill
         allocate(self%name,        source=trim(name)       )
         allocate(self%descr_short, source=trim(descr_short))
@@ -1035,7 +975,8 @@ contains
         if( n_filt_ctrls > 0 ) allocate(self%filt_ctrls(n_filt_ctrls))
         if( n_mask_ctrls > 0 ) allocate(self%mask_ctrls(n_mask_ctrls))
         if( n_comp_ctrls > 0 ) allocate(self%comp_ctrls(n_comp_ctrls))
-        self%exists = .true.
+        self%sp_required = sp_required
+        self%exists      = .true.
     end subroutine new
 
     subroutine set_input_1( self, which, i, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
@@ -1349,7 +1290,7 @@ contains
         ! write & clean
         call json%print(pjson, trim(adjustl(self%name))//'.json')
         if( json%failed() )then
-            print *, 'json input/output error for program: ', trim(self%name)
+            write(*,*) 'json input/output error for program: ', trim(self%name)
             stop
         endif
         call json%destroy(pjson)
@@ -1456,6 +1397,11 @@ contains
         class(simple_program), intent(in) :: self
         is_distr = str_has_substr(self%executable, 'distr')
     end function is_distr
+
+    logical function requires_sp_project( self )
+        class(simple_program), intent(in) :: self
+        requires_sp_project = self%sp_required
+    end function requires_sp_project
 
     subroutine kill( self )
         class(simple_program), intent(inout) :: self

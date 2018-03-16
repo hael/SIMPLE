@@ -155,14 +155,14 @@ contains
             ! disjoint nearest neighbour set
             self%nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
         endif
-        ! calc specscore
-        self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! B-factor memoization
         if( self%pftcc_ptr%objfun_is_ccres() )then
             bfac = self%pftcc_ptr%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
             call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
             call self%a_ptr%set(self%iptcl, 'bfac', bfac)
         endif
+        ! calc specscore
+        self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr
         call self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl, corrs)
         corr = max(0.,maxval(corrs))

@@ -339,6 +339,7 @@ contains
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
+        if(allocated(arr))deallocate(arr)
         allocate( arr(ffromto(1):ffromto(2)), stat=alloc_stat)
         allocchk('get_all; simple_oris')
         do i=ffromto(1),ffromto(2)

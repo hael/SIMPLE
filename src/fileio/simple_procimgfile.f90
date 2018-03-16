@@ -1065,59 +1065,120 @@ contains
         call avg%write(avgname,1)
     end subroutine make_avg_imgfile
 
+    ! !>  random_selection_from_imgfile
+    ! !! \param fname2selfrom  output filename
+    ! !! \param fname  input filename
+    ! !! \param nran number of random samples
+    ! !! \param smpd sampling distance
+    ! subroutine random_selection_from_imgfile( fname2selfrom, fname, nran, box, smpd, mask )
+    !     use simple_ran_tabu,       only: ran_tabu
+    !     use simple_stktab_handler, only: stktab_handler
+    !     use simple_strings,        only: str_has_substr
+    !     character(len=*),  intent(in) :: fname2selfrom, fname
+    !     integer,           intent(in) :: nran, box
+    !     real,              intent(in) :: smpd
+    !     logical, optional, intent(in) :: mask(:)
+    !     character(len=:), allocatable :: stkname
+    !     integer                       :: alloc_stat, n, ldim(3), i, ii, ldim_scaled(3), ind
+    !     type(ran_tabu)                :: rt
+    !     type(image)                   :: img, img_scaled
+    !     type(stktab_handler)          :: stkhandle
+    !     logical                       :: doscale, l_stktab_input
+    !     if( str_has_substr(fname2selfrom,'.txt') )then
+    !         call stkhandle%new(trim(fname2selfrom))
+    !         n       = stkhandle%get_nptcls()
+    !         ldim    = stkhandle%get_ldim()
+    !         ldim(3) = 1
+    !         l_stktab_input = .true.
+    !     else
+    !         call find_ldim_nptcls(fname2selfrom, ldim, n)
+    !         ldim(3) = 1
+    !         l_stktab_input = .false.
+    !     endif
+    !     ldim_scaled = [box,box,1]
+    !     doscale = any(ldim /= ldim_scaled)
+    !     if( doscale ) call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten
+    !     call raise_exception_imgfile( n, ldim, 'random_selection_from_imgfile' )
+    !     call img%new(ldim,smpd)
+    !     write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
+    !     rt = ran_tabu(n)
+    !     if( present(mask) )then
+    !         if( size(mask) /= n ) stop 'non-conguent logical mask; procimgfile :: random_selection_from_imgfile'
+    !         do i=1,n
+    !             if( .not. mask(i) ) call rt%insert(i)
+    !         end do
+    !     endif
+    !     do i=1,nran
+    !         call progress(i, nran)
+    !         ii = rt%irnd()
+    !         call rt%insert(ii)
+    !         if( l_stktab_input )then
+    !             call stkhandle%get_stkname_and_ind(ii, stkname, ind)
+    !             call img%read(stkname, ind)
+    !         else
+    !             call img%read(fname2selfrom, ii)
+    !         endif
+    !         if( doscale )then
+    !             call img%fwd_ft
+    !             if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2)&
+    !                  .and. ldim_scaled(3) <= ldim(3) )then
+    !                 call img%clip(img_scaled)
+    !             else
+    !                 call img%pad(img_scaled)
+    !             endif
+    !             call img_scaled%bwd_ft
+    !             call img_scaled%write(fname, i)
+    !         else
+    !             call img%write(fname, i)
+    !         endif
+    !     end do
+    !     call stkhandle%kill
+    ! end subroutine random_selection_from_imgfile
+
     !>  random_selection_from_imgfile
     !! \param fname2selfrom  output filename
     !! \param fname  input filename
     !! \param nran number of random samples
     !! \param smpd sampling distance
-    subroutine random_selection_from_imgfile( fname2selfrom, fname, nran, box, smpd, mask )
+    subroutine random_selection_from_imgfile( spproj, fname, box, nran)
+        use simple_sp_project,     only: sp_project
         use simple_ran_tabu,       only: ran_tabu
-        use simple_stktab_handler, only: stktab_handler
         use simple_strings,        only: str_has_substr
-        character(len=*),  intent(in) :: fname2selfrom, fname
-        integer,           intent(in) :: nran, box
-        real,              intent(in) :: smpd
-        logical, optional, intent(in) :: mask(:)
-        character(len=:), allocatable :: stkname
-        integer                       :: alloc_stat, n, ldim(3), i, ii, ldim_scaled(3), ind
-        type(ran_tabu)                :: rt
-        type(image)                   :: img, img_scaled
-        type(stktab_handler)          :: stkhandle
-        logical                       :: doscale, l_stktab_input
-        if( str_has_substr(fname2selfrom,'.txt') )then
-            call stkhandle%new(trim(fname2selfrom))
-            n       = stkhandle%get_nptcls()
-            ldim    = stkhandle%get_ldim()
-            ldim(3) = 1
-            l_stktab_input = .true.
-        else
-            call find_ldim_nptcls(fname2selfrom, ldim, n)
-            ldim(3) = 1
-            l_stktab_input = .false.
-        endif
+        class(sp_project), intent(inout) :: spproj
+        character(len=*),  intent(in)    :: fname
+        integer,           intent(in)    :: nran, box
+        type(ran_tabu)                   :: rt
+        type(image)                      :: img, img_scaled
+        character(len=:), allocatable    :: stkname
+        logical,          allocatable    :: mask(:)
+        real    :: smpd
+        integer :: nptcls, box_ori, ldim(3), i, ii, ldim_scaled(3), ind
+        logical :: doscale
+        ! dimensions
+        nptcls      = spproj%get_nptcls()
+        smpd        = spproj%os_stk%get(1,'smpd')
+        box_ori     = nint(spproj%os_stk%get(1,'box'))
+        ldim        = [box_ori,box_ori,1]
         ldim_scaled = [box,box,1]
-        doscale = any(ldim /= ldim_scaled)
-        if( doscale ) call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten
-        call raise_exception_imgfile( n, ldim, 'random_selection_from_imgfile' )
+        doscale     = box /= box_ori
+        if( doscale )call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten
+        call raise_exception_imgfile( nptcls, ldim, 'random_selection_from_imgfile' )
         call img%new(ldim,smpd)
+        ! state mask
+        mask = spproj%os_ptcl2D%get_all('state') > 0.5
+        if( count(mask) < nran )stop 'Insufficient images; simple_procimgfile%random_selection_from_imgfile'
+        rt = ran_tabu(nptcls)
+        do i=1,nptcls
+            if( .not. mask(i) ) call rt%insert(i)
+        end do
+        ! copy
         write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
-        rt = ran_tabu(n)
-        if( present(mask) )then
-            if( size(mask) /= n ) stop 'non-conguent logical mask; procimgfile :: random_selection_from_imgfile'
-            do i=1,n
-                if( .not. mask(i) ) call rt%insert(i)
-            end do
-        endif
-        do i=1,nran
+        do i = 1,nran
             call progress(i, nran)
             ii = rt%irnd()
             call rt%insert(ii)
-            if( l_stktab_input )then
-                call stkhandle%get_stkname_and_ind(ii, stkname, ind)
-                call img%read(stkname, ind)
-            else
-                call img%read(fname2selfrom, ii)
-            endif
+            call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
+            call img%read(stkname, ind)
             if( doscale )then
                 call img%fwd_ft
                 if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2)&
@@ -1132,7 +1193,9 @@ contains
                 call img%write(fname, i)
             endif
         end do
-        call stkhandle%kill
+        call rt%kill
+        call img%kill
+        call img_scaled%kill
     end subroutine random_selection_from_imgfile
 
 end module simple_procimgfile

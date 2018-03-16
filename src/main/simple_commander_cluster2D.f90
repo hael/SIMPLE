@@ -53,44 +53,33 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(params)  :: p
         type(build)   :: b
-        integer :: ncls_in_oritab, icls, fnr, file_stat, j
+        integer :: ncls_here, icls, fnr, file_stat, j
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        call b%build_strategy2D_tbox(p)             ! 2D Hadamard matcher built
+        call b%build_strategy2D_tbox(p)                   ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
-        if( cline%defined('oritab') .and. p%l_remap_cls )then
+        ncls_here = b%a%get_n('class')
+        if( .not. cline%defined('ncls') ) p%ncls = b%a%get_n('class')
+        if( p%l_remap_cls )then
             call b%a%remap_cls()
-            ncls_in_oritab = b%a%get_n('class')
             if( cline%defined('ncls') )then
-                if( p%ncls < ncls_in_oritab ) stop 'ERROR, inputted ncls < ncls_in_oritab; not allowed!'
-                if( p%ncls > ncls_in_oritab )then
+                if( p%ncls < ncls_here ) stop 'ERROR, inputted ncls < ncls_in_oritab; not allowed!'
+                if( p%ncls > ncls_here )then
                     call b%a%expand_classes(p%ncls)
                 endif
-            else
-                p%ncls = ncls_in_oritab
             endif
-        else if( cline%defined('oritab') )then
-            if( .not. cline%defined('ncls') ) p%ncls = b%a%get_n('class')
         else if( p%tseries .eq. 'yes' )then
             if( .not. cline%defined('ncls') )then
                 stop '# class averages (ncls) need to be part of command line when tseries=yes'
             endif
             call b%a%ini_tseries(p%ncls, 'class')
             call b%a%partition_eo(tseries=.true.)
-        else
-            if( .not. cline%defined('ncls') )then
-                stop 'If no oritab is provided ncls (# class averages) need to be part of command line'
-            endif
-            call b%a%rnd_cls(p%ncls)
-        endif
-        if( cline%defined('outfile') )then
-            p%oritab = p%outfile
-        else
-            p%oritab = 'cluster2D_startdoc'//trim(METADATA_EXT)
         endif
         ! shift multiplication
-        if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
+        if( p%mul > 1. )then
+            call b%a%mul_shifts(p%mul)
+        endif
         ! setup weights in case the 2D was run without them (specscore will still be there)
         if( p%weights2D.eq.'yes' )then
             if( p%nptcls <= SPECWMINPOP )then
@@ -106,13 +95,7 @@ contains
         ! even/odd partitioning
         if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
         ! write
-        if( p%l_distr_exec )then
-            if( nint(cline%get_rarg('part')) .eq. 1 )then
-                call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
-            endif
-        else
-            call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
-        endif
+        if( nint(cline%get_rarg('part')) .eq. 1 ) call b%spproj%write()
         ! create class averager
         call cavger_new(b, p, 'class')
         ! transfer ori data to object
@@ -120,22 +103,8 @@ contains
         ! standard cavg assembly
         call cavger_assemble_sums( .false. )
         ! write sums
-        if( p%l_distr_exec)then
-            call cavger_readwrite_partial_sums('write')
-            call qsys_job_finished( p, 'simple_commander_cluster2D :: exec_make_cavgs' )
-        else
-            call cavger_calc_and_write_frcs_and_eoavg('frcs.bin')
-            call gen2Dclassdoc( b, p, 'classdoc.txt')
-            if( cline%defined('refs') )then
-                call cavger_write(p%refs,      'merged')
-                call cavger_write(p%refs_even, 'even'  )
-                call cavger_write(p%refs_odd,  'odd'   )
-            else
-                call cavger_write('startcavgs'      //p%ext, 'merged')
-                call cavger_write('startcavgs_even' //p%ext, 'even'  )
-                call cavger_write('startcavgs_odd'  //p%ext, 'odd'   )
-            endif
-        endif
+        call cavger_readwrite_partial_sums('write')
+        call qsys_job_finished( p, 'simple_commander_cluster2D :: exec_make_cavgs' )
         call cavger_kill
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
@@ -148,9 +117,8 @@ contains
         type(params) :: p
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
-        logical      :: converged, l_distr_exec
+        logical      :: converged
         converged    = .false.
-        l_distr_exec = .false.
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_strategy2D_tbox(p)             ! 2D Hadamard matcher built
@@ -163,23 +131,8 @@ contains
         if( cline%defined('startit') )startit = p%startit
         if( startit == 1 )call b%a%clean_updatecnt
         ! execute
-        if( p%l_distr_exec )then
-            if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call cluster2D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
-        else
-            ! extremal dynamics
-            if( cline%defined('extr_iter') )then
-                ! all is well
-            else
-                p%extr_iter = startit
-            endif
-            do i=startit,p%maxits
-                call cluster2D_exec(b, p, cline, i, converged)
-                ! updates extremal dynamics
-                p%extr_iter = p%extr_iter + 1
-                if(converged) exit
-            end do
-        endif
+        if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
+        call cluster2D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         call qsys_job_finished(p, 'simple_commander_cluster2D :: exec_cluster2D')
@@ -204,22 +157,20 @@ contains
             p%refs_odd  = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_odd'//p%ext
             p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
         else if( .not. cline%defined('refs') )then
-            p%refs      = 'startcavgs'//p%ext
-            p%refs_even = 'startcavgs_even'//p%ext
-            p%refs_odd  = 'startcavgs_odd'//p%ext
+            p%refs      = 'start2Drefs'//p%ext
+            p%refs_even = 'start2Drefs_even'//p%ext
+            p%refs_odd  = 'start2Drefs_odd'//p%ext
         endif
         call cavger_calc_and_write_frcs_and_eoavg(p%frcs)
         ! classdoc gen needs to be after calc of FRCs
-        if( cline%defined('which_iter') )then
-            call gen2Dclassdoc( b, p, 'classdoc_'//int2str_pad(p%which_iter,3)//METADATA_EXT)
-        else
-            call gen2Dclassdoc( b, p, 'classdoc'//METADATA_EXT)
-        endif
+        call gen2Dclassdoc( b, p )
         ! write references
         call cavger_write(trim(p%refs),      'merged')
         call cavger_write(trim(p%refs_even), 'even'  )
         call cavger_write(trim(p%refs_odd),  'odd'   )
         call cavger_kill()
+        ! write project
+        call b%spproj%write(p%projfile)
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
@@ -261,16 +212,16 @@ contains
         type(oris)   :: clsdoc_ranked
         integer, allocatable :: order(:)
         real,    allocatable :: res(:)
-        p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
+        integer :: ldim(3), ncls
+        p = params(cline, spproj_a_seg=CLS2D_SEG)         ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        p%ncls = p%nptcls
-        call clsdoc_ranked%new_clean(p%ncls)
-        if( cline%defined('classdoc') )then
-            ! all we need to do is fetch from classdoc
+        call find_ldim_nptcls(p%stk, ldim, ncls)
+        p%ncls = ncls
+        if( b%a%get_noris() == p%ncls )then
+            ! all we need to do is fetch from classdoc in projfile &
             ! order according to resolution
-            call b%a%new(p%ncls)
-            call b%a%read(trim(p%classdoc))
-            res = b%a%get_all('res')
+            call clsdoc_ranked%new_clean(p%ncls)
+            res = b%spproj%os_cls2D%get_all('res')
             allocate(order(p%ncls))
             order = (/(iclass,iclass=1,p%ncls)/)
             call hpsort(res, order)
@@ -286,32 +237,10 @@ contains
                 call b%img%read(p%stk, order(iclass))
                 call b%img%write(p%outstk, iclass)
             end do
+            call clsdoc_ranked%write('classdoc_ranked.txt')
         else
-            ! tries to provide similar stats (oldschool routine for bwd compatibility)
-            ! order according to population
-            p%nptcls = binread_nlines(p, p%oritab)
-            call b%a%new(p%nptcls)
-            call binread_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
-            order = b%a%order_cls(p%ncls)
-            do iclass=1,p%ncls
-                pop = b%a%get_pop(order(iclass), 'class')
-                call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
-                call clsdoc_ranked%set(iclass, 'rank',  real(iclass))
-                call clsdoc_ranked%set(iclass, 'pop',   real(pop))
-                if( pop > 1 )then
-                    call clsdoc_ranked%set(iclass, 'corr',  b%a%get_avg('corr', class=order(iclass)))
-                    call clsdoc_ranked%set(iclass, 'w',     b%a%get_avg('w',    class=order(iclass)))
-                else
-                    call clsdoc_ranked%set(iclass, 'corr', -1.0)
-                    call clsdoc_ranked%set(iclass, 'w',     0.0)
-                endif
-                write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
-                &'RANK:', iclass ,'POP:', pop
-                call b%img%read(p%stk, order(iclass))
-                call b%img%write(p%outstk, iclass)
-            end do
+            ! nothing to do
         endif
-        call clsdoc_ranked%write(add2fbody(p%classdoc, '.txt', '_ranked'))
         ! end gracefully
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs

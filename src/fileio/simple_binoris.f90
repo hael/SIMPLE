@@ -43,6 +43,7 @@ type binoris
     procedure, private :: add_segment_2
     procedure, private :: add_segment_3
     procedure, private :: update_byte_ranges
+    procedure          :: read_first_segment_record
     procedure          :: read_segment_1
     procedure          :: read_segment_2
     procedure          :: read_segment_3
@@ -303,7 +304,7 @@ contains
         if( isegment > self%n_segments ) self%n_segments = isegment
         ! set range in segment
         self%header(isegment)%fromto(1) = 1
-        self%header(isegment)%fromto(1) = size(arr,1)
+        self%header(isegment)%fromto(2) = size(arr,1)
         ! set n_bytes_per_record
         self%header(isegment)%n_bytes_per_record = sizeof(arr(1,:))
         ! set n_records
@@ -323,6 +324,22 @@ contains
             endif
         end do
     end subroutine update_byte_ranges
+
+    subroutine read_first_segment_record( self, isegment, o )
+        use simple_ori, only: ori
+        class(binoris), intent(inout) :: self
+        integer,        intent(in)    :: isegment
+        class(ori),     intent(inout) :: o
+        character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_first_segment_record'
+        if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_first_segment_record'
+        if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
+            read(unit=self%funit,pos=self%header(isegment)%first_data_byte) str_os_line
+            call o%str2ori(str_os_line)
+        else
+            ! empty segment, nothing to do
+        endif
+    end subroutine read_first_segment_record
 
     subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo )
         class(binoris), intent(inout) :: self

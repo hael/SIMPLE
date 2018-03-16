@@ -243,24 +243,12 @@ case( 'motion_correct_ctf_estimate' )
 
     case( 'make_cavgs' )
         call cline%parse()
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
         ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
         call xmake_cavgs_distr%execute(cline)
     case( 'cluster2D' )
         call cline%parse()
-        ! sanity checks
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )

@@ -41,6 +41,9 @@ real(sp), parameter :: ATHRES_LIM   = 5.
 ! newline character
 character(len=*), parameter :: NEWLINE = new_line('a')
 
+! project file 4 now
+character(len=*), parameter :: PROJFILE_GLOB = 'myproject.simple'
+
 ! plan for the CTF
 type :: ctfplan
     character(len=STDLEN) :: mode=''                !< astig/noastig

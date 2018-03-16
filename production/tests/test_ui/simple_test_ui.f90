@@ -9,9 +9,9 @@ call get_prg_ptr('cluster2D', ptr2prg)
 call ptr2prg%print_cmdline()
 call ptr2prg%write2json()
 
-call get_prg_ptr('cluster2D_stream', ptr2prg)
-call ptr2prg%print_cmdline()
-call ptr2prg%write2json()
+! call get_prg_ptr('cluster2D_stream', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
 
 ! call get_prg_ptr('refine3D', ptr2prg)
 ! call ptr2prg%print_cmdline()
@@ -61,8 +61,8 @@ call ptr2prg%write2json()
 ! call ptr2prg%print_cmdline()
 ! call ptr2prg%write2json()
 
-call get_prg_ptr('volops', ptr2prg)
-call ptr2prg%print_cmdline()
-call ptr2prg%write2json()
+! call get_prg_ptr('volops', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json()
 
 end program simple_test_ui

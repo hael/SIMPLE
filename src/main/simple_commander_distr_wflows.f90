@@ -391,19 +391,7 @@ contains
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
         cline_cavgassemble = cline
-        call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        if( cline%defined('outfile') )then
-            ! because outfile is output from distributed exec of make_cavgs
-            call cline_cavgassemble%set('oritab', p_master%outfile)
-        else
-            ! because cluster2D_startdoc.METADATA_EXT is default output in the absence of outfile
-            call cline_cavgassemble%set('oritab', 'cluster2D_startdoc'//trim(METADATA_EXT))
-        endif
-        if( .not. cline%defined('stktab') )then
-            ! split stack
-            call xsplit%execute(cline)
-        endif
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble class averages
@@ -415,12 +403,11 @@ contains
     subroutine exec_cluster2D_distr( self, cline )
         use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
         class(cluster2D_distr_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),                   intent(inout) :: cline
         ! commanders
         type(check2D_conv_commander)         :: xcheck2D_conv
         type(merge_algndocs_commander)       :: xmerge_algndocs
-        type(split_commander)                :: xsplit
-        type(make_cavgs_distr_commander)      :: xmake_cavgs
+        type(make_cavgs_distr_commander)     :: xmake_cavgs
         ! command lines
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
@@ -447,58 +434,42 @@ contains
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! initialise starting references, orientations
-        if( cline%defined('oritab') )then
-            oritab=trim(p_master%oritab)
-        else
-            oritab=''
-        endif
-        if( cline%defined('refs') )then
-            refs = trim(p_master%refs)
-        else
-            refs = 'start2Drefs' // p_master%ext
-        endif
 
         ! prepare command lines from prototype master
-        cline_check2D_conv     = cline
-        cline_cavgassemble     = cline
-        cline_merge_algndocs   = cline
-        cline_make_cavgs       = cline
+        cline_check2D_conv   = cline
+        cline_cavgassemble   = cline
+        cline_merge_algndocs = cline
+        cline_make_cavgs     = cline
 
         ! initialise static command line parameters and static job description parameters
-        call cline_merge_algndocs%set('fbody',  trim(ALGN_FBODY)     )
-        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
-        call cline_merge_algndocs%set('ndocs',  real(p_master%nparts))
-        call cline_check2D_conv%set('box',      real(p_master%box)   )
-        call cline_check2D_conv%set('nptcls',   real(p_master%nptcls))
-        call cline_cavgassemble%set('prg',      'cavgassemble'       )
-        call cline_make_cavgs%set('prg',        'make_cavgs'         )
+        call cline_merge_algndocs%set('fbody',    trim(ALGN_FBODY)     )
+        call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
+        call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
+        call cline_merge_algndocs%set('oritype',  'ptcl2D')
+        call cline_merge_algndocs%set('projfile', trim(p_master%projfile))
+        call cline_cavgassemble%set('prg', 'cavgassemble')
+        call cline_make_cavgs%set('prg',   'make_cavgs')
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
-        if( .not. cline%defined('stktab') )then
-            ! split stack
-            call xsplit%execute(cline)
-        endif
+        ! splitting
+        call b%spproj%split_stk(p_master%nparts)
 
         ! execute initialiser
         if( .not. cline%defined('refs') )then
-            p_master%refs      = 'start2Drefs'//p_master%ext
+            refs               = 'start2Drefs' // p_master%ext
+            p_master%refs      = trim(refs)
             p_master%refs_even = 'start2Drefs_even'//p_master%ext
             p_master%refs_odd  = 'start2Drefs_odd'//p_master%ext
-            if( cline%defined('oritab') )then
-                call cline_make_cavgs%set('refs', p_master%refs)
-                call xmake_cavgs%execute(cline_make_cavgs)
-            else
-                if( cline%defined('stktab') )then
-                    call random_selection_from_imgfile(p_master%stktab, p_master%refs,&
-                        &p_master%ncls, p_master%box, p_master%smpd)
-                else
-                    call random_selection_from_imgfile(p_master%stk, p_master%refs,&
-                        &p_master%ncls, p_master%box, p_master%smpd)
-                endif
+            if( b%spproj%is_virgin_field('ptcl2D') )then
+                call random_selection_from_imgfile(b%spproj, p_master%refs, p_master%box, p_master%ncls)
                 call copy_imgfile(trim(p_master%refs), trim(p_master%refs_even), p_master%smpd, [1,p_master%ncls])
                 call copy_imgfile(trim(p_master%refs), trim(p_master%refs_odd),  p_master%smpd, [1,p_master%ncls])
+            else
+                call cline_make_cavgs%set('refs', p_master%refs)
+                call xmake_cavgs%execute(cline_make_cavgs)
             endif
+        else
+            refs = trim(p_master%refs)
         endif
 
         ! extremal dynamics
@@ -515,16 +486,6 @@ contains
             else
                 call b%a%partition_eo
             endif
-            if( cline%defined('oritab') )then
-                call binwrite_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
-            else if( cline%defined('deftab') )then
-                call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
-            else
-                p_master%deftab = 'deftab_from_distr_wflow'//trim(METADATA_EXT)
-                call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
-                call job_descr%set('deftab', trim(p_master%deftab))
-                call cline%set('deftab', trim(p_master%deftab))
-            endif
         endif
 
         ! main loop
@@ -540,7 +501,6 @@ contains
             call job_descr%set('extr_iter', trim(int2str(p_master%extr_iter)))
             call cline%set('extr_iter', real(p_master%extr_iter))
             ! updates
-            if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
@@ -548,20 +508,18 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! merge orientation documents
-            oritab = trim(CLUSTER2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
-            call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
             refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p_master%ext
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p_master%ext
-            call cline_cavgassemble%set('oritab', trim(oritab))
-            call cline_cavgassemble%set('which_iter', real(iter))
+            call cline_cavgassemble%set('refs', refs)
+            call cline_cavgassemble%set('projfile', p_master%projfile)
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! remapping of empty classes
             call remap_empty_cavgs
             ! check convergence
-            call cline_check2D_conv%set('oritab', trim(oritab))
+            call cline_check2D_conv%set('projfile', p_master%projfile)
             call xcheck2D_conv%execute(cline_check2D_conv)
             frac_srch_space = 0.
             if( iter > 1 ) frac_srch_space = cline_check2D_conv%get_rarg('frac')
@@ -597,11 +555,13 @@ contains
                 character(len=STDLEN) :: frcs_iter
                 integer               :: icls, state
                 if( p_master%dyncls.eq.'yes' )then
-                    call binread_oritab(oritab, b%spproj, b%a, [1,p_master%nptcls])
+                    !call binread_oritab(p_master%projfile, b%spproj, b%a, [1,p_master%nptcls])
+                    call b%spproj%read_segment('ptcl2D', p_master%projfile )
                     call b%a%fill_empty_classes(p_master%ncls, fromtocls)
                     if( allocated(fromtocls) )then
                         ! updates document
-                        call binwrite_oritab(oritab, b%spproj, b%a, [1,p_master%nptcls])
+                        call b%spproj%write()
+                        ! call binwrite_oritab(p_master%projfile, b%spproj, b%a, [1,p_master%nptcls])
                         ! updates refs
                         call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
                         do icls = 1, size(fromtocls, dim=1)
@@ -625,7 +585,7 @@ contains
                         if( p_master%match_filt.eq.'yes')then
                             ! updates FRCs
                             state     = 1
-                            frcs_iter = trim(FRCS_ITER_FBODY)//int2str_pad(iter,3)//'.bin'
+                            frcs_iter = trim(FRCS_ITER_FBODY)//int2str_pad(iter,3)//BIN_EXT
                             call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
                             call frcs%read(frcs_iter)
                             do icls = 1, size(fromtocls, dim=1)

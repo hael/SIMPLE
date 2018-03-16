@@ -42,7 +42,8 @@ contains
 
     !> for merging alignment documents from SIMPLE runs in distributed mode
     subroutine exec_merge_algndocs( self, cline )
-        use simple_map_reduce, only:  split_nobjs_even
+        use simple_map_reduce, only: split_nobjs_even
+        use simple_sp_project, only: transfer_sp_project_segment
         class(merge_algndocs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)               :: p
@@ -59,6 +60,15 @@ contains
             numlen = p%numlen
         else
             numlen = len(int2str(p%ndocs))
+        endif
+        ! if projfile is present, it will be both the input and output
+        ! to preserve meta-data information
+        if( cline%defined('projfile') )then
+            if( cline%defined('outfile') )then
+                write(*,*) 'ERROR! outfile cannot be defined simultaneously with projfile'
+                stop 'commander_distr :: exec_merge_algndocs'
+            endif
+            p%outfile = 'tmpfile_from_merge_algndocs.simple'
         endif
         select case(trim(METADATA_EXT))
             case('.simple')
@@ -116,6 +126,10 @@ contains
                     deallocate(os_strings(i)%str)
                 end do
                 deallocate(os_strings)
+                if( cline%defined('projfile') )then
+                    call transfer_sp_project_segment(p%outfile, p%projfile, trim(p%oritype))
+                    call del_file(p%outfile)
+                endif
             case('.txt')
                 call fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
                 &action='write', position='append', access='sequential')
@@ -216,7 +230,7 @@ contains
         parts = split_nobjs_even(p%nptcls, p%nparts)
         if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
         if( .not. stack_is_split() )then
-            call exec_cmdline('mkdir -p '//trim(STKPARTSDIR))
+            call mkdir(trim(STKPARTSDIR))
             do ipart=1,p%nparts
                 call progress(ipart,p%nparts)
                 cnt = 0

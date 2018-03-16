@@ -306,7 +306,7 @@ contains
             endif
         end do
         ! memoize CTF matrices
-        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
+        if( b%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl3D')
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! SEARCH

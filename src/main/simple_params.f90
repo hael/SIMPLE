@@ -129,6 +129,7 @@ type :: params
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
+    character(len=STDLEN) :: imgkind='ptcl'       !< type of input image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.simple)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
@@ -155,6 +156,7 @@ type :: params
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
+    character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
     character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
@@ -411,9 +413,10 @@ contains
         logical, optional, intent(in)    :: allow_mix, del_scaled
         integer, optional, intent(in)    :: spproj_a_seg
         type(binoris)                    :: bos
+        type(ori)                        :: o
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
-        character(len=:), allocatable    :: stk_part_fname_sc, pid_file
+        character(len=:), allocatable    :: stk_part_fname_sc, pid_file, phaseplate, ctfflag
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, sz, spproj_a_seg_inputted
         logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled
         nparts_set        = .false.
@@ -500,6 +503,7 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
+        call check_carg('imgkind',        self%imgkind)
         call check_carg('kmeans',         self%kmeans)
         call check_carg('label',          self%label)
         call check_carg('local',          self%local)
@@ -527,7 +531,7 @@ contains
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('prg',            self%prg)
-        call check_carg('projfile',       self%projfile)
+        call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
@@ -586,6 +590,7 @@ contains
         call check_file('outvol',         self%outvol,       notAllowed='T')
         call check_file('pdbfile',        self%pdbfile)
         call check_file('plaintexttab',   self%plaintexttab, 'T')
+        call check_file('projfile',       self%projfile,     'O')
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
@@ -753,15 +758,6 @@ contains
         call check_rarg('zsh',            self%zsh)
 
 !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
-        ! put unidoc (if defined as oritab)
-        if( cline%defined('unidoc') )then
-            if( .not. cline%defined('oritab') )then
-                call cline%set('oritab', self%unidoc)
-                self%oritab = self%unidoc
-            else
-                write(*,*) 'WARNING! Could not set unidoc to oritab because oritab is defined'
-            endif
-        endif
         ! put ctf_estimate_doc (if defined) as oritab
         if( cline%defined('ctf_estimate_doc') )then
             if( .not. cline%defined('oritab') )then
@@ -770,10 +766,6 @@ contains
             else
                 write(*,*) 'WARNING! Could not set ctf_estimate_doc to oritab because oritab is defined'
             endif
-        endif
-        ! make all programs have the simple_prefix
-        if(cline%defined('prg'))then
-            if(.not. str_has_substr(self%prg, 'simple_')) self%prg = 'simple_'//trim(self%prg)
         endif
         ! check nr of states
         if( cline%defined('nstates') )then
@@ -872,8 +864,48 @@ contains
                     stop 'unknown spproj_a_seg index; simple_params :: new'
             end select
         endif
-        ! take care of nptcls
-        if( self%stk .ne. '' )then
+        ! take care of nptcls etc.
+        ! project is in charge
+        if( cline%defined('projname') )then
+            self%projfile = trim(self%projname)//'.simple'
+            call cline%set('projfile', trim(self%projfile))
+        endif
+        if( file_exists(trim(self%projfile)) )then
+            ! get nptcls/box/smpd from project file
+            call bos%open(self%projfile)
+            self%nptcls = bos%get_n_records(self%spproj_a_seg)
+            call bos%read_first_segment_record(STK_SEG, o)
+            if( o%isthere('smpd') )then
+                self%smpd = o%get('smpd')
+            else
+                stop 'projfile exec requires smpd in os_stk field; currently absent'
+                stop 'ERROR! params :: new'
+            endif
+            if( o%isthere('box') ) self%box = nint(o%get('box'))
+            call o%kill
+            ! CTF plan
+            select case(trim(self%oritype))
+                case('ptcl2D')
+                    call bos%read_first_segment_record(PTCL2D_SEG, o)
+                case('ptcl3D')
+                    call bos%read_first_segment_record(PTCL3D_SEG, o)
+            end select
+            self%tfplan%flag = 'no'
+            if( o%exists() )then
+                if( o%isthere('ctf') )then
+                    call o%getter('ctf', ctfflag)
+                    self%tfplan%flag = trim(ctfflag)
+                endif
+            endif
+            self%ctf = trim(self%tfplan%flag)
+            if( o%isthere('phaseplate') )then
+                call o%getter('phaseplate', phaseplate)
+                self%tfplan%l_phaseplate = trim(phaseplate).eq.'yes'
+            else
+                self%tfplan%l_phaseplate = .false.
+            endif
+            call bos%close
+        else if( self%stk .ne. '' )then
             if( file_exists(self%stk) )then
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
@@ -886,17 +918,9 @@ contains
                 stop
             endif
         else if( self%oritab .ne. '' )then
-            ! get nr of particles from oritab
-            if( .not. cline%defined('nptcls') )then
-                if( str_has_substr(self%oritab,'.txt') )then
-                    self%nptcls = nlines(self%oritab)
-                else
-                    ! needed because use of binoris_io causes circular dependency
-                    ! since params is used by prime3D_srch
-                    call bos%open(self%oritab)
-                    self%nptcls = bos%get_n_records(self%spproj_a_seg)
-                    call bos%close
-                endif
+            if( .not. cline%defined('nptcls') .and. str_has_substr(self%oritab, '.txt') )then
+                ! get # particles from oritab
+                self%nptcls = nlines(self%oritab)
             endif
         else if( self%refs .ne. '' )then
             if( file_exists(self%refs) )then
@@ -918,7 +942,6 @@ contains
         call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
-
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
@@ -1197,9 +1220,11 @@ contains
             self%l_dose_weight = .true.
         endif
         ! prepare CTF plan
-        self%tfplan%flag         = self%ctf
-        self%tfplan%l_phaseplate = .false.
-        if( self%phaseplate .eq. 'yes' ) self%tfplan%l_phaseplate = .true.
+        if( .not.cline%defined('projfile') .and. .not.cline%defined('projname') )then
+            self%tfplan%flag         = self%ctf
+            self%tfplan%l_phaseplate = .false.
+            if( self%phaseplate .eq. 'yes' ) self%tfplan%l_phaseplate = .true.
+        endif
         ! set default nnn value to 10% of the search space
         if( .not. cline%defined('nnn') )then
             self%nnn = nint(0.1 * real(self%nspace))
@@ -1220,6 +1245,14 @@ contains
         ! global dev (development) flag
         self%l_dev = .false.
         if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.
+        ! sanity check imgkind
+        select case(trim(self%imgkind))
+            case('movie', 'mic', 'ptcl', 'cavg')
+                ! alles gut!
+            case DEFAULT
+                write(*,*) 'imgkind: ', trim(self%imgkind)
+                stop 'unsupported imgkind; params :: new'
+        end select
 
 !>>> END, IMAGE-PROCESSING-RELATED
 
@@ -1303,6 +1336,7 @@ contains
                     endif
                     if( raise_exception )then
                         write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', var
+                        write(*,*) 'File:', trim(file)
                         stop
                     endif
                     select case(file_descr)

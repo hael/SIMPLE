@@ -739,19 +739,20 @@ contains
     !! \param add_phshift additional phase shift (radians) introduced by the Volta
     !! \param endrot number of rotations
     !! \return ctfmat matrix with CTF values
-    function create_polar_ctfmat( self, tfun, dfx, dfy, angast, add_phshift, endrot ) result( ctfmat )
+    function create_polar_ctfmat( self, ctfparms, endrot ) result( ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf, only: ctf
         class(polarft_corrcalc), intent(inout) :: self
-        class(ctf),              intent(inout) :: tfun
-        real(sp),                intent(in)    :: dfx, dfy, angast, add_phshift
+        class(ctfparams),        intent(in)    :: ctfparms
         integer,                 intent(in)    :: endrot
+        type(ctf)             :: tfun
         real(sp), allocatable :: ctfmat(:,:)
         real(sp)              :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
         integer               :: irot,k
         allocate( ctfmat(endrot,self%kfromto(1):self%kfromto(2)) )
         inv_ldim = 1./real(self%ldim)
+        tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
         !$omp parallel do collapse(2) default(shared) private(irot,k,hinv,kinv,spaFreqSq,ang)&
         !$omp schedule(static) proc_bind(close)
         do irot=1,endrot
@@ -761,9 +762,11 @@ contains
                 spaFreqSq      = hinv*hinv+kinv*kinv
                 ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
                 if( self%phaseplate )then
-                    ctfmat(irot,k) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang,add_phshift)
+                    ctfmat(irot,k) = tfun%eval(spaFreqSq, ctfparms%dfx, ctfparms%dfy,&
+                        &ctfparms%angast, ang, ctfparms%phshift)
                 else
-                    ctfmat(irot,k) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang)
+                    ctfmat(irot,k) = tfun%eval(spaFreqSq, ctfparms%dfx, ctfparms%dfy,&
+                        &ctfparms%angast, ang)
                 endif
             end do
         end do
@@ -771,35 +774,20 @@ contains
     end function create_polar_ctfmat
 
     !>  \brief  is for generating all matrices of CTF values
-    subroutine create_polar_ctfmats( self, a )
-        use simple_ctf,  only: ctf
-        use simple_oris, only: oris
-        class(polarft_corrcalc), intent(inout) :: self
-        class(oris),             intent(inout) :: a
-        type(ctf) :: tfun
-        integer   :: iptcl
-        real(sp)  :: kv,cs,fraca,dfx,dfy,angast,phshift
-        logical   :: astig
-        astig = a%isthere('dfy')
+    subroutine create_polar_ctfmats( self, spproj, oritype )
+        use simple_sp_project,  only: sp_project
+        class(polarft_corrcalc),   intent(inout) :: self
+        class(sp_project), target, intent(inout) :: spproj
+        character(len=*),          intent(in)    :: oritype
+        type(ctfparams) :: ctfparms
+        integer         :: iptcl
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(1:self%nptcls,self%pftsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
         allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2")
         do iptcl=self%pfromto(1),self%pfromto(2)
             if( self%pinds(iptcl) > 0 )then
-                kv     = a%get(iptcl, 'kv'   )
-                cs     = a%get(iptcl, 'cs'   )
-                fraca  = a%get(iptcl, 'fraca')
-                dfx    = a%get(iptcl, 'dfx'  )
-                dfy    = dfx
-                angast = 0.
-                if( astig )then
-                    dfy    = a%get(iptcl, 'dfy'   )
-                    angast = a%get(iptcl, 'angast')
-                endif
-                phshift = 0.
-                if( self%phaseplate ) phshift = a%get(iptcl, 'phshift')
-                tfun = ctf(self%smpd, kv, cs, fraca)
-                self%ctfmats(self%pinds(iptcl),:,:) = self%create_polar_ctfmat(tfun, dfx, dfy, angast, phshift, self%pftsz)
+                ctfparms = spproj%get_ctfparams( trim(oritype), iptcl )
+                self%ctfmats(self%pinds(iptcl),:,:) = self%create_polar_ctfmat(ctfparms, self%pftsz)
             endif
         end do
     end subroutine create_polar_ctfmats
