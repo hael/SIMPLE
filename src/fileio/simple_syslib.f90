@@ -8,11 +8,12 @@
 
 !! Function:  get_sys_error simple_getenv  get_lunit cpu_usage get_process_id
 
-!! New interface: get_file_list, get_subdir_list, subprocess, glob_file_list, show_dir_content_recursive
-!! New OS calls:  simple_list_dirs, simple_list_files, simple_del_dir, simple_del_files, exec_subprocess
+!! New interface: get_file_list, list_dirs, subprocess, glob_file_list, show_dir_content_recursive
+!! New OS calls:  simple_list_dirs, simple_list_files, simple_rmdir, simple_del_files, exec_subprocess
 
 module simple_syslib
     use simple_defs
+    use iso_c_binding
 #if defined(GNU)
     use, intrinsic :: iso_fortran_env, only: &
         &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
@@ -313,20 +314,16 @@ module simple_syslib
     ! private
 
 
+    !> libc interface
     interface
         ! rmdir    CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
         ! On  success,  zero is returned.  On error, -1 is returned, and errno is
         ! set appropriately.
-        integer function rmdir(dirname) result(status) bind(C, name="rmdir")
+        function rmdir(dirname) bind(C, name="rmdir")
             use, intrinsic :: iso_c_binding
+            integer(c_int) :: rmdir
             character(c_char),dimension(*),intent(in)  ::  dirname
         end function rmdir
-        ! integer function makedir(dirname) result(status) bind(C, name="makedir")
-        !     use, intrinsic :: iso_c_binding
-        !     character(c_char),dimension(*),intent(in)  ::  dirname
-        ! end function makedir
-    end interface
-    interface
         function mkdir(path,mode) bind(c,name="mkdir")
             use, intrinsic :: iso_c_binding
             integer(c_int) :: mkdir
@@ -336,34 +333,88 @@ module simple_syslib
     end interface
     !> SIMPLE_POSIX.c commands
     interface
-        function get_file_list(path, results) bind(c,name="get_file_list")
+        ! integer function makedir(dirname) result(status) bind(C, name="makedir")
+        !     use, intrinsic :: iso_c_binding
+        !     character(c_char),dimension(*),intent(in)  ::  dirname
+        ! end function makedir
+        function get_file_list(path,  ext, count) bind(c,name="get_file_list")
             use, intrinsic :: iso_c_binding
-            integer(c_int) :: get_file_list                           !> return number of elements in results
+            implicit none
+            integer(c_int) :: get_file_list                           !> return success
             character(kind=c_char,len=1),dimension(*),intent(in)   :: path
-            character(kind=c_char,len=1),dimension(*), intent(out) :: results(*)
-        end function
-        function glob_file_list(av, results) bind(c,name="glob_file_list")
+          !  integer(c_int), intent(in), value :: len
+            character(kind=c_char,len=1),dimension(*),intent(in)   :: ext
+            ! type(c_ptr) :: file_list_ptr
+            !character(kind=c_char,len=1),dimension(*), intent(out) :: results(*)
+            integer(c_int), intent(inout) :: count                           !> number of elements in results
+        end function get_file_list
+        function get_file_list_reverse_modified(path, ext, count) bind(c,name="get_file_list_reverse_modified")
             use, intrinsic :: iso_c_binding
-            integer(c_int) ::glob_file_list                           !> return number of elements in results
+            implicit none
+            integer(c_int) :: get_file_list_reverse_modified                  !> return success
+            character(kind=c_char,len=1),dimension(*),intent(in)   :: path
+          !  integer(c_int), intent(in), value :: len
+            character(kind=c_char,len=1),dimension(*),intent(in)   :: ext
+            ! type(c_ptr) :: file_list_ptr
+            !character(kind=c_char,len=1),dimension(*), intent(out) :: results(*)
+            integer(c_int), intent(inout) :: count                           !> number of elements in results
+        end function get_file_list_reverse_modified
+        function glob_file_list(av, count, flag) bind(c,name="glob_file_list")
+            use, intrinsic :: iso_c_binding
+            implicit none
+            integer(c_int) :: glob_file_list                           !> return success
             character(kind=c_char,len=1),dimension(*),intent(in)    :: av  !> glob string
-            character(kind=c_char,len=1), dimension(*), intent(out) :: results(*)
+          !  type(c_ptr) :: file_list_ptr
+          !  integer(c_int), intent(in)    :: avlen                     !> av string length
+            integer(c_int), intent(inout) :: count                     !> number of elements in results
+            integer(c_int), intent(in)    :: flag                      !> flag 1=time-modified reverse
         end function
-         function get_subdir_list(path, results) bind(c,name="get_subdir_list")
+        function list_dirs(path,  count) bind(c,name="list_dirs")
             use, intrinsic :: iso_c_binding
-            integer(c_int) :: get_subdir_list                      !> return number of elements in results
+            implicit none
+            integer(c_int) :: list_dirs                      !> return success
             character(kind=c_char,len=1),dimension(*),intent(in)   :: path
-            character(kind=c_char,len=1),dimension(*), intent(out) :: results(*)
+          !  integer(c_int), intent(in), value :: len
+            !character(kind=c_char,len=1),dimension(*), intent(out) :: results(*)
+            type(c_ptr) :: file_list_ptr
+            integer(c_int), intent(inout) :: count                      !> return number of elements in results
         end function
         subroutine show_dir_content_recursive(path) bind(c,name="show_dir_content_recursive")
             use, intrinsic :: iso_c_binding
+            implicit none
             character(kind=c_char,len=1),dimension(*),intent(in) :: path
         end subroutine
         function subprocess(cmd,args) bind(c,name="subprocess")
             use, intrinsic :: iso_c_binding
+            implicit none
             integer(c_int) :: subprocess                                  !> return PID of forked process
             character(kind=c_char,len=1),dimension(*),intent(in) :: cmd   !> executable path
             character(kind=c_char,len=1),dimension(*),intent(in) :: args  !> arguments
         end function
+        function fcopy(file1, file2) bind(c,name="fcopy")
+            use, intrinsic :: iso_c_binding
+            implicit none
+            integer(c_int) :: fcopy                                 !> return success of fcopy
+            character(kind=c_char,len=1),dimension(*),intent(in) :: file1
+            character(kind=c_char,len=1),dimension(*),intent(in) :: file2
+          !  integer(c_int) :: l1,l2  !> string lengths
+        end function fcopy
+        subroutine free_file_list(p, n) bind(c, name='free_file_list')
+            use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_char
+            implicit none
+            type(c_ptr), intent(in), value :: p
+            integer(c_int), intent(in), value :: n
+        end subroutine free_file_list
+        function get_absolute_pathname(infile, outfile, outfile_length) bind(c,name="get_absolute_pathname")
+            use, intrinsic :: iso_c_binding
+            implicit none
+            integer :: get_absolute_pathname
+            character(kind=c_char,len=1),dimension(*),intent(in) :: infile
+         !   integer(c_int), intent(in) :: infile_length  !> string lengths
+            type(c_ptr) :: outfile !character(kind=c_char,len=1),dimension(*),intent(in) :: outfile
+            integer(c_int) :: outfile_length  !> string lengths
+            !character(kind=c_char,len=1), dimension(*), intent(inout) :: reverted_file
+        end function get_absolute_pathname
     end interface
 contains
 
@@ -679,6 +730,48 @@ contains
 
 
     !! SYSTEM FILE OPERATIONS
+    subroutine simple_copy_file(fname1, fname2)
+        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
+        ! character(len=1) c
+        ! integer :: isrc, idst, ierr, irec, i
+        ! open(newunit=isrc, file=fname1, access='direct', status='old', action='read', iostat=ierr, recl=1)
+        ! open(newunit=idst, file=fname2, access='direct', status='replace', action='write', iostat=ierr)
+        ! irec = 1
+        ! do
+        !     read(unit=isrc, rec=irec, iostat=ierr) c
+        !     if (ierr.ne.0) exit
+        !     write(unit=idst, rec=i) c
+        !     irec = irec + 1
+        ! end do
+        ! close(isrc)
+        ! close(idst)
+        integer :: status
+        status = fcopy(trim(fname1), trim(fname2))
+        if (status/=0)&
+            call simple_error_check(status,"simple_syslib::simple_copy_file failed "//trim(fname1)//" "//trim(fname2))
+    end subroutine simple_copy_file
+
+
+
+    !> \brief  Rename or move file
+    function simple_rename( filein, fileout , overwrite) result(file_status)
+        character(len=*), intent(in) :: filein, fileout !< input filename
+        logical, intent(in), optional :: overwrite      !< default true
+        integer :: file_status
+        logical :: force_overwrite
+        force_overwrite=.true.
+        if(present(overwrite)) force_overwrite=overwrite
+        if( file_exists(filein) )then
+            if( file_exists(fileout) .and. (.not. force_overwrite) )&
+                call simple_stop("simple_rename failed to rename file,  designated output filename already exists "//trim(fileout))
+            file_status = rename(filein, fileout)
+            if(file_status /= 0) call simple_error_check(file_status,"simple_rename failed to rename file "//trim(filein))
+        else
+            call simple_stop( "simple_fileio::simple_rename, designated input filename doesn't exist "//trim(filein))
+        end if
+
+    end function simple_rename
+
 
     function simple_chmod(pathname, mode ) result( status )
         character(len=*), intent(in) :: pathname, mode
@@ -897,10 +990,11 @@ contains
     end subroutine simple_mkdir_old
 
     !> \brief  Make directory -- fail when ignore is false
-    subroutine simple_mkdir( d , ignore)
+    subroutine simple_mkdir( d , ignore, status)
         use iso_c_binding
         character(len=*), intent(in) :: d
         logical, intent(in), optional:: ignore
+        integer, intent(out), optional :: status
         character(len=:), allocatable :: path
         integer :: io_status
         logical :: dir_e, ignore_here, qq
@@ -917,7 +1011,7 @@ contains
             io_status= mkdir(path, int(o'777',c_int16_t))
 #elif defined(PGI)
             allocate(path, source=trim(d))
-            io_status = makedir(path)
+            io_status = mkdir(path)
 #endif
             deallocate(path)
             if(.not. ignore_here)then
@@ -927,11 +1021,13 @@ contains
         else
             if(global_verbose) print *," Directory ", d, " already exists, simple_mkdir ignoring request"
         end if
+        if(present(status)) status = io_status
     end subroutine simple_mkdir
 
     !> \brief  Remove directory
-    subroutine simple_rmdir( d )
+    subroutine simple_rmdir( d , status)
         character(len=*), intent(in) :: d
+        integer, intent(out), optional :: status
         character(len=:), allocatable :: path
         integer :: io_status
         logical :: dir_e, qq
@@ -954,6 +1050,7 @@ contains
         else
             print *," Directory ", d, " does not exists, simple_rmdir ignoring request"
         end if
+        if(present(status)) status = io_status
     end subroutine simple_rmdir
 
     !> file list command based on flibs-0.9
@@ -1002,33 +1099,163 @@ contains
 #endif
     end subroutine simple_filetmp_list
 
-    function simple_list_dirs(path) result(list)
+    function simple_list_dirs(path, outfile, status) result(list)
         character(len=*),  intent(in)            :: path
+        character(len=*),  intent(in), optional  :: outfile
+        integer, intent(out), optional :: status
         character(len=STDLEN),pointer :: list(:)
         character(len=STDLEN) :: cur
         character(len=:), allocatable :: thispath
-        integer :: num_dirs
-        call simple_chdir(path, cur)
+        integer :: stat, i,num_dirs, luntmp
+      !  call simple_chdir(path, cur)
      !   call simple_filetmp_list(trim(list_subdirs), list)
         allocate(thispath, source=trim(path)//c_null_char)
-        num_dirs = get_subdir_list(thispath, list)
-        call simple_chdir(cur)
+        stat = list_dirs(trim(path), num_dirs)
+        if(stat/=0)call simple_stop("simple_syslib::simple_list_dirs failed to process list_dirs "//trim(thispath))
+        if(present(outfile))then
+            call simple_copy_file('__simple_filelist__', trim(outfile))
+        endif
+        open(newunit = luntmp, file = '__simple_filelist__')
+        allocate( list(num_dirs) )
+        do i = 1,num_dirs
+            read( luntmp, '(a)' ) list(i)
+        enddo
+        close( luntmp, status = 'delete' )
+
+       ! call simple_chdir(cur) !> change back
         deallocate(thispath)
+        if(present(status)) status= stat
     end function simple_list_dirs
 
-    function simple_list_files(path) result(list)
-        character(len=*), intent(in)            ::path
-        character(len=STDLEN), pointer :: list(:)
+    !> File list
+    !!  Path method
+    !>    list = simple_list_files('./')
+    !!    list = simple_list_files('./', ext='mrc', outfile='filetab.txt', tr=.true.)
+    !!  Glob method:
+    !!    list = simple_list_file(glob='dir/tmp*.txt')
+    function simple_list_files(path, ext, outfile, glob, tr, status) result(list)
+        character(len=*), intent(in), optional  :: path
+        character(len=*), intent(in), optional  :: ext
+        character(len=*), intent(in), optional  :: glob
+        character(len=*), intent(in), optional  :: outfile
+        logical, intent(in), optional :: tr                   !> "ls -tr " reverse time-modified flag
+        integer, intent(out), optional :: status
+        type(c_ptr) :: file_list_ptr
+        character(kind=c_char,len=1), pointer, dimension(:) :: tmp
+        character(len=STDLEN), allocatable :: list(:)
         character(len=STDLEN) :: cur
-        character(len=:), allocatable :: thispath
-        integer :: num_files
-        call simple_chdir(path, cur)
+        character(1) :: sep='/'
+        character(len=:), allocatable :: thispath, thisglob, thisext
+        integer :: i,num_files,stat, luntmp, time_sorted
+        time_sorted = 0 !   call simple_chdir(path, cur)
         ! call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
-        allocate(thispath, source=trim(path)//c_null_char)
-        num_files = get_file_list(thispath, list)
-        call simple_chdir(cur)
-        deallocate(thispath)
+        if(present(glob)) then
+            allocate(thisglob, source=trim(glob))
+        else
+            allocate(thisglob, source='*')
+        end if
+        if(present(path))then
+            if (len_trim(path)==0)then
+                allocate(thispath, source='')
+                elseif (index(trim(path),sep)==len_trim(path)) then
+                ! path is not empty and contains a slash
+                allocate(thispath, source=trim(path))
+            else
+                !! append a '/' separator to path
+                allocate(thispath, source=trim(path)//trim(sep))
+            end if
+            ! ext only has effect in path method
+            if(present(ext)) then
+                allocate(thisext, source=trim(glob))
+            else
+                allocate(thisext, source='')
+            end if
+        end if
+        !! Check both path and glob methods
+        if(present(path) .and. present(glob)) then
+            deallocate(thisglob)
+            allocate(thisglob, source=trim(thispath)//trim(thisglob))
+        else if(present(path) .and. (.not. present(glob))) then
+            ! path already set above
+        else if( (.not.present(path)) .and. present(glob)) then
+            ! glob already set above
+        else
+            call simple_stop("simple_syslib::simple_list_files Error must have either path or glob in args")
+        end if
+        time_sorted = 0
+        if(present(tr)) time_sorted = tr ! .eqv. .true.)
+
+        if(present(glob)) then
+            stat = glob_file_list(trim(thisglob), num_files, time_sorted)
+        else
+            if(time_sorted == 1) then
+                stat = get_file_list_reverse_modified(trim(thispath),trim(thisext), num_files)
+            else
+                stat = get_file_list(trim(thispath), trim(thisext), num_files)
+            end if
+        end if
+        if(stat/=0)call simple_stop("simple_syslib::simple_list_files failed to process file list "//trim(thispath))
+        if(present(outfile))then
+            call simple_copy_file('__simple_filelist__', trim(outfile))
+        endif
+        open(newunit = luntmp, file = '__simple_filelist__')
+        allocate( list(num_files) )
+        do i = 1,num_files
+            read( luntmp, '(a)' ) list(i)
+        enddo
+        close( luntmp, status = 'delete' )
+
+        ! call c_f_pointer(file_list_ptr, tmp, [256*num_files])
+        ! !  call simple_chdir(cur)
+        ! allocate(list(num_files))
+        ! do i=1, num_files
+        !    list(i) = tmp((i-1)*256 +1:(i*256) )
+        ! enddo
+!        call free_file_list(file_list_ptr, num_files)
+        if(allocated(thispath))deallocate(thispath)
+        if(allocated(thisext))deallocate(thisext)
+        if(allocated(thisglob))deallocate(thisglob)
+
+        if(associated(tmp)) nullify(tmp)
+        if(present(status)) status= stat
     end function simple_list_files
+
+
+    !> File list
+    !!  Path method
+    !>    list = simple_list_files('./')
+    !!    list = simple_list_files('./', ext='mrc', outfile='filetab.txt', tr=.true.)
+    !!  Glob method:
+    !!    list = simple_list_file(glob='dir/tmp*.txt')
+    function simple_glob_list_files(glob, outfile, tr) result(status)
+        character(len=*), intent(in)  :: glob
+        character(len=*), intent(in)  :: outfile
+        logical, intent(in), optional :: tr                   !> "ls -tr " reverse time-modified flag
+        integer :: status
+        type(c_ptr) :: file_list_ptr
+        character(kind=c_char,len=1), pointer, dimension(:) :: tmp
+        character(len=STDLEN), allocatable :: list(:)
+        character(1) :: sep='/'
+        character(len=:), allocatable :: thisglob
+        integer :: i,num_files, luntmp, time_sorted
+        time_sorted = 0 !   call simple_chdir(path, cur)
+        ! call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
+        if(len(glob)==0) then
+            allocate(thisglob, source=trim(glob))
+        else
+            allocate(thisglob, source='*')
+        end if
+        time_sorted = 0
+        if(present(tr)) time_sorted = tr ! implicit cast
+        status = glob_file_list(trim(thisglob), num_files, time_sorted)
+        if(status/=0)call simple_stop("simple_syslib::simple_glob_list_files failed to process file list "//trim(thisglob))
+        status= simple_rename('__simple_filelist__', trim(outfile))
+        if(status/=0)call simple_stop("simple_syslib::simple_glob_list_files failed to copy tmpfile to "//trim(outfile))
+        deallocate(thisglob)
+        if(associated(tmp)) nullify(tmp)
+
+    end function simple_glob_list_files
+
 
     !> \brief  is for deleting a file
     subroutine del_file( file )
@@ -1045,32 +1272,47 @@ contains
     end subroutine del_file
 
     !> generic deletion of files using POSIX glob
-    function simple_del_files(path, glob, dlist) result(glob_elems)
+    function simple_del_files(path, glob, dlist, status) result(glob_elems)
         character(len=*), intent(in), optional   ::path
         character(len=*), intent(in), optional   ::glob
         character(len=*), intent(out), optional :: dlist(:)
-        character(len=STDLEN), allocatable :: list(:)
+        integer, intent(out), optional :: status
+        type(c_ptr) :: listptr
+        character(kind=c_char,len=STDLEN), pointer :: list(:)
         character(len=STDLEN) :: cur, thispath
         character(len=:), allocatable :: thisglob
-        integer :: i, glob_elems
-        thispath="./"
-        if(present(path)) thispath=path
+        integer :: i, glob_elems,iostatus, luntmp
+        thispath="."
+        if(present(path))then
+            thispath=path
+            ! call simple_chdir(path, cur)
+        end if
         if(present(glob))then
             allocate(thisglob, source=trim(glob)//c_null_char)
         else
-            allocate(thisglob, source=""//c_null_char)
+            allocate(thisglob, source='*'//c_null_char)
         endif
-        call simple_chdir(path, cur)
-        glob_elems =  glob_file_list(thisglob, list)  ! simple_posix.c
-        if (size(list) /= glob_elems) then
+        !! glob must be protected by c_null char
+        iostatus =  glob_file_list(trim(thisglob),glob_elems, 0)  ! simple_posix.c
+        if(status/=0) call simple_stop("simple_syslib::simple_del_files glob failed")
+        open(newunit = luntmp, file = '__simple_filelist__')
+        allocate( list(glob_elems) )
+        do i = 1,glob_elems
+            read( luntmp, '(a)' ) list(i)
+        enddo
+        close( luntmp, status = 'delete' )
+
+        if ( glob_elems > 0) then
             do i=1,glob_elems
+                if(global_debug) print*, 'Deleting ', list(i)
                 call del_file(list(i))
             enddo
         else
             print *,"simple_syslib::simple_del_files no files matching ", trim(thisglob)
         endif
-        call simple_chdir(cur)
+       ! call simple_chdir(cur)
         if(present(dlist)) dlist = list
+        if(present(status))status=iostatus
         deallocate(list)
         deallocate(thisglob)
     end function simple_del_files
@@ -1382,5 +1624,26 @@ contains
         call exec_cmdline(trim(command))
         !  omp end critical
     end subroutine simple_dump_mem_usage
+
+
+    function absolute_path (infile) result(canonical_name)
+        character(kind=c_char, len=*), intent(in) :: infile
+        character(kind=c_char, len=STDLEN), target :: canonical_name
+        integer(1), dimension(:), pointer :: iptr
+        type(c_ptr) :: strptr
+        integer :: lengthin, status, lengthout
+        lengthin = len_trim(infile)+1
+        strptr = c_loc(canonical_name)
+        status = get_absolute_pathname(trim(infile), strptr, lengthout )
+ !       if( length > 1)then
+!            call c_f_pointer(strptr, canonical_name, (/ length /))
+!            allocate(canonical_name, source=iptr)
+ !           canonical_name = transfer(strptr,c_char)
+ !       else
+ !           allocate(canonical_name, source=infile)
+ !       end if
+    end function absolute_path
+
+
 
 end module simple_syslib
