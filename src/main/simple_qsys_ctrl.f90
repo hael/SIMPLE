@@ -382,7 +382,7 @@ contains
                     class DEFAULT
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))
                 end select
-                call exec_cmdline(trim(adjustl(qsys_cmd)))
+                call exec_cmdline(trim(adjustl(qsys_cmd)))  !!TODO change to exec_subprocess
             endif
         end do
     end subroutine submit_scripts
@@ -406,7 +406,7 @@ contains
                 &//'/'//trim(adjustl(script_name))
         end select
         ! execute the command
-        call exec_cmdline(trim(cmd))
+        call exec_cmdline(trim(cmd))  !!TODO change to exec_subprocess
     end subroutine submit_script
 
     ! QUERIES

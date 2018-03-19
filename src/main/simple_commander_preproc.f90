@@ -568,7 +568,7 @@ contains
         real,                  allocatable :: correlations(:,:)
         logical,               allocatable :: lselected(:)
         character(len=STDLEN)              :: cmd_str
-        integer                            :: iimg, isel, nall, nsel, loc(1)
+        integer                            :: iimg, isel, nall, nsel
         integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then

@@ -195,7 +195,6 @@ contains
     end subroutine exec_motion_correct_distr
 
     subroutine exec_motion_correct_tomo_distr( self, cline )
-        use simple_oris,           only: oris
         class(motion_correct_tomo_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
@@ -727,16 +726,16 @@ contains
                 str_state = int2str_pad(state,2)
                 vol = trim(VOL_FBODY)//trim(str_state)//p_master%ext
                 str = trim(STARTVOL_FBODY)//trim(str_state)//p_master%ext
-                stat = simple_rename( trim(vol), trim(str), overwrite=.true.)
+                iostat = simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
                 if( p_master%eo .ne. 'no' )then
                     vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p_master%ext
                     str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//p_master%ext
-                    stat = simple_rename( trim(vol_even), trim(str), overwrite=.true.)
+                    iostat= simple_rename( trim(vol_even), trim(str) )
                     vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p_master%ext
                     str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//p_master%ext
-                    stat = simple_rename( trim(vol_odd), trim(str), overwrite=.true.)
+                    iostat =  simple_rename( trim(vol_odd), trim(str) )
                 endif
             enddo
         else if( .not. have_oris .and. vol_defined )then
@@ -855,10 +854,10 @@ contains
                         vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//p_master%ext
                         vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //p_master%ext
                     endif
-                    stat = simple_rename( trim(vol), trim(vol_iter) )
+                    iostat = simple_rename( trim(vol), trim(vol_iter) )
                     if( p_master%eo .ne. 'no' )then
-                        stat = simple_rename( trim(vol_even), trim(vol_iter_even) )
-                        stat = simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
+                        iostat= simple_rename( trim(vol_even), trim(vol_iter_even) )
+                        iostat= simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
                     endif
                     ! post-process
                     vol = 'vol'//trim(int2str(state))
@@ -909,7 +908,6 @@ contains
 
     subroutine exec_reconstruct3D_distr( self, cline )
         use simple_commander_rec
-        use simple_oris, only: oris
         class(reconstruct3D_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! type(split_commander)              :: xsplit
@@ -1046,9 +1044,6 @@ contains
     subroutine exec_symsrch_distr( self, cline )
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
-        use simple_sym,  only: sym
-        use simple_oris, only: oris
-        use simple_ori,  only: ori
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs

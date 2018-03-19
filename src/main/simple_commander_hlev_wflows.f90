@@ -934,7 +934,7 @@ contains
                 else
                     fname = trim(p_master%mskvols(state))
                     p_master%mskvols(state) = dir//trim(fname)  ! name change
-                    call exec_cmdline('cp '//trim(fname)//' '//trim(p_master%mskvols(state)))
+                    call simple_copy_file(trim(fname), trim(p_master%mskvols(state)))
                 endif
             endif
         enddo
@@ -978,11 +978,11 @@ contains
                 call cline_refine3D%set('vol1', trim(p_master%vols(state)))
                 if( p_master%eo.ne.'no' )then
                     fname = dir//trim(FSC_FBODY)//str_state//BIN_EXT
-                    call exec_cmdline('cp '//trim(fname)//' fsc_state01.bin')
+                    call simple_copy_file(trim(fname),'fsc_state01.bin')
                     fname = dir//trim(FRCS_FBODY)//str_state//BIN_EXT
-                    if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' frcs_state01.bin')
+                    if(file_exists(fname))call simple_copy_file(trim(fname),'frcs_state01.bin')
                     fname = dir//trim(ANISOLP_FBODY)//str_state//p_master%ext
-                    if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' aniso_optlp_state01.mrc')
+                    if(file_exists(fname))call simple_copy_file(trim(fname),'aniso_optlp_state01.mrc')
                 endif
             endif
             if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(p_master%mskvols(state)))

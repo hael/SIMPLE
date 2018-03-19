@@ -11,7 +11,7 @@ implicit none
 type(cmdline)         :: cline
 logical               :: be_verbose=.false.
 character(len=8)      :: datestr
-character(len=STDLEN) :: folder, command
+character(len=STDLEN) :: folder, command, olddir
 if( command_argument_count() > 0 )then
    write(*,'(a)',advance='no') 'simple_test_img_export vol1=<volume.mrc> msk=<mask radius(in pixels)>'
    write(*,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
@@ -31,9 +31,9 @@ if( command_argument_count() > 0 )then
 endif
 call seed_rnd
 call date_and_time(date=datestr)
-folder = trim('SIMPLE_TEST_PNG_'//datestr)
-call simple_mkdir( trim(folder), ignore=.false. )
-call simple_chdir( trim(folder) )
+folder = trim('SIMPLE_TEST_IMGEXPORT_'//datestr)
+call simple_mkdir(folder)
+call simple_chdir(folder, olddir)
 
 call test_pnm_io
 call test_jpg_image(.true.)
@@ -43,4 +43,6 @@ call test_jpg_export
  !   call test_jpeg_io
  !   call test_png_io
 #endif
+call simple_chdir(olddir)
+
 end program simple_test_img_export

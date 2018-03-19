@@ -1,14 +1,14 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
 include 'simple_lib.f08'
-
-use simple_binoris_io      ! use all in there
+!use simple_binoris_io      ! use all in there
 use simple_procimgfile     ! use all in there
+use simple_image,          only: image
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_qsys_funs,      only: qsys_job_finished
+
 implicit none
 
 public :: binarise_commander
@@ -109,7 +109,6 @@ contains
         contains
 
             subroutine doit( img_or_vol )
-                use simple_image, only: image
                 class(image), intent(inout) :: img_or_vol
                 if( cline%defined('thres') )then
                     call img_or_vol%bin(p%thres)
@@ -362,9 +361,6 @@ contains
     !> for creating a similarity matrix based on image2image correlation
     subroutine exec_image_smat(self, cline)
         use simple_corrmat, only: calc_cartesian_corrmat
-        use simple_ori,     only: ori
-        use simple_imgfile, only: imgfile
-        use simple_image,   only: image
         class(image_smat_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)         :: p
@@ -402,9 +398,6 @@ contains
     !> volume/image_diff is a program for creating a volume based on volume difference
     !! this is purely for direct comparison of images in debugging
     subroutine exec_image_diff(self, cline)
-        use simple_ori,     only: ori
-        use simple_imgfile, only: imgfile
-        use simple_image,   only: image
         class(image_diff_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)         :: p
@@ -482,7 +475,7 @@ contains
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
-        use simple_image,       only: image
+        use simple_qsys_funs,      only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p
@@ -623,8 +616,7 @@ contains
 
     !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
-        use simple_imgfile,      only: imgfile
-        use simple_image,        only: image
+      !  use simple_imgfile,      only: imgfile
         class(stack_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params)                          :: p
@@ -710,8 +702,6 @@ contains
     !> provides standard single-particle image
     !> processing routines that are applied to MRC or SPIDER stacks.
     subroutine exec_stackops( self, cline )
-        use simple_ran_tabu,    only: ran_tabu
-        use simple_image,       only: image
         use simple_oris,        only: oris
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline

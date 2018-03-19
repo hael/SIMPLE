@@ -856,7 +856,6 @@ contains
     end subroutine get_stkname_and_ind
 
     subroutine add_scale_tag( self )
-        use simple_fileio, only: fname2ext, add2fbody
         class(sp_project), intent(inout) :: self
         character(len=:), allocatable :: ext, newname, stkname
         integer :: imic, nmics

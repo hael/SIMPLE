@@ -18,7 +18,7 @@ character(len=STDLEN)          :: pwd              !< working directory
 character(len=32), allocatable :: script_names(:)  !< file-names of generated scripts
 
 contains
-    
+
     ! INITIALISATION
 
     subroutine init_qsys_scripts( exec_cmd_in, qsys_obj, nptcls_in, npart_or_chunksz, split_mode )
@@ -45,9 +45,9 @@ contains
         npart = size(parts,1)
         call get_environment_variable('PWD', pwd)
     end subroutine init_qsys_scripts
-    
+
     ! SCRIPT GENERATION
-    
+
     subroutine gen_qsys_scripts( job_descr, outfile_body )
         use simple_chash, only: chash
         class(chash),               intent(inout) :: job_descr
@@ -72,7 +72,7 @@ contains
         call job_descr%delete('outfile')
         deallocate(outfile_body_local)
     end subroutine gen_qsys_scripts
-    
+
     function gen_qsys_script( job_descr, ipart ) result( fname )
         use simple_chash, only: chash
         class(chash),     intent(in)  :: job_descr
@@ -112,9 +112,9 @@ contains
             stop
         endif
     end function gen_qsys_script
-    
+
     ! SUBMISSION TO QSYS
-    
+
     subroutine submit_qsys_scripts
         use simple_qsys_local, only: qsys_local
         integer                       :: cstat, estat, ipart
@@ -136,9 +136,9 @@ contains
             deallocate(script_exec_cmd)
         end do
     end subroutine submit_qsys_scripts
-    
+
     ! QUERIES
-    
+
     function qsys_scripts_are_finished() result( are_finished )
         character(len=:), allocatable :: job_done_fname
         integer :: ipart
@@ -150,12 +150,12 @@ contains
         end do
         are_finished = all(jobs_done)
     end function qsys_scripts_are_finished
-    
+
     function qsys_stack_is_split( stkext, num_parts ) result( is_split )
         character(len=4),  intent(in) :: stkext
         integer, optional, intent(in) :: num_parts
         character(len=:), allocatable :: stack_part_fname
-        logical, allocatable          :: stack_parts_exist(:) 
+        logical, allocatable          :: stack_parts_exist(:)
         integer :: inpart, inumlen, ipart
         logical :: is_split
         if( present(num_parts) )then
@@ -173,9 +173,9 @@ contains
         end do
         is_split = all(stack_parts_exist)
     end function qsys_stack_is_split
-    
+
     ! CLEANUP
-    
+
     !> \brief  is for deleting EVERYTHING generated. Use with EXTREME caution
     subroutine qsys_cleanup_all
         integer                       :: cstat, estat
@@ -199,6 +199,7 @@ contains
         integer                       :: cstat, estat
         character(len=100)            :: cmsg
         character(len=:), allocatable :: cleanup_exec_cmd, tmp1, tmp2, tmp3
+
         allocate(tmp1,source='rm -rf FOO OUT* algndoc_* distr_*script_* recvol_state*_part* rho* fort.0' )
         allocate(tmp2,source=' JOB_FINISHED_* errfile.* outfile.* shdistr_script SHMEMJOBOUT shmemerrfile.* shmemoutfile.*')
         allocate(tmp3,source=' ctfsqsums_part* noisespecs_part* cavgs_part*')
@@ -211,15 +212,15 @@ contains
         endif
         deallocate(cleanup_exec_cmd, tmp1, tmp2, tmp3)
     end subroutine qsys_cleanup_iter
-        
+
     ! DESTRUCTOR
-    
+
     subroutine kill_qsys_script_gen
         if( allocated(exec_cmd))     deallocate(exec_cmd)
         if( allocated(parts))        deallocate(parts)
         if( allocated(script_names)) deallocate(script_names)
         myqsys=>null()
-        nptcls=0 
+        nptcls=0
         numlen=0
     end subroutine kill_qsys_script_gen
 

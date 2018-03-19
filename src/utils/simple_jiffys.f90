@@ -58,9 +58,8 @@ contains
 
     !> \brief  is for pretty ending
     subroutine simple_end( str, print_simple )
-        use simple_syslib,  only: get_process_id
+        use simple_syslib,  only: get_process_id, del_file
         use simple_strings, only: int2str
-        use simple_fileio,  only: del_file
         character(len=*),  intent(in) :: str
         logical, optional, intent(in) :: print_simple
         character(len=:), allocatable :: pid_file
@@ -85,7 +84,7 @@ contains
         endif
         write(stdout,'(A)') str
     end subroutine simple_end
-    
+
     !> \brief  for pretty haloween ending
     subroutine haloween_end( str )
         character(len=*), intent(in) :: str

@@ -1,20 +1,19 @@
 !==Program simple_select
 !
-! <select/begin> is a program for selecting files in table based on image correlation matching. <select/end> 
+! <select/begin> is a program for selecting files in table based on image correlation matching. <select/end>
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund 2016
 !
 program simple_select
+include 'simple_lib.f08'
 use simple_params,  only: params
 use simple_build,   only: build
 use simple_imgfile, only: imgfile
 use simple_image,   only: image
 use simple_cmdline, only: cmdline
 use simple_corrmat  ! singleton
-use simple_jiffys   ! singleton
-use simple_defs     ! singleton
 implicit none
 type(params)                       :: p
 type(build)                        :: b
@@ -74,17 +73,17 @@ if( cline%defined('filetab') )then
     ! read filetable
     call read_filetable(p%filetab, imgnames)
     if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
-    funit = get_fileunit()
-    open(unit=funit, file=p%outfile, iostat=ios, status="replace", action="write", access="sequential")
+
+    call fopen(funit,p%outfile, status="replace", action="write", iostat=ios, access="sequential")
     if( ios /= 0 )then
         write(*,*) "Error opening file name", trim(adjustl(p%outfile))
         stop
     endif
-    call execute_command_line('mkdir '//trim(adjustl(p%dir)))
+    call simple_mkdir(trim(adjustl(p%dir)))
     ! write outoput & move files
     do isel=1,nsel
         write(funit,'(a)') trim(adjustl(imgnames(selected(isel))))
-        call execute_command_line('mv '//trim(adjustl(imgnames(selected(isel))))//' '//trim(adjustl(p%dir)))
+        call simple_rename(trim(adjustl(imgnames(selected(isel)))), trim(adjustl(p%dir)))
     end do
     close(funit)
 endif

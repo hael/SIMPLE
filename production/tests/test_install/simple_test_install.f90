@@ -14,14 +14,13 @@ character(len=300)    :: command
 call seed_rnd
 call date_and_time(date=datestr)
 folder = trim('./SIMPLE_TEST_INSTALL_'//datestr)
-command = 'mkdir ' // trim( folder )//'|| true'
-call exec_cmdline( trim(command) )
+call simple_mkdir(trim( folder ))
 call simple_chdir( folder )
 ! dummy data
 box    = 96
 smpd   = 2.
 nspace = 64
-msk    = nint(real(box)/3.) 
+msk    = nint(real(box)/3.)
 ! volume
 call img%new( [box,box,box], smpd )
 call img%square( nint(real(box)/12.) )

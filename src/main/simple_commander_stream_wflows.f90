@@ -10,6 +10,9 @@ use simple_sp_project,           only: sp_project
 use simple_binoris_io              ! use all in there
 use simple_qsys_env,             only: qsys_env
 use simple_qsys_funs,            only: qsys_cleanup
+use simple_binoris_io              ! use all in there
+
+!use simple_commander_distr,      only: merge_algndocs_commander! use all in there
 implicit none
 
 public :: preprocess_stream_commander
@@ -184,6 +187,7 @@ contains
         integer :: iter, n_newstks, orig_box, box, nptcls_glob, ncls_glob, tnow
         integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_stk, n_stk_prev
         logical :: do_autoscale
+
         ! seed the random number generator
         call seed_rnd
         ! output command line executed

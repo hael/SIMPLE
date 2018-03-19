@@ -36,7 +36,6 @@ contains
 
     !> for merging alignment documents from SIMPLE runs in distributed mode
     subroutine exec_merge_algndocs( self, cline )
-        use simple_map_reduce, only: split_nobjs_even
         use simple_sp_project, only: transfer_sp_project_segment
         class(merge_algndocs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline

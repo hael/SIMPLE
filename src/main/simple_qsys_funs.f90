@@ -239,7 +239,7 @@ contains
         exec_str = trim(exec_bin)//' '//job_descr%chash2str()
         write(*,'(a)') '>>> EXECUTING COMMAND:'
         write(*,'(a)') trim(exec_str)
-        call exec_cmdline(exec_str)
+        call exec_cmdline(exec_str)  !!TODO change to exec_subprocess
     end subroutine exec_simple_prg
 
 end module simple_qsys_funs
