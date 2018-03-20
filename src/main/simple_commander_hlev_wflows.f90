@@ -48,7 +48,6 @@ contains
         ! constants
         integer, parameter :: MAXITS_STAGE1 = 10
         ! commanders
-        type(split_commander)            :: xsplit
         type(make_cavgs_distr_commander) :: xmake_cavgs
         type(cluster2D_distr_commander)  :: xcluster2D_distr
         type(rank_cavgs_commander)       :: xrank_cavgs
@@ -60,10 +59,10 @@ contains
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
-        type(scale_stk_parts_commander) :: xscale_distr
-        character(len=STDLEN) :: scaled_stktab
-        character(len=STDLEN) :: finalcavgs, finalcavgs_ranked
-        character(len=:), allocatable :: projfile_sc, stk
+        type(scale_project_distr_commander) :: xscale_distr
+        character(len=STDLEN)               :: scaled_stktab
+        character(len=STDLEN)               :: finalcavgs, finalcavgs_ranked
+        character(len=:), allocatable       :: projfile_sc, stk
         class(oris), pointer  :: os => null()
         type(sp_project)      :: spproj, spproj_sc
         type(params)          :: p_master
@@ -80,7 +79,7 @@ contains
             ! remove possible objfun flag from cline
             call cline%delete('objfun')
             ! SPLITTING
-            call spproj%read( p_master%projfile )
+            call spproj%read(p_master%projfile )
             call spproj%split_stk(p_master%nparts)
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
@@ -89,14 +88,13 @@ contains
             cline_cluster2D_stage1 = cline
             call cline_cluster2D_stage1%delete('update_frac')   ! no incremental learning in stage 1
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
-            call cline_cluster2D_stage1%delete('automsk')
             call cline_cluster2D_stage1%set('objfun', 'cc')     ! goal function is standard cross-correlation
             ! Scaling
-            call spproj%gen_projfile4scale( p_master%smpd_targets2D(1), projfile_sc,&
+            call spproj%scale_projfile(p_master%smpd_targets2D(1), projfile_sc,&
                 &cline_cluster2D_stage1, cline_scale1)
             call spproj%kill
             scale_stage1 = cline_scale1%get_rarg('scale')
-            scaling      = trim(projfile_sc) /= p_master%projfile
+            scaling      = trim(projfile_sc) /= trim(p_master%projfile)
             if( scaling )then
                 call xscale_distr%execute( cline_scale1 )
                 ! scale references
@@ -140,7 +138,7 @@ contains
             call cline_cluster2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
             ! Scaling
             call spproj%read( p_master%projfile )
-            call spproj%gen_projfile4scale( p_master%smpd_targets2D(2), projfile_sc,&
+            call spproj%scale_projfile( p_master%smpd_targets2D(2), projfile_sc,&
                 &cline_cluster2D_stage2, cline_scale2)
             call spproj%kill
             scale_stage2 = cline_scale2%get_rarg('scale')
@@ -292,7 +290,7 @@ contains
         call cline_refine3D_snhc%set('lp',     lplims(1))
         call cline_refine3D_snhc%set('nspace', real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('objfun', 'cc')
-        ! (2) PRIME3D_INIT
+        ! (2) refine3D_init
         call cline_refine3D_init%set('prg',    'refine3D')
         call cline_refine3D_init%set('ctf',    'no')
         call cline_refine3D_init%set('maxits', real(MAXITS_INIT))

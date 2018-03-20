@@ -153,9 +153,7 @@ contains
             if(.not.pptcl_mask(iptcl)) cycle
             cnt = cnt + 1
             ! exclusion condition
-            if( a_here%get_state(iptcl) == 0 .or.&
-               &nint(a_here%get(iptcl,'state_balance')) == 0 .or.&
-               &a_here%get(iptcl,'w') < TINY )then
+            if( a_here%get_state(iptcl) == 0 .or. a_here%get(iptcl,'w') < TINY )then
                 precs(cnt)%pind  = 0
                 cycle
             endif

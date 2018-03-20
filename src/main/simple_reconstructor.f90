@@ -688,13 +688,6 @@ contains
         call img_pad%new([p%boxpd,p%boxpd,1], p%smpd)
         ! make the gridding prepper
         call gridprep%new(img, self%kbwin, [p%boxpd,p%boxpd,1])
-        ! population balancing logics
-        if( p%balance > 0 )then
-            call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
-            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
-        else
-            call o%set_all2single('state_balance', 1.0)
-        endif
         ! zero the Fourier volume and rho
         call self%reset
         call self%reset_exp
@@ -732,26 +725,28 @@ contains
             subroutine rec_dens
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
-                integer   :: state, state_balance, ind
+                integer   :: state, ind
                 real      :: pw
-                state         = o%get_state(i)
-                state_balance = nint(o%get(i, 'state_balance'))
-                if( state == 0 .or. state_balance == 0 ) return
+                state = o%get_state(i)
+                if( state == 0 ) return
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
-                    if( p%l_stktab_input )then
-                        call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
-                    else
-                        if( p%l_distr_exec )then
-                            ind = cnt
-                            allocate(stkname, source=trim(p%stk_part))
-                        else
-                            ind = i
-                            allocate(stkname, source=trim(p%stk))
-                        endif
-                    endif
+                    ! if( p%l_stktab_input )then
+                    !     call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
+                    ! else
+                    !     if( p%l_distr_exec )then
+                    !         ind = cnt
+                    !         allocate(stkname, source=trim(p%stk_part))
+                    !     else
+                    !         ind = i
+                    !         allocate(stkname, source=trim(p%stk))
+                    !     endif
+                    ! endif
+
+                    stop 'recvol currently broken'
+
                     call img%read(stkname, ind)
                     call gridprep%prep(img, img_pad)
                     call self%insert_fplane(se, orientation, img_pad, pwght=pw)

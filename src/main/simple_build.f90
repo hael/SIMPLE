@@ -67,6 +67,7 @@ type :: build
     logical, private                    :: extremal3D_tbox_exists       = .false.
     logical, private                    :: read_features_exists         = .false.
   contains
+    procedure                           :: build_spproj
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
     procedure                           :: build_comlin_tbox
@@ -86,28 +87,13 @@ end type build
 
 contains
 
-    !> \brief  constructs the general toolbox
-    subroutine build_general_tbox( self, p, cline, do3d, nooritab, force_ctf )
+    !> \brief  constructs the sp project (part of general builder)
+    subroutine build_spproj( self, p, cline, nooritab )
         class(build), target, intent(inout) :: self
         class(params),        intent(inout) :: p
         class(cmdline),       intent(inout) :: cline
-        logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
-        integer :: lfny,  lfny_match, cyc_lims(3,2)
-        logical :: ddo3d, fforce_ctf, metadata_read
-        call self%kill_general_tbox
-        ddo3d = .true.
-        if( present(do3d) ) ddo3d = do3d
-        fforce_ctf = .false.
-        if( present(force_ctf) ) fforce_ctf = force_ctf
-        ! seed the random number generator
-        call seed_rnd
-        DebugPrint   'seeded random number generator'
-
-        ! set up symmetry functionality
-        call self%se%new(trim(p%pgrp))
-        p%nsym    = self%se%get_nsym()
-        p%eullims = self%se%srchrange()
-        DebugPrint   'did setup symmetry functionality'
+        logical, optional,    intent(in)    :: nooritab
+        logical ::  metadata_read
         ! create object for orientations
         ! b%a is now a pointer to a field in b%spproj
         select case(p%spproj_a_seg)
@@ -139,17 +125,16 @@ contains
         if( cline%defined('projfile') )then
             if( .not. file_exists(p%projfile) )then
                 write(*,*) 'project file not in exec dir: ', trim(p%projfile)
-                stop 'ERROR! build :: build_general_tbox'
+                stop 'ERROR! build :: build_spproj'
             endif
             metadata_read = .true.
         else if( associated(self%ptr2prg) )then
-            if( self%ptr2prg%requires_sp_project() )metadata_read = .true.
+            if( self%ptr2prg%requires_sp_project() ) metadata_read = .true.
         endif
         if( metadata_read )then
             if( cline%defined('projfile') )call self%spproj%read(p%projfile)
             ! ctf planning
             p%tfplan%mode = self%spproj%get_ctfmode(p%oritype)
-            DebugPrint 'did set ctfmode'
         else
             ! revert to oldschool logic
             if( present(nooritab) )then
@@ -172,9 +157,34 @@ contains
                 write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
                 write(*,'(a)') 'but your input orientation table lacks defocus values'
             endif
-            !DebugPrint 'did set ctfmode'
-            if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         endif
+        write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
+    end subroutine build_spproj
+
+    !> \brief  constructs the general toolbox
+    subroutine build_general_tbox( self, p, cline, do3d, nooritab, force_ctf )
+        class(build), target, intent(inout) :: self
+        class(params),        intent(inout) :: p
+        class(cmdline),       intent(inout) :: cline
+        logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
+        integer :: lfny,  lfny_match, cyc_lims(3,2)
+        logical :: ddo3d, fforce_ctf, metadata_read
+        call self%kill_general_tbox
+        ddo3d = .true.
+        if( present(do3d) ) ddo3d = do3d
+        fforce_ctf = .false.
+        if( present(force_ctf) ) fforce_ctf = force_ctf
+        ! seed the random number generator
+        call seed_rnd
+        DebugPrint   'seeded random number generator'
+        ! set up symmetry functionality
+        call self%se%new(trim(p%pgrp))
+        p%nsym    = self%se%get_nsym()
+        p%eullims = self%se%srchrange()
+        DebugPrint   'did setup symmetry functionality'
+        ! build spproj
+        call self%build_spproj(p, cline, nooritab)
+        ! states exception
         if( self%a%get_n('state') > 1 )then
             if( .not. cline%defined('nstates') )then
                 write(*,'(a)') 'WARNING, your input doc has multiple states but NSTATES is not given'

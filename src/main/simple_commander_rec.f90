@@ -34,7 +34,7 @@ contains
     subroutine exec_reconstruct3D( self, cline )
         use simple_rec_master, only: exec_rec_master
         class(reconstruct3D_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
         p = params(cline)                   ! parameters generated
@@ -111,7 +111,6 @@ contains
                 s     = ss
                 state = ss
             endif
-            if( b%a%get_pop(state, 'state' ) == 0 )cycle ! Empty state
             if( L_BENCH ) t_assemble = tic()
             call b%eorecvol%reset_all
             ! assemble volumes
@@ -241,7 +240,6 @@ contains
                 s     = ss
                 state = ss
             endif
-            if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
                 allocate(fbody, source=trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))

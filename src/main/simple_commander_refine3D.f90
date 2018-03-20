@@ -10,10 +10,9 @@ use simple_qsys_funs       ! use all in there
 use simple_binoris_io      ! use all in there
 implicit none
 
-public :: resrange_commander
 public :: npeaks_commander
 public :: nspace_commander
-public :: prime3D_init_commander
+public :: refine3D_init_commander
 public :: multiptcl_init_commander
 public :: prime3D_commander
 public :: rec_test_commander
@@ -21,10 +20,6 @@ public :: check3D_conv_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: resrange_commander
-  contains
-    procedure :: execute      => exec_resrange
-end type resrange_commander
 type, extends(commander_base) :: npeaks_commander
   contains
     procedure :: execute      => exec_npeaks
@@ -33,10 +28,10 @@ type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
 end type nspace_commander
-type, extends(commander_base) :: prime3D_init_commander
+type, extends(commander_base) :: refine3D_init_commander
   contains
-    procedure :: execute      => exec_prime3D_init
-end type prime3D_init_commander
+    procedure :: execute      => exec_refine3D_init
+end type refine3D_init_commander
 type, extends(commander_base) :: multiptcl_init_commander
   contains
     procedure :: execute      => exec_multiptcl_init
@@ -55,30 +50,6 @@ type, extends(commander_base) :: check3D_conv_commander
 end type check3D_conv_commander
 
 contains
-
-    subroutine exec_resrange( self, cline )
-        use simple_strategy3D_matcher, only: prime3D_find_resrange
-        class(resrange_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
-        if( cline%defined('box') .or. cline%defined('moldiam') )then
-            p = params(cline)                     ! parameters generated
-            call b%build_general_tbox(p, cline)   ! general objects built
-            call b%build_strategy3D_tbox(p) ! prime objects built
-            call prime3D_find_resrange( b, p, p%lp, p%lpstop )
-            p%lpstart = p%lp
-            call cline%set('lpstart',p%lpstart)   ! for reporting
-            call cline%set('lpstop',p%lpstop)     ! for reporting
-            write(*,'(A,1X,F5.1)') '>>> LP START:', p%lpstart
-            write(*,'(A,2X,F5.1)') '>>> LP STOP:',  p%lpstop
-            write(*,'(A,2X,F5.1)') '>>> HP:',       p%hp
-        else
-            stop 'need either box size or moldiam to estimate resrange; simple_resrange'
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_RESRANGE NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_resrange
 
     subroutine exec_npeaks( self, cline )
         class(npeaks_commander), intent(inout) :: self
@@ -112,36 +83,90 @@ contains
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
 
-    subroutine exec_prime3D_init( self, cline )
-        use simple_strategy3D_matcher, only: gen_random_model, prime3D_find_resrange
-        class(prime3D_init_commander), intent(inout) :: self
+    subroutine exec_refine3D_init( self, cline )
+        ! use simple_strategy3D_matcher, only: gen_random_model
+        class(refine3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)       :: p
         type(build)        :: b
         integer, parameter :: MAXIMGS=1000
-        p = params(cline) ! parameters generated
-        if( p%ctf .ne. 'no')then
-            if( .not. cline%defined('deftab') )&
-            &stop 'need texfile with defocus/astigmatism values for ctf .ne. no mode exec'
-        endif
-        call b%build_general_tbox(p, cline)   ! general objects built
-        call b%build_strategy3D_tbox(p) ! prime3D objects built
-        ! determine resolution range
-        if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        call b%build_strategy3D_tbox(p)     ! prime3D objects built
         ! generate the random model
         if( cline%defined('nran') )then
-            call gen_random_model( b, p, p%nran )
+            call gen_random_model( p%nran )
         else
             if( p%nptcls > MAXIMGS )then
-                call gen_random_model( b, p, MAXIMGS )
+                call gen_random_model( MAXIMGS )
             else
-                call gen_random_model( b, p )
+                call gen_random_model()
             endif
         endif
         ! end gracefully
         call qsys_job_finished( p, cline%get_carg('prg') )
-        call simple_end('**** SIMPLE_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prime3D_init
+        call simple_end('**** SIMPLE_refine3D_init NORMAL STOP ****', print_simple=.false.)
+
+
+        contains
+
+            subroutine gen_random_model( nsamp_in )
+                use simple_ran_tabu,           only: ran_tabu
+                use simple_kbinterpol,         only: kbinterpol
+                use simple_prep4cgrid,         only: prep4cgrid
+                use simple_strategy2D3D_common ! use all in there
+                integer, optional, intent(in) :: nsamp_in  !< num input samples
+                type(ran_tabu)       :: rt
+                type(ori)            :: orientation
+                integer, allocatable :: sample(:)
+                integer              :: i, nsamp, alloc_stat
+                type(kbinterpol)     :: kbwin
+                type(prep4cgrid)     :: gridprep
+                ! init volumes
+                call preprecvols(b, p)
+                if( trim(p%refine).eq.'tseries' )then
+                    call b%a%spiral
+                else
+                    call b%a%rnd_oris
+                    call b%a%zero_shifts
+                endif
+                p%vols(1) = 'startvol'//p%ext
+                nsamp = p%top - p%fromp + 1
+                if( present(nsamp_in) ) nsamp = nsamp_in
+                allocate( sample(nsamp) )
+                if( present(nsamp_in) )then
+                    rt = ran_tabu(p%top - p%fromp + 1)
+                    call rt%ne_ran_iarr(sample)
+                    call rt%kill
+                else
+                    forall(i=1:nsamp) sample(i) = i
+                endif
+                write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
+                ! make the gridding prepper
+                kbwin = b%recvols(1)%get_kbwin()
+                call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+                do i=1,nsamp
+                    call progress(i, nsamp)
+                    orientation = b%a%get_ori(sample(i) + p%fromp - 1)
+                    call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
+                    call gridprep%prep(b%img, b%img_pad)
+                    call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
+                end do
+                deallocate(sample)
+                call norm_struct_facts(b, p)
+                call killrecvols(b, p)
+
+
+                if( p%part .ne. 1 )then
+                    ! so random oris only written once in distributed mode
+                else
+                    !!!!!!!!!!!!!!!!
+                    call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
+                    !!!!!!!!!!!!!!!!!
+                endif
+            end subroutine gen_random_model
+
+    end subroutine exec_refine3D_init
 
     subroutine exec_multiptcl_init( self, cline )
         use simple_rec_master, only: exec_rec_master
@@ -187,7 +212,7 @@ contains
 
     subroutine exec_prime3D( self, cline )
         use simple_math,               only: calc_lowpass_lim, calc_fourier_index
-        use simple_strategy3D_matcher, only: prime3D_exec, prime3D_find_resrange
+        use simple_strategy3D_matcher, only: refine3D_exec
         use simple_strings,            only: str_has_substr
         class(prime3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
@@ -217,7 +242,7 @@ contains
             if( cline%defined('find') )then
                 p%lp = calc_lowpass_lim( p%find, p%boxmatch, p%smpd )
             endif
-            call prime3D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
+            call refine3D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
         else
             p%find = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
             ! init extremal dynamics
@@ -228,7 +253,7 @@ contains
             endif
             corr = -1
             do i=startit,p%maxits
-                call prime3D_exec(b, p, cline, i, converged)
+                call refine3D_exec(b, p, cline, i, converged)
                 ! updates extremal iteration
                 p%extr_iter = p%extr_iter + 1
                 if( .not. p%l_distr_exec .and. p%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then

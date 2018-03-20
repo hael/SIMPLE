@@ -37,10 +37,9 @@ type(check2D_conv_commander)         :: xcheck2D_conv
 type(rank_cavgs_commander)           :: xrank_cavgs
 
 ! PRIME3D PROGRAMS
-type(resrange_commander)             :: xresrange
 type(npeaks_commander)               :: xnpeaks
 type(nspace_commander)               :: xnspace
-type(prime3D_init_commander)         :: xprime3D_init
+type(refine3D_init_commander)         :: xrefine3D_init
 type(rec_test_commander)             :: xrec_test
 type(multiptcl_init_commander)       :: xmultiptcl_init
 type(prime3D_commander)              :: xprime3D
@@ -106,7 +105,7 @@ type(merge_algndocs_commander)       :: xmerge_algndocs
 type(merge_nnmat_commander)          :: xmerge_nnmat
 type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
-type(split_commander)                :: xsplit
+! type(split_commander)                :: xsplit
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -509,36 +508,6 @@ select case(prg)
 
     ! PRIME3D PROGRAMS
 
-    case( 'resrange' )
-        !==Program resrange
-        !
-        ! <resrange/begin>is a program for estimating the resolution range used in the heuristic
-        ! resolution-stepping scheme in the PRIME3D initial model production procedure. The initial
-        ! low-pass limit is set so that each image receives ten nonzero orientation weights. When
-        ! quasi-convergence has been reached, the limit is updated one Fourier index at the time,
-        ! until PRIME reaches the condition where six nonzero orientation weights are assigned to
-        ! each image. FSC-based filtering is unfortunately not possible to do in the ab initio
-        ! 3D reconstruction step, because when the orientations are mostly random, the FSC overestimates
-        ! the resolution. This program is used internally when executing PRIME in distributed mode. We
-        ! advise you to check the starting and stopping low-pass limits before executing PRIME3D using
-        ! this program. The resolution range estimate depends on the molecular diameter,
-        ! which is estimated based on the box size. If you want to override this estimate, set moldiam
-        ! to the desired value (in A). This may be necessary if your images have a lot of background
-        ! padding. However, for starting model generation it is probably better to clip the images snugly
-        ! around the particle, because smaller images equal less computation<resrange/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'nspace'
-        keys_optional(3) = 'pgrp'
-        keys_optional(4) = 'box'
-        keys_optional(5) = 'moldiam'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:5))
-        ! execute
-        call xresrange%execute(cline)
     case( 'npeaks' )
         !==Program npeaks
         !
@@ -571,13 +540,13 @@ select case(prg)
         call cline%parse_oldschool(keys_required=keys_required(:1))
         ! execute
         call xnspace%execute(cline)
-    case( 'prime3D_init' )
-        !==Program prime3D_init
+    case( 'refine3D_init' )
+        !==Program refine3D_init
         !
-        ! <prime3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D.
+        ! <refine3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D.
         ! If the data set is large (>5000 images), generating a random model can be slow. To speedup, set
         ! nran to some smaller number, resulting in nran images selected randomly for
-        ! reconstruction<prime3D_init/end>
+        ! reconstruction<refine3D_init/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -607,7 +576,7 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
-        call xprime3D_init%execute(cline)
+        call xrefine3D_init%execute(cline)
     case( 'multiptcl_init' )
         !==Program multiptcl_init
         !
@@ -936,22 +905,13 @@ select case(prg)
         keys_required(1) = 'nparts'
         keys_required(2) = 'smpd'
         keys_required(3) = 'msk'
-        keys_required(4) = 'oritab'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'state'
         keys_optional(3) = 'nstates'
         keys_optional(4) = 'mskfile'
-        keys_optional(5) = 'stk'
-        keys_optional(6) = 'stktab'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:6))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
         ! execute
         call xvolassemble_eo%execute(cline)
     case( 'volassemble' )
@@ -966,21 +926,12 @@ select case(prg)
         ! set required keys
         keys_required(1) = 'nparts'
         keys_required(2) = 'smpd'
-        keys_required(3) = 'oritab'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'state'
         keys_optional(3) = 'nstates'
-        keys_optional(4) = 'stk'
-        keys_optional(5) = 'stktab'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
         ! execute
         call xvolassemble%execute(cline)
 
@@ -1595,24 +1546,24 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:2))
         ! execute
         call xsplit_pairs%execute(cline)
-    case( 'split' )
-        !==Program split
-        !
-        ! <split/begin>is a program for splitting of image stacks into partitions for parallel execution.
-        ! This is done to reduce I/O latency<split/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'stk'
-        ! set optional keys
-        keys_optional(1) = 'nparts'
-        keys_optional(2) = 'neg'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
-
-        ! execute
-        call xsplit%execute(cline)
-    case DEFAULT
+    ! case( 'split' )
+    !     !==Program split
+    !     !
+    !     ! <split/begin>is a program for splitting of image stacks into partitions for parallel execution.
+    !     ! This is done to reduce I/O latency<split/end>
+    !     !
+    !     ! set required keys
+    !     keys_required(1) = 'smpd'
+    !     keys_required(2) = 'stk'
+    !     ! set optional keys
+    !     keys_optional(1) = 'nparts'
+    !     keys_optional(2) = 'neg'
+    !     ! parse command line
+    !     call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
+    !
+    !     ! execute
+    !     call xsplit%execute(cline)
+    ! case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'
     end select

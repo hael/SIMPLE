@@ -24,12 +24,12 @@ public :: ctf_estimate_distr_commander
 public :: pick_distr_commander
 public :: make_cavgs_distr_commander
 public :: cluster2D_distr_commander
-public :: prime3D_init_distr_commander
+public :: refine3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: reconstruct3D_distr_commander
 public :: tseries_track_distr_commander
 public :: symsrch_distr_commander
-public :: scale_stk_parts_commander
+public :: scale_project_distr_commander
 private
 
 type, extends(commander_base) :: motion_correct_ctf_estimate_distr_commander
@@ -64,10 +64,10 @@ type, extends(commander_base) :: cluster2D_distr_commander
   contains
     procedure :: execute      => exec_cluster2D_distr
 end type cluster2D_distr_commander
-type, extends(commander_base) :: prime3D_init_distr_commander
+type, extends(commander_base) :: refine3D_init_distr_commander
   contains
-    procedure :: execute      => exec_prime3D_init_distr
-end type prime3D_init_distr_commander
+    procedure :: execute      => exec_refine3D_init_distr
+end type refine3D_init_distr_commander
 type, extends(commander_base) :: prime3D_distr_commander
   contains
     procedure :: execute      => exec_prime3D_distr
@@ -84,10 +84,10 @@ type, extends(commander_base) :: symsrch_distr_commander
   contains
     procedure :: execute      => exec_symsrch_distr
 end type symsrch_distr_commander
-type, extends(commander_base) :: scale_stk_parts_commander
+type, extends(commander_base) :: scale_project_distr_commander
   contains
-    procedure :: execute      => exec_scale_stk_parts
-end type scale_stk_parts_commander
+    procedure :: execute      => exec_scale_project_distr
+end type scale_project_distr_commander
 
 contains
 
@@ -371,7 +371,7 @@ contains
     subroutine exec_make_cavgs_distr( self, cline )
         class(make_cavgs_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(split_commander) :: xsplit
+        ! type(split_commander) :: xsplit
         type(cmdline)         :: cline_cavgassemble
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -429,7 +429,7 @@ contains
         ! make master parameters
         p_master = params(cline)
         ! make builder
-        call b%build_general_tbox(p_master, cline, do3d=.false.)
+        call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -447,8 +447,10 @@ contains
         call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
         call cline_merge_algndocs%set('oritype',  'ptcl2D')
         call cline_merge_algndocs%set('projfile', trim(p_master%projfile))
-        call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_make_cavgs%set('prg',   'make_cavgs')
+        call cline_cavgassemble%set('prg',        'cavgassemble')
+        call cline_make_cavgs%set('prg',          'make_cavgs')
+        call cline_cavgassemble%set('projfile',   p_master%projfile)
+        call cline_check2D_conv%set('projfile',   p_master%projfile)
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! splitting
@@ -514,12 +516,10 @@ contains
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p_master%ext
             call cline_cavgassemble%set('refs', refs)
-            call cline_cavgassemble%set('projfile', p_master%projfile)
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! remapping of empty classes
             call remap_empty_cavgs
             ! check convergence
-            call cline_check2D_conv%set('projfile', p_master%projfile)
             call xcheck2D_conv%execute(cline_check2D_conv)
             frac_srch_space = 0.
             if( iter > 1 ) frac_srch_space = cline_check2D_conv%get_rarg('frac')
@@ -555,13 +555,11 @@ contains
                 character(len=STDLEN) :: frcs_iter
                 integer               :: icls, state
                 if( p_master%dyncls.eq.'yes' )then
-                    !call binread_oritab(p_master%projfile, b%spproj, b%a, [1,p_master%nptcls])
                     call b%spproj%read_segment('ptcl2D', p_master%projfile )
                     call b%a%fill_empty_classes(p_master%ncls, fromtocls)
                     if( allocated(fromtocls) )then
-                        ! updates document
+                        ! updates projfile
                         call b%spproj%write()
-                        ! call binwrite_oritab(p_master%projfile, b%spproj, b%a, [1,p_master%nptcls])
                         ! updates refs
                         call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
                         do icls = 1, size(fromtocls, dim=1)
@@ -600,14 +598,15 @@ contains
 
     end subroutine exec_cluster2D_distr
 
-    subroutine exec_prime3D_init_distr( self, cline )
+    subroutine exec_refine3D_init_distr( self, cline )
         use simple_commander_refine3D
         use simple_commander_rec
-        class(prime3D_init_distr_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        type(split_commander) :: xsplit
+        class(refine3D_init_distr_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        ! type(split_commander) :: xsplit
         type(cmdline)         :: cline_volassemble
         type(qsys_env)        :: qenv
+        type(build)           :: b
         type(params)          :: p_master
         character(len=STDLEN) :: vol
         type(chash)           :: job_descr
@@ -620,6 +619,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         p_master = params(cline)
+        ! make builder
+        call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -630,21 +631,18 @@ contains
         else
             vol = 'startvol_state01'//p_master%ext
         endif
-        if( .not. cline%defined('stktab') )then
-            ! split stack
-            call xsplit%execute(cline)
-        endif
+        ! splitting
+        call b%spproj%split_stk(p_master%nparts)
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
         call cline_volassemble%set( 'eo',     'no')
         call cline_volassemble%set( 'prg',    'volassemble')
-        call cline_volassemble%set( 'oritab', 'prime3D_startdoc'//trim(METADATA_EXT))
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prime3D_init_distr
+        call simple_end('**** SIMPLE_DISTR_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_refine3D_init_distr
 
     subroutine exec_prime3D_distr( self, cline )
         use simple_commander_refine3D
@@ -657,11 +655,11 @@ contains
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(prime3D_init_distr_commander)   :: xprime3D_init_distr
+        type(refine3D_init_distr_commander)   :: xrefine3D_init_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
         type(merge_algndocs_commander)       :: xmerge_algndocs
         type(check3D_conv_commander)         :: xcheck3D_conv
-        type(split_commander)                :: xsplit
+        ! type(split_commander)                :: xsplit
         type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline)         :: cline_reconstruct3D_distr
@@ -692,7 +690,7 @@ contains
         ! make master parameters
         p_master = params(cline)
         ! make general builder to the the orientations in
-        call b%build_general_tbox(p_master, cline, do3d=.false.)
+        call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
 
@@ -709,7 +707,7 @@ contains
 
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )       ! required for distributed call
-        call cline_refine3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
+        call cline_refine3D_init%set( 'prg', 'refine3D_init' ) ! required for distributed call
         if( trim(p_master%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_merge_algndocs%set('nthr',   1.)
         call cline_merge_algndocs%set('fbody',  trim(ALGN_FBODY))
@@ -733,7 +731,7 @@ contains
         enddo
         ! split stack
         if( .not. cline%defined('stktab') )then
-            call xsplit%execute(cline)
+            ! call xsplit%execute(cline)
         endif
 
         ! GENERATE STARTING MODELS & ORIENTATIONS
@@ -751,7 +749,7 @@ contains
         enddo
         if( .not.cline%defined('oritab') .and. .not.vol_defined )then
             ! ab-initio
-            call xprime3D_init_distr%execute( cline_refine3D_init )
+            call xrefine3D_init_distr%execute( cline_refine3D_init )
             call cline%set( 'vol1', 'startvol_state01'//p_master%ext )
             call cline%set( 'oritab', oritab )
         else if( cline%defined('oritab') .and. .not.vol_defined )then
@@ -965,7 +963,7 @@ contains
         use simple_oris, only: oris
         class(reconstruct3D_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(split_commander)              :: xsplit
+        ! type(split_commander)              :: xsplit
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
         type(cmdline)                      :: cline_volassemble
@@ -985,13 +983,13 @@ contains
         call cline%delete('refine')
         p_master = params(cline)
         ! make general builder to get oris in
-        call b%build_general_tbox(p_master, cline, do3d=.false.)
+        call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         if( .not. cline%defined('stktab') )then
             ! split stack
-            call xsplit%execute(cline)
+            ! call xsplit%execute(cline)
         endif
         ! eo partitioning
         if( p_master%eo .ne. 'no' )then
@@ -1244,7 +1242,7 @@ contains
             shvec    = -1. * shvec ! the sign is right
             ! rotate the orientations & transfer the 3d shifts to 2d
             ! begin with making a general builder to support *.simple oritab input
-            call b%build_general_tbox(p_master, cline, do3d=.false.)
+            call b%build_spproj(p_master, cline)
             ! oritab is now read in, whatever format it had (.txt or .simple)
             nl = binread_nlines(p_master, p_master%oritab)
             call binread_oritab(p_master%oritab, b%spproj, b%a, [1,nl])
@@ -1254,7 +1252,6 @@ contains
                 call syme%apply_sym_with_shift(b%a, symaxis, shvec )
             endif
             call binwrite_oritab(p_master%outfile, b%spproj, b%a, [1,nl])
-            call b%kill_general_tbox
         endif
 
         ! THE END
@@ -1276,12 +1273,13 @@ contains
         call simple_end('**** SIMPLE_DISTR_SYMSRCH NORMAL STOP ****')
     end subroutine exec_symsrch_distr
 
-    subroutine exec_scale_stk_parts( self, cline )
+    subroutine exec_scale_project_distr( self, cline )
         use simple_map_reduce, only: split_nobjs_even
-        class(scale_stk_parts_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
+        class(scale_project_distr_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
+        type(build)                        :: b
         type(chash)                        :: job_descr
         type(cmdline)                      :: cline_scale
         type(chash),           allocatable :: part_params(:)
@@ -1289,58 +1287,50 @@ contains
         character(len=STDLEN), allocatable :: part_stks(:)
         character(len=STDLEN) :: filetab
         integer, allocatable  :: parts(:,:)
-        integer               :: ipart, nparts, nstks, cnt, istk, partsz
-        ! seed the random number generator
-        call seed_rnd
+        real                  :: smpd
+        integer               :: ipart, nparts, nstks, cnt, istk, partsz, box
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline)
+        ! make builder
+        call b%build_spproj(p_master, cline)
         ! copy command line
         cline_scale = cline
         ! prepare part-dependent parameters
-        if( cline%defined('stktab') )then
-            call cline_scale%delete('stktab')
-            nstks = p_master%stkhandle%get_nmics()
-            if(cline%defined('nparts'))then
-                nparts = min(p_master%nparts, nstks)
-                call cline_scale%set('nparts',real(nparts))
-                p_master%nparts = nparts
-            else
-                nparts = 1
-            endif
-            parts = split_nobjs_even(nstks, nparts)
-            allocate(part_params(nparts))
-            cnt = 0
-            do ipart=1,nparts
-                call part_params(ipart)%new(1)
-                partsz = parts(ipart,2) - parts(ipart,1) + 1
-                allocate(part_stks(partsz))
-                ! creates part filetab
-                filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
-                do istk=1,partsz
-                    cnt = cnt + 1
-                    part_stks(istk) = p_master%stkhandle%get_stkname(cnt)
-                enddo
-                ! write part filetab & update part parameters
-                call write_filetable( filetab, part_stks )
-                call part_params(ipart)%set('filetab', filetab)
-                deallocate(part_stks)
-            end do
-            deallocate(parts)
+        nstks = b%spproj%os_stk%get_noris()
+        if( nstks == 0 ) stop 'os_stk field of spproj empty; commander_distr_wflows :: exec_scale_distr'
+        if( cline%defined('nparts') )then
+            nparts = min(p_master%nparts, nstks)
+            call cline_scale%set('nparts', real(nparts))
         else
-            ! prepare part-dependent parameters
-            allocate(part_params(p_master%nparts))
-            do ipart=1,p_master%nparts
-                call part_params(ipart)%new(2)
-                allocate(stkname, source=trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
-                outstkname = add2fbody(stkname, p_master%ext, '_sc')
-                call part_params(ipart)%set('stk',    stkname)
-                call part_params(ipart)%set('outstk', outstkname)
-                deallocate(stkname, outstkname)
-            end do
+            nparts = 1
         endif
+        smpd = b%spproj%get_smpd()
+        box  = b%spproj%get_box()
+        call cline_scale%set('smpd', smpd)
+        call cline_scale%set('box',  real(box))
+        p_master%nparts = nparts
+        parts = split_nobjs_even(nstks, nparts)
+        allocate(part_params(nparts))
+        cnt = 0
+        do ipart=1,nparts
+            call part_params(ipart)%new(1)
+            partsz = parts(ipart,2) - parts(ipart,1) + 1
+            allocate(part_stks(partsz))
+            ! creates part filetab
+            filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
+            do istk=1,partsz
+                cnt = cnt + 1
+                part_stks(istk) = b%spproj%get_stkname(cnt)
+            enddo
+            ! write part filetab & update part parameters
+            call write_filetable( filetab, part_stks )
+            call part_params(ipart)%set('filetab', filetab)
+            deallocate(part_stks)
+        end do
+        deallocate(parts)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -1351,15 +1341,13 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         ! clean
         call qsys_cleanup(p_master)
-        if( cline%defined('stktab') )then
-            ! removes temporary split stktab lists
-            do ipart=1,nparts
-                filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
-                call del_file( filetab )
-            end do
-        endif
+        ! removes temporary split stktab lists
+        do ipart=1,nparts
+            filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
+            call del_file( filetab )
+        end do
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_SCALE_STK_PARTS NORMAL STOP ****')
-    end subroutine exec_scale_stk_parts
+        call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
+    end subroutine exec_scale_project_distr
 
 end module simple_commander_distr_wflows

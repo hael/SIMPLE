@@ -363,13 +363,13 @@ contains
         stop
     end subroutine print_doc_preprocess
 
-    subroutine print_doc_prime3D_init
+    subroutine print_doc_refine3D_init
         write(*,'(A)', advance='no') 'is a distributed workflow for generating a random initial model for initialisati'
         write(*,'(A)', advance='no') 'on of PRIME3D. If the data set is large (>5000 images), generating a random mode'
         write(*,'(A)', advance='no') 'l can be slow. To speedup, set nran to some smaller number, resulting in nran im'
         write(*,'(A)') 'ages selected randomly for reconstruction'
         stop
-    end subroutine print_doc_prime3D_init
+    end subroutine print_doc_refine3D_init
 
     subroutine print_doc_reconstruct3D
         write(*,'(A)', advance='no') 'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,'
@@ -478,7 +478,7 @@ contains
         write(*,'(A)') 'pick'
         write(*,'(A)') 'powerspecs'
         write(*,'(A)') 'preprocess'
-        write(*,'(A)') 'prime3D_init'
+        write(*,'(A)') 'refine3D_init'
         write(*,'(A)') 'reconstruct3D'
         write(*,'(A)') 'refine3D'
         write(*,'(A)') 'scale_stk_parts'

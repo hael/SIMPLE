@@ -124,23 +124,22 @@ contains
         if( b%a%get_nevenodd() == 0 )then
             stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
         endif
-        if( .not. cline%defined('refs') )&
-        &stop 'need refs to be part of command line for distributed cluster2D execution'
-        if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
-        call cavger_read(p%refs,      'merged')
+        if( .not. cline%defined('refs') ) stop 'need refs to be part of command line for cluster2D execution'
+        if( .not. file_exists(p%refs) )   stop 'input references (refs) does not exist in cwd'
+        call cavger_read(p%refs, 'merged')
         if( file_exists(p%refs_even) )then
-            call cavger_read(p%refs_even, 'even'  )
+            call cavger_read(p%refs_even, 'even')
         else
-            call cavger_read(p%refs, 'even'  )
+            call cavger_read(p%refs, 'even')
         endif
         if( file_exists(p%refs_odd) )then
-            call cavger_read(p%refs_odd,  'odd'   )
+            call cavger_read(p%refs_odd, 'odd')
         else
-            call cavger_read(p%refs,  'odd'   )
+            call cavger_read(p%refs, 'odd')
         endif
 
         ! SETUP WEIGHTS
-        ! this needs to be done prior tfit_bfaco search such that each part
+        ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
         if( p%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( p%nptcls <= SPECWMINPOP )then
@@ -160,7 +159,7 @@ contains
                     ! now ensuring the spectral re-ranking does not re-populates
                     ! zero-populated classes, for congruence with empty cavgs
                     do icls = 1, p%ncls
-                        if( prev_pops(icls) > 0 )cycle
+                        if( prev_pops(icls) > 0 ) cycle
                         call b%a%get_pinds(icls, 'class', pinds, consider_w=.false.)
                         if( .not.allocated(pinds) )cycle
                         do iptcl = 1, size(pinds)
@@ -179,16 +178,6 @@ contains
 
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
-
-        ! POPULATION BALANCING LOGICS
-        ! this needs to be done prior to search such that each part
-        ! sees the same information in distributed execution(p%oritab.ne.'') .and. p%l_frac_update
-        if( p%balance > 0 )then
-            call b%a%balance(p%balance, skewness)
-            write(*,'(A,F8.2)') '>>> CLASS DISTRIBUTION SKEWNESS(%):', 100. * skewness
-        else
-            call b%a%set_all2single('state_balance', 1.0)
-        endif
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
@@ -237,7 +226,7 @@ contains
         if( b%spproj%get_ctfflag('ptcl2D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl2D')
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
-
+        
         ! SEARCH
         if( L_BENCH ) t_align = tic()
         if( L_BENCH_CLUSTER2D )then

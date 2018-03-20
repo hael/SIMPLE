@@ -116,6 +116,25 @@ contains
                 stop 'commander_project :: exec_manage_project'
             endif
         endif
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            if( trim(p%ctf) .ne. 'no' )then
+                ! there needs to be associated parameters of some form
+                if( n_ori_inputs < 1 )then
+                    write(*,*) 'ERROR, stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)'
+                    stop 'commander_project :: exec_manage_project'
+                endif
+            endif
+        endif
+        if( cline%defined('stk') .and. cline%defined('stktab') )then
+            write(*,*) 'ERROR, stk and stktab are both defined on command line, use either or'
+            stop 'commander_project :: exec_manage_project'
+        endif
+        if( cline%defined('filetab') )then
+            if( cline%defined('stk') .or. cline%defined('stktab') )then
+                write(*,*) 'ERROR, stk and stktab cannot be inputted when filetab (of movies) is inputted'
+                stop 'commander_project :: exec_manage_project'
+            endif
+        endif
         if( inputted_oritab )then
             ndatlines = binread_nlines(p, p%oritab)
             call os%new_clean(ndatlines)
@@ -182,7 +201,6 @@ contains
         if( n_ori_inputs == 1 )then
             ! sampling distance
             if( cline%defined('smpd') )then
-                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('smpd', p%smpd)
             else
                 do i=1,ndatlines
@@ -195,7 +213,6 @@ contains
             endif
             ! acceleration voltage
             if( cline%defined('kv') )then
-                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('kv', p%kv)
             else
                 do i=1,ndatlines
@@ -208,7 +225,6 @@ contains
             endif
             ! spherical aberration
             if( cline%defined('cs') )then
-                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('cs', p%cs)
             else
                 do i=1,ndatlines
@@ -221,7 +237,6 @@ contains
             endif
             ! fraction of amplitude contrast
             if( cline%defined('fraca') )then
-                !!!! this should only be done if this is a stack import !!!!
                 call os%set_all2single('fraca', p%fraca)
             else
                 do i=1,ndatlines
@@ -249,41 +264,20 @@ contains
         ! PROJECT FILE MANAGEMENT
         if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
 
-        ! STACK INPUT MANAGEMENT
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            if( trim(p%ctf) .ne. 'no' )then
-                ! there needs to be associated parameters of some form
-                if( n_ori_inputs < 1 )then
-                    write(*,*) 'ERROR, stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)'
-                    stop 'commander_project :: exec_manage_project'
-                endif
-            endif
-        endif
-        if( cline%defined('stk') .and. cline%defined('stktab') )then
-            write(*,*) 'ERROR, stk and stktab are both defined on command line, use either or'
-            stop 'commander_project :: exec_manage_project'
-        endif
-        if( cline%defined('filetab') )then
-            if( cline%defined('stk') .or. cline%defined('stktab') )then
-                write(*,*) 'ERROR, stk and stktab cannot be inputted when filetab (of movies) is inputted'
-                stop 'commander_project :: exec_manage_project'
-            endif
-        endif
-
         ! UPDATE FIELDS
         ! add stack if present
         if( cline%defined('stk') )then
-            if( n_ori_inputs < 1 )then
+            if( n_ori_inputs == 0 )then
                 if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance in A) input required when importing class averages; commander_project :: exec_manage_project'
-                call spproj%add_single_stk(p%stk, p%smpd, p%imgkind)
+                call spproj%add_cavgs2os_out(p%stk, p%smpd, p%imgkind)
             else
                 if( cline%defined('smpd') )then
-                    call spproj%add_single_stk(p%stk, p%smpd, p%imgkind, os=os)
+                    call spproj%add_single_ptcls_stk(p%stk, p%smpd, os)
                 endif
             endif
         endif
         ! add list of stacks (stktab) if present
-        if( cline%defined('stktab') ) call spproj%add_stktab(p%stktab, os)
+        if( cline%defined('stktab') ) call spproj%add_ptcls_stktab(p%stktab, os)
         ! add list of movies (filetab) if present
         if( cline%defined('filetab') )then
             ! hard requirements

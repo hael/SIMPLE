@@ -34,8 +34,7 @@ contains
             endif
         else
             ! first iteration, no class assignment: all classes are up for grab
-            allocate(cls_pops(p%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
-            allocchk("simple_strategy2D_matcher; prime2D_exec cls_pops")
+            allocate(cls_pops(p%ncls), source=MINCLSPOPLIM+1)
         endif
         ! make random reference direction order
         nptcls = count(ptcl_mask)

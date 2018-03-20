@@ -21,6 +21,7 @@ type :: oris
     ! CONSTRUCTORS
     procedure          :: new
     procedure          :: new_clean
+    procedure          :: reallocate
     ! GETTERS
     procedure          :: e1get
     procedure          :: e2get
@@ -247,6 +248,25 @@ contains
             call self%o(i)%new_ori_clean
         end do
     end subroutine new_clean
+
+    !>  \brief  is a constructor
+    subroutine reallocate( self, new_n )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: new_n
+        type(oris) :: tmp
+        integer    :: old_n, i
+        if( self%n == 0 )     stop 'ERROR! cannot reallocate non-existing oris; oris :: reallocate'
+        if( new_n <= self%n ) stop 'ERROR! reallocation to smaller size not supported; oris :: reallocate'
+        ! make a copies
+        old_n = self%n
+        tmp   = self
+        ! reallocate
+        call self%new_clean(new_n)
+        ! stash back the old data
+        do i=1,old_n
+            self%o(i) = tmp%o(i)
+        end do
+    end subroutine reallocate
 
     ! GETTERS
 

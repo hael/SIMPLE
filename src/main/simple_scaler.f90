@@ -93,9 +93,9 @@ contains
     end subroutine scale_exec
 
     subroutine scale_distr_exec( self )
-        use simple_commander_distr_wflows, only: scale_stk_parts_commander
-        class(scaler)                   :: self
-        type(scale_stk_parts_commander) :: xscale_distr
+        use simple_commander_distr_wflows, only: scale_project_distr_commander
+        class(scaler)                       :: self
+        type(scale_project_distr_commander) :: xscale_distr
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> AUTO-SCALING IMAGES'
         write(*,'(A)') '>>>'

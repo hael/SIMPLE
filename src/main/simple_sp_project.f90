@@ -13,11 +13,13 @@ character(len=4)   :: NULL = 'null'
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
     ! segments 1-10 reserved for simple program outputs, orientations and files
-    type(oris)        :: os_stk    ! per-micrograph stack os, segment 1
-    type(oris)        :: os_ptcl2D ! per-particle 2D os,      segment 2
-    type(oris)        :: os_cls2D  ! per-cluster 2D os,       segment 3
-    type(oris)        :: os_cls3D  ! per-cluster 3D os,       segment 4
-    type(oris)        :: os_ptcl3D ! per-particle 3D os,      segment 5
+    type(oris)        :: os_stk    ! per-micrograph stack os,  segment 1
+    type(oris)        :: os_ptcl2D ! per-particle 2D os,       segment 2
+    type(oris)        :: os_cls2D  ! per-cluster 2D os,        segment 3
+    type(oris)        :: os_cls3D  ! per-cluster 3D os,        segment 4
+    type(oris)        :: os_ptcl3D ! per-particle 3D os,       segment 5
+    type(oris)        :: os_out    ! critical project outputs, segment 6
+    ! In segment 6 we stash class averages, ranked class averages, final volumes etc.
 
     ! ARRAY REPRESENTATIONS OF BINARY FILE SEGMENTS FOR FRCS & FSCS
     real, allocatable :: frcs(:,:) ! Fourier Ring  Corrs      segment 9
@@ -41,14 +43,16 @@ contains
     procedure, private :: map_ptcl_ind2stk_ind
     ! os_stk related methods
     procedure          :: add_movies
-    procedure          :: add_stktab
-    procedure          :: add_single_stk
+    procedure          :: add_ptcls_stktab
+    procedure          :: add_single_ptcls_stk
     procedure          :: get_stkname
     procedure          :: get_stkname_and_ind
     procedure          :: add_scale_tag
     procedure          :: del_scale_tag
     procedure          :: write_stktab
     procedure          :: del_stk_files
+    ! os_out related methods
+    procedure          :: add_cavgs2os_out
     ! getters
     procedure          :: get_nptcls
     procedure          :: get_box
@@ -63,7 +67,7 @@ contains
     procedure          :: split_stk
     procedure          :: new_sp_oris
     procedure          :: set_sp_oris
-    procedure          :: gen_projfile4scale
+    procedure          :: scale_projfile
     ! printers
     procedure          :: print_info
     ! I/O
@@ -95,10 +99,14 @@ contains
                 sp_reciever%os_stk    = sp_provider%os_stk
             case('ptcl2D')
                 sp_reciever%os_ptcl2D = sp_provider%os_ptcl2D
+            case('cls2D')
+                sp_reciever%os_cls2D  = sp_provider%os_cls2D
             case('cls3D')
-                sp_reciever%os_cls3D = sp_provider%os_cls3D
+                sp_reciever%os_cls3D  = sp_provider%os_cls3D
             case('ptcl3D')
                 sp_reciever%os_ptcl3D = sp_provider%os_ptcl3D
+            case('out')
+                sp_reciever%os_out    = sp_provider%os_out
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype)
                 stop 'unsupported oritype; sp_project :: transfer_sp_project_segment'
@@ -129,6 +137,9 @@ contains
             case('ptcl3D')
                 call self%os_ptcl3D%new_clean(n)
                 os_ptr => self%os_ptcl3D
+            case('out')
+                call self%os_out%new_clean(n)
+                os_ptr => self%os_out
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype)
                 stop 'unsupported oritype; sp_project :: new_with_os_segptr'
@@ -153,7 +164,7 @@ contains
             if( cline%defined('projname') )then
                 projname_new = cline%get_carg('projname')
                 call self%projinfo%getter(1, 'projname', projname_old)
-                write(*,*) 'Changing project name from ', trim(projname_old), ' to ', trim(projname_new)
+                write(*,'(a,a,a,a)') 'Creating new project ', trim(projname_new), ' from ', trim(projname_old)
                 call self%projinfo%set(1, 'projname', trim(projname_new))
                 call self%projinfo%set(1, 'projfile', trim(projname_new)//'.simple')
             endif
@@ -179,7 +190,7 @@ contains
                 call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
             endif
         endif
-        ! it is assumed that the project is created in the "project directory", i.e. stash cwd
+        ! it is assumed that the project is created in the root "project directory", i.e. stash cwd
         call simple_getcwd(cwd)
         call self%projinfo%set(1, 'cwd', trim(cwd))
     end subroutine update_projinfo
@@ -363,7 +374,7 @@ contains
         enddo
     end subroutine add_movies
 
-    subroutine add_stktab( self, stktab, os )
+    subroutine add_ptcls_stktab( self, stktab, os )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: stktab
         class(oris),       intent(inout) :: os ! parameters associated with stktab
@@ -466,14 +477,13 @@ contains
                 call self%os_ptcl3D%set(iptcl, 'stkind', real(istk))
             end do
         end do
-    end subroutine add_stktab
+    end subroutine add_ptcls_stktab
 
-    subroutine add_single_stk( self, stk, smpd, imgkind, os )
+    subroutine add_single_ptcls_stk( self, stk, smpd, os )
         use simple_imghead, only: find_ldim_nptcls
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=*),      intent(in)    :: imgkind
         class(oris), optional, intent(inout) :: os   ! parameters associated with stk
         real,             allocatable :: smpds(:)
         integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D, fnr
@@ -526,13 +536,14 @@ contains
         call self%os_stk%set(1, 'top',     real(nptcls))
         call self%os_stk%set(1, 'smpd',    real(smpd_here))
         call self%os_stk%set(1, 'stkkind', 'single')
+        call self%os_stk%set(1, 'imgkind', 'ptcl')
         ! update particle fields
         self%os_ptcl2D = os
         ! set stack index to 1
         call self%os_ptcl2D%set_all2single('stkind', 1.0)
         ! make ptcl2D field identical to ptcl3D field
         self%os_ptcl3D = self%os_ptcl2D
-    end subroutine add_single_stk
+    end subroutine add_single_ptcls_stk
 
     subroutine split_stk( self, nparts )
         use simple_imghead,    only: find_ldim_nptcls
@@ -696,15 +707,63 @@ contains
         end do
     end subroutine del_stk_files
 
+    ! os_out related methods
+
+    subroutine add_cavgs2os_out( self, stk, smpd, imgkind )
+        use simple_imghead, only: find_ldim_nptcls
+        class(sp_project),     intent(inout) :: self
+        character(len=*),      intent(in)    :: stk
+        real,                  intent(in)    :: smpd ! sampling distance of images in stk
+        character(len=*),      intent(in)    :: imgkind
+        integer :: ldim(3), nptcls, n_os_out
+        ! file exists?
+        if( .not. file_exists(stk) )then
+            write(*,*) 'Inputted stack (stk): ', trim(stk)
+            stop 'does not exist in cwd; sp_project :: add_os_out'
+        endif
+        ! find dimension of inputted stack
+        call find_ldim_nptcls(stk, ldim, nptcls)
+        if( ldim(1) /= ldim(2) )then
+            write(*,*) 'xdim: ', ldim(1)
+            write(*,*) 'ydim: ', ldim(2)
+            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_os_out'
+        endif
+        ! check if field is empty
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 )then
+            n_os_out = 1
+            call self%os_out%new_clean(n_os_out)
+        else
+            n_os_out = n_os_out + 1
+            call self%os_out%reallocate(n_os_out)
+        endif
+        ! fill-in field
+        call self%os_out%set(n_os_out , 'stk',     trim(stk))
+        call self%os_out%set(n_os_out , 'box',     real(ldim(1)))
+        call self%os_out%set(n_os_out , 'nptcls',  real(nptcls))
+        call self%os_out%set(n_os_out , 'fromp',   1.0)
+        call self%os_out%set(n_os_out , 'top',     real(nptcls))
+        call self%os_out%set(n_os_out , 'smpd',    real(smpd))
+        call self%os_out%set(n_os_out , 'stkkind', 'single')
+        call self%os_out%set(n_os_out , 'imgkind', 'cavg')
+    end subroutine add_cavgs2os_out
+
     ! getters
 
     integer function get_nptcls( self )
         class(sp_project), target, intent(inout) :: self
-        integer :: i
+        integer :: i, nos
         get_nptcls = 0
-        do i=1,self%os_stk%get_noris()
+        nos        = self%os_stk%get_noris()
+        do i=1,nos
             get_nptcls = get_nptcls + nint(self%os_stk%get(i,'nptcls'))
         enddo
+        ! sanity check
+        if( self%os_stk%isthere(nos,'top') )then
+            if( self%os_stk%get(nos,'top') /=  get_nptcls )then
+                stop 'ERROR! total # particles .ne. last top index; sp_project :: get_nptcls'
+            endif
+        endif
     end function get_nptcls
 
     integer function get_box( self )
@@ -713,7 +772,7 @@ contains
         get_box  = 0
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            stop 'Empty stack object! simple_sp_project :: get_box'
+            stop 'ERROR! empty os_stk field! sp_project :: get_box'
         endif
         get_box = nint( self%os_stk%get(1,'box') )
     end function get_box
@@ -724,7 +783,7 @@ contains
         get_smpd  = 0.
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            stop 'Empty stack object! simple_sp_project :: get_box'
+            stop 'ERROR! empty os_stk field! sp_project :: get_smpd'
         endif
         get_smpd = self%os_stk%get(1,'smpd')
     end function get_smpd
@@ -873,7 +932,7 @@ contains
             ctfflag = 'null'
         endif
         if( trim(ctfflag).eq.'null' )then
-            write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl_field'
+            write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
             stop 'sp_project :: get_ctfparams'
         else
             select case(trim(ctfflag))
@@ -975,25 +1034,27 @@ contains
     logical function is_virgin_field( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        class(oris), pointer :: ptcls => null()
+        class(oris), pointer :: os => null()
         real, allocatable   :: rvals
         is_virgin_field = .false.
         ! set field pointer
         select case(trim(oritype))
             case('ptcl2D')
-                ptcls => self%os_ptcl2D
+                os => self%os_ptcl2D
             case('ptcl3D')
-                ptcls => self%os_ptcl3D
+                os => self%os_ptcl3D
+            case('cls3D')
+                os => self%os_cls3D
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: get_ctfparams'
+                stop 'sp_project :: is_virgin_field'
         end select
-        if( any( abs(ptcls%get_all('e3'))>TINY) )return
-        if( any( abs(ptcls%get_all('e1'))>TINY) )return
-        if( any( abs(ptcls%get_all('e2'))>TINY) )return
-        if( any( abs(ptcls%get_all('corr'))>TINY) )return
-        if( any( abs(ptcls%get_all('x'))>TINY) )return
-        if( any( abs(ptcls%get_all('y'))>TINY) )return
+        if( any( abs(os%get_all('e3')  )>TINY) )return
+        if( any( abs(os%get_all('e1')  )>TINY) )return
+        if( any( abs(os%get_all('e2')  )>TINY) )return
+        if( any( abs(os%get_all('corr'))>TINY) )return
+        if( any( abs(os%get_all('x')   )>TINY) )return
+        if( any( abs(os%get_all('y')   )>TINY) )return
         is_virgin_field = .true.
     end function is_virgin_field
 
@@ -1014,6 +1075,8 @@ contains
                 call self%os_cls3D%new_clean(n)
             case('ptcl3D')
                 call self%os_ptcl3D%new_clean(n)
+            case('out')
+                call self%os_out%new_clean(n)
             case('projinfo')
                 call self%projinfo%new_clean(n)
             case('jobproc')
@@ -1040,6 +1103,8 @@ contains
                 self%os_cls3D  = os
             case('ptcl3D')
                 self%os_ptcl3D = os
+            case('out')
+                self%os_out    = os
             case('projinfo')
                 self%projinfo  = os
             case('jobproc')
@@ -1051,7 +1116,7 @@ contains
         end select
     end subroutine set_sp_oris
 
-    subroutine gen_projfile4scale( self, smpd_target, new_projfile, cline, cline_scale )
+    subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale )
         ! this probably needs an oritype input for dealing with scale class averages
         use simple_cmdline, only: cmdline
         class(sp_project),             intent(inout) :: self
@@ -1060,25 +1125,21 @@ contains
         class(cmdline),                intent(inout) :: cline
         class(cmdline),                intent(out)   :: cline_scale
         character(len=:), allocatable :: projfile, projname, new_projname
-        real    :: scale_factor,smpd_sc, msk_sc, smpd, msk
+        real    :: scale_factor, smpd_sc, msk_sc, smpd, msk
         integer :: box, box_sc, istk, n_os_stk
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            stop 'Empty stack object! simple_sp_project :: get_scale'
+            stop 'Empty stack object! simple_sp_project :: scale_projfile'
         endif
-        if( self%projinfo%isthere('projname') )then
-            call self%projinfo%getter(1, 'projname', projname)
-        else
-            call self%projinfo%getter(1, 'projfile', projfile)
-            projname = get_fbody( projfile, 'simple' )
-        endif
-        projfile = trim(projname)//'.simple'
+        call self%projinfo%getter(1, 'projfile', projfile)
+        call self%projinfo%getter(1, 'projname', projname)
         ! dimensions
         smpd = self%get_smpd()
         box  = self%get_box()
         call autoscale(box, smpd, smpd_target, box_sc, smpd_sc, scale_factor)
-        call cline_scale%set('prg',   'scale_stk_parts')
-        call cline_scale%set('scale', scale_factor)
+        call cline_scale%set('prg',      'scale_project')
+        call cline_scale%set('scale',    scale_factor)
+        call cline_scale%set('projfile', projfile)
         if( box == box_sc )then
             ! no scaling
             new_projfile = trim(projfile)
@@ -1104,18 +1165,14 @@ contains
         call cline%set('projname', trim(new_projname))
         call cline%delete('projfile')
         call self%update_projinfo( cline )
-        call self%write_stktab('stktab_ori.txt')
         call self%add_scale_tag
         ! save
         call self%write()
         ! command line for scaling
-        call cline_scale%set('smpd',    smpd)
-        call cline_scale%set('box',     real(box))
         call cline_scale%set('newbox',  real(box_sc))
-        call cline_scale%set('filetab', trim('stktab_ori.txt'))
-        if( cline%defined('nthr') )  call cline_scale%set('nthr', cline%get_rarg('nthr'))
-        if( cline%defined('nparts') )call cline_scale%set('nparts', cline%get_rarg('nparts'))
-    end subroutine gen_projfile4scale
+        if( cline%defined('nthr') )   call cline_scale%set('nthr', cline%get_rarg('nthr'))
+        if( cline%defined('nparts') ) call cline_scale%set('nparts', cline%get_rarg('nparts'))
+    end subroutine scale_projfile
 
     ! printers
 
@@ -1132,6 +1189,8 @@ contains
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-cluster  3D      segment (4) :', n
         n = self%os_ptcl3D%get_noris()
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 3D      segment (5) :', n
+        n = self%os_out%get_noris()
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in out                  segment (6) :', n
         n = 0
         if( allocated(self%frcs) ) n = size(self%frcs,1)
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in FRCs                 segment (9) :', n
@@ -1165,7 +1224,6 @@ contains
             call self%segreader(isegment)
         end do
         call self%bos%close
-        ! call self%projinfo2globals
     end subroutine read
 
     subroutine read_ctfparams_state_eo( self, fname )
@@ -1185,7 +1243,6 @@ contains
             call self%segreader(isegment, only_ctfparams_state_eo=.true.)
         end do
         call self%bos%close
-        ! call self%projinfo2globals
     end subroutine read_ctfparams_state_eo
 
     subroutine read_segment( self, which, fname, fromto )
@@ -1218,9 +1275,10 @@ contains
                         call self%os_cls3D%read(fname,  fromto)
                     case('ptcl3D')
                         call self%os_ptcl3D%read(fname, fromto)
+                    case('out')
+                        call self%os_out%read(fname)
                     case('projinfo')
                         call self%projinfo%read(fname)
-                        ! call self%projinfo2globals
                     case('jobproc')
                         call self%jobproc%read(fname)
                     case('compenv')
@@ -1256,6 +1314,9 @@ contains
             case(PTCL3D_SEG)
                 call self%os_ptcl3D%new_clean(n)
                 call self%bos%read_segment(isegment, self%os_ptcl3D, only_ctfparams_state_eo=only_ctfparams_state_eo)
+            case(OUT_SEG)
+                call self%os_out%new_clean(n)
+                call self%bos%read_segment(isegment, self%os_out)
             case(FRCS_SEG)
                 call self%read_2Darray_segment(FRCS_SEG, self%frcs)
             case(FSCS_SEG)
@@ -1358,6 +1419,12 @@ contains
                         else
                             write(*,*) 'WARNING, no ptcl3D-type oris available to write; sp_project :: write_segment'
                         endif
+                    case('out')
+                        if( self%os_out%get_noris() > 0 )then
+                            call self%os_out%write(fname)
+                        else
+                            write(*,*) 'WARNING, no out-type oris available to write; sp_project :: write_segment'
+                        endif
                     case('projinfo')
                         if( self%projinfo%get_noris() > 0 )then
                             call self%projinfo%write(fname, fromto)
@@ -1400,6 +1467,8 @@ contains
                 call self%bos%write_segment(isegment, self%os_cls3D, fromto)
             case(PTCL3D_SEG)
                 call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
+            case(OUT_SEG)
+                call self%bos%write_segment(isegment, self%os_out)
             case(FRCS_SEG)
                 call self%bos%write_segment(FRCS_SEG, self%frcs)
             case(FSCS_SEG)
@@ -1422,6 +1491,7 @@ contains
         call self%os_cls2D%kill
         call self%os_cls3D%kill
         call self%os_ptcl3D%kill
+        call self%os_out%kill
         call self%projinfo%kill
         call self%jobproc%kill
         call self%compenv%kill
@@ -1443,6 +1513,8 @@ contains
                 isegment = CLS3D_SEG
             case('ptcl3D')
                 isegment = PTCL3D_SEG
+            case('out')
+                isegment = OUT_SEG
             case('frcs')
                 isegment = FRCS_SEG
             case('fscs')

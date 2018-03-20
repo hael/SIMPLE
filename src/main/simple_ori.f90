@@ -139,7 +139,6 @@ contains
         call self%htab%set('y',0.)
         call self%htab%set('dist',180.)
         call self%htab%set('state',1.)
-        call self%htab%set('state_balance',1.)
         call self%htab%set('frac',0.)
         call self%htab%set('eo',-1.) ! -1. is default (low-pass set); 0. for even; 1. for odd
         self%chtab = chash()

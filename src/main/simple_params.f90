@@ -1,12 +1,11 @@
 ! provides global distribution of constants and derived constants
 module simple_params
 #include "simple_lib.f08"
-use simple_ori,            only: ori
-use simple_cmdline,        only: cmdline
-use simple_magic_boxes,    only: find_magic_box
-use simple_imghead,        only: find_ldim_nptcls
-use simple_stktab_handler, only: stktab_handler
-use simple_binoris,        only: binoris
+use simple_ori,         only: ori
+use simple_cmdline,     only: cmdline
+use simple_magic_boxes, only: find_magic_box
+use simple_imghead,     only: find_ldim_nptcls
+use simple_binoris,     only: binoris
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none
@@ -20,7 +19,6 @@ type :: params
     ! global objects
     type(ori)             :: ori_glob
     type(ctfplan)         :: tfplan
-    type(stktab_handler)  :: stkhandle
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
@@ -58,7 +56,7 @@ type :: params
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: neigh='no'             !<
     character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
+    ! character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
     character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
@@ -381,7 +379,7 @@ type :: params
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
     logical :: l_remap_cls    = .false.
-    logical :: l_stktab_input = .false.
+    ! logical :: l_stktab_input = .false.
     logical :: l_cc_objfun    = .true.
     logical :: l_cc_bfac      = .true.
     logical :: l_dev          = .false.
@@ -515,7 +513,7 @@ contains
         call check_carg('neg',            self%neg)
         call check_carg('neigh',          self%neigh)
         call check_carg('noise_norm',     self%noise_norm)
-        call check_carg('noise',          self%noise)
+        ! call check_carg('noise',          self%noise)
         call check_carg('norec',          self%norec)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
@@ -973,22 +971,22 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
-        self%l_stktab_input = .false.
+        ! self%l_stktab_input = .false.
         if( cline%defined('stktab') )then
-            if( cline%defined('stk') )&
-                &stop 'stk and stktab cannot simultaneously be defined; params :: new'
-            ! prepare stktab handler and set everything accordingly in this instance
-            if( self%l_distr_exec )then
-                call self%stkhandle%new(trim(self%stktab), self%part)
-            else
-                call self%stkhandle%new(trim(self%stktab))
-            endif
-            self%nmics   = self%stkhandle%get_nmics()
-            self%nptcls  = self%stkhandle%get_nptcls()
-            self%ldim    = self%stkhandle%get_ldim()
-            self%ldim(3) = 1
-            self%box     = self%ldim(1)
-            self%l_stktab_input = .true.
+            ! if( cline%defined('stk') )&
+            !     &stop 'stk and stktab cannot simultaneously be defined; params :: new'
+            ! ! prepare stktab handler and set everything accordingly in this instance
+            ! if( self%l_distr_exec )then
+            !     call self%stkhandle%new(trim(self%stktab), self%part)
+            ! else
+            !     call self%stkhandle%new(trim(self%stktab))
+            ! endif
+            ! self%nmics   = self%stkhandle%get_nmics()
+            ! self%nptcls  = self%stkhandle%get_nptcls()
+            ! self%ldim    = self%stkhandle%get_ldim()
+            ! self%ldim(3) = 1
+            ! self%box     = self%ldim(1)
+            ! self%l_stktab_input = .true.
         else
             if( ddel_scaled )then
                 ! delete possibly pre-existing scaled stack parts

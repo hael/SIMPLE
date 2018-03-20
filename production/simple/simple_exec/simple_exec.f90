@@ -572,29 +572,7 @@ select case(prg)
         ! execute
         call xnormalize%execute(cline)
     case( 'scale' )
-        !==Program scale
-        !
-        ! <scale/begin>is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks
-        ! and volumes<scale/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        ! set optional keys
-        keys_optional(1)  = 'stk'
-        keys_optional(2)  = 'vol1'
-        keys_optional(3)  = 'filetab'
-        keys_optional(4)  = 'msk'
-        keys_optional(5)  = 'scale'
-        keys_optional(6)  = 'scale2'
-        keys_optional(7)  = 'newbox'
-        keys_optional(8)  = 'clip'
-        keys_optional(9)  = 'outvol'
-        keys_optional(10) = 'outstk'
-        keys_optional(11) = 'outstk2'
-        ! parse command line
-        if( describe ) call print_doc_scale
-        call cline%parse_oldschool(keys_required(:1),keys_optional(:11))
-        ! execute
+        call cline%parse()
         call xscale%execute(cline)
     case( 'stack' )
         !==Program stack

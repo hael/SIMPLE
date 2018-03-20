@@ -25,7 +25,7 @@ use simple_strategy2D3D_common       ! use all in there
 use simple_timer                     ! use all in there
 implicit none
 
-public :: prime3D_find_resrange, prime3D_exec, gen_random_model
+public :: refine3D_exec!, gen_random_model
 public :: preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
@@ -42,32 +42,7 @@ character(len=STDLEN)          :: benchfname
 
 contains
 
-    subroutine prime3D_find_resrange( b, p, lp_start, lp_finish )
-        use simple_oris, only: oris
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        real,          intent(out)   :: lp_start, lp_finish
-        real, allocatable :: peaks(:)
-        type(oris)        :: o
-        integer :: lfny, k, pos10, pos6
-        call o%new(p%nspace)
-        call o%spiral
-        lfny = b%img_match%get_lfny(1)
-        allocate( peaks(lfny), stat=alloc_stat )
-        allocchk("In: prime3D_find_resrange, simple_strategy3D_matcher")
-        do k=2,b%img_match%get_lfny(1)
-            peaks(k) = real(o%find_npeaks(b%img_match%get_lp(k), p%moldiam))
-        end do
-        peaks(1)  = peaks(2)
-        pos10     = locate(peaks, lfny, 10.)
-        pos6      = locate(peaks, lfny,  6.)
-        lp_start  = b%img_match%get_lp(pos10)
-        lp_finish = b%img_match%get_lp(pos6)
-        deallocate(peaks)
-        call o%kill
-    end subroutine prime3D_find_resrange
-
-    subroutine prime3D_exec( b, p, cline, which_iter, converged )
+    subroutine refine3D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
@@ -91,7 +66,7 @@ contains
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
         integer :: batchlims(2)
-        logical :: doprint, do_extr
+        logical :: doprint, do_extr, is_virgin
 
         if( L_BENCH )then
             t_init = tic()
@@ -104,11 +79,7 @@ contains
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( p%eo .ne. 'no' )then
-            if( p%l_distr_exec )then
-                if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: prime2D_exec'
-            else
-                if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
-            endif
+            if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec'
         else
             call b%a%set_all2single('eo', -1.)
         endif
@@ -134,16 +105,6 @@ contains
         end select
         DebugPrint '*** strategy3D_matcher ***: determined the number of peaks'
 
-        ! RANDOM MODEL GENERATION
-        if( p%vols(1) .eq. '' .and. p%nstates == 1 )then
-            if( p%nptcls > 1000 )then
-                call gen_random_model(b, p, 1000)
-            else
-                call gen_random_model(b, p)
-            endif
-            DebugPrint '*** strategy3D_matcher ***: generated random model'
-        endif
-
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
 
@@ -160,16 +121,6 @@ contains
 
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
-
-        ! POPULATION BALANCING LOGICS
-        ! this needs to be done prior to search such that each part
-        ! sees the same information in distributed execution
-        if( p%balance > 0 )then
-            call b%a%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
-            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
-        else
-            call b%a%set_all2single('state_balance', 1.0)
-        endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -238,21 +189,13 @@ contains
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
-        if( .not. p%l_distr_exec )then
-            if( p%refine .eq. 'snhc')then
-                p%outfile = trim(SNHCDOC)
-            else
-                p%outfile = trim(REFINE3D_ITER_FBODY)//int2str_pad(which_iter,3)//trim(METADATA_EXT)
-            endif
-        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         if( L_BENCH ) t_prep_primesrch3D = tic()
         ! clean big objects before starting to allocate new big memory chunks
-        if( p%l_distr_exec )then
-            call b%vol%kill
-            call b%vol2%kill
-        endif
+        call b%vol%kill
+        call b%vol2%kill
+
         ! array allocation for strategy3D
         call prep_strategy3D( b, p, ptcl_mask, npeaks )
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
@@ -268,9 +211,24 @@ contains
         endif
         select case(trim(refine))
             case('snhc')
-                allocate(strategy3D_snhc_single   :: strategy3Dsrch(p%fromp:p%top))
+                allocate(strategy3D_snhc_single :: strategy3Dsrch(p%fromp:p%top))
             case('single')
-                allocate(strategy3D_single        :: strategy3Dsrch(p%fromp:p%top))
+                ! check if virgin
+                select case(trim(p%oritype))
+                    case('ptcl3D')
+                        is_virgin = b%spproj%is_virgin_field('ptcl3D')
+                    case('cls3D')
+                        is_virgin = b%spproj%is_virgin_field('cls3D')
+                    case DEFAULT
+                        write(*,*) 'oritype: ', trim(p%oritype)
+                        stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
+                end select
+                ! allocate the appropriate polymorphic type
+                if( is_virgin )then
+                    allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top))
+                else
+                    allocate(strategy3D_single        :: strategy3Dsrch(p%fromp:p%top))
+                endif
             case('multi')
                 allocate(strategy3D_multi         :: strategy3Dsrch(p%fromp:p%top))
             case('greedy_single')
@@ -306,14 +264,18 @@ contains
             endif
         end do
         ! memoize CTF matrices
-        if( b%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl3D')
-        ! memoize FFTs for improved performance
+        if( trim(p%oritype) .eq. 'ptcl3D' )then
+            if( b%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl3D')
+        else
+            ! class averages have no CTF
+        endif
+        ! memoize FFTs
         call pftcc%memoize_ffts
+
         ! SEARCH
         if( p%dryrun.eq.'yes' )then
             ! TBD
         else
-            call del_file(p%outfile)
             if( L_BENCH ) t_align = tic()
             !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
             do i=1,nptcls2update
@@ -334,7 +296,15 @@ contains
         if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
-        call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top], isegment=PTCL3D_SEG)
+        select case(trim(p%oritype))
+            case('ptcl3D')
+                call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top], isegment=PTCL3D_SEG)
+            case('cls3D')
+                call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top], isegment=CLS3D_SEG)
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(p%oritype)
+                stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
+        end select
         p%oritab = p%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION
@@ -374,7 +344,7 @@ contains
                 iptcl       = pinds(i)
                 ibatch      = i - batchlims(1) + 1
                 orientation = b%a%get_ori(iptcl)
-                if( orientation%isstatezero() .or. nint(orientation%get('state_balance')) == 0 ) cycle
+                if( orientation%isstatezero() ) cycle
                 if( trim(p%refine).eq.'clustersym' )then
                     ! always C1 reconstruction
                     call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation, o_peaks(iptcl))
@@ -401,20 +371,11 @@ contains
         if( L_BENCH ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE
-        if( p%l_distr_exec )then
-            call qsys_job_finished( p, 'simple_strategy3D_matcher :: prime3D_exec')
-        else
-            select case(trim(p%refine))
-                case('cluster','clustersym','clusterdev')
-                    converged = b%conv%check_conv_cluster()
-                case DEFAULT
-                    converged = b%conv%check_conv3D()
-            end select
-        endif
+        call qsys_job_finished( p, 'simple_strategy3D_matcher :: refine3D_exec')
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.
-            if( p%l_distr_exec .and. p%part /= 1 ) doprint = .false.
+            if( p%part /= 1 ) doprint = .false.
             if( doprint )then
                 benchfname = 'HADAMARD3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
@@ -437,67 +398,67 @@ contains
                 call fclose(fnr)
             endif
         endif
-    end subroutine prime3D_exec
+    end subroutine refine3D_exec
 
-    subroutine gen_random_model( b, p, nsamp_in )
-        use simple_ran_tabu,   only: ran_tabu
-        class(build),      intent(inout) :: b         !< build object
-        class(params),     intent(inout) :: p         !< param object
-        integer, optional, intent(in)    :: nsamp_in  !< num input samples
-        type(ran_tabu)       :: rt
-        type(ori)            :: orientation
-        integer, allocatable :: sample(:)
-        integer              :: i, nsamp, alloc_stat
-        type(kbinterpol)     :: kbwin
-        type(prep4cgrid)     :: gridprep
-        if( p%vols(1) == '' )then
-            ! init volumes
-            call preprecvols(b, p)
-            p%oritab = 'prime3D_startdoc'//trim(METADATA_EXT)
-            if( trim(p%refine).eq.'tseries' )then
-                call b%a%spiral
-            else
-                call b%a%rnd_oris
-                call b%a%zero_shifts
-            endif
-            if( p%l_distr_exec .and. p%part.ne.1 )then
-                ! so random oris only written once in distributed mode
-            else
-                call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
-            endif
-            p%vols(1) = 'startvol'//p%ext
-            if( p%noise .eq. 'yes' )then
-                call b%vol%ran
-                call b%vol%write(p%vols(1), del_if_exists=.true.)
-                return
-            endif
-            nsamp = p%top - p%fromp + 1
-            if( present(nsamp_in) ) nsamp = nsamp_in
-            allocate( sample(nsamp), stat=alloc_stat )
-            call alloc_errchk("In: gen_random_model; simple_strategy3D_matcher", alloc_stat)
-            if( present(nsamp_in) )then
-                rt = ran_tabu(p%top - p%fromp + 1)
-                call rt%ne_ran_iarr(sample)
-                call rt%kill
-            else
-                forall(i=1:nsamp) sample(i) = i
-            endif
-            write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
-            ! make the gridding prepper
-            kbwin = b%recvols(1)%get_kbwin()
-            call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
-            do i=1,nsamp
-                call progress(i, nsamp)
-                orientation = b%a%get_ori(sample(i) + p%fromp - 1)
-                call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
-                call gridprep%prep(b%img, b%img_pad)
-                call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
-            end do
-            deallocate(sample)
-            call norm_struct_facts(b, p)
-            call killrecvols(b, p)
-        endif
-    end subroutine gen_random_model
+    ! subroutine gen_random_model( b, p, nsamp_in )
+    !     use simple_ran_tabu,   only: ran_tabu
+    !     class(build),      intent(inout) :: b         !< build object
+    !     class(params),     intent(inout) :: p         !< param object
+    !     integer, optional, intent(in)    :: nsamp_in  !< num input samples
+    !     type(ran_tabu)       :: rt
+    !     type(ori)            :: orientation
+    !     integer, allocatable :: sample(:)
+    !     integer              :: i, nsamp, alloc_stat
+    !     type(kbinterpol)     :: kbwin
+    !     type(prep4cgrid)     :: gridprep
+    !     if( p%vols(1) == '' )then
+    !         ! init volumes
+    !         call preprecvols(b, p)
+    !         p%oritab = 'prime3D_startdoc'//trim(METADATA_EXT)
+    !         if( trim(p%refine).eq.'tseries' )then
+    !             call b%a%spiral
+    !         else
+    !             call b%a%rnd_oris
+    !             call b%a%zero_shifts
+    !         endif
+    !         if( p%part .ne. 1 )then
+    !             ! so random oris only written once in distributed mode
+    !         else
+    !             call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
+    !         endif
+    !         p%vols(1) = 'startvol'//p%ext
+    !         if( p%noise .eq. 'yes' )then
+    !             call b%vol%ran
+    !             call b%vol%write(p%vols(1), del_if_exists=.true.)
+    !             return
+    !         endif
+    !         nsamp = p%top - p%fromp + 1
+    !         if( present(nsamp_in) ) nsamp = nsamp_in
+    !         allocate( sample(nsamp), stat=alloc_stat )
+    !         call alloc_errchk("In: gen_random_model; simple_strategy3D_matcher", alloc_stat)
+    !         if( present(nsamp_in) )then
+    !             rt = ran_tabu(p%top - p%fromp + 1)
+    !             call rt%ne_ran_iarr(sample)
+    !             call rt%kill
+    !         else
+    !             forall(i=1:nsamp) sample(i) = i
+    !         endif
+    !         write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
+    !         ! make the gridding prepper
+    !         kbwin = b%recvols(1)%get_kbwin()
+    !         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+    !         do i=1,nsamp
+    !             call progress(i, nsamp)
+    !             orientation = b%a%get_ori(sample(i) + p%fromp - 1)
+    !             call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
+    !             call gridprep%prep(b%img, b%img_pad)
+    !             call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
+    !         end do
+    !         deallocate(sample)
+    !         call norm_struct_facts(b, p)
+    !         call killrecvols(b, p)
+    !     endif
+    ! end subroutine gen_random_model
 
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline )
@@ -510,7 +471,6 @@ contains
         integer   :: batchlims(2), imatch, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
         nrefs  = p%nspace * p%nstates
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
@@ -522,8 +482,7 @@ contains
 
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
-        cnt   = 0
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
+        cnt = 0
         do s=1,p%nstates
             if( p%oritab .ne. '' )then
                 if( b%a%get_pop(s, 'state') == 0 )then
@@ -536,14 +495,12 @@ contains
             call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s), do_center, xyz)
             if( p%eo .ne. 'no' )then
                 if( p%nstates.eq.1 )then
-                    if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING EVEN REFERENCES'
                     call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
                         call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
                     end do
                     !$omp end parallel do
-                    if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING ODD REFERENCES'
                     call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
@@ -551,7 +508,6 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
                     call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
                     do iref=1,p%nspace

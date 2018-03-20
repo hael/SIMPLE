@@ -36,17 +36,15 @@ contains
         class(params), intent(inout)  :: p
         integer,       intent(in)     :: iptcl
         character(len=:), allocatable :: stkname
-        integer :: ind
-        if( p%l_stktab_input )then
-            call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
-            call b%img%read(stkname, ind)
-        else
-            if( p%l_distr_exec )then
-                call b%img%read(p%stk_part, iptcl - p%fromp + 1)
-            else
-                call b%img%read(p%stk, iptcl)
-            endif
-        endif
+        integer :: ind_in_stk
+        call b%spproj%get_stkname_and_ind(p%oritype, iptcl, stkname, ind_in_stk)
+        call b%img%read(stkname, ind_in_stk)
+        ! if( p%l_stktab_input )then
+        !     call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+        !     call b%img%read(stkname, ind_in_stk)
+        ! else
+        !     call b%img%read(p%stk_part, iptcl - p%fromp + 1)
+        ! endif
     end subroutine read_img
 
     subroutine read_img_and_norm( b, p, iptcl )
@@ -65,56 +63,71 @@ contains
         character(len=:), allocatable :: stkname
         integer :: iptcl, ind_in_batch, ind_in_stk
         if( present(ptcl_mask) )then
-            if( p%l_stktab_input )then
-                do iptcl=fromptop(1),fromptop(2)
-                    if( ptcl_mask(iptcl) )then
-                        ind_in_batch = iptcl - fromptop(1) + 1
-                        call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
-                        call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
-                    endif
-                end do
-            else
-                if( p%l_distr_exec )then
-                    do iptcl=fromptop(1),fromptop(2)
-                        if( ptcl_mask(iptcl) )then
-                            ind_in_batch = iptcl - fromptop(1) + 1
-                            ind_in_stk   = iptcl - p%fromp + 1
-                            call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
-                        endif
-                    end do
-                else
-                    do iptcl=fromptop(1),fromptop(2)
-                        if( ptcl_mask(iptcl) )then
-                            ind_in_batch = iptcl - fromptop(1) + 1
-                            ind_in_stk   = iptcl
-                            call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
-                        endif
-                    end do
-                endif
-            endif
-        else
-            if( p%l_stktab_input )then
-                do iptcl=fromptop(1),fromptop(2)
+            do iptcl=fromptop(1),fromptop(2)
+                if( ptcl_mask(iptcl) )then
                     ind_in_batch = iptcl - fromptop(1) + 1
-                    call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+                    call b%spproj%get_stkname_and_ind(p%oritype, iptcl, stkname, ind_in_stk)
                     call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
-                end do
-            else
-                if( p%l_distr_exec )then
-                    do iptcl=fromptop(1),fromptop(2)
-                        ind_in_batch = iptcl - fromptop(1) + 1
-                        ind_in_stk   = iptcl - p%fromp + 1
-                        call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
-                    end do
-                else
-                    do iptcl=fromptop(1),fromptop(2)
-                        ind_in_batch = iptcl - fromptop(1) + 1
-                        ind_in_stk   = iptcl
-                        call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
-                    end do
                 endif
-            endif
+            end do
+        else
+            do iptcl=fromptop(1),fromptop(2)
+                ind_in_batch = iptcl - fromptop(1) + 1
+                call b%spproj%get_stkname_and_ind(p%oritype, iptcl, stkname, ind_in_stk)
+                call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+            end do
         endif
+        ! if( present(ptcl_mask) )then
+        !     if( p%l_stktab_input )then
+        !         do iptcl=fromptop(1),fromptop(2)
+        !             if( ptcl_mask(iptcl) )then
+        !                 ind_in_batch = iptcl - fromptop(1) + 1
+        !                 call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+        !                 call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+        !             endif
+        !         end do
+        !     else
+        !         if( p%l_distr_exec )then
+        !             do iptcl=fromptop(1),fromptop(2)
+        !                 if( ptcl_mask(iptcl) )then
+        !                     ind_in_batch = iptcl - fromptop(1) + 1
+        !                     ind_in_stk   = iptcl - p%fromp + 1
+        !                     call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
+        !                 endif
+        !             end do
+        !         else
+        !             do iptcl=fromptop(1),fromptop(2)
+        !                 if( ptcl_mask(iptcl) )then
+        !                     ind_in_batch = iptcl - fromptop(1) + 1
+        !                     ind_in_stk   = iptcl
+        !                     call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
+        !                 endif
+        !             end do
+        !         endif
+        !     endif
+        ! else
+        !     if( p%l_stktab_input )then
+        !         do iptcl=fromptop(1),fromptop(2)
+        !             ind_in_batch = iptcl - fromptop(1) + 1
+        !             call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+        !             call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+        !         end do
+        !     else
+        !         if( p%l_distr_exec )then
+        !             do iptcl=fromptop(1),fromptop(2)
+        !                 ind_in_batch = iptcl - fromptop(1) + 1
+        !                 ind_in_stk   = iptcl - p%fromp + 1
+        !                 call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
+        !             end do
+        !         else
+        !             do iptcl=fromptop(1),fromptop(2)
+        !                 ind_in_batch = iptcl - fromptop(1) + 1
+        !                 ind_in_stk   = iptcl
+        !                 call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
+        !             end do
+        !         endif
+        !     endif
+        ! endif
     end subroutine read_imgbatch_1
 
     subroutine read_imgbatch_2( b, p, n, pinds, batchlims )
@@ -123,27 +136,32 @@ contains
         integer,       intent(in)     :: n, pinds(n), batchlims(2)
         character(len=:), allocatable :: stkname
         integer :: ind_in_stk, i, ii
-        if( p%l_stktab_input )then
-            do i=batchlims(1),batchlims(2)
-                ii = i - batchlims(1) + 1
-                call p%stkhandle%get_stkname_and_ind(pinds(i), stkname, ind_in_stk)
-                call b%imgbatch(ii)%read(stkname, ind_in_stk)
-            end do
-        else
-            if( p%l_distr_exec )then
-                do i=batchlims(1),batchlims(2)
-                    ii         = i - batchlims(1) + 1
-                    ind_in_stk = pinds(i) - p%fromp + 1
-                    call b%imgbatch(ii)%read(p%stk_part, ind_in_stk)
-                end do
-            else
-                do i=batchlims(1),batchlims(2)
-                    ii         = i - batchlims(1) + 1
-                    ind_in_stk = pinds(i)
-                    call b%imgbatch(ii)%read(p%stk, ind_in_stk)
-                end do
-            endif
-        endif
+        do i=batchlims(1),batchlims(2)
+            ii = i - batchlims(1) + 1
+            call b%spproj%get_stkname_and_ind(p%oritype, pinds(i), stkname, ind_in_stk)
+            call b%imgbatch(ii)%read(stkname, ind_in_stk)
+        end do
+        ! if( p%l_stktab_input )then
+        !     do i=batchlims(1),batchlims(2)
+        !         ii = i - batchlims(1) + 1
+        !         call p%stkhandle%get_stkname_and_ind(pinds(i), stkname, ind_in_stk)
+        !         call b%imgbatch(ii)%read(stkname, ind_in_stk)
+        !     end do
+        ! else
+        !     if( p%l_distr_exec )then
+        !         do i=batchlims(1),batchlims(2)
+        !             ii         = i - batchlims(1) + 1
+        !             ind_in_stk = pinds(i) - p%fromp + 1
+        !             call b%imgbatch(ii)%read(p%stk_part, ind_in_stk)
+        !         end do
+        !     else
+        !         do i=batchlims(1),batchlims(2)
+        !             ii         = i - batchlims(1) + 1
+        !             ind_in_stk = pinds(i)
+        !             call b%imgbatch(ii)%read(p%stk, ind_in_stk)
+        !         end do
+        !     endif
+        ! endif
     end subroutine read_imgbatch_2
 
     subroutine set_bp_range( b, p, cline )

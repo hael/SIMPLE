@@ -998,12 +998,7 @@ contains
             integer, intent(in) :: iptcl
             character(len=:), allocatable :: stkname
             integer :: ind
-            if( p%l_stktab_input )then
-                call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
-                call b%img%read(stkname, ind)
-            else
-                call b%img%read(p%stk, iptcl)
-            endif
+            call b%img%read(p%stk, iptcl)
         end subroutine read_image
 
     end subroutine exec_stackops

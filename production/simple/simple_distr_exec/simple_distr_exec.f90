@@ -26,7 +26,7 @@ type(cluster2D_autoscale_commander)               :: xcluster2D_distr
 type(cluster2D_stream_distr_commander)            :: xcluster2D_stream_distr
 
 ! PRIME3D
-type(prime3D_init_distr_commander)                :: xprime3D_init_distr
+type(refine3D_init_distr_commander)               :: xrefine3D_init_distr
 type(prime3D_distr_commander)                     :: xprime3D_distr
 type(reconstruct3D_distr_commander)               :: xreconstruct3D_distr
 type(symsrch_distr_commander)                     :: xsymsrch_distr
@@ -40,7 +40,7 @@ type(cluster3D_commander)                         :: xcluster3D
 type(cluster3D_refine_commander)                  :: xcluster3D_refine
 
 ! SUPORTING DISTRIBUTED WORKFLOWS
-type(scale_stk_parts_commander)                   :: xscale_stk_parts
+type(scale_project_distr_commander)               :: xscale_project
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -272,13 +272,13 @@ case( 'motion_correct_ctf_estimate' )
 
     ! PRIME3D
 
-    case( 'prime3D_init' )
-        !==Program prime3D_init
+    case( 'refine3D_init' )
+        !==Program refine3D_init
         !
-        ! <prime3D_init/begin>is a distributed workflow for generating a random initial model for
+        ! <refine3D_init/begin>is a distributed workflow for generating a random initial model for
         ! initialisation of PRIME3D. If the data set is large (>5000 images), generating a random
         ! model can be slow. To speedup, set nran to some smaller number, resulting in nran images
-        ! selected randomly for reconstruction<prime3D_init/end>
+        ! selected randomly for reconstruction<refine3D_init/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -298,7 +298,7 @@ case( 'motion_correct_ctf_estimate' )
         keys_optional(9)  = 'stktab'
         keys_optional(10) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_prime3D_init
+        if( describe ) call print_doc_refine3D_init
         call cline%parse_oldschool(keys_required(:5), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -307,15 +307,9 @@ case( 'motion_correct_ctf_estimate' )
             stop 'stk or stktab need to be part of command line!'
         endif
         ! execute
-        call xprime3D_init_distr%execute( cline )
+        call xrefine3D_init_distr%execute( cline )
     case( 'refine3D' )
         call cline%parse()
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
         ! set defaults
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine') ) call cline%set('refine',  'single')
@@ -546,30 +540,9 @@ case( 'motion_correct_ctf_estimate' )
 
     ! SUPPORTING DISTRIBUTED WORKFLOWS
 
-    case( 'scale_stk_parts' )
-        !==Program scale_stk_parts
-        !
-        ! <scale_stk_parts/begin>is a distributed workflow for scaling
-        ! partial stacks<scale_stk_parts/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'newbox'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'stktab'
-        keys_optional(3) = 'nparts'
-        ! parse command line
-        if( describe ) call print_doc_scale_stk_parts
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
-        ! sanity check
-        if( cline%defined('nparts') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'nparts or stktab need to be part of command line!'
-        endif
-        ! execute
-        call xscale_stk_parts%execute( cline )
+    case( 'scale_project' )
+        call cline%parse()
+        call xscale_project%execute(cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'
