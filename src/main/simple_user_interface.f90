@@ -703,7 +703,7 @@ contains
         ! <empty>
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., '')
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
         call pick%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         ! alternative inputs
         ! <empty>

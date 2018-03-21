@@ -326,29 +326,45 @@ contains
     end subroutine exec_ctf_estimate_distr
 
     subroutine exec_pick_distr( self, cline )
+        use simple_sp_project, only: sp_project
         class(pick_distr_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(qsys_env) :: qenv
-        type(params)   :: p_master
-        type(chash)    :: job_descr
+        type(sp_project)              :: spproj
+        type(qsys_env)                :: qenv
+        type(params)                  :: p_master
+        type(chash)                   :: job_descr
+        character(len=:), allocatable :: output_dir
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
         p_master = params(cline)
-        p_master%nptcls = nlines(p_master%filetab)
-        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        p_master%numlen = len(int2str(p_master%nptcls))
+        call cline%set('numlen', real(p_master%numlen))
+        ! output directory
+        if( cline%defined('dir') )then
+            output_dir = trim(p_master%dir)
+        else
+            output_dir = trim(DIR_PICKER)
+            call cline%set('dir', trim(output_dir))
+        endif
+        call mkdir(output_dir)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+        ! merge docs
+        call spproj%read(p_master%projfile)
+        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        ! cleanup
         call qsys_cleanup(p_master)
+        ! graceful exit
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 

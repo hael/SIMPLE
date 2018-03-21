@@ -59,6 +59,8 @@ contains
     procedure          :: get_nptcls
     procedure          :: get_box
     procedure          :: get_smpd
+    procedure          :: get_nmics
+    procedure          :: get_nmovies
     procedure          :: oritype2segment
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
@@ -396,7 +398,7 @@ contains
                 is_movie = .false.
             else
                 call os_ptr%set(imic, 'intg',  trim(movienames(cnt)))
-                call os_ptr%set(imic, 'imgkind', 'mic')                
+                call os_ptr%set(imic, 'imgkind', 'mic')
                 is_movie = .true.
             endif
             call os_ptr%set(imic, 'xdim',       real(ldim(1)))
@@ -830,6 +832,28 @@ contains
         endif
         get_smpd = self%os_stk%get(1,'smpd')
     end function get_smpd
+
+    integer function get_nmics( self )
+        class(sp_project), target, intent(inout) :: self
+        character(len=:), allocatable :: imgkind
+        integer :: i
+        get_nmics = 0
+        do i=1,self%os_mic%get_noris()
+            call self%os_mic%getter(i,'imgkind',imgkind)
+            if( trim(imgkind).eq.'mic' ) get_nmics = get_nmics + 1
+        enddo
+    end function get_nmics
+
+    integer function get_nmovies( self )
+        class(sp_project), target, intent(inout) :: self
+        character(len=:), allocatable :: imgkind
+        integer :: i
+        get_nmovies = 0
+        do i=1,self%os_mic%get_noris()
+            call self%os_mic%getter(i,'imgkind',imgkind)
+            if( trim(imgkind).eq.'movie' ) get_nmovies = get_nmovies + 1
+        enddo
+    end function get_nmovies
 
     integer function oritype2segment(self, oritype)
         class(sp_project), intent(in) :: self

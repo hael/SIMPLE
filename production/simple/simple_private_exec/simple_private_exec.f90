@@ -363,9 +363,7 @@ select case(prg)
         ! <pick/begin>is a template-based picker program<pick/end>
         !
         ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'refs'
-        keys_required(3) = 'smpd'
+        keys_required(1) = 'refs'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
@@ -373,7 +371,7 @@ select case(prg)
         keys_optional(4) = 'ndev'
         keys_optional(5) = 'dir'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:5))
         ! execute
         call xpick%execute(cline)
 

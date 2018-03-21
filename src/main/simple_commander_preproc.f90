@@ -17,6 +17,7 @@ use simple_motion_correct_iter, only: motion_correct_iter
 use simple_ctf_estimate_iter,   only: ctf_estimate_iter
 use simple_picker_iter,         only: picker_iter
 use simple_qsys_funs,           only: qsys_job_finished
+use simple_sp_project,          only: sp_project
 use simple_binoris_io           ! use all in there
 implicit none
 
@@ -99,7 +100,7 @@ contains
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
         logical      :: l_pick
-        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
         endif
@@ -111,8 +112,8 @@ contains
         else
             l_pick = .false.
         endif
-        call read_filetable(p%filetab, movienames)
-        nmovies = size(movienames)
+        ! call read_filetable(p%filetab, movienames)
+        ! nmovies = size(movienames)
         if( cline%defined('numlen') )then
             ! nothing to do
         else
@@ -160,26 +161,18 @@ contains
             if( cline%defined('startit') ) fromto(1) = p%startit
             fromto(2) = nmovies
         else
-            if( p%l_distr_exec )then
-                ! DISTRIBUTED MODE
-                if( cline%defined('outfile') )then
-                    allocate(fname_unidoc_output, source=trim(output_dir_unidoc)//trim(p%outfile))
-                else
-                    allocate(fname_unidoc_output, source=trim(output_dir_unidoc)//&
-                        &trim(UNIDOC_OUTPUT)//'_part'//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT))
-                endif
-                if( cline%defined('fromp') .and. cline%defined('top') )then
-                    fromto(1) = p%fromp
-                    fromto(2) = p%top
-                else
-                    stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
-                endif
+            ! DISTRIBUTED MODE
+            if( cline%defined('outfile') )then
+                allocate(fname_unidoc_output, source=trim(output_dir_unidoc)//trim(p%outfile))
             else
-                ! PRIVATE
-                allocate(fname_unidoc_output,source=trim(output_dir_unidoc)//trim(UNIDOC_OUTPUT)//trim(METADATA_EXT))
-                fromto(1) = 1
-                if( cline%defined('startit') ) fromto(1) = p%startit
-                fromto(2) = nmovies
+                allocate(fname_unidoc_output, source=trim(output_dir_unidoc)//&
+                    &trim(UNIDOC_OUTPUT)//'_part'//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT))
+            endif
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                fromto(1) = p%fromp
+                fromto(2) = p%top
+            else
+                stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
@@ -196,8 +189,9 @@ contains
             else
                 movie_ind = imovie ! standard mode
             endif
+            movie_counter = movie_counter + 1
             ! motion_correct
-            call mciter%iterate(cline, p, orientation, movie_ind, movie_counter,&
+            call mciter%iterate(cline, p, orientation, movie_ind,&
                 &frame_counter, movienames(imovie), smpd_scaled, output_dir_motion_correct)
             call os_uni%set_ori(movie_counter, orientation)
             p%smpd           = smpd_scaled
@@ -213,9 +207,8 @@ contains
             if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
             ! picker
             if( l_pick )then
-                movie_counter = movie_counter - 1
-                p%lp          = p%lp_pick
-                call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out, output_dir_picker)
+                p%lp = p%lp_pick
+                call piter%iterate(cline, p, moviename_intg, boxfile, nptcls_out, output_dir_picker)
                 call os_uni%set(movie_counter, 'boxfile', trim(boxfile)   )
                 call os_uni%set(movie_counter, 'nptcls',  real(nptcls_out))
                 if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
@@ -459,16 +452,15 @@ contains
     end subroutine exec_powerspecs
 
     subroutine exec_motion_correct( self, cline )
-        use simple_sp_project, only: sp_project
         class(motion_correct_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
         type(params)                  :: p
         type(motion_correct_iter)     :: mciter
         type(sp_project)              :: spproj
-        type(ori)                     :: orientation
-        character(len=:), allocatable :: output_dir, moviename
+        type(ori)                     :: o
+        character(len=:), allocatable :: output_dir, moviename, imgkind
         real    :: smpd_scaled
-        integer :: nmovies, fromto(2), imovie, ntot, movie_counter, frame_counter, lfoo(3), nframes
+        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt, nmovs
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
@@ -514,21 +506,18 @@ contains
         endif
         ! align
         frame_counter = 0
-        movie_counter = 0
+        cnt = 0
         do imovie=fromto(1),fromto(2)
-            call orientation%new_ori_clean
-            ! movie name
-            call spproj%os_mic%getter(imovie, 'movie', moviename)
-            ! parameters transfer
-            if( spproj%os_mic%isthere(imovie, 'cs') )    call orientation%set('cs', spproj%os_mic%get(imovie, 'cs'))
-            if( spproj%os_mic%isthere(imovie, 'kv') )    call orientation%set('kv', spproj%os_mic%get(imovie, 'kv'))
-            if( spproj%os_mic%isthere(imovie, 'fraca') ) call orientation%set('fraca', spproj%os_mic%get(imovie, 'fraca'))
-            ! actual alignment
-            call mciter%iterate(cline, p, orientation, imovie, movie_counter,&
-            &frame_counter, moviename, smpd_scaled, trim(output_dir))
-            call spproj%os_mic%set_ori(imovie, orientation)
-            call orientation%print_ori()
-            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
+            o = spproj%os_mic%get_ori(imovie)
+            if( o%isthere('imgkind').and.o%isthere('movie') )then
+                cnt = cnt + 1
+                call o%getter('imgkind', imgkind)
+                if( imgkind.ne.'movie' )cycle
+                call o%getter('movie', moviename)
+                call mciter%iterate(cline, p, o, imovie, frame_counter, moviename, smpd_scaled, trim(output_dir))
+                call spproj%os_mic%set_ori(imovie, o)
+                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
+            endif
         end do
         ! output
         call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
@@ -538,16 +527,14 @@ contains
     end subroutine exec_motion_correct
 
     subroutine exec_ctf_estimate( self, cline )
-        use simple_sp_project, only: sp_project
         class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
         type(params)                       :: p
         type(ctf_estimate_iter)            :: cfiter
         type(sp_project)                   :: spproj
-        character(len=:),      allocatable :: intg_forctf, output_dir
-        character(len=STDLEN) :: intg_fbody, intg_ext, intg_name
-        type(ori)             :: o
-        integer               :: nmovies, fromto(2), imic, ntot, intg_counter
+        type(ori)                          :: o
+        character(len=:),      allocatable :: intg_forctf, output_dir, imgkind
+        integer :: nmovies, fromto(2), imic, ntot, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         ! output directory
         if( cline%defined('dir') )then
@@ -559,11 +546,8 @@ contains
         ! parameters & loop range
         if( p%stream .eq. 'yes' )then
             ! determine loop range
-            fromto(:)   = 1 !!!!!!!!!!!!!!!!!!!!!!! NOW SHOULD POINT TO MICROGRAPH OF ORIGIN ????
+            fromto(:) = 1 !!!!!!!!!!!!!!!!!!!!!!! NOW SHOULD POINT TO MICROGRAPH OF ORIGIN ????
             call spproj%os_mic%getter(1, 'intg', intg_forctf)
-            intg_name  = remove_abspath(trim(intg_forctf))
-            intg_ext   = fname2ext(trim(intg_name))
-            intg_fbody = get_fbody(trim(intg_name), trim(intg_ext))
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -576,18 +560,23 @@ contains
         ! read in integrated movies
         call spproj%read_segment( 'mic', p%projfile, fromto ) !!!!!!!!!!!!!!!!!!!!!!! SO THIS MAKES SENSE
         ! loop over exposures (movies)
+        cnt= 0
         do imic = fromto(1),fromto(2)
             o = spproj%os_mic%get_ori(imic)
-            call o%getter('intg', intg_forctf)
-            call cfiter%iterate(p, imic, intg_forctf, o, trim(output_dir))
-            write(*,'(f4.0,1x,a)') 100.*(real(intg_counter)/real(ntot)), 'percent of the micrographs processed'
-            call spproj%os_mic%set_ori(imic, o)
+            if( o%isthere('imgkind') )then
+                call o%getter('imgkind', imgkind)
+                if( imgkind.ne.'mic' )cycle
+                cnt = cnt + 1
+                call o%getter('intg', intg_forctf)
+                call cfiter%iterate(p, imic, intg_forctf, o, trim(output_dir))
+                call spproj%os_mic%set_ori(imic, o)
+                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
+            endif
         end do
         ! output
         call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
-        ! cleanup
-        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_ctf_estimate' )
         ! end gracefully
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_ctf_estimate' )
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate
 
@@ -763,15 +752,13 @@ contains
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(params)                         :: p
+        type(sp_project)                     :: spproj
         type(picker_iter)                    :: piter
-        character(len=STDLEN),   allocatable :: movienames_intg(:)
-        character(len=:),        allocatable :: output_dir
-        character(len=STDLEN)                :: boxfile
-        integer :: nmovies, fromto(2), imovie, ntot, movie_counter, nptcls_out
-        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
-        ! check filetab existence
-        call read_filetable(p%filetab, movienames_intg)
-        nmovies = size(movienames_intg)
+        type(ori)                            :: o
+        character(len=:),        allocatable :: output_dir, intg_name, imgkind
+        character(len=LONGSTRLEN)            :: boxfile
+        integer :: nmovies, fromto(2), imic, ntot, nptcls_out, cnt
+        p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         ! output directory
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
@@ -779,27 +766,40 @@ contains
             output_dir = trim(DIR_PICKER)
         endif
         call mkdir(output_dir)
-        ! determine loop range
-        if( cline%defined('part') )then
+        ! parameters & loop range
+        if( p%stream .eq. 'yes' )then
+            ! determine loop range
+            fromto(:)   = 1 !!!!!!!!!!!!!!!!!!!!!!! NOW SHOULD POINT TO MICROGRAPH OF ORIGIN ????
+        else
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
                 fromto(2) = p%top
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_pick'
             endif
-        else
-            fromto(1) = 1
-            if( cline%defined('startit') ) fromto(1) = p%startit
-            fromto(2) = nmovies
         endif
-        ntot          = fromto(2) - fromto(1) + 1
-        movie_counter = 0
-        do imovie=fromto(1),fromto(2)
-            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie), boxfile, nptcls_out, output_dir)
-            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
+        ntot = fromto(2) - fromto(1) + 1
+        ! read in integrated movies
+        call spproj%read_segment('mic', p%projfile, fromto)
+        ! main loop
+        cnt = 0
+        do imic=fromto(1),fromto(2)
+            o = spproj%os_mic%get_ori(imic)
+            if( o%isthere('imgkind') )then
+                call o%getter('imgkind', imgkind)
+                if( imgkind.ne.'mic' )cycle
+                cnt = cnt + 1
+                call o%getter('intg', intg_name)
+                call piter%iterate(cline, p, intg_name, boxfile, nptcls_out, output_dir)
+                call spproj%os_mic%set(imic, 'boxfile', trim(boxfile))
+                call spproj%os_mic%set(imic, 'nptcls', real(nptcls_out))
+                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
+            endif
         end do
-        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_pick' )
+        ! output
+        call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
@@ -826,7 +826,7 @@ contains
         logical                            :: params_present(3), ctf_estimatecc_is_there, phshift_is_there
         logical                            :: ctfres_is_there
         noutside = 0
-        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
+        p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then
             if( cline%defined('outstk') .and. cline%defined('outfile') )then
                 ! all ok
@@ -842,17 +842,17 @@ contains
         endif
         call mkdir(output_dir)
         ! check file inout existence and read filetables
-        if( .not. cline%defined('filetab') ) stop 'need filetab input to extract'
-        if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
-        if( .not. file_exists(p%filetab)   ) stop 'inputted filetab does not exist in cwd'
-        if( .not. file_exists(p%boxtab)    ) stop 'inputted boxtab does not exist in cwd'
-        nmovies   = nlines(p%filetab)
-        nboxfiles = nlines(p%boxtab)
-        DebugPrint  'nboxfiles: ', nboxfiles
-        if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
-        call read_filetable(p%filetab, movienames)
-        call read_filetable(p%boxtab,  boxfilenames)
-        DebugPrint  'nmovies: ', nmovies
+        !if( .not. cline%defined('filetab') ) stop 'need filetab input to extract'
+        !if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
+        !if( .not. file_exists(p%filetab)   ) stop 'inputted filetab does not exist in cwd'
+        !if( .not. file_exists(p%boxtab)    ) stop 'inputted boxtab does not exist in cwd'
+        !nmovies   = nlines(p%filetab)
+        !nboxfiles = nlines(p%boxtab)
+        !DebugPrint  'nboxfiles: ', nboxfiles
+        !if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
+        !call read_filetable(p%filetab, movienames)
+        !call read_filetable(p%boxtab,  boxfilenames)
+        !DebugPrint  'nmovies: ', nmovies
         ! determine loop range
         fromto(1) = 1
         fromto(2) = nmovies

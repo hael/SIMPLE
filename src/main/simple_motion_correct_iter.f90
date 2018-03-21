@@ -29,13 +29,13 @@ end type motion_correct_iter
 
 contains
 
-    subroutine iterate( self, cline, p, orientation, imovie, movie_counter, frame_counter, moviename, smpd_out, dir_out )
-        class(motion_correct_iter),         intent(inout) :: self
+    subroutine iterate( self, cline, p, orientation, imovie, frame_counter, moviename, smpd_out, dir_out )
+        class(motion_correct_iter), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(params),              intent(inout) :: p
         class(ori),                 intent(inout) :: orientation
         integer,                    intent(in)    :: imovie
-        integer,                    intent(inout) :: movie_counter, frame_counter
+        integer,                    intent(inout) :: frame_counter
         character(len=*),           intent(in)    :: moviename
         real,                       intent(out)   :: smpd_out
         character(len=*),           intent(in)    :: dir_out
@@ -74,7 +74,6 @@ contains
         if( .not. file_exists(moviename) )then
             write(*,*) 'inputted movie stack does not exist: ', moviename
         endif
-        movie_counter = movie_counter + 1
         write(*,'(a,1x,i5)') '>>> PROCESSING MOVIE:', imovie
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( p%nframesgrp > 0 )then
@@ -87,12 +86,13 @@ contains
         call motion_correct_movie(self%moviename, p, corr, smpd_out, shifts, err)
         if( err ) return
         ! report to ori object
-        call orientation%set('smpd',   smpd_out)
-        call orientation%set('movie',  trim(moviename))
-        call orientation%set('intg',   trim(self%moviename_intg))
-        call orientation%set('forctf', trim(self%moviename_forctf))
-        call orientation%set('pspec',  trim(self%moviename_pspec))
-        call orientation%set('thumb',  trim(self%moviename_thumb))
+        call orientation%set('smpd',    smpd_out)
+        call orientation%set('movie',   trim(moviename))
+        call orientation%set('intg',    trim(self%moviename_intg))
+        call orientation%set('forctf',  trim(self%moviename_forctf))
+        call orientation%set('pspec',   trim(self%moviename_pspec))
+        call orientation%set('thumb',   trim(self%moviename_thumb))
+        call orientation%set('imgkind', 'mic')
         if( cline%defined('tof') )call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         ! generate sums
         if( p%tomo .eq. 'yes' )then

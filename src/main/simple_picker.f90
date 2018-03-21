@@ -23,18 +23,16 @@ logical,          parameter   :: WRITESHRUNKEN = .true., DOPRINT = .true., GAUPI
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target
 type(image)                   :: gaussimg
 type(image),      allocatable :: refs(:), refs_refine(:)
-logical,          allocatable :: selected_peak_positions(:), lgaupeaks(:,:)
-real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:)
+logical,          allocatable :: selected_peak_positions(:)
+real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:), peak_stats(:,:)
 integer,          allocatable :: peak_positions(:,:), peak_positions_refined(:,:), refmat(:,:)
 character(len=:), allocatable :: micname, refsname
-real, allocatable             :: peak_stats(:,:)
-character(len=STDLEN)         :: boxname
+character(len=LONGSTRLEN)     :: boxname
 integer                       :: ldim(3), ldim_refs(3), ldim_refs_refine(3), ldim_shrink(3)
 integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_refine, ny_refine
-integer                       :: nrefs, npeaks, npeaks_sel, orig_box, lfny, nbackgr, cnt_glob=0
+integer                       :: nrefs, npeaks, npeaks_sel, orig_box, cnt_glob=0
 real                          :: smpd, smpd_shrunken, smpd_shrunken_refine, corrmax, corrmin
 real                          :: msk, msk_refine, lp, distthr, ndev
-logical                       :: rm_outliers = .true.
 
 contains
 
@@ -46,7 +44,6 @@ contains
         type(image)       :: refimg
         integer           :: ifoo, iref
         real              :: sigma, hp
-        real, allocatable :: rmat(:,:,:)
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
         allocchk('picker;init, 1')
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
@@ -149,19 +146,18 @@ contains
     end subroutine init_picker
 
     subroutine exec_picker( boxname_out, nptcls_out )
-        character(len=STDLEN), intent(out) :: boxname_out
-        integer,               intent(out) :: nptcls_out
+        character(len=LONGSTRLEN), intent(out) :: boxname_out
+        integer,                   intent(out) :: nptcls_out
         call extract_peaks
         call distance_filter
         call refine_positions
         call gather_stats
         call one_cluster_clustering
-        ! if( rm_outliers ) call remove_outliers
         nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         call write_boxfile
-        boxname_out = boxname
+        boxname_out = trim(boxname)
     end subroutine exec_picker
 
     subroutine extract_peaks
