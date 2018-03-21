@@ -457,18 +457,17 @@ contains
     end subroutine exec_powerspecs
 
     subroutine exec_motion_correct( self, cline )
+        use simple_sp_project, only: sp_project
         class(motion_correct_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline !< command line input
-        type(params)              :: p
-        type(motion_correct_iter) :: mciter
-        type(oris)                :: os_uni
-        type(ori)                 :: orientation
-        character(len=STDLEN), allocatable :: movienames(:)
-        character(len=:),      allocatable :: output_dir
+        class(cmdline),                  intent(inout) :: cline !< command line input
+        type(params)                  :: p
+        type(motion_correct_iter)     :: mciter
+        type(sp_project)              :: spproj
+        type(ori)                     :: orientation, o_mov
+        character(len=:), allocatable :: output_dir, moviename
         real    :: smpd_scaled
-        integer :: nmovies, fromto(2), imovie, ntot, movie_counter
-        integer :: frame_counter, lfoo(3), nframes
-        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
+        integer :: nmovies, fromto(2), imovie, ntot, movie_counter, frame_counter, lfoo(3), nframes
+        p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
         endif
@@ -478,13 +477,6 @@ contains
                 stop 'give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)'
             endif
         endif
-        call read_filetable(p%filetab, movienames)
-        nmovies = size(movienames)
-        if( cline%defined('numlen') )then
-            ! nothing to do
-        else
-            p%numlen = len(int2str(nmovies))
-        endif
         ! output directory
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
@@ -492,63 +484,71 @@ contains
             output_dir = trim(DIR_MOTION_CORRECT)
         endif
         call mkdir(output_dir)
-        ! determine loop range
-        if( p%l_distr_exec )then
-            if( p%tomo .eq. 'no' )then
-                if( cline%defined('fromp') .and. cline%defined('top') )then
-                    fromto(1) = p%fromp
-                    fromto(2) = p%top
-                else
-                    stop 'fromp & top args need to be defined in parallel execution; simple_motion_correct'
-                endif
+        ! determine loop range & fetch movies oris object
+        if( p%tomo .eq. 'no' )then
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                fromto(1) = p%fromp
+                fromto(2) = p%top
             else
-                fromto(1) = 1
-                fromto(2) = nmovies
+                stop 'fromp & top args need to be defined in parallel execution; simple_motion_correct'
             endif
+            call spproj%read_segment( 'mic', p%projfile, fromto )
         else
+            ! all movies
+            call spproj%read_segment( 'mic', p%projfile)
             fromto(1) = 1
-            if( cline%defined('startit') ) fromto(1) = p%startit
-            fromto(2)  = nmovies
+            fromto(2) = spproj%os_mic%get_noris()
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!! should check for 'movie' field here? !!!!!!!!!!!!!!!!!!1
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! for series of tomographic movies we need to calculate the time_per_frame
         if( p%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
-            call find_ldim_nptcls(movienames(1), lfoo, nframes)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!! should check for 'movie' field here? !!!!!!!!!!!!!!!!!!1
+            call spproj%os_mic%getter(1, 'movie', moviename)
+            call find_ldim_nptcls(moviename, lfoo, nframes)
             ! calculate time_per_frame
             p%time_per_frame = p%exp_time/real(nframes*nmovies)
         endif
         ! align
         frame_counter = 0
         movie_counter = 0
-        call orientation%new
-        call os_uni%new(ntot)
         do imovie=fromto(1),fromto(2)
+            call orientation%new_ori_clean
+            ! movie name
+            call spproj%os_mic%getter(imovie, 'movie', moviename)
+            ! parameters transfer
+            if( spproj%os_mic%isthere(imovie, 'cs') )    call orientation%set('cs', spproj%os_mic%get(imovie, 'cs'))
+            if( spproj%os_mic%isthere(imovie, 'kv') )    call orientation%set('kv', spproj%os_mic%get(imovie, 'kv'))
+            if( spproj%os_mic%isthere(imovie, 'fraca') ) call orientation%set('fraca', spproj%os_mic%get(imovie, 'fraca'))
+            ! actual alignment
             call mciter%iterate(cline, p, orientation, imovie, movie_counter,&
-            &frame_counter, movienames(imovie), smpd_scaled, trim(output_dir))
-            call os_uni%set_ori(movie_counter, orientation)
+            &frame_counter, moviename, smpd_scaled, trim(output_dir))
+            call spproj%os_mic%set_ori(imovie, orientation)
+            call orientation%print_ori()
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
-        call os_uni%write( trim(output_dir)//p%outfile )
-        call os_uni%kill
-        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_motion_correct' )
+        ! output
+        call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
     subroutine exec_ctf_estimate( self, cline )
+        use simple_sp_project, only: sp_project
         class(ctf_estimate_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline  !< command line input
+        class(cmdline),                intent(inout) :: cline  !< command line input
         type(params)                       :: p
-        type(ctf_estimate_iter)                  :: cfiter
-        character(len=STDLEN), allocatable :: movienames_forctf(:)
-        character(len=:),      allocatable :: fname_ctf_estimate_output, output_dir
-        character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
+        type(ctf_estimate_iter)            :: cfiter
+        type(sp_project)                   :: spproj
+        character(len=:),      allocatable :: intg_forctf, output_dir
+        character(len=STDLEN) :: intg_fbody, intg_ext, intg_name
         type(oris)            :: os
-        integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
-        p = params(cline, spproj_a_seg=STK_SEG) ! constants & derived constants produced
-        call read_filetable(p%filetab, movienames_forctf)
-        nmovies = size(movienames_forctf)
+        integer               :: nmovies, fromto(2), imic, ntot, intg_counter
+        p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
+        !call read_filetable(p%filetab, movienames_forctf)
+        !nmovies = size(movienames_forctf)
         ! output directory
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
@@ -556,45 +556,35 @@ contains
             output_dir = trim(DIR_CTF_ESTIMATE)
         endif
         call mkdir(output_dir)
-        ! params
-        if( p%l_distr_exec )then
-            allocate(fname_ctf_estimate_output, source=trim(output_dir)//&
-                &'ctf_estimate_output_part'//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT))
+        ! parameters & loop range
+        if( p%stream .eq. 'yes' )then
             ! determine loop range
+            fromto(:)   = 1 !!!!!!!!!!!!!!!!!!!!!!! NOW SHOULD POINT TO MICROGRAPH OF ORIGIN ????
+            call spproj%os_mic%getter(1, 'intg', intg_forctf)
+            intg_name  = remove_abspath(trim(intg_forctf))
+            intg_ext   = fname2ext(trim(intg_name))
+            intg_fbody = get_fbody(trim(intg_name), trim(intg_ext))
+        else
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
                 fromto(2) = p%top
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_ctf_estimate'
             endif
-        else
-            if( p%stream .eq. 'yes' )then
-                ! determine loop range
-                fromto(:)   = 1
-                movie_name  = remove_abspath(trim(movienames_forctf(1)))
-                movie_ext   = fname2ext(trim(movie_name))
-                movie_fbody = get_fbody(trim(movie_name), trim(movie_ext))
-                allocate(fname_ctf_estimate_output, source=trim(output_dir)//&
-                    &'ctf_estimate_output_'//trim(movie_fbody)//trim(METADATA_EXT))
-            else
-                ! determine loop range
-                fromto(1) = 1
-                if( cline%defined('startit') ) fromto(1) = p%startit
-                fromto(2) = nmovies
-                allocate(fname_ctf_estimate_output, source=trim(output_dir)//'ctf_estimate_output'//trim(METADATA_EXT))
-            endif
         endif
         ntot = fromto(2) - fromto(1) + 1
         call os%new(ntot)
+        ! read in integrated movies
+        call spproj%read_segment( 'mic', p%projfile, fromto ) !!!!!!!!!!!!!!!!!!!!!!! SO THIS MAKES SENSE
         ! loop over exposures (movies)
-        movie_counter = 0
-        do imovie=fromto(1),fromto(2)
-            call cfiter%iterate(p, imovie, movie_counter, movienames_forctf(imovie), os, trim(output_dir))
-            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
+        intg_counter = 0
+        do imic = fromto(1),fromto(2)
+            call spproj%os_mic%getter(imic, 'intg', intg_forctf)
+            call cfiter%iterate(p, imic, intg_counter, intg_forctf, os, trim(output_dir))
+            write(*,'(f4.0,1x,a)') 100.*(real(intg_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
-        call os%write(fname_ctf_estimate_output)
+        !call os%write(fname_ctf_estimate_output)
         call os%kill
-        deallocate(fname_ctf_estimate_output)
         call qsys_job_finished( p, 'simple_commander_preprocess :: exec_ctf_estimate' )
         ! end gracefully
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')

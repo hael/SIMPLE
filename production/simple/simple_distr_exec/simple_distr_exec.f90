@@ -91,7 +91,7 @@ select case(prg)
 
     ! PIPELINED MOTION_CORRECT + CTF_ESTIMATE
 
-case( 'motion_correct_ctf_estimate' )
+    case( 'motion_correct_ctf_estimate' )
         !==Program motion_correct_ctf_estimate
         !
         ! <motion_correct_ctf_estimate/begin>is a pipelined distributed workflow: motion_correct + ctf_estimate program<motion_correct_ctf_estimate/end>

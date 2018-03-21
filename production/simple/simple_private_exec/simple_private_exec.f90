@@ -256,9 +256,7 @@ select case(prg)
         ! a contiguous subset of frames will be averaged without any dose-weighting applied.
         ! <motion_correct/end>
         !
-        ! set required keys
-        keys_required(1)  = 'filetab'
-        keys_required(2)  = 'smpd'
+
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'fbody'
@@ -268,7 +266,7 @@ select case(prg)
         keys_optional(6)  = 'lpstop'
         keys_optional(7)  = 'trs'
         keys_optional(8)  = 'pspecsz'
-        keys_optional(9)  = 'numlen'
+        keys_optional(9)  = 'dir'
         keys_optional(10) = 'startit'
         keys_optional(11) = 'scale'
         keys_optional(12) = 'nframesgrp'
@@ -276,10 +274,8 @@ select case(prg)
         keys_optional(14) = 'fromf'
         keys_optional(15) = 'tof'
         keys_optional(16) = 'nsig'
-        keys_optional(17) = 'outfile'
-        keys_optional(18) = 'dir'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:18))
+        call cline%parse_oldschool(keys_optional=keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)

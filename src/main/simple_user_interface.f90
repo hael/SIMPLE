@@ -657,7 +657,7 @@ contains
         & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
         & contiguous subset of frames will be averaged without any dose-weighting applied.',&   ! descr_long
         &'simple_distr_exec',&                                                                  ! executable
-        &0, 7, 0, 6, 2, 0, 2, .true.)                                                           ! # entries in each group
+        &0, 6, 0, 6, 2, 0, 2, .true.)                                                           ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -669,7 +669,6 @@ contains
         call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., '')
         call motion_correct%set_input('parm_ios', 6, pspecsz)
-        call motion_correct%set_input('parm_ios', 7, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls

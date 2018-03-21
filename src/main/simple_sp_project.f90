@@ -13,13 +13,15 @@ character(len=4)   :: NULL = 'null'
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
     ! segments 1-10 reserved for simple program outputs, orientations and files
-    type(oris)        :: os_stk    ! per-micrograph stack os,  segment 1
-    type(oris)        :: os_ptcl2D ! per-particle 2D os,       segment 2
-    type(oris)        :: os_cls2D  ! per-cluster 2D os,        segment 3
-    type(oris)        :: os_cls3D  ! per-cluster 3D os,        segment 4
-    type(oris)        :: os_ptcl3D ! per-particle 3D os,       segment 5
-    type(oris)        :: os_out    ! critical project outputs, segment 6
-    ! In segment 6 we stash class averages, ranked class averages, final volumes etc.
+
+    ! In segment 7 we stash class averages, ranked class averages, final volumes etc.
+    type(oris)        :: os_mic    ! micrographs,              segment 1
+    type(oris)        :: os_stk    ! per-micrograph stack os,  segment 2
+    type(oris)        :: os_ptcl2D ! per-particle 2D os,       segment 3
+    type(oris)        :: os_cls2D  ! per-cluster 2D os,        segment 4
+    type(oris)        :: os_cls3D  ! per-cluster 3D os,        segment 5
+    type(oris)        :: os_ptcl3D ! per-particle 3D os,       segment 6
+    type(oris)        :: os_out    ! critical project outputs, segment 7
 
     ! ARRAY REPRESENTATIONS OF BINARY FILE SEGMENTS FOR FRCS & FSCS
     real, allocatable :: frcs(:,:) ! Fourier Ring  Corrs      segment 9
@@ -57,6 +59,7 @@ contains
     procedure          :: get_nptcls
     procedure          :: get_box
     procedure          :: get_smpd
+    procedure          :: oritype2segment
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
     procedure          :: get_ctfmode
@@ -68,6 +71,7 @@ contains
     procedure          :: new_sp_oris
     procedure          :: set_sp_oris
     procedure          :: scale_projfile
+    procedure          :: merge_algndocs
     ! printers
     procedure          :: print_info
     ! I/O
@@ -95,6 +99,8 @@ contains
         call sp_reciever%read(fname_reciever)
         call sp_provider%read_segment(oritype, fname_provider)
         select case(trim(oritype))
+            case('mic')
+                sp_reciever%os_mic    = sp_provider%os_mic
             case('stk')
                 sp_reciever%os_stk    = sp_provider%os_stk
             case('ptcl2D')
@@ -122,6 +128,9 @@ contains
         character(len=*),          intent(in)    :: oritype
         class(oris), pointer,      intent(inout) :: os_ptr
         select case(trim(oritype))
+            case('mic')
+                call self%os_mic%new_clean(n)
+                os_ptr => self%os_mic
             case('stk')
                 call self%os_stk%new_clean(n)
                 os_ptr => self%os_stk
@@ -329,49 +338,81 @@ contains
 
     ! os_stk related methods
 
-    subroutine add_movies( self, filetab, smpd, kv, cs, fraca, phaseplate )
-        class(sp_project), intent(inout)   :: self
-        character(len=*),  intent(in)      :: filetab, phaseplate
-        real,              intent(in)      :: smpd, kv, cs, fraca
-        character(len=STDLEN), allocatable :: movienames(:)
-        integer :: n_os_stk, imic, ldim(3), nframes, ldim_first(3), nmics
+    subroutine add_movies( self, filetab, oritype, smpd, kv, cs, fraca, phaseplate )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: filetab, oritype, phaseplate
+        real,                      intent(in)    :: smpd, kv, cs, fraca
+        class(oris),               pointer :: os_ptr
+        type(oris)                         :: os
+        character(len=STDLEN), allocatable :: movienames(:), segment
+        integer :: n_os_stk, imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
+        logical :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
             write(*,*) 'Inputted stack list (stktab): ', trim(filetab)
             stop 'does not exist in cwd; sp_project :: add_movies'
         endif
-        ! check that stk field is empty
-        n_os_stk = self%os_stk%get_noris()
-        if( n_os_stk > 0 )then
-            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
-            stop 'ABORTING! sp_project :: add_stktab'
-        endif
+        ! oris object pointer
+        select case(trim(oritype))
+            case('mic')
+                os_ptr => self%os_mic
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype)
+                stop 'unsupported oritype; sp_project :: new_with_os_segptr'
+        end select
+        ! ! check that stk field is empty
+        ! n_os_stk = self%os_stk%get_noris()
+        ! if( n_os_stk > 0 )then
+        !     write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
+        !     stop 'ABORTING! sp_project :: add_stktab'
+        ! endif
         ! read movie names
         call read_filetable(filetab, movienames)
         nmics = size(movienames)
-        ! update os_stk field
-        call self%os_stk%new_clean(nmics)
-        do imic=1,nmics
-            call find_ldim_nptcls(trim(movienames(imic)), ldim, nframes)
+        ! update oris
+        !call self%os_stk%new_clean(nmics)
+        nprev_mics = os_ptr%get_noris()
+        ntot       = nmics + nprev_mics
+        if( nprev_mics == 0 )then
+            call os_ptr%new_clean(ntot)
+        else
+            os = os_ptr
+            call os_ptr%new_clean(ntot)
+            do imic = 1,nprev_mics
+                call os_ptr%set_ori(imic, os%get_ori(imic))
+            enddo
+            call os%kill
+        endif
+        cnt = 0
+        do imic=nprev_mics+1,ntot
+            cnt = cnt + 1
+            call find_ldim_nptcls(trim(movienames(cnt)), ldim, nframes)
             if( nframes <= 0 )then
                 write(*,*) 'WARNING! # frames in movie ', trim(movienames(imic)), ' <= zero, ommitting'
                 cycle
             else if( nframes > 1 )then
-                call self%os_stk%set(imic, 'movie', trim(movienames(imic)))
-                call self%os_stk%set(imic, 'imgkind', 'movie')
+                call os_ptr%set(imic, 'movie', trim(movienames(cnt)))
+                is_movie = .false.
             else
-                call self%os_stk%set(imic, 'intg',  trim(movienames(imic)))
-                call self%os_stk%set(imic, 'imgkind', 'mic')
+                call os_ptr%set(imic, 'intg',  trim(movienames(cnt)))
+                is_movie = .true.
             endif
-            call self%os_stk%set(imic, 'xdim',       real(ldim(1)))
-            call self%os_stk%set(imic, 'ydim',       real(ldim(2)))
-            call self%os_stk%set(imic, 'nframes',    real(nframes))
-            call self%os_stk%set(imic, 'smpd',       smpd)
-            call self%os_stk%set(imic, 'kv',         kv)
-            call self%os_stk%set(imic, 'cs',         cs)
-            call self%os_stk%set(imic, 'fraca',      fraca)
-            call self%os_stk%set(imic, 'phaseplate', trim(phaseplate))
+            call os_ptr%set(imic, 'xdim',       real(ldim(1)))
+            call os_ptr%set(imic, 'ydim',       real(ldim(2)))
+            call os_ptr%set(imic, 'nframes',    real(nframes))
+            call os_ptr%set(imic, 'smpd',       smpd)
+            call os_ptr%set(imic, 'kv',         kv)
+            call os_ptr%set(imic, 'cs',         cs)
+            call os_ptr%set(imic, 'fraca',      fraca)
+            call os_ptr%set(imic, 'phaseplate', trim(phaseplate))
         enddo
+        if( is_movie )then
+            segment = 'MOVIE(S)'
+        else
+            segment = 'MICROGRAPH(S)'
+        endif
+        write(*,'(A13,I6,A1,A)')'>>> IMPORTED ',nmics,' ', trim(segment)
+        write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(segment),':',ntot
     end subroutine add_movies
 
     subroutine add_ptcls_stktab( self, stktab, os )
@@ -485,7 +526,7 @@ contains
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
         class(oris), optional, intent(inout) :: os   ! parameters associated with stk
-        real,             allocatable :: smpds(:)
+        ! real,             allocatable :: smpds(:)
         integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D, fnr
         real    :: smpd_here
         ! file exists?
@@ -564,7 +605,6 @@ contains
         else if( n_os_stk >= nparts )then
             return
         endif
-        !
         smpd    = self%os_stk%get(1,'smpd')
         box     = nint(self%os_stk%get(1,'box'))
         call self%os_stk%getter(1,'stk',stk)
@@ -672,6 +712,7 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=:), allocatable :: ext, newname, stkname
         integer :: imic, nmics
+        nmics = self%os_stk%get_noris()
         do imic=1,nmics
             call self%os_stk%getter(imic, 'stk', stkname)
             ext     = fname2ext(trim(stkname))
@@ -787,6 +828,29 @@ contains
         endif
         get_smpd = self%os_stk%get(1,'smpd')
     end function get_smpd
+
+    integer function oritype2segment(self, oritype)
+        class(sp_project), intent(in) :: self
+        character(len=*),  intent(in) :: oritype
+        select case(trim(oritype))
+            case('mic')
+                oritype2segment = MIC_SEG
+            case('stk')
+                oritype2segment = STK_SEG
+            case('ptcl2D')
+                oritype2segment = PTCL2D_SEG
+            case('cls2D')
+                oritype2segment = CLS2D_SEG
+            case('cls3D')
+                oritype2segment = CLS3D_SEG
+            case('ptcl3D')
+                oritype2segment = PTCL3D_SEG
+            case('out')
+                oritype2segment = OUT_SEG
+            case DEFAULT
+                oritype2segment = GENERIC_SEG
+        end select
+    end function
 
     character(len=STDLEN) function get_ctfmode( self, oritype )
         class(sp_project), target, intent(inout) :: self
@@ -1065,6 +1129,8 @@ contains
         character(len=*),  intent(in)    :: which
         integer,           intent(in)    :: n
         select case(trim(which))
+            case('mic')
+                call self%os_mic%new_clean(n)
             case('stk')
                 call self%os_stk%new_clean(n)
             case('ptcl2D')
@@ -1093,6 +1159,8 @@ contains
         character(len=*),  intent(in)    :: which
         class(oris),       intent(inout) :: os
         select case(trim(which))
+            case('mic')
+                self%os_mic    = os
             case('stk')
                 self%os_stk    = os
             case('ptcl2D')
@@ -1174,23 +1242,75 @@ contains
         if( cline%defined('nparts') ) call cline_scale%set('nparts', cline%get_rarg('nparts'))
     end subroutine scale_projfile
 
+    !> for merging alignment documents from SIMPLE runs in distributed mode
+    subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in )
+        use simple_map_reduce, only: split_nobjs_even
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: nptcls, ndocs
+        character(len=*),  intent(in)    :: oritype, fbody
+        integer, optional, intent(in)    :: numlen_in
+        class(oris),          pointer :: os_ptr
+        integer,          allocatable :: parts(:,:)
+        character(len=:), allocatable :: fname
+        type(binoris)         :: bos_doc
+        type(oris)            :: os_part
+        integer               :: i, iptcl, cnt, numlen, n_records, partsz, isegment
+        numlen = len(int2str(ndocs))
+        if( present(numlen_in) ) numlen = numlen_in
+        parts = split_nobjs_even(nptcls, ndocs)
+        ! convert from flag to enumerator to integer
+        isegment = self%oritype2segment(oritype)
+        ! allocate merged oris
+        call self%new_seg_with_ptr( nptcls, oritype, os_ptr )
+        ! read & transfer
+        do i=1,ndocs
+            ! read part
+            fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
+            call bos_doc%open(trim(fname))
+            n_records = bos_doc%get_n_records(isegment)
+            partsz    = parts(i,2) - parts(i,1) + 1
+            if( n_records /= partsz )then
+                write(*,*) 'ERROR, # records does not match expectation'
+                write(*,*) 'EXTRACTED FROM file: ', trim(fname)
+                write(*,*) 'n_records: ', n_records
+                write(*,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
+                write(*,*) 'fromto: ', parts(i,1), parts(i,2)
+                write(*,*) 'partsz: ', partsz
+                stop
+            endif
+            call os_part%new_clean(n_records)
+            call bos_doc%read_segment(isegment, os_part)
+            call bos_doc%close()
+            ! transfer to self
+            cnt = 0
+            do iptcl = parts(i,1), parts(i,2)
+                cnt = cnt + 1
+                call os_ptr%set_ori(iptcl, os_part%get_ori(cnt))
+            enddo
+        end do
+        ! end gracefully
+        call self%write()
+    end subroutine merge_algndocs
+
     ! printers
 
     subroutine print_info( self )
         class(sp_project), intent(in) :: self
         integer :: n
+        n = self%os_mic%get_noris()
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in micrographs          segment (1) :', n
         n = self%os_stk%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-micrograph stack segment (1) :', n
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-micrograph stack segment (2) :', n
         n = self%os_ptcl2D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 2D      segment (2) :', n
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 2D      segment (3) :', n
         n = self%os_cls2D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-cluster  2D      segment (3) :', n
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-cluster  2D      segment (4) :', n
         n = self%os_cls3D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-cluster  3D      segment (4) :', n
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-cluster  3D      segment (5) :', n
         n = self%os_ptcl3D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 3D      segment (5) :', n
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 3D      segment (6) :', n
         n = self%os_out%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in out                  segment (6) :', n
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in out                  segment (7) :', n
         n = 0
         if( allocated(self%frcs) ) n = size(self%frcs,1)
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in FRCs                 segment (9) :', n
@@ -1202,7 +1322,7 @@ contains
         n = self%jobproc%get_noris()
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in jobproc              segment (12):', n
         n = self%compenv%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in compenv              segment (12):', n
+        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in compenv              segment (13):', n
     end subroutine print_info
 
     ! readers
@@ -1265,6 +1385,8 @@ contains
             case('T')
                 ! *.txt plain text ori file
                 select case(trim(which))
+                    case('mic')
+                        call self%os_mic%read(fname)
                     case('stk')
                         call self%os_stk%read(fname)
                     case('ptcl2D')
@@ -1299,6 +1421,9 @@ contains
         integer :: n
         n = self%bos%get_n_records(isegment)
         select case(isegment)
+            case(MIC_SEG)
+                call self%os_mic%new_clean(n)
+                call self%bos%read_segment(isegment, self%os_mic)
             case(STK_SEG)
                 call self%os_stk%new_clean(n)
                 call self%bos%read_segment(isegment, self%os_stk,    only_ctfparams_state_eo=only_ctfparams_state_eo)
@@ -1389,6 +1514,12 @@ contains
             case('T')
                 ! *.txt plain text ori file
                 select case(trim(which))
+                    case('mic')
+                        if( self%os_mic%get_noris() > 0 )then
+                            call self%os_mic%write(fname)
+                        else
+                            write(*,*) 'WARNING, no mic-type oris available to write; sp_project :: write_segment'
+                        endif
                     case('stk')
                         if( self%os_stk%get_noris() > 0 )then
                             call self%os_stk%write(fname)
@@ -1457,6 +1588,8 @@ contains
         integer,           intent(in)    :: isegment
         integer, optional, intent(in)    :: fromto(2)
         select case(isegment)
+            case(MIC_SEG)
+                call self%bos%write_segment(isegment, self%os_mic, fromto)
             case(STK_SEG)
                 call self%bos%write_segment(isegment, self%os_stk)
             case(PTCL2D_SEG)
@@ -1503,6 +1636,8 @@ contains
         character(len=*),  intent(in) :: which
         integer :: isegment
         select case(trim(which))
+            case('mic')
+                isegment = MIC_SEG
             case('stk')
                 isegment = STK_SEG
             case('ptcl2D')

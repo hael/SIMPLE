@@ -415,7 +415,7 @@ contains
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: stk_part_fname_sc, pid_file, phaseplate, ctfflag
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, sz, spproj_a_seg_inputted
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, spproj_a_seg_inputted
         logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
@@ -813,6 +813,8 @@ contains
             ! this determines the spproj_a_seg
             if( present(spproj_a_seg) ) spproj_a_seg_inputted = self%spproj_a_seg
             select case(trim(self%oritype))
+                case('mic')
+                    self%spproj_a_seg = MIC_SEG
                 case('stk')
                     self%spproj_a_seg = STK_SEG
                 case('ptcl2D')
@@ -842,6 +844,8 @@ contains
             endif
         else
             select case(self%spproj_a_seg)
+                case(MIC_SEG)
+                    self%oritype = 'mic'
                 case(STK_SEG)
                     self%oritype = 'stk'
                 case(PTCL2D_SEG)
@@ -849,7 +853,7 @@ contains
                 case(CLS2D_SEG)
                     self%oritype = 'cls2D'
                 case(CLS3D_SEG)
-                    self%oritype = 'ptcl2D'
+                    self%oritype = 'cls3D'
                 case(PTCL3D_SEG)
                     self%oritype = 'ptcl3D'
                 case(PROJINFO_SEG)
@@ -872,13 +876,23 @@ contains
             ! get nptcls/box/smpd from project file
             call bos%open(self%projfile)
             self%nptcls = bos%get_n_records(self%spproj_a_seg)
-            call bos%read_first_segment_record(STK_SEG, o)
+            select case(self%spproj_a_seg)
+                case(MIC_SEG)
+                    call bos%read_first_segment_record(MIC_SEG, o)
+                case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG)
+                    call bos%read_first_segment_record(STK_SEG, o)
+                case DEFAULT
+                    call o%new_ori_clean
+                    call o%set('smpd',0.)
+            end select
             if( o%isthere('smpd') )then
                 self%smpd = o%get('smpd')
             else
-                stop 'projfile exec requires smpd in os_stk field; currently absent'
+                print *,'projfile exec requires smpd in field:', trim(self%oritype)
                 stop 'ERROR! params :: new'
             endif
+            ! box
+            call bos%read_first_segment_record(STK_SEG, o)
             if( o%isthere('box') ) self%box = nint(o%get('box'))
             call o%kill
             ! CTF plan
@@ -1245,7 +1259,7 @@ contains
         if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.
         ! sanity check imgkind
         select case(trim(self%imgkind))
-            case('movie', 'mic', 'ptcl', 'cavg')
+            case('movie', 'mic','ptcl', 'cavg')
                 ! alles gut!
             case DEFAULT
                 write(*,*) 'imgkind: ', trim(self%imgkind)

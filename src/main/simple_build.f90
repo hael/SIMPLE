@@ -97,6 +97,9 @@ contains
         ! create object for orientations
         ! b%a is now a pointer to a field in b%spproj
         select case(p%spproj_a_seg)
+            case(MIC_SEG)
+                call self%spproj%os_mic%new(p%nptcls)
+                self%a => self%spproj%os_mic
             case(STK_SEG)
                 call self%spproj%os_stk%new(p%nptcls)
                 self%a => self%spproj%os_stk

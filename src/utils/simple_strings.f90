@@ -46,12 +46,9 @@ contains
         logical :: str_is_file
         i = index(str, '.')
         ! check if first symbol after . is a character
+        str_is_file = .false.
         if( i /= 0 .and. i < len_trim(str)  )then
-            if( is_a_letter(str(i+1:i+1)) )then
-                str_is_file = .true.
-            else
-                str_is_file = .false.
-            endif
+            if( is_a_letter(str(i+1:i+1)) )str_is_file = .true.
         endif
         ! file name
         if( str_is_file )then

@@ -47,6 +47,7 @@ contains
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer, parameter :: MAXITS_STAGE1 = 10
+        integer, parameter :: MAXITS_STAGE1_EXTR = 15
         ! commanders
         type(make_cavgs_distr_commander) :: xmake_cavgs
         type(cluster2D_distr_commander)  :: xcluster2D_distr
@@ -86,9 +87,14 @@ contains
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%delete('update_frac')   ! no incremental learning in stage 1
-            call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call cline_cluster2D_stage1%set('objfun', 'cc')     ! goal function is standard cross-correlation
+            call cline_cluster2D_stage1%delete('automsk')
+            if( p_master%l_frac_update )then
+                call cline_cluster2D_stage1%delete('update_frac')   ! no incremental learning in stage 1
+                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
+            else
+                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
+            endif
             ! Scaling
             call spproj%scale_projfile(p_master%smpd_targets2D(1), projfile_sc,&
                 &cline_cluster2D_stage1, cline_scale1)
@@ -136,6 +142,9 @@ contains
             if( p_master%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             call cline_cluster2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
+            if( cline%defined('update_frac') )then
+                call cline_cluster2D_stage2%set('update_frac', p_master%update_frac)
+            endif
             ! Scaling
             call spproj%read( p_master%projfile )
             call spproj%scale_projfile( p_master%smpd_targets2D(2), projfile_sc,&

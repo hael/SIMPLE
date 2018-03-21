@@ -76,6 +76,8 @@ contains
                 allocate( os_strings(p%nptcls) )
                 ! convert from flag to enumerator to integer
                 select case(trim(p%oritype))
+                    case('mic')
+                        isegment = MIC_SEG
                     case('stk')
                         isegment = STK_SEG
                     case('ptcl2D')

@@ -28,8 +28,6 @@ private
 logical, parameter             :: L_BENCH         = .false.
 logical, parameter             :: L_BENCH_CLUSTER2D = .false.
 type(polarft_corrcalc), target :: pftcc
-integer, allocatable           :: pinds(:)
-logical, allocatable           :: ptcl_mask(:)
 integer                        :: nptcls2update
 integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
 real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
@@ -40,14 +38,13 @@ character(len=STDLEN)          :: benchfname
 contains
 
     !>  \brief  is the prime2D algorithm
-    subroutine cluster2D_exec( b, p, cline, which_iter, converged )
+    subroutine cluster2D_exec( b, p, cline, which_iter )
         use simple_qsys_funs,    only: qsys_job_finished
         use simple_binoris_io,   only: binwrite_oritab
         class(build),  target, intent(inout) :: b
         class(params), target, intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
-        logical,        intent(inout) :: converged
         integer, allocatable       :: prev_pops(:), pinds(:)
         logical, allocatable       :: ptcl_mask(:)
         class(strategy2D), pointer :: strategy2Dsrch(:)

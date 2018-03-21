@@ -117,8 +117,6 @@ contains
         type(params) :: p
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
-        logical      :: converged
-        converged    = .false.
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_strategy2D_tbox(p)             ! 2D Hadamard matcher built
@@ -132,7 +130,7 @@ contains
         if( startit == 1 )call b%a%clean_updatecnt
         ! execute
         if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-        call cluster2D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
+        call cluster2D_exec(b, p, cline, startit) ! partition or not, depending on 'part'
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         call qsys_job_finished(p, 'simple_commander_cluster2D :: exec_cluster2D')

@@ -72,10 +72,8 @@ contains
     subroutine exec_print_project_info( self, cline )
         class(print_project_info_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        type(params)     :: p
         type(sp_project) :: spproj
-        p = params(cline)
-        call spproj%read(p%projfile)
+        call spproj%read(cline%get_carg('projfile'))
         call spproj%print_info
         call spproj%kill
         call simple_end('**** PRINT_PROJECT_INFO NORMAL STOP ****')
@@ -290,7 +288,7 @@ contains
             else
                 allocate(phaseplate, source='no')
             endif
-            call spproj%add_movies(p%filetab, p%smpd, p%kv, p%cs, p%fraca, phaseplate)
+            call spproj%add_movies(p%filetab, p%oritype, p%smpd, p%kv, p%cs, p%fraca, phaseplate)
         endif
         ! update project info
         call spproj%update_projinfo( cline )

@@ -147,26 +147,23 @@ contains
     end subroutine exec_motion_correct_ctf_estimate_distr
 
     subroutine exec_motion_correct_distr( self, cline )
+        use simple_sp_project, only: sp_project
         class(motion_correct_distr_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
-        type(merge_algndocs_commander) :: xmerge_algndocs
-        type(cmdline)                  :: cline_merge_algndocs
-        type(qsys_env)                 :: qenv
-        type(params)                   :: p_master
-        type(chash)                    :: job_descr
-        character(len=:), allocatable  :: output_dir, fbody
+        class(cmdline),                        intent(inout) :: cline
+        type(sp_project)              :: spproj
+        type(qsys_env)                :: qenv
+        type(params)                  :: p_master
+        type(chash)                   :: job_descr
+        character(len=:), allocatable :: output_dir
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
+        call cline%set('oritype', 'mic')
         ! make master parameters
         p_master        = params(cline)
-        p_master%nptcls = nlines(p_master%filetab)
-        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-        ! deal with numlen so that length matches JOB_FINISHED indicator files
         p_master%numlen = len(int2str(p_master%nptcls))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
@@ -177,23 +174,15 @@ contains
             call cline%set('dir', trim(output_dir))
         endif
         call mkdir(output_dir)
-        allocate(fbody, source=trim(output_dir)//trim(UNIDOC_FBODY))
-        ! prepare merge_algndocs command line
-        cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.)
-        call cline_merge_algndocs%set( 'fbody',    trim(fbody))
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls))
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts))
-        call cline_merge_algndocs%set( 'outfile',  trim(output_dir)//trim(SIMPLE_UNIDOC))
-        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen))
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(UNIDOC_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
-        call xmerge_algndocs%execute( cline_merge_algndocs )
+        call spproj%read(p_master%projfile)
+        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully
@@ -406,12 +395,10 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! commanders
         type(check2D_conv_commander)         :: xcheck2D_conv
-        type(merge_algndocs_commander)       :: xmerge_algndocs
         type(make_cavgs_distr_commander)     :: xmake_cavgs
         ! command lines
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
-        type(cmdline)         :: cline_merge_algndocs
         type(cmdline)         :: cline_make_cavgs
         ! other variables
         type(qsys_env)        :: qenv
@@ -438,15 +425,9 @@ contains
         ! prepare command lines from prototype master
         cline_check2D_conv   = cline
         cline_cavgassemble   = cline
-        cline_merge_algndocs = cline
         cline_make_cavgs     = cline
 
         ! initialise static command line parameters and static job description parameters
-        call cline_merge_algndocs%set('fbody',    trim(ALGN_FBODY)     )
-        call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
-        call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
-        call cline_merge_algndocs%set('oritype',  'ptcl2D')
-        call cline_merge_algndocs%set('projfile', trim(p_master%projfile))
         call cline_cavgassemble%set('prg',        'cavgassemble')
         call cline_make_cavgs%set('prg',          'make_cavgs')
         call cline_cavgassemble%set('projfile',   p_master%projfile)
@@ -510,7 +491,7 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! merge orientation documents
-            call xmerge_algndocs%execute(cline_merge_algndocs)
+            call b%spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'ptcl2D', ALGN_FBODY)
             ! assemble class averages
             refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p_master%ext
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext
