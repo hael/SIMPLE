@@ -289,12 +289,6 @@ select case(prg)
         !
         ! <ctf_estimate/begin>is a SIMPLE program for fitting the CTF<ctf_estimate/end>
         !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'kv'
-        keys_required(4) = 'cs'
-        keys_required(5) = 'fraca'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'pspecsz'
@@ -306,7 +300,7 @@ select case(prg)
         keys_optional(8) = 'phaseplate'
         keys_optional(9) = 'dir'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:9))
+        call cline%parse_oldschool(keys_optional=keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)

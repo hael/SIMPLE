@@ -185,7 +185,7 @@ contains
         ntot = fromto(2) - fromto(1) + 1
         frame_counter = 0
         movie_counter = 0
-        call orientation%new
+        call orientation%new_ori_clean
         call os_uni%new(ntot)
         smpd_original = p%smpd
         ! loop over exposures (movies)
@@ -201,13 +201,15 @@ contains
                 &frame_counter, movienames(imovie), smpd_scaled, output_dir_motion_correct)
             call os_uni%set_ori(movie_counter, orientation)
             p%smpd           = smpd_scaled
-            movie_counter    = movie_counter - 1
+            ! movie_counter    = movie_counter - 1
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')    !! realloc warning
             moviename_intg   = mciter%get_moviename('intg')
             p%hp             = p%hp_ctfestimate
             p%lp             = p%lp_ctf_estimate
-            call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni, output_dir_ctf_estimate)
+            orientation      = os_uni%get_ori(movie_counter)
+            call cfiter%iterate(p, movie_ind, moviename_forctf, orientation, output_dir_ctf_estimate)
+            call os_uni%set_ori(movie_counter, orientation)
             if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
             ! picker
             if( l_pick )then
@@ -463,7 +465,7 @@ contains
         type(params)                  :: p
         type(motion_correct_iter)     :: mciter
         type(sp_project)              :: spproj
-        type(ori)                     :: orientation, o_mov
+        type(ori)                     :: orientation
         character(len=:), allocatable :: output_dir, moviename
         real    :: smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter, frame_counter, lfoo(3), nframes
@@ -544,11 +546,9 @@ contains
         type(sp_project)                   :: spproj
         character(len=:),      allocatable :: intg_forctf, output_dir
         character(len=STDLEN) :: intg_fbody, intg_ext, intg_name
-        type(oris)            :: os
+        type(ori)             :: o
         integer               :: nmovies, fromto(2), imic, ntot, intg_counter
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
-        !call read_filetable(p%filetab, movienames_forctf)
-        !nmovies = size(movienames_forctf)
         ! output directory
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
@@ -573,18 +573,19 @@ contains
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
-        call os%new(ntot)
         ! read in integrated movies
         call spproj%read_segment( 'mic', p%projfile, fromto ) !!!!!!!!!!!!!!!!!!!!!!! SO THIS MAKES SENSE
         ! loop over exposures (movies)
-        intg_counter = 0
         do imic = fromto(1),fromto(2)
-            call spproj%os_mic%getter(imic, 'intg', intg_forctf)
-            call cfiter%iterate(p, imic, intg_counter, intg_forctf, os, trim(output_dir))
+            o = spproj%os_mic%get_ori(imic)
+            call o%getter('intg', intg_forctf)
+            call cfiter%iterate(p, imic, intg_forctf, o, trim(output_dir))
             write(*,'(f4.0,1x,a)') 100.*(real(intg_counter)/real(ntot)), 'percent of the micrographs processed'
+            call spproj%os_mic%set_ori(imic, o)
         end do
-        !call os%write(fname_ctf_estimate_output)
-        call os%kill
+        ! output
+        call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        ! cleanup
         call qsys_job_finished( p, 'simple_commander_preprocess :: exec_ctf_estimate' )
         ! end gracefully
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')

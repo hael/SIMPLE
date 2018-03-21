@@ -392,9 +392,11 @@ contains
                 cycle
             else if( nframes > 1 )then
                 call os_ptr%set(imic, 'movie', trim(movienames(cnt)))
+                call os_ptr%set(imic, 'imgkind', 'movie')
                 is_movie = .false.
             else
                 call os_ptr%set(imic, 'intg',  trim(movienames(cnt)))
+                call os_ptr%set(imic, 'imgkind', 'mic')                
                 is_movie = .true.
             endif
             call os_ptr%set(imic, 'xdim',       real(ldim(1)))

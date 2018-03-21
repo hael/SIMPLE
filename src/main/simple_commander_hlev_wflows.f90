@@ -189,10 +189,9 @@ contains
             call xcluster2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
-            last_iter        = last_iter_stage2 ! for ranking
         endif
         ! ranking
-        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//p_master%ext
+        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
         call cline_rank_cavgs%set('projfile', trim(p_master%projfile))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))

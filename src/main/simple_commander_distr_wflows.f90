@@ -183,6 +183,7 @@ contains
         ! merge docs
         call spproj%read(p_master%projfile)
         call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        call spproj%kill
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully
@@ -282,25 +283,25 @@ contains
     end subroutine exec_powerspecs_distr
 
     subroutine exec_ctf_estimate_distr( self, cline )
+        use simple_sp_project, only: sp_project
         class(ctf_estimate_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        type(merge_algndocs_commander) :: xmerge_algndocs
-        type(cmdline)                  :: cline_merge_algndocs
+        type(sp_project)               :: spproj
         type(params)                   :: p_master
         type(chash)                    :: job_descr
         type(qsys_env)                 :: qenv
-        character(len=:), allocatable  :: output_dir, fbody
+        character(len=:), allocatable  :: output_dir
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
         p_master = params(cline)
-        p_master%nptcls = nlines(p_master%filetab)
-        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        p_master%numlen = len(int2str(p_master%nptcls))
+        call cline%set('numlen', real(p_master%numlen))
         ! output directory
         if( cline%defined('dir') )then
             output_dir = trim(p_master%dir)
@@ -309,24 +310,18 @@ contains
             call cline%set('dir', trim(output_dir))
         endif
         call mkdir(output_dir)
-        allocate(fbody, source=trim(output_dir)//trim('ctf_estimate_output_part'))
-        ! prepare merge_algndocs command line
-        cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.)
-        call cline_merge_algndocs%set( 'fbody',    trim(fbody) )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile',  trim(output_dir)//'ctf_estimate_output_merged'//trim(METADATA_EXT))
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
-        call xmerge_algndocs%execute( cline_merge_algndocs )
-        ! clean
+        call spproj%read(p_master%projfile)
+        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        ! cleanup
         call qsys_cleanup(p_master)
+        ! graceful ending
         call simple_end('**** SIMPLE_DISTR_ctf_estimate NORMAL STOP ****')
     end subroutine exec_ctf_estimate_distr
 

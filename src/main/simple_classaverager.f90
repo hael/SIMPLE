@@ -110,7 +110,6 @@ contains
         ! phaseplate    = p%tfplan%l_phaseplate
         ! smpd
         smpd          = p%smpd
-        print *,'smpd=', smpd
         ! set ldims
         ldim          = [pp%box,pp%box,1]
         ldim_pd       = [pp%boxpd,pp%boxpd,1]

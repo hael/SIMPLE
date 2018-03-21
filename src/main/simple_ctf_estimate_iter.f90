@@ -13,17 +13,16 @@ end type ctf_estimate_iter
 
 contains
 
-    subroutine iterate( self, p, imovie, movie_counter, moviename_forctf, os, dir_out )
+    subroutine iterate( self, p, imovie, moviename_forctf, orientation, dir_out )
         use simple_params, only: params
-        use simple_oris,   only: oris
+        use simple_ori,    only: ori
         use simple_image,  only: image
         use simple_ctf_estimate  ! use all in there
         class(ctf_estimate_iter), intent(inout)      :: self
         class(params),      intent(inout)      :: p
         integer,            intent(in)         :: imovie
-        integer,            intent(inout)      :: movie_counter
         character(len=*),   intent(in)         :: moviename_forctf
-        class(oris),        intent(inout)      :: os
+        class(ori),         intent(inout)      :: orientation
         character(len=*),   intent(in)         :: dir_out
         integer                       :: nframes, ldim(3), i
         character(len=:), allocatable :: fname_diag
@@ -47,7 +46,6 @@ contains
         call pspec_all%new([p%pspecsz,p%pspecsz,1],   p%smpd)
         call micrograph%mic2eospecs(p%pspecsz, 'sqrt', pspec_lower, pspec_upper, pspec_all)
         ! deal with output
-        movie_counter = movie_counter + 1
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctf_estimate_diag')
         fname_diag = trim(dir_out)//'/'//remove_abspath(trim(fname_diag))
         ! fitting
@@ -56,16 +54,16 @@ contains
         call ctf_estimate_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
         call ctf_estimate_kill
         ! reporting
-        call os%set(movie_counter, 'kv',         p%kv    )
-        call os%set(movie_counter, 'cs',         p%cs    )
-        call os%set(movie_counter, 'fraca',      p%fraca )
-        call os%set(movie_counter, 'dfx',        dfx     )
-        call os%set(movie_counter, 'dfy',        dfy     )
-        call os%set(movie_counter, 'angast',     angast  )
-        call os%set(movie_counter, 'phshift',    phshift )
-        call os%set(movie_counter, 'ctf_estimatecc',   cc      )
-        call os%set(movie_counter, 'dferr',      dferr   )
-        call os%set(movie_counter, 'ctfscore',   ctfscore)
+        call orientation%set('kv',         p%kv    )
+        call orientation%set('cs',         p%cs    )
+        call orientation%set('fraca',      p%fraca )
+        call orientation%set('dfx',        dfx     )
+        call orientation%set('dfy',        dfy     )
+        call orientation%set('angast',     angast  )
+        call orientation%set('phshift',    phshift )
+        call orientation%set('ctf_estimatecc',   cc)
+        call orientation%set('dferr',      dferr   )
+        call orientation%set('ctfscore',   ctfscore)
         ! destruct (to avoid mem-leaks)
         call micrograph%kill
         call pspec_lower%kill
