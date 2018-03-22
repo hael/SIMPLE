@@ -85,10 +85,17 @@ foreach(TESTNAME ${TESTDIRS})
     add_executable(${TESTEXE} ${TESTSOURCES})
     target_link_libraries(${TESTEXE} ${EXTRA_LIBS})
     if(USE_OPENMP)
-      set_target_properties(${TESTEXE} PROPERTIES
-        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} -fno-range-check"
-        LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
-        LANGUAGE Fortran)
+      if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+	set_target_properties(${TESTEXE} PROPERTIES
+          COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+          LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
+          LANGUAGE Fortran)
+      else()
+	set_target_properties(${TESTEXE} PROPERTIES
+          COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} -fno-range-check"
+          LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
+          LANGUAGE Fortran)
+      endif()
     endif(USE_OPENMP)
     install(TARGETS ${TESTEXE}
       ARCHIVE DESTINATION ${CMAKE_INSTALL_BINDIR}
