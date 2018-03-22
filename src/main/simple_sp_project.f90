@@ -301,8 +301,9 @@ contains
         integer,                   intent(in)    :: iptcl
         integer,                   intent(out)   :: stkind
         integer,                   intent(out)   :: ind_in_stk
-        class(oris), pointer :: ptcl_field => null()
+        class(oris), pointer                     :: ptcl_field
         integer :: nptcls, fromp, top
+        nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
             case('ptcl2D')
@@ -347,7 +348,7 @@ contains
         real,                      intent(in)    :: smpd, kv, cs, fraca
         class(oris),               pointer :: os_ptr
         type(oris)                         :: os
-        character(len=STDLEN), allocatable :: movienames(:), segment
+        character(len=:),      allocatable :: movienames(:), segment
         integer :: n_os_stk, imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical :: is_movie
         ! file exists?
@@ -681,6 +682,7 @@ contains
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, nstks, box, n_os_stk
         integer :: nptcls, nptcls_part, numlen
         real    :: smpd
+        integer(4) :: rename_res
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk==0 )then
@@ -729,7 +731,7 @@ contains
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
             allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//'.'//trim(ext))
-            call rename(trim(stkpart), trim(dest_stkpart))
+            rename_res = rename(trim(stkpart), trim(dest_stkpart))
             nptcls_part = parts(istk,2)-parts(istk,1)+1
             call self%os_stk%set(istk, 'stk',     trim(dest_stkpart))
             call self%os_stk%set(istk, 'box',     real(box))
@@ -960,9 +962,10 @@ contains
     character(len=STDLEN) function get_ctfmode( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        class(oris), pointer          :: ptcl_field => null()
+        class(oris), pointer          :: ptcl_field
         integer :: stkind
         logical :: dfx_here, dfy_here
+        nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
             case('ptcl2D')
@@ -991,9 +994,10 @@ contains
     character(len=STDLEN) function get_ctfflag( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        class(oris), pointer          :: ptcl_field => null()
+        class(oris), pointer          :: ptcl_field
         character(len=:), allocatable :: ctfflag
         integer              :: stkind, ind_in_stk
+        nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
             case('ptcl2D')
@@ -1043,9 +1047,10 @@ contains
     logical function has_phaseplate( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        class(oris), pointer          :: ptcl_field => null()
+        class(oris), pointer          :: ptcl_field
         character(len=:), allocatable :: phaseplate
         integer              :: stkind, ind_in_stk
+        nullify(ptcl_field)
         ! do the index mapping
         call self%map_ptcl_ind2stk_ind(oritype, 1, stkind, ind_in_stk)
         ! set field pointer
@@ -1073,11 +1078,12 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         integer,                   intent(in)    :: iptcl
-        class(oris), pointer          :: ptcl_field => null()
+        class(oris), pointer          :: ptcl_field
         character(len=:), allocatable :: ctfflag
         type(ctfparams)      :: ctfvars
         integer              :: stkind, ind_in_stk
         logical              :: dfy_was_there
+        nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
             case('ptcl2D')
@@ -1202,7 +1208,8 @@ contains
     logical function is_virgin_field( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        class(oris), pointer :: os => null()
+        class(oris), pointer :: os
+        nullify(os)
         is_virgin_field = .false.
         ! set field pointer
         select case(trim(oritype))
