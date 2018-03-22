@@ -1488,22 +1488,38 @@ contains
 
     function simple_full_path (infile) result(canonical_name)
         character(kind=c_char, len=*), intent(in)  :: infile
-        character(kind=c_char, len=:), allocatable :: canonical_name
+        character(len=STDLEN) :: canonical_name
         integer(1), dimension(:), pointer          :: iptr
-        character, pointer                         :: fstring(:)
-        type(c_ptr), target                        :: strptr
-        integer :: lengthin, status, lengthout
+        type(c_ptr) :: cstring
+        character, pointer                            :: fstring(:)
+        integer                                       :: slen, i
 
+
+        integer :: lengthin, status, lengthout
+        character(len=LINE_MAX_LEN), target :: fstr
+        character(len=STDLEN) :: infile_c
         lengthin = len_trim(infile)
-        !strptr = c_loc(canonical_name)
-        status = get_absolute_pathname(trim(infile)//achar(0), strptr, lengthout )
+         print *, " address fstr ", loc(fstr)
+        cstring = c_loc(fstr)
+        infile_c = trim(infile)//achar(0)
+        print *, " address cstring ", loc(cstring)
+        status = get_absolute_pathname(infile_c, cstring, lengthout )
+        print *, " address cstring ", loc(cstring)
+        print *, " address fstr ", loc(fstr)
+     !   print *," fstr ", trim(adjustl(fstr))
        if( lengthout > 1)then
-            call c_f_pointer(strptr, fstring, [lengthout])
-!            allocate(canonical_name, source=iptr)
- !           canonical_name = transfer(strptr,c_char)
+           call c_f_pointer(cstring, fstring, [STDLEN] )
+           write(*,'(a)') fstring
+!           allocate(canonical_name)
+           !           canonical_name = transfer(strptr,c_char)
+           canonical_name= trim(adjustl(fstr))
+           ! do i= 1,lengthout
+           !     canonical_name(i) = fstring(i)
+           ! enddo
         else
-            allocate(canonical_name, source=infile)
+            canonical_name =infile
         end if
+
         print *, 'input file/path name: ', infile
         print *, 'absolute file/path name: ', canonical_name
     end function simple_full_path

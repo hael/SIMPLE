@@ -105,148 +105,151 @@ if (io_stat /= 0) call simple_error_check()
 !! New interface: get_file_list, get_subdir_list, subprocess, glob_file_list, show_dir_content_recursive
 !! New OS calls:  simple_list_dirs, simple_list_files, simple_rmdir, simple_del_files, exec_subprocess
 
-print *, '>>>'
-print *, '>>> Syslib function Test 5: simple_list_files / get_file_list -- Root directory'
-print *, '>>>'
-if (io_stat == 0 .and. allocated(res))then
-    print *,"    file list num files:  size ", size(res)
-    print *,"    files: "
-    do i=1, size(res)
-        write(*,'(i0,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<  simple_list_files or get_file_list failed '
-    call simple_error_check()
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
-print *, '>>>'
-print *, '>>> Syslib function Test 5: simple_list_files / get_file_list -- Current directory Empty '
-print *, '>>>'
-res = simple_list_files ("", status=io_stat)
-if (io_stat == 0 .and. allocated(res))then
-    print *,"    file list num files: ", n, " size ", size(res)
-    print *,"    files: "
-    do i=1, size(res)
-        write(*,'(i0,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<  simple_list_files or get_file_list failed '
-    call simple_error_check()
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
-print *, '>>>'
-print *, '>>> Syslib function Test 5: simple_list_files / get_file_list -- Current directory with slash '
-print *, '>>>'
-res = simple_list_files ("./", status=io_stat)
-if (io_stat == 0 .and. allocated(res))then
-    print *,"    num files: ", n, " size ", size(res)
-    print *,"    files: "
-    do i=1, size(res)
-        write(*,'(i0,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<  simple_list_files or get_file_list failed '
-    call simple_error_check()
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
-print *, '>>>'
-print *, '>>> Syslib function Test 5: simple_list_files / glob_file_list -- single glob (this will emulate "ls *" ) '
-print *, '>>>'
-res = simple_list_files (glob="*", status=io_stat)
-if (io_stat == 0 .and. allocated(res))then
-    print *,"    num files: ", size(res)
-    print *,"    files: "
-    do i=1, size(res)
-        write(*,'(i0,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<  simple_list_files or glob_file_list failed '
-    call simple_error_check()
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
+! print *, '>>>'
+! print *, '>>> Syslib function Test 5: simple_list_files / get_file_list -- Root directory'
+! print *, '>>>'
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"    file list num files:  size ", size(res)
+!     print *,"    files: "
+!     do i=1, size(res)
+!         write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+! else
+!     print *, '<<<  simple_list_files or get_file_list failed '
+!     call simple_error_check()
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
 
 
-print *, '>>>'
-print *, '>>> Syslib function Test 5: simple_glob_list_tofile / glob_file_list -- advanced glob  '
-print *, '>>>'
-io_stat = simple_glob_list_tofile(glob=trim(simple_path_str)//"/scripts/*.pl", outfile='perl_scripts.tmp')
-if (io_stat == 0 .and. allocated(res))then
-    print *,"    num files: ", size(res)
-    print *,"    files: "
-    do i=1, size(res)
-        write(*,'(i0,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<  simple_list_files or glob_file_list failed '
-    call simple_error_check()
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
+! print *, '>>>'
+! print *, '>>> Syslib function Test 5: simple_list_files / get_file_list -- Current directory Empty '
+! print *, '>>>'
+! res = simple_list_files ("", status=io_stat)
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"    file list num files: ", n, " size ", size(res)
+!     print *,"    files: "
+!     do i=1, size(res)
+!         write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+! else
+!     print *, '<<<  simple_list_files or get_file_list failed '
+!     call simple_error_check()
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
+! print *, '>>>'
+! print *, '>>> Syslib function Test 5: simple_list_files / get_file_list -- Current directory with slash '
+! print *, '>>>'
+! res = simple_list_files ("./", status=io_stat)
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"    num files: ", n, " size ", size(res)
+!     print *,"    files: "
+!     do i=1, size(res)
+!         write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+! else
+!     print *, '<<<  simple_list_files or get_file_list failed '
+!     call simple_error_check()
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
+! print *, '>>>'
+! print *, '>>> Syslib function Test 5: simple_list_files / glob_file_list -- single glob (this will emulate "ls *" ) '
+! print *, '>>>'
+! res = simple_list_files (glob="*", status=io_stat)
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"    num files: ", size(res)
+!     print *,"    files: "
+!     do i=1, size(res)
+!         write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+! else
+!     print *, '<<<  simple_list_files or glob_file_list failed '
+!     call simple_error_check()
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
 
 
-print *, '>>>'
-print *, '>>> Syslib function Test 6:   simple_list_dirs / list_dirs '
-print *, '>>>'
-res = simple_list_dirs(".", status=io_stat)
-if (io_stat == 0 .and. allocated(res))then
-    print *,"    num dirs: ", size(res)
-    print *,"    dirs: "
-      do i=1, size(res)
-        write(*,'(i0,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<   simple_list_dirs/get_file_list "." failed '
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
-call exec_cmdline("simple_test_fileio 2>&1 > /dev/null")
-print *, '>>>'
-print *, '>>> Syslib function Test 6: simple_del_files / glob_file_list -- (emulate: rm -f SIMPLE_TEST_FILEIO*/tmp*.txt)'
-print *, '>>>'
-n = simple_del_files (glob="SIMPLE_TEST_FILEIO*/tmp*.txt", dlist=res, status=io_stat)
-if (io_stat == 0 .and. allocated(res))then
-    print *,"   num of deleted files: ", n, " size ", size(res)
-    print *,"   deleted files: "
-    do i=1, size(res)
-        if(file_exists(trim(res(i)))) write(*,'(a,": File still exists")')  trim(adjustl(res(i)))
+! print *, '>>>'
+! print *, '>>> Syslib function Test 5: simple_glob_list_tofile / glob_file_list -- advanced glob  '
+! print *, '>>>'
+! io_stat = simple_glob_list_tofile(glob=simple_path_str//"/scripts/*.pl", outfile='perl_scripts_list.tmp')
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"    num files: ", size(res)
+!     print *,"    files: "
+!     do i=1, size(res)
+!         write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+!     call del_file('perl_scripts_list.tmp')
+! else
+!     print *, '<<<  simple_glob_list_tofile or glob_file_list failed '
+!     call simple_error_check()
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
 
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<  simple_del_files / glob_file_list rm -f SIMPLE_TEST_FILEIO*/tmp*.txt FAILED'
-    call simple_error_check()
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
 
-call exec_cmdline("simple_test_fileio 2>&1 > /dev/null")
-print *, '>>>'
-print *, '>>> Syslib function Test 6: simple_rm_force / glob_file_list -- (emulate: rm -rf SIMPLE_TEST_FILEIO*)'
-print *, '>>>'
-n = simple_rm_force (glob="SIMPLE_TEST_FILEIO*", dlist=res, status=io_stat)
-if (io_stat == 0 .and. allocated(res))then
-    print *,"   num of deleted files and dirs: ", n, " size ", size(res)
-    print *,"   deleted files and dirs: "
-    do i=1, size(res)
-        write(*,'(i0,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
- !       print *, res(i)
-    enddo
-else
-    print *, '<<<  simple_rm_force or glob_rm_rf failed '
-    call simple_error_check()
-    passed=.false.
-endif
-if(allocated(res))deallocate(res)
+! print *, '>>>'
+! print *, '>>> Syslib function Test 6:   simple_list_dirs / list_dirs '
+! print *, '>>>'
+! res = simple_list_dirs(".", status=io_stat)
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"    num dirs: ", size(res)
+!     print *,"    dirs: "
+!       do i=1, size(res)
+!         write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+! else
+!     print *, '<<<   simple_list_dirs/get_file_list "." failed '
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
+
+! call exec_cmdline("simple_test_fileio 2>&1 > /dev/null")
+! print *, '>>>'
+! print *, '>>> Syslib function Test 6: simple_del_files / glob_file_list -- (emulate: rm -f SIMPLE_TEST_FILEIO*/tmp*.txt)'
+! print *, '>>>'
+! n = simple_del_files (glob="SIMPLE_TEST_FILEIO*/tmp*.txt", dlist=res, status=io_stat)
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"   num of deleted files: ", n, " size ", size(res)
+!     print *,"   deleted files: "
+!     do i=1, size(res)
+!         if(file_exists(trim(res(i)))) write(*,'(a,": File still exists")')  trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+! else
+!     print *, '<<<  simple_del_files / glob_file_list rm -f SIMPLE_TEST_FILEIO*/tmp*.txt FAILED'
+!     call simple_error_check()
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
+
+! call exec_cmdline("simple_test_fileio 2>&1 > /dev/null")
+! print *, '>>>'
+! print *, '>>> Syslib function Test 6: simple_rm_force / glob_file_list -- (emulate: rm -rf SIMPLE_TEST_FILEIO*)'
+! print *, '>>>'
+! n = simple_rm_force (glob="SIMPLE_TEST_FILEIO*", dlist=res, status=io_stat)
+! if (io_stat == 0 .and. allocated(res))then
+!     print *,"   num of deleted files and dirs: ", n, " size ", size(res)
+!     print *,"   deleted files and dirs: "
+!     do i=1, size(res)
+!         write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!  !       print *, res(i)
+!     enddo
+! else
+!     print *, '<<<  simple_rm_force or glob_rm_rf failed '
+!     call simple_error_check()
+!     passed=.false.
+! endif
+! if(allocated(res))deallocate(res)
 
 
 print *, '>>>'

@@ -29,6 +29,7 @@
 #endif
 
 #define MAX_CHAR_FILENAME 256
+#define LINE_MAX_LEN 8192
 #define MAKEDIR makedir_
 #define REMOVEDIR removedir_
 #define GET_FILE_LIST get_file_list_
@@ -164,7 +165,11 @@ int get_file_list(const char * path,  const char * ext, int *count, size_t ivf_p
         perror("Failed : simple_posix.c::get_file_list ");
         return -1;
     }
-    printf("DEBUG:  In get_file_list %s\n", cpath);
+#if _DEBUG
+    printf("DEBUG:  In get_file_list, path:%s\n", cpath);
+    printf("DEBUG:  In get_file_list, ext:%s\n", ext);
+#endif
+
     extern int errno;
     DIR           *d;
 
@@ -253,12 +258,13 @@ int get_file_list_modified(const char * path, const char* ext, int* count, int f
         perror("Failed : simple_posix.c::get_file_list_reverse_modified ");
         return -1;
     }
+#if _DEBUG
     printf("%30s: path:%s\n", "DEBUG: In get_file_list_modified", path);
     printf("%30s: strlen path:%zd\n", "DEBUG: In get_file_list_modified", strlen(path));
     printf("%30s:  flag:%d  ext:%3s\n", "DEBUG: In get_file_list_modified", flag, ext);
     printf("%30s: strlen ext:%zd\n", "DEBUG: In get_file_list_modified", strlen(ext));
     printf("%30s: ivf_pathLen:%12u\n", "DEBUG: In get_file_list_modified", (long) ivf_path);
-
+#endif
     // Remove temp file if it exists
     if(access( "./__simple_filelist__", F_OK ) != -1){
         if(remove("./__simple_filelist__")!=0) {
@@ -536,9 +542,11 @@ int glob_file_list(const char *match,  int*count, int* sort_by_time, size_t ivf_
     FILE* f;
     int err;
     err = 0;
+#if _DEBUG
     printf("DEBUG: In glob_file_list size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
     printf("DEBUG: In glob_file_list cmatch:%s\n", cmatch);
     printf("DEBUG: In glob_file_list flag:%d \n", *sort_by_time);
+#endif
 
     int glob_val = glob(cmatch, GLOB_PERIOD, NULL, &globlist);
     free(cmatch);
@@ -623,9 +631,10 @@ int glob_rm_all(const char *match,  int*count, size_t ivf_match)
     FILE* f;
     int err;
     err = 0;
+#if _DEBUG
     printf("DEBUG: In glob_rm_all size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
     printf("DEBUG: In glob_rm_all cmatch:%s\n", cmatch);
-
+#endif
     int glob_val = glob(cmatch, GLOB_PERIOD, NULL, &globlist);
     free(cmatch);
     f = fopen("__simple_filelist__", "w");
@@ -765,16 +774,47 @@ int  get_absolute_pathname(const char* in, char* out, int* outlen, size_t ivf_in
     // realpath(in, resolved_path);
     //      printf("\n%s\n",resolved_path);
     //      return 0;
-    char *filein = F90toCstring(in, strlen(in));
-    char *resolved = canonicalize_file_name(filein); free(filein);
+  char *filein = F90toCstring(in, fstrlen(in,MAX_CHAR_FILENAME));
+  char *resolved = canonicalize_file_name(filein);
+#if _DEBUG
+    printf("%30s: path:%s\n", "DEBUG: In  get_absolute_pathname", in);
+    printf("%30s: strlen path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(in));
+    printf("%30s: strlen path:%d\n", "DEBUG: In  get_absolute_pathname", fstrlen(in, MAX_CHAR_FILENAME));
+    printf("%30s: c str:%s\n", "DEBUG: In  get_absolute_pathname", filein);
+    printf("%30s: strlen c str:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(filein));
+    printf("%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
+    printf("%30s: strlen resolved:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(resolved));
+    printf("%30s: out path addr:%ld\n", "DEBUG: In  get_absolute_pathname", *out);
+    printf("%30s: strlen out path:%zd  %ld\n", "DEBUG: In  get_absolute_pathname", strlen(out), sizeof(out));
+#endif
+
     if(resolved == NULL) {
         printf("%d %s\nget_absolute_path failed to canonicalize  file %s\n", errno, strerror(errno), filein);
         perror("Failed : simple_posix.c::glob_file_list ");
         return 1;
     }
-    *outlen = strlen(resolved);
-    f2cstr(out , resolved, *outlen);
-    //strncpy(out, resolved, *outlen);
+    *outlen = strlen(resolved) ;
+    //    *out = malloc(MAX_CHAR_FILENAME);
+
+    //static char *c2fstr(char* cstr, char *fstr, int elem_len, int sizeofcstr)
+
+    //
+     strncpy(out, resolved, *outlen);for (int i = *outlen;i<MAX_CHAR_FILENAME;i++ ) out[i]='\0';
+
+#if _DEBUG
+    printf("%30s: out path:%s\n", "DEBUG: In  get_absolute_pathname", out);
+    printf("%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
+#endif
+    *out = c2fstr( resolved, out, *outlen, sizeof(resolved) );
+    out[0]='/';
+
+#if _DEBUG
+    printf("%30s: out path:%s\n", "DEBUG: In  get_absolute_pathname c2fstr", out);
+    printf("%30s: out path addr:%ld\n", "DEBUG: In  get_absolute_pathname", *out);
+    printf("%30s: strlen out path:%zd  %ld\n", "DEBUG: In  get_absolute_pathname", strlen(out), sizeof(out));
+#endif
+
+    free(filein);
     free(resolved);
     //out = resolved;
     return 0;
