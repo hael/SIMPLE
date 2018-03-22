@@ -1,8 +1,10 @@
 ! clustering based on a similartity matrix using affinity propagation
 module simple_aff_prop
-use simple_math
-use simple_rnd
-use simple_stat
+use simple_defs
+use simple_math, only:euclid
+use simple_rnd,  only:ran3
+use simple_stat, only: analyze_smat
+use simple_syslib, only: allocchk
 implicit none
 
 public :: aff_prop, test_aff_prop
@@ -12,8 +14,8 @@ type aff_prop
     private
     integer              :: N                    !< nr of data entries
     real,    allocatable :: A(:,:), R(:,:)       !< A is affinities & R responsibilities
-    real,    allocatable :: Aold(:,:), Rold(:,:) 
-    real,    allocatable :: Rp(:,:), tmp(:)     
+    real,    allocatable :: Aold(:,:), Rold(:,:)
+    real,    allocatable :: Rp(:,:), tmp(:)
     real,    allocatable :: AS(:,:), dA(:)
     real,    pointer     :: S(:,:)               !< pointer to similarity matrix
     real,    allocatable :: Y(:), Y2(:)          !< maxvals
@@ -36,11 +38,11 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, N, S, ftol, lam, pref, maxits )
         class(aff_prop),   intent(inout) :: self
-        integer,           intent(in)    :: N               ! # data entries       
+        integer,           intent(in)    :: N               ! # data entries
         real,    target,   intent(inout) :: S(N,N)          ! similarity matrix
         real,    optional, intent(in)    :: ftol, lam, pref ! tolerance, dampening factor, preference thres
         integer, optional, intent(in)    :: maxits
-        integer :: alloc_stat, i, j
+        integer :: i, j
         real    :: ppref, diff
         call self%kill
         ! set constants
@@ -66,7 +68,8 @@ contains
         ! allocate
         allocate( self%A(N,N), self%R(N,N), self%Aold(N,N), self%Rp(N,N),&
         self%Rold(N,N), self%AS(N,N), self%Y(N), self%Y2(N), self%tmp(N),&
-        self%I(N), self%I2(N), self%dA(N) )
+        self%I(N), self%I2(N), self%dA(N) , stat=alloc_stat)
+        if(alloc_stat/=0) call allocchk("simple_aff_prop::new  1 ")
         self%A      = 0.
         self%R      = 0.
         self%Aold   = 0.
@@ -92,7 +95,7 @@ contains
         real,                 intent(out)   :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
         real              :: x, realmax
-        integer           :: i, j, k, alloc_stat, ncls, loc(1)
+        integer           :: i, j, k,  ncls, loc(1)
         ! initialize
         realmax   = huge(x)
         self%A    = 0.
@@ -151,7 +154,8 @@ contains
         end do
         if( allocated(centers) ) deallocate(centers)
         if( allocated(labels) )  deallocate(labels)
-        allocate( centers(ncls), similarities(ncls), labels(self%N) )
+        allocate( centers(ncls), similarities(ncls), labels(self%N) , stat=alloc_stat)
+        if(alloc_stat/=0) call allocchk("simple_aff_prop::propagate  1 ")
         ! set the cluster centers
         ncls = 0
         do j=1,self%N

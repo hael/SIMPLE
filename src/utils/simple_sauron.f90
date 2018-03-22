@@ -1,7 +1,11 @@
 ! SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
 ! provides support for one-line per one particle input/output
 module simple_sauron
-include 'simple_lib.f08'
+    use simple_defs
+    use simple_strings
+    use simple_syslib, only: allocchk
+    use simple_hash, only: hash
+    use simple_chash, only: chash
 implicit none
 
 contains
@@ -13,8 +17,8 @@ contains
         character(len=32),     allocatable :: keys(:)
         character(len=STDLEN), allocatable :: vals(:)
         character(len=:),      allocatable :: line_trimmed
-        character(len=STDLEN) :: args(128), args_pair(2), format
-        integer :: nargs, iarg, nargs_pair, ival, io_stat
+        character(len=STDLEN) :: args(128), args_pair(2)
+        integer :: nargs, iarg, ival, io_stat
         allocate(line_trimmed, source=trim(line))
         call parsestr(line_trimmed,' ',args,nargs)
         allocate(keys(nargs), vals(nargs), stat=alloc_stat)
@@ -30,7 +34,7 @@ contains
                 &'WARNING! Invalid key; simple_sauron :: sauron_line_parser'
             if(len(args_pair(2)) == 0 ) write(*,'(a)')&
                 &'WARNING! Invalid arg; simple_sauron :: sauron_line_parser'
-            keys(iarg) = args_pair(1)
+            keys(iarg) = args_pair(1) !      CHARACTER expression will be truncated in assignment (32/256)
             vals(iarg) = args_pair(2)
             select case(str2format(vals(iarg)))
                 case( 'real' )
