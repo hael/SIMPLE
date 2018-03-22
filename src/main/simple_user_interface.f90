@@ -52,6 +52,7 @@ type :: simple_program
     procedure          :: print_cmdline
     procedure          :: print_prg_descr_long
     procedure          :: write2json
+    procedure          :: get_nrequired_keys
     procedure          :: get_required_keys
     procedure          :: is_distr
     procedure          :: requires_sp_project
@@ -344,7 +345,7 @@ contains
         &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
         call cluster2D%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &few iterations of search, before the automatic scheme kicks in. Also controls the degree of downsampling in the first &
-        phase', 'initial low-pass limit in Angstroms', .false., 15.)
+        &phase', 'initial low-pass limit in Angstroms', .false., 15.)
         call cluster2D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
@@ -1044,8 +1045,8 @@ contains
         contains
 
             subroutine set( arr, i )
+                integer,                  intent(in)    :: i
                 type(simple_input_param), intent(inout) :: arr(i)
-                integer,                  intent(in)  :: i
                 allocate(arr(i)%key,               source=trim(key))
                 allocate(arr(i)%keytype,           source=trim(keytype))
                 allocate(arr(i)%descr_short,       source=trim(descr_short))
@@ -1145,7 +1146,6 @@ contains
         use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         type(chash) :: ch
-        integer     :: i
         write(*,'(a)') ''
         write(*,'(a)') '>>> PROGRAM INFO'
         call ch%new(4)
@@ -1210,7 +1210,6 @@ contains
         use simple_strings, only: lexSort
         class(simple_program), intent(in) :: self
         type(chash) :: ch
-        integer     :: i
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_distr_exec'
 
@@ -1378,14 +1377,33 @@ contains
 
     end subroutine write2json
 
+    integer function get_nrequired_keys( self )
+        class(simple_program), intent(in) :: self
+        get_nrequired_keys = nreq_counter(self%img_ios) + nreq_counter(self%parm_ios) +&
+        &nreq_counter(self%alt_ios) + nreq_counter(self%srch_ctrls) + nreq_counter(self%filt_ctrls) +&
+        &nreq_counter(self%mask_ctrls) + nreq_counter(self%comp_ctrls)
+
+        contains
+
+            function nreq_counter( arr ) result( nreq )
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                integer :: nreq, i
+                nreq = 0
+                if( allocated(arr) )then
+                    do i=1,size(arr)
+                        if( arr(i)%required ) nreq = nreq + 1
+                    end do
+                endif
+            end function nreq_counter
+
+    end function get_nrequired_keys
+
     function get_required_keys( self ) result( keys )
         class(simple_program), intent(in) :: self
         type(str4arr), allocatable :: keys(:)
         integer :: nreq, ireq
         ! count # required
-        nreq = nreq_counter(self%img_ios) + nreq_counter(self%parm_ios)   + nreq_counter(self%alt_ios)    +&
-        &nreq_counter(self%srch_ctrls)    + nreq_counter(self%filt_ctrls) + nreq_counter(self%mask_ctrls) +&
-        &nreq_counter(self%comp_ctrls)
+        nreq = self%get_nrequired_keys()
         ! extract keys
         if( nreq > 0 )then
             allocate(keys(nreq))
@@ -1400,17 +1418,6 @@ contains
         endif
 
         contains
-
-            function nreq_counter( arr ) result( nreq )
-                type(simple_input_param), allocatable, intent(in) :: arr(:)
-                integer :: nreq, i
-                nreq = 0
-                if( allocated(arr) )then
-                    do i=1,size(arr)
-                        if( arr(i)%required ) nreq = nreq + 1
-                    end do
-                endif
-            end function nreq_counter
 
             subroutine key_extractor( arr )
                 type(simple_input_param), allocatable, intent(in) :: arr(:)

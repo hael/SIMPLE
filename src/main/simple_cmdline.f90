@@ -90,13 +90,11 @@ contains
             ! endif
         endif
         ! get required keys
-        keys_required = ptr2prg%get_required_keys()
-        ! check that we got them all or inform user
-        if( allocated(keys_required) )then
-            sz_keys_req    = size(keys_required)
+        sz_keys_req = ptr2prg%get_nrequired_keys()
+        if( sz_keys_req > 0 )then
+            keys_required  = ptr2prg%get_required_keys()
             nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
         else
-            sz_keys_req    = 0
             nargs_required = 1
         endif
         if( self%argcnt < nargs_required )then

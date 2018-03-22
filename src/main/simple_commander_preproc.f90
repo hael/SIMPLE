@@ -92,7 +92,8 @@ contains
         character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate
         character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=:),      allocatable :: output_dir_picker, output_dir_unidoc
-        character(len=STDLEN) :: boxfile, dir_ptcls, movie_fbody, movie_ext, movie_fname
+        character(len=LONGSTRLEN) :: boxfile
+        character(len=STDLEN) :: movie_fbody, movie_ext, movie_fname
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
@@ -460,7 +461,7 @@ contains
         type(ori)                     :: o
         character(len=:), allocatable :: output_dir, moviename, imgkind
         real    :: smpd_scaled
-        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt, nmovs
+        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
@@ -529,12 +530,12 @@ contains
     subroutine exec_ctf_estimate( self, cline )
         class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
-        type(params)                       :: p
-        type(ctf_estimate_iter)            :: cfiter
-        type(sp_project)                   :: spproj
-        type(ori)                          :: o
-        character(len=:),      allocatable :: intg_forctf, output_dir, imgkind
-        integer :: nmovies, fromto(2), imic, ntot, cnt
+        type(params)                  :: p
+        type(ctf_estimate_iter)       :: cfiter
+        type(sp_project)              :: spproj
+        type(ori)                     :: o
+        character(len=:), allocatable :: intg_forctf, output_dir, imgkind
+        integer                       :: fromto(2), imic, ntot, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         ! output directory
         if( cline%defined('dir') )then
@@ -591,7 +592,7 @@ contains
         real,                  allocatable :: correlations(:,:)
         logical,               allocatable :: lselected(:)
         character(len=STDLEN)              :: cmd_str
-        integer                            :: iimg, isel, nall, nsel, loc(1), ios
+        integer                            :: iimg, isel, nall, nsel, loc(1)
         integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
@@ -757,7 +758,7 @@ contains
         type(ori)                            :: o
         character(len=:),        allocatable :: output_dir, intg_name, imgkind
         character(len=LONGSTRLEN)            :: boxfile
-        integer :: nmovies, fromto(2), imic, ntot, nptcls_out, cnt
+        integer :: fromto(2), imic, ntot, nptcls_out, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         ! output directory
         if( cline%defined('dir') )then
@@ -807,24 +808,23 @@ contains
     subroutine exec_extract( self, cline )
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
-        type(params)                       :: p
-        type(build)                        :: b
-        integer                            :: nmovies, nboxfiles, nframes, pind, noris
-        integer                            :: i, j, ldim(3), box_current, movie, ndatlines, nptcls
-        integer                            :: cnt, niter, fromto(2), orig_box
-        integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside
-        type(nrtxtfile)                    :: boxfile
-        character(len=STDLEN)              :: stack, outfile, moviename, stack_frames, fbody
-        character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:), movienames_frames(:)
-        character(len=:),      allocatable :: output_dir
-        real,                  allocatable :: boxdata(:,:)
-        logical,               allocatable :: oris_mask(:)
-        real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               :: particle_position(2), ctf_estimatecc, phshift
-        type(image)                        :: micrograph
-        type(oris)                         :: outoris, os_uni
-        logical                            :: params_present(3), ctf_estimatecc_is_there, phshift_is_there
-        logical                            :: ctfres_is_there
+        type(params)                  :: p
+        type(build)                   :: b
+        type(sp_project)              :: spproj
+        type(nrtxtfile)               :: boxfile
+        type(image)                   :: micrograph
+        type(oris)                    :: o_ptcls
+        type(ori)                     :: o_mic
+        character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind
+        real,             allocatable :: boxdata(:,:)
+        logical,          allocatable :: oris_mask(:), mics_mask(:)
+        character(len=LONGSTRLEN)     :: stack, outfile, fbody
+        integer                       :: nframes, imic, iptcl, ldim(3), nptcls, nmics, box
+        integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside
+        real                          :: kv, cs, fraca, dfx, dfy, angast, ctfres
+        real                          :: particle_position(2), ctf_estimatecc, phshift
+        logical                       :: ctf_estimatecc_is_there, phshift_is_there
+        logical                       :: ctfres_is_there, dfy_is_there
         noutside = 0
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then
@@ -841,169 +841,159 @@ contains
             output_dir = trim(DIR_EXTRACT)
         endif
         call mkdir(output_dir)
-        ! check file inout existence and read filetables
-        !if( .not. cline%defined('filetab') ) stop 'need filetab input to extract'
-        !if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
-        !if( .not. file_exists(p%filetab)   ) stop 'inputted filetab does not exist in cwd'
-        !if( .not. file_exists(p%boxtab)    ) stop 'inputted boxtab does not exist in cwd'
-        !nmovies   = nlines(p%filetab)
-        !nboxfiles = nlines(p%boxtab)
-        !DebugPrint  'nboxfiles: ', nboxfiles
-        !if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
-        !call read_filetable(p%filetab, movienames)
-        !call read_filetable(p%boxtab,  boxfilenames)
-        !DebugPrint  'nmovies: ', nmovies
-        ! determine loop range
-        fromto(1) = 1
-        fromto(2) = nmovies
-        ntot = fromto(2) - fromto(1) + 1
-        ! find ldim
-        call find_ldim_nptcls(movienames(1), ldim, ifoo)
-        ! initialize
+        ! read in integrated movies
+        call spproj%read_segment('mic', p%projfile)
+        ntot  = spproj%os_mic%get_noris()
+        ! sanity checks
+        allocate(mics_mask(ntot), source=.false.)
+        nmics  = 0
+        nptcls = 0
+        do imic = 1, ntot
+            o_mic = spproj%os_mic%get_ori(imic)
+            if( .not.o_mic%isthere('imgkind') )cycle
+            if( .not.o_mic%isthere('intg')    )cycle
+            if( .not.o_mic%isthere('boxfile') )cycle
+            call o_mic%getter('imgkind', imgkind)
+            if( trim(imgkind).ne.'mic') cycle
+            call o_mic%getter('intg', mic_name)
+            if( .not.file_exists(mic_name) )cycle
+            call o_mic%getter('boxfile', boxfile_name)
+            if( .not.file_exists(boxfile_name) )cycle
+            ! get number of frames from stack
+            call find_ldim_nptcls(mic_name, lfoo, nframes )
+            if( nframes > 1 ) stop 'multi-frame extraction no longer supported; simple_extract'
+            ! update mask
+            mics_mask(imic) = .true.
+            nmics = nmics + 1
+            ! image & box dimensions
+            if( nmics == 1 )call find_ldim_nptcls(mic_name, ldim, ifoo)
+            if( nptcls == 0 .and. .not.cline%defined('box') )then
+                if( nlines(boxfile_name) > 0 )then
+                    call boxfile%new(boxfile_name, 1)
+                    nptcls = boxfile%get_ndatalines()
+                endif
+                if( nptcls == 0 )cycle
+                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
+                call boxfile%readNextDataLine(boxdata(1,:))
+                call boxfile%kill
+                call cline%set('box', boxdata(1,3))
+            endif
+        enddo
+        call spproj%kill
+        if( nmics == 0 ) stop 'No particles to extract! simple_commander_preproc :: exec_extract'
+        p%box = nint(cline%get_rarg('box'))
+        if( p%box == 0 )stop 'ERROR, box cannot be zero!'
+        ! init
+        call b%build_general_tbox(p, cline, do3d=.false.)
         call micrograph%new([ldim(1),ldim(2),1], p%smpd)
         niter    = 0
         noutside = 0
-        ! loop over exposures (movies)
-        do movie=fromto(1),fromto(2)
-            moviename = trim(adjustl(movienames(movie)))
-            ! get movie index (parsing the number string from the filename)
-            call fname2ind(moviename, movie_ind)
-            ! process boxfile
+        ! main loop
+        do imic = 1, ntot
+            if( .not.mics_mask(imic) )cycle
+            ! fetch micrograph
+            o_mic = b%a%get_ori(imic)
+            call o_mic%getter('imgkind', imgkind)
+            call o_mic%getter('intg', mic_name)
+            call o_mic%getter('boxfile', boxfile_name)
+            ! box file
             nptcls = 0
-            if( file_exists(boxfilenames(movie)) )then
-                if( nlines(boxfilenames(movie)) > 0 )then
-                    call boxfile%new(boxfilenames(movie), 1)
-                    nptcls = boxfile%get_ndatalines()
-                endif
+            if( nlines(boxfile_name) > 0 )then
+                call boxfile%new(boxfile_name, 1)
+                nptcls = boxfile%get_ndatalines()
             endif
             if( nptcls == 0 ) cycle
-            ! update iteration counter
+            ! ...
             niter = niter + 1
-            ! show progress
-            if( niter > 1 ) call progress(niter,ntot)
-            ! oris object for params
-            call outoris%new(nptcls)
+            call progress(imic,ntot)
+            ! box checks
+            call o_ptcls%new(nptcls)
             if(allocated(oris_mask))deallocate(oris_mask)
             allocate(oris_mask(nptcls), source=.false., stat=alloc_stat)
-            allocchk("In simple_extract oris_mask")
             ! read box data & update mask
-            if(allocated(boxdata))deallocate(boxdata)
-            allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            allocchk('In: simple_extract; boxdata etc., 2')
-            do j=1,nptcls
-                call boxfile%readNextDataLine(boxdata(j,:))
-                orig_box = nint(boxdata(j,3))
-                if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
+            if( allocated(boxdata) )deallocate(boxdata)
+            allocate( boxdata(nptcls, boxfile%get_nrecs_per_line()), stat=alloc_stat)
+            do iptcl=1,nptcls
+                call boxfile%readNextDataLine(boxdata(iptcl,:))
+                box = nint(boxdata(iptcl,3))
+                if( nint(boxdata(iptcl,3)) /= nint(boxdata(iptcl,4)) )then
                     stop 'Only square windows are currently allowed!'
                 endif
-                if( j == 1 .and. .not. cline%defined('box') ) p%box = nint(boxdata(1,3)) ! use the box size from the box file
                 ! modify coordinates if change in box (shift by half the difference)
-                if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
+                if( box /= p%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(p%box-box)/2.
+                if( nint(boxdata(iptcl,3)) /= p%box )then
+                    write(*,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', p%box
+                    stop 'inconsistent box sizes in box files'
+                endif
                 ! update particle mask & movie index
-                if( box_inside(ldim, nint(boxdata(j,1:2)), p%box) )then
-                    call outoris%set(j, 'movie', real(movie_ind))
-                    oris_mask(j) = .true.
-                endif
+                if( box_inside(ldim, nint(boxdata(iptcl,1:2)), p%box) )oris_mask(iptcl) = .true.
             end do
-            ! check box parsing
-            if( .not. cline%defined('box') )then
-                if( niter == 1 )then
-                    p%box = nint(boxdata(1,3))   ! use the box size from the box file
-                else
-                    box_current = nint(boxdata(1,3))
-                    if( box_current /= p%box )then
-                        write(*,*) 'box_current: ', box_current, 'box in params: ', p%box
-                        stop 'inconsistent box sizes in box files'
-                    endif
-                endif
-                if( p%box == 0 )then
-                    write(*,*) 'ERROR, box cannot be zero!'
-                    stop
-                endif
-            endif
+            call o_ptcls%new_clean(nptcls)
             DebugPrint  'did check box parsing'
-            ! get number of frames from stack
-            call find_ldim_nptcls(moviename, lfoo, nframes )
-            if( nframes > 1 ) stop 'multi-frame extraction no longer supported; simple_extract'
-            ! build general objects
-            if( niter == 1 )then
-                call b%build_general_tbox(p,cline,do3d=.false.)
-            endif
             ! extract ctf info
-            if( b%a%isthere('dfx') )then
-                params_present(1) = b%a%isthere('kv')
-                params_present(2) = b%a%isthere('cs')
-                params_present(3) = b%a%isthere('fraca')
-                if( all(params_present) )then
-                    ! alles ok
-                else
-                    if( .not. params_present(1) ) write(*,*) 'ERROR! input doc lacks kv'
-                    if( .not. params_present(2) ) write(*,*) 'ERROR! input doc lacks cs'
-                    if( .not. params_present(3) ) write(*,*) 'ERROR! input doc lacks fraca'
-                    stop
+            if( o_mic%isthere('dfx') )then
+                if( .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('kv') )then
+                    stop 'ERROR! Input lacks at least cs, kv or fraca field'
                 endif
-                kv    = b%a%get(movie,'kv')
-                cs    = b%a%get(movie,'cs')
-                fraca = b%a%get(movie,'fraca')
-                dfx   = b%a%get(movie,'dfx')
-                ctf_estimatecc_is_there = b%a%isthere('ctf_estimatecc')
-                phshift_is_there  = b%a%isthere('phshift')
-                ctfres_is_there   = b%a%isthere('ctfres')
-                if( ctf_estimatecc_is_there ) ctf_estimatecc = b%a%get(movie,'ctf_estimatecc')
-                if( phshift_is_there  ) phshift  = b%a%get(movie,'phshift')
-                if( ctfres_is_there   ) ctfres   = b%a%get(movie,'ctfres')
+                kv    = o_mic%get('kv')
+                cs    = o_mic%get('cs')
+                fraca = o_mic%get('fraca')
+                dfx   = o_mic%get('dfx')
+                ctf_estimatecc_is_there = o_mic%isthere('ctf_estimatecc')
+                phshift_is_there        = o_mic%isthere('phshift')
+                ctfres_is_there         = o_mic%isthere('ctfres')
+                dfy_is_there            = o_mic%isthere('dfy')
+                if( ctf_estimatecc_is_there ) ctf_estimatecc = o_mic%get('ctf_estimatecc')
+                if( phshift_is_there  )       phshift        = o_mic%get('phshift')
+                if( ctfres_is_there   )       ctfres         = o_mic%get('ctfres')
                 angast = 0.
-                if( b%a%isthere('dfy') )then ! astigmatic CTF
-                    if( .not. b%a%isthere('angast') ) stop 'need angle of astigmatism for CTF correction'
-                    dfy    = b%a%get(movie,'dfy')
-                    angast = b%a%get(movie,'angast')
+                if( dfy_is_there )then ! astigmatic CTF
+                    if( .not. o_mic%isthere('angast') ) stop 'need angle of astigmatism for CTF correction'
+                    dfy    = o_mic%get('dfy')
+                    angast = o_mic%get('angast')
                 endif
-                do j=1,nptcls
-                    if( oris_mask(j) )then
-                        call outoris%set(j, 'kv',         kv)
-                        call outoris%set(j, 'cs',         cs)
-                        call outoris%set(j, 'fraca',   fraca)
-                        call outoris%set(j, 'smpd',   p%smpd)
-                        call outoris%set(j, 'dfx',       dfx)
-                        if( b%a%isthere('dfy') )then
-                            call outoris%set(j, 'angast', angast)
-                            call outoris%set(j, 'dfy',       dfy)
-                        endif
-                        if( ctf_estimatecc_is_there ) call outoris%set(j, 'ctf_estimatecc', ctf_estimatecc)
-                        if( phshift_is_there  ) call outoris%set(j, 'phshift',  phshift)
-                        if( ctfres_is_there   ) call outoris%set(j, 'ctfres',   ctfres)
+                do iptcl=1,nptcls
+                    if( .not.oris_mask(iptcl) )cycle
+                    call o_ptcls%set(iptcl, 'kv',    kv)
+                    call o_ptcls%set(iptcl, 'cs',    cs)
+                    call o_ptcls%set(iptcl, 'fraca', fraca)
+                    call o_ptcls%set(iptcl, 'smpd',  p%smpd)
+                    call o_ptcls%set(iptcl, 'dfx',  dfx)
+                    if( dfy_is_there )then
+                        call o_ptcls%set(iptcl, 'angast', angast)
+                        call o_ptcls%set(iptcl, 'dfy',       dfy)
                     endif
+                    if( ctf_estimatecc_is_there ) call o_ptcls%set(iptcl, 'ctf_estimatecc', ctf_estimatecc)
+                    if( phshift_is_there  )       call o_ptcls%set(iptcl, 'phshift', phshift)
+                    if( ctfres_is_there   )       call o_ptcls%set(iptcl, 'ctfres', ctfres)
                 end do
+                call o_ptcls%compress(oris_mask)
+                call o_ptcls%kill_chash() ! remove chash part
                 DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
-                ! compress & write params (remove entries for boxes outside micrograph)
-                call outoris%compress(oris_mask)
-                call outoris%kill_chash() ! remove chash part
                 ! output stk & params file names
                 if( p%stream.eq.'yes' )then
-                    outfile = trim(output_dir)//p%outfile
+                    outfile = trim(output_dir)//p%outfile !!!!!!!!!!!!!!!!!!!!!!!
                 else
-                    fbody   = get_fbody(trim(remove_abspath(moviename)), p%ext, separator=.false.)
-                    outfile = trim(output_dir)//trim(EXTRACT_PARAMS_FBODY)//trim(fbody)//trim(METADATA_EXT)
+                    fbody = get_fbody(trim(remove_abspath(mic_name)), p%ext, separator=.false.)
                 endif
-                call del_file(outfile)
-                call binwrite_oritab(outfile, b%spproj, outoris, [1,count(oris_mask)])
             endif
             ! output stack
             if( p%stream.eq.'yes' )then
-                stack   = trim(output_dir)//p%outstk
+                stack = trim(output_dir)//p%outstk
             else
-                stack   = trim(output_dir)//trim(EXTRACT_STK_FBODY) // trim(remove_abspath(moviename))
+                stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(remove_abspath(mic_name))
             endif
             ! extract windows from integrated movie
-            call micrograph%read(moviename, 1)
+            call micrograph%read(mic_name, 1)
             ! filter out frequencies lower than the box can express to avoid aliasing
             call micrograph%bp(real(p%box) * p%smpd, 0.)
+            ! write new stack
             cnt = 0
-            do j=1,nptcls ! loop over boxes
-                if( oris_mask(j) )then
+            do iptcl=1,nptcls ! loop over boxes
+                if( oris_mask(iptcl) )then
                     cnt = cnt + 1
                     ! extract the window
-                    particle_position = boxdata(j,1:2)
+                    particle_position = boxdata(iptcl,1:2)
                     call micrograph%window(nint(particle_position), p%box, b%img, noutside)
                     if( p%pcontrast .eq. 'black' ) call b%img%neg()
                     call b%img%norm()
@@ -1011,29 +1001,12 @@ contains
                     call b%img%write(trim(adjustl(stack)), cnt)
                 endif
             end do
-            ! extract windows from integrated movie (subset of frames)
-            if( allocated(movienames_frames) )then
-                fbody        = get_fbody(trim(stack), p%ext, separator=.false.)
-                stack_frames = add2fbody(fbody, p%ext, '_frames_subset')
-                call micrograph%read(movienames_frames(movie),1)
-                cnt = 0
-                do j=1,nptcls ! loop over boxes
-                    if( oris_mask(j) )then
-                        cnt = cnt + 1
-                        ! extract the window
-                        particle_position = boxdata(j,1:2)
-                        call micrograph%window(nint(particle_position), p%box, b%img)
-                        if( p%pcontrast .eq. 'black' ) call b%img%neg()
-                        call b%img%norm()
-                        call b%img%edges_norm
-                        call b%img%write(trim(adjustl(stack_frames)), cnt)
-                    endif
-                end do
-            endif
+            ! IMPORT INTO PROJECT
+            ! call  b%spproj%append_stk( o_mic, o_ptcls )
             ! destruct
-            call boxfile%kill
-        end do
-        ! end gracefully
+            call boxfile%kill()
+        enddo
+        call b%spproj%write()
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 
         contains

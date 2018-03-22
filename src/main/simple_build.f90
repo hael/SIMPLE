@@ -137,7 +137,12 @@ contains
         if( metadata_read )then
             if( cline%defined('projfile') )call self%spproj%read(p%projfile)
             ! ctf planning
-            p%tfplan%mode = self%spproj%get_ctfmode(p%oritype)
+            select case(trim(p%oritype))
+                case('mic')
+                    ! nothing to do
+                case DEFAULT
+                    p%tfplan%mode = self%spproj%get_ctfmode(p%oritype)
+            end select
         else
             ! revert to oldschool logic
             if( present(nooritab) )then

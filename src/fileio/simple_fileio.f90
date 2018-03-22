@@ -62,7 +62,6 @@ contains
         character(len=30)     :: async_this, access_this, action_this, status_this,&
             &blank_this, pad_this, decimal_this, delim_this, form_this, round_this,&
             &position_this, errmsg_this
-        
         ! check to see if filename is empty
         write(filename,'(A)') trim(adjustl(file))
         if ( strIsBlank(filename) )then
