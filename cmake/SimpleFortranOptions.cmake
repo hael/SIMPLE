@@ -237,7 +237,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
 
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -C -CC -w -Wno-endif-labels -fopenmp") # only seen by preprocessor if #include.*timer is present
   set(CMAKE_Fortran_FLAGS                " ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS} ${EXTRA_FLAGS} ")
-  set(CMAKE_Fortran_FLAGS_DEBUG          " ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG}" )
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS_DEBUG} ${EXTRA_FLAGS} " )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        " ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${EXTRA_FLAGS} ")
 
@@ -310,7 +310,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
      set (EXTRA_FLAGS "${EXTRA_FLAGS} -Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign  -Minfo=all,ftn -Mneginfo=all")
   endif()
   if (USE_OPENACC_ONLY)
-   set(EXTRA_FLAGS "${EXTRA_FLAGS}  -acc")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS}  -acc")
     add_definitions(" -DUSE_OPENACC ")
    else()
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -mp")
@@ -625,8 +625,8 @@ Warning -- libgd will pull latest stable libjpeg that may conflict with libjpeg9
     message(STATUS "lib: ${GD_LIBRARIES}")
     add_definitions(" -D_LIBGD ")
     include_directories(" ${GD_INCLUDE_DIRS}")
-    set(EXTRA_LIBS ${EXTRA_LIBS} ${GD_LIBRARIES} ${ZLIB_LIBRARY_RELEASE})
     set(EXTRA_LIBS ${EXTRA_LIBS} -ljpeg)
+    set(EXTRA_LIBS ${EXTRA_LIBS} ${GD_LIBRARIES} ${ZLIB_LIBRARY_RELEASE})
   endif()
 endif()
 

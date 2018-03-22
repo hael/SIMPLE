@@ -67,6 +67,7 @@ file(GLOB TESTDIRS
   "tests/test_*"
   )
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+  list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
   list(REMOVE_ITEM TESTDIRS "tests/test_cuda")

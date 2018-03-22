@@ -43,7 +43,7 @@ file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCO
  list(APPEND FILEIO_src
     "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_posix.c"
     )
-file(GLOB IMGOPS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
+file(GLOB OPERATORS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
 if ( USE_CUDA )
   file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.f[90][08]" PARENT_SCOPE)
@@ -76,7 +76,7 @@ list(APPEND SIMPLE_src
 )
 
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${IMG_src} ${IMGOPS_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${IMG_src} ${OPERATORS_src} ${SIMPLE_src})
 # message(STATUS "SIMPLE LIBRARY SOURCES: ${SIMPLECORELIB}")
 
 ##########################################################################
