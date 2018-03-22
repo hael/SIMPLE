@@ -1,6 +1,6 @@
 ! concrete commander: operations on projects (spproject) and associated files
 module simple_commander_project
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
@@ -16,7 +16,7 @@ public :: import_movies_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
 private
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: project2txt_commander
   contains

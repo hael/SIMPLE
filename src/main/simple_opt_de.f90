@@ -11,7 +11,7 @@ private
 integer, parameter :: N_GENERAL = 136,    N_VALLEY = 126,    N_MULTIMODAL = 103,    N_FLAT = 106
 real,    parameter :: F_GENERAL = 0.2790, F_VALLEY = 0.4027, F_MULTIMODAL = 0.3976, F_FLAT = 0.5860
 real,    parameter :: X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_MULTIMODAL = 0.9794, X_FLAT = 0.3345
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
 type, extends(optimizer) :: opt_de
     private
@@ -72,8 +72,8 @@ contains
         class(opt_spec), intent(inout) :: spec        !< specification
         class(*),        intent(inout) :: fun_self    !< self-pointer for cost function
         real,            intent(out)   :: lowest_cost !< lowest cost
-        real    :: trial_costs(spec%npop), rtol
-        real    :: trials(spec%npop,spec%ndim), trial(spec%ndim), cost_trial, L
+        real    :: rtol
+        real    :: trial(spec%ndim), cost_trial, L
         integer :: a, rb, b, i, j, X, t, loc(1), nworse
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; de_minimize; simple_opt_de'

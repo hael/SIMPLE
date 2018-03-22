@@ -7,7 +7,7 @@ implicit none
 
 public :: qsys_ctrl
 private
-#include "simple_local_flags.inc"
+!#include "simple_local_flags.inc"
 
 integer, parameter :: SHORTTIME = 3
 

@@ -20,7 +20,7 @@ implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead, find_ldim_nptcls, has_ldim_nptcls
 private
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
 integer, parameter         :: NREALS          = 104
 integer, parameter, public :: dataRbytes      = 1

@@ -27,6 +27,7 @@ module simple_syslib
     use ifport, killpid=>kill, intel_ran=>ran
     use ifcore
 #endif
+    use simple_error
     implicit none
 #if defined(PGI)
     !! include lib3f.h without kill, bessel fns, etc
@@ -113,10 +114,6 @@ module simple_syslib
             integer, intent(in) :: lu
         end function ftell
 
-        subroutine gerror(str)
-            character*(*), intent(out) :: str
-        end subroutine gerror
-
         subroutine getarg(i,c)
             integer, intent(in) :: i
             character*(*), intent(out) :: c
@@ -168,9 +165,6 @@ module simple_syslib
             integer, intent(out) :: date_array(3)
         end subroutine idate
 
-        integer function ierrno()
-        end function ierrno
-
         ! subroutine ioinit(cc,bz,ap,pf,vb)
         ! logical, intent(in) :: cc, bz, ap, vb
         ! character*(*), intent(in) :: pf
@@ -215,10 +209,6 @@ module simple_syslib
         integer function outstr(ch)
             character*(*), intent(in) :: ch
         end function outstr
-
-        subroutine perror(str)
-            character*(*), intent(in) :: str
-        end subroutine perror
 
         integer function putc(ch)
             character*(*), intent(in) :: ch
@@ -417,195 +407,6 @@ module simple_syslib
         end function get_absolute_pathname
     end interface
 contains
-
-    !! ERROR Routines
-
-    subroutine simple_stop (msg,f,l)
-        character(len=*),      intent(in) :: msg
-        character(len=*),      intent(in), optional :: f !< filename of caller
-        integer,               intent(in), optional :: l !< line number from calling file
-        integer   :: last_err
-        if(present(f).and.present(l))&
-            write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
-        write(stderr,'("Message: ",/,a,/)') trim(msg)
-        last_err = get_sys_error()
-        stop
-    end subroutine simple_stop
-
-    function get_sys_error () result(err)
-        integer :: err
-        character(len=100) :: msg
-        err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
-        if( err < 0)then !! PGI likes to use negative error numbers
-            !#ifdef PGI
-            !            msg = gerror()
-            !#else
-            call gerror(msg) !! EXTERNAL;
-            !#endif
-            write(stderr,'("SIMPLE_SYSLIB::SYSERROR NEG ",I0)') err
-            write(stderr,*) trim(msg)
-        else if (err /= 0) then
-#ifdef GNU
-            write(msg,'("Last detected error (SIMPLE_SYSLIB::SYSERROR) ",I0,":")') err
-            call perror(trim(adjustl(msg)))
-
-#elif defined(INTEL)
-            ! err= getlasterror()
-            ! using IERRNO result from above
-            select case (err)
-            case (1) ! EPERM
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 1 Insufficient permission for operation"
-            case (2) ! ENOENT
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 2 No such file or directory"
-            case (3) ! ESRCH
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 3 No such process"
-            case (4) ! EIO
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 4 INTR error"
-            case (5) ! EIO
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 5 I/O error"
-            case (6) ! ENXIO
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 5 NXIO error"
-            case (7) ! E2BIG)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 7 Argument list too long"
-            case (8) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 8 File is not executable"
-            case (9)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 9 Bad file"
-            case (10)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 8 Bad child"
-            case (11)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 9 AGAIN error"
-            case ( ENOMEM)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 12 Not enough resources"
-            case ( EACCES)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 13  Access denied; the file's permission setting does not allow the specified access. Permission denied"
-            case (14)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 14 FAULT"
-            case (15)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 15 NOTBLK       "
-            case (16) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 16 BUSY         "
-            case (17) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 17 EXIST        "
-            case ( EXDEV)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 18 Cross-device link"
-            case (19) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 19 ERR$NODEV"
-            case ( ENOTDIR)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 20 Not a directory"
-            case (21)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 21 Is a directory"
-            case (  EINVAL)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 22 Invalid argument"
-            case (23)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 23 NFILE       "
-            case (24)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 24 MFILE       "
-            case (25)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 25 NOTTY       "
-            case (26)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 26 TXTBSY      "
-            case (27)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 27 FBIG        "
-            case (28)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 28 NOSPC       "
-            case (29)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 29 SPIPE       "
-            case (30)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 30 ROFS        "
-            case (31)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 31 MLINK       "
-            case (32)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 32 PIPE        "
-            case (33)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 33 DOM         "
-            case (34)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 34 RANGE       "
-            case (35)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 35 UCLEAN      "
-            case (36)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 36 DEADLOCK    "
-            case (38)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 38 NAMETOOLONG "
-            case (39)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 39 NOLCK       "
-            case (40)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 40 NOSYS       "
-            case (41)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 41 NOTEMPTY    "
-            case (42)
-                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 42 ILSEQ       "
-            end select
-            write(msg,'("SIMPLE SYSERROR ",I0)') err
-            call perror(msg)
-#else
-            !! PGI
-            ! msg = gerror()
-            ! write(stderr,'("SIMPLE_SYSLIB::SYSERROR ",I0)',advance='no') err
-            ! write(stderr,*) trim(msg)
-            write(msg,'("Last detected error (SIMPLE_SYSLIB::SYSERROR) ",I0,":")') err
-            call perror(trim(adjustl(msg)))
-#endif
-        end if
-    end function get_sys_error
-
-    !> \brief  is for checking allocation
-    subroutine allocchk( message, alloc_err, file, line, iomsg )
-        character(len=*), intent(in)           :: message
-        integer,          intent(in), optional :: alloc_err
-        character(len=*), intent(in), optional :: file !< filename of caller
-        integer,          intent(in), optional :: line !< line number from calling file
-        character(len=*), intent(in), optional :: iomsg !< IO message
-        integer                                :: syserr, alloc_status
-        alloc_status=alloc_stat    !! global variable from simple_defs
-        if(present(alloc_err))alloc_status=alloc_err
-        if (alloc_status/=0)then
-            write(stderr,'(a)') 'ERROR: Allocation failure!'
-            call simple_error_check(alloc_status)
-            if(present(iomsg))&
-                write(stderr,'("IO Message ",A)') trim(adjustl(iomsg))
-            if(present(file).and.present(line))&
-                write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') file,line
-            call simple_stop(message)
-        endif
-    end subroutine allocchk
-
-    subroutine simple_error_check(io_stat, msg)
-        integer,          intent(in), optional :: io_stat
-        character(len=*), intent(in), optional :: msg
-        integer :: io_stat_this, last_sys_error
-        character(len=STDLEN ) :: newmsg
-        if (present(io_stat))then
-            io_stat_this = io_stat
-        else
-            io_stat_this = get_sys_error()
-        end if
-
-#ifdef PGI
-        if(io_stat_this < 0)then
-            if (IS_IOSTAT_END(io_stat_this))then
-                write(stderr,'(a)')"fclose EOF reached (PGI version)"
-                io_stat_this=0
-            else if (IS_IOSTAT_EOR(io_stat_this)) then
-                write(stderr,'(a)')"fclose End-of-record reached (PGI version)"
-                io_stat_this=0
-            end if
-        end if
-#else
-        !! Intel and GNU
-        if (io_stat_this==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat_this
-        if (io_stat_this==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat_this
-
-#endif
-        if( io_stat_this /= 0 ) then
-            write(stderr,'(a,1x,I0 )') 'ERROR: File I/O failure, IOS# ', io_stat_this
-            if(present(msg)) write(stderr,'(a)') trim(adjustl(msg))
-            !! do not stop yet -- let the fopen/fclose call to finish
-            !! stop
-        endif
-
-    end subroutine simple_error_check
-
 
 
     !>  Wrapper for system call

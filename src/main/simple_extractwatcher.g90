@@ -231,7 +231,7 @@ contains
         class(extractwatcher), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         character(len=STDLEN) :: fname_here, fbody
-        fname_here = remove_abspath(trim(adjustl(fname)))
+        fname_here = basename(trim(adjustl(fname)))
         fbody      = get_fbody(trim(fname_here), trim(self%ext), separator=.false.)
         fbody      = fbody(12:) ! removes the 'ptcls_from_'
         deftab_from_stk = trim(self%watch_dir) // trim('extract_params_') // trim(fbody) // trim(METADATA_EXT)

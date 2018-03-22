@@ -1,14 +1,20 @@
 ! stack image processing routines for SPIDER/MRC files
-
 module simple_procimgfile
 include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_oris,    only: oris
 implicit none
 
-private :: raise_exception_imgfile
-public
+private ! :: raise_exception_imgfile
 
+public :: copy_imgfile, diff_imgfiles, make_pattern_stack, pad_imgfile, resize_imgfile, clip_imgfile
+public :: resize_and_clip_imgfile, resize_imgfile_double, norm_bin_imgfile, norm_imgfile, norm_ext_imgfile
+public :: noise_norm_imgfile, shellnorm_imgfile, stats_imgfile, neg_imgfile, masscen_imgfile, cure_imgfile
+public :: acf_imgfile, add_noise_imgfile, frameavg_imgfile, ft2img_imgfile,shift_imgfile,bp_imgfile
+public :: real_filter_imgfile,phase_rand_imgfile, apply_ctf_imgfile,shrot_imgfile,mask_imgfile, taper_edges_imgfile
+public :: bin_imgfile, make_avg_imgfile, random_selection_from_imgfile
+
+#include "simple_local_flags.inc"
 contains
 
     !>  \brief  is for raising exception
@@ -102,7 +108,7 @@ contains
         real               :: x, y
         integer            :: n, fnum, ier, i, ldim(3)
         logical            :: err
-#include "simple_local_flags.inc"
+
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'make_pattern_stack' )
@@ -149,7 +155,7 @@ contains
             if( err ) write(*,'(a,i7)') 'WARNING: variance zero! image nr: ', i
             if( present(avg) ) avg = avg+pcavec
             write(fnum,rec=i) pcavec
-            if( debug )then
+            if( debug .or. global_debug )then
                 call check4nans(pcavec)
                 call img%serialize(pcavec, mskrad)
                 call img%write('unserialized.spi', i)
@@ -507,7 +513,7 @@ contains
         character(len=*), intent(in)  :: fname
         class(oris),      intent(out) :: os
         real, optional,   intent(in)  :: msk
-        real              :: ave, sdev, var, med, minv, maxv, ent, spec
+        real              :: ave, sdev, med, minv, maxv, spec
         real, allocatable :: spectrum(:)
         type(image)       :: img
         integer           :: i, n, ldim(3)
@@ -1069,6 +1075,7 @@ contains
         use simple_sp_project,     only: sp_project
         use simple_ran_tabu,       only: ran_tabu
         use simple_strings,        only: str_has_substr
+<<<<<<< variant A
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: fname
         integer,           intent(in)    :: nran, box
@@ -1084,6 +1091,51 @@ contains
         smpd        = spproj%os_stk%get(1,'smpd')
         box_ori     = nint(spproj%os_stk%get(1,'box'))
         ldim        = [box_ori,box_ori,1]
+>>>>>>> variant B
+        character(len=*),  intent(in) :: fname2selfrom, fname
+        integer,           intent(in) :: nran, box
+        real,              intent(in) :: smpd
+        logical, optional, intent(in) :: mask(:)
+        character(len=:), allocatable :: stkname
+        integer                       :: n, ldim(3), i, ii, ldim_scaled(3), ind
+        type(ran_tabu)                :: rt
+        type(image)                   :: img, img_scaled
+        type(stktab_handler)          :: stkhandle
+        logical                       :: doscale, l_stktab_input
+        if( str_has_substr(fname2selfrom,'.txt') )then
+            call stkhandle%new(trim(fname2selfrom))
+            n       = stkhandle%get_nptcls()
+            ldim    = stkhandle%get_ldim()
+            ldim(3) = 1
+            l_stktab_input = .true.
+        else
+            call find_ldim_nptcls(fname2selfrom, ldim, n)
+            ldim(3) = 1
+            l_stktab_input = .false.
+        endif
+####### Ancestor
+        character(len=*),  intent(in) :: fname2selfrom, fname
+        integer,           intent(in) :: nran, box
+        real,              intent(in) :: smpd
+        logical, optional, intent(in) :: mask(:)
+        character(len=:), allocatable :: stkname
+        integer                       :: alloc_stat, n, ldim(3), i, ii, ldim_scaled(3), ind
+        type(ran_tabu)                :: rt
+        type(image)                   :: img, img_scaled
+        type(stktab_handler)          :: stkhandle
+        logical                       :: doscale, l_stktab_input
+        if( str_has_substr(fname2selfrom,'.txt') )then
+            call stkhandle%new(trim(fname2selfrom))
+            n       = stkhandle%get_nptcls()
+            ldim    = stkhandle%get_ldim()
+            ldim(3) = 1
+            l_stktab_input = .true.
+        else
+            call find_ldim_nptcls(fname2selfrom, ldim, n)
+            ldim(3) = 1
+            l_stktab_input = .false.
+        endif
+======= end
         ldim_scaled = [box,box,1]
         doscale     = box /= box_ori
         if( doscale )call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten

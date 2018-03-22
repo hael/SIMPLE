@@ -10,7 +10,6 @@
 ! Public License.
 !-----------------------------------------------------------------------------!
     logical :: debug=.false.
-    logical :: warn=.false.
     logical :: verbose=.false.
 
 #define _WPRINT_FILE_LINE_(FFFF,LLLL) if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,': '
@@ -27,16 +26,16 @@
 #  elif defined(INTEL)
 #    define LinePrint(N) #N
 #    define DebugPrint if(debug.or.global_debug) print *,__FILENAME__//":",__LINE__,
-#  else 
+#  else
 #   define DebugPrint  _WPRINT_FILE_LINE_(__FILENAME__,__LINE__);if(debug.or.global_debug) print *,
 #  endif
 # endif
 #endif
 #ifndef WarnPrint
-# define WarnPrint if(warn.or.debug.or.global_debug) print *, __FILENAME__,':',__LINE__,':Warning:',
+# define WarnPrint print *, __FILENAME__,':',__LINE__,':Warning:',
 #endif
 #ifndef VerbosePrint
-# define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *, 
+# define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *,
 #endif
 ! #ifndef ErrorPrint
 ! # define ErrorPrint(msg) write(*,'("Error in ",/,A,/," line ",I0,":",A)') __FILENAME__,__LINE__, msg

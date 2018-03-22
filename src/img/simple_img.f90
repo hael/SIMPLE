@@ -7,9 +7,9 @@
 !
 !! Modified by Michael Eager Feb 2018
 module simple_img
-#include "simple_lib.f08"
-    use, intrinsic                       :: iso_c_binding
-    implicit none
+include 'simple_lib.f08'
+use, intrinsic                       :: iso_c_binding
+implicit none
 
     !*** cptr should be have the same size as a c pointer
     !*** It doesn't matter whether it is an integer or a real
@@ -44,7 +44,7 @@ public
 
 contains
 
-    subroutine read_png(file_name,buffer,status)
+    subroutine read_png(file_name, buffer, status)
         character(*), intent(in)         :: file_name
         real, allocatable, intent(inout) :: buffer(:,:)
         integer, intent(out), optional   :: status

@@ -4,139 +4,139 @@
 !! (better than 8-bit PNG)
 
 module simple_jpg
-#include "simple_lib.f08"
-    use,intrinsic                                        :: iso_c_binding
-    implicit none
+include 'simple_lib.f08'
+use,intrinsic                                        :: iso_c_binding
+implicit none
 
-    public                                               :: jpg_img, test_jpg_export
-    private
+public                                               :: jpg_img, test_jpg_export
+private
 #include "simple_local_flags.inc"
     !*** cptr should be have the same size as a c pointer
     !*** It doesn't matter whether it is an integer or a real
-    integer, parameter                                   :: cptr          = kind(5)
-    integer, parameter                                   :: numComponents = 3
-    !  integer, parameter                                   :: pixelsize     = selected_int_kind(3)
-    !   integer, parameter                                   :: longint       = selected_int_kind(9)
-    integer, public, parameter                           :: max_colors =  256
-    !buf_range(1)buf_range(1)im2 = gdImageScale(im, 1, 65535);
-    integer, parameter                                   :: GREYSCALE  =  1
+integer, parameter                                   :: cptr          = kind(5)
+integer, parameter                                   :: numComponents = 3
+!  integer, parameter                                   :: pixelsize     = selected_int_kind(3)
+!   integer, parameter                                   :: longint       = selected_int_kind(9)
+integer, public, parameter                           :: max_colors =  256
+!buf_range(1)buf_range(1)im2 = gdImageScale(im, 1, 65535);
+integer, parameter                                   :: GREYSCALE  =  1
 
 
-    type jpg_img
-        private
-        integer                                          :: width      =  0
-        integer                                          :: height     =  0
-        integer                                          :: quality    =  90
-        integer                                          :: colorspace =  1
-        integer(cptr)                                    :: ptr        =  0
-        logical                                          :: fmode      = .false.
-        real                                             :: gamma      = 0.707
-        logical                                          :: normalised = .false.
-        integer(1), dimension(:), pointer                :: img_buffer => NULL()
-    contains
-        procedure :: destructor
-        procedure :: constructor
-        procedure                                        :: getWidth
-        procedure                                        :: getHeight
-        procedure                                        :: getQuality
-        procedure                                        :: getColorspace
-        procedure                                        :: setQuality
-        procedure                                        :: setColorspace
-        procedure                                        :: getGamma
-        procedure                                        :: getNormalised
-        procedure                                        :: setGamma
-        procedure                                        :: setNormalised
-        procedure :: montage
-        procedure, private                               :: save_jpeg_r4_3D
-        procedure, private                               :: save_jpeg_r4
-        procedure, private                               :: save_jpeg_i4
-        generic                                          :: writeJpgToFile  => save_jpeg_r4_3D, save_jpeg_r4, save_jpeg_i4
-        procedure, private                                        :: load_jpeg_r4
-        procedure, private                                        :: load_jpeg_i4
-        generic                                          :: loadJpgFromFile  => load_jpeg_r4, load_jpeg_i4
+type jpg_img
+    private
+    integer                                          :: width      =  0
+    integer                                          :: height     =  0
+    integer                                          :: quality    =  90
+    integer                                          :: colorspace =  1
+    integer(cptr)                                    :: ptr        =  0
+    logical                                          :: fmode      = .false.
+    real                                             :: gamma      = 0.707
+    logical                                          :: normalised = .false.
+    integer(1), dimension(:), pointer                :: img_buffer => NULL()
+contains
+    procedure :: destructor
+    procedure :: constructor
+    procedure                                        :: getWidth
+    procedure                                        :: getHeight
+    procedure                                        :: getQuality
+    procedure                                        :: getColorspace
+    procedure                                        :: setQuality
+    procedure                                        :: setColorspace
+    procedure                                        :: getGamma
+    procedure                                        :: getNormalised
+    procedure                                        :: setGamma
+    procedure                                        :: setNormalised
+    procedure :: montage
+    procedure, private                               :: save_jpeg_r4_3D
+    procedure, private                               :: save_jpeg_r4
+    procedure, private                               :: save_jpeg_i4
+    generic                                          :: writeJpgToFile  => save_jpeg_r4_3D, save_jpeg_r4, save_jpeg_i4
+    procedure, private                                        :: load_jpeg_r4
+    procedure, private                                        :: load_jpeg_i4
+    generic                                          :: loadJpgFromFile  => load_jpeg_r4, load_jpeg_i4
 
-    end type jpg_img
+end type jpg_img
 
-    ! interface jpg_img
-    !     ! Constructor declaration
-    !     module procedure constructor
-    ! end interface jpg_img
+! interface jpg_img
+!     ! Constructor declaration
+!     module procedure constructor
+! end interface jpg_img
 
-    interface
+interface
 #ifdef HAVE_LIBJPEG
-        subroutine setup_jpeg ( width, height, in, out ) bind ( c, name="setup_jpeg" )
-            import
-            integer(C_INT), intent(in), value            :: width
-            integer(C_INT), intent(in), value            :: height
-            integer(C_INT), dimension(*), intent(out)    :: in
-            integer(C_INT), dimension(*), intent(out)    :: out
-        end subroutine setup_jpeg
-        subroutine read_jpeg (file_name, img, width, height, colorspec, status ) bind ( c, name="read_jpeg" )
-            import
-            character(c_char), dimension(*), intent(in)  :: file_name
-            type(C_PTR), value            :: img
-            integer(c_int), intent(inout)                :: width
-            integer(c_int), intent(inout)                :: height
-            integer(c_int), intent(inout)                :: colorspec
-            integer(c_int), intent(inout)                :: status
-        end subroutine read_jpeg
+    subroutine setup_jpeg ( width, height, in, out ) bind ( c, name="setup_jpeg" )
+        import
+        integer(C_INT), intent(in), value            :: width
+        integer(C_INT), intent(in), value            :: height
+        integer(C_INT), dimension(*), intent(out)    :: in
+        integer(C_INT), dimension(*), intent(out)    :: out
+    end subroutine setup_jpeg
+    subroutine read_jpeg (file_name, img, width, height, colorspec, status ) bind ( c, name="read_jpeg" )
+        import
+        character(c_char), dimension(*), intent(in)  :: file_name
+        type(C_PTR), value            :: img
+        integer(c_int), intent(inout)                :: width
+        integer(c_int), intent(inout)                :: height
+        integer(c_int), intent(inout)                :: colorspec
+        integer(c_int), intent(inout)                :: status
+    end subroutine read_jpeg
 
-        subroutine write_jpeg (img, file_name, width, height, quality, colorspec, status ) bind ( c, name="write_jpeg" )
-            import
-            type (C_PTR), VALUE             :: img
-            character(c_char),dimension(*),intent(in)    :: file_name
-            integer(c_int), intent(in), VALUE            :: width
-            integer(c_int), intent(in), VALUE            :: height
-            integer(c_int), intent(in)                   :: quality
-            integer(c_int), intent(in), VALUE            :: colorspec
-            integer(c_int), intent(inout)                :: status
-        end subroutine write_jpeg
+    subroutine write_jpeg (img, file_name, width, height, quality, colorspec, status ) bind ( c, name="write_jpeg" )
+        import
+        type (C_PTR), VALUE             :: img
+        character(c_char),dimension(*),intent(in)    :: file_name
+        integer(c_int), intent(in), VALUE            :: width
+        integer(c_int), intent(in), VALUE            :: height
+        integer(c_int), intent(in)                   :: quality
+        integer(c_int), intent(in), VALUE            :: colorspec
+        integer(c_int), intent(inout)                :: status
+    end subroutine write_jpeg
 #endif
 
-        ! function fgltLoadTGA(FileName,width,height,components,eform,image)
-        !     use, intrinsic :: iso_c_binding
-        !     type(c_ptr), target :: fgltloadTGA
-        !     character(len=*), intent(in) :: FileName
-        !     integer(c_int), intent(out) :: width, height
-        !     integer(c_int), intent(out) :: components, eform
-        !     integer(c_char), dimension(:), allocatable, &
-        !         intent(out), target :: image
-        ! end function fgltLoadTGA
-        !        STBIWDEF int stbi_write_jpg(char const *filename, int x, int y, int comp, const void  *data, int quality)
-        integer function stbi_write_jpg (file_name, w, h, comp, data, quality ) bind ( c, name="stbi_write_jpg" )
-            import
-            character(c_char),dimension(*),intent(in)    :: file_name
-            integer(c_int), intent(in), VALUE            :: w
-            integer(c_int), intent(in), VALUE            :: h
-            integer(c_int), intent(in), VALUE            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
-            !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
-            type (C_PTR), VALUE             :: data ! (const void *)
-            integer(c_int), intent(in), value            :: quality  ! 1 to 100. Higher quality looks better but results in a bigger image.
-        end function stbi_write_jpg
-        integer function stbi_write_png (file_name, w, h, comp, data ) bind ( c, name="stbi_write_jpg" )
-            import
-            character(c_char),dimension(*),intent(in)    :: file_name
-            integer(c_int), intent(in), VALUE            :: w
-            integer(c_int), intent(in), VALUE            :: h
-            integer(c_int), intent(in), VALUE            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
-            !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
-            type (C_PTR), VALUE             :: data ! (const void *)
+    ! function fgltLoadTGA(FileName,width,height,components,eform,image)
+    !     use, intrinsic :: iso_c_binding
+    !     type(c_ptr), target :: fgltloadTGA
+    !     character(len=*), intent(in) :: FileName
+    !     integer(c_int), intent(out) :: width, height
+    !     integer(c_int), intent(out) :: components, eform
+    !     integer(c_char), dimension(:), allocatable, &
+    !         intent(out), target :: image
+    ! end function fgltLoadTGA
+    !        STBIWDEF int stbi_write_jpg(char const *filename, int x, int y, int comp, const void  *data, int quality)
+    integer function stbi_write_jpg (file_name, w, h, comp, data, quality ) bind ( c, name="stbi_write_jpg" )
+        import
+        character(c_char),dimension(*),intent(in)    :: file_name
+        integer(c_int), intent(in), VALUE            :: w
+        integer(c_int), intent(in), VALUE            :: h
+        integer(c_int), intent(in), VALUE            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
+        !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
+        type (C_PTR), VALUE             :: data ! (const void *)
+        integer(c_int), intent(in), value            :: quality  ! 1 to 100. Higher quality looks better but results in a bigger image.
+    end function stbi_write_jpg
+    integer function stbi_write_png (file_name, w, h, comp, data ) bind ( c, name="stbi_write_jpg" )
+        import
+        character(c_char),dimension(*),intent(in)    :: file_name
+        integer(c_int), intent(in), VALUE            :: w
+        integer(c_int), intent(in), VALUE            :: h
+        integer(c_int), intent(in), VALUE            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
+        !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
+        type (C_PTR), VALUE             :: data ! (const void *)
 
-        end function stbi_write_png
-        integer function stbi_read_jpg (file_name, data, w, h, comp ) bind ( c, name="stbi_read_jpg" )
-            use,intrinsic                                        :: iso_c_binding
+    end function stbi_write_png
+    integer function stbi_read_jpg (file_name, data, w, h, comp ) bind ( c, name="stbi_read_jpg" )
+        use,intrinsic                                        :: iso_c_binding
         implicit none
-            character(c_char),dimension(*),intent(in)    :: file_name
-            type (C_PTR)             :: data ! (const void *)
-            integer(c_int), intent(inout)            :: w
-            integer(c_int), intent(inout)            :: h
-            integer(c_int), intent(inout)            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
-            !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
+        character(c_char),dimension(*),intent(in)    :: file_name
+        type (C_PTR)             :: data ! (const void *)
+        integer(c_int), intent(inout)            :: w
+        integer(c_int), intent(inout)            :: h
+        integer(c_int), intent(inout)            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
+        !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
 
 
-        end function stbi_read_jpg
+    end function stbi_read_jpg
 
-    end interface
+end interface
 
 contains
 
@@ -174,32 +174,32 @@ contains
     end function getNormalised
 
     subroutine setWidth(self, width)
-        class(jpg_img), intent(inout)                       :: self
+        class(jpg_img), intent(inout)                    :: self
         integer, intent(in)                              :: width
         self%width=width
     end subroutine setWidth
     subroutine setHeight(self,height)
-        class(jpg_img), intent(inout)                       :: self
+        class(jpg_img), intent(inout)                    :: self
         integer, intent(in) :: height
         self%height=height
     end subroutine setHeight
     subroutine setQuality(self,quality)
-        class(jpg_img), intent(inout)                       :: self
+        class(jpg_img), intent(inout)                    :: self
         integer, intent(in)                              :: quality
         self%quality=quality
     end subroutine setQuality
     subroutine setColorspace(self,colorspace)
-        class(jpg_img), intent(inout)                       :: self
+        class(jpg_img), intent(inout)                    :: self
         integer, intent(in)                              :: colorspace
         self%colorspace=colorspace
     end subroutine setColorspace
     subroutine setGamma(self,gamma)
-        class(jpg_img), intent(inout)                       :: self
+        class(jpg_img), intent(inout)                    :: self
         real,intent(in)                                  :: gamma
         self%gamma=gamma
     end subroutine setGamma
     subroutine setNormalised(self,normalised)
-        class(jpg_img), intent(inout)                       :: self
+        class(jpg_img), intent(inout)                    :: self
         logical, intent(in)                              :: normalised
         self%normalised=normalised
     end subroutine setNormalised
@@ -460,7 +460,7 @@ contains
     end function load_jpeg_r4
 
     function load_jpeg_i4(self, fname, out_buffer) result(status)
-        use,intrinsic                                        :: iso_c_binding
+        use,intrinsic   :: iso_c_binding
         implicit none
         class(jpg_img), intent(inout)       :: self
         character(len=*), intent(inout)     :: fname

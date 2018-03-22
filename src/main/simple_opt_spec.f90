@@ -48,7 +48,9 @@ type :: opt_spec
     real, allocatable         :: peaks(:,:)                           !< output peaks (local optimal solutions)
     real, allocatable         :: grad_4_tmp(:)                        !< temporary storage for single precision gradient
     real, allocatable         :: x_4_tmp(:)                           !< temporary storage for single precision function value
-#include "simple_local_flags.inc"
+    logical                   :: debug     = .false.
+    logical                   :: warn      = .false.
+    logical                   :: verbose   = .false.
     logical                   :: converged = .false.                  !< converged status
     logical                   :: exists    = .false.                  !< to indicate existence
   contains
@@ -61,7 +63,7 @@ type :: opt_spec
     procedure :: set_fdfcostfun
     procedure :: set_costfun_8
     procedure :: set_gcostfun_8
-    procedure :: set_fdfcostfun_8    
+    procedure :: set_fdfcostfun_8
     procedure :: set_inipop
     procedure :: eval_f_4
     procedure :: eval_df_4
@@ -71,7 +73,7 @@ type :: opt_spec
     procedure :: eval_fdf_8
     generic   :: eval_f  => eval_f_4, eval_f_8
     generic   :: eval_df => eval_df_4, eval_df_8
-    generic   :: eval_fdf => eval_fdf_4, eval_fdf_8    
+    generic   :: eval_fdf => eval_fdf_4, eval_fdf_8
     procedure :: kill
 end type opt_spec
 
@@ -319,13 +321,13 @@ contains
         self%inipopulation = pop
     end subroutine set_inipop
 
-    !> \brief  evaluate the cost function 
+    !> \brief  evaluate the cost function
     function eval_f_4( self, fun_self, x ) result(f)
         class(opt_spec), intent(inout) :: self
         class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
         real                           :: f
-        if (.not. associated(self%costfun)) then      
+        if (.not. associated(self%costfun)) then
             write (*,*) 'error : simple_opt_spec: costfun not associated'
             return
         end if
@@ -334,7 +336,7 @@ contains
     end function eval_f_4
 
     !> \brief  evaluate the gradient
-    subroutine eval_df_4( self, fun_self, x, grad ) 
+    subroutine eval_df_4( self, fun_self, x, grad )
         class(opt_spec), intent(inout) :: self
         class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
@@ -346,7 +348,7 @@ contains
         call self%gcostfun(fun_self, x, grad, self%ndim)
         self%ngevals = self%ngevals  + 1
     end subroutine eval_df_4
-    
+
     !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise
     subroutine eval_fdf_4( self, fun_self, x, f, gradient )
         class(opt_spec), intent(inout) :: self
@@ -373,7 +375,7 @@ contains
         class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp)                       :: f
-        if ((.not. associated(self%costfun)).and.(.not. associated(self%costfun_8))) then      
+        if ((.not. associated(self%costfun)).and.(.not. associated(self%costfun_8))) then
             write (*,*) 'error : simple_opt_spec: no costfun associated'
             return
         end if
@@ -383,11 +385,11 @@ contains
             self%x_4_tmp = real(x, kind=4)
             f   = self%costfun(fun_self, self%x_4_tmp, self%ndim)
         end if
-        self%nevals = self%nevals  + 1            
+        self%nevals = self%nevals  + 1
     end function eval_f_8
 
     !> \brief  evaluate the gradient, double precision
-    subroutine eval_df_8( self, fun_self, x, grad ) 
+    subroutine eval_df_8( self, fun_self, x, grad )
         class(opt_spec), intent(inout) :: self
         class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
@@ -405,7 +407,7 @@ contains
         end if
         self%ngevals = self%ngevals  + 1
     end subroutine eval_df_8
-    
+
     !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise, double precision
     subroutine eval_fdf_8( self, fun_self, x, f, gradient )
         class(opt_spec), intent(inout) :: self
@@ -429,17 +431,17 @@ contains
             if (associated(self%fdfcostfun)) then
                 call self%fdfcostfun(fun_self, self%x_4_tmp, f_4, self%grad_4_tmp, self%ndim)
                 f        = f_4
-                gradient = self%grad_4_tmp                            
+                gradient = self%grad_4_tmp
             else
                 f        = self%costfun(fun_self, self%x_4_tmp, self%ndim)
                 call self%gcostfun(fun_self, self%x_4_tmp, self%grad_4_tmp, self%ndim)
                 gradient = self%grad_4_tmp
             endif
-        end if        
+        end if
         self%nevals  = self%nevals  + 1
         self%ngevals = self%ngevals + 1
     end subroutine eval_fdf_8
-    
+
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
@@ -485,7 +487,7 @@ contains
         self%fdfcostfun => fun
     end subroutine set_fdfcostfun
 
- 
+
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun_8( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
@@ -530,7 +532,7 @@ contains
         end interface
         self%fdfcostfun_8 => fun
     end subroutine set_fdfcostfun_8
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(opt_spec), intent(inout) :: self !< instance
@@ -553,7 +555,7 @@ contains
             self%fdfcostfun   => null()
             self%costfun_8    => null()
             self%gcostfun_8   => null()
-            self%fdfcostfun_8 => null()            
+            self%fdfcostfun_8 => null()
             self%opt_callback => null()
             self%exists = .false.
         endif

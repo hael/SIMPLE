@@ -22,7 +22,7 @@ type, extends(optimizer) :: opt_powell
     procedure :: kill         => kill_opt_powell
 end type opt_powell
 
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
 contains
 
@@ -150,7 +150,7 @@ contains
                     end do
                     if(2.*abs(fp-cost).le.spec%ftol*(abs(fp)+abs(cost))) return ! termination criterion
                     if(iter.eq.spec%maxits)then
-                        if( warn ) write(*,'(a)') 'powell exceeding maximum iterations; simple_opt_powell'
+                        if( spec%warn ) write(*,'(a)') 'powell exceeding maximum iterations; simple_opt_powell'
                         return
                     end if
                     do j=1,spec%ndim

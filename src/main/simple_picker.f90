@@ -48,7 +48,7 @@ contains
         if(alloc_stat.ne.0)call allocchk('picker;init, 1',alloc_stat)
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('picker;init, 2')
-        boxname = remove_abspath( fname_new_ext(micname,'box') )
+        boxname = basename( fname_new_ext(micname,'box') )
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd = smpd_in
         lp   = 20.0

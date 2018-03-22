@@ -576,10 +576,11 @@ contains
         real    :: maxminratio, normfac, corrmax, corrmin
         integer :: icorr, ncorrs
         ncorrs = size(corrs)
-        allocate(weights(ncorrs), corrs_copy(ncorrs), expnegdists(ncorrs),stat=alloc_stat)
-        if(alloc_stat /= 0) call allocchk("In: corrs2weights; simple_stat" , alloc_stat)
+        allocate(weights(ncorrs), expnegdists(ncorrs),stat=alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: corrs2weights; simple_stat 1" , alloc_stat)
         weights     = 0.
-        corrs_copy  = corrs
+        allocate( corrs_copy(ncorrs), source=corrs,stat=alloc_stat)
+        if(alloc_stat /= 0) call allocchk("In: corrs2weights; simple_stat 2" , alloc_stat)
         expnegdists = 0.
         corrmax     = maxval(corrs_copy)
         if( corrmax < 0. )then

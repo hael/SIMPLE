@@ -6,6 +6,7 @@ use simple_defs
 use simple_defs_fname
 use simple_defs_conv
 !! File I/O and system utilities
+use simple_error
 use simple_syslib
 use simple_fileio
 !! General utilities
@@ -18,6 +19,7 @@ use simple_timer
 use simple_magic_boxes
 use simple_combinatorics
 use simple_map_reduce
+use simple_sauron
 !! General data structures
 use simple_arr,      only: arr
 use simple_sll,      only: sll

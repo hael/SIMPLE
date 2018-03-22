@@ -387,18 +387,18 @@ void CGD_IMAGE_JPEG(gdImagePtr *ptr, const char *file, int *quality)
         }
     }
 #ifdef _DEBUG
-    	FILE*in = fopen (file, "rb");
-      if (!in) {
+    FILE*in = fopen(file, "rb");
+    if(!in) {
         fprintf(stderr, "Can't open file test/gdtest.jpg.\n");
-        exit (1);
-      }
-      gdImagePtr im2 = gdImageCreateFromJpeg (in);
-      fclose (in);
-      if (!im2) {
+        exit(1);
+    }
+    gdImagePtr im2 = gdImageCreateFromJpeg(in);
+    fclose(in);
+    if(!im2) {
         fprintf(stderr, "gdImageCreateFromJpeg failed.\n");
-        exit (1);
-      }
-      gdImageDestroy (im2);
+        exit(1);
+    }
+    gdImageDestroy(im2);
 #endif
     return;
 }
@@ -411,9 +411,9 @@ void CGD_IMAGE_CREATE_FROM_JPEG(const char *file, gdImagePtr *ptr)
         *ptr = 0;
     } else {
         *ptr = gdImageCreateFromJpeg(f);
-        if (!*ptr) {
-          fprintf(stderr, "gdImageCreateFromJpeg failed. Attempted to open %s\n", file);
-          exit (1);
+        if(!*ptr) {
+            fprintf(stderr, "gdImageCreateFromJpeg failed. Attempted to open %s\n", file);
+            exit(1);
         }
         (void)fclose(f);
     }

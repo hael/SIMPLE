@@ -19,8 +19,6 @@ implicit none
 public :: reconstructor
 private
 
-logical, parameter :: DEBUG = .false.
-
 type, extends(image) :: reconstructor
     private
     type(kbinterpol)            :: kbwin                        !< window function object
@@ -74,6 +72,8 @@ type, extends(image) :: reconstructor
     procedure          :: dealloc_rho
 end type reconstructor
 
+#include "simple_local_flags.inc"
+
 contains
 
     ! CONSTRUCTORS
@@ -98,12 +98,12 @@ contains
         self%winsz       =  p%winsz
         self%alpha       =  p%alpha
         self%ctfflag     =  spproj%get_ctfflag_type(p%oritype)
-        if( DEBUG ) print *, '(DEBUG) reconstructor :: alloc_rho; self%ctfflag: ', self%ctfflag
+        DebugPrint '(DEBUG) reconstructor :: alloc_rho; self%ctfflag: ', self%ctfflag
         self%tfastig     =  .false.
         if( trim(spproj%get_ctfmode(p%oritype)) .eq. 'astig' ) self%tfastig = .true.
-        if( DEBUG ) print *, '(DEBUG) reconstructor :: alloc_rho; spproj%get_ctfmode(p%oritype): ', trim(spproj%get_ctfmode(p%oritype))
+        DebugPrint '(DEBUG) reconstructor :: alloc_rho; spproj%get_ctfmode(p%oritype): ', trim(spproj%get_ctfmode(p%oritype))
         self%phaseplate  =  spproj%has_phaseplate(p%oritype)
-        if( DEBUG ) print *, '(DEBUG) reconstructor :: alloc_rho; spproj%has_phaseplate(p%oritype): ', spproj%has_phaseplate(p%oritype)
+        DebugPrint '(DEBUG) reconstructor :: alloc_rho; spproj%has_phaseplate(p%oritype): ', spproj%has_phaseplate(p%oritype)
         self%kbwin       =  kbinterpol(self%winsz,self%alpha)
         self%wdim        =  self%kbwin%get_wdim()
         self%lims        =  self%loop_lims(2)

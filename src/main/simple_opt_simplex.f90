@@ -25,7 +25,6 @@ contains
 
     !> \brief  is a constructor
     subroutine new_opt_simplex( self, spec )
-        use simple_opt_spec, only: opt_spec
         class(opt_simplex), intent(inout) :: self !< instance
         class(opt_spec),    intent(inout) :: spec !< specification
         real :: x
@@ -39,7 +38,6 @@ contains
 
     !> \brief  restarted simplex minimization
     subroutine simplex_minimize( self, spec, fun_self, lowest_cost )
-        use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: amoeba
         class(opt_simplex), intent(inout) :: self        !< instance
         class(opt_spec),    intent(inout) :: spec        !< specification

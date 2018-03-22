@@ -166,7 +166,7 @@ contains
         character(len=*),    intent(in)    :: fname
         character(len=STDLEN) :: fname_here, fbody, ext, motion_correct_name, ctf_name
         logical :: motion_correct_done, ctf_done
-        fname_here = remove_abspath(trim(adjustl(fname)))
+        fname_here = basename(trim(adjustl(fname)))
         ext        = trim(fname2ext(fname_here))
         fbody      = get_fbody(trim(fname_here), trim(ext))
         if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//'_'//trim(adjustl(fbody))

@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_ori,            only: ori
 use simple_cmdline,        only: cmdline
 use simple_binoris,        only: binoris
-use simple_stktab_handler, only: stktab_handler
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none

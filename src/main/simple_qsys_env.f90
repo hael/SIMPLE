@@ -9,7 +9,7 @@ use simple_qsys_ctrl,    only: qsys_ctrl
 use simple_params,       only: params
 
 implicit none
-#include "simple_local_flags.inc"
+!#include "simple_local_flags.inc"
 
 type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)

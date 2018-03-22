@@ -17,7 +17,7 @@ implicit none
 
 public :: imgfile
 private
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
 type imgfile
     private
@@ -242,11 +242,10 @@ contains
         integer,                intent(in)    :: last_slice   !< Last slice
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
         character(len=100)          :: io_message
-        integer                     :: io_stat,itmp,dims(3),tmparrdims(3)
+        integer                     :: io_stat,dims(3),tmparrdims(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         logical                     :: arr_is_ready,alloc_tmparr
         class(ImgHead), pointer     :: ptr=>null()
-        class(ImgHead), allocatable :: imghed
 #ifdef PGI
         include 'lib3f.h'
 #endif

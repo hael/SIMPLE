@@ -2,7 +2,6 @@
 module simple_cont3D_ada_srch
 include 'simple_lib.f08'
 
-
 use simple_params,           only: params
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_projector,        only: projector
@@ -48,7 +47,7 @@ type cont3D_ada_srch
     integer                          :: prev_state    = 0      !< previous state
     integer                          :: nstates       = 0      !< number of states
     character(len=STDLEN)            :: shbarr        = 'yes'  !< shift barrier flag
-    character(len=STDLEN)            :: refine        = ''     !< 
+    character(len=STDLEN)            :: refine        = ''     !<
     logical                          :: exists = .false.
 
   contains
@@ -182,7 +181,7 @@ contains
         call self%o_peaks%set_all2single('specscore', self%specscore)
         ! best orientation
         self%o_out = self%o_peaks%get_ori(best_loc(1))
-        call self%o_out%set('corr', wcorr)  
+        call self%o_out%set('corr', wcorr)
         ! angular distances & deviation
         o = self%o_out
         call self%se%sym_euldist( self%o_in, o, euldist )
@@ -348,7 +347,7 @@ contains
         call hpsort(self%npeaks, logws, order)
         call reverse(order)
         call reverse(logws)
-        forall(ipeak = 1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak))) 
+        forall(ipeak = 1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
         ! thresholding
         included = (ws >= FACTWEIGHTS_THRESH)
         where( .not.included ) ws = 0.

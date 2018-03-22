@@ -2,11 +2,9 @@
 module simple_binoris
 use, intrinsic :: iso_c_binding
 use simple_defs    ! use all in there
-use simple_ori,    only: ori
-use simple_oris,   only: oris
 use simple_strings
-use simple_fileio
-use simple_syslib, only: allocchk
+use simple_fileio, only: file_exists, funit_size, fopen, fclose, fileiochk
+use simple_syslib, only: allocchk, del_file
 implicit none
 
 public :: binoris
@@ -170,6 +168,7 @@ contains
     end subroutine print_header
 
     subroutine write_segment_1( self, isegment, os, fromto )
+        use simple_oris,   only: oris
         class(binoris),    intent(inout) :: self
         integer,           intent(in)    :: isegment
         class(oris),       intent(inout) :: os ! indexed from 1 to nptcls
@@ -258,6 +257,7 @@ contains
     end subroutine write_segment_3
 
     subroutine add_segment_1( self, isegment, os, fromto )
+        use simple_oris,   only: oris
         class(binoris),    intent(inout) :: self
         integer,           intent(in)    :: isegment
         class(oris),       intent(inout) :: os
@@ -345,6 +345,7 @@ contains
     end subroutine read_first_segment_record
 
     subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo )
+        use simple_oris,   only: oris
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
         class(oris),    intent(inout) :: os
@@ -435,6 +436,8 @@ contains
     end subroutine read_segment_3
 
     subroutine read_segment_ctfparams_state_eo( self, isegment, os )
+        use simple_ori,    only: ori
+        use simple_oris,   only: oris
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
         class(oris),    intent(inout) :: os

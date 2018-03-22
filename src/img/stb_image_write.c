@@ -21,23 +21,26 @@
 
 int stbi_read_jpg(const char* file_name, void** result, int* width, int* height, int* components)
 {
-  fprintf(stderr, " In stbi_read_jpg -- reading 1 %s\n",file_name);fflush(stderr);
-  //stbi_uc
-  *result = stbi_load(file_name, width, height, components, 3);
-  if(*result ==NULL) { fprintf(stderr, " stbi_load result invalid \n");return 0;}
-  if(0){
-   fprintf(stderr, " stbi_load result valid \n");
-  fprintf(stderr, " stbi_load result valid \n");
-  fprintf(stderr, " stbi_load result size %ld\n", sizeof(*result)/sizeof(stbi_uc) );
-  fprintf(stderr, " stbi_load result[0] %4.4x\n", ((stbi_uc)*result));
-  fprintf(stderr, " stbi_load result[rowend] %4.4x\n", ((stbi_uc) *result +(*width) -1));
-  fprintf(stderr, " stbi_load result[end] %4.4x\n", ((stbi_uc)(*result) +(*width)*(*height)-1));
-  }
-  //*data = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
-  //data = &result;
-  //memcpy(*data, result, (*width) * (*height) * 3);
-   //stbi_image_free((void *)result);
-  return 1;
+    fprintf(stderr, " In stbi_read_jpg -- reading 1 %s\n", file_name); fflush(stderr);
+    //stbi_uc
+    *result = stbi_load(file_name, width, height, components, 3);
+    if(*result == NULL) {
+        fprintf(stderr, " stbi_load result invalid \n");
+        return 0;
+    }
+    if(0) {
+        fprintf(stderr, " stbi_load result valid \n");
+        fprintf(stderr, " stbi_load result valid \n");
+        fprintf(stderr, " stbi_load result size %ld\n", sizeof(*result) / sizeof(stbi_uc));
+        fprintf(stderr, " stbi_load result[0] %4.4x\n", ((stbi_uc)*result));
+        fprintf(stderr, " stbi_load result[rowend] %4.4x\n", ((stbi_uc) *result + (*width) - 1));
+        fprintf(stderr, " stbi_load result[end] %4.4x\n", ((stbi_uc)(*result) + (*width) * (*height) - 1));
+    }
+    //*data = malloc(sizeof(unsigned char) * (*width) * (*height) * 3);
+    //data = &result;
+    //memcpy(*data, result, (*width) * (*height) * 3);
+    //stbi_image_free((void *)result);
+    return 1;
 }
 
 

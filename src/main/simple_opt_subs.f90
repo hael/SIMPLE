@@ -18,7 +18,6 @@ contains
     !!          location spec%x. All accomplished by calling the routines mnbrak
     !!          and brent. No derivatives needed
     subroutine linmin(spec,fun_self,lowest_cost)
-        use simple_opt_spec, only: opt_spec
         class(opt_spec), intent(inout) :: spec
         class(*),        intent(inout) :: fun_self
         real,            intent(out)   :: lowest_cost
@@ -323,7 +322,6 @@ contains
         contains
 
             subroutine amoeba_private
-                 use simple_jiffys, only: assert_eq, swap
                 integer :: i,ilo,inhi,loc(1)
                 real :: rtol,ysave,ytry,ytmp
                 ndim=assert_eq(size(p,2),size(p,1)-1,size(y)-1,size(pb),'amoeba; simple_opt_subs')
@@ -408,7 +406,6 @@ contains
 
     !> \brief  stochastic hill climbing selection rule for distance arrays
     function shc_selector( dists, old_ind ) result( new_ind )
-        use simple_ran_tabu, only: ran_tabu
         real, intent(in)    :: dists(:)
         integer, intent(in) :: old_ind
         type(ran_tabu)      :: rt
@@ -435,7 +432,6 @@ contains
 
     !> \brief  check the vector with respect to the limits
     subroutine check_and_correct_vec( spec, vec, corrected )
-        use simple_opt_spec, only: opt_spec
         class(opt_spec), intent(in)    :: spec           !< specification
         real, intent(inout)            :: vec(spec%ndim) !< solution vector
         logical, intent(out), optional :: corrected   !< to indicate if vector was corrected

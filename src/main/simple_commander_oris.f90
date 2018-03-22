@@ -21,7 +21,7 @@ public :: oristats_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
 private
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: cluster_oris_commander
   contains
@@ -771,7 +771,7 @@ contains
         ! b%a = a
         n = b%a%get_noris()
         if( .not.cline%defined('fbody') )then
-            fname = remove_abspath(trim(adjustl(p%oritab)))
+            fname = basename(trim(adjustl(p%oritab)))
             ext   = trim(fname2ext(fname))
             p%fbody = trim(get_fbody(trim(fname), trim(ext)))
         endif

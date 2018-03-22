@@ -18,7 +18,6 @@ implicit none
 public :: preprocess_stream_commander
 public :: cluster2D_stream_distr_commander
 private
-#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: preprocess_stream_commander
   contains

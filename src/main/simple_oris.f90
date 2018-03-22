@@ -4,7 +4,6 @@ module simple_oris
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 
-use simple_ran_tabu,    only: ran_tabu
 use simple_ori,         only: ori
 implicit none
 
@@ -799,7 +798,7 @@ contains
             os_conf = self
         else if( self%n > npeaks )then
             ! shrink set
-            !pgi$ allocate(ows(self%n))
+            !$ allocate(ows(self%n))
             ows  = self%get_all('ow')
             inds = (/(i,i=1,self%n)/)
             call hpsort(ows, inds)
@@ -1707,7 +1706,7 @@ contains
         character(len=*), intent(in)    :: state_or_class
         integer, allocatable :: parts(:,:)
         integer :: ipart, iptcl
-        !pgi$ allocate(parts(self%n,2))
+        !$ allocate(parts(self%n,2))
         parts = split_nobjs_even(self%n, nsplit)
         do ipart=1,nsplit
             do iptcl=parts(ipart,1),parts(ipart,2)
@@ -1873,7 +1872,7 @@ contains
         do i=1,self%n
             call self%o(i)%set('lp', ran3()*100.)
         end do
-DebugPrint " In oris:: rnd_lps done"
+        DebugPrint " In oris:: rnd_lps done"
     end subroutine rnd_lps
 
     !>  \brief  randomizes correlations in oris
@@ -2253,7 +2252,7 @@ DebugPrint " In oris:: rnd_lps done"
             med = 0.
             pop = self%get_pop(class, 'class')
             if( pop == 0 ) return
-            !pgi$ allocate(vals(self%n))
+            !$ allocate(vals(self%n))
             vals = self%get_arr(which, class)
             if( pop == 1 )then
                 med = vals(1)
@@ -2284,7 +2283,7 @@ DebugPrint " In oris:: rnd_lps done"
         logical,          intent(out)   :: err
         real, allocatable :: vals(:), all_vals(:)
         real, allocatable :: states(:)
-        !pgi$ allocate(states(self%n), all_vals(self%n), vals(self%n))
+        !$ allocate(states(self%n), all_vals(self%n), vals(self%n))
         states   = self%get_all('state')
         all_vals = self%get_all(which)
         vals     = pack(all_vals, mask=(states > 0.5))
@@ -2439,11 +2438,11 @@ DebugPrint " In oris:: rnd_lps done"
         class(oris), intent(inout) :: self
         real,    allocatable :: specscores(:)
         integer, allocatable :: inds(:)
-        integer :: i, nspecs
+        integer :: i
         allocate( inds(self%n), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
         DebugPrint " In oris:: order allocated ?"
-        !pgi$ allocate(specscores(self%n))
+        !$ allocate(specscores(self%n))
         specscores = self%get_all('specscore')
         DebugPrint " In oris:: order allocated yes"
         inds = (/(i,i=1,self%n)/)
@@ -2466,7 +2465,7 @@ DebugPrint " In oris:: rnd_lps done"
         integer :: i
         allocate( inds(self%n), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
-        !pgi$ allocate(corrs(self%n))
+        !$ allocate(corrs(self%n))
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
         call hpsort(corrs, inds)
@@ -2696,9 +2695,9 @@ DebugPrint " In oris:: rnd_lps done"
                     deallocate(specscores,weights)
                 enddo
             else
-                !pgi$ allocate(specscores(self%n))
+                !$ allocate(specscores(self%n))
                 specscores = self%get_all('specscore')
-                !pgi$ allocate(weights(self%n))
+                !$ allocate(weights(self%n))
                 weights    = self%get_all('w')
                 where( weights < 0.5 )
                     specscores = 0.
@@ -3056,9 +3055,9 @@ DebugPrint " In oris:: rnd_lps done"
         integer :: n_incl, thresh_ind
         real    :: corr_bound
         ! grab relevant correlations
-        !pgi$ allocate(corrs(self%n))
+        !$ allocate(corrs(self%n))
         corrs      = self%get_all('corr')
-        !pgi$ allocate(incl(self%n))
+        !$ allocate(incl(self%n))
         incl       = self%included()
         corrs_incl = pack(corrs, mask=incl)
         ! sort correlations & determine threshold
@@ -3620,7 +3619,7 @@ DebugPrint " In oris:: rnd_lps done"
         call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
         call os%rnd_corrs()
         DebugPrint "simple_oris::test_oris rnd_corrs called"
-        !pgi$ allocate(order(os%n))
+        !$ allocate(order(os%n))
         order = os%order()
         DebugPrint "simple_oris::test_oris order called"
         if( doprint )then

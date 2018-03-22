@@ -342,7 +342,6 @@ contains
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         integer           :: j, find_plate
-        real              :: corrmax
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
