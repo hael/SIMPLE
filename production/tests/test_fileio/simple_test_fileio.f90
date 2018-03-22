@@ -10,24 +10,24 @@ program simple_test_fileio
     integer               :: box, nspace, msk, i,j,istat
     integer               :: un, u(1200)
     character(len=8)      :: datestr
-    character(len=STDLEN) :: folder, cmd
-    character(len=300)    :: command
-    CHARACTER(len=100)    :: msg
+    character(len=STDLEN) :: folder,  oldfolder, curDir
     character(len=30)     :: fname
-    real(dp) :: tmp(5)
-    integer(int32) :: ii
-    real, dimension(10) :: a, b
+
     global_verbose=.true.
     call seed_rnd
     call date_and_time(date=datestr)
     folder = trim('./SIMPLE_TEST_FILEIO_'//datestr)
-    command = 'mkdir ' // trim( folder )//'|| true'
+
     call simple_mkdir( trim(folder) )
     call simple_mkdir( trim(folder) ) !! double checking creation to print ignore statement
     print *," Listing of ", folder
-    call system(trim('ls -al '//folder))
+    call exec_cmdline(trim('ls -al '//folder))
     print *," Changing directory to ", folder
-    call simple_chdir( trim(folder) )
+    call simple_chdir( trim(folder),  oldfolder)
+    call simple_getcwd(curDir)
+    print *," Current working directory ", curDir
+    print *," Previous working directory ", oldfolder
+
 
 #if defined(PGI)
     print *,">>> Testing PGI STREAMING  "
@@ -78,7 +78,6 @@ program simple_test_fileio
     print *,">>> Testing PGI STREAMING  completed"
 #endif
 
-
     print *,">>> Testing FOPEN  (Expecting Error 24)"
     do i=1,1200
         write(fname,'("tmp_",i0,".txt")') i
@@ -96,8 +95,7 @@ program simple_test_fileio
         !!   print *," Closing ", u(j)
         call fclose(u(j))
     end do
-    command = '/bin/rm -f tmp_*.txt || true'
-    call exec_cmdline( trim(command) )
+
     print *,">>> Testing FOPEN/FCLOSE completed"
 
     ! dummy data
@@ -148,20 +146,20 @@ contains
         real :: output, back
         real, parameter :: delta=epsilon(output)
         integer :: i,j
-        real :: spacing(1000000)
-        call random_number(spacing)
-        spacing = spacing / sum(spacing)
+        real :: spac(100000)
+        call random_number(spac)
+        spac = spac / sum(spac)
         errors = 0.
         j=0
         output =  (1.0/exp(1.0))
-        do while (output < 1)
+        do j=1, size(spac,1)
+            if (output >= 1) exit
             do i=1,nformats
                 write(teststring,FMT=formats(i)) output
                 read(teststring,*) back
                 if (abs(back-output) > errors(i)) errors(i) = abs(back-output)
             enddo
-            output = output + spacing(j) ! delta
-            j=j+1
+            output = output + spac(j) ! delta
         end do
 
         print *, 'Maximum errors: '
@@ -172,17 +170,16 @@ contains
         j=0
         errors = 0.
         output = (1.0/exp(1.0))
-        do while (output < 1)
+        do j=1, size(spac,1)
+            if (output >= 1) exit
             write(teststring,*) output
             read(teststring,*) back
             if (abs(back-output) > errors(1)) errors(1) = abs(back-output)
-            output = output + spacing(j) ! delta
-            j=j+1
+            output = output + spac(j) ! delta
+
         end do
 
         print *, 'Error = ', errors(1)
     end subroutine test_readwrite_accuracy
-
-
 
 end program simple_test_fileio

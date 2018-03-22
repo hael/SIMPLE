@@ -204,13 +204,22 @@ module simple_cufft
 
 ! contains
 
-!   subroutine cufftPlan2Dswap(plan,nx,ny, type)
-!     use iso_c_binding
-!     type(c_ptr):: plan
-!     integer(c_int),value:: nx, ny, type
-!     call cufftPlan2dC(plan,ny,nx,type)
-!   end subroutine cufftPlan2Dswap
-
+! !   subroutine cufftPlan2Dswap(plan,nx,ny, type)
+! !     use iso_c_binding
+! !     type(c_ptr):: plan
+! !     integer(c_int),value:: nx, ny, type
+! !     call cufftPlan2dC(plan,ny,nx,type)
+!   !   end subroutine cufftPlan2Dswap
+!   !> https://www.olcf.ornl.gov/tutorials/mixing-openacc-with-gpu-libraries/
+!   INTERFACE
+!     subroutine launchcufft(data, n, stream) BIND (C, NAME='launchCUFFT')
+!       USE ISO_C_BINDING
+!       implicit none
+!       type (C_PTR), value :: data
+!       integer (C_INT), value :: n
+!       type (C_PTR), value :: stream
+!     end subroutine
+!   END INTERFACE
 end module simple_cufft
 
 ! A general subroutine that uses the transform type passed in "transform" to
@@ -282,3 +291,49 @@ end subroutine cufftExec
 !                                                  cufftExecC2R(), cufftExecZ2D()
 !-----------------------------------------------------------------
 !   fftw_destroy_plan()                            cufftDestroy()
+
+! subroutine ornl_fft_exec
+!     use iso_c_binding
+!     use cufft
+!     use openacc
+!     implicit none
+
+!     integer, parameter :: n = 256
+!     complex (c_float_complex) :: data(n)
+!     integer (c_int):: i
+!     integer :: max_id,istat
+!     type (c_ptr) :: stream
+
+!     ! initialize interleaved input data on host
+!     real :: w = 7.0
+!     real :: x
+!     real, parameter :: pi = 3.1415927
+!     do i=1,n
+!         x = (i-1.0)/(n-1.0);
+!         data(i) = CMPLX(COS(2.0*PI*w*x),0.0)
+!     enddo
+
+!     ! Copy data to device at start of region and back to host and end of region
+!     !$acc data copy(data)
+
+!         ! Inside this region the device data pointer will be used
+!         !$acc host_data use_device(data)
+
+!         ! Query OpenACC for CUDA stream
+!         stream = acc_get_cuda_stream(acc_async_sync)
+
+!         ! Launch FFT on the GPU
+!         call launchcufft(C_LOC(data), n, stream)
+!         !$acc end host_data
+
+!     !$acc end data
+
+!     ! Find the frequency
+!     max_id = 1
+!     do i=1,n/2
+!         if (REAL(data(i)) .gt. REAL(data(max_id))) then
+!             max_id = i-1
+!         endif
+!     enddo
+!     print *, "frequency:", max_id
+!  end

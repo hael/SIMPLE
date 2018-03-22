@@ -16,7 +16,6 @@ program simple_omp_timer_test
 include 'simple_lib.f08'
 use simple_timer_omp_test
 use simple_test_omp
-
 implicit none
 
 real              :: starttime, stoptime

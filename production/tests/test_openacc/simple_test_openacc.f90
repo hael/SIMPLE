@@ -1,8 +1,17 @@
 program simple_test_openacc
+! #include "openacc_lib.h"
     use openacc
     use simple_oacc_vecadd
     use simple_oacc_omp
     implicit none
+
+#ifndef _OPENACC
+#warning " _OPENACC not defined use -fopenacc in FFLAGS or enable USE_OPENACC in cmake build"
+#else
+#warning "C Preprocessor got here!"  _OPENACC
+    write(*,'(a,1x,i0)')"OpenACC preprocessor version:",  _OPENACC
+#endif
+
 
 #ifdef  _OPENACC
     print *,' simple_test_openacc OpenACC is enabled '
@@ -25,9 +34,9 @@ contains
         integer, parameter :: N=10, M=500, P=30
         integer :: i, j, k
         real    :: particles(N,M,P), total
-
+#if defined(PGI)|| (defined(GNU) && (__GNUC__ >= 6 ))
         particles = 1.0
-
+        if (openacc_version >= 201306) then
         !$acc kernels
         do i=1,N
             do j=1,M
@@ -96,9 +105,11 @@ contains
 
         print *, 'test_oacc_basics:parallel loop collapse(3) reduction(+:total): '
         print *,'                 sum should be: ', N*M*P*2, 'sum is: ', total
+    else
+        print *, 'test_oacc_basics:parallel loop: sorry, unimplemented: directive not yet implemented in your gfortran version'
+    endif
+#endif
 
     end subroutine test_oacc_basics
-
-
 
 end program simple_test_openacc
