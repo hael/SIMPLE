@@ -327,13 +327,13 @@ type :: params
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
-    real    :: hp_ctfestimate=30.      !< high-pass limit 4 ctf_estimate(in A)
+    real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
     real    :: lp=20.              !< low-pass limit(in A)
-    real    :: lp_ctf_estimate=5.0      !< low-pass limit 4 ctf_estimate(in A)
+    real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.3      !< corr criterion low-pass limit assignment(0.143-0.5){0.3}
     real    :: lplims2D(3)
@@ -717,7 +717,7 @@ contains
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)
         call check_rarg('hp',             self%hp)
-        call check_rarg('hp_ctfestimate',     self%hp_ctfestimate)
+        call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
         call check_rarg('hp_fsc',         self%hp_fsc)
         call check_rarg('inner',          self%inner)
         call check_rarg('kv',             self%kv)

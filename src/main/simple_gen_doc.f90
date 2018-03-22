@@ -329,11 +329,6 @@ contains
         stop
     end subroutine print_doc_motion_correct
 
-    subroutine print_doc_motion_correct_ctf_estimate
-        write(*,'(A)') 'is a pipelined distributed workflow: motion_correct + ctf_estimate program'
-        stop
-    end subroutine print_doc_motion_correct_ctf_estimate
-
     subroutine print_doc_motion_correct_tomo
         write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or motion_correctring of tomograph'
         write(*,'(A)', advance='no') 'ic movies. Input is a textfile with absolute paths to movie files in addition to'

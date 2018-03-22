@@ -118,7 +118,7 @@ contains
         call chdict%push('hist',          'give variable for histogram plot')
         call chdict%push('hp',            'high-pass limit(in A)')
         call chdict%push('hp_fsc',        'FSC high-pass limit(in A)')
-        call chdict%push('hp_ctfestimate',    'high-pass limit 4 ctf_estimate(in A)')
+        call chdict%push('hp_ctf_estimate', 'high-pass limit 4 ctf_estimate(in A)')
         call chdict%push('iares',         'integer angular resolution{10}')
         call chdict%push('infile',        'file with inputs(.txt|.simple)')
         call chdict%push('inner',         'inner mask radius(in pixels)')

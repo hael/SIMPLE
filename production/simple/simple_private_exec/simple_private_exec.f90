@@ -129,13 +129,6 @@ select case(prg)
         !
         ! <preprocess/begin>is a program that executes motion_correct, ctf_estimate and pick in sequence
         ! <preprocess/end>
-        !
-        ! set required keys
-        keys_required(1)   = 'filetab'
-        keys_required(2)   = 'smpd'
-        keys_required(3)   = 'kv'
-        keys_required(4)   = 'cs'
-        keys_required(5)   = 'fraca'
         ! set optional keys
         keys_optional(1)   = 'nthr'
         keys_optional(2)   = 'refs'
@@ -152,7 +145,7 @@ select case(prg)
         keys_optional(13)  = 'nframesgrp'
         keys_optional(14)  = 'fromf'
         keys_optional(15)  = 'tof'
-        keys_optional(16)  = 'hp_ctfestimate'
+        keys_optional(16)  = 'hp_ctf_estimate'
         keys_optional(17)  = 'lp_ctf_estimate'
         keys_optional(18)  = 'lp_pick'
         keys_optional(19)  = 'dfmin'
@@ -168,13 +161,13 @@ select case(prg)
         keys_optional(29)  = 'pcontrast'
         keys_optional(30)  = 'ctfreslim'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:30))
+        call cline%parse_oldschool(keys_optional=keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',           8.)
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',        512.)
-        if( .not. cline%defined('hp_ctfestimate')  ) call cline%set('hp_ctfestimate',  30.)
+        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate', 30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         20.)
         if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)

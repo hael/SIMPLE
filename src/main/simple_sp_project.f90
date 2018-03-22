@@ -45,6 +45,7 @@ contains
     procedure, private :: map_ptcl_ind2stk_ind
     ! os_stk related methods
     procedure          :: add_movies
+    procedure          :: append_single_stk
     procedure          :: add_ptcls_stktab
     procedure          :: add_single_ptcls_stk
     procedure          :: get_stkname
@@ -363,11 +364,11 @@ contains
                 stop 'unsupported oritype; sp_project :: new_with_os_segptr'
         end select
         ! ! check that stk field is empty
-        ! n_os_stk = self%os_stk%get_noris()
-        ! if( n_os_stk > 0 )then
-        !     write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
-        !     stop 'ABORTING! sp_project :: add_stktab'
-        ! endif
+        n_os_stk = self%os_stk%get_noris()
+        if( n_os_stk > 0 )then
+            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
+            stop 'ABORTING! sp_project :: add_stktab'
+        endif
         ! read movie names
         call read_filetable(filetab, movienames)
         nmics = size(movienames)
@@ -418,6 +419,84 @@ contains
         write(*,'(A13,I6,A1,A)')'>>> IMPORTED ',nmics,' ', trim(segment)
         write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(segment),':',ntot
     end subroutine add_movies
+
+    subroutine append_single_stk( self, stk, smpd, os )
+        use simple_ori,     only: ori
+        use simple_imghead, only: find_ldim_nptcls
+        class(sp_project),     intent(inout) :: self
+        character(len=*),      intent(in)    :: stk
+        real,                  intent(in)    :: smpd ! sampling distance of images in stk
+        class(oris),           intent(inout) :: os   ! parameters associated with stk
+        type(oris) :: tmp_os
+        type(ori)  :: o
+        integer    :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D, fnr, i
+        ! file exists?
+        if( .not. file_exists(stk) )then
+            write(*,*) 'Inputted stack (stk): ', trim(stk)
+            stop 'does not exist in cwd; sp_project :: add_stk'
+        endif
+        ! find dimension of inputted stack
+        call find_ldim_nptcls(stk, ldim, nptcls)
+        if( ldim(1) /= ldim(2) )then
+            write(*,*) 'xdim: ', ldim(1)
+            write(*,*) 'ydim: ', ldim(2)
+            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_single_stk'
+        endif
+        ! check that inputs are of conforming sizes
+        n_os = os%get_noris()
+        if( n_os /= nptcls )then
+            write(*,*) '# input oris      : ', n_os
+            write(*,*) '# ptcl imgs in stk: ', nptcls
+            stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_single_stk'
+        endif
+        ! updates_fields
+        n_os_stk    = self%os_stk%get_noris() + 1
+        n_os_ptcl2D = self%os_ptcl2D%get_noris()
+        n_os_ptcl3D = self%os_ptcl3D%get_noris()
+        if( n_os_stk == 1 )then
+            call self%os_stk%new_clean(1)
+            call self%os_ptcl2D%new_clean(nptcls)
+            call self%os_ptcl3D%new_clean(nptcls)
+        else
+            ! stk
+            tmp_os = self%os_stk
+            call self%os_stk%new_clean(n_os_stk)
+            do i = 1, n_os_stk-1
+                call self%os_stk%set_ori(i, tmp_os%get_ori(i))
+            enddo
+            ! 2d
+            n_os_ptcl2D = self%os_ptcl2D%get_noris()
+            tmp_os      = self%os_ptcl2D
+            call self%os_ptcl2D%new_clean(n_os_ptcl2D + nptcls)
+            do i = 1, n_os_ptcl2D
+                call self%os_ptcl2D%set_ori(i, tmp_os%get_ori(i))
+            enddo
+            ! 3d
+            n_os_ptcl3D = self%os_ptcl3D%get_noris()
+            tmp_os      = self%os_ptcl3D
+            call self%os_ptcl3D%new_clean(n_os_ptcl3D + nptcls)
+            do i = 1, n_os_ptcl3D
+                call self%os_ptcl3D%set_ori(i, tmp_os%get_ori(i))
+            enddo
+        endif
+        ! updates oris_objects
+        call self%os_stk%set(n_os_stk, 'stk',     trim(stk))
+        call self%os_stk%set(n_os_stk, 'box',     real(ldim(1)))
+        call self%os_stk%set(n_os_stk, 'nptcls',  real(nptcls))
+        call self%os_stk%set(n_os_stk, 'fromp',   1.0)
+        call self%os_stk%set(n_os_stk, 'top',     real(nptcls))
+        call self%os_stk%set(n_os_stk, 'smpd',    real(smpd))
+        call self%os_stk%set(n_os_stk, 'stkkind', 'single')
+        call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
+        call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))
+        ! update particle oris objects
+        do i = 1, nptcls
+            o = os%get_ori(i)
+            call o%set('stkind', real(n_os_stk))
+            call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
+            call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
+        enddo
+    end subroutine append_single_stk
 
     subroutine add_ptcls_stktab( self, stktab, os )
         class(sp_project), intent(inout) :: self
@@ -805,7 +884,7 @@ contains
         enddo
         ! sanity check
         if( self%os_stk%isthere(nos,'top') )then
-            if( self%os_stk%get(nos,'top') /=  get_nptcls )then
+            if( nint(self%os_stk%get(nos,'top')) /=  get_nptcls )then
                 stop 'ERROR! total # particles .ne. last top index; sp_project :: get_nptcls'
             endif
         endif
@@ -882,8 +961,7 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         class(oris), pointer          :: ptcl_field => null()
-        character(len=:), allocatable :: ctfflag
-        integer :: stkind, ind_in_stk
+        integer :: stkind
         logical :: dfx_here, dfy_here
         ! set field pointer
         select case(trim(oritype))
@@ -1125,7 +1203,6 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         class(oris), pointer :: os => null()
-        real, allocatable   :: rvals
         is_virgin_field = .false.
         ! set field pointer
         select case(trim(oritype))
@@ -1356,7 +1433,7 @@ contains
     subroutine read( self, fname )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
-        integer :: isegment, n
+        integer :: isegment
         if( .not. file_exists(trim(fname)) )then
             write(*,*) 'fname: ', trim(fname)
             stop 'inputted file does not exist; sp_project :: read'
@@ -1375,7 +1452,7 @@ contains
     subroutine read_ctfparams_state_eo( self, fname )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
-        integer :: isegment, n
+        integer :: isegment
         if( .not. file_exists(trim(fname)) )then
             write(*,*) 'fname: ', trim(fname)
             stop 'inputted file does not exist; sp_project :: read'
@@ -1533,7 +1610,6 @@ contains
         character(len=*),  intent(in)    :: which
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
-        integer :: isegment
         select case(fname2format(fname))
             case('O')
                 stop 'write_segment is not supported for *.simple project files; sp_project :: write_segment'

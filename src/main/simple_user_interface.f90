@@ -816,7 +816,7 @@ contains
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
         call preprocess%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
         & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
-        call preprocess%set_input('filt_ctrls', 4, 'hp_ctfestimate', 'num', 'High-pass limit for CTF parameter estimation',&
+        call preprocess%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
         call preprocess%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
         & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)

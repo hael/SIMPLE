@@ -85,8 +85,8 @@ contains
         type(picker_iter)          :: piter
         type(extract_commander)    :: xextract
         type(cmdline)              :: cline_extract
-        character(len=STDLEN), allocatable :: movienames(:)
-        character(len=:),      allocatable :: fname_unidoc_output
+        type(sp_project)           :: spproj
+        character(len=:),      allocatable :: fname_unidoc_output, imgkind, moviename
         character(len=:),      allocatable :: moviename_forctf, moviename_intg
         character(len=:),      allocatable :: fname_stk_extract, fname_ctf_extract
         character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate
@@ -95,11 +95,9 @@ contains
         character(len=LONGSTRLEN) :: boxfile
         character(len=STDLEN) :: movie_fbody, movie_ext, movie_fname
         type(params) :: p
-        type(oris)   :: os_uni
-        type(ori)    :: orientation
+        type(ori)    :: o_mov
         real         :: smpd_original, smpd_scaled
-        integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
-        integer      :: frame_counter, movie_ind, nptcls_out
+        integer      :: nmovies, fromto(2), imovie, ntot, frame_counter, movie_ind, nptcls_out
         logical      :: l_pick
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         if( p%scale > 1.05 )then
@@ -113,14 +111,7 @@ contains
         else
             l_pick = .false.
         endif
-        ! call read_filetable(p%filetab, movienames)
-        ! nmovies = size(movienames)
-        if( cline%defined('numlen') )then
-            ! nothing to do
-        else
-            p%numlen = len(int2str(nmovies))
-        endif
-        ! output directory
+        ! output directories
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
         else
@@ -132,11 +123,8 @@ contains
         endif
         output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
         output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
-        output_dir_unidoc         = trim(output_dir)//trim(DIR_UNIDOC)
         call mkdir(output_dir)
         call mkdir(output_dir_ctf_estimate)
-        call mkdir(output_dir_motion_correct)
-        call mkdir(output_dir_unidoc)
         if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
             output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
@@ -145,22 +133,23 @@ contains
         endif
         ! filenaming and range
         if( p%stream.eq.'yes' )then
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
             ! STREAMING MODE
-            movie_fname = remove_abspath(trim(movienames(1)))
-            movie_ext   = fname2ext(trim(movie_fname))
-            movie_fbody = get_fbody(trim(movie_fname), trim(movie_ext))
-            if( cline%defined('fbody') )movie_fbody = trim(p%fbody)//trim(movie_fbody)
-            p%fbody = trim(movie_fbody)
-            ! ctf: on call and output set below
-            allocate(fname_unidoc_output, source=trim(DIR_UNIDOC)//trim(UNIDOC_OUTPUT)//&
-                &trim(movie_fbody)//trim(METADATA_EXT))
-            ! picker: on call
-            allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
-            allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//trim(METADATA_EXT))
-            call cline%set('fbody', trim(p%fbody))
-            fromto(1) = 1
-            if( cline%defined('startit') ) fromto(1) = p%startit
-            fromto(2) = nmovies
+            ! movie_fname = remove_abspath(trim(movienames(1)))
+            ! movie_ext   = fname2ext(trim(movie_fname))
+            ! movie_fbody = get_fbody(trim(movie_fname), trim(movie_ext))
+            ! if( cline%defined('fbody') )movie_fbody = trim(p%fbody)//trim(movie_fbody)
+            ! p%fbody = trim(movie_fbody)
+            ! ! ctf: on call and output set below
+            ! allocate(fname_unidoc_output, source=trim(DIR_UNIDOC)//trim(UNIDOC_OUTPUT)//&
+            !     &trim(movie_fbody)//trim(METADATA_EXT))
+            ! ! picker: on call
+            ! allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
+            ! allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//trim(METADATA_EXT))
+            ! call cline%set('fbody', trim(p%fbody))
+            ! fromto(1) = 1
+            ! if( cline%defined('startit') ) fromto(1) = p%startit
+            ! fromto(2) = nmovies
         else
             ! DISTRIBUTED MODE
             if( cline%defined('outfile') )then
@@ -177,69 +166,83 @@ contains
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
+        ! read in movies
+        call spproj%read_segment( 'mic', p%projfile )
+        ! numlen
+        if( cline%defined('numlen') )then
+            ! nothing to do
+        else
+            p%numlen = len(int2str(nmovies))
+        endif
+        !
         frame_counter = 0
-        movie_counter = 0
-        call orientation%new_ori_clean
-        call os_uni%new(ntot)
         smpd_original = p%smpd
         ! loop over exposures (movies)
-        do imovie=fromto(1),fromto(2)
+        do imovie = fromto(1),fromto(2)
+            ! fetch movie orientation
+            o_mov = spproj%os_mic%get_ori(imovie)
+            ! sanity check
+            if( .not.o_mov%isthere('imgkind') )cycle
+            if( .not.o_mov%isthere('movie')   )cycle
+            call o_mov%getter('imgkind', imgkind)
+            if( trim(imgkind).ne.'movie' )cycle
+            call o_mov%getter('movie', moviename)
+            if( .not.file_exists(moviename)) cycle
+            !
             p%smpd    = smpd_original
             if( ntot == 1 )then
-                movie_ind = p%part ! streaming mode
+                movie_ind = p%part ! streaming mode !!!!!!!!!!!!!!!!!!! TO UPDATE
             else
                 movie_ind = imovie ! standard mode
             endif
-            movie_counter = movie_counter + 1
             ! motion_correct
-            call mciter%iterate(cline, p, orientation, movie_ind,&
-                &frame_counter, movienames(imovie), smpd_scaled, output_dir_motion_correct)
-            call os_uni%set_ori(movie_counter, orientation)
-            p%smpd           = smpd_scaled
-            ! movie_counter    = movie_counter - 1
+            call mciter%iterate(cline, p, o_mov, movie_ind, frame_counter, moviename,&
+                &smpd_scaled, output_dir_motion_correct)
+            p%smpd = smpd_scaled
             ! ctf_estimate
-            moviename_forctf = mciter%get_moviename('forctf')    !! realloc warning
+            moviename_forctf = mciter%get_moviename('forctf')
             moviename_intg   = mciter%get_moviename('intg')
-            p%hp             = p%hp_ctfestimate
+            p%hp             = p%hp_ctf_estimate
             p%lp             = p%lp_ctf_estimate
-            orientation      = os_uni%get_ori(movie_counter)
-            call cfiter%iterate(p, movie_ind, moviename_forctf, orientation, output_dir_ctf_estimate)
-            call os_uni%set_ori(movie_counter, orientation)
-            if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
+            call o_mov%print_ori
+            call cfiter%iterate(p, movie_ind, moviename_forctf, o_mov, output_dir_ctf_estimate)
+            ! if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
             ! picker
             if( l_pick )then
                 p%lp = p%lp_pick
                 call piter%iterate(cline, p, moviename_intg, boxfile, nptcls_out, output_dir_picker)
-                call os_uni%set(movie_counter, 'boxfile', trim(boxfile)   )
-                call os_uni%set(movie_counter, 'nptcls',  real(nptcls_out))
-                if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
+                call o_mov%set('boxfile', trim(boxfile)   )
+                call o_mov%set('nptcls',  real(nptcls_out))
+                ! if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
             endif
             if( p%stream .eq. 'yes' )then
+                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
                 ! extract particles & params
-                if( l_pick )then
-                    cline_extract = cline
-                    call cline_extract%set('dir',       trim(output_dir_extract))
-                    call cline_extract%set('smpd',      p%smpd)
-                    call cline_extract%set('unidoc',    fname_unidoc_output)
-                    call cline_extract%set('outfile',   fname_ctf_extract)
-                    call cline_extract%set('outstk',    fname_stk_extract)
-                    call cline_extract%set('pcontrast', p%pcontrast)
-                    if( cline%defined('box_extract') )then
-                        call cline_extract%set('box', real(p%box_extract))
-                    endif
-                    call xextract%execute(cline_extract)
-                endif
+                ! if( l_pick )then
+                !     cline_extract = cline
+                !     call cline_extract%set('dir',       trim(output_dir_extract))
+                !     call cline_extract%set('smpd',      p%smpd)
+                !     call cline_extract%set('unidoc',    fname_unidoc_output)
+                !     call cline_extract%set('outfile',   fname_ctf_extract)
+                !     call cline_extract%set('outstk',    fname_stk_extract)
+                !     call cline_extract%set('pcontrast', p%pcontrast)
+                !     if( cline%defined('box_extract') )then
+                !         call cline_extract%set('box', real(p%box_extract))
+                !     endif
+                !     call xextract%execute(cline_extract)
+                ! endif
+            else
+                ! stash in project
+                call spproj%os_mic%set_ori(imovie, o_mov)
             endif
         end do
-        if( p%stream .eq. 'no' )then
-            ! write unidoc
-            call os_uni%write(fname_unidoc_output)
+        if( p%stream .eq. 'yes' )then
+            ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
+        else
+            call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
-        ! destruct
-        call os_uni%kill
-        deallocate(fname_unidoc_output)
-        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_preprocess' )
         ! end gracefully
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
@@ -570,6 +573,7 @@ contains
                 cnt = cnt + 1
                 call o%getter('intg', intg_forctf)
                 call cfiter%iterate(p, imic, intg_forctf, o, trim(output_dir))
+                call o%set('ctf', 'yes') !!!!!!!!!!!!
                 call spproj%os_mic%set_ori(imic, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
             endif
@@ -939,13 +943,13 @@ contains
                 cs    = o_mic%get('cs')
                 fraca = o_mic%get('fraca')
                 dfx   = o_mic%get('dfx')
-                ctf_estimatecc_is_there = o_mic%isthere('ctf_estimatecc')
+                ! ctf_estimatecc_is_there = o_mic%isthere('ctf_estimatecc')
                 phshift_is_there        = o_mic%isthere('phshift')
-                ctfres_is_there         = o_mic%isthere('ctfres')
+                ! ctfres_is_there         = o_mic%isthere('ctfres')
                 dfy_is_there            = o_mic%isthere('dfy')
-                if( ctf_estimatecc_is_there ) ctf_estimatecc = o_mic%get('ctf_estimatecc')
+                ! if( ctf_estimatecc_is_there ) ctf_estimatecc = o_mic%get('ctf_estimatecc')
                 if( phshift_is_there  )       phshift        = o_mic%get('phshift')
-                if( ctfres_is_there   )       ctfres         = o_mic%get('ctfres')
+                ! if( ctfres_is_there   )       ctfres         = o_mic%get('ctfres')
                 angast = 0.
                 if( dfy_is_there )then ! astigmatic CTF
                     if( .not. o_mic%isthere('angast') ) stop 'need angle of astigmatism for CTF correction'
@@ -963,9 +967,9 @@ contains
                         call o_ptcls%set(iptcl, 'angast', angast)
                         call o_ptcls%set(iptcl, 'dfy',       dfy)
                     endif
-                    if( ctf_estimatecc_is_there ) call o_ptcls%set(iptcl, 'ctf_estimatecc', ctf_estimatecc)
+                    ! if( ctf_estimatecc_is_there ) call o_ptcls%set(iptcl, 'ctf_estimatecc', ctf_estimatecc)
                     if( phshift_is_there  )       call o_ptcls%set(iptcl, 'phshift', phshift)
-                    if( ctfres_is_there   )       call o_ptcls%set(iptcl, 'ctfres', ctfres)
+                    ! if( ctfres_is_there   )       call o_ptcls%set(iptcl, 'ctfres', ctfres)
                 end do
                 call o_ptcls%compress(oris_mask)
                 call o_ptcls%kill_chash() ! remove chash part
@@ -1002,11 +1006,15 @@ contains
                 endif
             end do
             ! IMPORT INTO PROJECT
-            ! call  b%spproj%append_stk( o_mic, o_ptcls )
+            call  b%spproj%append_single_stk( trim(adjustl(stack)), p%smpd, o_ptcls )
             ! destruct
             call boxfile%kill()
         enddo
-        call b%spproj%write()
+        if( p%stream.eq.'yes' )then
+            ! needs to be synchronous
+        else
+            call b%spproj%write()
+        endif
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 
         contains

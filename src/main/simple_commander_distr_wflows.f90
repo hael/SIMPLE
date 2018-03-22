@@ -7,7 +7,6 @@ use simple_qsys_env,            only: qsys_env
 use simple_build,               only: build
 use simple_params,              only: params
 use simple_commander_base,      only: commander_base
-use simple_commander_preprocess ! use all in there
 use simple_commander_cluster2D  ! use all in there
 use simple_commander_distr      ! use all in there
 use simple_commander_mask       ! use all in there
@@ -16,7 +15,6 @@ use simple_qsys_funs            ! use all in there
 use simple_binoris_io           ! use all in there
 implicit none
 
-public :: motion_correct_ctf_estimate_distr_commander
 public :: motion_correct_distr_commander
 public :: motion_correct_tomo_distr_commander
 public :: powerspecs_distr_commander
@@ -32,10 +30,6 @@ public :: symsrch_distr_commander
 public :: scale_project_distr_commander
 private
 
-type, extends(commander_base) :: motion_correct_ctf_estimate_distr_commander
-  contains
-    procedure :: execute      => exec_motion_correct_ctf_estimate_distr
-end type motion_correct_ctf_estimate_distr_commander
 type, extends(commander_base) :: motion_correct_distr_commander
   contains
     procedure :: execute      => exec_motion_correct_distr
@@ -90,61 +84,6 @@ type, extends(commander_base) :: scale_project_distr_commander
 end type scale_project_distr_commander
 
 contains
-
-    subroutine exec_motion_correct_ctf_estimate_distr( self, cline )
-        use simple_commander_preprocess
-        class(motion_correct_ctf_estimate_distr_commander), intent(inout) :: self
-        class(cmdline),                                     intent(inout) :: cline
-        type(merge_algndocs_commander) :: xmerge_algndocs
-        type(cmdline)                  :: cline_merge_algndocs
-        type(qsys_env)                 :: qenv
-        type(params)                   :: p_master
-        type(chash)                    :: job_descr
-        character(len=:), allocatable  :: output_dir, fbody
-        ! seed the random number generator
-        call seed_rnd
-        ! output command line executed
-        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-        write(*,*) trim(cmdline_glob)
-        ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
-        ! make master parameters
-        p_master = params(cline)
-        p_master%nptcls = nlines(p_master%filetab)
-        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-        ! deal with numlen so that length matches JOB_FINISHED indicator files
-        p_master%numlen = len(int2str(p_master%nptcls))
-        call cline%set('numlen', real(p_master%numlen))
-        ! output directory
-        if( cline%defined('dir') )then
-            output_dir = trim(p_master%dir)
-        else
-            output_dir = trim(DIR_MOTION_CORRECT)
-            call cline%set('dir', trim(output_dir))
-        endif
-        call mkdir(output_dir)
-        allocate(fbody, source=trim(output_dir)//trim(UNIDOC_FBODY))
-        ! prepare merge_algndocs command line
-        cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.                   )
-        call cline_merge_algndocs%set( 'fbody',    trim(fbody)          )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls))
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts))
-        call cline_merge_algndocs%set( 'outfile',  trim(SIMPLE_UNIDOC)  )
-        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen))
-        ! setup the environment for distributed execution
-        call qenv%new(p_master, numlen=p_master%numlen)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(UNIDOC_FBODY))
-        ! merge docs
-        call xmerge_algndocs%execute( cline_merge_algndocs )
-        ! clean
-        call qsys_cleanup(p_master)
-        ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_CTF_ESTIMATE NORMAL STOP ****')
-    end subroutine exec_motion_correct_ctf_estimate_distr
 
     subroutine exec_motion_correct_distr( self, cline )
         use simple_sp_project, only: sp_project

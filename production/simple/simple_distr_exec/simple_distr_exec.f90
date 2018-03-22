@@ -13,7 +13,6 @@ implicit none
 
 ! PRE-PROCESSING
 type(preprocess_stream_commander)                 :: xpreprocess_stream
-type(motion_correct_ctf_estimate_distr_commander) :: xmotion_correct_ctf_estimate_distr
 type(motion_correct_distr_commander)              :: xmotion_correct_distr
 type(motion_correct_tomo_distr_commander)         :: xmotion_correct_tomo_distr
 type(powerspecs_distr_commander)                  :: xpowerspecs_distr
@@ -71,77 +70,18 @@ select case(prg)
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
-        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('hp_ctfestimate')  ) call cline%set('hp_ctfestimate',       30.)
-        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',        5.)
+        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
+        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
+        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('stream')          ) call cline%set('stream',    'no')
-        if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
-        if( cline%get_carg('stream') .eq. 'no' )then
-            if( .not.cline%defined('filetab')) stop 'The list of movies to process must be provided (FILETAB)'
-        else
-            if( cline%defined('filetab') )stop 'The list of movies cannot be provided in streaming mode'
-        endif
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
+        if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
         if( cline%defined('refs') ) call cline%set('dopick', 'yes')
         if( cline%get_carg('dopick').eq.'yes' .and. .not.cline%defined('refs') )then
             stop 'Picking references must be provided together with DOPICK=YES'
         endif
         call xpreprocess_stream%execute(cline)
-
-    ! PIPELINED MOTION_CORRECT + CTF_ESTIMATE
-
-    case( 'motion_correct_ctf_estimate' )
-        !==Program motion_correct_ctf_estimate
-        !
-        ! <motion_correct_ctf_estimate/begin>is a pipelined distributed workflow: motion_correct + ctf_estimate program<motion_correct_ctf_estimate/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'filetab'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'kv'
-        keys_required(4)  = 'cs'
-        keys_required(5)  = 'fraca'
-        keys_required(6)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'fbody'
-        keys_optional(3)  = 'dose_rate'
-        keys_optional(4)  = 'exp_time'
-        keys_optional(5)  = 'lpstart'
-        keys_optional(6)  = 'lpstop'
-        keys_optional(7)  = 'trs'
-        keys_optional(8)  = 'pspecsz'
-        keys_optional(9)  = 'numlen'
-        keys_optional(10) = 'startit'
-        keys_optional(11) = 'scale'
-        keys_optional(12) = 'nframesgrp'
-        keys_optional(13) = 'fromf'
-        keys_optional(14) = 'tof'
-        keys_optional(15) = 'nsig'
-        keys_optional(16) = 'outfile'
-        keys_optional(17) = 'hp'
-        keys_optional(18) = 'lp'
-        keys_optional(19) = 'dfmin'
-        keys_optional(20) = 'dfmax'
-        keys_optional(21) = 'dfstep'
-        keys_optional(22) = 'astigtol'
-        keys_optional(23) = 'phaseplate'
-        ! parse command line
-        if( describe ) call print_doc_motion_correct_ctf_estimate
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:23))
-        ! set defaults
-        call cline%set('dopick', 'no'     )
-        call cline%set('prg',    'preprocess')
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',           8.)
-        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',        512.)
-        if( .not. cline%defined('hp_ctfestimate')  ) call cline%set('hp_ctfestimate',  30.)
-        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
-        if( .not. cline%defined('opt')             ) call cline%set('opt',       'simplex')
-        ! execute
-        call xmotion_correct_ctf_estimate_distr%execute(cline)
 
     ! MOTION_CORRECT_MOVIES
 
