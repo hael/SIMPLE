@@ -298,8 +298,9 @@ contains
         character(len=*), intent(in), optional :: errmsg
         character(len=STDLEN) :: msg_this
         integer               :: funit, io_status
-        call exec_cmdline(trim('touch '//trim(adjustl(fname))))
+        call exec_cmdline(trim('touch -m '//trim(adjustl(fname))))
     end subroutine simple_touch
+
 
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
@@ -391,43 +392,6 @@ contains
         enddo
     end subroutine get_open_funits
 
-    !> \brief  return file size in bytes
-    function file_size(fname) result(sz)
-        character(len=*), intent(in) :: fname !< input filename
-        integer(kind=8)              :: sz
-        inquire(file=trim(adjustl(fname)),size=sz)
-    end function file_size
-
-    !> \brief  Rename or move file
-    function simple_rename( filein, fileout , overwrite) result(file_status)
-#ifdef INTEL
-        use ifport
-#elif PGI
-        use simple_syslib, only: rename
-#endif
-        character(len=*), intent(in) :: filein, fileout !< input filename
-        logical, intent(in), optional :: overwrite
-        integer :: file_status
-        logical :: force_overwrite
-        force_overwrite=.true.
-        if(present(overwrite)) force_overwrite=overwrite
-        if( file_exists(filein) )then
-            if( file_exists(fileout) .and. (.not. force_overwrite) )&
-                call fileiochk( " simple_rename failed to rename file,  designated output  filename already exists "//trim(fileout))
-#if defined(INTEL)
-            file_status = rename(filein, fileout)
-#elif defined(PGI)
-            file_status = rename(filein, fileout)
-#else
-            file_status = rename(filein, fileout) ! intrinsic GNU Fortran extension
-#endif
-
-        else
-            call simple_stop( "simple_fileio::simple_rename, designated input filename doesn't exist "//trim(filein))
-        end if
-        if(file_status /= 0) call fileiochk( " simple_rename failed to rename file "//trim(filein), file_status)
-    end function simple_rename
-
 
     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
     subroutine make_filetable( tabname, n, body, ext, numlen, suffix )
@@ -448,6 +412,13 @@ contains
         call fclose_1( fnr, ios )
         call fileiochk(" Error closing file in ::make_filetable ",ios)
     end subroutine make_filetable
+
+    !> \brief  return file size in bytes
+    function file_size(fname) result(sz)
+        character(len=*), intent(in) :: fname !< input filename
+        integer(kind=8)              :: sz
+        inquire(file=trim(adjustl(fname)),size=sz)
+    end function file_size
 
     !> \brief  is for checking file kind
     !> \param fname,suffix string args to check suffix
@@ -530,8 +501,8 @@ contains
             allocate(fname2ext, source=trim(fname(pos+1:length)))
         endif
     end function fname2ext
-
-    pure function remove_abspath( fname ) result( new_fname)
+    !> strip directory and suffix from filenames
+    pure function basename( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname
         integer :: length, pos
@@ -542,16 +513,16 @@ contains
         else
             allocate(new_fname, source=trim(fname(pos+1:length)))
         endif
-    end function remove_abspath
-
-    pure function extract_abspath( fname ) result( abspath )
+    end function
+    !> strip last component from file name
+    pure function dirname( fname ) result( abspath )
         character(len=*), intent(in)  :: fname !< abs filename
         character(len=:), allocatable :: abspath !< abs file path
         integer :: length, pos
         length = len_trim(fname)
         pos = scan(fname(1:length),'/',back=.true.)
         allocate(abspath, source=trim(fname(1:pos)))
-    end function extract_abspath
+    end function
 
     !>  \brief  returns the integer number identifier of a filename
     subroutine fname2ind( str, ivar )
@@ -624,7 +595,7 @@ contains
         end do
     end function make_filenames
 
-    !> \brief  is for deleting consequtively numbered files with padded number strings
+    !> \brief  is for deleting consecutively numbered files with padded number strings
     subroutine del_files( body, n, ext, numlen, suffix )
         character(len=*),           intent(in) :: body !< input filename body
         integer,                    intent(in) :: n    !< total num for del, formatted as body[n].ext
@@ -956,7 +927,7 @@ contains
 
     !> From flibs file_list
     ! Copyright (c) 2008, Arjen Markus
-    subroutine file_list( dir, list , suppress_errors, outfile)
+    subroutine file_list_old( dir, list , suppress_errors, outfile)
         character(len=*), intent(in)            :: dir
         character(len=*), pointer, dimension(:) :: list
         logical, intent(in), optional           :: suppress_errors
@@ -997,30 +968,41 @@ contains
             read( luntmp, '(a)' ) list(i)
         end do
         close( luntmp, status = 'delete' )
-    end subroutine file_list
-
+    end subroutine file_list_old
 
 
     subroutine ls_mrcfiletab( dir, filetabname )
         character(len=*),intent(in)  :: dir, filetabname
-        character(len=STDLEN) :: cmd
-        cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
-        call exec_cmdline(cmd)
+        ! character(len=STDLEN) :: cmd
+        ! cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
+        ! call exec_cmdline(cmd)
+
+        integer :: stat
+        stat = simple_glob_list_tofile(glob=trim(dir)//'/*.mrc*', outfile=trim(filetabname), tr=.true.)
+        if(stat/=0) call fileiochk("ls_mrcfiletab failed "//trim(dir))
     end subroutine ls_mrcfiletab
 
     subroutine ls_fbody_mrcfiletab( fbody, filetabname )
         character(len=*),intent(in)  :: fbody, filetabname
-        character(len=STDLEN) :: cmd
-        cmd = 'ls -tr '//trim(fbody)//'*.mrc*'//' > '//trim(filetabname)
-        print *,trim(cmd)
-        call exec_cmdline(cmd)
+        ! character(len=STDLEN) :: cmd
+        ! cmd = 'ls -tr '//trim(fbody)//'*.mrc*'//' > '//trim(filetabname)
+        ! print *,trim(cmd)
+        ! call exec_cmdline(cmd)
+
+        integer :: stat
+        stat = simple_glob_list_tofile(glob=trim(fbody)//'*.mrc*', outfile=trim(filetabname), tr=.true.)
+        if(stat/=0) call fileiochk("ls_fbody_mrcfiletab failed "//trim(fbody))
     end subroutine ls_fbody_mrcfiletab
 
     subroutine ls_filetab( fbody, ext, filetabname )
         character(len=*), intent(in)  :: fbody, ext, filetabname
-        character(len=STDLEN) :: cmd
-        cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
-        call exec_cmdline(cmd)
+        ! character(len=STDLEN) :: cmd
+        ! cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
+        ! call exec_cmdline(cmd)
+
+        integer :: stat
+        stat = simple_glob_list_tofile(glob=trim(fbody)//'*.'//trim(ext), outfile=trim(filetabname), tr=.true.)
+        if(stat/=0) call fileiochk("ls_filetab failed "//trim(fbody))
     end subroutine ls_filetab
 
     ! subroutine sys_del_files( fbody, ext )
