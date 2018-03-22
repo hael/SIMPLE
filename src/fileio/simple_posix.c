@@ -259,18 +259,27 @@ int get_file_list_modified(const char * path, const char* ext, int* count, int f
     printf("%30s: strlen ext:%zd\n", "DEBUG: In get_file_list_modified", strlen(ext));
     printf("%30s: ivf_pathLen:%12u\n", "DEBUG: In get_file_list_modified", (long) ivf_path);
 
-    FILE* f = fopen("__simple_filelist__", "w");
-    if(!f) {
-        printf("%d %s\nget_file_list_modified failed to open __simple_filelist__ in %s\n", errno, strerror(errno), cpath);
-        perror("Failed : simple_posix.c::get_file_list_modified ");
-        return -1;
+    // Remove temp file if it exists
+    if(access( "./__simple_filelist__", F_OK ) != -1){
+        if(remove("./__simple_filelist__")!=0) {
+          printf("%d %s\nget_file_list_modified failed to remove __simple_filelist__ in path %s\n", errno, strerror(errno), cpath);
+          perror("Failed : simple_posix.c::get_file_list_reverse_modified ");
+          return -1;
+        }
     }
     if(mtime_alpha) { /* modified time sort */
         n = scandir(cpath, &namelist, NULL, versionsort);
     } else { /* alphanumeric sort */
         n = scandir(cpath, &namelist, NULL, alphasort);
     }
+
     free(cpath);
+    FILE* f = fopen("__simple_filelist__", "w");
+    if(!f) {
+      printf("%d %s\nget_file_list_modified failed to open __simple_filelist__ in %s\n", errno, strerror(errno), cpath);
+      perror("Failed : simple_posix.c::get_file_list_modified ");
+      return -1;
+    }
     if(n < 0)
         perror("scandir failed to find files ; get_file_list_modified");
     else {
