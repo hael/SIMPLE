@@ -50,10 +50,10 @@ contains
     procedure, private                               :: save_jpeg_r4_3D
     procedure, private                               :: save_jpeg_r4
     procedure, private                               :: save_jpeg_i4
-    generic                                          :: writeJpgToFile  => save_jpeg_r4_3D, save_jpeg_r4, save_jpeg_i4
+    generic                                          :: writeJpg  => save_jpeg_r4_3D, save_jpeg_r4, save_jpeg_i4
     procedure, private                                        :: load_jpeg_r4
     procedure, private                                        :: load_jpeg_i4
-    generic                                          :: loadJpgFromFile  => load_jpeg_r4, load_jpeg_i4
+    generic                                          :: loadJpg  => load_jpeg_r4, load_jpeg_i4
 
 end type jpg_img
 

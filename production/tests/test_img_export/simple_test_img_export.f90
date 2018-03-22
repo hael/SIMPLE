@@ -43,6 +43,6 @@ call test_jpg_export
  !   call test_jpeg_io
  !   call test_png_io
 #endif
-call simple_chdir(olddir)
+! call simple_chdir(olddir)
 
 end program simple_test_img_export

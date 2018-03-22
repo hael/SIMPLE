@@ -39,7 +39,7 @@ contains
             rbuf = img%get_rmat()
             print *,rbuf
             allocate(rptr(ld1,ld2),source=rbuf(:,:,1))
-            status =  jpg%writeJpgToFile(str,rptr, quality=100, colorspec=1)
+            status =  jpg%writeJpg(str,rptr, quality=100, colorspec=1)
             if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg returned error' )
             call exec_cmdline('display test_jpg_ran.jpg')
 
@@ -47,7 +47,7 @@ contains
             allocate(ibuf(size(rbuf,1),size(rbuf,2),size(rbuf,3)))
             ibuf = INT(rbuf * (2**12))
             str= 'test_jpg_ran_int.jpg'
-            status = jpg%writeJpgToFile(str,ibuf(:,:,1))
+            status = jpg%writeJpg(str,ibuf(:,:,1))
             if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg int buffer failed ' )
             call exec_cmdline('display test_jpg_ran_int.jpg')
 
@@ -58,7 +58,7 @@ contains
             call img3%gauran( 5., 15. )
             if( doplot ) call img%vis
             str= 'test_jpg_gauss.jpg'
-            status =  jpg%writeJpgToFile(str,img3%get_rmat())
+            status =  jpg%writeJpg(str,img3%get_rmat())
             if(status /= 0)  call simple_stop('test_jpg_image_local write_jpeg 3D buffer failed' )
             call exec_cmdline('montage -geometry +1+1 test_jpg_gauss*.jpg gauss.jpg && display gauss.jpg')
 
