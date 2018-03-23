@@ -814,22 +814,34 @@ contains
         character(len=*), intent(in)            :: d
         logical,          intent(in), optional  :: ignore
         integer,          intent(out), optional :: status
-        character(len=:), allocatable           :: path
-        integer :: io_status
+        character(len=:), allocatable :: path
+        character(len=STDLEN) :: subdirs(5)
+        character(len=STDLEN) :: tmppath
+        integer :: nargs, iarg, ival, io_stat
+        integer :: io_status, idir, ndirs
         logical :: dir_e, ignore_here, qq
         ignore_here = .false.
         inquire(file=trim(d), exist=dir_e)
         if(.not. dir_e) then
+            if(index(trim(d), '/') == 0)then
+                ndirs=1
+                subdirs(1) = trim(d)
+            else
+                call parsestr(trim(d),'/',subdirs,ndirs)
+            endif
+            do idir=1, ndirs
+                call nsplit_str(trim(d),'/', tmppath, idir)
+
 #if defined(INTEL)
-            allocate(path, source=trim(d))
+            allocate(path, source=trim(tmppath))
             qq =  makedirqq(path)
             io_status = INT(qq)
 #elif defined(GNU)
-            allocate(path, source=trim(d)//c_null_char)
+            allocate(path, source=trim(tmppath)//c_null_char)
             !o_status = makedir(path) !trim(d)//c_null_char)
-            io_status= mkdir(path, int(o'777',c_int16_t))
+            io_status= mkdir(trim(path), int(o'777',c_int16_t))
 #elif defined(PGI)
-            allocate(path, source=trim(d))
+            allocate(path, source=trim(tmppath))
             io_status = mkdir(path, int(o'777',c_int16_t))
 #endif
             deallocate(path)
@@ -837,6 +849,7 @@ contains
                 if(io_status /= 0) call simple_error_check(io_status, &
                     "syslib:: simple_mkdir failed to create "//trim(d))
             endif
+            enddo
         else
             if(global_verbose) print *," Directory ", d, " already exists, simple_mkdir ignoring request"
         end if
