@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
+use simple_ori,           only: ori
 use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
 implicit none

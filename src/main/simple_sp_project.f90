@@ -771,7 +771,7 @@ contains
         call img%new([box,box,1], smpd)
         call simple_getcwd(cwd)
         tmp_dir = trim(cwd) // '/tmp_stacks/'
-        call mkdir(trim(tmp_dir))
+        call simple_mkdir(trim(tmp_dir))
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
             cnt = 0
@@ -800,7 +800,7 @@ contains
         kv    = self%os_stk%get(1,'kv')
         fraca = self%os_stk%get(1,'fraca')
         call self%os_stk%new_clean(nparts)
-        call mkdir(trim(STKPARTSDIR))
+        call simple_mkdir(trim(STKPARTSDIR))
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
             allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//'.'//trim(ext))

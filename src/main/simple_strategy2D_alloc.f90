@@ -1,6 +1,6 @@
 ! array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
 module simple_strategy2D_alloc
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 implicit none
 
 integer, allocatable :: cls_pops(:)

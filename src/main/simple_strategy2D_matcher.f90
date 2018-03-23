@@ -119,7 +119,7 @@ contains
         if( b%a%get_nevenodd() == 0 )then
             stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
         endif
-        if( .not. cline%defined('refs') )call simple_ stop('need refs to be part of command line for cluster2D execution')
+        if( .not. cline%defined('refs') )call simple_stop('need refs to be part of command line for cluster2D execution')
         if( .not. file_exists(p%refs) ) call simple_stop('input references (refs) does not exist in cwd')
         call cavger_read(p%refs, 'merged')
         if( file_exists(p%refs_even) )then
@@ -198,7 +198,7 @@ contains
                 if( b%spproj%is_virgin_field('ptcl2D') )then
                     allocate(strategy2D_greedy :: strategy2Dsrch(p%fromp:p%top), stat=alloc_stat)
                 else
-                    allocate(strategy2D_stochastic :: strategy2Dsrch(p%fromp:p%top, stat=alloc_stat))
+                    allocate(strategy2D_stochastic :: strategy2Dsrch(p%fromp:p%top), stat=alloc_stat)
                 endif
         end select
         if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2D objects ")

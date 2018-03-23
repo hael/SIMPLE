@@ -46,7 +46,7 @@ contains
         call micrograph%mic2eospecs(p%pspecsz, 'sqrt', pspec_lower, pspec_upper, pspec_all)
         ! deal with output
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctf_estimate_diag')
-        fname_diag = trim(dir_out)//'/'//remove_abspath(trim(fname_diag))
+        fname_diag = trim(dir_out)//'/'//basename(trim(fname_diag))
         ! fitting
         call ctf_estimate_init(pspec_all, pspec_lower, pspec_upper, p%smpd, p%kv,&
             &p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp], p%astigtol, p%phaseplate)

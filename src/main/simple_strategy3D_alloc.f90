@@ -1,6 +1,6 @@
 ! array allocation for concrete strategy3D extensions to improve caching and reduce alloc overheads
 module simple_strategy3D_alloc
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_oris, only: oris
 implicit none
 

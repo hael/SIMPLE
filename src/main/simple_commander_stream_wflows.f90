@@ -63,14 +63,14 @@ contains
         endif
         output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
         output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
-        call mkdir(output_dir)
-        call mkdir(output_dir_ctf_estimate)
-        call mkdir(output_dir_motion_correct)
+        call simple_mkdir(output_dir)
+        call simple_mkdir(output_dir_ctf_estimate)
+        call simple_mkdir(output_dir_motion_correct)
         if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
             output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
-            call mkdir(output_dir_picker)
-            call mkdir(output_dir_extract)
+            call simple_mkdir(output_dir_picker)
+            call simple_mkdir(output_dir_extract)
         endif
         ! read in movies
         call spproj%read( p_master%projfile )

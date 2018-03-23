@@ -1,11 +1,11 @@
 module simple_user_interface
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type simple_input_param
     character(len=:), allocatable :: key
@@ -1752,7 +1752,6 @@ contains
     end subroutine set_input_3
 
     subroutine print_ui( self )
-        use simple_chash, only: chash
         use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         type(chash) :: ch
@@ -1815,9 +1814,7 @@ contains
     end subroutine print_ui
 
     subroutine print_cmdline( self )
-        use simple_chash, only: chash
         use simple_ansi_ctrls
-        use simple_strings, only: lexSort
         class(simple_program), intent(in) :: self
         type(chash) :: ch
         logical     :: l_distr_exec
@@ -1908,7 +1905,6 @@ contains
 
     subroutine write2json( self )
         use json_module
-        use simple_strings, only: int2str
         class(simple_program), intent(in) :: self
         type(json_core)           :: json
         type(json_value), pointer :: pjson, program
@@ -1941,7 +1937,6 @@ contains
         contains
 
             subroutine create_section( name, arr )
-                use simple_strings, only: split, parsestr
                 character(len=*),          intent(in) :: name
                 type(simple_input_param), allocatable, intent(in) :: arr(:)
                 type(json_value), pointer :: entry, section, options
@@ -2044,7 +2039,6 @@ contains
     end function get_required_keys
 
     logical function is_distr( self )
-        use simple_strings, only: str_has_substr
         class(simple_program), intent(in) :: self
         is_distr = str_has_substr(self%executable, 'distr')
     end function is_distr

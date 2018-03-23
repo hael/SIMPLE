@@ -4,7 +4,7 @@
 !! Based on John Burkardt's  PPMA and PBMA modules (LPGL Copyright, March 2003)
 !! Modified by Michael Eager 2018, Monash University
 module simple_pnm
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use, intrinsic :: iso_c_binding
 implicit none
 

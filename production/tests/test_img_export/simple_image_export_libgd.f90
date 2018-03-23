@@ -4,7 +4,7 @@
 
 !! Modified by Michael Eager, Feb 2018
 module simple_test_export_libgd
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_img
 implicit none
 

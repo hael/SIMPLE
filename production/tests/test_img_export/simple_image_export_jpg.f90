@@ -1,5 +1,5 @@
 module simple_test_export_jpg
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_jpg,   only: jpg_img
 use simple_image, only: image
 implicit none

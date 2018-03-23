@@ -552,7 +552,7 @@ contains
 
         print *,"test_jpg_export: Testing load_jpeg_i4 "
         allocate(fstr, source="test.jpg")
-        status = jpg%loadJpgFromFile(fstr, int32_buffer)
+        status = jpg%loadJpg(fstr, int32_buffer)
         if(status == 0) then
             print *, " test_jpg_export: load_jpeg_i4 success "
             if(allocated(int32_buffer)) then
@@ -572,7 +572,7 @@ contains
         if(status==1) call simple_stop("test_jpg_export: FAILED: load_jpeg int32 failed")
 
         print *,"test_jpg_export: Testing load_jpeg_r4 "
-        status = jpg%loadJpgFromFile(fstr, real32_buffer)
+        status = jpg%loadJpg(fstr, real32_buffer)
         if(status == 0) then
             print *, "test_jpg_export: load_jpeg_r4 success "
             if(allocated(real32_buffer))then
@@ -595,7 +595,7 @@ contains
         deallocate(fstr)
         allocate(fstr, source="test-i4.jpg")
         call del_file(fstr)
-        status = jpg%writeJpgToFile(fstr, int32_buffer)
+        status = jpg%writeJpg(fstr, int32_buffer)
         if(status == 0) then
             print *, " test_jpg_export: save_jpeg_i4 success "
             if(file_exists("test-i4.jpg"))then
@@ -610,7 +610,7 @@ contains
         allocate(fstr, source="test-r4.jpg")
         call del_file(fstr)
         print *, " test_jpg_export: save_jpeg_r4  "
-        status = jpg%writeJpgToFile(fstr, real32_buffer)
+        status = jpg%writeJpg(fstr, real32_buffer)
         if(status == 0) then
             print *, " test_jpg_export: save_jpeg_r4 success "
             if(file_exists("test-r4.jpg"))then

@@ -4,7 +4,7 @@ use simple_defs
 use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
 use simple_syslib, only: file_exists, is_open, is_file_open, is_io, allocchk, &
-    &exec_cmdline, simple_stop, simple_error_check, del_file, simple_list_files
+    &exec_cmdline, simple_stop, simple_error_check, del_file, simple_list_files, simple_glob_list_tofile
 implicit none
 
 interface arr2file
@@ -978,7 +978,7 @@ contains
         ! call exec_cmdline(cmd)
 
         integer :: stat
-        stat = simple_glob_list_tofile(glob=trim(dir)//'/*.mrc*', outfile=trim(filetabname), tr=.true.)
+        stat = simple_glob_list_tofile(glob=trim(dir//'/*.mrc*'), outfile=trim(filetabname), tr=.true.)
         if(stat/=0) call fileiochk("ls_mrcfiletab failed "//trim(dir))
     end subroutine ls_mrcfiletab
 
@@ -990,7 +990,7 @@ contains
         ! call exec_cmdline(cmd)
 
         integer :: stat
-        stat = simple_glob_list_tofile(glob=trim(fbody)//'*.mrc*', outfile=trim(filetabname), tr=.true.)
+        stat = simple_glob_list_tofile(glob=trim(fbody//'*.mrc*'), outfile=trim(filetabname), tr=.true.)
         if(stat/=0) call fileiochk("ls_fbody_mrcfiletab failed "//trim(fbody))
     end subroutine ls_fbody_mrcfiletab
 

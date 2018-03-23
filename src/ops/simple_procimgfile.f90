@@ -1072,10 +1072,7 @@ contains
     !! \param nran number of random samples
     !! \param smpd sampling distance
     subroutine random_selection_from_imgfile( spproj, fname, box, nran)
-        use simple_sp_project,     only: sp_project
-        use simple_ran_tabu,       only: ran_tabu
-        use simple_strings,        only: str_has_substr
-<<<<<<< variant A
+        use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: fname
         integer,           intent(in)    :: nran, box
@@ -1091,51 +1088,6 @@ contains
         smpd        = spproj%os_stk%get(1,'smpd')
         box_ori     = nint(spproj%os_stk%get(1,'box'))
         ldim        = [box_ori,box_ori,1]
->>>>>>> variant B
-        character(len=*),  intent(in) :: fname2selfrom, fname
-        integer,           intent(in) :: nran, box
-        real,              intent(in) :: smpd
-        logical, optional, intent(in) :: mask(:)
-        character(len=:), allocatable :: stkname
-        integer                       :: n, ldim(3), i, ii, ldim_scaled(3), ind
-        type(ran_tabu)                :: rt
-        type(image)                   :: img, img_scaled
-        type(stktab_handler)          :: stkhandle
-        logical                       :: doscale, l_stktab_input
-        if( str_has_substr(fname2selfrom,'.txt') )then
-            call stkhandle%new(trim(fname2selfrom))
-            n       = stkhandle%get_nptcls()
-            ldim    = stkhandle%get_ldim()
-            ldim(3) = 1
-            l_stktab_input = .true.
-        else
-            call find_ldim_nptcls(fname2selfrom, ldim, n)
-            ldim(3) = 1
-            l_stktab_input = .false.
-        endif
-####### Ancestor
-        character(len=*),  intent(in) :: fname2selfrom, fname
-        integer,           intent(in) :: nran, box
-        real,              intent(in) :: smpd
-        logical, optional, intent(in) :: mask(:)
-        character(len=:), allocatable :: stkname
-        integer                       :: alloc_stat, n, ldim(3), i, ii, ldim_scaled(3), ind
-        type(ran_tabu)                :: rt
-        type(image)                   :: img, img_scaled
-        type(stktab_handler)          :: stkhandle
-        logical                       :: doscale, l_stktab_input
-        if( str_has_substr(fname2selfrom,'.txt') )then
-            call stkhandle%new(trim(fname2selfrom))
-            n       = stkhandle%get_nptcls()
-            ldim    = stkhandle%get_ldim()
-            ldim(3) = 1
-            l_stktab_input = .true.
-        else
-            call find_ldim_nptcls(fname2selfrom, ldim, n)
-            ldim(3) = 1
-            l_stktab_input = .false.
-        endif
-======= end
         ldim_scaled = [box,box,1]
         doscale     = box /= box_ori
         if( doscale )call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten

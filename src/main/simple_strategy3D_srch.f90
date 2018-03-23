@@ -1,6 +1,6 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_params,            only: params
 use simple_oris,              only: oris
 use simple_ori,               only: ori

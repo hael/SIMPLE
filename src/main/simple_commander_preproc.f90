@@ -119,12 +119,12 @@ contains
         endif
         output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
         output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
-        call mkdir(output_dir)
-        call mkdir(output_dir_ctf_estimate)
-        call mkdir(output_dir_motion_correct)
+        call simple_mkdir(output_dir)
+        call simple_mkdir(output_dir_ctf_estimate)
+        call simple_mkdir(output_dir_motion_correct)
         if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-            call mkdir(output_dir_picker)
+            call simple_mkdir(output_dir_picker)
             if( p%stream.eq.'yes' )then
                 output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
                 call mkdir(output_dir_extract)
@@ -451,7 +451,7 @@ contains
         else
             output_dir = trim(DIR_MOTION_CORRECT)
         endif
-        call mkdir(output_dir)
+        call simple_mkdir(output_dir)
         if( cline%defined('fbody') )then
             fbody = trim(p%fbody)
         else
@@ -519,7 +519,7 @@ contains
         else
             output_dir = trim(DIR_CTF_ESTIMATE)
         endif
-        call mkdir(output_dir)
+        call simple_mkdir(output_dir)
         ! parameters & loop range
         if( p%stream .eq. 'yes' )then
             ! determine loop range
@@ -568,7 +568,7 @@ contains
         real,                  allocatable :: correlations(:,:)
         logical,               allocatable :: lselected(:)
         character(len=STDLEN)              :: cmd_str
-        integer                            :: iimg, isel, nall, nsel
+        integer                            :: iimg, isel, nall, nsel, idx(1)
         integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
@@ -600,7 +600,8 @@ contains
             read(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the read was successful
             if(io_stat/=0) then
-                call fileiochk('**ERROR(simple_commander_preprocess): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
+                call fileiochk('**ERROR(simple_commander_preprocess): I/O error reading corrmat_select.bin. '//&
+                    &'Remove the file to override the memoization.', io_stat)
             endif
             call fclose(funit,errmsg='simple_commander_preprocess ; error when closing corrmat_select.bin  ')
         else
@@ -612,7 +613,8 @@ contains
             write(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the write was successful
             if(io_stat/=0) then
-                call fileiochk('**ERROR(simple_commander_preproc): I/O error writing corrmat_select.bin. Remove the file to override the memoization.', io_stat)
+                call fileiochk('**ERROR(simple_commander_preproc): I/O error writing corrmat_select.bin.'//&
+                    &'Remove the file to override the memoization.', io_stat)
             endif
             call fclose(funit,errmsg='simple_commander_preprocess ; error when closing corrmat_select.bin  ')
         endif
@@ -622,10 +624,10 @@ contains
         if(alloc_stat.ne.0)call allocchk("In commander_preproc::select selected lselected ",alloc_stat)
         lselected = .false.
         do isel=1,nsel
-            loc = maxloc(correlations(isel,:))
-            selected(isel) = loc(1)
+            idx = maxloc(correlations(isel,:))
+            selected(isel) = idx(1)
             lselected(selected(isel)) = .true.
-            DebugPrint 'selected: ', loc(1), ' with corr: ', correlations(isel,loc(1))
+            DebugPrint 'selected: ', idx(1), ' with corr: ', correlations(isel,idx(1))
         end do
         if( cline%defined('filetab') )then
             ! read filetable
@@ -633,8 +635,8 @@ contains
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
             call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
             call fileiochk('simple_commander_preprocess ; fopen error when opening '//trim(p%outfile), io_stat)
-            call mkdir(p%dir_select)
-            call mkdir(p%dir_reject)
+            call simple_mkdir(p%dir_select)
+            call simple_mkdir(p%dir_reject)
              ! write outoput & move files
             do iimg=1,nall
                 if( lselected(iimg) )then
@@ -740,7 +742,7 @@ contains
         else
             output_dir = trim(DIR_PICKER)
         endif
-        call mkdir(output_dir)
+        call simple_mkdir(output_dir)
         ! parameters & loop range
         if( p%stream .eq. 'yes' )then
             ! determine loop range
@@ -805,7 +807,7 @@ contains
         else
             output_dir = trim(DIR_EXTRACT)
         endif
-        call mkdir(output_dir)
+        call simple_mkdir(output_dir)
         ! read in integrated movies
         call spproj%read_segment('mic', p%projfile)
         ntot  = spproj%os_mic%get_noris()

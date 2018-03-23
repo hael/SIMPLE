@@ -1,6 +1,6 @@
 ! common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
 module simple_strategy2D_srch
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_oris,              only: oris

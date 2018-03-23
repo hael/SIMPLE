@@ -177,7 +177,7 @@ contains
             output_dir = trim(DIR_MOTION_CORRECT)
             call cline%set('dir', trim(output_dir))
         endif
-        call mkdir(output_dir)
+        call simple_mkdir(output_dir)
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
@@ -312,7 +312,7 @@ contains
             output_dir = trim(DIR_CTF_ESTIMATE)
             call cline%set('dir', trim(output_dir))
         endif
-        call mkdir(output_dir)
+        call simple_mkdir(output_dir)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -355,7 +355,7 @@ contains
             output_dir = trim(DIR_PICKER)
             call cline%set('dir', trim(output_dir))
         endif
-        call mkdir(output_dir)
+        call simple_mkdir(output_dir)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
