@@ -12,10 +12,10 @@
 ! WARRANTY. Redistribution and modification is regulated by the GNU General
 ! Public License.
 ! -----------------------------------------------------------------------------!
-program simple_omp_timer_test
+program simple_omp_test
 include 'simple_lib.f08'
 use simple_timer_omp_test
-use simple_test_omp
+use simple_test_omp_basics
 implicit none
 
 real              :: starttime, stoptime
@@ -37,4 +37,4 @@ call test_parallel_omp
 call test_shared_race_condition
 
 
-end program simple_omp_timer_test
+end program simple_omp_test

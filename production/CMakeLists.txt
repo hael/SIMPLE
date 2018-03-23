@@ -155,22 +155,21 @@ list(APPEND CTESTDIRS
   test_units )
 
 add_test(NAME test_parse
-  CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_parse nthr=4 verbose=yes)
+  COMMAND  ${CMAKE_COMMAND} -E simple_test_parse nthr=4 verbose=yes)
 
 add_test(NAME test_install
-  CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_install nthr=4 verbose=yes)
+  COMMAND  ${CMAKE_COMMAND} -E simple_test_install nthr=4 verbose=yes)
 
 
 add_test(NAME test_units
-  CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_units nthr=4)
+  COMMAND  ${CMAKE_COMMAND} -E simple_test_units nthr=4)
 
 add_test(NAME test_timer
-  CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_timer verbose=yes debug=yes)
+  COMMAND  ${CMAKE_COMMAND} -E simple_test_timer verbose=yes debug=yes)
+
+
+add_test(NAME YeahhhTest COMMAND ${CMAKE_COMMAND} -E echo 'Yeahh')
