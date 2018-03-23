@@ -46,7 +46,7 @@ contains
         class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
-        integer, parameter :: MAXITS_STAGE1 = 10
+        integer, parameter :: MAXITS_STAGE1      = 10
         integer, parameter :: MAXITS_STAGE1_EXTR = 15
         ! commanders
         type(make_cavgs_distr_commander) :: xmake_cavgs
@@ -87,10 +87,10 @@ contains
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%set('objfun', 'cc')     ! goal function is standard cross-correlation
+            call cline_cluster2D_stage1%set('objfun', 'cc')       ! goal function is standard cross-correlation
             call cline_cluster2D_stage1%delete('automsk')
             if( p_master%l_frac_update )then
-                call cline_cluster2D_stage1%delete('update_frac')   ! no incremental learning in stage 1
+                call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
             else
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))

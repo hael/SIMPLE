@@ -62,6 +62,7 @@ contains
         type(kbinterpol)      :: kbwin
         type(sym)             :: c1_symop
         type(prep4cgrid)      :: gridprep
+        type(ctfparams)       :: ctfvars
         character(len=STDLEN) :: fname, refine
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
@@ -344,12 +345,13 @@ contains
                 iptcl       = pinds(i)
                 ibatch      = i - batchlims(1) + 1
                 orientation = b%a%get_ori(iptcl)
+                ctfvars     = b%spproj%get_ctfparams(p%oritype, iptcl)
                 if( orientation%isstatezero() ) cycle
                 if( trim(p%refine).eq.'clustersym' )then
                     ! always C1 reconstruction
-                    call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation, o_peaks(iptcl))
+                    call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation, o_peaks(iptcl), ctfvars)
                 else
-                    call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
+                    call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl), ctfvars)
                 endif
             end do
         end do

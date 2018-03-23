@@ -1,16 +1,16 @@
 module simple_reconstructor_tester
 #include "simple_lib.f08"
-use simple_build,          only: build
-use simple_params,         only: params
-use simple_cmdline,        only: cmdline
-use simple_kbinterpol,     only: kbinterpol
-use simple_prep4cgrid,     only: prep4cgrid
-use simple_ori,            only: ori
-use simple_oris,           only: oris
-use simple_image,          only: image
+use simple_build,              only: build
+use simple_params,             only: params
+use simple_cmdline,            only: cmdline
+use simple_kbinterpol,         only: kbinterpol
+use simple_prep4cgrid,         only: prep4cgrid
+use simple_ori,                only: ori
+use simple_oris,               only: oris
+use simple_image,              only: image
 use simple_strategy2D3D_common ! use all in there
-use simple_timer           ! use all in there
-use simple_defs            ! use all in there
+use simple_timer               ! use all in there
+use simple_defs                ! use all in there
 implicit none
 
 public :: exec_old_school_rec, exec_rec_batch_gridprep
@@ -30,6 +30,7 @@ contains
         type(ori)        :: orientation
         type(kbinterpol) :: kbwin
         type(prep4cgrid) :: gridprep
+        type(ctfparams)  :: ctfvars
         integer          :: iptcl
         real             :: reslim
         t_init = tic()
@@ -44,9 +45,10 @@ contains
         t_rec = tic()
         do iptcl=1,p%nptcls
             orientation = b%a%get_ori(iptcl)
+            ctfvars     =  b%spproj%get_ctfparams(p%oritype, iptcl)
             call read_img_and_norm(b, p, iptcl)
             call gridprep%prep(b%img, b%img_pad)
-            call grid_ptcl(b, p, b%img_pad, b%se, orientation)
+            call grid_ptcl(b, p, b%img_pad, b%se, orientation, ctfvars)
         end do
         rt_rec = toc(t_rec)
         ! normalise structure factors
@@ -81,6 +83,7 @@ contains
         type(ori)                :: orientation
         type(kbinterpol)         :: kbwin
         type(prep4cgrid)         :: gridprep
+        type(ctfparams)          :: ctfvars
         integer                  :: iptcl, i, iptcl_batch, batchlims(2), ibatch
         real                     :: reslim
         type(image), allocatable :: rec_imgs(:)
@@ -120,9 +123,10 @@ contains
             rt_gridprep = rt_gridprep + toc(t_gridprep)
             t_gridding  = tic()
             do iptcl=batchlims(1),batchlims(2)
-                ibatch = iptcl - batchlims(1) + 1
+                ibatch      = iptcl - batchlims(1) + 1
                 orientation = b%a%get_ori(iptcl)
-                call grid_ptcl_tst(b, p, rec_imgs(ibatch), orientation )
+                ctfvars     = b%spproj%get_ctfparams(p%oritype, iptcl)
+                call grid_ptcl_tst(b, p, rec_imgs(ibatch), orientation, ctfvars)
             end do
             rt_gridding = rt_gridding + toc(t_gridding)
         end do

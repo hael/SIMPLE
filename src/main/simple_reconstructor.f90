@@ -12,9 +12,10 @@ use simple_ctf,        only: ctf
 use simple_ori,        only: ori
 use simple_oris,       only: oris
 use simple_params,     only: params
-use simple_sym,        only: sym
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
+use simple_sym,        only: sym
+use simple_sp_project, only: sp_project
 implicit none
 
 public :: reconstructor
@@ -78,9 +79,10 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine alloc_rho( self, p, expand )
+    subroutine alloc_rho( self, p, spproj, expand )
         class(reconstructor), intent(inout) :: self   !< this instance
         class(params),        intent(in)    :: p      !< parameters object
+        class(sp_project),    intent(inout) :: spproj !< project description
         logical, optional,    intent(in)    :: expand !< expand flag
         real    :: inv1, inv2
         integer :: dim, h, k, sh
@@ -90,31 +92,22 @@ contains
         call self%dealloc_rho
         l_expand = .true.
         if( present(expand) ) l_expand = expand
-        self%ldim_img = self%get_ldim()
-        self%nyq      = self%get_lfny(1)
-        self%winsz    = p%winsz
-        self%alpha    = p%alpha
-        select case(p%ctf)
-            case('no')
-                self%ctf%flag = CTFFLAG_NO
-            case('yes')
-                self%ctf%flag = CTFFLAG_YES
-            case('mul')
-                stop 'ERROR! ctf=mul deprecated; simple_reconstructor :: alloc_rho'
-            case('flip')
-                self%ctf%flag = CTFFLAG_FLIP
-        end select
-        self%tfastig = .false.
-        if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
-        self%phaseplate  = p%tfplan%l_phaseplate
-        self%kbwin       = kbinterpol(self%winsz,self%alpha)
-        self%wdim        = self%kbwin%get_wdim()
-        self%lims        = self%loop_lims(2)
-        self%cyc_lims    = self%loop_lims(3)
-        self%shconst_rec = self%get_shconst()
+        self%ldim_img    =  self%get_ldim()
+        self%nyq         =  self%get_lfny(1)
+        self%winsz       =  p%winsz
+        self%alpha       =  p%alpha
+        self%ctf%flag    =  spproj%get_ctfflag_type(p%oritype)
+        self%tfastig     =  .false.
+        if( trim(spproj%get_ctfmode(p%oritype)) .eq. 'astig' ) self%tfastig = .true.
+        self%phaseplate  =  spproj%has_phaseplate(p%oritype)
+        self%kbwin       =  kbinterpol(self%winsz,self%alpha)
+        self%wdim        =  self%kbwin%get_wdim()
+        self%lims        =  self%loop_lims(2)
+        self%cyc_lims    =  self%loop_lims(3)
+        self%shconst_rec =  self%get_shconst()
         ! Work out dimensions of the rho array
-        self%rho_shape(1)    = fdim(self%ldim_img(1))
-        self%rho_shape(2:3)  = self%ldim_img(2:3)
+        self%rho_shape(1)   = fdim(self%ldim_img(1))
+        self%rho_shape(2:3) = self%ldim_img(2:3)
         ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
         self%kp = fftwf_alloc_real(int(product(self%rho_shape),c_size_t))
         ! Set up the rho array which will point at the allocated memory
@@ -127,18 +120,14 @@ contains
             self%ldim_exp(2,:) = [-dim, dim]
             self%ldim_exp(3,:) = [-dim, dim]
             allocate(self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
-            allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=cmplx(0.,0.))
             allocate(self%rho_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0., stat=alloc_stat)
-            allocchk("In: alloc_rho; simple_reconstructor rho_exp")
-        end if
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0.)
+        endif
         ! build CTF related matrices
         if( self%ctf%flag .ne. CTFFLAG_NO)then
-            allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),&
-                source=0.)
-            allocate(self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),&
-                source=0.)
+            allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),        source=0.)
+            allocate(self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0.)
             !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k,sh,inv1,inv2) proc_bind(close)
             do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
                 do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
@@ -156,7 +145,6 @@ contains
         ! generate index map
         allocate( self%ind_map(self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2),3), source=0)
         call self%get_2Dphys_ind_mapping(self%cyc_lims(1:2,:), self%ind_map)
-        !
         call self%reset
     end subroutine alloc_rho
 
@@ -227,7 +215,7 @@ contains
     !> get the kbintpol window
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self !< this instance
-        type(kbinterpol) :: wf   !< return kbintpol window
+        type(kbinterpol) :: wf                      !< return kbintpol window
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
 
@@ -241,8 +229,7 @@ contains
         call fopen(filnum, trim(kernam), status='NEW', action='WRITE', access='STREAM', iostat=ierr)
         call fileio_errmsg( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
         write(filnum, pos=1, iostat=ierr) self%rho
-        if( ierr .ne. 0 ) &
-            call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
+        if( ierr .ne. 0 ) call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
         call fclose(filnum,errmsg='simple_reconstructor ; write rho  fclose ')
     end subroutine write_rho
 
@@ -254,48 +241,33 @@ contains
         call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM', iostat=ierr)
         call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
         read(filnum, pos=1, iostat=ierr) self%rho
-        if( ierr .ne. 0 ) &
-            call fileio_errmsg('simple_reconstructor::read_rho; simple_reconstructor reading '&
-            &// trim(kernam), ierr)
+        if( ierr .ne. 0 ) call fileio_errmsg('simple_reconstructor::read_rho; simple_reconstructor reading '// trim(kernam), ierr)
         call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
     end subroutine read_rho
 
     ! CONVOLUTION INTERPOLATION
 
     !> insert Fourier plane, single orientation
-    subroutine insert_fplane_1( self, se, o, fpl, pwght )
-        use simple_sym, only: sym
-        class(reconstructor), intent(inout) :: self  !< instance
-        class(sym),           intent(inout) :: se    !< symmetry elements
-        class(ori),           intent(inout) :: o     !< orientation
-        class(image),         intent(inout) :: fpl   !< Fourier plane
-        real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+    subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght )
+        class(reconstructor), intent(inout) :: self    !< instance
+        class(sym),           intent(inout) :: se      !< symmetry elements
+        class(ori),           intent(inout) :: o       !< orientation
+        type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
+        class(image),         intent(inout) :: fpl     !< Fourier plane
+        real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
-        integer   :: logi(3), phys(3), sh, i, h, k, nsym, isym, iwinsz
-        integer   :: win(2,3) ! window boundary array in fortran contiguous format
+        integer   :: logi(3), phys(3), sh, i, h, k, nsym, isym, iwinsz, win(2,3)
         complex   :: comp, oshift
-        real      :: w(self%wdim,self%wdim,self%wdim), vec(3), loc(3), dists(3), shconst_here(2)
-        real      :: arg, dfx, dfy, angast, phshift, tval, tvalsq
+        real      :: w(self%wdim,self%wdim,self%wdim), vec(3), loc(3), dists(3), shconst_here(2), arg, tval, tvalsq
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
         if( self%ctf%flag /= CTFFLAG_NO )then
-            ! make CTF object & get CTF info
-            tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
-            dfx  = o%get('dfx')
-            if( self%tfastig )then ! astigmatic CTF model
-                dfy    = o%get('dfy')
-                angast = o%get('angast')
-            else                   ! non-astigmatic CTF model
-                dfy    = dfx
-                angast = 0.
-            endif
-            call tfun%init(dfx, dfy, angast)
-            ! additional phase shift from the Volta
-            phshift = 0.
-            if( self%phaseplate ) phshift = o%get('phshift')
+            ! make CTF object
+            tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
+            call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
         endif
         ! setup rotation matrices
         nsym = se%get_nsym()
@@ -341,7 +313,7 @@ contains
                     if( self%ctf%flag /= CTFFLAG_NO )then
                         ! CTF and CTF**2 values
                         if( self%phaseplate )then
-                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
+                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), ctfvars%phshift)
                         else
                             tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                         endif
@@ -373,20 +345,19 @@ contains
     end subroutine insert_fplane_1
 
     !> insert Fourier plane, distribution of orientations (with weights)
-    subroutine insert_fplane_2( self, se, os, fpl, pwght, state )
-        use simple_sym, only: sym
+    subroutine insert_fplane_2( self, se, os, ctfvars, fpl, pwght, state )
         class(reconstructor), intent(inout) :: self  !< instance
         class(sym),           intent(inout) :: se    !< symmetry elements
         class(oris),          intent(inout) :: os    !< orientations
+        type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
         class(image),         intent(inout) :: fpl   !< Fourier plane
         real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         integer, optional,    intent(in)    :: state !< state to reconstruct
         type(ori) :: o_sym, o
         type(ctf) :: tfun
         complex   :: comp, oshift
-        integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz
-        integer   :: win(2,3) ! window boundary array in fortran contiguous format
-        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), dfx, dfy, angast, phshift
+        integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
+        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris())
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rotmats(os%get_noris(),se%get_nsym(),3,3)
         ! take care of optional state flag
         sstate = 1
@@ -395,21 +366,9 @@ contains
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
         if( self%ctf%flag /= CTFFLAG_NO )then
-            ! make CTF object & get CTF info
-            o    = os%get_ori(1)
-            tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
-            dfx  = o%get('dfx')
-            if( self%tfastig )then ! astigmatic CTF model
-                dfy    = o%get('dfy')
-                angast = o%get('angast')
-            else                   ! non-astigmatic CTF model
-                dfy    = dfx
-                angast = 0.
-            endif
-            call tfun%init(dfx, dfy, angast)
-            ! additional phase shift from the Volta
-            phshift = 0.
-            if( self%phaseplate ) phshift = o%get('phshift')
+            ! make CTF object
+            tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
+            call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
         endif
         ! setup orientation weights/states/rotation matrices/shifts
         nsym  = se%get_nsym()
@@ -460,7 +419,7 @@ contains
                         if( self%ctf%flag /= CTFFLAG_NO )then
                             ! CTF and CTF**2 values
                             if( self%phaseplate )then
-                                tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
+                                tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), ctfvars%phshift)
                             else
                                 tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                             endif
@@ -669,23 +628,25 @@ contains
     ! RECONSTRUCTION
 
     !> reconstruction routine
-    subroutine rec( self, p, o, se, state, part )
+    subroutine rec( self, p, spproj, o, se, state, part )
         use simple_prep4cgrid, only: prep4cgrid
-        class(reconstructor), intent(inout) :: self      !< this object
-        class(params),        intent(in)    :: p         !< parameters
-        class(oris),          intent(inout) :: o         !< orientations
-        class(sym),           intent(inout) :: se        !< symmetry element
-        integer,              intent(in)    :: state     !< state to reconstruct
-        integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
+        class(reconstructor), intent(inout) :: self   !< this object
+        class(params),        intent(in)    :: p      !< parameters
+        class(sp_project),    intent(inout) :: spproj !< project description
+        class(oris),          intent(inout) :: o      !< orientations
+        class(sym),           intent(inout) :: se     !< symmetry element
+        integer,              intent(in)    :: state  !< state to reconstruct
+        integer, optional,    intent(in)    :: part   !< partition (4 parallel rec)
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
+        type(ctfparams)  :: ctfvars
         real             :: skewness
         integer          :: statecnt(p%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
         ! make the images
-        call img%new([p%box,p%box,1], p%smpd)
-        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd)
+        call img%new([p%box,p%box,1], self%get_smpd())
+        call img_pad%new([p%boxpd,p%boxpd,1], self%get_smpd())
         ! make the gridding prepper
         call gridprep%new(img, self%kbwin, [p%boxpd,p%boxpd,1])
         ! zero the Fourier volume and rho
@@ -719,13 +680,14 @@ contains
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
+
         contains
 
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
-                integer   :: state, ind
+                integer   :: state, ind_in_stk
                 real      :: pw
                 state = o%get_state(i)
                 if( state == 0 ) return
@@ -733,23 +695,11 @@ contains
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
-                    ! if( p%l_stktab_input )then
-                    !     call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
-                    ! else
-                    !     if( p%l_distr_exec )then
-                    !         ind = cnt
-                    !         allocate(stkname, source=trim(p%stk_part))
-                    !     else
-                    !         ind = i
-                    !         allocate(stkname, source=trim(p%stk))
-                    !     endif
-                    ! endif
-
-                    stop 'recvol currently broken'
-
-                    call img%read(stkname, ind)
+                    call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                    call img%read(stkname, ind_in_stk)
                     call gridprep%prep(img, img_pad)
-                    call self%insert_fplane(se, orientation, img_pad, pwght=pw)
+                    ctfvars = spproj%get_ctfparams(p%oritype, i)
+                    call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
                     deallocate(stkname)
                 endif
             end subroutine rec_dens

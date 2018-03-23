@@ -88,7 +88,7 @@ contains
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call eorecvol_read%new(p)
+        call eorecvol_read%new(p, b%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage
         n = p%nstates*p%nparts
         if( L_BENCH )then
@@ -231,7 +231,7 @@ contains
         ! rebuild b%vol according to box size (because it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
         call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call recvol_read%alloc_rho(p)
+        call recvol_read%alloc_rho(p, b%spproj)
         do ss=1,p%nstates
             if( cline%defined('state') )then
                 s     = 1        ! index in reconstruct3D

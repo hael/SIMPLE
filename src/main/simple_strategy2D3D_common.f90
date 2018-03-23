@@ -39,12 +39,6 @@ contains
         integer :: ind_in_stk
         call b%spproj%get_stkname_and_ind(p%oritype, iptcl, stkname, ind_in_stk)
         call b%img%read(stkname, ind_in_stk)
-        ! if( p%l_stktab_input )then
-        !     call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
-        !     call b%img%read(stkname, ind_in_stk)
-        ! else
-        !     call b%img%read(p%stk_part, iptcl - p%fromp + 1)
-        ! endif
     end subroutine read_img
 
     subroutine read_img_and_norm( b, p, iptcl )
@@ -77,57 +71,6 @@ contains
                 call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
             end do
         endif
-        ! if( present(ptcl_mask) )then
-        !     if( p%l_stktab_input )then
-        !         do iptcl=fromptop(1),fromptop(2)
-        !             if( ptcl_mask(iptcl) )then
-        !                 ind_in_batch = iptcl - fromptop(1) + 1
-        !                 call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
-        !                 call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
-        !             endif
-        !         end do
-        !     else
-        !         if( p%l_distr_exec )then
-        !             do iptcl=fromptop(1),fromptop(2)
-        !                 if( ptcl_mask(iptcl) )then
-        !                     ind_in_batch = iptcl - fromptop(1) + 1
-        !                     ind_in_stk   = iptcl - p%fromp + 1
-        !                     call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
-        !                 endif
-        !             end do
-        !         else
-        !             do iptcl=fromptop(1),fromptop(2)
-        !                 if( ptcl_mask(iptcl) )then
-        !                     ind_in_batch = iptcl - fromptop(1) + 1
-        !                     ind_in_stk   = iptcl
-        !                     call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
-        !                 endif
-        !             end do
-        !         endif
-        !     endif
-        ! else
-        !     if( p%l_stktab_input )then
-        !         do iptcl=fromptop(1),fromptop(2)
-        !             ind_in_batch = iptcl - fromptop(1) + 1
-        !             call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
-        !             call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
-        !         end do
-        !     else
-        !         if( p%l_distr_exec )then
-        !             do iptcl=fromptop(1),fromptop(2)
-        !                 ind_in_batch = iptcl - fromptop(1) + 1
-        !                 ind_in_stk   = iptcl - p%fromp + 1
-        !                 call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
-        !             end do
-        !         else
-        !             do iptcl=fromptop(1),fromptop(2)
-        !                 ind_in_batch = iptcl - fromptop(1) + 1
-        !                 ind_in_stk   = iptcl
-        !                 call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
-        !             end do
-        !         endif
-        !     endif
-        ! endif
     end subroutine read_imgbatch_1
 
     subroutine read_imgbatch_2( b, p, n, pinds, batchlims )
@@ -141,27 +84,6 @@ contains
             call b%spproj%get_stkname_and_ind(p%oritype, pinds(i), stkname, ind_in_stk)
             call b%imgbatch(ii)%read(stkname, ind_in_stk)
         end do
-        ! if( p%l_stktab_input )then
-        !     do i=batchlims(1),batchlims(2)
-        !         ii = i - batchlims(1) + 1
-        !         call p%stkhandle%get_stkname_and_ind(pinds(i), stkname, ind_in_stk)
-        !         call b%imgbatch(ii)%read(stkname, ind_in_stk)
-        !     end do
-        ! else
-        !     if( p%l_distr_exec )then
-        !         do i=batchlims(1),batchlims(2)
-        !             ii         = i - batchlims(1) + 1
-        !             ind_in_stk = pinds(i) - p%fromp + 1
-        !             call b%imgbatch(ii)%read(p%stk_part, ind_in_stk)
-        !         end do
-        !     else
-        !         do i=batchlims(1),batchlims(2)
-        !             ii         = i - batchlims(1) + 1
-        !             ind_in_stk = pinds(i)
-        !             call b%imgbatch(ii)%read(p%stk, ind_in_stk)
-        !         end do
-        !     endif
-        ! endif
     end subroutine read_imgbatch_2
 
     subroutine set_bp_range( b, p, cline )
@@ -310,13 +232,14 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl_1( b, p, img, se, o )
+    subroutine grid_ptcl_1( b, p, img, se, o, ctfvars )
         use simple_sym, only: sym
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        class(image),  intent(inout) :: img
-        class(sym),    intent(inout) :: se
-        class(ori),    intent(inout) :: o
+        class(build),    intent(inout) :: b
+        class(params),   intent(inout) :: p
+        class(image),    intent(inout) :: img
+        class(sym),      intent(inout) :: se
+        class(ori),      intent(inout) :: o
+        type(ctfparams), intent(in)    :: ctfvars
         real      :: pw
         integer   :: s, eo
         pw = 1.0
@@ -330,22 +253,23 @@ contains
             s = o%get_state()
             ! gridding
             if( p%eo .ne. 'no' )then
-                call b%eorecvols(s)%grid_fplane(se, o, img, eo, pwght=pw)
+                call b%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
             else
-                call b%recvols(s)%insert_fplane(se, o, img, pwght=pw)
+                call b%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=pw)
             endif
         endif
     end subroutine grid_ptcl_1
 
     !>  \brief  grids one particle image to the volume (distribution of weigted oris)
-    subroutine grid_ptcl_2( b, p, img, se, o, os )
+    subroutine grid_ptcl_2( b, p, img, se, o, os, ctfvars )
         use simple_sym, only: sym
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        class(image),  intent(inout) :: img
-        class(sym),    intent(inout) :: se
-        class(ori),    intent(inout) :: o
-        class(oris),   intent(inout) :: os
+        class(build),    intent(inout) :: b
+        class(params),   intent(inout) :: p
+        class(image),    intent(inout) :: img
+        class(sym),      intent(inout) :: se
+        class(ori),      intent(inout) :: o
+        class(oris),     intent(inout) :: os
+        type(ctfparams), intent(in)    :: ctfvars
         real, allocatable :: states(:)
         real    :: pw
         integer :: s, eo
@@ -359,18 +283,18 @@ contains
             ! gridding
             if( p%nstates == 1 )then
                 if( p%eo .ne. 'no' )then
-                    call b%eorecvols(1)%grid_fplane(se, os, img, eo, pwght=pw)
+                    call b%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
                 else
-                    call b%recvols(1)%insert_fplane(se, os, img, pwght=pw)
+                    call b%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=pw)
                 endif
             else
                 states = os%get_all('state')
                 do s=1,p%nstates
                     if( count(nint(states) == s) > 0 )then
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(se, os, img, eo, pwght=pw, state=s)
+                            call b%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
                         else
-                            call b%recvols(s)%insert_fplane(se, os, img, pwght=pw, state=s)
+                            call b%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=pw, state=s)
                         endif
                     endif
                 end do
@@ -379,12 +303,13 @@ contains
     end subroutine grid_ptcl_2
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl_tst( b, p, img, orientation )
+    subroutine grid_ptcl_tst( b, p, img, orientation, ctfvars )
         use simple_kbinterpol, only: kbinterpol
         class(build),          intent(inout) :: b
         class(params),         intent(inout) :: p
         class(image),          intent(inout) :: img
         class(ori),            intent(inout) :: orientation
+        type(ctfparams),       intent(in)    :: ctfvars
         real       :: pw
         integer    :: s, npeaks, eo, nstates
         npeaks  = 1
@@ -400,7 +325,7 @@ contains
         ! fwd ft
         call img%fwd_ft
         ! one peak & one state
-         call b%eorecvols(s)%grid_fplane(b%se, orientation, img, eo, pw)
+         call b%eorecvols(s)%grid_fplane(b%se, orientation, ctfvars, img, eo, pw)
     end subroutine grid_ptcl_tst
 
     !>  \brief  prepares all particle images for alignment
@@ -633,7 +558,7 @@ contains
             case('yes','aniso')
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
-                        call b%eorecvols(istate)%new(p)
+                        call b%eorecvols(istate)%new(p, b%spproj)
                         call b%eorecvols(istate)%reset_all
                         if( p%l_frac_update )then
                             call b%eorecvols(istate)%read_eos(trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str)
@@ -646,7 +571,7 @@ contains
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
                         call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
-                        call b%recvols(istate)%alloc_rho(p)
+                        call b%recvols(istate)%alloc_rho(p, b%spproj)
                         call b%recvols(istate)%reset
                         call b%recvols(istate)%reset_exp
                         if( p%l_frac_update )then

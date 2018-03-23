@@ -73,6 +73,7 @@ type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
 type(simple_program), target :: refine3D
+type(simple_program), target :: refine3D_init
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: volops
@@ -144,6 +145,7 @@ contains
         call new_postprocess
         call new_preprocess
         call new_refine3D
+        call new_refine3D_init
         call new_scale
         call new_scale_project
         call new_volops
@@ -180,6 +182,8 @@ contains
                 ptr2prg => preprocess
             case('refine3D')
                 ptr2prg => refine3D
+            case('refine3D_init')
+                ptr2prg => refine3D_init
             case('scale')
                 ptr2prg => scale
             case('scale_project')
@@ -202,6 +206,7 @@ contains
         write(*,'(A)') pick%name
         write(*,'(A)') preprocess%name
         write(*,'(A)') refine3D%name
+        write(*,'(A)') refine3D_init%name
         write(*,'(A)') scale_project%name
     end subroutine list_distr_prgs_in_ui
 
@@ -216,7 +221,7 @@ contains
     ! private class methods
 
     subroutine set_common_params
-        call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .false., 'myproject.simple')
+        call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., 'myproject.simple')
         call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF correction', 'Contrast Transfer Function correction; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
@@ -310,16 +315,15 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 0, 1, 10, 7, 2, 2, .true.)                                          ! # entries in each group
-
+        &1, 1, 0, 10, 7, 2, 2, .true.)                                          ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
         &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc')
         ! parameter input/output
-        ! <empty>
+        call cluster2D%set_input('parm_ios', 1, projfile)
         ! alternative inputs
-        call cluster2D%set_input('alt_ios', 1, projfile)
+        ! <empty>
         ! search controls
         call cluster2D%set_input('srch_ctrls', 1, ncls)
         cluster2D%srch_ctrls(1)%required = .true.
@@ -884,6 +888,36 @@ contains
         call refine3D%set_input('comp_ctrls', 1, nparts)
         call refine3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D
+
+    subroutine new_refine3D_init
+        ! PROGRAM SPECIFICATION
+        call refine3D_init%new(&
+        &'refine3D_init',& ! name
+        &'random initialisation of 3D volume refinement',&                                                     ! descr_short
+        &'is a distributed workflow for generating a random initial 3D model for initialisation of refine3D',& ! descr_long
+        &'simple_distr_exec',&                                                                                 ! executable
+        &0, 1, 0, 3, 0, 2, 2, .true.)                                                                          ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !<empty>
+        ! parameter input/output
+        call refine3D_init%set_input('parm_ios', 1, projfile)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        call refine3D_init%set_input('srch_ctrls', 1, nspace)
+        call refine3D_init%set_input('srch_ctrls', 2, pgrp)
+        call refine3D_init%set_input('srch_ctrls', 3, 'nran', 'num', 'Number of random samples', 'Number of images to randomly sample for 3D reconstruction',&
+        &'# random samples', .false., 0.)
+        ! filter controls
+        !<empty>
+        ! mask controls
+        call refine3D_init%set_input('mask_ctrls', 1, msk)
+        call refine3D_init%set_input('mask_ctrls', 2, inner)
+        ! computer controls
+        call refine3D_init%set_input('comp_ctrls', 1, nparts)
+        call refine3D_init%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_refine3D_init
 
     subroutine new_scale
         ! PROGRAM SPECIFICATION

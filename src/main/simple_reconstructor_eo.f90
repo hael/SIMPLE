@@ -9,6 +9,7 @@ use simple_imghead,       only: find_ldim_nptcls
 use simple_imgfile,       only: imgfile
 use simple_kbinterpol,    only: kbinterpol
 use simple_masker,        only: masker
+use simple_sp_project,    only: sp_project
 implicit none
 
 public :: reconstructor_eo
@@ -75,9 +76,10 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self, p )
-        class(reconstructor_eo), intent(inout) :: self !< instance
-        class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
+    subroutine new( self, p, spproj )
+        class(reconstructor_eo), intent(inout) :: self   !< instance
+        class(params), target,   intent(in)    :: p      !< parameters object (provides constants)
+        class(sp_project),       intent(inout) :: spproj !< project description
         logical     :: neg
         call self%kill
         ! set constants
@@ -102,13 +104,13 @@ contains
             call self%envmask%resmask(p)
         endif
         call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call self%even%alloc_rho(p)
+        call self%even%alloc_rho(p, spproj)
         call self%even%set_ft(.true.)
         call self%odd%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call self%odd%alloc_rho(p)
+        call self%odd%alloc_rho(p, spproj)
         call self%odd%set_ft(.true.)
         call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call self%eosum%alloc_rho(p, expand=.false.)
+        call self%eosum%alloc_rho(p, spproj, expand=.false.)
         ! set redundant limits
         self%cyc_lims = self%even%loop_lims(3)
         ! set existence
@@ -257,40 +259,42 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane_1( self, se, o, fpl, eo, pwght )
+    subroutine grid_fplane_1( self, se, o, ctfvars, fpl, eo, pwght )
         use simple_ori, only: ori
         use simple_sym, only: sym
-        class(reconstructor_eo), intent(inout) :: self  !< instance
-        class(sym),              intent(inout) :: se    !< symmetry elements
-        class(ori),              intent(inout) :: o     !< orientation
-        class(image),            intent(inout) :: fpl   !< Fourier plane
-        integer,                 intent(in)    :: eo    !< eo flag
-        real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        class(reconstructor_eo), intent(inout) :: self    !< instance
+        class(sym),              intent(inout) :: se      !< symmetry elements
+        class(ori),              intent(inout) :: o       !< orientation
+        type(ctfparams),         intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
+        class(image),            intent(inout) :: fpl     !< Fourier plane
+        integer,                 intent(in)    :: eo      !< eo flag
+        real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, o, fpl, pwght)
+                call self%even%insert_fplane(se, o, ctfvars, fpl, pwght)
             case(1)
-                call self%odd%insert_fplane(se, o, fpl, pwght)
+                call self%odd%insert_fplane(se, o, ctfvars, fpl, pwght)
             case DEFAULT
                 stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
         end select
     end subroutine grid_fplane_1
 
-    subroutine grid_fplane_2( self, se, os, fpl, eo, pwght, state )
+    subroutine grid_fplane_2( self, se, os, ctfvars, fpl, eo, pwght, state )
         use simple_oris, only: oris
         use simple_sym,  only: sym
-        class(reconstructor_eo), intent(inout) :: self  !< instance
-        class(sym),              intent(inout) :: se    !< symmetry elements
-        class(oris),             intent(inout) :: os    !< orientation
-        class(image),            intent(inout) :: fpl   !< Fourier plane
-        integer,                 intent(in)    :: eo    !< eo flag
-        real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
-        integer, optional,       intent(in)    :: state !< state flag
+        class(reconstructor_eo), intent(inout) :: self    !< instance
+        class(sym),              intent(inout) :: se      !< symmetry elements
+        class(oris),             intent(inout) :: os      !< orientation
+        type(ctfparams),         intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
+        class(image),            intent(inout) :: fpl     !< Fourier plane
+        integer,                 intent(in)    :: eo      !< eo flag
+        real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
+        integer, optional,       intent(in)    :: state   !< state flag
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, os, fpl, pwght, state)
+                call self%even%insert_fplane(se, os, ctfvars, fpl, pwght, state)
             case(1)
-                call self%odd%insert_fplane(se, os, fpl, pwght, state)
+                call self%odd%insert_fplane(se, os, ctfvars, fpl, pwght, state)
             case DEFAULT
                 stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
         end select
@@ -418,22 +422,24 @@ contains
     ! RECONSTRUCTION
 
     !> \brief  for distributed reconstruction of even/odd maps
-    subroutine eorec_distr( self, p, o, se, state, fbody )
+    subroutine eorec_distr( self, p, spproj, o, se, state, fbody )
         use simple_oris,       only: oris
         use simple_sym,        only: sym
         use simple_params,     only: params
         use simple_prep4cgrid, only: prep4cgrid
         class(reconstructor_eo),    intent(inout) :: self   !< object
         class(params),              intent(in)    :: p      !< parameters
+        class(sp_project),          intent(inout) :: spproj !< project description
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element
         integer,                    intent(in)    :: state  !< state to reconstruct
         character(len=*), optional, intent(in)    :: fbody  !< body of output file
-        type(kbinterpol)  :: wf
-        type(image)       :: img, img_pad
-        type(prep4cgrid)  :: gridprep
-        real              :: skewness
-        integer           :: statecnt(p%nstates), i, cnt, state_here, state_glob
+        type(kbinterpol) :: wf
+        type(image)      :: img, img_pad
+        type(prep4cgrid) :: gridprep
+        type(ctfparams)  :: ctfvars
+        real             :: skewness
+        integer          :: statecnt(p%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
         ! make the images
@@ -483,7 +489,7 @@ contains
                 use simple_ori, only: ori
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
-                integer   :: state, ind, eo
+                integer   :: state, ind_in_stk, eo
                 real      :: pw
                 state = nint(o%get(i, 'state'))
                 if( state == 0 ) return
@@ -492,23 +498,12 @@ contains
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
                     eo          = nint(orientation%get('eo'))
-                    ! if( p%l_stktab_input )then
-                    !     call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
-                    ! else
-                    !     if( p%l_distr_exec )then
-                    !         ind = cnt
-                    !         allocate(stkname, source=trim(p%stk_part))
-                    !     else
-                    !         ind = i
-                    !         allocate(stkname, source=trim(p%stk))
-                    !     endif
-                    ! endif
-
-                    stop 'recvol currently broken'
-
-                    call img%read(stkname, ind)
+                    call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                    call img%read(stkname, ind_in_stk)
                     call gridprep%prep(img, img_pad)
-                    call self%grid_fplane(se, orientation, img_pad, eo, pw)
+                    ctfvars = spproj%get_ctfparams(p%oritype, i)
+                    call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
+                    deallocate(stkname)
                  endif
             end subroutine rec_dens
 

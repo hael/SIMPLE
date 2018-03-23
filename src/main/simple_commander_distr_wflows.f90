@@ -64,7 +64,7 @@ type, extends(commander_base) :: refine3D_init_distr_commander
 end type refine3D_init_distr_commander
 type, extends(commander_base) :: prime3D_distr_commander
   contains
-    procedure :: execute      => exec_prime3D_distr
+    procedure :: execute      => exec_refine3D_distr
 end type prime3D_distr_commander
 type, extends(commander_base) :: reconstruct3D_distr_commander
   contains
@@ -575,7 +575,7 @@ contains
         call simple_end('**** SIMPLE_DISTR_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_refine3D_init_distr
 
-    subroutine exec_prime3D_distr( self, cline )
+    subroutine exec_refine3D_distr( self, cline )
         use simple_commander_refine3D
         use simple_commander_mask
         use simple_commander_rec
@@ -887,7 +887,7 @@ contains
         call cline%set('endit', real(iter))
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
-    end subroutine exec_prime3D_distr
+    end subroutine exec_refine3D_distr
 
     subroutine exec_reconstruct3D_distr( self, cline )
         use simple_commander_rec

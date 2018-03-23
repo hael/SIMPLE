@@ -348,7 +348,7 @@ contains
         real,                      intent(in)    :: smpd, kv, cs, fraca
         class(oris),               pointer :: os_ptr
         type(oris)                         :: os
-        character(len=:),      allocatable :: movienames(:), segment
+        character(len=STDLEN), allocatable :: movienames(:), segment
         integer :: n_os_stk, imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical :: is_movie
         ! file exists?
@@ -1009,7 +1009,7 @@ contains
                 return
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: get_ctfparams'
+                stop 'sp_project :: get_ctfflag'
         end select
         ! do the index mapping
         call self%map_ptcl_ind2stk_ind(oritype, 1, stkind, ind_in_stk)
@@ -1082,7 +1082,7 @@ contains
         character(len=:), allocatable :: ctfflag
         type(ctfparams)      :: ctfvars
         integer              :: stkind, ind_in_stk
-        logical              :: dfy_was_there
+        logical              :: dfy_was_there, l_noctf
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -1109,9 +1109,11 @@ contains
             write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
             stop 'sp_project :: get_ctfparams'
         else
+            l_noctf = .true.
             select case(trim(ctfflag))
                 case('no')
                     ctfvars%ctfflag%flag = CTFFLAG_NO
+                    l_noctf = .true.
                 case('yes')
                     ctfvars%ctfflag%flag = CTFFLAG_YES
                 case('mul')
@@ -1155,6 +1157,13 @@ contains
         else
             write(*,*) 'ERROR! fraca (fraction of amplitude contrast) lacking in os_stk_field'
             stop 'sp_project :: get_ctfparams'
+        endif
+        if( l_noctf )then
+            ctfvars%dfx     = 0.
+            ctfvars%dfy     = 0.
+            ctfvars%angast  = 0.
+            ctfvars%phshift = 0.
+            return
         endif
         ! defocus in x
         if( ptcl_field%isthere(iptcl, 'dfx') )then

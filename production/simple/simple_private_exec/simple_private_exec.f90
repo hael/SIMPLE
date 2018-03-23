@@ -530,30 +530,16 @@ select case(prg)
         ! reconstruction<refine3D_init/end>
         !
         ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'pgrp'
+
+        keys_required(1) = 'msk'
+        keys_required(2) = 'pgrp'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'lp'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'nspace'
-        keys_optional(7)  = 'nran'
-        keys_optional(8)  = 'refine'
-        keys_optional(9) = 'stk'
-        keys_optional(10) = 'stktab'
-        keys_optional(11) = 'phaseplate'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'inner'
+        keys_optional(3) = 'nspace'
+        keys_optional(4) = 'nran'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:11))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
@@ -884,7 +870,7 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'nparts'
-        keys_required(2) = 'smpd'
+        keys_required(2) = 'projfile'
         keys_required(3) = 'msk'
         ! set optional keys
         keys_optional(1) = 'nthr'
@@ -906,7 +892,7 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'nparts'
-        keys_required(2) = 'smpd'
+        keys_required(2) = 'projfile'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'state'
@@ -1334,6 +1320,8 @@ select case(prg)
         !==Program manageproject
         !
         ! </begin></end>
+        !
+        ! ctf migh need to be a required key
         !
         ! set optional keys
         keys_optional(1)  = 'smpd'

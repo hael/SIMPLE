@@ -38,7 +38,7 @@ type, extends(commander_base) :: multiptcl_init_commander
 end type multiptcl_init_commander
 type, extends(commander_base) :: prime3D_commander
   contains
-    procedure :: execute      => exec_prime3D
+    procedure :: execute      => exec_refine3D
 end type prime3D_commander
 type, extends(commander_base) :: rec_test_commander
   contains
@@ -105,7 +105,7 @@ contains
         endif
         ! end gracefully
         call qsys_job_finished( p, cline%get_carg('prg') )
-        call simple_end('**** SIMPLE_refine3D_init NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
 
 
         contains
@@ -118,10 +118,12 @@ contains
                 integer, optional, intent(in) :: nsamp_in  !< num input samples
                 type(ran_tabu)       :: rt
                 type(ori)            :: orientation
-                integer, allocatable :: sample(:)
-                integer              :: i, nsamp, alloc_stat
                 type(kbinterpol)     :: kbwin
                 type(prep4cgrid)     :: gridprep
+                type(ctfparams)      :: ctfvars
+                integer, allocatable :: sample(:)
+                integer              :: i, nsamp, alloc_stat
+
                 ! init volumes
                 call preprecvols(b, p)
                 if( trim(p%refine).eq.'tseries' )then
@@ -148,21 +150,19 @@ contains
                 do i=1,nsamp
                     call progress(i, nsamp)
                     orientation = b%a%get_ori(sample(i) + p%fromp - 1)
+                    ctfvars     = b%spproj%get_ctfparams(p%oritype, sample(i) + p%fromp - 1)
                     call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
                     call gridprep%prep(b%img, b%img_pad)
-                    call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
+                    call b%recvols(1)%insert_fplane(b%se, orientation, ctfvars, b%img_pad, pwght=1.0)
                 end do
                 deallocate(sample)
                 call norm_struct_facts(b, p)
                 call killrecvols(b, p)
-
-
                 if( p%part .ne. 1 )then
                     ! so random oris only written once in distributed mode
                 else
-                    !!!!!!!!!!!!!!!!
-                    call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
-                    !!!!!!!!!!!!!!!!!
+                    ! update the spproj on disk
+                    call b%spproj%write()
                 endif
             end subroutine gen_random_model
 
@@ -210,7 +210,7 @@ contains
         call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_multiptcl_init
 
-    subroutine exec_prime3D( self, cline )
+    subroutine exec_refine3D( self, cline )
         use simple_math,               only: calc_lowpass_lim, calc_fourier_index
         use simple_strategy3D_matcher, only: refine3D_exec
         use simple_strings,            only: str_has_substr
@@ -269,7 +269,7 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
-    end subroutine exec_prime3D
+    end subroutine exec_refine3D
 
     subroutine exec_rec_test( self, cline )
         use simple_reconstructor_tester ! use all in there

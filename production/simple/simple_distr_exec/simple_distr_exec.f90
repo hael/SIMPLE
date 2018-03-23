@@ -213,40 +213,7 @@ select case(prg)
     ! PRIME3D
 
     case( 'refine3D_init' )
-        !==Program refine3D_init
-        !
-        ! <refine3D_init/begin>is a distributed workflow for generating a random initial model for
-        ! initialisation of PRIME3D. If the data set is large (>5000 images), generating a random
-        ! model can be slow. To speedup, set nran to some smaller number, resulting in nran images
-        ! selected randomly for reconstruction<refine3D_init/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'lp'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'nspace'
-        keys_optional(7)  = 'nran'
-        keys_optional(8)  = 'stk'
-        keys_optional(9)  = 'stktab'
-        keys_optional(10) = 'phaseplate'
-        ! parse command line
-        if( describe ) call print_doc_refine3D_init
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:10))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
-        ! execute
+        call cline%parse()
         call xrefine3D_init_distr%execute( cline )
     case( 'refine3D' )
         call cline%parse()

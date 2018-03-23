@@ -135,7 +135,7 @@ contains
             if( self%ptr2prg%requires_sp_project() ) metadata_read = .true.
         endif
         if( metadata_read )then
-            if( cline%defined('projfile') )call self%spproj%read(p%projfile)
+            call self%spproj%read(p%projfile)
             ! ctf planning
             select case(trim(p%oritype))
                 case('mic')
@@ -338,7 +338,7 @@ contains
         call self%kill_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-        call self%recvol%alloc_rho(p)
+        call self%recvol%alloc_rho(p, self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
@@ -360,7 +360,7 @@ contains
         class(params), intent(in)    :: p
         call self%kill_rec_eo_tbox
         call self%raise_hard_ctf_exception(p)
-        call self%eorecvol%new(p)
+        call self%eorecvol%new(p, self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
@@ -462,7 +462,7 @@ contains
         allocate( self%recvols(1), stat=alloc_stat )
         allocchk('build_strategy3D_tbox; simple_build, 2')
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-        call self%recvols(1)%alloc_rho(p)
+        call self%recvols(1)%alloc_rho(p, self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.
