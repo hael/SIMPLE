@@ -160,7 +160,27 @@ contains
       index  = scan(str, delim)
       before = adjustl(trim(str(1:index-1)))
       str    = adjustl(str(index+1:))
-    end subroutine split_str
+  end subroutine split_str
+
+      !> \brief  finds the first instance of a character 'delim' in the
+    !!         the string 'str'. The characters before the found delimiter are
+    !!         output in 'before'. The characters after the found delimiter are
+    !!         output in 'str'.
+    subroutine nsplit_str(str, delim, before, n)
+      character(len=*), intent(inout) :: str
+      character(len=1), intent(in)    :: delim
+      character(len=*), intent(out)   :: before
+      integer, intent(in)    :: n
+      integer :: start, index, i
+      str    = trim(str)
+      start=1
+      do i=1,n
+          index  = scan(str(start:), delim)
+          start=index+1
+      end do
+      before = adjustl(trim(str(1:index-1)))
+      str    = adjustl(str(index+1:))
+    end subroutine nsplit_str
 
     !> \brief  finds the first instance of a character 'delim' in the
     !!         the string 'str'. The characters before the found delimiter are
