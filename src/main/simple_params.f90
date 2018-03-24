@@ -56,7 +56,6 @@ type :: params
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: neigh='no'             !<
     character(len=3)      :: noise_norm ='no'
-    ! character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
     character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}

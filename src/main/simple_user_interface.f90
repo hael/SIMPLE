@@ -38,8 +38,8 @@ type :: simple_program
     type(simple_input_param), allocatable :: mask_ctrls(:)
     ! computer controls
     type(simple_input_param), allocatable :: comp_ctrls(:)
-    ! simple project dependence flag
-    logical :: sp_required = .false.
+    ! sp_project required flag
+    logical :: sp_required = .true.
     ! existence flag
     logical :: exists = .false.
   contains
@@ -72,6 +72,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
+type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
 type(simple_program), target :: scale
@@ -83,6 +84,7 @@ type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
+type(simple_input_param) :: eo
 type(simple_input_param) :: fraca
 type(simple_input_param) :: kv
 type(simple_input_param) :: deftab
@@ -144,6 +146,7 @@ contains
         call new_pick
         call new_postprocess
         call new_preprocess
+        call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
         call new_scale
@@ -180,6 +183,8 @@ contains
                 ptr2prg => postprocess
             case('preprocess')
                 ptr2prg => preprocess
+            case('reconstruct3D')
+                ptr2prg => reconstruct3D
             case('refine3D')
                 ptr2prg => refine3D
             case('refine3D_init')
@@ -205,6 +210,7 @@ contains
         write(*,'(A)') motion_correct%name
         write(*,'(A)') pick%name
         write(*,'(A)') preprocess%name
+        write(*,'(A)') reconstruct3D%name
         write(*,'(A)') refine3D%name
         write(*,'(A)') refine3D_init%name
         write(*,'(A)') scale_project%name
@@ -243,7 +249,7 @@ contains
         call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true., 0.)
         call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
         &'inner mask radius in pixels', .false., 0.)
-        call set_param(ncls,          'ncls',          'num', 'Number of 2D clusters', 'Number of groups to sort the particles &
+        call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
         &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .false., 200.)
         call set_param(nparts,        'nparts',        'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
@@ -264,19 +270,21 @@ contains
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false., 300.)
-        call set_param(lplim_crit,    'lplim_crit',    'num', 'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
+        call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
         &'low-pass FSC criterion(0.143-0.5){0.3}', .false., 0.3)
-        call set_param(cs,            'cs',            'num', 'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false., 2.7)
-        call set_param(fraca,         'fraca',         'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false., 0.1)
-        call set_param(pspecsz,       'pspecsz',       'num', 'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false., 512.)
-        call set_param(dfmin,         'dfmin',         'num', 'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false., 0.5)
-        call set_param(dfmax,         'dfmax',         'num', 'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false., 5.0)
-        call set_param(dfstep,        'dfstep',        'num', 'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false., 0.05)
-        call set_param(astigtol,      'astigtol',      'num', 'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns',  .false., 0.05)
-        call set_param(mw,            'mw',            'num', 'Molecular weight','Molecular weight in kDa', 'in kDa', .false., 0.)
-        call set_param(mirr,          'mirr',          'multi', 'Perform mirroring', 'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false., 'no')
-        call set_param(bfac,          'bfac',          'num', 'B-factor for sharpening','B-factor for sharpening in Angstroms^2', 'B-factor in Angstroms^2', .false., 200.)
-        call set_param(outvol,        'outvol',        'file', 'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
+        call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false., 2.7)
+        call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false., 0.1)
+        call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false., 512.)
+        call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false., 0.5)
+        call set_param(dfmax,         'dfmax',         'num',    'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false., 5.0)
+        call set_param(dfstep,        'dfstep',        'num',    'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false., 0.05)
+        call set_param(astigtol,      'astigtol',      'num',    'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns',  .false., 0.05)
+        call set_param(mw,            'mw',            'num',    'Molecular weight','Molecular weight in kDa', 'in kDa', .false., 0.)
+        call set_param(mirr,          'mirr',          'multi',  'Perform mirroring', 'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false., 'no')
+        call set_param(bfac,          'bfac',          'num',    'B-factor for sharpening','B-factor for sharpening in Angstroms^2', 'B-factor in Angstroms^2', .false., 200.)
+        call set_param(outvol,        'outvol',        'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
+        call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
+        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
     end subroutine set_common_params
 
     subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
@@ -307,6 +315,22 @@ contains
         if( .not. self%required ) allocate(self%cval_default, source=trim(default_value))
     end subroutine set_param_2
 
+    ! TEMPLATE
+    ! INPUT PARAMETER SPECIFICATIONS
+    ! image input/output
+    !<empty>
+    ! parameter input/output
+    !<empty>
+    ! alternative inputs
+    !<empty>
+    ! search controls
+    !<empty>
+    ! filter controls
+    !<empty>
+    ! mask controls
+    ! <empty>
+    ! computer controls
+
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION
         call cluster2D%new(&
@@ -315,7 +339,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 10, 7, 2, 2, .true.)                                          ! # entries in each group
+        &1, 1, 0, 10, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -370,8 +394,8 @@ contains
         &'cluster2D_stream',& ! name
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
-        &'simple_distr_exec',&                                                  ! executable
-        &1, 0, 0, 6, 5, 2, 2, .true.)                                           ! # entries in each group
+        &'simple_distr_exec',&                                                                                            ! executable
+        &1, 0, 0, 6, 5, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D_stream%set_input('img_ios', 1, 'dir_ptcls', 'file', 'Particles directory',&
@@ -420,7 +444,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
-        &0, 1, 0, 7, 6, 5, 2, .true.)                                              ! # entries in each group
+        &0, 1, 0, 7, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -444,8 +468,7 @@ contains
         call cluster3D%set_input('filt_ctrls', 3, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D%set_input('filt_ctrls', 4, lplim_crit)
-        call cluster3D%set_input('filt_ctrls', 5, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        call cluster3D%set_input('filt_ctrls', 5, eo)
         call cluster3D%set_input('filt_ctrls', 6, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
@@ -467,7 +490,7 @@ contains
         &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_long
         &'simple_distr_exec',&                                                 ! executable
-        &0, 2, 0, 4, 2, 0, 2, .true.)                                          ! # entries in each group
+        &0, 2, 0, 4, 2, 0, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -502,7 +525,7 @@ contains
         & program produces a parameter files that should be concatenated for use in&
         & conjunction with other SIMPLE programs.',&
         &'simple_exec',&                                                                        ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true.)                                                           ! # entries in each group
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -532,7 +555,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                          ! descr_long
         &'simple_distr_exec',&                                                          ! executable
-        &1, 1, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group
+        &1, 1, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call initial_3Dmodel%set_input('img_ios', 1, 'stk', 'file', 'Class averages image stack', 'Class averages image stack', 'xxx.mrc file with class averages', .true., '')
@@ -574,7 +597,7 @@ contains
         &'is used to produce class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &1, 4, 0, 0, 0, 0, 2, .true.)              ! # entries in each group
+        &1, 4, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
@@ -602,11 +625,11 @@ contains
         ! PROGRAM SPECIFICATION
         call mask%new(&
         &'mask',& ! name
-        &'is a program for masking images and volumes',&                            ! descr_short
+        &'is a program for masking images and volumes',&                      ! descr_short
         &'If you want to mask your images with a spherical mask with a soft &
-        & falloff, set msk to the radius in pixels',&                               ! descr_long
-        &'simple_exec',&                                                            ! executable
-        &0, 3, 2, 0, 1,11, 1, .false.)                                              ! # entries in each group
+        & falloff, set msk to the radius in pixels',&                         ! descr_long
+        &'simple_exec',&                                                      ! executable
+        &0, 3, 2, 0, 1,11, 1, .false.)                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -662,7 +685,7 @@ contains
         & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
         & contiguous subset of frames will be averaged without any dose-weighting applied.',&   ! descr_long
         &'simple_distr_exec',&                                                                  ! executable
-        &0, 6, 0, 6, 2, 0, 2, .true.)                                                           ! # entries in each group
+        &0, 6, 0, 6, 2, 0, 2, .true.)                                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -702,7 +725,7 @@ contains
         &'is a distributed workflow for template-based particle picking',&      ! descr_short
         &'is a distributed workflow for template-based particle picking',&      ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &0, 2, 0, 2, 1, 0, 1, .true.)                                           ! # entries in each group
+        &0, 2, 0, 2, 1, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -730,7 +753,7 @@ contains
         &'is a program for post-processing of volumes',&                            ! descr_short
         &'Use program volops to estimate the B-factor with the Guinier plot',&      ! descr_long
         &'simple_exec',&                                                            ! executable
-        &1, 1, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group
+        &1, 1, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process', &
@@ -779,7 +802,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence or streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 10, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group
+        &1, 10, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
@@ -831,14 +854,44 @@ contains
         call preprocess%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess
 
+    subroutine new_reconstruct3D
+        ! PROGRAM SPECIFICATION
+        call reconstruct3D%new(&
+        &'reconstruct3D',&                                                                    ! name
+        &'3D reconstruction from oriented particles',&                                        ! descr_long
+        &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, '&
+        &'given input orientations and state assignments. The algorithm is based on direct Fourier inversion '&
+        &'with a Kaiser-Bessel (KB) interpolation kernel',&
+        &'simple_distr_exec',&                                                                ! executable
+        &0, 1, 0, 2, 1, 2, 2, .true.)                                                        ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !<empty>
+        ! parameter input/output
+        call reconstruct3D%set_input('parm_ios', 1, projfile)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        call reconstruct3D%set_input('srch_ctrls', 1, pgrp)
+        call reconstruct3D%set_input('srch_ctrls', 2, frac)
+        ! filter controls
+        call reconstruct3D%set_input('filt_ctrls', 1, eo)
+        ! mask controls
+        call reconstruct3D%set_input('mask_ctrls', 1, msk)
+        call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call reconstruct3D%set_input('comp_ctrls', 1, nparts)
+        call reconstruct3D%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_reconstruct3D
+
     subroutine new_refine3D
         ! PROGRAM SPECIFICATION
         call refine3D%new(&
-        &'refine3D',& ! name
+        &'refine3D',&                                                                                      ! name
         &'3D volume refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D volume refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                             ! executable
-        &1, 0, 0, 12, 7, 5, 2, .true.)                                                                              ! # entries in each group
+        &1, 0, 0, 12, 7, 5, 2, .true.)                                                                     ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &

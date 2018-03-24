@@ -629,12 +629,12 @@ contains
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         call cline%set( 'box', real(p_master%box) )
         ! prepare command lines from prototype master
-        cline_reconstruct3D_distr   = cline
-        cline_refine3D_init   = cline
-        cline_check3D_conv   = cline
-        cline_merge_algndocs = cline
-        cline_volassemble    = cline
-        cline_postprocess   = cline
+        cline_reconstruct3D_distr = cline
+        cline_refine3D_init       = cline
+        cline_check3D_conv        = cline
+        cline_merge_algndocs      = cline
+        cline_volassemble         = cline
+        cline_postprocess         = cline
 
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )       ! required for distributed call
@@ -886,7 +886,7 @@ contains
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D_distr
 
     subroutine exec_reconstruct3D_distr( self, cline )
@@ -963,7 +963,7 @@ contains
         call qsys_watcher(state_assemble_finished)
         ! termination
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_reconstruct3D NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 
     subroutine exec_tseries_track_distr( self, cline )

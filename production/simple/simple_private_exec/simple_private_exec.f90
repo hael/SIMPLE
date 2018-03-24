@@ -816,43 +816,17 @@ select case(prg)
     ! RECONSTRUCTION PROGRAMS
 
     case( 'reconstruct3D' )
-        !==Program reconstruct3D
-        !
-        ! <reconstruct3D/begin>is a program for reconstructing volumes from MRC and SPIDER stacks, given input
-        ! orientations and state assignments. The algorithm is based on direct Fourier inversion with a
-        ! Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple
-        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when
-        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual
-        ! particle images. mul is used to scale the origin shifts if down-sampled
-        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip
-        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. The inner parameter
-        ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical
-        ! icosahedral viruses<reconstruct3D/end>
-        !
         ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'oritab'
+        keys_required(1)  = 'projfile'
+        keys_required(2)  = 'pgrp'
         keys_required(3)  = 'msk'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'eo'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'frac'
-        keys_optional(5)  = 'mul'
-        keys_optional(6)  = 'mskfile'
-        keys_optional(7)  = 'stk'
-        keys_optional(8)  = 'stktab'
-        keys_optional(9)  = 'phaseplate'
+        keys_optional(3)  = 'frac'
+        keys_optional(4)  = 'mskfile'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:9))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -1321,8 +1295,8 @@ select case(prg)
         !
         ! </begin></end>
         !
-        ! ctf migh need to be a required key
-        !
+        ! set required keys
+        keys_required(1) = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'smpd'
         keys_optional(2)  = 'cs'
@@ -1349,11 +1323,8 @@ select case(prg)
         keys_optional(23) = 'phshiftunit'
         keys_optional(24) = 'oritype'
         keys_optional(25) = 'filetab'
-        keys_optional(26) = 'ctf'
         ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:26))
-        ! set defaults
-        ! if( .not. cline%defined('ctf') ) call cline%set('ctf', 'yes')
+        call cline%parse_oldschool(keys_required, keys_optional(:25))
         ! execute
         call xmanage_project%execute(cline)
     case( 'print_project_info' )

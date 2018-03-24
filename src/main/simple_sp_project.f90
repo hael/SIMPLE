@@ -348,8 +348,8 @@ contains
         real,                      intent(in)    :: smpd, kv, cs, fraca
         class(oris),               pointer :: os_ptr
         type(oris)                         :: os
-        character(len=STDLEN), allocatable :: movienames(:), segment
-        integer :: n_os_stk, imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
+        character(len=STDLEN), allocatable :: movienames(:), name
+        integer :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
@@ -362,33 +362,21 @@ contains
                 os_ptr => self%os_mic
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: new_with_os_segptr'
+                stop 'unsupported oritype; sp_project :: add_movies'
         end select
-        ! ! check that stk field is empty
-        n_os_stk = self%os_stk%get_noris()
-        if( n_os_stk > 0 )then
-            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
-            stop 'ABORTING! sp_project :: add_stktab'
-        endif
         ! read movie names
         call read_filetable(filetab, movienames)
         nmics = size(movienames)
         ! update oris
-        !call self%os_stk%new_clean(nmics)
         nprev_mics = os_ptr%get_noris()
         ntot       = nmics + nprev_mics
         if( nprev_mics == 0 )then
             call os_ptr%new_clean(ntot)
         else
-            os = os_ptr
-            call os_ptr%new_clean(ntot)
-            do imic = 1,nprev_mics
-                call os_ptr%set_ori(imic, os%get_ori(imic))
-            enddo
-            call os%kill
+            call os_ptr%reallocate(ntot)
         endif
         cnt = 0
-        do imic=nprev_mics+1,ntot
+        do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
             call find_ldim_nptcls(trim(movienames(cnt)), ldim, nframes)
             if( nframes <= 0 )then
@@ -413,12 +401,12 @@ contains
             call os_ptr%set(imic, 'phaseplate', trim(phaseplate))
         enddo
         if( is_movie )then
-            segment = 'MOVIE(S)'
+            name = 'MOVIE(S)'
         else
-            segment = 'MICROGRAPH(S)'
+            name = 'MICROGRAPH(S)'
         endif
-        write(*,'(A13,I6,A1,A)')'>>> IMPORTED ',nmics,' ', trim(segment)
-        write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(segment),':',ntot
+        write(*,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
+        write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
     end subroutine add_movies
 
     subroutine append_single_stk( self, stk, smpd, os )
@@ -434,21 +422,21 @@ contains
         ! file exists?
         if( .not. file_exists(stk) )then
             write(*,*) 'Inputted stack (stk): ', trim(stk)
-            stop 'does not exist in cwd; sp_project :: add_stk'
+            stop 'does not exist in cwd; sp_project :: append_single_stk'
         endif
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
-            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_single_stk'
+            stop 'ERROR! nonsquare particle images not supported; sp_project :: append_single_stk'
         endif
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
         if( n_os /= nptcls )then
             write(*,*) '# input oris      : ', n_os
             write(*,*) '# ptcl imgs in stk: ', nptcls
-            stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_single_stk'
+            stop 'ERROR! nonconforming sizes of inputs; sp_project :: append_single_stk'
         endif
         ! updates_fields
         n_os_stk    = self%os_stk%get_noris() + 1
@@ -460,25 +448,13 @@ contains
             call self%os_ptcl3D%new_clean(nptcls)
         else
             ! stk
-            tmp_os = self%os_stk
-            call self%os_stk%new_clean(n_os_stk)
-            do i = 1, n_os_stk-1
-                call self%os_stk%set_ori(i, tmp_os%get_ori(i))
-            enddo
+            call self%os_stk%reallocate(n_os_stk)
             ! 2d
             n_os_ptcl2D = self%os_ptcl2D%get_noris()
-            tmp_os      = self%os_ptcl2D
-            call self%os_ptcl2D%new_clean(n_os_ptcl2D + nptcls)
-            do i = 1, n_os_ptcl2D
-                call self%os_ptcl2D%set_ori(i, tmp_os%get_ori(i))
-            enddo
+            call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls)
             ! 3d
             n_os_ptcl3D = self%os_ptcl3D%get_noris()
-            tmp_os      = self%os_ptcl3D
-            call self%os_ptcl3D%new_clean(n_os_ptcl3D + nptcls)
-            do i = 1, n_os_ptcl3D
-                call self%os_ptcl3D%set_ori(i, tmp_os%get_ori(i))
-            enddo
+            call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
         endif
         ! updates oris_objects
         call self%os_stk%set(n_os_stk, 'stk',     trim(stk))
@@ -1109,7 +1085,7 @@ contains
             write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
             stop 'sp_project :: get_ctfparams'
         else
-            l_noctf = .true.
+            l_noctf = .false.
             select case(trim(ctfflag))
                 case('no')
                     ctfvars%ctfflag%flag = CTFFLAG_NO

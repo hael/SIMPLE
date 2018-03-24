@@ -27,7 +27,7 @@ contains
             case DEFAULT
                 stop 'unknonw eo flag; simple_rec_master :: exec_rec_master'
         end select
-        if( cline%defined('mul') ) call b%a%mul_shifts(1.0/p%mul) ! 4 safety
+        if( cline%defined('mul') ) stop 'mul flag no longer supported; rec_master :: exec_rec_master'
     end subroutine exec_rec_master
 
     subroutine exec_rec( b, p, cline, fbody_in )
