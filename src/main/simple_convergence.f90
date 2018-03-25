@@ -161,11 +161,6 @@ contains
             self%sdev      = self%bap%get_avg('sdev')
             self%bfac      = self%bap%get_avg('bfac')
         endif
-        if( self%pp%athres==0. )then
-            ! required for distributed mode
-            self%pp%athres = rad2deg( atan(max(self%pp%fny, self%pp%lp)/(self%pp%moldiam/2.)) )
-        endif
-        write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
@@ -191,8 +186,7 @@ contains
         endif
         ! determine convergence
         if( self%pp%nstates == 1 )then
-            if( self%dist < self%pp%athres/5. .and.&
-                self%frac > FRAC_LIM          .and.&
+            if( self%frac    > FRAC_LIM       .and.&
                 self%mi_proj > MI_CLASS_LIM_3D )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
@@ -228,10 +222,9 @@ contains
                 write(*,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
-            if( min_state_mi_joint > MI_STATE_LIM      .and.&
-                self%mi_state      > MI_STATE_LIM      .and.&
-                self%dist          < self%pp%athres/5. .and.&
-                self%frac          > FRAC_LIM                )then
+            if( min_state_mi_joint > MI_STATE_LIM .and.&
+                self%mi_state      > MI_STATE_LIM .and.&
+                self%frac          > FRAC_LIM      )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else

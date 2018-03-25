@@ -1175,19 +1175,6 @@ contains
         else
             ctfvars%phshift = 0.
         endif
-        ! DEBUG
-        ! print *,iptcl
-        ! call ptcl_field%print_(iptcl)
-        ! print *,ctfvars%ctfflag
-        ! print *,ctfvars%smpd
-        ! print *,ctfvars%kv
-        ! print *,ctfvars%cs
-        ! print *,ctfvars%fraca
-        ! print *,ctfvars%dfx
-        ! print *,ctfvars%dfy
-        ! print *,ctfvars%angast
-        ! print *,ctfvars%l_phaseplate
-        ! print *,ctfvars%phshift
     end function get_ctfparams
 
     logical function is_virgin_field( self, oritype )
@@ -1347,12 +1334,12 @@ contains
         class(oris),          pointer :: os_ptr
         integer,          allocatable :: parts(:,:)
         character(len=:), allocatable :: fname
-        type(binoris)         :: bos_doc
-        type(oris)            :: os_part
-        integer               :: i, iptcl, cnt, numlen, n_records, partsz, isegment
+        type(binoris) :: bos_doc
+        type(oris)    :: os_part
+        integer       :: i, iptcl, cnt, numlen, n_records, partsz, isegment
         numlen = len(int2str(ndocs))
         if( present(numlen_in) ) numlen = numlen_in
-        parts = split_nobjs_even(nptcls, ndocs)
+        parts  = split_nobjs_even(nptcls, ndocs)
         ! convert from flag to enumerator to integer
         isegment = self%oritype2segment(oritype)
         ! allocate merged oris
@@ -1383,7 +1370,6 @@ contains
                 call os_ptr%set_ori(iptcl, os_part%get_ori(cnt))
             enddo
         end do
-        ! end gracefully
         call self%write()
     end subroutine merge_algndocs
 
@@ -1423,18 +1409,24 @@ contains
     ! readers
 
     subroutine read( self, fname )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        class(sp_project),          intent(inout) :: self
+        character(len=*), optional, intent(in)    :: fname
+        character(len=:), allocatable :: projfile
         integer :: isegment
-        if( .not. file_exists(trim(fname)) )then
-            write(*,*) 'fname: ', trim(fname)
+        if( present(fname) )then
+            if( fname2format(fname) .ne. 'O' )then
+                write(*,*) 'fname: ', trim(fname)
+                stop 'file format not supported; sp_project :: read'
+            endif
+            projfile = trim(fname)
+        else
+            call self%projinfo%getter(1, 'projfile', projfile)
+        endif
+        if( .not. file_exists(trim(projfile)) )then
+            write(*,*) 'fname: ', trim(projfile)
             stop 'inputted file does not exist; sp_project :: read'
         endif
-        if( fname2format(fname) .ne. 'O' )then
-            write(*,*) 'fname: ', trim(fname)
-            stop 'file format not supported; sp_project :: read'
-        endif
-        call self%bos%open(fname)
+        call self%bos%open(projfile)
         do isegment=1,self%bos%get_n_segments()
             call self%segreader(isegment)
         end do

@@ -344,10 +344,10 @@ contains
         class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
-        type(check2D_conv_commander)         :: xcheck2D_conv
+        type(check_2Dconv_commander)         :: xcheck_2Dconv
         type(make_cavgs_distr_commander)     :: xmake_cavgs
         ! command lines
-        type(cmdline)         :: cline_check2D_conv
+        type(cmdline)         :: cline_check_2Dconv
         type(cmdline)         :: cline_cavgassemble
         type(cmdline)         :: cline_make_cavgs
         ! other variables
@@ -373,15 +373,13 @@ contains
         call cline%gen_job_descr(job_descr)
 
         ! prepare command lines from prototype master
-        cline_check2D_conv   = cline
+        cline_check_2Dconv   = cline
         cline_cavgassemble   = cline
         cline_make_cavgs     = cline
 
         ! initialise static command line parameters and static job description parameters
-        call cline_cavgassemble%set('prg',        'cavgassemble')
-        call cline_make_cavgs%set('prg',          'make_cavgs')
-        call cline_cavgassemble%set('projfile',   p_master%projfile)
-        call cline_check2D_conv%set('projfile',   p_master%projfile)
+        call cline_cavgassemble%set('prg', 'cavgassemble')
+        call cline_make_cavgs%set('prg',   'make_cavgs')
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! splitting
@@ -451,14 +449,14 @@ contains
             ! remapping of empty classes
             call remap_empty_cavgs
             ! check convergence
-            call xcheck2D_conv%execute(cline_check2D_conv)
+            call xcheck_2Dconv%execute(cline_check_2Dconv)
             frac_srch_space = 0.
-            if( iter > 1 ) frac_srch_space = cline_check2D_conv%get_rarg('frac')
+            if( iter > 1 ) frac_srch_space = cline_check_2Dconv%get_rarg('frac')
             ! the below activates shifting & automasking
-            if( iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. cline_check2D_conv%defined('trs')) )then
+            if( iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. cline_check_2Dconv%defined('trs')) )then
                 if( .not.job_descr%isthere('trs') )then
                     ! activates shift search
-                    str = real2str(cline_check2D_conv%get_rarg('trs'))
+                    str = real2str(cline_check_2Dconv%get_rarg('trs'))
                     call job_descr%set('trs', trim(str) )
                 endif
                 if( cline%defined('automsk') )then
@@ -466,7 +464,7 @@ contains
                     if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','cavg')
                 endif
             endif
-            if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
+            if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
         end do
         call qsys_cleanup(p_master)
         ! report the last iteration on exit
@@ -586,17 +584,14 @@ contains
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(refine3D_init_distr_commander)   :: xrefine3D_init_distr
-        type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
-        type(merge_algndocs_commander)       :: xmerge_algndocs
-        type(check3D_conv_commander)         :: xcheck3D_conv
-        ! type(split_commander)                :: xsplit
+        type(refine3D_init_distr_commander) :: xrefine3D_init_distr
+        type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
+        type(check_3Dconv_commander)        :: xcheck_3Dconv
         type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline)         :: cline_reconstruct3D_distr
         type(cmdline)         :: cline_refine3D_init
-        type(cmdline)         :: cline_check3D_conv
-        type(cmdline)         :: cline_merge_algndocs
+        type(cmdline)         :: cline_check_3Dconv
         type(cmdline)         :: cline_volassemble
         type(cmdline)         :: cline_postprocess
         ! other variables
@@ -606,11 +601,11 @@ contains
         type(chash)           :: job_descr
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         character(len=STDLEN) :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
-        character(len=STDLEN) :: vol_iter_odd, oritab, str, str_iter, optlp_file
+        character(len=STDLEN) :: vol_iter_odd, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
-        real                  :: frac_srch_space, corr, corr_prev
+        real                  :: corr, corr_prev
         integer               :: s, state, iter
-        logical               :: vol_defined
+        logical               :: vol_defined, have_oris, do_abinitio
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -620,70 +615,51 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         p_master = params(cline)
-        ! make general builder to the the orientations in
+        ! make builder
         call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
 
-        ! initialise
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
-        call cline%set( 'box', real(p_master%box) )
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
         cline_refine3D_init       = cline
-        cline_check3D_conv        = cline
-        cline_merge_algndocs      = cline
+        cline_check_3Dconv        = cline
         cline_volassemble         = cline
         cline_postprocess         = cline
 
         ! initialise static command line parameters and static job description parameter
-        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )       ! required for distributed call
-        call cline_refine3D_init%set( 'prg', 'refine3D_init' ) ! required for distributed call
+        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
+        call cline_refine3D_init%set(       'prg', 'refine3D_init' ) ! required for distributed call
         if( trim(p_master%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
-        call cline_merge_algndocs%set('nthr',   1.)
-        call cline_merge_algndocs%set('fbody',  trim(ALGN_FBODY))
-        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
-        call cline_merge_algndocs%set('ndocs',  real(p_master%nparts))
-        call cline_check3D_conv%set('box',      real(p_master%box)   )
-        call cline_check3D_conv%set('nptcls',   real(p_master%nptcls))
-        call cline_postprocess%set('nstates',   1.)
-        call cline_postprocess%set('mirr',      'no')
+        call cline_postprocess%set('nstates', 1.)
+        call cline_postprocess%set('mirr',  'no')
 
         ! for parallel volassemble over states
-        allocate(state_assemble_finished(p_master%nstates) )
+        allocate(state_assemble_finished(p_master%nstates))
 
         ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,p_master%nstates
             vol = 'vol'//int2str( state )
-            call cline_check3D_conv%delete( trim(vol) )
-            call cline_merge_algndocs%delete( trim(vol) )
+            call cline_check_3Dconv%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        ! split stack
-        if( .not. cline%defined('stktab') )then
-            ! call xsplit%execute(cline)
-        endif
+
+        ! splitting
+        call b%spproj%split_stk(p_master%nparts)
 
         ! GENERATE STARTING MODELS & ORIENTATIONS
-        ! Orientations
-        if( cline%defined('oritab') )then
-            oritab=trim(p_master%oritab)
-        else
-            oritab='prime3D_startdoc'//trim(METADATA_EXT)
-        endif
-        ! Models
         vol_defined = .false.
         do state = 1,p_master%nstates
             vol = 'vol' // int2str(state)
-            if( cline%defined(trim(vol)) )vol_defined = .true.
+            if( cline%defined(trim(vol)) ) vol_defined = .true.
         enddo
-        if( .not.cline%defined('oritab') .and. .not.vol_defined )then
-            ! ab-initio
-            call xrefine3D_init_distr%execute( cline_refine3D_init )
-            call cline%set( 'vol1', 'startvol_state01'//p_master%ext )
-            call cline%set( 'oritab', oritab )
-        else if( cline%defined('oritab') .and. .not.vol_defined )then
+        have_oris   = .not. b%spproj%is_virgin_field(p_master%oritype)
+        do_abinitio = .not. have_oris .and. .not. vol_defined
+        if( do_abinitio )then
+            call xrefine3D_init_distr%execute( cline_refine3D_init)
+            call cline%set('vol1', 'startvol_state01'//p_master%ext)
+        else if( have_oris .and. .not. vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
             do state = 1,p_master%nstates
@@ -703,7 +679,7 @@ contains
                     call simple_rename( trim(vol_odd), trim(str) )
                 endif
             enddo
-        else if( .not.cline%defined('oritab') .and. vol_defined )then
+        else if( .not. have_oris .and. vol_defined )then
             ! projection matching
             select case( p_master%neigh )
                 case( 'yes' )
@@ -711,8 +687,6 @@ contains
                 case DEFAULT
                     ! all good
             end select
-        else
-            ! all good
         endif
         ! EXTREMAL DYNAMICS
         if( cline%defined('extr_iter') )then
@@ -728,22 +702,13 @@ contains
                 else
                     call b%a%partition_eo
                 endif
-                if( cline%defined('oritab') )then
-                    call binwrite_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
-                else if( cline%defined('deftab') )then
-                    call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
-                else
-                    p_master%deftab = 'deftab_from_distr_wflow'//trim(METADATA_EXT)
-                    call binwrite_oritab(p_master%deftab, b%spproj, b%a, [1,p_master%nptcls])
-                    call job_descr%set('deftab', trim(p_master%deftab))
-                    call cline%set('deftab', trim(p_master%deftab))
-                endif
+                call b%spproj%write()
             endif
         endif
-        ! prepare Prime3D job description
+        ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
-        iter = p_master%startit-1
+        iter = p_master%startit - 1
         corr = -1.
         do
             iter = iter + 1
@@ -751,10 +716,8 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
-            if( cline%defined('oritab') )then
-                call binread_oritab(trim(cline%get_carg('oritab')), b%spproj, b%a, [1,p_master%nptcls])
-                frac_srch_space = b%a%get_avg('frac')
-                call job_descr%set( 'oritab', trim(oritab) )
+            if( have_oris .or. iter > p_master%startit )then
+                call b%spproj%read()
                 if( p_master%refine .eq. 'snhc' )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
@@ -770,8 +733,8 @@ contains
             p_master%extr_iter = p_master%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(p_master%extr_iter)))
             call cline%set('extr_iter', real(p_master%extr_iter))
-            call job_descr%set( 'startit', trim(int2str(iter)) )
-            call cline%set( 'startit', real(iter) )
+            call job_descr%set( 'startit', trim(int2str(iter)))
+            call cline%set('startit', real(iter))
             ! FRCs
             if( cline%defined('frcs') )then
                 ! all good
@@ -781,16 +744,9 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! ASSEMBLE ALIGNMENT DOCS
-            if( p_master%refine .eq. 'snhc' )then
-                oritab = trim(SNHCDOC)
-            else
-                oritab = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
-            endif
-            call cline%set( 'oritab', oritab )
-            call cline_merge_algndocs%set( 'outfile', trim(oritab) )
-            call xmerge_algndocs%execute( cline_merge_algndocs )
+            call b%spproj%merge_algndocs(p_master%nptcls, p_master%nparts, p_master%oritype, ALGN_FBODY)
+
             ! ASSEMBLE VOLUMES
-            call cline_volassemble%set( 'oritab', trim(oritab) )
             if( p_master%eo.ne.'no' )then
                 call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
             else
@@ -809,7 +765,10 @@ contains
             end do
             call qsys_watcher(state_assemble_finished)
             ! rename volumes, postprocess & update job_descr
-            call binread_oritab(trim(oritab), b%spproj, b%a, [1,p_master%nptcls])
+
+            !!!!!!!!!! do we need to read spproj here???
+            ! call binread_oritab(trim(oritab), b%spproj, b%a, [1,p_master%nptcls])
+
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
                 if( b%a%get_pop( state, 'state' ) == 0 )then
@@ -865,20 +824,19 @@ contains
                 endif
             enddo
             ! CONVERGENCE
-            call cline_check3D_conv%set( 'oritab', trim(oritab) )
-            if(p_master%refine.eq.'cluster') call cline_check3D_conv%delete('update_res')
-            call xcheck3D_conv%execute( cline_check3D_conv )
+            if(p_master%refine.eq.'cluster') call cline_check_3Dconv%delete('update_res')
+            call xcheck_3Dconv%execute( cline_check_3Dconv )
             if( iter >= p_master%startit+2 )then
                 ! after a minimum of 2 iterations
-                if( cline_check3D_conv%get_carg('converged') .eq. 'yes' ) exit
+                if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) exit
             endif
             if( iter >= p_master%maxits ) exit
             ! ITERATION DEPENDENT UPDATES
-            if( cline_check3D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
+            if( cline_check_3Dconv%defined('trs') .and. .not.job_descr%isthere('trs') )then
                 ! activates shift search if frac >= 90
-                str = real2str(cline_check3D_conv%get_rarg('trs'))
+                str = real2str(cline_check_3Dconv%get_rarg('trs'))
                 call job_descr%set( 'trs', trim(str) )
-                call cline%set( 'trs', cline_check3D_conv%get_rarg('trs') )
+                call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
         end do
         call qsys_cleanup(p_master)
@@ -913,25 +871,22 @@ contains
         ! make master parameters
         call cline%delete('refine')
         p_master = params(cline)
-        ! make general builder to get oris in
+        ! make lightweight builder
         call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
-        if( .not. cline%defined('stktab') )then
-            ! split stack
-            ! call xsplit%execute(cline)
-        endif
+        ! splitting
+        call b%spproj%split_stk(p_master%nparts)
         ! eo partitioning
         if( p_master%eo .ne. 'no' )then
-            call binread_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
             if( b%a%get_nevenodd() == 0 )then
                 if( p_master%tseries .eq. 'yes' )then
                     call b%a%partition_eo(tseries=.true.)
                 else
                     call b%a%partition_eo
                 endif
-                call binwrite_oritab(p_master%oritab, b%spproj, b%a, [1,p_master%nptcls])
+                call b%spproj%write()
             endif
         endif
         ! schedule

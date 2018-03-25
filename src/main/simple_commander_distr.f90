@@ -14,7 +14,6 @@ public :: merge_algndocs_commander
 public :: merge_nnmat_commander
 public :: merge_similarities_commander
 public :: split_pairs_commander
-! public :: split_commander
 private
 
 type, extends(commander_base) :: merge_algndocs_commander
@@ -33,10 +32,6 @@ type, extends(commander_base) :: split_pairs_commander
   contains
     procedure :: execute      => exec_split_pairs
 end type split_pairs_commander
-! type, extends(commander_base) :: split_commander
-!   contains
-!     procedure :: execute      => exec_split
-! end type split_commander
 
 contains
 
@@ -213,93 +208,5 @@ contains
         call split_pairs_in_parts(p%nptcls, p%nparts)
         call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs
-
-    !> for splitting of image stacks into balanced partitions for parallel execution.
-    !! This is done to reduce I/O latency
-    ! subroutine exec_split( self, cline )
-    !     use simple_map_reduce,  only: split_nobjs_even! use all in there
-    !     use simple_image,  only: image
-    !     class(split_commander), intent(inout) :: self
-    !     class(cmdline),         intent(inout) :: cline
-    !     type(params)         :: p
-    !     type(image)          :: img
-    !     integer              :: iptcl, ipart, ldim(3), cnt
-    !     integer, allocatable :: parts(:,:)
-    !     p = params(cline) ! parameters generated
-    !     ldim = p%ldim
-    !     ldim(3) = 1
-    !     call img%new(ldim,p%smpd)
-    !     parts = split_nobjs_even(p%nptcls, p%nparts)
-    !     if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
-    !     if( .not. stack_is_split() )then
-    !         call mkdir(trim(STKPARTSDIR))
-    !         do ipart=1,p%nparts
-    !             call progress(ipart,p%nparts)
-    !             cnt = 0
-    !             do iptcl=parts(ipart,1),parts(ipart,2)
-    !                 cnt = cnt + 1
-    !                 call read_image( iptcl )
-    !                 if( p%neg .eq. 'yes' ) call img%neg()
-    !                 call img%write(trim(STKPARTFBODY)//int2str_pad(ipart,p%numlen)//p%ext, cnt)
-    !             end do
-    !         end do
-    !     else
-    !         write(*,'(a)') '>>> NO SPLIT PERFORMED, STACK ALREADY PARTITIONED CORRECTLY'
-    !     endif
-    !     deallocate(parts)
-    !     call img%kill
-    !     call simple_end('**** SIMPLE_SPLIT NORMAL STOP ****', print_simple=.false.)
-    !
-    !     contains
-    !
-    !         logical function stack_is_split()
-    !             character(len=:), allocatable :: stack_part_fname
-    !             logical,          allocatable :: stack_parts_exist(:)
-    !             integer :: ipart, numlen, sz, sz_correct, ldim(3)
-    !             logical :: is_split, is_correct
-    !             allocate( stack_parts_exist(p%nparts) )
-    !             numlen = len(int2str(p%nparts))
-    !             do ipart=1,p%nparts
-    !                 allocate(stack_part_fname, source=trim(STKPARTFBODY)//int2str_pad(ipart,numlen)//p%ext)
-    !                 stack_parts_exist(ipart) = file_exists(stack_part_fname)
-    !                 deallocate(stack_part_fname)
-    !             end do
-    !             is_split = all(stack_parts_exist)
-    !             is_correct = .true.
-    !             if( is_split )then
-    !                 do ipart=1,p%nparts
-    !                     sz_correct = parts(ipart,2) - parts(ipart,1) + 1
-    !                     allocate(stack_part_fname, source=trim(STKPARTFBODY)//int2str_pad(ipart,numlen)//p%ext)
-    !                     call find_ldim_nptcls(stack_part_fname, ldim, sz)
-    !                     if( sz /= sz_correct )then
-    !                         is_correct = .false.
-    !                         exit
-    !                     endif
-    !                     if( ldim(1) == p%box_original .and. ldim(2) == p%box_original )then
-    !                         ! dimension ok
-    !                     else
-    !                         is_correct = .false.
-    !                         exit
-    !                     endif
-    !                     deallocate(stack_part_fname)
-    !                 end do
-    !             endif
-    !             stack_is_split = is_split .and. is_correct
-    !             if( .not. stack_is_split ) call del_files(trim(STKPARTFBODY), p%nparts, ext=p%ext)
-    !         end function stack_is_split
-    !
-    !         subroutine read_image( iptcl )
-    !             integer, intent(in) :: iptcl
-    !             character(len=:), allocatable :: stkname
-    !             integer :: ind
-    !             if( p%l_stktab_input )then
-    !                 call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
-    !                 call img%read(stkname, ind)
-    !             else
-    !                 call img%read(p%stk, iptcl)
-    !             endif
-    !         end subroutine read_image
-    !
-    ! end subroutine exec_split
 
 end module simple_commander_distr

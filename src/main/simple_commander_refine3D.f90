@@ -16,7 +16,7 @@ public :: refine3D_init_commander
 public :: multiptcl_init_commander
 public :: prime3D_commander
 public :: rec_test_commander
-public :: check3D_conv_commander
+public :: check_3Dconv_commander
 private
 #include "simple_local_flags.inc"
 
@@ -44,10 +44,10 @@ type, extends(commander_base) :: rec_test_commander
   contains
     procedure :: execute      => exec_rec_test
 end type rec_test_commander
-type, extends(commander_base) :: check3D_conv_commander
+type, extends(commander_base) :: check_3Dconv_commander
   contains
-    procedure :: execute      => exec_check3D_conv
-end type check3D_conv_commander
+    procedure :: execute      => exec_check_3Dconv
+end type check_3Dconv_commander
 
 contains
 
@@ -287,9 +287,9 @@ contains
         call simple_end('**** SIMPLE_REC_TEST NORMAL STOP ****')
     end subroutine exec_rec_test
 
-    subroutine exec_check3D_conv( self, cline )
+    subroutine exec_check_3Dconv( self, cline )
         use simple_math,    only: rad2deg, get_lplim_at_corr
-        class(check3D_conv_commander), intent(inout) :: self
+        class(check_3Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
@@ -301,7 +301,7 @@ contains
         limset = .false. ;  update_res = .false.
         if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates), stat=alloc_stat)
-            allocchk("In simple_commander_refine3D:: exec_check3D_conv")
+            allocchk("In simple_commander_refine3D:: exec_check_3Dconv")
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state
@@ -335,13 +335,6 @@ contains
             ! we fall over
             stop 'No method available to set low-pass limit! ABORTING...'
         endif
-        ! calculate angular threshold
-        select case(p%refine)
-            case('yes','de')
-                p%athres = max(p%lp, ATHRES_LIM)
-            case DEFAULT
-                p%athres = rad2deg(atan(p%lp/(p%moldiam/2.)))
-        end select
         ! check convergence
         if( cline%defined('update_res') )then
             update_res = .false.
@@ -377,7 +370,7 @@ contains
         call cline%set('frac', b%conv%get('frac'))
         ! end gracefully
         call b%kill_general_tbox
-        call simple_end('**** SIMPLE_CHECK3D_CONV NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_check3D_conv
+        call simple_end('**** SIMPLE_check_3Dconv NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_check_3Dconv
 
 end module simple_commander_refine3D

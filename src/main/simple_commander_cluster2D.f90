@@ -15,7 +15,7 @@ implicit none
 public :: make_cavgs_commander
 public :: cluster2D_commander
 public :: cavgassemble_commander
-public :: check2D_conv_commander
+public :: check_2Dconv_commander
 public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
 private
@@ -32,10 +32,10 @@ type, extends(commander_base) :: cavgassemble_commander
   contains
     procedure :: execute      => exec_cavgassemble
 end type cavgassemble_commander
-type, extends(commander_base) :: check2D_conv_commander
+type, extends(commander_base) :: check_2Dconv_commander
   contains
-    procedure :: execute      => exec_check2D_conv
-end type check2D_conv_commander
+    procedure :: execute      => exec_check_2Dconv
+end type check_2Dconv_commander
 type, extends(commander_base) :: rank_cavgs_commander
   contains
     procedure :: execute      => exec_rank_cavgs
@@ -175,8 +175,8 @@ contains
         call simple_touch('CAVGASSEMBLE_FINISHED', errmsg='In: commander_rec :: eo_cavgassemble ')
     end subroutine exec_cavgassemble
 
-    subroutine exec_check2D_conv( self, cline )
-        class(check2D_conv_commander), intent(inout) :: self
+    subroutine exec_check_2Dconv( self, cline )
+        class(check_2Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
@@ -196,8 +196,8 @@ contains
             call cline%set('converged', 'no')
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_CHECK2D_CONV NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_check2D_conv
+        call simple_end('**** SIMPLE_check_2Dconv NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_check_2Dconv
 
     subroutine exec_rank_cavgs( self, cline )
         use simple_oris, only: oris

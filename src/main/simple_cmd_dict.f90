@@ -25,7 +25,6 @@ contains
         call chdict%push('astigerr',      'astigmatism error(in microns)')
         call chdict%push('astigtol',      'expected (tolerated) astigmatism(in microns){0.05}')
         call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
-        call chdict%push('athres',        'angular threshold(in degrees)')
         call chdict%push('automsk',       'envelope masking(yes|no|cavg){no}')
         call chdict%push('autoscale',     'automatic down-scaling(yes|no)')
         call chdict%push('avg',           'calculate average(yes|no)')

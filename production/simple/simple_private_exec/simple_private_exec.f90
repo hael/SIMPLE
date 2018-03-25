@@ -33,17 +33,17 @@ type(pick_commander)                 :: xpick
 type(make_cavgs_commander)           :: xmake_cavgs
 type(cluster2D_commander)            :: xcluster2D
 type(cavgassemble_commander)         :: xcavgassemble
-type(check2D_conv_commander)         :: xcheck2D_conv
+type(check_2Dconv_commander)         :: xcheck_2Dconv
 type(rank_cavgs_commander)           :: xrank_cavgs
 
 ! PRIME3D PROGRAMS
 type(npeaks_commander)               :: xnpeaks
 type(nspace_commander)               :: xnspace
-type(refine3D_init_commander)         :: xrefine3D_init
+type(refine3D_init_commander)        :: xrefine3D_init
 type(rec_test_commander)             :: xrec_test
 type(multiptcl_init_commander)       :: xmultiptcl_init
 type(prime3D_commander)              :: xprime3D
-type(check3D_conv_commander)         :: xcheck3D_conv
+type(check_3Dconv_commander)         :: xcheck_3Dconv
 
 ! COMMON-LINES PROGRAMS
 type(symsrch_commander)              :: xsymsrch
@@ -450,24 +450,26 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:3), keys_optional(:2))
         ! execute
         call xcavgassemble%execute(cline)
-    case( 'check2D_conv' )
-        !==Program check2D_conv
+    case( 'check_2Dconv' )
+        !==Program check_2Dconv
         !
-        ! <check2D_conv/begin>is a program for checking if a cluster2D run has converged.
+        ! <check_2Dconv/begin>is a program for checking if a cluster2D run has converged.
         ! The statistics outputted include (1) the overlap between the distribution of parameters
         ! for succesive runs. (2) The percentage of search space scanned, i.e. how many reference
         ! images are evaluated on average. (3) The average correlation between the images and
         ! their corresponding best matching reference section. If convergence to a local optimum
         ! is achieved, the fraction increases. Convergence is achieved if the parameter distribution
         ! overlap is larger than 0.95 and more than 99% of the reference sections need to be
-        ! searched to find an improving solution<check2D_conv/end>
+        ! searched to find an improving solution<check_2Dconv/end>
         !
         ! set required keys
         keys_required(1) = 'projfile'
         ! parse command line
         call cline%parse_oldschool(keys_required(:1))
+        ! set defaults
+        call cline%set('oritype', 'ptcl2D')
         ! execute
-        call xcheck2D_conv%execute(cline)
+        call xcheck_2Dconv%execute(cline)
     case( 'rank_cavgs' )
         !==Program rank_cavgs
         !
@@ -522,24 +524,17 @@ select case(prg)
         ! execute
         call xnspace%execute(cline)
     case( 'refine3D_init' )
-        !==Program refine3D_init
-        !
-        ! <refine3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D.
-        ! If the data set is large (>5000 images), generating a random model can be slow. To speedup, set
-        ! nran to some smaller number, resulting in nran images selected randomly for
-        ! reconstruction<refine3D_init/end>
-        !
         ! set required keys
-
         keys_required(1) = 'msk'
         keys_required(2) = 'pgrp'
+        keys_required(3) = 'projfile'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'inner'
         keys_optional(3) = 'nspace'
         keys_optional(4) = 'nran'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
@@ -587,58 +582,39 @@ select case(prg)
         !execute
         call xmultiptcl_init%execute(cline)
     case( 'refine3D' )
-        !==Program refine3D
-        !
-        ! <refine3D/begin>is an ab inito reconstruction/refinement program based on probabilistic
-        ! projection matching. There are a daunting number of options in refine3D. If you
-        ! are processing class averages we recommend that you instead use the simple_distr_exec prg=
-        ! initial_3Dmodel route.<refine3D/end>
-        !
         ! set required keys
         keys_required(1)  = 'vol1'
-        keys_required(2)  = 'smpd'
+        keys_required(2)  = 'projfile'
         keys_required(3)  = 'msk'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp'
+        keys_required(4)  = 'pgrp'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'vol2'
-        keys_optional(3)  = 'oritab'
-        keys_optional(4)  = 'deftab'
-        keys_optional(5)  = 'trs'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'cenlp'
-        keys_optional(9) = 'focusmsk'
-        keys_optional(10) = 'objfun'
-        keys_optional(11) = 'lpstop'
-        keys_optional(12) = 'lplim_crit'
-        keys_optional(13) = 'eo'
-        keys_optional(14) = 'refine'
-        keys_optional(15) = 'frac'
-        keys_optional(16) = 'mskfile'
-        keys_optional(17) = 'inner'
-        keys_optional(18) = 'width'
-        keys_optional(19) = 'nspace'
-        keys_optional(20) = 'nstates'
-        keys_optional(21) = 'startit'
-        keys_optional(22) = 'maxits'
-        keys_optional(23) = 'shbarrier'
-        keys_optional(24) = 'noise'
-        keys_optional(25) = 'nnn'
-        keys_optional(26) = 'rrate'
-        keys_optional(27) = 'update_frac'
-        keys_optional(28) = 'stk'
-        keys_optional(29) = 'stktab'
-        keys_optional(30) = 'phaseplate'
+        keys_optional(3)  = 'trs'
+        keys_optional(4)  = 'hp'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'cenlp'
+        keys_optional(7)  = 'focusmsk'
+        keys_optional(8) = 'objfun'
+        keys_optional(9) = 'lpstop'
+        keys_optional(10) = 'lplim_crit'
+        keys_optional(11) = 'eo'
+        keys_optional(12) = 'refine'
+        keys_optional(13) = 'frac'
+        keys_optional(14) = 'mskfile'
+        keys_optional(15) = 'inner'
+        keys_optional(16) = 'width'
+        keys_optional(17) = 'nspace'
+        keys_optional(18) = 'nstates'
+        keys_optional(19) = 'startit'
+        keys_optional(20) = 'maxits'
+        keys_optional(21) = 'shbarrier'
+        keys_optional(22) = 'noise'
+        keys_optional(23) = 'nnn'
+        keys_optional(24) = 'rrate'
+        keys_optional(25) = 'update_frac'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:30))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:25))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine') )then
@@ -665,10 +641,10 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:6), keys_optional(:1))
         ! execute
         call xrec_test%execute(cline)
-    case( 'check3D_conv' )
-        !==Program check3D_conv
+    case( 'check_3Dconv' )
+        !==Program check_3Dconv
         !
-        ! <check3D_conv/begin>is a program for checking if a PRIME3D run has converged. The statistics
+        ! <check_3Dconv/begin>is a program for checking if a PRIME3D run has converged. The statistics
         ! outputted include (1) angle of feasible region, which is proportional to the angular
         ! resolution of the set of discrete projection directions being searched. (2) The average angular
         ! distance between orientations in the present and previous iteration. In the early iterations,
@@ -679,27 +655,23 @@ select case(prg)
         ! deviation of the Euler angles. Convergence is achieved if the angular distance between the
         ! orientations in successive iterations falls significantly below the angular resolution of the
         ! search space and more than 99% of the reference sections need to be matched on average
-        ! <check3D_conv/end>
+        ! <check_3Dconv/end>
         !
         ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'box'
-        keys_required(3) = 'oritab'
-        keys_required(4) = 'nptcls'
-        keys_required(5) = 'pgrp'
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'pgrp'
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'nstates'
         keys_optional(3) = 'eo'
         keys_optional(4) = 'nspace'
-        keys_optional(5) = 'find'
-        keys_optional(6) = 'refine'
+        keys_optional(5) = 'refine'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:5))
         ! set defaults
-        if( .not. cline%defined('lp') .and. .not.cline%defined('lp') )call cline%set('lp', 20.)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! execute
-        call xcheck3D_conv%execute(cline)
+        call xcheck_3Dconv%execute(cline)
 
     ! COMMON-LINES PROGRAMS
 
@@ -1324,7 +1296,7 @@ select case(prg)
         keys_optional(24) = 'oritype'
         keys_optional(25) = 'filetab'
         ! parse command line
-        call cline%parse_oldschool(keys_required, keys_optional(:25))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:25))
         ! execute
         call xmanage_project%execute(cline)
     case( 'print_project_info' )
@@ -1435,14 +1407,13 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'fbody'
-        keys_required(2) = 'nptcls'
+        keys_required(2) = 'projfile'
         keys_required(3) = 'ndocs'
         ! set optional keys
-        keys_optional(1) = 'projfile'
-        keys_optional(2) = 'numlen'
-        keys_optional(3) = 'oritype' ! needs to be required when we move to *.simple format
+        keys_optional(1) = 'numlen'
+        keys_optional(2) = 'oritype' ! needs to be required when we move to *.simple format
         ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:2))
         ! execute
         call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )

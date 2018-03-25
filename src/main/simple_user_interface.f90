@@ -863,7 +863,7 @@ contains
         &'given input orientations and state assignments. The algorithm is based on direct Fourier inversion '&
         &'with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                                ! executable
-        &0, 1, 0, 2, 1, 2, 2, .true.)                                                        ! # entries in each group, requires sp_project
+        &0, 1, 0, 2, 1, 2, 2, .true.)                                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !<empty>
@@ -891,13 +891,13 @@ contains
         &'3D volume refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D volume refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                             ! executable
-        &1, 0, 0, 12, 7, 5, 2, .true.)                                                                     ! # entries in each group
+        &1, 1, 0, 12, 7, 5, 2, .true.)                                                                     ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
         & sections for particle image matching', 'input volume e.g. recvol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
-        !<empty>
+        call refine3D%set_input('parm_ios', 1, projfile)
         ! alternative inputs
         !<empty>
         ! search controls

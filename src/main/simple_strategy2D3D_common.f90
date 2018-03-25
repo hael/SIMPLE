@@ -149,8 +149,6 @@ contains
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
                     p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
-                else if( cline%defined('find') )then
-                    p%kfromto(2) = min(p%find,p%tofny)
                 else if( b%a%isthere(p%fromp,'lp') )then
                     p%kfromto(2) = calc_fourier_index(b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd)
                 else

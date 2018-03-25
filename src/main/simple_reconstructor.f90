@@ -21,7 +21,7 @@ implicit none
 public :: reconstructor
 private
 
-logical, parameter :: DEBUG = .true.
+logical, parameter :: DEBUG = .false.
 
 type, extends(image) :: reconstructor
     private

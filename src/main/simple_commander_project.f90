@@ -197,8 +197,8 @@ contains
             end do
         endif
 
-        if( cline%defined('stktab') )then
-            ! if importing extracted particles
+        if( cline%defined('stk') )then
+            ! if importing single stack of extracted particles
             if( n_ori_inputs == 1 )then
                 ! sampling distance
                 if( cline%defined('smpd') )then
