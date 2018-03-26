@@ -185,6 +185,7 @@ contains
         ! calculate CTF score diagnostic
         df_avg = dfx + dfy / 2.0
         call ctf2pspecimg(tfun, pspec_ctf_roavg, df_avg, df_avg, 0.)
+        call imgmsk%resmsk(hp, lp)
         hpfind = pspec_all_roavg%get_find(hp)
         lpfind = pspec_all_roavg%get_find(lp)
         filtsz = pspec_lower_roavg%get_filtsz()

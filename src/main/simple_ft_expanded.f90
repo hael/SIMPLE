@@ -528,7 +528,6 @@ contains
         class(ft_expanded), intent(inout), target :: self1, self2 !< instances
         real(dp), intent(in)                      :: shvec(2)
         real(dp)                                  :: arg
-        complex(dp)                               :: tmp
         integer                                   :: hind,kind
         call allocate_tmpmats(self1%flims)
         if (associated(ft_exp_tmp_cmat12_self1, self1) .and. associated(ft_exp_tmp_cmat12_self2, self2)) then

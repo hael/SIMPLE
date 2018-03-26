@@ -35,24 +35,23 @@ contains
         class(cmdline),                     intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
         integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
-        ! type(merge_algndocs_commander)     :: xmerge_algndocs
+        class(cmdline),       allocatable  :: completed_jobs(:)
         type(qsys_env)                     :: qenv
         type(chash)                        :: job_descr
-        ! type(cmdline)                      :: cline_merge_algndocs
         type(params)                       :: p_master
         type(moviewatcher)                 :: movie_buff
         type(sp_project)                   :: spproj
         character(len=STDLEN), allocatable :: movies(:)
-        character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate
+        character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract
-        character(len=:),      allocatable :: output_dir_picker, fbody
         character(len=LONGSTRLEN)          :: movie
-        integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter
+        integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
         logical                            :: l_pick
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
-        p_master  = params(cline)
+        p_master = params(cline)
+        p_master%stream = 'yes'
         ! picking
         if( cline%defined('refs') )then
             l_pick = .true.
@@ -77,96 +76,79 @@ contains
             call mkdir(output_dir_extract)
         endif
         ! read in movies
-        call spproj%read_segment( 'mic', p_master%projfile )
-        ! main fork
-        if( p_master%stream.eq.'yes' )then
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
-            ! ! STREAMING
-            ! ! set defaults
-            ! p_master%numlen     = 5
-            ! call cline%set('numlen', real(p_master%numlen))
-            ! p_master%split_mode = 'stream'
-            ! p_master%ncunits    = p_master%nparts
-            ! ! setup the environment for distributed execution
-            ! call qenv%new(p_master, stream=.true.)
-            ! ! movie watcher init
-            ! movie_buff = moviewatcher(p_master, longtime, print=.true.)
-            ! ! start watching
-            ! prev_stacksz = 0
-            ! nmovies      = 0
-            ! iter         = 0
-            ! do
-            !     if( file_exists(trim(TERM_STREAM)) )then
-            !         write(*,'(A)')'>>> TERMINATING PREPROCESSING STREAM'
-            !         exit
-            !     endif
-            !     iter = iter + 1
-            !     call movie_buff%watch( nmovies, movies )
-            !     ! append movies to processing stack
-            !     if( nmovies > 0 )then
-            !         do imovie = 1, nmovies
-            !             movie = trim(adjustl(movies(imovie)))
-            !             call create_individual_filetab
-            !             call qenv%qscripts%add_to_streaming( cline )
-            !         enddo
-            !     endif
-            !     ! manage stream scheduling
-            !     call qenv%qscripts%schedule_streaming( qenv%qdescr )
-            !     stacksz = qenv%qscripts%get_stacksz()
-            !     if( stacksz .ne. prev_stacksz )then
-            !         prev_stacksz = stacksz
-            !         write(*,'(A,I5)')'>>> MOVIES TO PROCESS: ', stacksz
-            !     endif
-            !     ! wait
-            !     call simple_sleep(SHORTTIME)
-            ! end do
-        else
-            ! DISTRIBUTED EXECUTION
-            ! p_master%nptcls = nlines(p_master%filetab)
-            p_master%nptcls = spproj%os_mic%get_noris()
-            if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-            ! deal with numlen so that length matches JOB_FINISHED indicator files
-            p_master%numlen = len(int2str(p_master%nptcls))
-            call cline%set('numlen', real(p_master%numlen))
-            ! output directory
-            ! prepare merge_algndocs command line
-            ! cline_merge_algndocs = cline
-            ! call cline_merge_algndocs%set( 'nthr',     1.)
-            ! call cline_merge_algndocs%set( 'fbody',    trim(fbody))
-            ! call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls))
-            ! call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts))
-            ! call cline_merge_algndocs%set( 'outfile',  trim(output_dir_unidoc)//trim(SIMPLE_UNIDOC))
-            ! call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen))
-            ! setup the environment for distributed execution
-            call qenv%new(p_master, numlen=p_master%numlen)
-            ! prepare job description
-            call cline%gen_job_descr(job_descr)
-            ! schedule & clean
-            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
-            ! merge docs
-            call spproj%read(p_master%projfile)
-            call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
-            call spproj%kill
-        endif
+        call spproj%read( p_master%projfile )
+        ! set defaults
+        p_master%numlen     = 5
+        call cline%set('numlen', real(p_master%numlen))
+        p_master%split_mode = 'stream'
+        p_master%ncunits    = p_master%nparts
+        ! setup the environment for distributed execution
+        call qenv%new(p_master, stream=.true.)
+        ! movie watcher init
+        movie_buff = moviewatcher(p_master, longtime, print=.true.)
+        ! start watching
+        prev_stacksz = 0
+        nmovies      = 0
+        iter         = 0
+        do
+            if( file_exists(trim(TERM_STREAM)) )then
+                write(*,'(A)')'>>> TERMINATING PREPROCESSING STREAM'
+                exit
+            endif
+            iter = iter + 1
+            call movie_buff%watch( nmovies, movies )
+            ! append movies to processing stack
+            if( nmovies > 0 )then
+                do imovie = 1, nmovies
+                    movie = trim(adjustl(movies(imovie)))
+                    call create_individual_project()
+                    call qenv%qscripts%add_to_streaming( cline )
+                enddo
+            endif
+            ! manage stream scheduling
+            call qenv%qscripts%schedule_streaming( qenv%qdescr )
+            stacksz = qenv%qscripts%get_stacksz()
+            if( stacksz .ne. prev_stacksz )then
+                prev_stacksz = stacksz
+                write(*,'(A,I5)')'>>> MOVIES TO PROCESS: ', stacksz
+                call qenv%qscripts%get_stream_done_stack( completed_jobs )
+                if(allocated(completed_jobs))then
+                    do icline=1,size(completed_jobs)
+                        print *,icline
+                        call completed_jobs(icline)%printline()
+                        call spproj%append_project( completed_jobs(icline)%get_carg('projfile') )
+                    enddo
+                else
+                    print *,'nothing to do iter:',iter
+                endif
+            endif
+            ! wait
+            call simple_sleep(SHORTTIME)
+        end do
         ! cleanup
         call qsys_cleanup(p_master)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PREPROCESS NORMAL STOP ****')
         contains
 
-            subroutine create_individual_filetab
-                use simple_fileio, only: fopen, fclose, fileio_errmsg
-                integer               :: fnr, file_stat
-                character(len=STDLEN) :: fname, ext, movie_here
+            subroutine create_individual_project
+                type(sp_project)              :: spproj_here
+                type(cmdline)                 :: cline_here
+                character(len=STDLEN)         :: fname, ext, movie_here
+                character(len=LONGSTRLEN)     :: projname
                 movie_here = remove_abspath(trim(movie))
-                ext   = fname2ext(trim(movie_here))
-                fname = 'preprocess_'//trim(get_fbody(trim(movie_here), trim(ext)))//'.txt'
-                call fopen(fnr, status='replace', action='write', file=trim(fname), iostat=file_stat)
-                call fileio_errmsg('exec_preprocess_stream :: create_individual_filetab '//trim(fname), file_stat)
-                write(fnr,'(a)') trim(movie)
-                call fclose(fnr, errmsg='exec_preprocess_stream closing filetab '//trim(fname))
-                call cline%set('filetab', fname)
-            end subroutine create_individual_filetab
+                ext        = fname2ext(trim(movie_here))
+                projname   = 'preprocess_'//trim(get_fbody(trim(movie_here), trim(ext)))
+                call cline_here%set('projname', trim(projname)) ! necessary?
+                call spproj_here%update_projinfo(cline_here)
+                spproj_here%compenv = spproj%compenv
+                spproj_here%jobproc = spproj%jobproc
+                call spproj_here%add_single_movie(trim(movie), 'mic', p_master%smpd,&
+                    &p_master%kv, p_master%cs, p_master%fraca, p_master%phaseplate)
+                call spproj_here%write()
+                call spproj_here%kill()
+                call cline%set('projfile', trim(projname)//'.simple')
+            end subroutine create_individual_project
 
     end subroutine exec_preprocess_stream
 

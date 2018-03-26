@@ -29,52 +29,42 @@ end type motion_correct_iter
 
 contains
 
-    subroutine iterate( self, cline, p, orientation, imovie, frame_counter, moviename, smpd_out, dir_out )
-        class(motion_correct_iter), intent(inout) :: self
+    subroutine iterate( self, cline, p, orientation, fbody, frame_counter, moviename, smpd_out, dir_out )
+        class(motion_correct_iter),         intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(params),              intent(inout) :: p
         class(ori),                 intent(inout) :: orientation
-        integer,                    intent(in)    :: imovie
         integer,                    intent(inout) :: frame_counter
-        character(len=*),           intent(in)    :: moviename
+        character(len=*),           intent(in)    :: moviename, fbody
         real,                       intent(out)   :: smpd_out
         character(len=*),           intent(in)    :: dir_out
+        character(len=:), allocatable :: fbody_here, ext
         real, allocatable     :: shifts(:,:)
         integer               :: ldim(3), ldim_thumb(3), iframe, nframes
         real                  :: corr, scale
         logical               :: err
-        ! make names
-        if( cline%defined('fbody') )then
-            if( p%stream.eq.'yes' )then
-                self%moviename_intg   = trim(dir_out)//trim(adjustl(p%fbody))//'_intg'//p%ext
-                self%moviename_forctf = trim(dir_out)//trim(adjustl(p%fbody))//'_forctf'//p%ext
-                self%moviename_pspec  = trim(dir_out)//trim(adjustl(p%fbody))//'_pspec'//p%ext
-                self%moviename_thumb  = trim(dir_out)//trim(adjustl(p%fbody))//'_thumb'//p%ext
-            else
-                self%moviename_intg   = trim(dir_out)//trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_forctf = trim(dir_out)//trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_pspec  = trim(dir_out)//trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_thumb  = trim(dir_out)//trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie,p%numlen)//p%ext
-            endif
-            if( cline%defined('tof') )then
-                self%moviename_intg_frames = trim(dir_out)//trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
-                &//int2str(p%tof)//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
-            endif
-        else
-            self%moviename_intg   = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_intg'//p%ext
-            self%moviename_forctf = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_forctf'//p%ext
-            self%moviename_pspec  = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_pspec'//p%ext
-            self%moviename_thumb  = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_thumb'//p%ext
-            if( cline%defined('tof') )then
-                self%moviename_intg_frames = trim(dir_out)//int2str_pad(imovie,p%numlen)//'_frames'//int2str(p%fromf)//'-'&
-                &//int2str(p%tof)//'_intg'//p%ext
-            endif
-        endif
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(*,*) 'inputted movie stack does not exist: ', moviename
         endif
-        write(*,'(a,1x,i5)') '>>> PROCESSING MOVIE:', imovie
+        ! make filenames
+        fbody_here = remove_abspath(trim(moviename))
+        ext        = fname2ext(trim(fbody_here))
+        if( fbody.ne.'' )then
+            fbody_here = trim(fbody)//'_'//get_fbody(trim(fbody_here), trim(ext))
+        else
+            fbody_here = get_fbody(trim(fbody_here), trim(ext))
+        endif
+        self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//'_intg'//trim(p%ext)
+        self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//'_forctf'//trim(p%ext)
+        self%moviename_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//'_pspec'//trim(p%ext)
+        self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//'_thumb'//trim(p%ext)
+        if( cline%defined('tof') )then
+            self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(p%fromf)//'-'&
+            &//int2str(p%tof)//'_intg'//p%ext
+        endif
+        ! check, increment counter & print
+        write(*,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( p%nframesgrp > 0 )then
             self%moviename = 'tmpnframesgrpmovie'//p%ext
@@ -86,12 +76,12 @@ contains
         call motion_correct_movie(self%moviename, p, corr, smpd_out, shifts, err)
         if( err ) return
         ! report to ori object
-        call orientation%set('smpd',    smpd_out)
-        call orientation%set('movie',   trim(moviename))
-        call orientation%set('intg',    trim(self%moviename_intg))
-        call orientation%set('forctf',  trim(self%moviename_forctf))
-        call orientation%set('pspec',   trim(self%moviename_pspec))
-        call orientation%set('thumb',   trim(self%moviename_thumb))
+        call orientation%set('smpd',   smpd_out)
+        call orientation%set('movie',  trim(moviename))
+        call orientation%set('intg',   trim(self%moviename_intg))
+        call orientation%set('forctf', trim(self%moviename_forctf))
+        call orientation%set('pspec',  trim(self%moviename_pspec))
+        call orientation%set('thumb',  trim(self%moviename_thumb))
         call orientation%set('imgkind', 'mic')
         if( cline%defined('tof') )call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         ! generate sums

@@ -43,8 +43,9 @@ contains
     procedure          :: update_compenv
     ! index management
     procedure, private :: map_ptcl_ind2stk_ind
-    ! os_stk related methods
+    procedure          :: add_single_movie
     procedure          :: add_movies
+    ! os_stk related methods
     procedure          :: append_single_stk
     procedure          :: add_ptcls_stktab
     procedure          :: add_single_ptcls_stk
@@ -211,8 +212,8 @@ contains
         use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        character(len=STDLEN)         :: env_var
-        character(len=:), allocatable :: projname
+        character(len=STDLEN)            :: env_var
+        character(len=:), allocatable    :: projname
         if( self%compenv%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -340,16 +341,58 @@ contains
         ind_in_stk = iptcl - fromp + 1
     end subroutine map_ptcl_ind2stk_ind
 
-    ! os_stk related methods
+    ! os_mic related methods
+
+    subroutine add_single_movie( self, moviename, oritype, smpd, kv, cs, fraca, phaseplate )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: moviename, oritype, phaseplate
+        real,                      intent(in)    :: smpd, kv, cs, fraca
+        class(oris),                     pointer :: os_ptr
+        integer :: n_os_mic, ldim(3), nframes
+        ! oris object pointer
+        select case(trim(oritype))
+            case('mic')
+                os_ptr => self%os_mic
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype)
+                stop 'unsupported oritype; sp_project :: add_single_movie'
+        end select
+        ! ! check that stk field is empty
+        n_os_mic = os_ptr%get_noris()
+        if( n_os_mic > 0 )then
+            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_mic
+            stop 'ABORTING! sp_project :: add_stktab'
+        endif
+        call os_ptr%new_clean(1)
+        call find_ldim_nptcls(trim(moviename), ldim, nframes)
+        if( nframes <= 0 )then
+            write(*,*) 'WARNING! # frames in movie ', trim(moviename), ' <= zero, ommitting'
+        else if( nframes > 1 )then
+            call os_ptr%set(1, 'movie', trim(moviename))
+            call os_ptr%set(1, 'imgkind', 'movie')
+        else
+            call os_ptr%set(1, 'intg',  trim(moviename))
+            call os_ptr%set(1, 'imgkind', 'mic')
+        endif
+        call os_ptr%set(1, 'xdim',       real(ldim(1)))
+        call os_ptr%set(1, 'ydim',       real(ldim(2)))
+        call os_ptr%set(1, 'nframes',    real(nframes))
+        call os_ptr%set(1, 'smpd',       smpd)
+        call os_ptr%set(1, 'kv',         kv)
+        call os_ptr%set(1, 'cs',         cs)
+        call os_ptr%set(1, 'fraca',      fraca)
+        call os_ptr%set(1, 'phaseplate', trim(phaseplate))
+    end subroutine add_single_movie
 
     subroutine add_movies( self, filetab, oritype, smpd, kv, cs, fraca, phaseplate )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: filetab, oritype, phaseplate
         real,                      intent(in)    :: smpd, kv, cs, fraca
-        class(oris),               pointer :: os_ptr
-        type(oris)                         :: os
-        character(len=STDLEN), allocatable :: movienames(:), name
-        integer :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
+        class(oris),                     pointer :: os_ptr
+        type(oris)                               :: os
+        character(len=STDLEN),       allocatable :: movienames(:)
+        character(len=:),            allocatable :: name
+        integer :: n_os_mics, imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
@@ -409,6 +452,8 @@ contains
         write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
     end subroutine add_movies
 
+    ! os_stk related methods
+
     subroutine append_single_stk( self, stk, smpd, os )
         use simple_ori,     only: ori
         use simple_imghead, only: find_ldim_nptcls
@@ -418,7 +463,7 @@ contains
         class(oris),           intent(inout) :: os   ! parameters associated with stk
         type(oris) :: tmp_os
         type(ori)  :: o
-        integer    :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D, fnr, i
+        integer    :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D, i
         ! file exists?
         if( .not. file_exists(stk) )then
             write(*,*) 'Inputted stack (stk): ', trim(stk)
@@ -587,8 +632,7 @@ contains
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
         class(oris), optional, intent(inout) :: os   ! parameters associated with stk
         ! real,             allocatable :: smpds(:)
-        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D, fnr
-        real    :: smpd_here
+        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         ! file exists?
         if( .not. file_exists(stk) )then
             write(*,*) 'Inputted stack (stk): ', trim(stk)
@@ -626,7 +670,6 @@ contains
                 write(*,*) '# ptcl imgs in stk: ', nptcls
                 stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_single_stk'
             endif
-            smpd_here = smpd
         endif
         ! make stk field
         call self%os_stk%new_clean(1)
@@ -635,7 +678,7 @@ contains
         call self%os_stk%set(1, 'nptcls',  real(nptcls))
         call self%os_stk%set(1, 'fromp',   1.0)
         call self%os_stk%set(1, 'top',     real(nptcls))
-        call self%os_stk%set(1, 'smpd',    real(smpd_here))
+        call self%os_stk%set(1, 'smpd',    real(smpd))
         call self%os_stk%set(1, 'stkkind', 'single')
         call self%os_stk%set(1, 'imgkind', 'ptcl')
         ! update particle fields
@@ -653,11 +696,11 @@ contains
         class(sp_project),     intent(inout) :: self
         integer,               intent(in)    :: nparts
         type(image)                   :: img
-        character(len=:), allocatable :: stk, tmp_dir, dir, ext, imgkind, stkpart, dest_stkpart
+        character(len=:), allocatable :: stk, tmp_dir, ext, imgkind, stkpart, dest_stkpart
         character(len=STDLEN) :: cwd
-        integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, nstks, box, n_os_stk
-        integer :: nptcls, nptcls_part, numlen
-        real    :: smpd
+        integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
+        integer    :: nptcls, nptcls_part, numlen
+        real       :: smpd
         integer(4) :: rename_res
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -939,7 +982,6 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         class(oris), pointer          :: ptcl_field
-        integer :: stkind
         logical :: dfx_here, dfy_here
         nullify(ptcl_field)
         ! set field pointer
@@ -1552,7 +1594,7 @@ contains
         real    :: rval
         integer :: ndim1, ndim2
         ndim1 = self%bos%get_n_records(isegment)
-        ndim2 = self%bos%get_n_bytes_per_record(isegment) / sizeof(rval)
+        ndim2 = int(self%bos%get_n_bytes_per_record(isegment) / sizeof(rval))
         if( allocated(array) ) deallocate(array)
         allocate( array(ndim1,ndim2), source=0. )
         call self%bos%read_segment(isegment, array)

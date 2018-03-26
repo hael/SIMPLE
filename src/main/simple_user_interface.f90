@@ -72,6 +72,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
+type(simple_program), target :: preprocess_stream
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
@@ -146,6 +147,7 @@ contains
         call new_pick
         call new_postprocess
         call new_preprocess
+        call new_preprocess_stream
         call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
@@ -183,6 +185,8 @@ contains
                 ptr2prg => postprocess
             case('preprocess')
                 ptr2prg => preprocess
+            case('preprocess_stream')
+                ptr2prg => preprocess_stream
             case('reconstruct3D')
                 ptr2prg => reconstruct3D
             case('refine3D')
@@ -210,6 +214,7 @@ contains
         write(*,'(A)') motion_correct%name
         write(*,'(A)') pick%name
         write(*,'(A)') preprocess%name
+        write(*,'(A)') preprocess_stream%name
         write(*,'(A)') reconstruct3D%name
         write(*,'(A)') refine3D%name
         write(*,'(A)') refine3D_init%name
@@ -800,25 +805,24 @@ contains
         &'preprocess', & ! name
         &'is a program that performs for movie alignment',&                                 ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
-        &' in sequence or streaming mode as the microscope collects the data',&
+        &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 10, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &0, 9, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
+        ! <empty>
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call preprocess%set_input('parm_ios', 3, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
         call preprocess%set_input('parm_ios', 4, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
-        call preprocess%set_input('parm_ios', 5, 'stream', 'binary', 'Streaming on/off', 'Whether to activate streaming mode(yes|no){yes}', '(yes|no){no}', .false., 'no')
-        call preprocess%set_input('parm_ios', 6, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess%set_input('parm_ios', 7, 'refs', 'file', 'Picking 2D references',&
+        call preprocess%set_input('parm_ios', 5, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess%set_input('parm_ios', 6, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
-        call preprocess%set_input('parm_ios', 8, 'fbody', 'string', 'Template output micrograph name',&
+        call preprocess%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess%set_input('parm_ios', 9, pspecsz)
-        call preprocess%set_input('parm_ios',10, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
+        call preprocess%set_input('parm_ios', 8, pspecsz)
+        call preprocess%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
         ! alternative inputs
         !<empty>
         ! search controls
@@ -853,6 +857,65 @@ contains
         call preprocess%set_input('comp_ctrls', 1, nparts)
         call preprocess%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess
+
+    subroutine new_preprocess_stream
+        ! PROGRAM SPECIFICATION
+        call preprocess_stream%new(&
+        &'preprocess_stream', & ! name
+        &'is a program that performs for movie alignment',&                                 ! descr_short
+        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_distr_exec',&                                                              ! executable
+        &1, 9, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call preprocess_stream%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
+        ! parameter input/output
+        call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
+        call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess_stream%set_input('parm_ios', 3, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
+        call preprocess_stream%set_input('parm_ios', 4, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call preprocess_stream%set_input('parm_ios', 5, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('parm_ios', 6, 'refs', 'file', 'Picking 2D references',&
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
+        call preprocess_stream%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
+        &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
+        call preprocess_stream%set_input('parm_ios', 8, pspecsz)
+        call preprocess_stream%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        call preprocess_stream%set_input('srch_ctrls', 1, trs)
+        call preprocess_stream%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false., 1.0)
+        call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false., 1.0)
+        call preprocess_stream%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false., 1.0)
+        call preprocess_stream%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas in motion_correct', '# of standard deviation threshold for outlier removal in motion_correct{6}', '{6}', .false., 6.)
+        call preprocess_stream%set_input('srch_ctrls', 7, dfmin)
+        call preprocess_stream%set_input('srch_ctrls', 8, dfmax)
+        call preprocess_stream%set_input('srch_ctrls', 9, dfstep)
+        call preprocess_stream%set_input('srch_ctrls',10, astigtol)
+        call preprocess_stream%set_input('srch_ctrls',11, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',12, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
+        & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call preprocess_stream%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        ! filter controls
+        call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
+        call preprocess_stream%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        call preprocess_stream%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
+        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
+        call preprocess_stream%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
+        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
+        call preprocess_stream%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
+        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call preprocess_stream%set_input('comp_ctrls', 1, nparts)
+        call preprocess_stream%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_preprocess_stream
 
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION

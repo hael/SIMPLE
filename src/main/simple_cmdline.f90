@@ -85,7 +85,7 @@ contains
         endif
         if( ptr2prg%requires_sp_project() )then
             ! if( .not. file_exists(PROJFILE_GLOB) )then
-             write(*,*) 'project file not in cwd: ', PROJFILE_GLOB
+             !write(*,*) 'project file not in cwd: ', PROJFILE_GLOB
             !     stop 'ERROR! cmdline :: parse'
             ! endif
         endif

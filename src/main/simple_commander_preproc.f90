@@ -79,27 +79,24 @@ contains
 
     subroutine exec_preprocess( self, cline )
         class(preprocess_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(ctf_estimate_iter)    :: cfiter
-        type(motion_correct_iter)  :: mciter
-        type(picker_iter)          :: piter
-        type(extract_commander)    :: xextract
-        type(cmdline)              :: cline_extract
-        type(sp_project)           :: spproj
-        character(len=:),      allocatable :: fname_unidoc_output, imgkind, moviename
-        character(len=:),      allocatable :: moviename_forctf, moviename_intg
-        character(len=:),      allocatable :: fname_stk_extract, fname_ctf_extract
-        character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate
-        character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract
-        character(len=:),      allocatable :: output_dir_picker, output_dir_unidoc
-        character(len=LONGSTRLEN) :: boxfile
-        character(len=STDLEN) :: movie_fbody, movie_ext, movie_fname
-        type(params) :: p
-        type(ori)    :: o_mov
-        real         :: smpd_original, smpd_scaled
-        integer      :: nmovies, fromto(2), imovie, ntot, frame_counter, movie_ind, nptcls_out
-        logical      :: l_pick
-        p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
+        class(cmdline),              intent(inout) :: cline
+        type(params)                  :: p
+        type(ori)                     :: o_mov
+        type(ctf_estimate_iter)       :: cfiter
+        type(motion_correct_iter)     :: mciter
+        type(picker_iter)             :: piter
+        type(extract_commander)       :: xextract
+        type(cmdline)                 :: cline_extract
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody
+        character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
+        character(len=:), allocatable :: output_dir, output_dir_ctf_estimate, output_dir_extract
+        character(len=LONGSTRLEN)     :: boxfile
+        real    :: smpd_original, smpd_scaled
+        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
+        logical :: l_pick
+        ! constants & derived constants
+        p = params(cline, spproj_a_seg=MIC_SEG)
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
         endif
@@ -111,7 +108,7 @@ contains
         else
             l_pick = .false.
         endif
-        ! output directories
+        ! output directories & name
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
         else
@@ -125,39 +122,28 @@ contains
         output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
         call mkdir(output_dir)
         call mkdir(output_dir_ctf_estimate)
+        call mkdir(output_dir_motion_correct)
         if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
             output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
             call mkdir(output_dir_picker)
             call mkdir(output_dir_extract)
         endif
-        ! filenaming and range
+        if( cline%defined('fbody') )then
+            fbody = trim(p%fbody)
+        else
+            fbody = ''
+        endif
+        ! read in movies
+        call spproj%read( p%projfile )
+        ! range
         if( p%stream.eq.'yes' )then
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
             ! STREAMING MODE
-            ! movie_fname = remove_abspath(trim(movienames(1)))
-            ! movie_ext   = fname2ext(trim(movie_fname))
-            ! movie_fbody = get_fbody(trim(movie_fname), trim(movie_ext))
-            ! if( cline%defined('fbody') )movie_fbody = trim(p%fbody)//trim(movie_fbody)
-            ! p%fbody = trim(movie_fbody)
-            ! ! ctf: on call and output set below
-            ! allocate(fname_unidoc_output, source=trim(DIR_UNIDOC)//trim(UNIDOC_OUTPUT)//&
-            !     &trim(movie_fbody)//trim(METADATA_EXT))
-            ! ! picker: on call
-            ! allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
-            ! allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//trim(METADATA_EXT))
-            ! call cline%set('fbody', trim(p%fbody))
-            ! fromto(1) = 1
-            ! if( cline%defined('startit') ) fromto(1) = p%startit
-            ! fromto(2) = nmovies
+            fromto(1) = 1
+            if( cline%defined('startit') )fromto(1) = p%startit
+            fromto(2) = spproj%os_mic%get_noris()
         else
             ! DISTRIBUTED MODE
-            if( cline%defined('outfile') )then
-                allocate(fname_unidoc_output, source=trim(output_dir_unidoc)//trim(p%outfile))
-            else
-                allocate(fname_unidoc_output, source=trim(output_dir_unidoc)//&
-                    &trim(UNIDOC_OUTPUT)//'_part'//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT))
-            endif
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
                 fromto(2) = p%top
@@ -166,8 +152,6 @@ contains
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
-        ! read in movies
-        call spproj%read_segment( 'mic', p%projfile )
         ! numlen
         if( cline%defined('numlen') )then
             ! nothing to do
@@ -190,54 +174,42 @@ contains
             if( .not.file_exists(moviename)) cycle
             !
             p%smpd    = smpd_original
-            if( ntot == 1 )then
-                movie_ind = p%part ! streaming mode !!!!!!!!!!!!!!!!!!! TO UPDATE
-            else
-                movie_ind = imovie ! standard mode
-            endif
             ! motion_correct
-            call mciter%iterate(cline, p, o_mov, movie_ind, frame_counter, moviename,&
+            call mciter%iterate(cline, p, o_mov, fbody, frame_counter, moviename,&
                 &smpd_scaled, output_dir_motion_correct)
             p%smpd = smpd_scaled
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')
             moviename_intg   = mciter%get_moviename('intg')
             p%hp             = p%hp_ctf_estimate
-            p%lp             = p%lp_ctf_estimate
-            call o_mov%print_ori
-            call cfiter%iterate(p, movie_ind, moviename_forctf, o_mov, output_dir_ctf_estimate)
-            ! if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
+            p%lp             = max(p%fny, p%lp_ctf_estimate) ! should be in params?
+            call cfiter%iterate(p, moviename_forctf, o_mov, output_dir_ctf_estimate)
+            ! update project
+            call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
             if( l_pick )then
-                p%lp = p%lp_pick
+                p%lp = max(p%fny, p%lp_pick) ! should be in params?
                 call piter%iterate(cline, p, moviename_intg, boxfile, nptcls_out, output_dir_picker)
                 call o_mov%set('boxfile', trim(boxfile)   )
                 call o_mov%set('nptcls',  real(nptcls_out))
-                ! if( p%stream .eq. 'yes' ) call os_uni%write(fname_unidoc_output)
-            endif
-            if( p%stream .eq. 'yes' )then
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
-                ! extract particles & params
-                ! if( l_pick )then
-                !     cline_extract = cline
-                !     call cline_extract%set('dir',       trim(output_dir_extract))
-                !     call cline_extract%set('smpd',      p%smpd)
-                !     call cline_extract%set('unidoc',    fname_unidoc_output)
-                !     call cline_extract%set('outfile',   fname_ctf_extract)
-                !     call cline_extract%set('outstk',    fname_stk_extract)
-                !     call cline_extract%set('pcontrast', p%pcontrast)
-                !     if( cline%defined('box_extract') )then
-                !         call cline_extract%set('box', real(p%box_extract))
-                !     endif
-                !     call xextract%execute(cline_extract)
-                ! endif
-            else
-                ! stash in project
+                ! update project
                 call spproj%os_mic%set_ori(imovie, o_mov)
+                ! extract particles
+                if( p%stream .eq. 'yes' )then
+                    ! needs to write and re-read project at the end as extract overwrites it
+                    call spproj%write()
+                    cline_extract = cline
+                    call cline_extract%set('dir', trim(output_dir_extract))
+                    call cline_extract%set('pcontrast', p%pcontrast)
+                    if( cline%defined('box_extract') )call cline_extract%set('box', real(p%box_extract))
+                    call xextract%execute(cline_extract)
+                    call spproj%kill
+                endif
             endif
         end do
         if( p%stream .eq. 'yes' )then
-            ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
+            call spproj%print_info
+            if( .not.l_pick )call spproj%write()
         else
             call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
@@ -462,7 +434,7 @@ contains
         type(motion_correct_iter)     :: mciter
         type(sp_project)              :: spproj
         type(ori)                     :: o
-        character(len=:), allocatable :: output_dir, moviename, imgkind
+        character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
         real    :: smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
@@ -475,13 +447,18 @@ contains
                 stop 'give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)'
             endif
         endif
-        ! output directory
+        ! output directory & names
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
         else
             output_dir = trim(DIR_MOTION_CORRECT)
         endif
         call mkdir(output_dir)
+        if( cline%defined('fbody') )then
+            fbody = trim(p%fbody)
+        else
+            fbody = ''
+        endif
         ! determine loop range & fetch movies oris object
         if( p%tomo .eq. 'no' )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
@@ -496,13 +473,11 @@ contains
             call spproj%read_segment( 'mic', p%projfile)
             fromto(1) = 1
             fromto(2) = spproj%os_mic%get_noris()
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!! should check for 'movie' field here? !!!!!!!!!!!!!!!!!!1
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! for series of tomographic movies we need to calculate the time_per_frame
         if( p%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!! should check for 'movie' field here? !!!!!!!!!!!!!!!!!!1
             call spproj%os_mic%getter(1, 'movie', moviename)
             call find_ldim_nptcls(moviename, lfoo, nframes)
             ! calculate time_per_frame
@@ -518,7 +493,7 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'movie' )cycle
                 call o%getter('movie', moviename)
-                call mciter%iterate(cline, p, o, imovie, frame_counter, moviename, smpd_scaled, trim(output_dir))
+                call mciter%iterate(cline, p, o, fbody, frame_counter, moviename, smpd_scaled, trim(output_dir))
                 call spproj%os_mic%set_ori(imovie, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
             endif
@@ -550,7 +525,7 @@ contains
         ! parameters & loop range
         if( p%stream .eq. 'yes' )then
             ! determine loop range
-            fromto(:) = 1 !!!!!!!!!!!!!!!!!!!!!!! NOW SHOULD POINT TO MICROGRAPH OF ORIGIN ????
+            fromto(:) = 1
             call spproj%os_mic%getter(1, 'intg', intg_forctf)
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
@@ -562,7 +537,7 @@ contains
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! read in integrated movies
-        call spproj%read_segment( 'mic', p%projfile, fromto ) !!!!!!!!!!!!!!!!!!!!!!! SO THIS MAKES SENSE
+        call spproj%read_segment( 'mic', p%projfile, fromto )
         ! loop over exposures (movies)
         cnt= 0
         do imic = fromto(1),fromto(2)
@@ -572,7 +547,7 @@ contains
                 if( imgkind.ne.'mic' )cycle
                 cnt = cnt + 1
                 call o%getter('intg', intg_forctf)
-                call cfiter%iterate(p, imic, intg_forctf, o, trim(output_dir))
+                call cfiter%iterate(p, intg_forctf, o, trim(output_dir))
                 call o%set('ctf', 'yes') !!!!!!!!!!!!
                 call spproj%os_mic%set_ori(imic, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'

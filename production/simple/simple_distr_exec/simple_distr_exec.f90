@@ -12,6 +12,7 @@ use simple_commander_hlev_wflows
 implicit none
 
 ! PRE-PROCESSING
+type(preprocess_distr_commander)                  :: xpreprocess
 type(preprocess_stream_commander)                 :: xpreprocess_stream
 type(motion_correct_distr_commander)              :: xmotion_correct_distr
 type(motion_correct_tomo_distr_commander)         :: xmotion_correct_tomo_distr
@@ -81,8 +82,25 @@ select case(prg)
         if( cline%get_carg('dopick').eq.'yes' .and. .not.cline%defined('refs') )then
             stop 'Picking references must be provided together with DOPICK=YES'
         endif
+        call xpreprocess%execute(cline)
+    case( 'preprocess_stream' )
+        call cline%parse()
+        ! set defaults
+        if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
+        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
+        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
+        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
+        if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
+        if( cline%defined('refs') ) call cline%set('dopick', 'yes')
+        if( cline%get_carg('dopick').eq.'yes' .and. .not.cline%defined('refs') )then
+            stop 'Picking references must be provided together with DOPICK=YES'
+        endif
         call xpreprocess_stream%execute(cline)
-
     ! MOTION_CORRECT_MOVIES
 
     case( 'motion_correct' )

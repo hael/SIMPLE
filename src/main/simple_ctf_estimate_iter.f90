@@ -13,14 +13,13 @@ end type ctf_estimate_iter
 
 contains
 
-    subroutine iterate( self, p, imovie, moviename_forctf, orientation, dir_out )
+    subroutine iterate( self, p, moviename_forctf, orientation, dir_out )
         use simple_params, only: params
         use simple_ori,    only: ori
         use simple_image,  only: image
         use simple_ctf_estimate  ! use all in there
         class(ctf_estimate_iter), intent(inout)      :: self
         class(params),      intent(inout)      :: p
-        integer,            intent(in)         :: imovie
         character(len=*),   intent(in)         :: moviename_forctf
         class(ori),         intent(inout)      :: orientation
         character(len=*),   intent(in)         :: dir_out

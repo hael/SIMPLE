@@ -722,7 +722,7 @@ contains
         call check_rarg('kv',             self%kv)
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
-        call check_rarg('lp_ctf_estimate',     self%lp_ctf_estimate)
+        call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
@@ -874,26 +874,30 @@ contains
         if( file_exists(trim(self%projfile)) )then
             ! get nptcls/box/smpd from project file
             call bos%open(self%projfile)
-            self%nptcls = bos%get_n_records(self%spproj_a_seg)
-            select case(self%spproj_a_seg)
-                case(MIC_SEG)
-                    call bos%read_first_segment_record(MIC_SEG, o)
-                case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG)
-                    call bos%read_first_segment_record(STK_SEG, o)
-                case DEFAULT
-                    call o%new_ori_clean
-                    call o%set('smpd',0.)
-            end select
-            if( o%isthere('smpd') )then
-                self%smpd = o%get('smpd')
+            if( self%stream.eq.'no' )then
+                self%nptcls = bos%get_n_records(self%spproj_a_seg)
+                select case(self%spproj_a_seg)
+                    case(MIC_SEG)
+                        call bos%read_first_segment_record(MIC_SEG, o)
+                    case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG)
+                        call bos%read_first_segment_record(STK_SEG, o)
+                    case DEFAULT
+                        call o%new_ori_clean
+                        call o%set('smpd',0.)
+                end select
+                if( o%isthere('smpd') )then
+                    self%smpd = o%get('smpd')
+                else
+                    print *,'projfile exec requires smpd in field:', trim(self%oritype)
+                    stop 'ERROR! params :: new'
+                endif
+                ! box
+                call bos%read_first_segment_record(STK_SEG, o)
+                if( o%isthere('box') ) self%box = nint(o%get('box'))
+                call o%kill
             else
-                print *,'projfile exec requires smpd in field:', trim(self%oritype)
-                stop 'ERROR! params :: new'
+                ! nothing to do for streaming, values set at runtime
             endif
-            ! box
-            call bos%read_first_segment_record(STK_SEG, o)
-            if( o%isthere('box') ) self%box = nint(o%get('box'))
-            call o%kill
             ! CTF plan
             select case(trim(self%oritype))
                 case('ptcl2D')

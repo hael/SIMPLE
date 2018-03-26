@@ -15,6 +15,7 @@ use simple_qsys_funs            ! use all in there
 use simple_binoris_io           ! use all in there
 implicit none
 
+public :: preprocess_distr_commander
 public :: motion_correct_distr_commander
 public :: motion_correct_tomo_distr_commander
 public :: powerspecs_distr_commander
@@ -30,6 +31,10 @@ public :: symsrch_distr_commander
 public :: scale_project_distr_commander
 private
 
+type, extends(commander_base) :: preprocess_distr_commander
+  contains
+    procedure :: execute      => exec_preprocess_distr
+end type preprocess_distr_commander
 type, extends(commander_base) :: motion_correct_distr_commander
   contains
     procedure :: execute      => exec_motion_correct_distr
@@ -84,6 +89,72 @@ type, extends(commander_base) :: scale_project_distr_commander
 end type scale_project_distr_commander
 
 contains
+
+    subroutine exec_preprocess_distr( self, cline )
+        use simple_commander_preprocess, only: preprocess_commander
+        use simple_sp_project,           only: sp_project
+        class(preprocess_distr_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(qsys_env)                     :: qenv
+        type(chash)                        :: job_descr
+        type(params)                       :: p_master
+        type(sp_project)                   :: spproj
+        character(len=STDLEN), allocatable :: movies(:)
+        character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
+        character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract
+        character(len=LONGSTRLEN)          :: movie
+        integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
+        logical                            :: l_pick
+        ! set oritype
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+        ! make master parameters
+        p_master = params(cline)
+        ! picking
+        if( cline%defined('refs') )then
+            l_pick = .true.
+        else
+            l_pick = .false.
+        endif
+        ! output directories
+        if( cline%defined('dir') )then
+            output_dir = trim(p_master%dir)//'/'
+        else
+            output_dir = trim(DIR_PREPROC)
+        endif
+        output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
+        output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
+        call mkdir(output_dir)
+        call mkdir(output_dir_ctf_estimate)
+        call mkdir(output_dir_motion_correct)
+        if( l_pick )then
+            output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
+            output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
+            call mkdir(output_dir_picker)
+            call mkdir(output_dir_extract)
+        endif
+        ! read in movies
+        call spproj%read( p_master%projfile )
+        ! DISTRIBUTED EXECUTION
+        p_master%nptcls = spproj%os_mic%get_noris()
+        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! deal with numlen so that length matches JOB_FINISHED indicator files
+        p_master%numlen = len(int2str(p_master%nptcls))
+        call cline%set('numlen', real(p_master%numlen))
+        ! setup the environment for distributed execution
+        call qenv%new(p_master, numlen=p_master%numlen)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+        ! merge docs
+        call spproj%read(p_master%projfile)
+        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        call spproj%kill
+        ! cleanup
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_PREPROCESS NORMAL STOP ****')
+    end subroutine exec_preprocess_distr
 
     subroutine exec_motion_correct_distr( self, cline )
         use simple_sp_project, only: sp_project
