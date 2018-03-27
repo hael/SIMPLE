@@ -1192,14 +1192,14 @@ contains
             l_noctf = .false.
             select case(trim(ctfflag))
                 case('no')
-                    ctfvars%ctfflag%flag = CTFFLAG_NO
+                    ctfvars%ctfflag = CTFFLAG_NO
                     l_noctf = .true.
                 case('yes')
-                    ctfvars%ctfflag%flag = CTFFLAG_YES
+                    ctfvars%ctfflag = CTFFLAG_YES
                 case('mul')
                     stop 'ERROR ctf=mul deprecated; simple_classaverager :: cavger_new'
                 case('flip')
-                    ctfvars%ctfflag%flag = CTFFLAG_FLIP
+                    ctfvars%ctfflag = CTFFLAG_FLIP
             end select
         endif
         ! sampling distance

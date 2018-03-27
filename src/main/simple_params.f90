@@ -126,7 +126,7 @@ type :: params
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
-    character(len=STDLEN) :: imgkind='ptcl'       !< type of input image(ptcl|cavg|mic|movie){ptcl}
+    character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.simple)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext

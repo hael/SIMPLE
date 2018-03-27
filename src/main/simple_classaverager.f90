@@ -32,7 +32,7 @@ end type ptcl_record
 
 class(build),      pointer     :: bp => null()                  !< pointer to build
 class(params),     pointer     :: pp => null()                  !< pointer to params
-type(CTFFLAGTYPE)              :: ctfflag                       !< ctf flag <yes|no|mul|flip>
+integer                        :: ctfflag                       !< ctf flag <yes=1|no=0|flip=2>
 integer                        :: istart          = 0, iend = 0 !< particle index range
 integer                        :: partsz          = 0           !< size of partition
 integer                        :: ncls            = 0           !< # classes
@@ -104,7 +104,7 @@ contains
         endif
         partsz = count(pptcl_mask)
         ! CTF logics
-        ctfflag%flag = b%spproj%get_ctfflag_type('ptcl2D')
+        ctfflag = b%spproj%get_ctfflag_type('ptcl2D')
         ! set phaseplate flag
         phaseplate = b%spproj%has_phaseplate('ptcl2D')
         ! phaseplate    = p%tfplan%l_phaseplate
@@ -462,8 +462,8 @@ contains
                     else
                         add_phshift = 0.
                     endif
-                    if( ctfflag%flag /= CTFFLAG_NO )then
-                        if( ctfflag%flag == CTFFLAG_FLIP )then
+                    if( ctfflag /= CTFFLAG_NO )then
+                        if( ctfflag == CTFFLAG_FLIP )then
                             call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 1, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
                                 &precs(iprec)%angast, add_phshift)

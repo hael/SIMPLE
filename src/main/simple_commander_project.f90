@@ -133,7 +133,7 @@ contains
         type(params)     :: p
         p = params(cline)
         if( .not. file_exists(p%projfile) )then
-            write(*,*) 'projfile: ', trim(p%projfile), ' does not exist in cwd: ', trim(p%cwd)
+            write(*,*) 'projfile: ', trim(p%projfile), ' to update does not exist in cwd: ', trim(p%cwd)
             write(*,*) 'Use program new_project to create a new project from scratch'
             stop 'ABORTING... commander_project :: update_project'
         endif
@@ -161,7 +161,6 @@ contains
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
         if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
-        ! update fields
         ! add movies
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
@@ -192,6 +191,9 @@ contains
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
 
+    ! CTF flag required for importing extracted particles
+    ! imgkind required
+
     !> for importing extracted particles
     subroutine exec_import_particles( self, cline )
         use simple_oris,      only: oris
@@ -208,6 +210,7 @@ contains
         type(nrtxtfile)  :: paramfile
         logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
         integer          :: i, ndatlines, nrecs, n_ori_inputs
+        type(ctfparams)  :: ctfvars
 
         p = params(cline)
 
@@ -216,7 +219,7 @@ contains
         inputted_oritab       = cline%defined('oritab')
         inputted_deftab       = cline%defined('deftab')
         inputted_plaintexttab = cline%defined('plaintexttab')
-        n_ori_inputs = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
+        n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
         ! exceptions
         if( n_ori_inputs > 1 )then
             write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
@@ -226,24 +229,16 @@ contains
             write(*,*) 'ERROR, stk and stktab are both defined on command line, use either or'
             stop 'commander_project :: exec_import_particles'
         endif
-        if( cline%defined('filetab') )then
-            if( n_ori_inputs > 0 )then
-                write(*,*) 'Parameter input (oritab|deftab|plaintexttab) not allowed when importing movies (filetab)'
-                stop 'commander_project :: exec_manage_project'
-            endif
-            if( cline%defined('stk') .or. cline%defined('stktab') )then
-                write(*,*) 'ERROR, stk and stktab cannot be inputted when filetab (of movies) is inputted'
-                stop 'commander_project :: exec_manage_project'
-            endif
-        endif
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             if( trim(p%ctf) .ne. 'no' )then
                 ! there needs to be associated parameters of some form
                 if( n_ori_inputs < 1 )then
                     write(*,*) 'ERROR, stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)'
-                    stop 'commander_project :: exec_manage_project'
+                    stop 'commander_project :: exec_import_particles'
                 endif
             endif
+        else
+            stop 'ERROR, either stk or stktab needed on command line; commander_project :: import_particles'
         endif
         ! oris input
         if( inputted_oritab )then
@@ -268,7 +263,7 @@ contains
             nrecs     = paramfile%get_nrecs_per_line()
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'simple_commander_project :: exec_manage_project'
+                stop 'commander_project :: exec_extract_ptcls'
             endif
             call os%new_clean(ndatlines)
             allocate( line(nrecs) )
@@ -281,7 +276,7 @@ contains
                     case( 'microns' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported dfunit; simple_commander_project :: exec_manage_project'
+                        stop 'unsupported dfunit; commander_project :: exec_extract_ptcls'
                 end select
                 select case(p%angastunit)
                     case( 'radians' )
@@ -289,7 +284,7 @@ contains
                     case( 'degrees' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported angastunit; simple_commander_project :: exec_manage_project'
+                        stop 'unsupported angastunit; commander_project :: exec_extract_ptcls'
                 end select
                 select case(p%phshiftunit)
                     case( 'radians' )
@@ -297,7 +292,7 @@ contains
                     case( 'degrees' )
                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
                     case DEFAULT
-                        stop 'unsupported phshiftunit; simple_commander_project :: exec_manage_project'
+                        stop 'unsupported phshiftunit; commander_project :: exec_extract_ptcls'
                 end select
                 call os%set(i, 'dfx', line(1))
                 if( nrecs > 1 )then
@@ -310,8 +305,35 @@ contains
             end do
         endif
 
+
         if( cline%defined('stk') )then
-            ! if importing single stack of extracted particles
+            ! if importing single stack of extracted particles, these are hard requirements
+            if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing single stack of particles (stk); commander_project :: exec_import_particles'
+            if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when importing movies; commander_project :: exec_extract_ptcls'
+            if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when importing movies; commander_project :: exec_extract_ptcls'
+            if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when importing movies; commander_project :: exec_extract_ptcls'
+            if( cline%defined('phaseplate') )then
+                phaseplate = cline%get_carg('phaseplate')
+            else
+                allocate(phaseplate, source='no')
+            endif
+            ctfvars%smpd         = p%smpd
+            ctfvars%kv           = p%kv
+            ctfvars%cs           = p%cs
+            ctfvars%fraca        = p%fraca
+            ctfvars%l_phaseplate = phaseplate .eq. 'yes'
+            select case(trim(p%ctf))
+                case('yes')
+                    ctfvars%ctfflag = 1
+                case('no')
+                    ctfvars%ctfflag = 0
+                case('flip')
+                    ctfvars%ctfflag = 3
+                case DEFAULT
+                    write(*,*) 'unsupported ctf flag: ', trim(p%ctf)
+                    stop 'ABORTING... commander_project :: exec_extract_ptcls'
+            end select
+        else
             if( n_ori_inputs == 1 )then
                 ! sampling distance
                 if( cline%defined('smpd') )then
@@ -321,7 +343,7 @@ contains
                         if( .not. os%isthere(i, 'smpd') )then
                             write(*,*) 'os entry: ', i, ' lacks sampling distance (smpd)'
                             write(*,*) 'Please, provide smpd on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_extract_ptcls'
                         endif
                     end do
                 endif
@@ -333,7 +355,7 @@ contains
                         if( .not. os%isthere(i, 'kv') )then
                             write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
                             write(*,*) 'Please, provide kv on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_extract_ptcls'
                         endif
                     end do
                 endif
@@ -345,7 +367,7 @@ contains
                         if( .not. os%isthere(i, 'cs') )then
                             write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
                             write(*,*) 'Please, provide cs on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_extract_ptcls'
                         endif
                     end do
                 endif
@@ -357,7 +379,7 @@ contains
                         if( .not. os%isthere(i, 'fraca') )then
                             write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
                             write(*,*) 'Please, provide fraca on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_extract_ptcls'
                         endif
                     end do
                 endif
@@ -391,10 +413,10 @@ contains
         ! add stack if present
         if( cline%defined('stk') )then
             if( n_ori_inputs == 0 )then
-                if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance in A) input required when importing class averages; commander_project :: exec_manage_project'
+                if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance in A) input required when importing class averages; commander_project :: exec_extract_ptcls'
                 call spproj%add_cavgs2os_out(p%stk, p%smpd, p%imgkind)
             else
-                if( cline%defined('smpd') ) call spproj%add_single_ptcls_stk(p%stk, p%smpd, os)
+                ! if( cline%defined('smpd') ) call spproj%add_single_ptcls_stk(p%stk, ctfvars, os)
             endif
         endif
         ! add list of stacks (stktab) if present
@@ -402,10 +424,10 @@ contains
         ! add list of movies (filetab) if present
         if( cline%defined('filetab') )then
             ! hard requirements
-            if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing movies; commander_project :: exec_manage_project'
-            if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when importing movies; commander_project :: exec_manage_project'
-            if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when importing movies; commander_project :: exec_manage_project'
-            if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when importing movies; commander_project :: exec_manage_project'
+            if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing movies; commander_project :: exec_extract_ptcls'
+            if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when importing movies; commander_project :: exec_extract_ptcls'
+            if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when importing movies; commander_project :: exec_extract_ptcls'
+            if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when importing movies; commander_project :: exec_extract_ptcls'
             if( cline%defined('phaseplate') )then
                 phaseplate = cline%get_carg('phaseplate')
             else
@@ -420,7 +442,7 @@ contains
 
         ! WRITE PROJECT FILE
         call spproj%write
-        call simple_end('**** MANAGE_PROJECT NORMAL STOP ****')
+        call simple_end('**** EXTRACT_PTCLS NORMAL STOP ****')
     end subroutine exec_import_particles
 
     !> for managing projects
@@ -499,7 +521,7 @@ contains
             nrecs     = paramfile%get_nrecs_per_line()
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'simple_commander_project :: exec_manage_project'
+                stop 'commander_project :: exec_manage_project'
             endif
             call os%new_clean(ndatlines)
             allocate( line(nrecs) )
@@ -512,7 +534,7 @@ contains
                     case( 'microns' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported dfunit; simple_commander_project :: exec_manage_project'
+                        stop 'unsupported dfunit; commander_project :: exec_manage_project'
                 end select
                 select case(p%angastunit)
                     case( 'radians' )
@@ -520,7 +542,7 @@ contains
                     case( 'degrees' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported angastunit; simple_commander_project :: exec_manage_project'
+                        stop 'unsupported angastunit; commander_project :: exec_manage_project'
                 end select
                 select case(p%phshiftunit)
                     case( 'radians' )
@@ -528,7 +550,7 @@ contains
                     case( 'degrees' )
                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
                     case DEFAULT
-                        stop 'unsupported phshiftunit; simple_commander_project :: exec_manage_project'
+                        stop 'unsupported phshiftunit; commander_project :: exec_manage_project'
                 end select
                 call os%set(i, 'dfx', line(1))
                 if( nrecs > 1 )then
@@ -552,7 +574,7 @@ contains
                         if( .not. os%isthere(i, 'smpd') )then
                             write(*,*) 'os entry: ', i, ' lacks sampling distance (smpd)'
                             write(*,*) 'Please, provide smpd on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_manage_project'
                         endif
                     end do
                 endif
@@ -564,7 +586,7 @@ contains
                         if( .not. os%isthere(i, 'kv') )then
                             write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
                             write(*,*) 'Please, provide kv on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_manage_project'
                         endif
                     end do
                 endif
@@ -576,7 +598,7 @@ contains
                         if( .not. os%isthere(i, 'cs') )then
                             write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
                             write(*,*) 'Please, provide cs on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_manage_project'
                         endif
                     end do
                 endif
@@ -588,7 +610,7 @@ contains
                         if( .not. os%isthere(i, 'fraca') )then
                             write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
                             write(*,*) 'Please, provide fraca on command line or update input document'
-                            stop 'ERROR! simple_commander_project :: exec_manage_project'
+                            stop 'ERROR! commander_project :: exec_manage_project'
                         endif
                     end do
                 endif

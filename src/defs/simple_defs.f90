@@ -58,15 +58,15 @@ end type str4arr
 
 ! CTF flag type
 enum, bind(c)
-    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP = 3
+    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2
 end enum
-type :: CTFFLAGTYPE
-    integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
-end type CTFFLAGTYPE
+! type :: CTFFLAGTYPE
+!     integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
+! end type CTFFLAGTYPE
 
 ! type for CTF parameters
 type :: ctfparams
-    type(CTFFLAGTYPE) :: ctfflag
+    integer :: ctfflag = 0
     real    :: smpd    = 0.
     real    :: kv      = 0.
     real    :: cs      = 0.

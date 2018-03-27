@@ -43,7 +43,7 @@ type, extends(image) :: reconstructor
     integer                     :: lims(3,2)      = 0           !< Friedel limits
     integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits
-    type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
+    integer                     :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
     logical                     :: tfastig        = .false.     !< astigmatic CTF or not
     logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
@@ -96,8 +96,8 @@ contains
         self%nyq         =  self%get_lfny(1)
         self%winsz       =  p%winsz
         self%alpha       =  p%alpha
-        self%ctf%flag    =  spproj%get_ctfflag_type(p%oritype)
-        if( DEBUG ) print *, '(DEBUG) reconstructor :: alloc_rho; self%ctf%flag: ', self%ctf%flag
+        self%ctfflag     =  spproj%get_ctfflag_type(p%oritype)
+        if( DEBUG ) print *, '(DEBUG) reconstructor :: alloc_rho; self%ctfflag: ', self%ctfflag
         self%tfastig     =  .false.
         if( trim(spproj%get_ctfmode(p%oritype)) .eq. 'astig' ) self%tfastig = .true.
         if( DEBUG ) print *, '(DEBUG) reconstructor :: alloc_rho; spproj%get_ctfmode(p%oritype): ', trim(spproj%get_ctfmode(p%oritype))
@@ -128,7 +128,7 @@ contains
                 &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0.)
         endif
         ! build CTF related matrices
-        if( self%ctf%flag .ne. CTFFLAG_NO)then
+        if( self%ctfflag .ne. CTFFLAG_NO)then
             allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),        source=0.)
             allocate(self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0.)
             !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k,sh,inv1,inv2) proc_bind(close)
@@ -267,7 +267,7 @@ contains
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
-        if( self%ctf%flag /= CTFFLAG_NO )then
+        if( self%ctfflag /= CTFFLAG_NO )then
             ! make CTF object
             tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
@@ -313,7 +313,7 @@ contains
                     arg    = dot_product(shconst_here, vec(1:2))
                     oshift = cmplx(cos(arg), sin(arg))
                     ! transfer function
-                    if( self%ctf%flag /= CTFFLAG_NO )then
+                    if( self%ctfflag /= CTFFLAG_NO )then
                         ! CTF and CTF**2 values
                         if( self%phaseplate )then
                             tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), ctfvars%phshift)
@@ -321,7 +321,7 @@ contains
                             tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                         endif
                         tvalsq = tval * tval
-                        if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                        if( self%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                     else
                         tval   = 1.
                         tvalsq = tval
@@ -368,7 +368,7 @@ contains
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
-        if( self%ctf%flag /= CTFFLAG_NO )then
+        if( self%ctfflag /= CTFFLAG_NO )then
             ! make CTF object
             tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
@@ -419,7 +419,7 @@ contains
                         arg    = dot_product(shifts(iori,:), vec(1:2))
                         oshift = cmplx(cos(arg), sin(arg))
                         ! transfer function
-                        if( self%ctf%flag /= CTFFLAG_NO )then
+                        if( self%ctfflag /= CTFFLAG_NO )then
                             ! CTF and CTF**2 values
                             if( self%phaseplate )then
                                 tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), ctfvars%phshift)
@@ -427,7 +427,7 @@ contains
                                 tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                             endif
                             tvalsq = tval * tval
-                            if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                            if( self%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                         else
                             tval   = 1.
                             tvalsq = tval
