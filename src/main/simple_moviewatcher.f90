@@ -170,7 +170,7 @@ contains
         fname_here = remove_abspath(trim(adjustl(fname)))
         ext        = trim(fname2ext(fname_here))
         fbody      = get_fbody(trim(fname_here), trim(ext))
-        if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//trim(adjustl(fbody))
+        if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//'_'//trim(adjustl(fbody))
         ! motion_correct
         motion_correct_name = trim(self%dir_out)//trim(DIR_MOTION_CORRECT)//&
             &trim(adjustl(fbody))//trim(THUMBNAIL_SUFFIX)//trim(self%ext)
@@ -181,8 +181,8 @@ contains
             motion_correct_done = file_exists(trim(motion_correct_name))
         endif
         ! ctf_estimate
-        ctf_name = trim(self%dir_out)//trim(DIR_CTF_ESTIMATE)//trim(UNIDOC_OUTPUT)//&
-            &trim(adjustl(fbody))//trim(METADATA_EXT)
+        ctf_name = trim(self%dir_out)//trim(DIR_CTF_ESTIMATE)//trim(adjustl(fbody))//&
+            &'_forctf_ctf_estimate_diag'//trim(self%ext)
         ctf_done = file_exists(trim(ctf_name))
         to_process = .not. (motion_correct_done .and. ctf_done)
     end function to_process

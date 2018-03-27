@@ -45,6 +45,8 @@ contains
     procedure, private :: map_ptcl_ind2stk_ind
     procedure          :: add_single_movie
     procedure          :: add_movies
+    ! project editing
+    procedure          :: append_project
     ! os_stk related methods
     procedure          :: append_single_stk
     procedure          :: add_ptcls_stktab
@@ -341,6 +343,65 @@ contains
         ind_in_stk = iptcl - fromp + 1
     end subroutine map_ptcl_ind2stk_ind
 
+    ! project editing
+
+    !> append segment to current project. BOTH projects must be read in first!
+    subroutine append_project( self, proj, oritype )
+        class(sp_project), target, intent(inout) :: self, proj
+        character(len=*),          intent(in)    :: oritype
+        class(oris),          pointer :: os_ptr, os_append_ptr
+        type(oris)                    :: os
+        character(len=:), allocatable :: stk
+        real                          :: smpd, smpd_self
+        integer                       :: i, cnt, n, n2append
+        select case(trim(oritype))
+            case('mic')
+                os_ptr => self%os_mic
+                os_append_ptr => proj%os_mic
+            case('stk')
+                os_ptr => self%os_stk
+                os_append_ptr => proj%os_stk
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype)
+                stop 'unsupported oritype for this purpose; sp_project :: append_project'
+        end select
+        n2append = os_append_ptr%get_noris()
+        if( n2append == 0 )return
+        smpd = os_append_ptr%get(1, 'smpd')
+        n    = os_ptr%get_noris()
+        if( n == 0 )then
+            ! first entry
+        else
+            smpd_self = os_ptr%get(1, 'smpd')
+            if( abs(smpd-smpd_self) > 0.001 )then
+                write(*,*) 'smpd self', smpd_self
+                write(*,*) 'smpd 2 append', smpd
+                stop ' Only a project with the same smpd can be appended to the project; simple_sp_project :: append_project'
+            endif
+        endif
+        select case(trim(oritype))
+            case('mic')
+                if( n == 0 )then
+                    os_ptr = os_append_ptr
+                else
+                    ! append
+                    call os%new_clean(n + n2append)
+                    do i=1,n
+                        call os%set_ori(i, os_ptr%get_ori(i))
+                    enddo
+                    cnt = n
+                    do i=1,n2append
+                        cnt = cnt + 1
+                        call os%set_ori(cnt, os_append_ptr%get_ori(i))
+                    enddo
+                    os_ptr = os
+                endif
+            case('stk')
+                call os_append_ptr%getter(1, 'stk', stk)
+                call self%append_single_stk(stk, smpd, proj%os_ptcl2D)
+        end select
+    end subroutine append_project
+
     ! os_mic related methods
 
     subroutine add_single_movie( self, moviename, oritype, smpd, kv, cs, fraca, phaseplate )
@@ -451,6 +512,7 @@ contains
         write(*,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
         write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
     end subroutine add_movies
+
 
     ! os_stk related methods
 

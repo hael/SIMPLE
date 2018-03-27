@@ -32,6 +32,7 @@ type qsys_ctrl
     integer                        :: ncomputing_units       = 0 !< number of computing units
     integer                        :: ncomputing_units_avail = 0 !< number of available units
     integer                        :: numlen                 = 0 !< length of padded number string
+    integer                        :: n_stream_updates       = 0 !< counter, for streaming only
     integer                        :: cline_stacksz          = 0 !< size of stack of command lines, for streaming only
     logical                        :: stream    = .false.        !< stream flag
     logical                        :: existence = .false.        !< indicates existence
@@ -65,6 +66,7 @@ type qsys_ctrl
     procedure          :: add_to_stream_done_stack
     procedure          :: get_stream_done_stack
     procedure          :: get_stacksz
+    procedure          :: get_done_stacksz
     ! DESTRUCTOR
     procedure          :: kill
 end type qsys_ctrl
@@ -417,13 +419,17 @@ contains
                 self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
             endif
             if( self%stream )then
-                call self%add_to_stream_done_stack( self%stream_cline_submitted(ipart) )
+                if( self%jobs_done(ipart) .and. self%n_stream_updates > 0 )then
+                    call self%add_to_stream_done_stack( self%stream_cline_submitted(ipart) )
+                    call self%stream_cline_submitted(ipart)%delete('prg')
+                endif
             else
                 if( self%jobs_done(ipart) )self%jobs_submitted(ipart) = .true.
             endif
         end do
         if( self%stream )then
             self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
+            self%n_stream_updates = self%n_stream_updates + 1
         else
             njobs_in_queue = count(self%jobs_submitted .eqv. (.not.self%jobs_done))
             self%ncomputing_units_avail = self%ncomputing_units - njobs_in_queue
@@ -528,6 +534,7 @@ contains
         class(cmdline),    intent(in)    :: cline
         type(cmdline), allocatable :: tmp_stack(:)
         integer :: i, stacksz
+        if( .not.cline%defined('prg') )return
         if( .not. allocated(self%stream_cline_done_stack) )then
             ! empty stack
             allocate( self%stream_cline_done_stack(1))
@@ -563,9 +570,19 @@ contains
 
     !>  \brief  returns streaming jobs stack size
     integer function get_stacksz( self )
-        class(qsys_ctrl), intent(inout) :: self
+        class(qsys_ctrl), intent(in) :: self
         get_stacksz = self%cline_stacksz
     end function get_stacksz
+
+    !>  \brief  returns streaming jobs done stack size
+    integer function get_done_stacksz( self )
+        class(qsys_ctrl), intent(in) :: self
+        if( .not. allocated(self%stream_cline_done_stack) )then
+            get_done_stacksz = 0
+        else
+            get_done_stacksz = size(self%stream_cline_done_stack)
+        endif
+    end function get_done_stacksz
 
     ! DESTRUCTOR
 

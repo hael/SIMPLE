@@ -807,10 +807,10 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &0, 9, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 9, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -866,10 +866,11 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 9, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &2,13, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess_stream%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
+        call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'file', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
+        call preprocess_stream%set_input('img_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -882,6 +883,10 @@ contains
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess_stream%set_input('parm_ios', 8, pspecsz)
         call preprocess_stream%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
+        call preprocess_stream%set_input('parm_ios', 10, kv)
+        call preprocess_stream%set_input('parm_ios', 11, cs)
+        call preprocess_stream%set_input('parm_ios', 12, fraca)
+        call preprocess_stream%set_input('parm_ios', 13, smpd)
         ! alternative inputs
         !<empty>
         ! search controls

@@ -78,14 +78,11 @@ select case(prg)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
-        if( cline%defined('refs') ) call cline%set('dopick', 'yes')
-        if( cline%get_carg('dopick').eq.'yes' .and. .not.cline%defined('refs') )then
-            stop 'Picking references must be provided together with DOPICK=YES'
-        endif
         call xpreprocess%execute(cline)
     case( 'preprocess_stream' )
         call cline%parse()
         ! set defaults
+        call cline%set('stream','yes')
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
@@ -96,10 +93,6 @@ select case(prg)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
-        if( cline%defined('refs') ) call cline%set('dopick', 'yes')
-        if( cline%get_carg('dopick').eq.'yes' .and. .not.cline%defined('refs') )then
-            stop 'Picking references must be provided together with DOPICK=YES'
-        endif
         call xpreprocess_stream%execute(cline)
     ! MOTION_CORRECT_MOVIES
 

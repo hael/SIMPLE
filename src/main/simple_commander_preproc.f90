@@ -125,9 +125,11 @@ contains
         call mkdir(output_dir_motion_correct)
         if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-            output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
             call mkdir(output_dir_picker)
-            call mkdir(output_dir_extract)
+            if( p%stream.eq.'yes' )then
+                output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
+                call mkdir(output_dir_extract)
+            endif
         endif
         if( cline%defined('fbody') )then
             fbody = trim(p%fbody)
@@ -139,9 +141,7 @@ contains
         ! range
         if( p%stream.eq.'yes' )then
             ! STREAMING MODE
-            fromto(1) = 1
-            if( cline%defined('startit') )fromto(1) = p%startit
-            fromto(2) = spproj%os_mic%get_noris()
+            fromto(:) = 1
         else
             ! DISTRIBUTED MODE
             if( cline%defined('fromp') .and. cline%defined('top') )then
@@ -180,7 +180,6 @@ contains
             p%smpd = smpd_scaled
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')
-            moviename_intg   = mciter%get_moviename('intg')
             p%hp             = p%hp_ctf_estimate
             p%lp             = max(p%fny, p%lp_ctf_estimate) ! should be in params?
             call cfiter%iterate(p, moviename_forctf, o_mov, output_dir_ctf_estimate)
@@ -189,6 +188,7 @@ contains
             ! picker
             if( l_pick )then
                 p%lp = max(p%fny, p%lp_pick) ! should be in params?
+                moviename_intg = mciter%get_moviename('intg')
                 call piter%iterate(cline, p, moviename_intg, boxfile, nptcls_out, output_dir_picker)
                 call o_mov%set('boxfile', trim(boxfile)   )
                 call o_mov%set('nptcls',  real(nptcls_out))
@@ -804,15 +804,8 @@ contains
         real                          :: particle_position(2), ctf_estimatecc, phshift
         logical                       :: ctf_estimatecc_is_there, phshift_is_there
         logical                       :: ctfres_is_there, dfy_is_there
-        noutside = 0
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
-        if( p%stream .eq. 'yes' )then
-            if( cline%defined('outstk') .and. cline%defined('outfile') )then
-                ! all ok
-            else
-                stop 'need outstk & outfile to be part of the command line in stream=yes mode'
-            endif
-        endif
+        call cline%printline
         ! output directory
         if( cline%defined('dir') )then
             output_dir = trim(p%dir)//'/'
@@ -936,7 +929,6 @@ contains
                     call o_ptcls%set(iptcl, 'kv',    kv)
                     call o_ptcls%set(iptcl, 'cs',    cs)
                     call o_ptcls%set(iptcl, 'fraca', fraca)
-                    call o_ptcls%set(iptcl, 'smpd',  p%smpd)
                     call o_ptcls%set(iptcl, 'dfx',  dfx)
                     if( dfy_is_there )then
                         call o_ptcls%set(iptcl, 'angast', angast)
@@ -949,19 +941,9 @@ contains
                 call o_ptcls%compress(oris_mask)
                 call o_ptcls%kill_chash() ! remove chash part
                 DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
-                ! output stk & params file names
-                if( p%stream.eq.'yes' )then
-                    outfile = trim(output_dir)//p%outfile !!!!!!!!!!!!!!!!!!!!!!!
-                else
-                    fbody = get_fbody(trim(remove_abspath(mic_name)), p%ext, separator=.false.)
-                endif
             endif
             ! output stack
-            if( p%stream.eq.'yes' )then
-                stack = trim(output_dir)//p%outstk
-            else
-                stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(remove_abspath(mic_name))
-            endif
+            stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(remove_abspath(mic_name))
             ! extract windows from integrated movie
             call micrograph%read(mic_name, 1)
             ! filter out frequencies lower than the box can express to avoid aliasing
@@ -982,14 +964,10 @@ contains
             end do
             ! IMPORT INTO PROJECT
             call  b%spproj%append_single_stk( trim(adjustl(stack)), p%smpd, o_ptcls )
-            ! destruct
+            ! clean
             call boxfile%kill()
         enddo
-        if( p%stream.eq.'yes' )then
-            ! needs to be synchronous
-        else
-            call b%spproj%write()
-        endif
+        call b%spproj%write()
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 
         contains
