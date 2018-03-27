@@ -449,15 +449,15 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: filetab, oritype, phaseplate
         real,                      intent(in)    :: smpd, kv, cs, fraca
-        class(oris),                     pointer :: os_ptr
-        type(oris)                               :: os
-        character(len=STDLEN),       allocatable :: movienames(:)
-        character(len=:),            allocatable :: name
+        class(oris),           pointer     :: os_ptr
+        type(oris)                         :: os
+        character(len=STDLEN), allocatable :: movienames(:)
+        character(len=:),      allocatable :: name
         integer :: n_os_mics, imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
-            write(*,*) 'Inputted stack list (stktab): ', trim(filetab)
+            write(*,*) 'Inputted movie list (filetab): ', trim(filetab)
             stop 'does not exist in cwd; sp_project :: add_movies'
         endif
         ! oris object pointer

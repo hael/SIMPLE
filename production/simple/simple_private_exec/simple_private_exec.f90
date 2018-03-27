@@ -91,6 +91,9 @@ type(cluster_oris_commander)         :: xcluster_oris
 type(rotmats2oris_commander)         :: xrotmats2oris
 type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
+type(new_project_commander)          :: xnew_project
+type(update_project_commander)       :: xupdate_project
+type(import_movies_commander)        :: ximport_movies
 type(manage_project_commander)       :: xmanage_project
 type(print_project_info_commander)   :: xprint_project_info
 
@@ -1262,8 +1265,76 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
         ! execute
         call xproject2txt%execute(cline)
+    case( 'new_project' )
+        !==Program new_project
+        !
+        ! </begin></end>
+        !
+        ! set required keys
+        keys_required(1) = 'projname'
+        ! set optional keys
+        keys_optional(1) = 'user_email'
+        keys_optional(2) = 'time_per_image'
+        keys_optional(3) = 'user_account'
+        keys_optional(4) = 'user_project'
+        keys_optional(5) = 'qsys_partition'
+        keys_optional(6) = 'qsys_qos'
+        keys_optional(7) = 'qsys_reservation'
+        keys_optional(8) = 'job_memory_per_task'
+        ! parse command line
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
+        ! execute
+        call xnew_project%execute(cline)
+    case( 'update_project' )
+        !==Program update_project
+        !
+        ! </begin></end>
+        !
+        ! set required keys
+        keys_required(1) = 'projname'
+        ! set optional keys
+        keys_optional(1) = 'user_email'
+        keys_optional(2) = 'time_per_image'
+        keys_optional(3) = 'user_account'
+        keys_optional(4) = 'user_project'
+        keys_optional(5) = 'qsys_partition'
+        keys_optional(6) = 'qsys_qos'
+        keys_optional(7) = 'qsys_reservation'
+        keys_optional(8) = 'job_memory_per_task'
+        ! parse command line
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
+        ! execute
+        call xupdate_project%execute(cline)
+    case( 'import_movies' )
+        !==Program import_movies
+        !
+        ! </begin></end>
+        !
+        ! set required keys
+        keys_required(1)  = 'projname'
+        keys_required(2)  = 'filetab'
+        keys_required(3)  = 'smpd'
+        keys_required(4)  = 'kv'
+        keys_required(5)  = 'cs'
+        keys_required(6)  = 'fraca'
+        ! set optional keys
+        keys_optional(1)  = 'user_email'
+        keys_optional(2)  = 'time_per_image'
+        keys_optional(3)  = 'user_account'
+        keys_optional(4)  = 'user_project'
+        keys_optional(5)  = 'qsys_partition'
+        keys_optional(6)  = 'qsys_qos'
+        keys_optional(7)  = 'qsys_reservation'
+        keys_optional(8)  = 'job_memory_per_task'
+        keys_optional(9)  = 'phaseplate'
+        keys_optional(10) = 'boxtab'
+        ! parse command line
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
+        ! execute
+        call ximport_movies%execute(cline)
+
     case( 'manage_project' )
-        !==Program manageproject
+        !==Program manage_project
         !
         ! </begin></end>
         !

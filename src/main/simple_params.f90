@@ -876,19 +876,17 @@ contains
             call bos%open(self%projfile)
             if( self%stream.eq.'no' )then
                 self%nptcls = bos%get_n_records(self%spproj_a_seg)
+                call o%new_ori_clean
                 select case(self%spproj_a_seg)
                     case(MIC_SEG)
                         call bos%read_first_segment_record(MIC_SEG, o)
                     case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG)
                         call bos%read_first_segment_record(STK_SEG, o)
-                    case DEFAULT
-                        call o%new_ori_clean
-                        call o%set('smpd',0.)
                 end select
                 if( o%isthere('smpd') )then
                     self%smpd = o%get('smpd')
                 else
-                    print *,'projfile exec requires smpd in field:', trim(self%oritype)
+                    print *,'projfile exec requires smpd in mic or stk seg'
                     stop 'ERROR! params :: new'
                 endif
                 ! box
