@@ -30,9 +30,10 @@ character(len=*), parameter :: VOL_FBODY            = 'recvol_state'
 character(len=*), parameter :: ANISOLP_FBODY        = 'aniso_optlp_state'
 character(len=*), parameter :: SNHCDOC              = 'snhc_oris'//trim(METADATA_EXT)
 character(len=*), parameter :: SNHCVOL              = 'snhc_recvol_state'
-! REFINE3D COMMON
+! 2D/3D COMMON
 character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
 character(len=*), parameter :: FRCS_FBODY           = 'frcs_state'
+character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
 character(len=*), parameter :: FRCS_ITER_FBODY      = 'frcs_iter'
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 ! EXTRACT

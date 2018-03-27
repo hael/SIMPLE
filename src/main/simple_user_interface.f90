@@ -403,8 +403,8 @@ contains
         &1, 0, 0, 6, 5, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cluster2D_stream%set_input('img_ios', 1, 'dir_ptcls', 'file', 'Particles directory',&
-        &'Directory where particles and CTF parameters are automatically detected', 'e.g. extract/', .true., '')
+        call cluster2D_stream%set_input('img_ios', 1, 'projfile_target', 'file', 'Target project',&
+        &'Project encapsulating new particles and parameters to be classified in 2D', 'e.g. mytargetprojfile.simple', .true., '')
         ! parameter input/output
         !<empty>
         ! alternative inputs

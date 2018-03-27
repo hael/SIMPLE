@@ -99,11 +99,8 @@ contains
         type(chash)                        :: job_descr
         type(params)                       :: p_master
         type(sp_project)                   :: spproj
-        character(len=STDLEN), allocatable :: movies(:)
         character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract
-        character(len=LONGSTRLEN)          :: movie
-        integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
         logical                            :: l_pick
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
@@ -425,7 +422,7 @@ contains
         type(qsys_env)        :: qenv
         type(params)          :: p_master
         type(build)           :: b
-        character(len=STDLEN) :: refs, refs_even, refs_odd, oritab, str, str_iter
+        character(len=STDLEN) :: refs, refs_even, refs_odd, str, str_iter
         integer               :: iter
         type(chash)           :: job_descr
         real                  :: frac_srch_space
@@ -506,7 +503,7 @@ contains
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
-            call job_descr%set('frcs', trim(FRCS_ITER_FBODY)//int2str_pad(iter - 1,3)//BIN_EXT)
+            call job_descr%set('frcs', trim(FRCS_FILE))
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
             ! merge orientation documents
@@ -515,7 +512,7 @@ contains
             refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p_master%ext
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p_master%ext
-            call cline_cavgassemble%set('refs', refs)
+            call cline_cavgassemble%set('refs', trim(refs))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! remapping of empty classes
             call remap_empty_cavgs
@@ -558,8 +555,6 @@ contains
                     call b%spproj%read_segment('ptcl2D', p_master%projfile )
                     call b%a%fill_empty_classes(p_master%ncls, fromtocls)
                     if( allocated(fromtocls) )then
-                        ! updates projfile
-                        call b%spproj%write()
                         ! updates refs
                         call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
                         do icls = 1, size(fromtocls, dim=1)
@@ -580,18 +575,18 @@ contains
                         enddo
                         call img_cavg%read(trim(refs_odd), p_master%ncls)
                         call img_cavg%write(trim(refs_odd), p_master%ncls)  ! to preserve size
-                        if( p_master%match_filt.eq.'yes')then
-                            ! updates FRCs
-                            state     = 1
-                            frcs_iter = trim(FRCS_ITER_FBODY)//int2str_pad(iter,3)//BIN_EXT
-                            call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
-                            call frcs%read(frcs_iter)
-                            do icls = 1, size(fromtocls, dim=1)
-                                call frcs%set_frc( fromtocls(icls,2),&
-                                &frcs%get_frc(fromtocls(icls,1), p_master%box, state), state)
-                            enddo
-                            call frcs%write(frcs_iter)
-                        endif
+                        ! updates FRCs
+                        state     = 1
+                        frcs_iter = trim(FRCS_ITER_FBODY)//int2str_pad(iter,3)//BIN_EXT
+                        call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
+                        call frcs%read(frcs_iter)
+                        do icls = 1, size(fromtocls, dim=1)
+                            call frcs%set_frc( fromtocls(icls,2),&
+                            &frcs%get_frc(fromtocls(icls,1), p_master%box, state), state)
+                        enddo
+                        ! need to be re-written for distributed apps!
+                        call frcs%write(frcs_iter)
+                        call b%spproj%write()
                     endif
                 endif
             end subroutine remap_empty_cavgs
@@ -1240,7 +1235,6 @@ contains
         type(chash)                        :: job_descr
         type(cmdline)                      :: cline_scale
         type(chash),           allocatable :: part_params(:)
-        character(len=:),      allocatable :: stkname, outstkname
         character(len=STDLEN), allocatable :: part_stks(:)
         character(len=STDLEN) :: filetab
         integer, allocatable  :: parts(:,:)

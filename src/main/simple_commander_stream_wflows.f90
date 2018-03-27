@@ -177,8 +177,8 @@ contains
         type(cmdline)                       :: cline_cluster2D, cline_scale, cline_make_cavgs
         type(params)                        :: p_master
         type(sp_project)                    :: orig_proj, work_proj
-        character(len=:),      allocatable :: orig_projfile, target_projfile
-        character(len=STDLEN)              :: str_iter, refs_glob, frcs_glob
+        character(len=:),       allocatable :: orig_projfile
+        character(len=STDLEN)               :: str_iter, refs_glob
         real    :: orig_smpd, smpd, msk, scale_factor, orig_msk
         integer :: iter, n_newstks, orig_box, box, nptcls_glob, ncls_glob, tnow
         integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_stk, n_stk_prev
@@ -207,8 +207,8 @@ contains
         call cline_make_cavgs%delete('autoscale')
         ! wait for the first stacks to trickle in...
         do
-            if( .not.is_file_open(target_projfile) )then
-                call orig_proj%read(target_projfile)
+            if( .not.is_file_open(p_master%projfile_target) )then
+                call orig_proj%read(p_master%projfile_target)
                 n_stk = orig_proj%os_stk%get_noris()
                 if( n_stk > 0)then
                     nptcls_glob = orig_proj%get_nptcls()
@@ -286,8 +286,8 @@ contains
                     exit
                 endif
             ! detects whether new images have been added to the original project
-            if( .not.is_file_open(target_projfile) )then
-                call orig_proj%read_segment('stk', target_projfile)
+            if( .not.is_file_open(p_master%projfile_target) )then
+                call orig_proj%read_segment('stk', p_master%projfile_target)
                 n_stk     = orig_proj%os_stk%get_noris()
                 n_newstks = n_stk - n_stk_prev
             endif
@@ -476,7 +476,7 @@ contains
                         ! FRCs
                         call frcs_prev%new(ncls_glob_prev, box, smpd, state)
                         call frcs%new(ncls_glob, box, smpd, state)
-                        call frcs_prev%read('frcs.bin')
+                        call frcs_prev%read(FRCS_FILE)
                         do icls = 1, ncls_glob_prev
                             call frcs%set_frc(icls,&
                             &frcs_prev%get_frc(icls, box, state), state)
@@ -485,7 +485,7 @@ contains
                             call frcs%set_frc( fromtocls(icls,2),&
                             &frcs%get_frc(fromtocls(icls,1), box, state), state)
                         enddo
-                        call frcs%write(frcs_glob)
+                        call frcs%write(FRCS_FILE)
                     endif
                 endif
             end subroutine map_new_ptcls

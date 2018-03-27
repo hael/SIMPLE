@@ -153,6 +153,7 @@ type :: params
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
+    character(len=STDLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
@@ -886,8 +887,28 @@ contains
                 if( o%isthere('smpd') )then
                     self%smpd = o%get('smpd')
                 else
-                    print *,'projfile exec requires smpd in mic or stk seg'
-                    stop 'ERROR! params :: new'
+                    if( cline%defined('projfile_target') )then
+                        ! if absent check the target project
+                        if( file_exists(trim(self%projfile_target)) )then
+                            call bos%open(self%projfile_target)
+                            call o%new_ori_clean
+                            select case(self%spproj_a_seg)
+                                case(MIC_SEG)
+                                    call bos%read_first_segment_record(MIC_SEG, o)
+                                case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG)
+                                    call bos%read_first_segment_record(STK_SEG, o)
+                            end select
+                            if( o%isthere('smpd') )then
+                                self%smpd = o%get('smpd')
+                            else
+                                print *,'projfile exec requires smpd in mic or stk seg'
+                                stop 'ERROR! params :: new'
+                            endif
+                        endif
+                    else
+                        print *,'projfile exec requires smpd in mic or stk seg'
+                        stop 'ERROR! params :: new'
+                    endif
                 endif
                 ! box
                 call bos%read_first_segment_record(STK_SEG, o)

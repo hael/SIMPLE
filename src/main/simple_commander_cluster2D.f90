@@ -144,11 +144,11 @@ contains
         type(build)  :: b
         integer      :: fnr, file_stat, j
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
+        p%frcs = trim(FRCS_FILE)
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_strategy2D_tbox(p)
         call cavger_new(b, p, 'class')
         call cavger_assemble_sums_from_parts()
-        p%frcs  = 'frcs.bin'
         if( cline%defined('which_iter') )then
             p%refs      = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
             p%refs_even = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_even'//p%ext
