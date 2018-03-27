@@ -548,7 +548,6 @@ contains
                 cnt = cnt + 1
                 call o%getter('intg', intg_forctf)
                 call cfiter%iterate(p, intg_forctf, o, trim(output_dir))
-                call o%set('ctf', 'yes') !!!!!!!!!!!!
                 call spproj%os_mic%set_ori(imic, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
             endif

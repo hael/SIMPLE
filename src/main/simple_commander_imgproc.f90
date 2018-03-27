@@ -592,7 +592,7 @@ contains
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
                 if( cline%defined('dir_target') )then
-                    fname = trim(p%dir_target)//'/'//add2fbody(remove_abspath(filenames(ifile)), p%ext, '_sc')
+                    fname = trim(p%dir_target)//'/'//add2fbody(remove_abspath(filenames(ifile)), p%ext, SCALE_SUFFIX)
                 else
                     fname = add2fbody(trim(filenames(ifile)), p%ext, '_sc')
                 endif

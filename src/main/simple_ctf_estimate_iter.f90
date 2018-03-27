@@ -60,6 +60,7 @@ contains
         call orientation%set('dfy',        dfy     )
         call orientation%set('angast',     angast  )
         call orientation%set('phshift',    phshift )
+        call orientation%set('ctf',           'yes')
         call orientation%set('ctf_estimatecc',   cc)
         call orientation%set('dferr',      dferr   )
         call orientation%set('ctfscore',   ctfscore)
