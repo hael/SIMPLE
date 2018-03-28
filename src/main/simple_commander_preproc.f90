@@ -793,7 +793,8 @@ contains
         type(image)                   :: micrograph
         type(oris)                    :: o_ptcls
         type(ori)                     :: o_mic
-        character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind
+        type(ctfparams)               :: ctfparms
+        character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind, ctfstr, phplate
         real,             allocatable :: boxdata(:,:)
         logical,          allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN)     :: stack, outfile, fbody
@@ -832,7 +833,7 @@ contains
             if( .not.file_exists(boxfile_name) )cycle
             ! get number of frames from stack
             call find_ldim_nptcls(mic_name, lfoo, nframes )
-            if( nframes > 1 ) stop 'multi-frame extraction no longer supported; simple_extract'
+            if( nframes > 1 ) stop 'multi-frame extraction no longer supported; commander_preproc :: exec_extract'
             ! update mask
             mics_mask(imic) = .true.
             nmics = nmics + 1
@@ -851,9 +852,9 @@ contains
             endif
         enddo
         call spproj%kill
-        if( nmics == 0 ) stop 'No particles to extract! simple_commander_preproc :: exec_extract'
+        if( nmics == 0 ) stop 'No particles to extract! commander_preproc :: exec_extract'
         p%box = nint(cline%get_rarg('box'))
-        if( p%box == 0 )stop 'ERROR, box cannot be zero!'
+        if( p%box == 0 )stop 'ERROR! box cannot be zero; commander_preproc :: exec_extract'
         ! init
         call b%build_general_tbox(p, cline, do3d=.false.)
         call micrograph%new([ldim(1),ldim(2),1], p%smpd)
@@ -888,58 +889,54 @@ contains
                 call boxfile%readNextDataLine(boxdata(iptcl,:))
                 box = nint(boxdata(iptcl,3))
                 if( nint(boxdata(iptcl,3)) /= nint(boxdata(iptcl,4)) )then
-                    stop 'Only square windows are currently allowed!'
+                    stop 'ERROR! Only square windows are currently allowed; commander_preproc :: exec_extract'
                 endif
                 ! modify coordinates if change in box (shift by half the difference)
                 if( box /= p%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(p%box-box)/2.
                 if( nint(boxdata(iptcl,3)) /= p%box )then
                     write(*,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', p%box
-                    stop 'inconsistent box sizes in box files'
+                    stop 'ERROR! inconsistent box sizes in box files; commander_preproc :: exec_extract'
                 endif
                 ! update particle mask & movie index
                 if( box_inside(ldim, nint(boxdata(iptcl,1:2)), p%box) )oris_mask(iptcl) = .true.
             end do
             call o_ptcls%new_clean(nptcls)
-            DebugPrint  'did check box parsing'
             ! extract ctf info
             if( o_mic%isthere('dfx') )then
-                if( .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('kv') )then
-                    stop 'ERROR! Input lacks at least cs, kv or fraca field'
+                if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
+                    stop 'ERROR! Input lacks at least cs, kv or fraca field; commander_preproc :: exec_extract'
                 endif
-                kv    = o_mic%get('kv')
-                cs    = o_mic%get('cs')
-                fraca = o_mic%get('fraca')
-                dfx   = o_mic%get('dfx')
-                ! ctf_estimatecc_is_there = o_mic%isthere('ctf_estimatecc')
-                phshift_is_there        = o_mic%isthere('phshift')
-                ! ctfres_is_there         = o_mic%isthere('ctfres')
-                dfy_is_there            = o_mic%isthere('dfy')
-                ! if( ctf_estimatecc_is_there ) ctf_estimatecc = o_mic%get('ctf_estimatecc')
-                if( phshift_is_there  )       phshift        = o_mic%get('phshift')
-                ! if( ctfres_is_there   )       ctfres         = o_mic%get('ctfres')
-                angast = 0.
-                if( dfy_is_there )then ! astigmatic CTF
-                    if( .not. o_mic%isthere('angast') ) stop 'need angle of astigmatism for CTF correction'
-                    dfy    = o_mic%get('dfy')
-                    angast = o_mic%get('angast')
+                ! prepare CTF vars
+                call o_mic%getter('ctf', ctfstr)
+                ctfparms%ctfflag = 1
+                select case( trim(ctfstr) )
+                    case('no')
+                        ctfparms%ctfflag = 0
+                    case('yes')
+                        ctfparms%ctfflag = 1
+                    case('flip')
+                        ctfparms%ctfflag = 2
+                end select
+                ctfparms%kv           = o_mic%get('kv')
+                ctfparms%cs           = o_mic%get('cs')
+                ctfparms%fraca        = o_mic%get('fraca')
+                if( o_mic%isthere('phaseplate'))then
+                    call o_mic%getter('phaseplate', phplate)
+                    ctfparms%l_phaseplate = trim(phplate) .eq. 'yes'
+                else
+                    ctfparms%l_phaseplate = .false.
                 endif
+                if( ctfparms%ctfflag > 0 )then
+                    if( .not.o_mic%isthere('dfx') )then
+                        stop 'ERROR! ctf .ne. no and input lacks dfx; commander_preproc :: exec_extract'
+                    endif
+                endif
+                ! transfer to particles
                 do iptcl=1,nptcls
                     if( .not.oris_mask(iptcl) )cycle
-                    call o_ptcls%set(iptcl, 'kv',    kv)
-                    call o_ptcls%set(iptcl, 'cs',    cs)
-                    call o_ptcls%set(iptcl, 'fraca', fraca)
-                    call o_ptcls%set(iptcl, 'dfx',  dfx)
-                    if( dfy_is_there )then
-                        call o_ptcls%set(iptcl, 'angast', angast)
-                        call o_ptcls%set(iptcl, 'dfy',       dfy)
-                    endif
-                    ! if( ctf_estimatecc_is_there ) call o_ptcls%set(iptcl, 'ctf_estimatecc', ctf_estimatecc)
-                    if( phshift_is_there  )       call o_ptcls%set(iptcl, 'phshift', phshift)
-                    ! if( ctfres_is_there   )       call o_ptcls%set(iptcl, 'ctfres', ctfres)
+                    call o_ptcls%set_ori(iptcl, o_mic)
                 end do
                 call o_ptcls%compress(oris_mask)
-                call o_ptcls%kill_chash() ! remove chash part
-                DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
             endif
             ! output stack
             stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(remove_abspath(mic_name))
@@ -962,7 +959,7 @@ contains
                 endif
             end do
             ! IMPORT INTO PROJECT
-            call  b%spproj%append_single_stk( trim(adjustl(stack)), p%smpd, o_ptcls )
+            call  b%spproj%add_stk(trim(adjustl(stack)), ctfparms, o_ptcls)
             ! clean
             call boxfile%kill()
         enddo

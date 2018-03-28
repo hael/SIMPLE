@@ -134,6 +134,7 @@ contains
             subroutine create_individual_project
                 type(sp_project)              :: spproj_here
                 type(cmdline)                 :: cline_here
+                type(ctfparams)               :: ctfvars
                 character(len=STDLEN)         :: ext, movie_here
                 character(len=LONGSTRLEN)     :: projname
                 movie_here = remove_abspath(trim(movie))
@@ -141,10 +142,15 @@ contains
                 projname   = 'preprocess_'//trim(get_fbody(trim(movie_here), trim(ext)))
                 call cline_here%set('projname', trim(projname)) ! necessary?
                 call spproj_here%update_projinfo(cline_here)
-                spproj_here%compenv = spproj%compenv
-                spproj_here%jobproc = spproj%jobproc
-                call spproj_here%add_single_movie(trim(movie), 'mic', p_master%smpd,&
-                    &p_master%kv, p_master%cs, p_master%fraca, p_master%phaseplate)
+                spproj_here%compenv  = spproj%compenv
+                spproj_here%jobproc  = spproj%jobproc
+                ctfvars%ctfflag      = CTFFLAG_YES
+                ctfvars%smpd         = p_master%smpd
+                ctfvars%cs           = p_master%cs
+                ctfvars%kv           = p_master%kv
+                ctfvars%fraca        = p_master%fraca
+                ctfvars%l_phaseplate = p_master%phaseplate.eq.'yes'
+                call spproj_here%add_single_movie(trim(movie), ctfvars)
                 call spproj_here%write()
                 call spproj_here%kill()
                 call cline%set('projfile', trim(projname)//'.simple')
@@ -329,11 +335,12 @@ contains
                 class(oris),  intent(inout) :: os_stk_in
                 character(len=*), parameter :: SCALE_FILETAB = 'stkscale.txt'
                 type(oris)                         :: os_ptcls
-                type(ori)                          :: o_stk, o_stk_in
+                type(ori)                          :: o_stk
+                type(ctfparams)                    :: ctfvars
                 type(qsys_env)                     :: qenv
                 character(len=STDLEN), allocatable :: new_stks(:)
-                character(len=:),      allocatable :: stkname, val
-                integer :: istk, nptcls
+                character(len=:),      allocatable :: stkname, val, ctfstr, phaseplate
+                integer :: istk, nptcls, iptcl
                 allocate(new_stks(n_newstks))
                 do istk=1,n_newstks
                     call os_stk_in%getter(n_stk+istk, 'stk', stkname)
@@ -358,28 +365,32 @@ contains
                 endif
                 ! append to working project
                 do istk=1,n_newstks
-                    nptcls = nint(os_stk_in%get(n_stk+istk,'nptcls'))
+                    o_stk  = os_stk_in%get_ori(n_stk+istk)
+                    nptcls = nint(o_stk%get('nptcls'))
                     call os_ptcls%new_clean(nptcls)
-                    call work_proj%append_single_stk(new_stks(istk), smpd, os_ptcls)
-                    o_stk_in = os_stk_in%get_ori(n_stk+istk)
-                    o_stk    = work_proj%os_stk%get_ori(n_stk+istk)
-                    if( o_stk_in%isthere('ctf') )then
-                        call o_stk_in%getter('ctf', val)
-                        call o_stk%set('ctf',trim(val))
+                    do iptcl=1,nptcls
+                        call os_ptcls%set_ori(iptcl, o_stk)
+                    enddo
+                    call o_stk%getter('ctf', ctfstr)
+                    ctfvars%ctfflag = 1
+                    select case( trim(ctfstr) )
+                        case('no')
+                            ctfvars%ctfflag = 0
+                        case('yes')
+                            ctfvars%ctfflag = 1
+                        case('flip')
+                            ctfvars%ctfflag = 2
+                    end select
+                    ctfvars%kv    = o_stk%get('kv')
+                    ctfvars%cs    = o_stk%get('cs')
+                    ctfvars%fraca = o_stk%get('fraca')
+                    if( o_stk%isthere('phaseplate'))then
+                        call o_stk%getter('phaseplate', phaseplate)
+                        ctfvars%l_phaseplate = trim(phaseplate) .eq. 'yes'
+                    else
+                        ctfvars%l_phaseplate = .false.
                     endif
-                    ! transfer CTF parameters
-                    if( o_stk_in%isthere('cs') )     call o_stk%set('cs', o_stk_in%get('cs'))
-                    if( o_stk_in%isthere('kv') )     call o_stk%set('kv', o_stk_in%get('kv'))
-                    if( o_stk_in%isthere('fraca') )  call o_stk%set('fraca', o_stk_in%get('fraca'))
-                    if( o_stk_in%isthere('dfx') )    call o_stk%set('dfx', o_stk_in%get('dfx'))
-                    if( o_stk_in%isthere('dfy') )    call o_stk%set('dfy', o_stk_in%get('dfy'))
-                    if( o_stk_in%isthere('angast') ) call o_stk%set('angast', o_stk_in%get('angast'))
-                    if( o_stk_in%isthere('phshift') )call o_stk%set('phshift', o_stk_in%get('phshift'))
-                    if( o_stk_in%isthere('phaseplate') )then
-                        call o_stk_in%getter('phaseplate', val)
-                        call o_stk%set('phaseplate',trim(val))
-                    endif
-                    call work_proj%os_stk%set_ori(n_stk+istk, o_stk)
+                    call work_proj%add_stk(new_stks(istk), ctfvars, os_ptcls)
                 enddo
                 ! update global parameters
                 n_stk       = work_proj%os_stk%get_noris()

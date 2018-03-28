@@ -74,6 +74,7 @@ type :: oris
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure          :: reject
+    procedure          :: delete_entry
     procedure          :: set_euler
     procedure          :: set_shift
     procedure          :: e1set
@@ -1371,6 +1372,16 @@ contains
         integer,     intent(in)    :: i
         call self%o(i)%reject
     end subroutine reject
+
+    !>  \brief  entry deleter
+    subroutine delete_entry( self, key )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%delete_entry(key)
+        end do
+    end subroutine delete_entry
 
     !>  \brief  is a setter
     subroutine set_euler( self, i, euls )

@@ -1,5 +1,7 @@
 module simple_sp_project
 #include "simple_lib.f08"
+use simple_ori,     only: ori
+use simple_imghead, only: find_ldim_nptcls
 use simple_oris,    only: oris
 use simple_binoris, only: binoris
 implicit none
@@ -48,9 +50,9 @@ contains
     ! project editing
     procedure          :: append_project
     ! os_stk related methods
-    procedure          :: append_single_stk
-    procedure          :: add_ptcls_stktab
-    procedure          :: add_single_ptcls_stk
+    procedure          :: add_stk
+    procedure          :: add_stktab
+    procedure          :: add_single_stk
     procedure          :: get_stkname
     procedure          :: get_stkname_and_ind
     procedure          :: add_scale_tag
@@ -351,6 +353,7 @@ contains
         character(len=*),          intent(in)    :: oritype
         class(oris),          pointer :: os_ptr, os_append_ptr
         type(oris)                    :: os
+        type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
         real                          :: smpd, smpd_self
         integer                       :: i, cnt, n, n2append
@@ -398,32 +401,28 @@ contains
                 endif
             case('stk')
                 call os_append_ptr%getter(1, 'stk', stk)
-                call self%append_single_stk(stk, smpd, proj%os_ptcl2D)
+                ctfvar = proj%get_ctfparams('stk', 1)
+                call self%add_stk(stk, ctfvar, proj%os_ptcl2D)
         end select
     end subroutine append_project
 
     ! os_mic related methods
 
-    subroutine add_single_movie( self, moviename, oritype, smpd, kv, cs, fraca, phaseplate )
+    subroutine add_single_movie( self, moviename, ctfvars )
         class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: moviename, oritype, phaseplate
-        real,                      intent(in)    :: smpd, kv, cs, fraca
-        class(oris),                     pointer :: os_ptr
+        character(len=*),          intent(in)    :: moviename
+        type(ctfparams),           intent(in)    :: ctfvars
+        class(oris), pointer :: os_ptr
         integer :: n_os_mic, ldim(3), nframes
         ! oris object pointer
-        select case(trim(oritype))
-            case('mic')
-                os_ptr => self%os_mic
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: add_single_movie'
-        end select
-        ! ! check that stk field is empty
+        os_ptr => self%os_mic
+        ! check that stk field is empty
         n_os_mic = os_ptr%get_noris()
         if( n_os_mic > 0 )then
             write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_mic
-            stop 'ABORTING! sp_project :: add_stktab'
+            stop 'ABORTING! sp_project :: add_single_movie'
         endif
+        ! update ori
         call os_ptr%new_clean(1)
         call find_ldim_nptcls(trim(moviename), ldim, nframes)
         if( nframes <= 0 )then
@@ -431,24 +430,40 @@ contains
         else if( nframes > 1 )then
             call os_ptr%set(1, 'movie', trim(moviename))
             call os_ptr%set(1, 'imgkind', 'movie')
+            call os_ptr%set(1, 'nframes',    real(nframes))
         else
             call os_ptr%set(1, 'intg',  trim(moviename))
             call os_ptr%set(1, 'imgkind', 'mic')
         endif
         call os_ptr%set(1, 'xdim',       real(ldim(1)))
         call os_ptr%set(1, 'ydim',       real(ldim(2)))
-        call os_ptr%set(1, 'nframes',    real(nframes))
-        call os_ptr%set(1, 'smpd',       smpd)
-        call os_ptr%set(1, 'kv',         kv)
-        call os_ptr%set(1, 'cs',         cs)
-        call os_ptr%set(1, 'fraca',      fraca)
-        call os_ptr%set(1, 'phaseplate', trim(phaseplate))
+        call os_ptr%set(1, 'smpd',       ctfvars%smpd)
+        call os_ptr%set(1, 'kv',         ctfvars%kv)
+        call os_ptr%set(1, 'cs',         ctfvars%cs)
+        call os_ptr%set(1, 'fraca',      ctfvars%fraca)
+        if( ctfvars%l_phaseplate )then
+            call os_ptr%set(1, 'phaseplate', 'yes')
+        else
+            call os_ptr%set(1, 'phaseplate', 'no')
+        endif
+        select case(ctfvars%ctfflag)
+            case(0)
+                call os_ptr%set(1, 'ctf', 'no')
+            case(1)
+                call os_ptr%set(1, 'ctf', 'yes')
+            case(2)
+                call os_ptr%set(1, 'ctf', 'flip')
+            case DEFAULT
+                write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
+                stop 'ERROR, unsupported ctfflag; sp_project :: add_single_movie'
+        end select
     end subroutine add_single_movie
 
-    subroutine add_movies( self, filetab, oritype, smpd, kv, cs, fraca, phaseplate )
+    ! subroutine add_movies( self, filetab, smpd, kv, cs, fraca, phaseplate )
+    subroutine add_movies( self, filetab, ctfvars )
         class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: filetab, oritype, phaseplate
-        real,                      intent(in)    :: smpd, kv, cs, fraca
+        character(len=*),          intent(in)    :: filetab
+        type(ctfparams),           intent(in)    :: ctfvars
         class(oris),           pointer     :: os_ptr
         type(oris)                         :: os
         character(len=STDLEN), allocatable :: movienames(:)
@@ -461,13 +476,7 @@ contains
             stop 'does not exist in cwd; sp_project :: add_movies'
         endif
         ! oris object pointer
-        select case(trim(oritype))
-            case('mic')
-                os_ptr => self%os_mic
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: add_movies'
-        end select
+        os_ptr => self%os_mic
         ! read movie names
         call read_filetable(filetab, movienames)
         nmics = size(movienames)
@@ -498,11 +507,26 @@ contains
             call os_ptr%set(imic, 'xdim',       real(ldim(1)))
             call os_ptr%set(imic, 'ydim',       real(ldim(2)))
             call os_ptr%set(imic, 'nframes',    real(nframes))
-            call os_ptr%set(imic, 'smpd',       smpd)
-            call os_ptr%set(imic, 'kv',         kv)
-            call os_ptr%set(imic, 'cs',         cs)
-            call os_ptr%set(imic, 'fraca',      fraca)
-            call os_ptr%set(imic, 'phaseplate', trim(phaseplate))
+            call os_ptr%set(imic, 'smpd',       ctfvars%smpd)
+            call os_ptr%set(imic, 'kv',         ctfvars%kv)
+            call os_ptr%set(imic, 'cs',         ctfvars%cs)
+            call os_ptr%set(imic, 'fraca',      ctfvars%fraca)
+            if( ctfvars%l_phaseplate )then
+                call os_ptr%set(imic, 'phaseplate', 'yes')
+            else
+                call os_ptr%set(imic, 'phaseplate', 'no')
+            endif
+            select case(ctfvars%ctfflag)
+                case(0)
+                    call os_ptr%set(imic, 'ctf', 'no')
+                case(1)
+                    call os_ptr%set(imic, 'ctf', 'yes')
+                case(2)
+                    call os_ptr%set(imic, 'ctf', 'flip')
+                case DEFAULT
+                    write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
+                    stop 'ERROR, unsupported ctfflag; sp_project :: add_movies'
+            end select
         enddo
         if( is_movie )then
             name = 'MOVIE(S)'
@@ -513,37 +537,41 @@ contains
         write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
     end subroutine add_movies
 
-
     ! os_stk related methods
 
-    subroutine append_single_stk( self, stk, smpd, os )
-        use simple_ori,     only: ori
-        use simple_imghead, only: find_ldim_nptcls
+    subroutine add_stk( self, stk, ctfvars, os )
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
-        real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        class(oris),           intent(inout) :: os   ! parameters associated with stk
+        type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
+        class(oris),           intent(inout) :: os      ! parameters associated with stk
         type(oris) :: tmp_os
         type(ori)  :: o
-        integer    :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D, i
+        integer    :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        integer    :: i, fromp, top
         ! file exists?
         if( .not. file_exists(stk) )then
             write(*,*) 'Inputted stack (stk): ', trim(stk)
-            stop 'does not exist in cwd; sp_project :: append_single_stk'
+            stop 'does not exist in cwd; sp_project :: add_stk'
         endif
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
-            stop 'ERROR! nonsquare particle images not supported; sp_project :: append_single_stk'
+            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stk'
         endif
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
         if( n_os /= nptcls )then
             write(*,*) '# input oris      : ', n_os
             write(*,*) '# ptcl imgs in stk: ', nptcls
-            stop 'ERROR! nonconforming sizes of inputs; sp_project :: append_single_stk'
+            stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stk'
+        endif
+        ! existence of ctf/defocus values
+        if( ctfvars%ctfflag > 0 )then
+            if( .not.os%isthere(1,'dfx') )then
+                stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
+            endif
         endif
         ! updates_fields
         n_os_stk    = self%os_stk%get_noris() + 1
@@ -553,8 +581,13 @@ contains
             call self%os_stk%new_clean(1)
             call self%os_ptcl2D%new_clean(nptcls)
             call self%os_ptcl3D%new_clean(nptcls)
+            fromp = 1
+            top   = n_os
         else
             ! stk
+            if( self%os_stk%isthere(n_os_stk-1,'top') )then
+                stop 'FROMP/TOP keys should always be informed; simple_sp_project :: add_stk'
+            endif
             call self%os_stk%reallocate(n_os_stk)
             ! 2d
             n_os_ptcl2D = self%os_ptcl2D%get_noris()
@@ -562,82 +595,124 @@ contains
             ! 3d
             n_os_ptcl3D = self%os_ptcl3D%get_noris()
             call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
+            fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
+            top   = fromp + n_os_ptcl2D - 1
         endif
         ! updates oris_objects
         call self%os_stk%set(n_os_stk, 'stk',     trim(stk))
         call self%os_stk%set(n_os_stk, 'box',     real(ldim(1)))
         call self%os_stk%set(n_os_stk, 'nptcls',  real(nptcls))
-        call self%os_stk%set(n_os_stk, 'fromp',   1.0)
-        call self%os_stk%set(n_os_stk, 'top',     real(nptcls))
-        call self%os_stk%set(n_os_stk, 'smpd',    real(smpd))
-        call self%os_stk%set(n_os_stk, 'stkkind', 'single')
+        call self%os_stk%set(n_os_stk, 'fromp',   real(fromp))
+        call self%os_stk%set(n_os_stk, 'top',     real(top))
+        call self%os_stk%set(n_os_stk, 'stkkind', 'split')
         call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
-        call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))
+        call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
+        call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
+        call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
+        call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
+        if( ctfvars%l_phaseplate )then
+            call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
+        else
+            call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
+        endif
+        select case(ctfvars%ctfflag)
+            case(0)
+                call self%os_stk%set(n_os_stk, 'ctf', 'no')
+            case(1)
+                call self%os_stk%set(n_os_stk, 'ctf', 'yes')
+            case(2)
+                call self%os_stk%set(n_os_stk, 'ctf', 'flip')
+            case DEFAULT
+                write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
+                stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
+        end select
+        if( self%os_mic%get_noris() == n_os_stk)then
+            call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))
+        endif
         ! update particle oris objects
         do i = 1, nptcls
             o = os%get_ori(i)
+            call o%kill_chash()
+            call o%delete_entry('kv')
+            call o%delete_entry('cs')
+            call o%delete_entry('fraca')
+            call o%delete_entry('smpd')
+            if( ctfvars%ctfflag > 0 )then
+                if( .not.o%isthere('dfx') )then
+                    stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
+                endif
+            endif
             call o%set('stkind', real(n_os_stk))
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
             call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
         enddo
-    end subroutine append_single_stk
+    end subroutine add_stk
 
-    subroutine add_ptcls_stktab( self, stktab, os )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: stktab
-        class(oris),       intent(inout) :: os ! parameters associated with stktab
-        character(len=STDLEN), allocatable :: stknames(:)
-        real, allocatable :: smpds(:)
-        integer :: n_os_stk, istk, ldim(3), ldim_here(3), nptcls, istart, istop
-        integer :: n_os, n_os_ptcl2D, n_os_ptcl3D, fromp, top, iptcl, nmics
-        ! file exists?
-        if( .not. file_exists(stktab) )then
-            write(*,*) 'Inputted stack list (stktab): ', trim(stktab)
-            stop 'does not exist in cwd; sp_project :: add_stktab'
-        endif
+    subroutine add_single_stk( self, stk, ctfvars, os )
+        class(sp_project),     intent(inout) :: self
+        character(len=*),      intent(in)    :: stk
+        type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
+        class(oris), optional, intent(inout) :: os   ! parameters associated with stk
+        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
             write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
-            stop 'ABORTING! sp_project :: add_stktab'
+            stop 'ABORTING! sp_project :: add_single_stk'
         endif
         ! check that particle fields are empty
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         if( n_os_ptcl2D > 0 )then
             write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_stktab'
+            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
         endif
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_ptcl3D > 0 )then
             write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_stktab'
+            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
+        endif
+        if( ctfvars%ctfflag > 0 )then
+            if( .not.os%isthere(1,'dfx') )then
+                stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_single_stk'
+            endif
+        endif
+        ! add stack
+        call self%add_stk(stk, ctfvars, os)
+        ! indicate single
+        call self%os_stk%set(1, 'stkkind', 'single')
+    end subroutine add_single_stk
+
+    subroutine add_stktab( self, stktab, os )
+        class(sp_project),   intent(inout) :: self
+        character(len=*),    intent(in)    :: stktab
+        class(oris),         intent(inout) :: os ! parameters associated with stktab
+        type(ctfparams)                    :: ctfvars
+        type(ori)                          :: o_stk
+        type(oris)                         :: os_ptcls
+        character(len=:), allocatable      :: phplate, ctfstr
+        character(len=STDLEN), allocatable :: stknames(:)
+        integer :: istk, ldim(3), ldim_here(3), nptcls, n_os, iptcl, nstks
+        ! file exists?
+        if( .not. file_exists(stktab) )then
+            write(*,*) 'Inputted stack list (stktab): ', trim(stktab)
+            stop 'does not exist in cwd; sp_project :: add_stktab'
         endif
         ! read micrograph stack names
         call read_filetable(stktab, stknames)
-        nmics = size(stknames)
+        nstks = size(stknames)
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
-        if( n_os /= nmics )then
+        if( n_os /= nstks )then
             write(*,*) '# input oris      : ', n_os
-            write(*,*) '# stacks in stktab: ', nmics
+            write(*,*) '# stacks in stktab: ', nstks
             stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stktab'
         endif
-        if( os%isthere('smpd') )then
-            smpds = os%get_all('smpd')
-            if( any(abs(smpds - smpds(1)) > 1e-6) )then
-                write(*,*) 'smpd of particle 1 in os: ', smpds(1), ' not consistent with all others'
-                stop 'ERROR! nonconforming samplign distances; sp_project :: add_stktab'
+        do istk=1,nstks
+            if( .not.file_exists(stknames(istk)) )then
+                write(*,*) 'Inputted stack: ', trim(stknames(istk))
+                stop 'does not exist in cwd; sp_project :: add_stktab'
             endif
-        else
-            write(*,*) 'Sampling distance (smpd) is the minimum requirement when importing per-micrograph stacks'
-            stop 'ERROR! sp_project :: add_stktab'
-        endif
-        ! make os_stk field with the inputted os parameters transferred
-        self%os_stk = os
-        ! fill-in the image stacks
-        istart = 1
-        istop  = 0
-        do istk=1,nmics
+            o_stk = os%get_ori(istk)
             ! logical dimension management
             call find_ldim_nptcls(trim(stknames(istk)), ldim, nptcls)
             ldim(3) = 1
@@ -658,101 +733,36 @@ contains
                 write(*,*) 'ydim:     ', ldim(2)
                 stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stktab'
             endif
-            ! update stop index counter
-            istop = istop + nptcls
-            ! update os_stk field
-            call self%os_stk%set(istk, 'stk',     trim(stknames(istk)))
-            call self%os_stk%set(istk, 'box',     real(ldim(1)))
-            call self%os_stk%set(istk, 'nptcls',  real(nptcls))
-            call self%os_stk%set(istk, 'smpd',    smpds(1))
-            call self%os_stk%set(istk, 'fromp',   real(istart))
-            call self%os_stk%set(istk, 'top',     real(istop))
-            call self%os_stk%set(istk, 'imgkind', 'ptcl')
-            call self%os_stk%set(istk, 'stkkind', 'split')
-            ! update nptcls
-            nptcls = istop
-            ! update start index counter
-            istart = istart + nptcls
-        end do
-        ! update particle fields with stack index mapping
-        call self%os_ptcl2D%new(nptcls)
-        call self%os_ptcl3D%new(nptcls)
-        do istk=1,nmics
-            fromp = nint(self%os_stk%get(istk, 'fromp'))
-            top   = nint(self%os_stk%get(istk, 'top')  )
-            do iptcl=fromp,top
-                call self%os_ptcl2D%set(iptcl, 'stkind', real(istk))
-                call self%os_ptcl3D%set(iptcl, 'stkind', real(istk))
-            end do
-        end do
-    end subroutine add_ptcls_stktab
-
-    subroutine add_single_ptcls_stk( self, stk, smpd, os )
-        use simple_imghead, only: find_ldim_nptcls
-        class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: stk
-        real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        class(oris), optional, intent(inout) :: os   ! parameters associated with stk
-        ! real,             allocatable :: smpds(:)
-        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
-        ! file exists?
-        if( .not. file_exists(stk) )then
-            write(*,*) 'Inputted stack (stk): ', trim(stk)
-            stop 'does not exist in cwd; sp_project :: add_stk'
-        endif
-        ! check that stk field is empty
-        n_os_stk = self%os_stk%get_noris()
-        if( n_os_stk > 0 )then
-            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
-            stop 'ABORTING! sp_project :: add_single_stk'
-        endif
-        ! check that particle fields are empty
-        n_os_ptcl2D = self%os_ptcl2D%get_noris()
-        if( n_os_ptcl2D > 0 )then
-            write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
-        endif
-        n_os_ptcl3D = self%os_ptcl3D%get_noris()
-        if( n_os_ptcl3D > 0 )then
-            write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
-        endif
-        ! find dimension of inputted stack
-        call find_ldim_nptcls(stk, ldim, nptcls)
-        if( ldim(1) /= ldim(2) )then
-            write(*,*) 'xdim: ', ldim(1)
-            write(*,*) 'ydim: ', ldim(2)
-            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_single_stk'
-        endif
-        if( present(os) )then
-            ! check that inputs are of conforming sizes
-            n_os = os%get_noris()
-            if( n_os /= nptcls )then
-                write(*,*) '# input oris      : ', n_os
-                write(*,*) '# ptcl imgs in stk: ', nptcls
-                stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_single_stk'
+            ! prepare CTF vars
+            call o_stk%getter('ctf', ctfstr)
+            ctfvars%ctfflag = 1
+            select case( trim(ctfstr) )
+                case('no')
+                    ctfvars%ctfflag = 0
+                case('yes')
+                    ctfvars%ctfflag = 1
+                case('flip')
+                    ctfvars%ctfflag = 2
+            end select
+            ctfvars%kv    = o_stk%get('kv')
+            ctfvars%cs    = o_stk%get('cs')
+            ctfvars%fraca = o_stk%get('fraca')
+            if( o_stk%isthere('phaseplate'))then
+                call o_stk%getter('phaseplate', phplate)
+                ctfvars%l_phaseplate = trim(phplate) .eq. 'yes'
+            else
+                ctfvars%l_phaseplate = .false.
             endif
-        endif
-        ! make stk field
-        call self%os_stk%new_clean(1)
-        call self%os_stk%set(1, 'stk',     trim(stk))
-        call self%os_stk%set(1, 'box',     real(ldim(1)))
-        call self%os_stk%set(1, 'nptcls',  real(nptcls))
-        call self%os_stk%set(1, 'fromp',   1.0)
-        call self%os_stk%set(1, 'top',     real(nptcls))
-        call self%os_stk%set(1, 'smpd',    real(smpd))
-        call self%os_stk%set(1, 'stkkind', 'single')
-        call self%os_stk%set(1, 'imgkind', 'ptcl')
-        ! update particle fields
-        self%os_ptcl2D = os
-        ! set stack index to 1
-        call self%os_ptcl2D%set_all2single('stkind', 1.0)
-        ! make ptcl2D field identical to ptcl3D field
-        self%os_ptcl3D = self%os_ptcl2D
-    end subroutine add_single_ptcls_stk
+            ! import
+            call os_ptcls%new_clean(nptcls)
+            do iptcl=1,nptcls
+                call os_ptcls%set_ori(iptcl, o_stk)
+            end do
+            call self%add_stk(stknames(istk), ctfvars, os_ptcls)
+        enddo
+    end subroutine add_stktab
 
     subroutine split_stk( self, nparts )
-        use simple_imghead,    only: find_ldim_nptcls
         use simple_map_reduce, only: split_nobjs_even
         use simple_image,      only: image
         class(sp_project),     intent(inout) :: self
@@ -917,7 +927,6 @@ contains
     ! os_out related methods
 
     subroutine add_cavgs2os_out( self, stk, smpd, imgkind )
-        use simple_imghead, only: find_ldim_nptcls
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk

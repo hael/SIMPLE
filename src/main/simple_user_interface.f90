@@ -69,6 +69,7 @@ type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: mask
 type(simple_program), target :: motion_correct
+type(simple_program), target :: new_project
 type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
@@ -87,6 +88,7 @@ type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: eo
 type(simple_input_param) :: fraca
+type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: deftab
 type(simple_input_param) :: dfmin
@@ -114,7 +116,11 @@ type(simple_input_param) :: outvol
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: projfile
+type(simple_input_param) :: projname
 type(simple_input_param) :: pspecsz
+type(simple_input_param) :: qsys_partition
+type(simple_input_param) :: qsys_qos
+type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
@@ -148,6 +154,7 @@ contains
         call new_postprocess
         call new_preprocess
         call new_preprocess_stream
+        call new_new_project
         call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
@@ -179,6 +186,8 @@ contains
                 ptr2prg => mask
             case('motion_correct')
                 ptr2prg => motion_correct
+            case('new_project')
+                ptr2prg => new_project
             case('pick')
                 ptr2prg => pick
             case('postprocess')
@@ -224,6 +233,7 @@ contains
     subroutine list_shmem_prgs_in_ui
         write(*,'(A)') extract%name
         write(*,'(A)') mask%name
+        write(*,'(A)') new_project%name
         write(*,'(A)') postprocess%name
         write(*,'(A)') scale%name
         write(*,'(A)') volops%name
@@ -233,6 +243,7 @@ contains
 
     subroutine set_common_params
         call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., 'myproject.simple')
+        call set_param(projname,      'projname',      'str',    'Project name', 'SIMPLE project name', 'e.g. to create myproject.simple', .true., 'myproject')
         call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF correction', 'Contrast Transfer Function correction; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
@@ -290,6 +301,11 @@ contains
         call set_param(outvol,        'outvol',        'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
         call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
         &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        call set_param(projname,      'projname',      'str',    'Project name', 'Name of project to create myproject.simple file for meta-data management', 'e.g. to create myproject.simple', .true., '')
+        call set_param(job_memory_per_task, 'job_memory_per_task', 'str', 'Memory per part', 'Memory in MB per part in distributed execution{1600}', 'MB per part{1600}', .false., 1600.)
+        call set_param(qsys_partition,'qsys_partition','str',    'Name of partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'part name', .false., '')
+        call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
+        call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give yourpart', .false., '')
     end subroutine set_common_params
 
     subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
@@ -722,6 +738,39 @@ contains
         call motion_correct%set_input('comp_ctrls', 1, nparts)
         call motion_correct%set_input('comp_ctrls', 2, nthr)
     end subroutine new_motion_correct
+
+    subroutine new_new_project
+        ! PROGRAM SPECIFICATION
+        ! call new_project%new(&
+        ! &'new_project', & ! name
+        ! &'is a program for creating a new project',&                                                           ! descr_short
+        ! &'SIMPLE3.0 relies on a monolithic project file for controlling execution on distributed &
+        ! &systems and for unified meta-data management. This program creates that file which is mirrored &
+        ! & by an abstract data type in the backend, which is required for execution of any SIMPLE3.0 program',& ! descr_long
+        ! &'simple_exec',&                                                                                       ! executable
+        ! &0, 1, 0, 0, 0, 0, 0, .false.)                                                                         ! # entries in each group, requires sp_project
+        ! ! INPUT PARAMETER SPECIFICATIONS
+        ! ! image input/output
+        ! !<empty>
+        ! ! parameter input/output
+        ! call new_project%set_input('parm_ios', 1, 'projname', 'str', 'Project name', 'Name of project to create myproject.simple file for meta-data management',&
+        ! &'e.g. to create myproject.simple', .true., '')
+        ! call new_project%set_input('parm_ios', 2, job_memory_per_task)
+        ! call new_project%set_input('parm_ios', 3, qsys_partition)
+        ! call new_project%set_input('parm_ios', 4, qsys_qos)
+        ! call new_project%set_input('parm_ios', 5, qsys_reservation)
+
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+
+    end subroutine new_new_project
 
     subroutine new_pick
         ! PROGRAM SPECIFICATION
