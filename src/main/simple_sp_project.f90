@@ -61,6 +61,7 @@ contains
     procedure          :: del_stk_files
     ! os_out related methods
     procedure          :: add_cavgs2os_out
+    procedure          :: make_cavgs_project
     ! getters
     procedure          :: get_nptcls
     procedure          :: get_box
@@ -926,11 +927,10 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd, imgkind )
+    subroutine add_cavgs2os_out( self, stk, smpd)
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=*),      intent(in)    :: imgkind
         integer :: ldim(3), nptcls, n_os_out
         ! file exists?
         if( .not. file_exists(stk) )then
@@ -962,7 +962,46 @@ contains
         call self%os_out%set(n_os_out , 'smpd',    real(smpd))
         call self%os_out%set(n_os_out , 'stkkind', 'single')
         call self%os_out%set(n_os_out , 'imgkind', 'cavg')
+        call self%os_out%set(n_os_out , 'ctf',     'no')
     end subroutine add_cavgs2os_out
+
+    subroutine make_cavgs_project( self, projname, self_out )
+        use simple_cmdline, only: cmdline
+        class(sp_project),     intent(inout) :: self, self_out
+        character(len=*),      intent(in)    :: projname
+        type(cmdline) :: cline
+        character(len=:), allocatable :: imgk
+        integer :: i, ind, n_os_out, cnt
+        ! copy projinfo & compenv fields
+        self_out%projinfo = self%projinfo
+        self_out%compenv  = self%compenv
+        ! move the averages from os_out (in self) to os_stk (in self_out)
+        n_os_out             = self%os_out%get_noris()
+        if( n_os_out < 1 )then
+            write(*,*) '# entries in os_out: ', n_os_out
+            stop 'no class averages available in project; sp_project :: make_cavgs_project'
+        endif
+        cnt = 0
+        do i=1,n_os_out
+            call self%os_out%getter(i, 'imgkind', imgk)
+            if( imgk .eq. 'cavg' )then
+                cnt = cnt + 1
+                ind = i
+            endif
+        end do
+        if( cnt > 1 ) stop 'ABORTING... multiple sets of class averages in project; sp_project :: make_cavgs_project'
+        call self_out%os_stk%new_clean(1)
+        call self_out%os_stk%set_ori(1, self%os_out%get_ori(ind))
+        call self_out%os_stk%set(1, 'ctf', 'no')
+        ! update project "header"
+        call cline%set('projname', trim(projname))
+        call self_out%update_projinfo(cline)
+        ! update ptcl3D field
+        call self_out%os_ptcl3D%new_clean(nint(self_out%os_stk%get(1, 'nptcls')))
+        call self_out%os_ptcl3D%set_all2single('stkind', 1.0)
+        ! write
+        call self_out%write()
+    end subroutine make_cavgs_project
 
     ! getters
 

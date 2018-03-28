@@ -232,23 +232,21 @@ contains
         type(scaler)          :: scobj
         type(params)          :: p_master
         type(sp_project)      :: spproj
-        class(oris), pointer  :: os => null()
+        type(oris)            :: os
         real                  :: iter, smpd_target, lplims(2)
         character(len=2)      :: str_state
-        character(len=STDLEN) :: vol_iter, oritab
+        character(len=:), allocatable :: projfile, stk
+        character(len=STDLEN) :: vol_iter
         logical               :: srch4symaxis, doautoscale
         ! set cline defaults
         call cline%set('eo', 'no')
         ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! auto-scaling prep
         doautoscale = (cline%get_carg('autoscale').eq.'yes')
         ! now, remove autoscale flag from command line, since no scaled partial stacks
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
-        ! delete possibly pre-existing stack_parts
-        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
-        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
         ! make master parameters
         p_master = params(cline)
         ! set global state string
@@ -271,11 +269,27 @@ contains
         ! passed
         if( cline%defined('lpstart') ) lplims(1) = p_master%lpstart
         if( cline%defined('lpstop')  ) lplims(2) = p_master%lpstop
-        ! init scaler
-        smpd_target = p_master%smpd
+        ! local project
+        call spproj%read(p_master%projfile)
+        ! split
+        call spproj%split_stk(p_master%nparts)
+        ! Scaling
         if( doautoscale )then
             smpd_target = lplims(2)*LP2SMPDFAC
+            call spproj%os_stk%getter(1, 'stk', stk)
+            call cline%set('stk',trim(stk))
             call scobj%init(p_master, cline, p_master%box, smpd_target, STKSCALEDBODY)
+            call spproj%os_stk%set(1, 'stk',  STKSCALEDBODY)
+            call spproj%os_stk%set(1, 'smpd', cline%get_rarg('smpd'))
+            call spproj%os_stk%set(1, 'box',  cline%get_rarg('box'))
+            projfile = get_fbody(p_master%projfile,'.simple')//SCALE_SUFFIX//'.simple'
+            call cline%set('projfile',trim(projfile))
+            call spproj%update_projinfo(cline)
+            call spproj%write()
+            call cline%delete('stk')
+        else
+            smpd_target = p_master%smpd
+            projfile    = p_master%projfile
         endif
         ! prepare command lines from prototype master
         cline_refine3D_snhc   = cline
@@ -291,7 +305,6 @@ contains
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
         call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
         call cline_refine3D_snhc%set('prg',    'refine3D')
-        call cline_refine3D_snhc%set('ctf',    'no')
         call cline_refine3D_snhc%set('maxits', real(MAXITS_SNHC))
         call cline_refine3D_snhc%set('refine', 'snhc')
         call cline_refine3D_snhc%set('dynlp',  'no') ! better be explicit about the dynlp
@@ -300,10 +313,8 @@ contains
         call cline_refine3D_snhc%set('objfun', 'cc')
         ! (2) refine3D_init
         call cline_refine3D_init%set('prg',    'refine3D')
-        call cline_refine3D_init%set('ctf',    'no')
         call cline_refine3D_init%set('maxits', real(MAXITS_INIT))
         call cline_refine3D_init%set('vol1',   trim(SNHCVOL)//trim(str_state)//p_master%ext)
-        call cline_refine3D_init%set('oritab', trim(SNHCDOC))
         call cline_refine3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_refine3D_init%set('lp',     lplims(1))
         if( .not. cline_refine3D_init%defined('nspace') )then
@@ -328,15 +339,13 @@ contains
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_reconstruct3D%set('prg',      'reconstruct3D')
             call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
-            call cline_reconstruct3D%set('ctf',      'no')
             call cline_reconstruct3D%set('oritab',   'symdoc'//trim(METADATA_EXT))
             ! refinement step now uses the symmetrised vol and doc
-            call cline_refine3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT))
+            ! call cline_refine3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT)) !! TO UPDATE
             call cline_refine3D_refine%set('vol1',   'rec_sym'//p_master%ext)
         endif
         ! (4) PRIME3D REFINE STEP
         call cline_refine3D_refine%set('prg', 'refine3D')
-        call cline_refine3D_refine%set('ctf', 'no')
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
         call cline_refine3D_refine%set('refine', 'single')
         call cline_refine3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
@@ -371,7 +380,7 @@ contains
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> SYMMETRY AXIS SEARCH'
             write(*,'(A)') '>>>'
-            call cline_symsrch%set('oritab', trim(oritab))
+            !call cline_symsrch%set('oritab', trim(oritab)) ! TO UPDATE
             call cline_symsrch%set('vol1', trim(vol_iter))
             call xsymsrch_distr%execute(cline_symsrch)
             write(*,'(A)') '>>>'
@@ -381,7 +390,6 @@ contains
             call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
             ! refinement step needs to use iter dependent vol/oritab
-            call cline_refine3D_refine%set('oritab', trim(oritab))
             call cline_refine3D_refine%set('vol1', trim(vol_iter))
         endif
         write(*,'(A)') '>>>'
@@ -393,18 +401,17 @@ contains
         call set_iter_dependencies
         ! delete stack parts (we are done with them)
         call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
+        call spproj%read_segment( p_master%oritype, projfile )
+        os = spproj%os_ptcl3D
         if( doautoscale )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(*,'(A)') '>>>'
             ! modulate shifts
-            call spproj%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os)
-            call binread_oritab(oritab, spproj, os, [1,p_master%nptcls])
-            call os%mul_shifts(1./scobj%get_scaled_var('scale'))
-            call binwrite_oritab(oritab, spproj, os, [1,p_master%nptcls])
-            ! prepare reconstruct3D command line
+            call os%mul_shifts( 1./scobj%get_scaled_var('scale') )
+            call spproj%read( p_master%projfile )
+            call spproj%write()
             call scobj%update_stk_smpd_msk(cline_reconstruct3D, 'original')
-            call cline_reconstruct3D%set('oritab', trim(oritab))
             ! re-reconstruct volume
             call xreconstruct3D%execute(cline_reconstruct3D)
             call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
@@ -414,8 +421,9 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
+        call os%write('final_oris.txt')
         call cline_project%set('vol1', 'rec_final'//p_master%ext)
-        call cline_project%set('oritab', trim(oritab))
+        call cline_project%set('oritab', 'final_oris.txt')
         call xproject%execute(cline_project)
         ! end gracefully
         call del_file(trim(STKSCALEDBODY)//p_master%ext)
@@ -426,7 +434,7 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
+                !oritab   = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
