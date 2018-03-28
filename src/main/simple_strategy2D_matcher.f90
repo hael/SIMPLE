@@ -223,7 +223,7 @@ contains
         if( b%spproj%get_ctfflag('ptcl2D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl2D')
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
-        
+
         ! SEARCH
         if( L_BENCH ) t_align = tic()
         if( L_BENCH_CLUSTER2D )then
@@ -317,6 +317,8 @@ contains
         logical   :: do_center
         real      :: xyz(3)
         ! create the polarft_corrcalc object
+        print *,p%ctf
+        
         call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)

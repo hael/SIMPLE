@@ -617,11 +617,11 @@ contains
             call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
         endif
         select case(ctfvars%ctfflag)
-            case(0)
+            case(CTFFLAG_NO)
                 call self%os_stk%set(n_os_stk, 'ctf', 'no')
-            case(1)
+            case(CTFFLAG_YES)
                 call self%os_stk%set(n_os_stk, 'ctf', 'yes')
-            case(2)
+            case(CTFFLAG_FLIP)
                 call self%os_stk%set(n_os_stk, 'ctf', 'flip')
             case DEFAULT
                 write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
@@ -769,11 +769,12 @@ contains
         class(sp_project),     intent(inout) :: self
         integer,               intent(in)    :: nparts
         type(image)                   :: img
-        character(len=:), allocatable :: stk, tmp_dir, ext, imgkind, stkpart, dest_stkpart
+        type(ori)                     :: orig_stk
+        character(len=:), allocatable :: stk, tmp_dir, ext, imgkind, stkpart, dest_stkpart, ctfstr
         character(len=STDLEN) :: cwd
         integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer    :: nptcls, nptcls_part, numlen
-        real       :: smpd
+        real       :: smpd, cs, kv, fraca
         integer(4) :: rename_res
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -818,6 +819,11 @@ contains
             enddo
         endif
         ! updates new stack parts
+        orig_stk = self%os_stk%get_ori(1)
+        call self%os_stk%getter(1, 'ctf', ctfstr)
+        cs    = self%os_stk%get(1,'cs')
+        kv    = self%os_stk%get(1,'kv')
+        fraca = self%os_stk%get(1,'fraca')
         call self%os_stk%new_clean(nparts)
         call mkdir(trim(STKPARTSDIR))
         do istk = 1,nparts
@@ -825,6 +831,10 @@ contains
             allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//'.'//trim(ext))
             rename_res = rename(trim(stkpart), trim(dest_stkpart))
             nptcls_part = parts(istk,2)-parts(istk,1)+1
+            call self%os_stk%set(istk, 'ctf',   ctfstr)
+            call self%os_stk%set(istk, 'cs',    cs)
+            call self%os_stk%set(istk, 'kv',    kv)
+            call self%os_stk%set(istk, 'fraca', fraca)
             call self%os_stk%set(istk, 'stk',     trim(dest_stkpart))
             call self%os_stk%set(istk, 'box',     real(box))
             call self%os_stk%set(istk, 'smpd',    smpd)
@@ -1086,7 +1096,7 @@ contains
             case DEFAULT
                 oritype2segment = GENERIC_SEG
         end select
-    end function
+    end function oritype2segment
 
     character(len=STDLEN) function get_ctfmode( self, oritype )
         class(sp_project), target, intent(inout) :: self

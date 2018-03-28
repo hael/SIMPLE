@@ -485,19 +485,22 @@ contains
         class(params), intent(in)    :: p
         logical :: params_present(4)
         if( p%tfplan%flag.ne.'no' )then
-            params_present(1) = self%a%isthere('kv')
-            params_present(2) = self%a%isthere('cs')
-            params_present(3) = self%a%isthere('fraca')
-            params_present(4) = self%a%isthere('dfx')
-            if( all(params_present) )then
-                ! alles ok
-            else
-                if( .not. params_present(1) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks kv'
-                if( .not. params_present(2) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks cs'
-                if( .not. params_present(3) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks fraca'
-                if( .not. params_present(4) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks defocus'
-                stop
-            endif
+            select case(p%spproj_a_seg)
+                case(MIC_SEG)
+                    !
+                case(STK_SEG)
+                    if( .not. self%a%isthere('cs') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks cs'
+                    if( .not. self%a%isthere('kv') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks kv'
+                    if( .not. self%a%isthere('fraca') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks fraca'
+                case(PTCL2D_SEG,PTCL3D_SEG)
+                    if( .not. self%a%isthere('dfx') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks defocus values'
+                case(CLS2D_SEG)
+                    !
+                case(CLS3D_SEG)
+                    !
+                case DEFAULT
+                    !
+            end select
         endif
         if( p%tfplan%l_phaseplate )then
             if( .not. self%a%isthere('phshift') )then

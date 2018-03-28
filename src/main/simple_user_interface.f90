@@ -301,7 +301,6 @@ contains
         call set_param(outvol,        'outvol',        'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
         call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
         &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
-        call set_param(projname,      'projname',      'str',    'Project name', 'Name of project to create myproject.simple file for meta-data management', 'e.g. to create myproject.simple', .true., '')
         call set_param(job_memory_per_task, 'job_memory_per_task', 'str', 'Memory per part', 'Memory in MB per part in distributed execution{1600}', 'MB per part{1600}', .false., 1600.)
         call set_param(qsys_partition,'qsys_partition','str',    'Name of partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')

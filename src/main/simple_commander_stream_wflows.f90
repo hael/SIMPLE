@@ -196,6 +196,7 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
+        call cline%set('stream','yes')
         p_master      = params(cline)
         orig_projfile = p_master%projfile
         allocate(WORK_PROJFILE, source='CLUSTER2DSTREAM.simple')

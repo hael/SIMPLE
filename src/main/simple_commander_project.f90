@@ -200,13 +200,14 @@ contains
                 call spproj%os_mic%set(i, 'boxfile', trim(boxfnames(i)))
             end do
         endif
+        ! update project info
+        call spproj%update_projinfo( cline )
+        ! update computer environment
+        call spproj%update_compenv( cline )
         ! write project file
         call spproj%write
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
-
-    ! CTF flag required for importing extracted particles
-
 
     !> for importing extracted particles
     subroutine exec_import_particles( self, cline )
@@ -429,7 +430,14 @@ contains
         endif
 
         ! PROJECT FILE MANAGEMENT
-        if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
+        if( file_exists(trim(p%projfile)) )then
+            call spproj%read(p%projfile)
+        else
+            ! update project info
+            call spproj%update_projinfo( cline )
+            ! update computer environment
+            call spproj%update_compenv( cline )
+        endif
         ! UPDATE FIELDS
         ! add stack if present
         if( cline%defined('stk') ) call spproj%add_single_stk(p%stk, ctfvars, os)
@@ -449,6 +457,11 @@ contains
         p = params(cline)
         if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
         call spproj%add_cavgs2os_out(p%stk, p%smpd)
+        ! update project info
+        call spproj%update_projinfo( cline )
+        ! update computer environment
+        call spproj%update_compenv( cline )
+        ! WRITE PROJECT FILE
         call spproj%write
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs

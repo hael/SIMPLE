@@ -589,6 +589,7 @@ contains
         call check_file('pdbfile',        self%pdbfile)
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('projfile',       self%projfile,     'O')
+        call check_file('projfile_target',self%projfile_target,'O')
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
@@ -874,7 +875,7 @@ contains
         endif
         if( file_exists(trim(self%projfile)) )then
             ! get nptcls/box/smpd from project file
-            call bos%open(self%projfile)
+            call bos%open(trim(self%projfile))
             if( self%stream.eq.'no' )then
                 self%nptcls = bos%get_n_records(self%spproj_a_seg)
                 call o%new_ori_clean
@@ -887,28 +888,8 @@ contains
                 if( o%isthere('smpd') )then
                     self%smpd = o%get('smpd')
                 else
-                    if( cline%defined('projfile_target') )then
-                        ! if absent check the target project
-                        if( file_exists(trim(self%projfile_target)) )then
-                            call bos%open(self%projfile_target)
-                            call o%new_ori_clean
-                            select case(self%spproj_a_seg)
-                                case(MIC_SEG)
-                                    call bos%read_first_segment_record(MIC_SEG, o)
-                                case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG)
-                                    call bos%read_first_segment_record(STK_SEG, o)
-                            end select
-                            if( o%isthere('smpd') )then
-                                self%smpd = o%get('smpd')
-                            else
-                                print *,'projfile exec requires smpd in mic or stk seg'
-                                stop 'ERROR! params :: new'
-                            endif
-                        endif
-                    else
-                        print *,'projfile exec requires smpd in mic or stk seg'
-                        stop 'ERROR! params :: new'
-                    endif
+                    print *,'projfile exec requires smpd in mic or stk seg'
+                    stop 'ERROR! params :: new'
                 endif
                 ! box
                 call bos%read_first_segment_record(STK_SEG, o)
@@ -919,10 +900,8 @@ contains
             endif
             ! CTF plan
             select case(trim(self%oritype))
-                case('ptcl2D')
-                    call bos%read_first_segment_record(PTCL2D_SEG, o)
-                case('ptcl3D')
-                    call bos%read_first_segment_record(PTCL3D_SEG, o)
+                case('ptcl2D', 'ptcl3D')
+                    call bos%read_first_segment_record(STK_SEG, o)
             end select
             self%tfplan%flag = 'no'
             if( o%exists() )then

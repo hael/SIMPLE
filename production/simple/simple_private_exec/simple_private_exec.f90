@@ -95,7 +95,7 @@ type(new_project_commander)          :: xnew_project
 type(update_project_commander)       :: xupdate_project
 type(import_movies_commander)        :: ximport_movies
 type(import_particles_commander)     :: ximport_particles
-! type(manage_project_commander)       :: xmanage_project
+type(import_cavgs_commander)         :: ximport_cavgs
 type(print_project_info_commander)   :: xprint_project_info
 
 ! TIME-SERIES ANALYSIS PROGRAMS
@@ -1350,46 +1350,26 @@ select case(prg)
         ! parse command line
         call cline%parse_oldschool(keys_required(:1), keys_optional(:13))
         ! set defaults
-        call cline%set('oritype', 'ptcl')
+        call cline%set('oritype', 'stk')
         ! execute
         call ximport_particles%execute(cline)
-    ! case( 'manage_project' )
-    !     !==Program manage_project
-    !     !
-    !     ! </begin></end>
-    !     !
-    !     ! set required keys
-    !     keys_required(1) = 'ctf'
-    !     ! set optional keys
-    !     keys_optional(1)  = 'smpd'
-    !     keys_optional(2)  = 'cs'
-    !     keys_optional(3)  = 'kv'
-    !     keys_optional(4)  = 'fraca'
-    !     keys_optional(5)  = 'projfile'
-    !     keys_optional(6)  = 'projname'
-    !     keys_optional(7)  = 'phaseplate'
-    !     keys_optional(8)  = 'user_email'
-    !     keys_optional(9)  = 'time_per_image'
-    !     keys_optional(10) = 'user_account'
-    !     keys_optional(11) = 'user_project'
-    !     keys_optional(12) = 'qsys_partition'
-    !     keys_optional(13) = 'qsys_qos'
-    !     keys_optional(14) = 'qsys_reservation'
-    !     keys_optional(15) = 'job_memory_per_task'
-    !     keys_optional(16) = 'stk'
-    !     keys_optional(17) = 'stktab'
-    !     keys_optional(18) = 'plaintexttab'
-    !     keys_optional(19) = 'oritab'
-    !     keys_optional(20) = 'deftab'
-    !     keys_optional(21) = 'dfunit'
-    !     keys_optional(22) = 'angastunit'
-    !     keys_optional(23) = 'phshiftunit'
-    !     keys_optional(24) = 'oritype'
-    !     keys_optional(25) = 'filetab'
-    !     ! parse command line
-    !     call cline%parse_oldschool(keys_required(:1), keys_optional(:25))
-    !     ! execute
-    !     call xmanage_project%execute(cline)
+    case( 'import_cavgs' )
+        !==Program import_cavgs
+        !
+        ! </begin></end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_optional(2)  = 'smpd'
+        ! set optional keys
+        keys_optional(1)  = 'projfile'
+        keys_optional(2)  = 'projname'
+        ! parse command line
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
+        ! set defaults
+        call cline%set('oritype', 'stk')
+        ! execute
+        call ximport_cavgs%execute(cline)
     case( 'print_project_info' )
         !==Program print_project_info
         !
