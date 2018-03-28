@@ -135,45 +135,39 @@ contains
     ! setters/getters
 
     !>  \brief  transfers orientation data to the instance
-    subroutine cavger_transf_oridat( a )
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
-        class(oris), intent(in)    :: a
-        real, allocatable :: ori_weights(:)
-        type(ori)         :: orientation
-        type(oris)        :: a_here
-        integer           :: alloc_stat, cnt, n_incl, iori
-        integer           :: cnt_ori, icls, iptcl
-        logical           :: l_reduce_projs
-        ! create a copy of a that can be modified
-        a_here = a
+    subroutine cavger_transf_oridat( spproj )
+        use simple_sp_project, only: sp_project
+        class(sp_project), intent(inout) :: spproj
+        type(ctfparams)   :: ctfvars
+        integer           :: alloc_stat, cnt, iptcl
         cnt    = 0
-        ! fetch data from a_here
+        ! fetch data from project
         do iptcl=istart,iend
             if(.not.pptcl_mask(iptcl)) cycle
             cnt = cnt + 1
             ! exclusion condition
-            if( a_here%get_state(iptcl) == 0 .or. a_here%get(iptcl,'w') < TINY )then
+            if( spproj%os_ptcl2D%get_state(iptcl) == 0 .or. spproj%os_ptcl2D%get(iptcl,'w') < TINY )then
                 precs(cnt)%pind  = 0
                 cycle
             endif
             ! parameter transfer
             precs(cnt)%pind  = iptcl
-            precs(cnt)%eo    = nint(a_here%get(iptcl,'eo'))
-            precs(cnt)%pw    = a_here%get(iptcl,'w')
-            precs(cnt)%tfun  = ctf(pp%smpd, a_here%get(iptcl,'kv'), a_here%get(iptcl,'cs'), a_here%get(iptcl,'fraca'))
-            select case(pp%tfplan%mode)
+            precs(cnt)%eo    = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
+            precs(cnt)%pw    = spproj%os_ptcl2D%get(iptcl,'w')
+            ctfvars          = spproj%get_ctfparams('ptcl2D',iptcl)
+            precs(cnt)%tfun  = ctf(pp%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
+            select case(trim(pp%tfplan%mode))
                 case('astig') ! astigmatic CTF
-                    precs(cnt)%dfx    = a_here%get(iptcl,'dfx')
-                    precs(cnt)%dfy    = a_here%get(iptcl,'dfy')
-                    precs(cnt)%angast = a_here%get(iptcl,'angast')
+                    precs(cnt)%dfx    = ctfvars%dfx
+                    precs(cnt)%dfy    = ctfvars%dfy
+                    precs(cnt)%angast = ctfvars%angast
                 case('noastig') ! non-astigmatic CTF
-                    precs(cnt)%dfx    = a_here%get(iptcl,'dfx')
-                    precs(cnt)%dfy    = precs(cnt)%dfx
+                    precs(cnt)%dfx    = ctfvars%dfx
+                    precs(cnt)%dfy    = ctfvars%dfx
                     precs(cnt)%angast = 0.
             end select
             precs(cnt)%phshift = 0.
-            if( phaseplate ) precs(cnt)%phshift = a_here%get(iptcl,'phshift')
+            if( phaseplate ) precs(cnt)%phshift = ctfvars%phshift
         end do
         l_hard_assign = .true.
         cnt = 0
@@ -195,18 +189,15 @@ contains
                           precs(cnt)%shifts(1,2), precs(cnt)%inpl_inds(1),&
                           precs(cnt)%eos(1),      stat=alloc_stat )
                 call alloc_errchk('cavger_new; simple_classaverager, record arrays', alloc_stat)
-                precs(cnt)%classes(1)   = nint(a_here%get(iptcl, 'class'))
-                precs(cnt)%inpl_inds(1) = nint(a_here%get(iptcl, 'inpl'))
-                precs(cnt)%states(1)    = nint(a_here%get(iptcl, 'state'))
-                precs(cnt)%eos(1)       = nint(a_here%get(iptcl, 'eo'))
-                precs(cnt)%ows(1)       = a_here%get(iptcl, 'w')
-                precs(cnt)%e3s(1)       = a_here%e3get(iptcl)
-                precs(cnt)%shifts(1,1)  = a_here%get(iptcl, 'x')
-                precs(cnt)%shifts(1,2)  = a_here%get(iptcl, 'y')
+                precs(cnt)%classes(1)   = nint(spproj%os_ptcl2D%get(iptcl, 'class'))
+                precs(cnt)%inpl_inds(1) = nint(spproj%os_ptcl2D%get(iptcl, 'inpl'))
+                precs(cnt)%states(1)    = nint(spproj%os_ptcl2D%get(iptcl, 'state'))
+                precs(cnt)%eos(1)       = nint(spproj%os_ptcl2D%get(iptcl, 'eo'))
+                precs(cnt)%ows(1)       = spproj%os_ptcl2D%get(iptcl, 'w')
+                precs(cnt)%e3s(1)       = spproj%os_ptcl2D%e3get(iptcl)
+                precs(cnt)%shifts(1,:)  = spproj%os_ptcl2D%get_2Dshift(iptcl)
             endif
         end do
-        ! endif
-        call a_here%kill
     end subroutine cavger_transf_oridat
 
     !>  \brief  is for initialization of the sums
@@ -285,27 +276,6 @@ contains
         end do
     end function class_pop
 
-    !>  \brief  is for calculating class population of even/odd partitions
-    function class_pop_eo( class, eo ) result( pop )
-        integer, intent(in) :: class, eo
-        integer :: pop, iprec, sz
-        logical, allocatable :: l_state_class(:)
-        pop = 0
-        do iprec=1,partsz
-            if( allocated(precs(iprec)%classes) )then
-                sz = size(precs(iprec)%classes)
-                allocate(l_state_class(sz))
-                where( precs(iprec)%states > 0 .and. precs(iprec)%classes .eq. class .and. precs(iprec)%eos == eo )
-                    l_state_class = .true.
-                else where
-                    l_state_class = .false.
-                endwhere
-                pop = pop + count(l_state_class)
-                deallocate(l_state_class)
-            endif
-        end do
-    end function class_pop_eo
-
     !>  \brief  is for getting a class average
     subroutine cavger_get_cavg( class, which, img )
         integer,              intent(in)    :: class
@@ -363,7 +333,6 @@ contains
         integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz
         integer   :: lims(3,2), nyq, logi(3), phys(3), win(2,2), lims_small(3,2), phys_cmat(3)
         integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
-        logical   :: pptcl_mask(pp%fromp:pp%top)
         if( .not. pp%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( do_frac_update )then
@@ -524,7 +493,7 @@ contains
                                     ! interpolation
                                     do l=1,wdim
                                         do m=1,wdim
-                                            if( w(l,m) == 0. ) cycle
+                                            if( w(l,m) < TINY ) cycle
                                             logi       = [cyc1(l), cyc2(m), 0]
                                             phys       = cgrid_imgs(i)%comp_addr_phys(logi)
                                             cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
@@ -535,7 +504,7 @@ contains
                                     ! interpolation
                                     do l=1,wdim
                                         do m=1,wdim
-                                            if( w(l,m) == 0. ) cycle
+                                            if( w(l,m) < TINY ) cycle
                                             logi       = [cyc1(l), cyc2(m), 0]
                                             phys       = cgrid_imgs(i)%comp_addr_phys(logi)
                                             cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&

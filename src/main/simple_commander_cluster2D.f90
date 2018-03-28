@@ -99,7 +99,7 @@ contains
         ! create class averager
         call cavger_new(b, p, 'class')
         ! transfer ori data to object
-        call cavger_transf_oridat(b%a)
+        call cavger_transf_oridat(b%spproj)
         ! standard cavg assembly
         call cavger_assemble_sums( .false. )
         ! write sums

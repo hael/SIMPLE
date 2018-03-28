@@ -1241,9 +1241,9 @@ contains
         else if( ptcl_field%isthere(iptcl, 'ctf') )then
             call ptcl_field%getter(iptcl, 'ctf', ctfflag)
         else
-            ctfflag = 'null'
+            ctfflag = NULL
         endif
-        if( trim(ctfflag).eq.'null' )then
+        if( trim(ctfflag).eq.NULL )then
             write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
             stop 'sp_project :: get_ctfparams'
         else

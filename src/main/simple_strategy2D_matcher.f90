@@ -49,8 +49,8 @@ contains
         logical, allocatable       :: ptcl_mask(:)
         class(strategy2D), pointer :: strategy2Dsrch(:)
         type(strategy2D_spec)      :: strategy2Dspec
-        integer :: iptcl, icls, i, j, fnr, cnt
-        real    :: corr_bound, frac_srch_space, skewness, extr_thresh
+        integer :: iptcl, icls, i, fnr, cnt
+        real    :: corr_bound, frac_srch_space, extr_thresh
         logical :: doprint, l_partial_sums, l_extr, l_frac_update
 
         if( L_BENCH )then
@@ -255,7 +255,7 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
-        call cavger_transf_oridat( b%a )
+        call cavger_transf_oridat( b%spproj )
         call cavger_assemble_sums( l_partial_sums )
         ! write results to disk
         call cavger_readwrite_partial_sums('write')
@@ -312,13 +312,13 @@ contains
         class(params), intent(inout) :: p
         integer,       intent(in)    :: which_iter
         type(polarizer), allocatable :: match_imgs(:)
-        integer   :: iptcl, icls, pop, pop_even, pop_odd
-        integer   :: batchlims(2), imatch, batchsz_max, iptcl_batch
+        integer   :: icls, pop, pop_even, pop_odd
+        integer   :: imatch, batchsz_max
         logical   :: do_center
         real      :: xyz(3)
         ! create the polarft_corrcalc object
         print *,p%ctf
-        
+
         call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)
