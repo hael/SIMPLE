@@ -882,7 +882,7 @@ contains
                 select case(self%spproj_a_seg)
                     case(MIC_SEG)
                         call bos%read_first_segment_record(MIC_SEG, o)
-                    case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG)
+                    case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG, CLS2D_SEG)
                         call bos%read_first_segment_record(STK_SEG, o)
                 end select
                 if( o%isthere('smpd') )then

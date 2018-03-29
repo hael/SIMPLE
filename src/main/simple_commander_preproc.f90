@@ -797,13 +797,10 @@ contains
         character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind, ctfstr, phplate
         real,             allocatable :: boxdata(:,:)
         logical,          allocatable :: oris_mask(:), mics_mask(:)
-        character(len=LONGSTRLEN)     :: stack, outfile, fbody
+        character(len=LONGSTRLEN)     :: stack
         integer                       :: nframes, imic, iptcl, ldim(3), nptcls, nmics, box
-        integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside
-        real                          :: kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                          :: particle_position(2), ctf_estimatecc, phshift
-        logical                       :: ctf_estimatecc_is_there, phshift_is_there
-        logical                       :: ctfres_is_there, dfy_is_there
+        integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff
+        real                          :: particle_position(2)
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         call cline%printline
         ! output directory
@@ -900,12 +897,14 @@ contains
                 ! update particle mask & movie index
                 if( box_inside(ldim, nint(boxdata(iptcl,1:2)), p%box) )oris_mask(iptcl) = .true.
             end do
+            nptcls_eff = count(oris_mask)
             call o_ptcls%new_clean(nptcls)
             ! extract ctf info
             if( o_mic%isthere('dfx') )then
                 if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
                     stop 'ERROR! Input lacks at least cs, kv or fraca field; commander_preproc :: exec_extract'
                 endif
+                ctfparms%smpd = p%smpd
                 ! prepare CTF vars
                 call o_mic%getter('ctf', ctfstr)
                 ctfparms%ctfflag = 1
@@ -959,7 +958,7 @@ contains
                 endif
             end do
             ! IMPORT INTO PROJECT
-            call  b%spproj%add_stk(trim(adjustl(stack)), ctfparms, o_ptcls)
+            call b%spproj%add_stk(trim(adjustl(stack)), ctfparms, o_ptcls)
             ! clean
             call boxfile%kill()
         enddo

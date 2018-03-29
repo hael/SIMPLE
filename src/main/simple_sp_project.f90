@@ -466,10 +466,9 @@ contains
         character(len=*),          intent(in)    :: filetab
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),           pointer     :: os_ptr
-        type(oris)                         :: os
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: name
-        integer :: n_os_mics, imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
+        integer :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
@@ -545,7 +544,6 @@ contains
         character(len=*),      intent(in)    :: stk
         type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
         class(oris),           intent(inout) :: os      ! parameters associated with stk
-        type(oris) :: tmp_os
         type(ori)  :: o
         integer    :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer    :: i, fromp, top
@@ -586,7 +584,7 @@ contains
             top   = n_os
         else
             ! stk
-            if( self%os_stk%isthere(n_os_stk-1,'top') )then
+            if( .not.self%os_stk%isthere(n_os_stk-1,'top') )then
                 stop 'FROMP/TOP keys should always be informed; simple_sp_project :: add_stk'
             endif
             call self%os_stk%reallocate(n_os_stk)
@@ -654,7 +652,7 @@ contains
         character(len=*),      intent(in)    :: stk
         type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
         class(oris), optional, intent(inout) :: os   ! parameters associated with stk
-        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        integer :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
