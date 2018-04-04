@@ -1360,10 +1360,10 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'stk'
-        keys_optional(2)  = 'smpd'
+        keys_required(2) = 'smpd'
         ! set optional keys
-        keys_optional(1)  = 'projfile'
-        keys_optional(2)  = 'projname'
+        keys_optional(1) = 'projfile'
+        keys_optional(2) = 'projname'
         ! parse command line
         call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
         ! set defaults

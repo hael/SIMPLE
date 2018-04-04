@@ -315,34 +315,35 @@ contains
                 endif
             end do
         endif
-
         if( cline%defined('stk') )then
-            ! if importing single stack of extracted particles, these are hard requirements
             if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing single stack of particles (stk); commander_project :: exec_import_particles'
-            if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when importing movies; commander_project :: exec_extract_ptcls'
-            if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when importing movies; commander_project :: exec_extract_ptcls'
-            if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when importing movies; commander_project :: exec_extract_ptcls'
-            if( cline%defined('phaseplate') )then
-                phaseplate = cline%get_carg('phaseplate')
-            else
-                allocate(phaseplate, source='no')
-            endif
-            ctfvars%smpd         = p%smpd
-            ctfvars%kv           = p%kv
-            ctfvars%cs           = p%cs
-            ctfvars%fraca        = p%fraca
-            ctfvars%l_phaseplate = phaseplate .eq. 'yes'
+            ctfvars%smpd = p%smpd
             select case(trim(p%ctf))
                 case('yes')
-                    ctfvars%ctfflag = 1
+                    ctfvars%ctfflag = CTFFLAG_YES
                 case('no')
-                    ctfvars%ctfflag = 0
+                    ctfvars%ctfflag = CTFFLAG_NO
                 case('flip')
-                    ctfvars%ctfflag = 2
+                    ctfvars%ctfflag = CTFFLAG_FLIP
                 case DEFAULT
                     write(*,*) 'unsupported ctf flag: ', trim(p%ctf)
                     stop 'ABORTING... commander_project :: exec_extract_ptcls'
             end select
+            if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
+                ! if importing single stack of extracted particles, these are hard requirements
+                if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when importing movies; commander_project :: exec_import_particles'
+                if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when importing movies; commander_project :: exec_import_particles'
+                if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when importing movies; commander_project :: exec_import_particles'
+                if( cline%defined('phaseplate') )then
+                    phaseplate = cline%get_carg('phaseplate')
+                else
+                    allocate(phaseplate, source='no')
+                endif
+                ctfvars%kv           = p%kv
+                ctfvars%cs           = p%cs
+                ctfvars%fraca        = p%fraca
+                ctfvars%l_phaseplate = phaseplate .eq. 'yes'
+            endif
         else
             ! importing from stktab
             if( n_ori_inputs == 1 )then

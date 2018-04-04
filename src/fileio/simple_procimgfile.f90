@@ -1095,7 +1095,11 @@ contains
         call raise_exception_imgfile( nptcls, ldim, 'random_selection_from_imgfile' )
         call img%new(ldim,smpd)
         ! state mask
-        mask = spproj%os_ptcl2D%get_all('state') > 0.5
+        if( spproj%os_ptcl2D%isthere('state') )then
+            mask = spproj%os_ptcl2D%get_all('state') > 0.5
+        else
+            allocate(mask(nptcls), source=.true.)
+        endif
         if( count(mask) < nran )stop 'Insufficient images; simple_procimgfile%random_selection_from_imgfile'
         rt = ran_tabu(nptcls)
         do i=1,nptcls

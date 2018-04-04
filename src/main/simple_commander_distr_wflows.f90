@@ -100,7 +100,7 @@ contains
         type(params)                       :: p_master
         type(sp_project)                   :: spproj
         character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
-        character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract
+        character(len=:),      allocatable :: output_dir_motion_correct
         logical                            :: l_pick
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
@@ -125,9 +125,7 @@ contains
         call mkdir(output_dir_motion_correct)
         if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-            output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
             call mkdir(output_dir_picker)
-            call mkdir(output_dir_extract)
         endif
         ! read in movies
         call spproj%read( p_master%projfile )

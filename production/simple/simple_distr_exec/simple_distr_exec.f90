@@ -91,7 +91,7 @@ select case(prg)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
+        if( .not. cline%defined('stream')          ) call cline%set('stream',         'yes')
         if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
         call xpreprocess_stream%execute(cline)
     ! MOTION_CORRECT_MOVIES

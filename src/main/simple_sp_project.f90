@@ -402,7 +402,7 @@ contains
                 endif
             case('stk')
                 call os_append_ptr%getter(1, 'stk', stk)
-                ctfvar = proj%get_ctfparams('stk', 1)
+                ctfvar = proj%get_ctfparams('ptcl2D', 1)
                 call self%add_stk(stk, ctfvar, proj%os_ptcl2D)
         end select
     end subroutine append_project
@@ -595,7 +595,7 @@ contains
             n_os_ptcl3D = self%os_ptcl3D%get_noris()
             call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
             fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
-            top   = fromp + n_os_ptcl2D - 1
+            top   = fromp + n_os - 1
         endif
         ! updates oris_objects
         call self%os_stk%set(n_os_stk, 'stk',     trim(stk))
@@ -642,6 +642,7 @@ contains
                 endif
             endif
             call o%set('stkind', real(n_os_stk))
+            if( .not.o%isthere('state') ) call o%set('state',1.)
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
             call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
         enddo
@@ -1024,6 +1025,8 @@ contains
         ! sanity check
         if( self%os_stk%isthere(nos,'top') )then
             if( nint(self%os_stk%get(nos,'top')) /=  get_nptcls )then
+                write(*,*) 'nptcls from ptcls', get_nptcls
+                write(*,*) 'nptcls from top', nint(self%os_stk%get(nos,'top'))
                 stop 'ERROR! total # particles .ne. last top index; sp_project :: get_nptcls'
             endif
         endif

@@ -208,7 +208,6 @@ contains
             endif
         end do
         if( p%stream .eq. 'yes' )then
-            call spproj%print_info
             if( .not.l_pick )call spproj%write()
         else
             call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
@@ -798,7 +797,7 @@ contains
         real,             allocatable :: boxdata(:,:)
         logical,          allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN)     :: stack
-        integer                       :: nframes, imic, iptcl, ldim(3), nptcls, nmics, box
+        integer                       :: nframes, imic, iptcl, ldim(3), nptcls, nmics, box, box_first
         integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff
         real                          :: particle_position(2)
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
@@ -845,18 +844,19 @@ contains
                 allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
                 call boxfile%readNextDataLine(boxdata(1,:))
                 call boxfile%kill
-                call cline%set('box', boxdata(1,3))
+                p%box = nint(boxdata(1,3))
             endif
         enddo
         call spproj%kill
         if( nmics == 0 ) stop 'No particles to extract! commander_preproc :: exec_extract'
-        p%box = nint(cline%get_rarg('box'))
+        ! p%box = nint(cline%get_rarg('box'))
         if( p%box == 0 )stop 'ERROR! box cannot be zero; commander_preproc :: exec_extract'
         ! init
         call b%build_general_tbox(p, cline, do3d=.false.)
         call micrograph%new([ldim(1),ldim(2),1], p%smpd)
-        niter    = 0
-        noutside = 0
+        niter     = 0
+        noutside  = 0
+        box_first = 0
         ! main loop
         do imic = 1, ntot
             if( .not.mics_mask(imic) )cycle
@@ -890,7 +890,7 @@ contains
                 endif
                 ! modify coordinates if change in box (shift by half the difference)
                 if( box /= p%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(p%box-box)/2.
-                if( nint(boxdata(iptcl,3)) /= p%box )then
+                if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= p%box )then
                     write(*,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', p%box
                     stop 'ERROR! inconsistent box sizes in box files; commander_preproc :: exec_extract'
                 endif
@@ -930,6 +930,14 @@ contains
                         stop 'ERROR! ctf .ne. no and input lacks dfx; commander_preproc :: exec_extract'
                     endif
                 endif
+                ! clean micrograph stats before transfer to particles
+                call o_mic%delete_entry('xdim')
+                call o_mic%delete_entry('ydim')
+                call o_mic%delete_entry('nframes')
+                call o_mic%delete_entry('nptcls')
+                call o_mic%delete_entry('ctf_estimatecc')
+                call o_mic%delete_entry('ctfscore')
+                call o_mic%delete_entry('dferr')
                 ! transfer to particles
                 do iptcl=1,nptcls
                     if( .not.oris_mask(iptcl) )cycle
