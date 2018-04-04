@@ -1068,9 +1068,9 @@ contains
         if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
         if( cline%defined('lp') ) self%dynlp = 'no'                ! override dynlp=yes and lpstop
         ! set 2D low-pass limits and smpd_targets 4 scaling
-        self%lplims2D(1)       = self%lpstart
-        self%lplims2D(2)       = self%lplims2D(1) - (self%lpstart - self%lpstop)/2.
-        self%lplims2D(3)       = self%lpstop
+        self%lplims2D(1)       = max(self%fny, self%lpstart)
+        self%lplims2D(2)       = max(self%fny, self%lplims2D(1) - (self%lpstart - self%lpstop)/2.)
+        self%lplims2D(3)       = max(self%fny, self%lpstop)
         self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
         self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
         ! set default ring2 value

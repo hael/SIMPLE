@@ -185,9 +185,10 @@ contains
         type(sp_project)                    :: orig_proj, work_proj
         character(len=:),       allocatable :: orig_projfile
         character(len=STDLEN)               :: str_iter, refs_glob
-        real    :: orig_smpd, smpd, msk, scale_factor, orig_msk
+        real    :: orig_smpd, msk, scale_factor, orig_msk
         integer :: iter, n_newstks, orig_box, box, nptcls_glob, ncls_glob, tnow
         integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_stk, n_stk_prev
+        logical :: do_autoscale
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -196,22 +197,27 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
-        call cline%set('stream','yes')
+        call cline%set('stream','yes') ! only for parameters determination
         p_master      = params(cline)
+        if( .not.file_exists(p_master%projfile) )stop 'Project does not exist!'
+        call cline%set('stream','no') ! was only for parameters determination
         orig_projfile = p_master%projfile
-        allocate(WORK_PROJFILE, source='CLUSTER2DSTREAM.simple')
+        allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
         ! init command-lines
         cline_cluster2D  = cline
         call cline_cluster2D%set('prg',       'cluster2D')
         call cline_cluster2D%set('autoscale', 'no')
-        call cline_cluster2D%set('projfile',  trim(WORK_PROJFILE))
         call cline_cluster2D%set('extr_iter', 100.) ! no extremal randomization
         call cline_cluster2D%delete('frac_update')
+        call cline_cluster2D%delete('projfile_target')
+        call cline_cluster2D%delete('projname')
+        call cline_cluster2D%set('projfile', trim(WORK_PROJFILE))
+        call cline_cluster2D%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
         cline_make_cavgs = cline
         call cline_make_cavgs%set('prg',    'make_cavgs')
-        call cline_cluster2D%set('projfile', trim(WORK_PROJFILE))
         call cline_make_cavgs%set('refs',   'cavgs_final'//p_master%ext)
         call cline_make_cavgs%delete('autoscale')
+        call cline_make_cavgs%set('projfile', trim(WORK_PROJFILE)) ! TO WORK OUT
         ! wait for the first stacks to trickle in...
         do
             if( .not.is_file_open(p_master%projfile_target) )then
@@ -227,29 +233,40 @@ contains
             endif
             call simple_sleep(WAIT_WATCHER) ! parameter instead
         enddo
-        ! temporary project & scaling
-        orig_box  = orig_proj%get_box()
-        orig_smpd = orig_proj%get_smpd()
+        ! transfer of general info
+        call work_proj%read(p_master%projfile)
+        orig_proj%projinfo = work_proj%projinfo
+        orig_proj%compenv  = work_proj%compenv
+        if( orig_proj%jobproc%get_noris()>0 ) orig_proj%jobproc = work_proj%jobproc
+        call work_proj%kill()
+        call orig_proj%projinfo%delete_entry('projname')
+        call orig_proj%projinfo%delete_entry('projfile')
+        call orig_proj%update_projinfo(cline_cluster2D) ! name change
+        call orig_proj%write()                          ! & write
+        call orig_proj%kill()
+        ! scaling
+        call work_proj%read(trim(WORK_PROJFILE))
+        orig_box  = work_proj%get_box()
+        orig_smpd = work_proj%get_smpd()
         orig_msk  = p_master%msk
-        if( p_master%autoscale.eq.'yes' )then
-            call orig_proj%scale_projfile(p_master%smpd_targets2D(1), WORK_PROJFILE, cline_cluster2D, cline_scale)
+        p_master%smpd_targets2D(1) = max(orig_smpd, p_master%lp*LP2SMPDFAC2D)
+        do_autoscale = p_master%autoscale.eq.'yes' .and. p_master%smpd_targets2D(1) > orig_smpd
+        if( do_autoscale )then
+            deallocate(WORK_PROJFILE)
+            call work_proj%scale_projfile(p_master%smpd_targets2D(1), WORK_PROJFILE, cline_cluster2D, cline_scale)
             scale_factor = cline_scale%get_rarg('scale')
             box          = nint(cline_scale%get_rarg('newbox'))
-            smpd         = cline_scale%get_rarg('smpd')
-            msk          = cline_scale%get_rarg('msk')
+            msk          = cline_cluster2D%get_rarg('msk')
             call xscale_distr%execute( cline_scale )
         else
-            call orig_proj%update_projinfo(cline_cluster2D) ! name change
-            call orig_proj%write()
-            call orig_proj%kill()
-            box  = orig_box
-            smpd = orig_smpd
-            msk  = orig_msk
             scale_factor = 1.
+            box          = orig_box
+            msk          = orig_msk
         endif
-        call cline_cluster2D%set('box',  real(box))
-        call cline_cluster2D%set('smpd', real(smpd))
-        call cline_cluster2D%set('msk',  real(msk))
+        call cline_cluster2D%set('projfile', trim(WORK_PROJFILE))
+        call cline_cluster2D%set('box',      real(box))
+        call cline_cluster2D%set('msk',      real(msk))
+        call work_proj%kill()
         ! Main loop
         ncls_glob      = nint(real(nptcls_glob) / real(p_master%nptcls_per_cls))
         last_injection = simple_gettime()
@@ -315,7 +332,7 @@ contains
             call simple_sleep(WAIT_WATCHER)
         enddo
         ! un-scaling
-        if( p_master%autoscale.eq.'yes' )then
+        if( do_autoscale )then
             call work_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
             call work_proj%os_ptcl2D%set_all2single('box',  real(orig_box))
             call work_proj%os_ptcl2D%set_all2single('smpd', real(orig_smpd))
@@ -403,9 +420,11 @@ contains
                 integer, allocatable  :: fromtocls(:,:)
                 type(image)           :: img_cavg
                 character(len=STDLEN) :: stk
+                real                  :: smpd
                 integer               :: icls
                 call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls)
                 if( allocated(fromtocls) )then
+                    smpd = work_proj%get_smpd()
                     ! updates document & classes
                     call work_proj%write()
                     call img_cavg%new([box, box,1], smpd)
@@ -440,6 +459,7 @@ contains
                 type(projection_frcs) :: frcs_prev, frcs
                 type(image)           :: img_cavg
                 integer, allocatable  :: fromtocls(:,:), cls(:)
+                real                  :: smpd
                 integer               :: icls, nptcls, iptcl, i, state
                 character(len=STDLEN) :: stk
                 nptcls = nptcls_glob - nptcls_glob_prev
@@ -463,6 +483,7 @@ contains
                     call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls)
                     if( allocated(fromtocls) )then
                         ! references
+                        smpd = work_proj%get_smpd()
                         call img_cavg%new([box,box,1], smpd)
                         do icls = 1, size(fromtocls, dim=1)
                             ! cavg

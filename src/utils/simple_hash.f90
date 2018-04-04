@@ -301,12 +301,14 @@ contains
     subroutine print( self )
         class(hash), intent(inout) :: self
         integer :: i
-        do i=1,self%hash_index-1
-            write(*,"(1X,A,A)", advance="no") trim(self%keys(i)%str), '='
-            write(*,"(A)", advance="no") trim(real2str(self%values(i)))
-        end do
-        write(*,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)%str), '='
-        write(*,"(A)") trim(real2str(self%values(self%hash_index)))
+        if( self%hash_index > 0 )then
+            do i=1,self%hash_index-1,1
+                write(*,"(1X,A,A)", advance="no") trim(self%keys(i)%str), '='
+                write(*,"(A)", advance="no") trim(real2str(self%values(i)))
+            end do
+            write(*,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)%str), '='
+            write(*,"(A)") trim(real2str(self%values(self%hash_index)))
+        endif
     end subroutine print
 
     ! DESTRUCTORS

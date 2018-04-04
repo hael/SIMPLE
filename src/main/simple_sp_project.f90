@@ -1453,6 +1453,7 @@ contains
         call cline_scale%set('prg',      'scale_project')
         call cline_scale%set('scale',    scale_factor)
         call cline_scale%set('projfile', projfile)
+        call cline_scale%set('smpd', smpd_sc)
         if( box == box_sc )then
             ! no scaling
             new_projfile = trim(projfile)
@@ -1468,8 +1469,6 @@ contains
             call self%os_stk%set(istk, 'smpd', real(smpd_sc))
             call self%os_stk%set(istk, 'box', real(box_sc))
         enddo
-        if( self%os_ptcl2D%isthere('smpd') ) call self%os_ptcl2D%set_all2single('smpd', real(smpd_sc))
-        if( self%os_ptcl3D%isthere('smpd') ) call self%os_ptcl3D%set_all2single('smpd', real(smpd_sc))
         call self%os_ptcl2D%mul_shifts(scale_factor)
         call self%os_ptcl3D%mul_shifts(scale_factor)
         ! name changes and list for scaling job

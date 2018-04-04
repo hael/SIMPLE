@@ -153,7 +153,6 @@ contains
             p%refs      = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
             p%refs_even = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_even'//p%ext
             p%refs_odd  = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_odd'//p%ext
-            p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
         else if( .not. cline%defined('refs') )then
             p%refs      = 'start2Drefs'//p%ext
             p%refs_even = 'start2Drefs_even'//p%ext
