@@ -1127,7 +1127,7 @@ contains
 
     subroutine new_scale_project
         ! PROGRAM SPECIFICATION
-        call scale%new(&
+        call scale_project%new(&
         &'scale', & ! name
         &'is a program for re-scaling MRC & SPIDER stacks',&                               ! descr_short
         &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
@@ -1137,8 +1137,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call scale%set_input('parm_ios', 1, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
-        call scale%set_input('parm_ios', 2, projfile)
+        call scale_project%set_input('parm_ios', 1, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
+        call scale_project%set_input('parm_ios', 2, projfile)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1148,8 +1148,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call scale%set_input('comp_ctrls', 1, nparts)
-        call scale%set_input('comp_ctrls', 2, nthr)
+        call scale_project%set_input('comp_ctrls', 1, nparts)
+        call scale_project%set_input('comp_ctrls', 2, nthr)
     end subroutine new_scale_project
 
     subroutine new_volops

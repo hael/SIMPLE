@@ -6,7 +6,6 @@ use simple_params,                only: params
 use simple_commander_base,        only: commander_base
 use simple_qsys_env,              only: qsys_env
 use simple_oris,                  only: oris
-use simple_scaler,                only: scaler
 use simple_strings,               only: int2str_pad, str2int
 use simple_sp_project,            only: sp_project
 use simple_binoris_io             ! use all in there
@@ -233,12 +232,11 @@ contains
         type(cmdline)         :: cline_scale
         ! other variables
         type(ctfparams)       :: ctfvars ! ctf=no by default
-        !type(scaler)          :: scobj
         type(params)          :: p_master
         type(sp_project)      :: spproj, work_proj
         type(oris)            :: os
-        real                  :: iter, smpd_target, lplims(2), orig_smpd, orig_msk, msk, scale_factor
-        integer               :: ncavgs, orig_box, box
+        real                  :: iter, smpd_target, lplims(2), orig_msk, msk, scale_factor
+        integer               :: ncavgs, orig_box, box, istk
         character(len=2)      :: str_state
         character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
         character(len=STDLEN) :: vol_iter
@@ -314,10 +312,10 @@ contains
         call work_proj%split_stk(p_master%nparts)
         ! Scaling
         orig_box    = work_proj%get_box()
-        orig_smpd   = work_proj%get_smpd()
         orig_msk    = p_master%msk
         smpd_target = max(p_master%smpd, lplims(2)*LP2SMPDFAC)
-        doautoscale = doautoscale .and. smpd_target > orig_smpd
+        doautoscale = doautoscale .and. smpd_target > work_proj%get_smpd()
+        projfile    = WORK_PROJFILE
         if( doautoscale )then
             deallocate(WORK_PROJFILE)
             call work_proj%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale)
@@ -325,7 +323,6 @@ contains
             scale_factor = cline_scale%get_rarg('scale')
             box          = nint(cline_scale%get_rarg('newbox'))
             msk          = cline%get_rarg('msk')
-            call cline_scale%printline
             call xscale_distr%execute( cline_scale )
         else
             box         = orig_box
@@ -334,8 +331,8 @@ contains
             projfile    = p_master%projfile
         endif
         call cline%set('projfile', trim(WORK_PROJFILE))
+        call cline%set('msk',      msk)
         call cline%set('box',      real(box))
-        call cline%set('msk',      real(msk))
         ! prepare command lines from prototype master
         cline_refine3D_snhc   = cline
         cline_refine3D_init   = cline
@@ -346,6 +343,11 @@ contains
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
         call cline_project%delete('nparts')
+        ! projects names are subject to change depending on scaling
+        call cline_reconstruct3D%delete('projname')
+        call cline_reconstruct3D%delete('projfile')
+        call cline_project%delete('projname')
+        call cline_project%delete('projfile')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
         call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
@@ -383,6 +385,7 @@ contains
             call cline_symsrch%set('lp',      lplims(2))
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_reconstruct3D%set('prg',      'reconstruct3D')
+            call cline_reconstruct3D%set('projfile', trim(WORK_PROJFILE))
             call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
             call cline_reconstruct3D%set('oritab',   'symdoc'//trim(METADATA_EXT))
             ! refinement step now uses the symmetrised vol and doc
@@ -404,13 +407,9 @@ contains
         ! (5) RE-PROJECT VOLUME
         call cline_project%set('prg',    'project')
         call cline_project%set('outstk', 'reprojs'//p_master%ext)
-        call cline_project%delete('stk')
-        if( doautoscale )then
-            ! TODO
-            ! call scobj%update_smpd_msk(cline_project, 'original')
-            ! ! scale class averages
-            ! call scobj%scale_exec
-        endif
+        call cline_project%set('smpd',    p_master%smpd)
+        call cline_project%set('msk',     orig_msk)
+        call cline_project%set('box',     real(orig_box))
         ! execute commanders
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
@@ -445,34 +444,52 @@ contains
         call xprime3D_distr%execute(cline_refine3D_refine)
         iter = cline_refine3D_refine%get_rarg('endit')
         call set_iter_dependencies
-        ! delete stack parts (we are done with them)
-        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
-        call spproj%read_segment( p_master%oritype, projfile )
-        os = spproj%os_ptcl3D
+        call work_proj%read_segment( 'ptcl3D', WORK_PROJFILE )
+        os = work_proj%os_ptcl3D
         if( doautoscale )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(*,'(A)') '>>>'
             ! modulate shifts
-            ! TODO
-            ! call os%mul_shifts( 1./scobj%get_scaled_var('scale') )
-            ! call spproj%read( p_master%projfile )
-            ! call spproj%write()
-            ! call scobj%update_stk_smpd_msk(cline_reconstruct3D, 'original')
+            call os%mul_shifts( 1./scale_factor )
+            ! clean stacks
+            call work_proj%read_segment( 'stk', WORK_PROJFILE )
+            do istk=1,work_proj%os_stk%get_noris()
+                call work_proj%os_stk%getter(istk, 'stk', stk)
+                call del_file(trim(stk))
+            enddo
+            call work_proj%kill()
+            call del_file(trim(WORK_PROJFILE))
+            deallocate(WORK_PROJFILE)
+            ! updates original scale project
+            WORK_PROJFILE = trim(projfile)
+            call work_proj%read(WORK_PROJFILE)
+            work_proj%os_ptcl3D = os
+            call work_proj%write()
             ! re-reconstruct volume
+            call cline_reconstruct3D%set('projfile',WORK_PROJFILE)
             call xreconstruct3D%execute(cline_reconstruct3D)
             call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         else
             call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
         endif
+        call work_proj%kill()
+        ! update the original project cls3D segment with orientations
+        call spproj%read(p_master%projfile)
+        call os%delete_entry('stkind')
+        spproj%os_cls3D = os
+        call spproj%write()
+        ! reprojections
+        call os%write('final_oris.txt')
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
-        call os%write('final_oris.txt')
-        call cline_project%set('vol1', 'rec_final'//p_master%ext)
-        call cline_project%set('oritab', 'final_oris.txt')
+        call cline_project%set('projfile', trim(WORK_PROJFILE))
+        call cline_project%set('vol1',     'rec_final'//p_master%ext)
+        call cline_project%set('oritab',   'final_oris.txt')
         call xproject%execute(cline_project)
         ! end gracefully
+        call del_file(WORK_PROJFILE)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
 
         contains

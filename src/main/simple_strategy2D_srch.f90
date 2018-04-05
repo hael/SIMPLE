@@ -55,6 +55,7 @@ type strategy2D_srch
     procedure :: prep4srch
     procedure :: inpl_srch
     procedure :: calc_corr
+    procedure :: calc_entropy
     procedure :: store_solution
     procedure :: kill
 end type strategy2D_srch
@@ -166,9 +167,10 @@ contains
         if( DEBUG ) print *, '>>> strategy2D_srch::FINISHED CALC_CORR'
     end subroutine calc_corr
 
-    subroutine store_solution( self )
+    subroutine store_solution( self, entropy )
         use simple_ori,  only: ori
         class(strategy2D_srch), intent(in) :: self
+        real,         optional, intent(in) :: entropy
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         real :: e3, mi_class, mi_inpl, mi_joint
         ! get in-plane angle
@@ -206,8 +208,34 @@ contains
         call self%a_ptr%set(self%iptcl, 'mi_inpl',    mi_inpl)
         call self%a_ptr%set(self%iptcl, 'mi_joint',   mi_joint)
         call self%a_ptr%set(self%iptcl, 'frac',       100.*(real(self%nrefs_eval)/real(self%nrefs)))
+        if( present(entropy) )call self%a_ptr%set(self%iptcl, 'ent', entropy)
         if( DEBUG ) print *, '>>> strategy2D_srch::GOT BEST ORI'
     end subroutine store_solution
+
+    !>  placeholder for whatever metric we want to calculate
+    real function calc_entropy( self, corrs )
+        class(strategy2D_srch), intent(in) :: self
+        real,                   intent(in) :: corrs(self%nrefs)
+        real    :: p, sum_cc
+        integer :: i, nonzero
+        logical :: msk(self%nrefs)
+        msk    = corrs > TINY
+        nonzero = count(msk)
+        if( nonzero <= 2 )then
+            ! This would have come from a random assignement or move so set to random
+            ! This theshold of 2 should be updated to a sensible value that takes
+            ! search space explored into account
+            calc_entropy = - log(1./real(self%nrefs)) / log(2.) ! base 2, in bits
+        else
+            sum_cc = sum(corrs, mask=msk)
+            do i = 1,self%nrefs
+                if( .not. msk(i) )cycle
+                p = corrs(i) / sum_cc
+                calc_entropy = calc_entropy - p*log(p)
+            enddo
+            calc_entropy = calc_entropy / log(2.)
+        endif
+    end function calc_entropy
 
     subroutine kill( self )
         class(strategy2D_srch),  intent(inout) :: self !< instance
