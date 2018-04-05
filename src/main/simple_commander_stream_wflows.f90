@@ -334,13 +334,13 @@ contains
         ! un-scaling
         if( do_autoscale )then
             call work_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
-            call work_proj%os_ptcl2D%set_all2single('box',  real(orig_box))
-            call work_proj%os_ptcl2D%set_all2single('smpd', real(orig_smpd))
+            call work_proj%os_stk%set_all2single('box',  real(orig_box))
+            call work_proj%os_stk%set_all2single('smpd', real(orig_smpd))
         endif
         call work_proj%write()
         ! class averages at original sampling
         call cline_make_cavgs%set('ncls', real(ncls_glob))
-        call xmake_cavgs%execute(cline_make_cavgs)
+        call xmake_cavgs%execute(cline_make_cavgs) ! should be distributed
         ! cleanup
         call qsys_cleanup(p_master)
         ! end gracefully

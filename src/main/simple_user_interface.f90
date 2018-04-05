@@ -575,12 +575,12 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                          ! descr_long
         &'simple_distr_exec',&                                                          ! executable
-        &1, 1, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 1, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call initial_3Dmodel%set_input('img_ios', 1, 'stk', 'file', 'Class averages image stack', 'Class averages image stack', 'xxx.mrc file with class averages', .true., '')
-        ! parameter input/output
         !<empty>
+        ! parameter input/output
+        call initial_3Dmodel%set_input('parm_ios', 1, projfile)
         ! alternative inputs
         !<empty>
         ! search controls

@@ -49,10 +49,11 @@ contains
         integer, parameter :: MAXITS_STAGE1      = 10
         integer, parameter :: MAXITS_STAGE1_EXTR = 15
         ! commanders
-        type(make_cavgs_distr_commander) :: xmake_cavgs
-        type(cluster2D_distr_commander)  :: xcluster2D_distr
-        type(rank_cavgs_commander)       :: xrank_cavgs
-        type(scale_commander)            :: xscale
+        type(make_cavgs_distr_commander)    :: xmake_cavgs
+        type(cluster2D_distr_commander)     :: xcluster2D_distr
+        type(rank_cavgs_commander)          :: xrank_cavgs
+        type(scale_commander)               :: xscale
+        type(scale_project_distr_commander) :: xscale_distr
         ! command lines
         type(cmdline) :: cline_cluster2D_stage1
         type(cmdline) :: cline_cluster2D_stage2
@@ -60,16 +61,12 @@ contains
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
-        type(scale_project_distr_commander) :: xscale_distr
-        character(len=STDLEN)               :: scaled_stktab
-        character(len=STDLEN)               :: finalcavgs, finalcavgs_ranked
-        character(len=:), allocatable       :: projfile_sc, stk
-        class(oris), pointer  :: os => null()
         type(sp_project)      :: spproj, spproj_sc
         type(params)          :: p_master
-        character(len=STDLEN) :: refs_sc
+        character(len=:), allocatable :: projfile_sc, stk
+        character(len=STDLEN) :: finalcavgs, finalcavgs_ranked, refs_sc
         real                  :: scale_stage1, scale_stage2
-        integer               :: istk, nparts, last_iter_stage1, last_iter_stage2, last_iter
+        integer               :: istk, nparts, last_iter_stage1, last_iter_stage2
         logical               :: scaling
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
@@ -190,6 +187,11 @@ contains
             last_iter_stage2 = nint(cline%get_rarg('endit'))
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
         endif
+        ! adding cavgs to project
+        call spproj%read( p_master%projfile )
+        call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd())
+        call spproj%write()
+        call spproj%kill()
         ! ranking
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
         call cline_rank_cavgs%set('projfile', trim(p_master%projfile))
@@ -197,7 +199,6 @@ contains
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        call del_file('cluster2D_startdoc'//trim(METADATA_EXT))
         call del_file('start2Drefs'//p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
@@ -205,19 +206,20 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-        use simple_commander_volops, only: project_commander
-        use simple_commander_rec,    only: reconstruct3D_commander
+        use simple_commander_volops,  only: project_commander
+        use simple_commander_rec,     only: reconstruct3D_commander
         class(initial_3Dmodel_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+        class(cmdline),                   intent(inout) :: cline
         ! constants
         real,             parameter :: CENLP=30.           !< consistency with prime3D
         integer,          parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,          parameter :: STATE=1, NPROJS_SYMSRCH=50
         integer,          parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
-        character(len=*), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
+        !character(len=*), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
         ! distributed commanders
-        type(prime3D_distr_commander) :: xprime3D_distr
-        type(symsrch_distr_commander) :: xsymsrch_distr
+        type(prime3D_distr_commander)       :: xprime3D_distr
+        type(symsrch_distr_commander)       :: xsymsrch_distr
+        type(scale_project_distr_commander) :: xscale_distr
         ! shared-mem commanders
         type(reconstruct3D_commander) :: xreconstruct3D
         type(project_commander)       :: xproject
@@ -228,14 +230,17 @@ contains
         type(cmdline)         :: cline_symsrch
         type(cmdline)         :: cline_reconstruct3D
         type(cmdline)         :: cline_project
+        type(cmdline)         :: cline_scale
         ! other variables
-        type(scaler)          :: scobj
+        type(ctfparams)       :: ctfvars ! ctf=no by default
+        !type(scaler)          :: scobj
         type(params)          :: p_master
-        type(sp_project)      :: spproj
+        type(sp_project)      :: spproj, work_proj
         type(oris)            :: os
-        real                  :: iter, smpd_target, lplims(2)
+        real                  :: iter, smpd_target, lplims(2), orig_smpd, orig_msk, msk, scale_factor
+        integer               :: ncavgs, orig_box, box
         character(len=2)      :: str_state
-        character(len=:), allocatable :: projfile, stk
+        character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
         character(len=STDLEN) :: vol_iter
         logical               :: srch4symaxis, doautoscale
         ! set cline defaults
@@ -248,7 +253,11 @@ contains
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         ! make master parameters
+        call cline%set('oritype', 'out')
         p_master = params(cline)
+        allocate(WORK_PROJFILE, source='initial_3Dmodel_tmproj.simple')
+        call del_file(WORK_PROJFILE)
+        call cline%set('oritype', 'ptcl3D')
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
@@ -269,28 +278,64 @@ contains
         ! passed
         if( cline%defined('lpstart') ) lplims(1) = p_master%lpstart
         if( cline%defined('lpstop')  ) lplims(2) = p_master%lpstop
-        ! local project
+        ! First wee need a dummy project for refine3D
+        ! fetch cavgs
         call spproj%read(p_master%projfile)
-        ! split
-        call spproj%split_stk(p_master%nparts)
-        ! Scaling
-        if( doautoscale )then
-            smpd_target = lplims(2)*LP2SMPDFAC
-            call spproj%os_stk%getter(1, 'stk', stk)
-            call cline%set('stk',trim(stk))
-            call scobj%init(p_master, cline, p_master%box, smpd_target, STKSCALEDBODY)
-            call spproj%os_stk%set(1, 'stk',  STKSCALEDBODY)
-            call spproj%os_stk%set(1, 'smpd', cline%get_rarg('smpd'))
-            call spproj%os_stk%set(1, 'box',  cline%get_rarg('box'))
-            projfile = get_fbody(p_master%projfile,'.simple')//SCALE_SUFFIX//'.simple'
-            call cline%set('projfile',trim(projfile))
-            call spproj%update_projinfo(cline)
-            call spproj%write()
-            call cline%delete('stk')
+        ncavgs       = nint(spproj%os_out%get(1,'nptcls'))
+        ctfvars%smpd = p_master%smpd
+        if( spproj%os_out%isthere('imgkind') )then
+            call spproj%os_out%getter(1, 'imgkind', imgkind)
+            if( trim(imgkind).ne.'cavg' )then
+                stop 'IMGKIND should be CAVG; simple_commander_hlev_wflows :: initial_3Dmodel'
+            endif
         else
+            stop 'IMGKIND should be informed; simple_commander_hlev_wflows :: initial_3Dmodel'
+        endif
+        if( spproj%os_out%isthere('stk') )then
+            call spproj%os_out%getter(1, 'stk', stk)
+        else
+            stop 'No class-average stack found; simple_commander_hlev_wflows :: initial_3Dmodel'
+        endif
+        ! fetch general project info
+        work_proj%projinfo = spproj%projinfo
+        work_proj%compenv  = spproj%compenv
+        if( spproj%jobproc%get_noris()>0 ) work_proj%jobproc = spproj%jobproc
+        call os%new_clean( ncavgs )
+        call work_proj%add_single_stk(trim(stk), ctfvars, os)
+        call spproj%kill
+        call os%kill
+        ! name change
+        call work_proj%projinfo%delete_entry('projname')
+        call work_proj%projinfo%delete_entry('projfile')
+        call cline%set('projfile', trim(WORK_PROJFILE))
+        call cline%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
+        call work_proj%update_projinfo(cline)
+        ! split
+        call work_proj%split_stk(p_master%nparts)
+        ! Scaling
+        orig_box    = work_proj%get_box()
+        orig_smpd   = work_proj%get_smpd()
+        orig_msk    = p_master%msk
+        smpd_target = max(p_master%smpd, lplims(2)*LP2SMPDFAC)
+        doautoscale = doautoscale .and. smpd_target > orig_smpd
+        if( doautoscale )then
+            deallocate(WORK_PROJFILE)
+            call work_proj%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale)
+            call cline_scale%set('nparts',1.) ! shared memory
+            scale_factor = cline_scale%get_rarg('scale')
+            box          = nint(cline_scale%get_rarg('newbox'))
+            msk          = cline%get_rarg('msk')
+            call cline_scale%printline
+            call xscale_distr%execute( cline_scale )
+        else
+            box         = orig_box
+            msk         = orig_msk
             smpd_target = p_master%smpd
             projfile    = p_master%projfile
         endif
+        call cline%set('projfile', trim(WORK_PROJFILE))
+        call cline%set('box',      real(box))
+        call cline%set('msk',      real(msk))
         ! prepare command lines from prototype master
         cline_refine3D_snhc   = cline
         cline_refine3D_init   = cline
@@ -361,9 +406,10 @@ contains
         call cline_project%set('outstk', 'reprojs'//p_master%ext)
         call cline_project%delete('stk')
         if( doautoscale )then
-            call scobj%update_smpd_msk(cline_project, 'original')
-            ! scale class averages
-            call scobj%scale_exec
+            ! TODO
+            ! call scobj%update_smpd_msk(cline_project, 'original')
+            ! ! scale class averages
+            ! call scobj%scale_exec
         endif
         ! execute commanders
         write(*,'(A)') '>>>'
@@ -408,10 +454,11 @@ contains
             write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(*,'(A)') '>>>'
             ! modulate shifts
-            call os%mul_shifts( 1./scobj%get_scaled_var('scale') )
-            call spproj%read( p_master%projfile )
-            call spproj%write()
-            call scobj%update_stk_smpd_msk(cline_reconstruct3D, 'original')
+            ! TODO
+            ! call os%mul_shifts( 1./scobj%get_scaled_var('scale') )
+            ! call spproj%read( p_master%projfile )
+            ! call spproj%write()
+            ! call scobj%update_stk_smpd_msk(cline_reconstruct3D, 'original')
             ! re-reconstruct volume
             call xreconstruct3D%execute(cline_reconstruct3D)
             call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
@@ -426,7 +473,6 @@ contains
         call cline_project%set('oritab', 'final_oris.txt')
         call xproject%execute(cline_project)
         ! end gracefully
-        call del_file(trim(STKSCALEDBODY)//p_master%ext)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
 
         contains
@@ -554,7 +600,7 @@ contains
             ! this is  to force initialisation (4 testing)
             call spproj_states%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os_states)
             call binread_oritab(p_master%oritab2, spproj_states, os_states, [1,p_master%nptcls])
-            labels = os_states%get_all('state')
+            labels = nint(os_states%get_all('state'))
             call os%set_all('state', real(labels))
             call os_states%kill
         else if( .not. cline%defined('startit') )then

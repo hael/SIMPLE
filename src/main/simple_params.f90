@@ -826,6 +826,8 @@ contains
                     self%spproj_a_seg = CLS3D_SEG
                 case('ptcl3D')
                     self%spproj_a_seg = PTCL3D_SEG
+                case('out')
+                    self%spproj_a_seg = OUT_SEG
                 case('projinfo')
                     self%spproj_a_seg = PROJINFO_SEG
                 case('jobproc')
@@ -884,6 +886,8 @@ contains
                         call bos%read_first_segment_record(MIC_SEG, o)
                     case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG, CLS2D_SEG)
                         call bos%read_first_segment_record(STK_SEG, o)
+                    case(OUT_SEG)
+                        call bos%read_first_segment_record(OUT_SEG, o)
                 end select
                 if( o%isthere('smpd') )then
                     self%smpd = o%get('smpd')
