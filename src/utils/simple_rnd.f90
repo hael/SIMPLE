@@ -91,20 +91,7 @@ contains
             pid = 53 !just a prime number, no special meaning
         end function my_getpid
     end subroutine seed_rnd
-    
-    
-    !>  \brief  random seed
-    subroutine seed_rnd
-        integer :: i, n, clock
-        integer, allocatable :: seed(:)
-        call random_seed(size = n)
-        allocate(seed(n))
-        call system_clock(count=clock)
-        seed = clock + 37 * (/ (i - 1, i = 1, n) /)
-        call random_seed(put = seed)
-        deallocate(seed)
-    end subroutine seed_rnd
-
+        
     !>  \brief  wrapper for the intrinsic Fortran random number generator
     function ran3( ) result( harvest )
         real :: harvest
