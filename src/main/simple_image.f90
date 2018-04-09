@@ -6916,11 +6916,11 @@ contains
         integer :: i, j, hwinsz, winsz
         logical :: was_fted, err, present_outliers
         if( self%ldim(3)>1 )stop 'for images only; simple_image::cure_outliers'
+        was_fted = self%is_ft()
         if( was_fted )stop 'for real space images only; simple_image::cure_outliers'
         present_outliers = present(outliers)
         ncured   = 0
         hwinsz   = 6
-        was_fted = self%is_ft()
         if( allocated(outliers) ) deallocate(outliers)
         allocate( outliers(self%ldim(1),self%ldim(2)), stat=alloc_stat)
         allocchk("In simple_image::cure_outliers ")
@@ -6980,6 +6980,7 @@ contains
         integer :: i, j, hwinsz, winsz,ncured
         logical :: was_fted, err, present_outliers, retl1norm
         if( self%ldim(3)>1 )stop 'for images only; simple_image:: denoise_NLM'
+        was_fted = self%is_ft()
         if( was_fted )stop 'for real space images only; simple_image::denoise_NLM'
         present_outliers = present(outliers)
         retl1norm=.false.
@@ -6989,7 +6990,6 @@ contains
         end if
         hwinsz   = 6
         nsigma = 1.0/ sqrt(1.0)
-        was_fted = self%is_ft()
         if( allocated(outliers) ) deallocate(outliers)
         allocate( outliers(self%ldim(1),self%ldim(2)) )
         outliers = .false.
