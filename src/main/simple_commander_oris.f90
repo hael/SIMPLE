@@ -456,6 +456,81 @@ contains
         call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
     end subroutine exec_map2ptcls
 
+    !> for mapping parameters that have been obtained using class averages to the individual particle images
+    subroutine exec_map2ptcls_copy( self, cline )
+        use simple_oris,       only: oris
+        use simple_ori,        only: ori
+        use simple_image,      only: image
+        use simple_imghead,    only: find_ldim_nptcls
+        use simple_sp_project, only: sp_project
+        use simple_corrmat   ! use all in there
+        class(map2ptcls_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        type state_organiser !> map2ptcls state struct
+            integer, allocatable :: particles(:)
+            type(ori)            :: ori3d
+        end type state_organiser
+        type(state_organiser), allocatable :: labeler(:)
+        type(image),           allocatable :: imgs_sel(:), imgs_cls(:)
+        real,                  allocatable :: correlations(:,:)
+        integer,               allocatable :: rejected_particles(:)
+        logical,               allocatable :: selected(:)
+        integer              :: isel, nsel, loc(1), iptcl, pind, icls
+        integer              :: nlines_oritab, nlines_oritab3D, nlines_deftab
+        integer              :: lfoo(3), ldim2(3), ldim3(3)
+        real                 :: corr, rproj, rstate
+        type(params)         :: p
+        type(build)          :: b
+        class(oris), pointer :: o_oritab3D
+        type(ori)            :: ori2d, ori_comp, o
+        type(sp_project)     :: spproj
+        p = params(cline)                                 ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        ! call b%a%remap_cls()
+        ! p%ncls = b%a%get_n('class')
+        ! nsel   = p%ncls
+        ! allocate(labeler(nsel))
+        ! do isel=1,nsel
+        !     call b%a%get_pinds(isel, 'class', labeler(isel)%particles)
+        ! end do
+        if( cline%defined('oritab3D') )then
+            if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
+            nlines_oritab3D = binread_nlines(p, p%oritab3D)
+            if( nlines_oritab3D /= nsel ) stop '# lines in oritab3D /= nr of selected cavgs'
+            call spproj%new_seg_with_ptr(nsel, 'cls3D', o_oritab3D)
+            call binread_oritab(p%oritab3D, spproj, o_oritab3D, [1,nsel])
+            ! compose orientations and set states
+            do isel=1,nsel
+                ! get 3d ori info
+                o      = o_oritab3D%get_ori(isel)
+                rproj  = o%get('proj')
+                rstate = o%get('state')
+                corr   = o%get('corr')
+                do iptcl=1,size(labeler(isel)%particles)
+                    ! get particle index
+                    pind = labeler(isel)%particles(iptcl)
+                    ! get 2d ori
+                    ori2d = b%a%get_ori(pind)
+                    if( cline%defined('mul') )then
+                        call ori2d%set('x', p%mul*ori2d%get('x'))
+                        call ori2d%set('y', p%mul*ori2d%get('y'))
+                    endif
+                    ! transfer original parameters in b%a
+                    ori_comp = b%a%get_ori(pind)
+                    ! compose ori3d and ori2d
+                    call o%compose3d2d(ori2d, ori_comp)
+                    ! set parameters in b%a
+                    call b%a%set_ori(pind, ori_comp)
+                    call b%a%set(pind, 'corr',  corr)
+                    call b%a%set(pind, 'proj',  rproj)
+                    call b%a%set(pind, 'state', rstate)
+                end do
+            end do
+        endif
+        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,p%nptcls])
+        call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
+    end subroutine exec_map2ptcls_copy
+
     subroutine exec_orisops(self,cline)
         use simple_ori,  only: ori
         use simple_math, only: normvec

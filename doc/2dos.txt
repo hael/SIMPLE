@@ -1,5 +1,9 @@
 CTFFIT
 
+TESTING
+* test greedy in conjunction with frac update and measure convergence rate vs SHC
+* evaluate TAU
+
 NEW DEVELOPMENTS
 * Need methods for projecting the time of an execution, so that we can display accordingly
 * support for doc input to re-extract with shifts from doc

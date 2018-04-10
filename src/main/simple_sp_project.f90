@@ -55,20 +55,16 @@ contains
     procedure          :: add_single_stk
     procedure          :: get_stkname
     procedure          :: get_stkname_and_ind
-    procedure          :: add_scale_tag
-    procedure          :: del_scale_tag
-    procedure          :: write_stktab
-    procedure          :: del_stk_files
+    procedure, private :: add_scale_tag
     ! os_out related methods
     procedure          :: add_cavgs2os_out
-    procedure          :: make_cavgs_project
     ! getters
     procedure          :: get_nptcls
     procedure          :: get_box
     procedure          :: get_smpd
     procedure          :: get_nmics
     procedure          :: get_nmovies
-    procedure          :: oritype2segment
+    procedure, private :: oritype2segment
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
     procedure          :: get_ctfmode
@@ -77,10 +73,10 @@ contains
     procedure          :: is_virgin_field
     ! modifiers
     procedure          :: split_stk
-    procedure          :: new_sp_oris
     procedure          :: set_sp_oris
     procedure          :: scale_projfile
     procedure          :: merge_algndocs
+    procedure          :: map2ptcls
     ! printers
     procedure          :: print_info
     ! I/O
@@ -893,47 +889,6 @@ contains
         end do
     end subroutine add_scale_tag
 
-    subroutine del_scale_tag( self )
-        use simple_fileio, only: fname2ext, del_from_fbody
-        class(sp_project), intent(inout) :: self
-        character(len=:), allocatable :: ext, newname, stkname
-        integer :: imic, nmics
-        nmics = self%os_stk%get_noris()
-        do imic=1,nmics
-            call self%os_stk%getter(imic, 'stk', stkname)
-            ext     = fname2ext(trim(stkname))
-            newname = del_from_fbody(stkname, '.'//ext, trim(SCALE_SUFFIX))
-            call self%os_stk%set(imic, 'stk', newname)
-        end do
-    end subroutine del_scale_tag
-
-    subroutine write_stktab( self, tabname )
-        use simple_fileio, only: fopen, fclose
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: tabname
-        character(len=:), allocatable    :: stkname
-        integer :: fnr, imic, nmics
-        nmics = self%os_stk%get_noris()
-        call fopen(fnr, file=trim(tabname), status='replace', action='write')
-        do imic=1,nmics
-            call self%os_stk%getter(imic, 'stk', stkname)
-            write(fnr,'(a)') stkname
-        end do
-        call fclose(fnr)
-    end subroutine write_stktab
-
-    subroutine del_stk_files( self )
-        use simple_fileio, only: del_file
-        class(sp_project), intent(inout) :: self
-        character(len=:), allocatable    :: stkname
-        integer :: imic, nmics
-        nmics = self%os_stk%get_noris()
-        do imic=1,nmics
-            call self%os_stk%getter(imic, 'stk', stkname)
-            call del_file(stkname)
-        end do
-    end subroutine del_stk_files
-
     ! os_out related methods
 
     subroutine add_cavgs2os_out( self, stk, smpd)
@@ -973,44 +928,6 @@ contains
         call self%os_out%set(n_os_out , 'imgkind', 'cavg')
         call self%os_out%set(n_os_out , 'ctf',     'no')
     end subroutine add_cavgs2os_out
-
-    subroutine make_cavgs_project( self, projname, self_out )
-        use simple_cmdline, only: cmdline
-        class(sp_project),     intent(inout) :: self, self_out
-        character(len=*),      intent(in)    :: projname
-        type(cmdline) :: cline
-        character(len=:), allocatable :: imgk
-        integer :: i, ind, n_os_out, cnt
-        ! copy projinfo & compenv fields
-        self_out%projinfo = self%projinfo
-        self_out%compenv  = self%compenv
-        ! move the averages from os_out (in self) to os_stk (in self_out)
-        n_os_out             = self%os_out%get_noris()
-        if( n_os_out < 1 )then
-            write(*,*) '# entries in os_out: ', n_os_out
-            stop 'no class averages available in project; sp_project :: make_cavgs_project'
-        endif
-        cnt = 0
-        do i=1,n_os_out
-            call self%os_out%getter(i, 'imgkind', imgk)
-            if( imgk .eq. 'cavg' )then
-                cnt = cnt + 1
-                ind = i
-            endif
-        end do
-        if( cnt > 1 ) stop 'ABORTING... multiple sets of class averages in project; sp_project :: make_cavgs_project'
-        call self_out%os_stk%new_clean(1)
-        call self_out%os_stk%set_ori(1, self%os_out%get_ori(ind))
-        call self_out%os_stk%set(1, 'ctf', 'no')
-        ! update project "header"
-        call cline%set('projname', trim(projname))
-        call self_out%update_projinfo(cline)
-        ! update ptcl3D field
-        call self_out%os_ptcl3D%new_clean(nint(self_out%os_stk%get(1, 'nptcls')))
-        call self_out%os_ptcl3D%set_all2single('stkind', 1.0)
-        ! write
-        call self_out%write()
-    end subroutine make_cavgs_project
 
     ! getters
 
@@ -1369,36 +1286,6 @@ contains
 
     ! modifiers
 
-    subroutine new_sp_oris( self, which, n )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer,           intent(in)    :: n
-        select case(trim(which))
-            case('mic')
-                call self%os_mic%new_clean(n)
-            case('stk')
-                call self%os_stk%new_clean(n)
-            case('ptcl2D')
-                call self%os_ptcl2D%new_clean(n)
-            case('cls2D')
-                call self%os_cls2D%new_clean(n)
-            case('cls3D')
-                call self%os_cls3D%new_clean(n)
-            case('ptcl3D')
-                call self%os_ptcl3D%new_clean(n)
-            case('out')
-                call self%os_out%new_clean(n)
-            case('projinfo')
-                call self%projinfo%new_clean(n)
-            case('jobproc')
-                call self%jobproc%new_clean(n)
-            case('compenv')
-                call self%compenv%new_clean(n)
-            case DEFAULT
-                stop 'unsupported which flag; sp_project :: new_sp_oris'
-        end select
-    end subroutine new_sp_oris
-
     subroutine set_sp_oris( self, which, os )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -1453,7 +1340,7 @@ contains
         call cline_scale%set('prg',      'scale_project')
         call cline_scale%set('scale',    scale_factor)
         call cline_scale%set('projfile', projfile)
-        call cline_scale%set('smpd', smpd_sc)
+        call cline_scale%set('smpd',     smpd_sc)
         if( box == box_sc )then
             ! no scaling
             new_projfile = trim(projfile)
@@ -1534,6 +1421,54 @@ contains
         end do
         call self%write()
     end subroutine merge_algndocs
+
+    subroutine map2ptcls( self )
+        class(sp_project), intent(inout) :: self
+        type state_organiser
+            integer, allocatable :: particles(:)
+            type(ori)            :: ori3d
+        end type state_organiser
+        type(state_organiser), allocatable :: labeler(:)
+        type(ori) :: ori2d, ori_comp, o
+        integer   :: ncls, icls, iptcl, pind
+        real      :: corr, rproj, rstate
+        if( self%is_virgin_field('cls3D') )then
+            write(*,*) 'ERROR! os_cls3D is virgin field; nothing to map back'
+            stop 'sp_project :: map2ptcls'
+        endif
+        if( self%is_virgin_field('ptcl2D') )then
+            write(*,*) 'ERROR! os_ptcl2D is virgin field; nothing to map back to'
+            stop 'sp_project :: map2ptcls'
+        endif
+        call self%os_ptcl2D%remap_cls()
+        ncls = self%os_ptcl2D%get_n('class')
+        allocate(labeler(ncls))
+        do icls=1,ncls
+            call self%os_ptcl2D%get_pinds(icls, 'class', labeler(icls)%particles)
+        end do
+        do icls=1,ncls
+            ! get 3d ori info
+            o      = self%os_cls3D%get_ori(icls)
+            rproj  = o%get('proj')
+            rstate = o%get('state')
+            corr   = o%get('corr')
+            do iptcl=1,size(labeler(icls)%particles)
+                ! get particle index
+                pind  = labeler(icls)%particles(iptcl)
+                ! get 2d ori
+                ori2d = self%os_ptcl2D%get_ori(pind)
+                ! transfer original parameters in self%os_ptcl2D
+                ori_comp = self%os_ptcl2D%get_ori(pind)
+                ! compose ori3d and ori2d
+                call o%compose3d2d(ori2d, ori_comp)
+                ! set parameters in self%os_ptcl2D
+                call self%os_ptcl2D%set_ori(pind, ori_comp)
+                call self%os_ptcl2D%set(pind, 'corr',  corr)
+                call self%os_ptcl2D%set(pind, 'proj',  rproj)
+                call self%os_ptcl2D%set(pind, 'state', rstate)
+            end do
+        end do
+    end subroutine map2ptcls
 
     ! printers
 
