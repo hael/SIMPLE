@@ -1191,9 +1191,11 @@ contains
 
             subroutine print_spihed
                 if( doprint )then
-                    write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
+                    write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)),&
+                        int(spihed(2)), int(spihed(1))
                     write(*,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
-                    write(*,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ', spihed(26)
+                    write(*,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ',&
+                        spihed(26)
                     write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
                 endif
             end subroutine
@@ -1230,7 +1232,7 @@ contains
             case DEFAULT
                 write(*,*) 'fname: ', fname
                 write(*,*) 'format descriptor: ', fname2format(fname)
-                stop 'File format not supported; find_ldim_nptcls; simple_procimgfile'
+                stop 'File format not supported; find_ldim_nptcls; simple_imghead'
         end select
     end subroutine find_ldim_nptcls
 

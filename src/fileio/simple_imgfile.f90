@@ -264,7 +264,7 @@ contains
         if( .not. arr_is_ready )then
             write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
             write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
-            call simple_stop( 'Array is not properly allocated; rSlices; simple_imgfile')
+            call simple_stop( 'Array is not properly allocated; rSlices; simple_imgfile',__FILENAME__,__LINE__)
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         ! Work out the position of the first byte
@@ -282,7 +282,7 @@ contains
                     first_hedbyte = hedbyteinds(1) ! first header byte
                 endif
             case DEFAULT
-                call simple_stop( 'Format not supported; rSlices; simple_imgfile')
+                call simple_stop( 'Format not supported; rSlices; simple_imgfile',__FILENAME__,__LINE__)
         end select
         rarr = 0. ! initialize to zero
         select case(byteperpix)
@@ -344,13 +344,13 @@ contains
             case DEFAULT
                 write(*,'(2a)') 'fname: ', trim(self%fname)
                 write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
-                call simple_stop( 'Unsupported bit-depth; rSlices; simple_imgfile')
+                call simple_stop( 'Unsupported bit-depth; rSlices; simple_imgfile',__FILENAME__,__LINE__)
         end select
         ! Check the read was successful
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(rSlices): I/O error ', io_stat, ' when reading from: ', trim(self%fname)
             write(*,'(2a)') 'IO error message was: ', trim(io_message)
-           call simple_stop( 'I/O error; rSlices; simple_imgfile')
+            call simple_stop( 'I/O error; rSlices; simple_imgfile',__FILENAME__,__LINE__)
         endif
     end subroutine rSlices
 
@@ -403,7 +403,7 @@ contains
         if( .not. arr_is_ready )then
             write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
             write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
-            call simple_stop( 'Array is not properly allocated; wSlices; simple_imgfile')
+            call simple_stop( 'Array is not properly allocated; wSlices; simple_imgfile',__FILENAME__,__LINE__)
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         ! Work out the position of the first byte
@@ -421,7 +421,7 @@ contains
                     first_hedbyte = hedbyteinds(1) ! first header byte
                 endif
             case DEFAULT
-                call simple_stop( 'Format not supported; wSlices; simple_imgfile')
+                call simple_stop( 'Format not supported; wSlices; simple_imgfile',__FILENAME__,__LINE__)
         end select
         ! find minmax
         max_val = maxval(rarr)
@@ -449,7 +449,7 @@ contains
         ! Check the write was successful
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
-            call simple_stop( 'I/O error; wSlices; simple_imgfile')
+            call simple_stop( 'I/O error; wSlices; simple_imgfile',__FILENAME__,__LINE__)
         endif
         ! May need to update file dims
         select case(self%head_format)
@@ -483,7 +483,7 @@ contains
                 else if( self%isvol .and. is_ft .and. is_even(dims(1:2)) )then
                     call self%overall_head%setIform(-22)
                 else
-                    call simple_stop( 'undefined file type, wSlices; simple_imgfile')
+                    call simple_stop( 'undefined file type, wSlices; simple_imgfile',__FILENAME__,__LINE__)
                 endif
         end select
         ! Remember that we wrote to the file

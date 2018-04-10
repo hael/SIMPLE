@@ -13,7 +13,7 @@ private
 integer(kind=8), parameter :: MAX_N_SEGEMENTS = 20
 integer(kind=8), parameter :: N_VARS_HEAD_SEG = 5
 integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGEMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
-logical,         parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type file_header_segment
     integer(kind=8)   :: fromto(2)          = 0
@@ -151,7 +151,7 @@ contains
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_header'
         write(unit=self%funit,pos=1,iostat=io_status) self%header
         if( io_status .ne. 0 ) call fileiochk('binoris :: write_header, ERROR writing header bytes ', io_status)
-        if( DEBUG ) print *, 'wrote: ', sizeof(self%header), ' header bytes'
+        DebugPrint  'wrote: ', sizeof(self%header), ' header bytes'
     end subroutine write_header
 
     subroutine print_header( self )
@@ -196,11 +196,11 @@ contains
             nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
-                if( DEBUG ) print *, 'wrote: ', sizeof(str_dyn//spaces(nspaces)),&
+                DebugPrint 'wrote: ', sizeof(str_dyn//spaces(nspaces)),&
                     &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
             else
                 write(unit=self%funit,pos=ibytes) str_dyn
-                if( DEBUG ) print *, 'wrote: ', sizeof(str_dyn),&
+                DebugPrint 'wrote: ', sizeof(str_dyn),&
                     &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
@@ -224,11 +224,11 @@ contains
             nspaces = self%header(isegment)%n_bytes_per_record - len(sarr(i)%str)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) sarr(i)%str//spaces(nspaces)
-                if( DEBUG ) print *, 'wrote: ', sizeof(sarr(i)%str//spaces(nspaces)),&
+                DebugPrint 'wrote: ', sizeof(sarr(i)%str//spaces(nspaces)),&
                     &' segment: ', isegment, ' bytes, starting @: ', ibytes
             else
                 write(unit=self%funit,pos=ibytes) sarr(i)%str
-                if( DEBUG ) print *, 'wrote: ', sizeof(sarr(i)%str),&
+                DebugPrint 'wrote: ', sizeof(sarr(i)%str),&
                     &' segment: ', isegment, ' bytes, starting @: ', ibytes
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
@@ -250,7 +250,7 @@ contains
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
             write(unit=self%funit,pos=ibytes) arr(i,:)
-            if( DEBUG ) print *, 'wrote: ', sizeof(arr(i,:)),&
+            DebugPrint 'wrote: ', sizeof(arr(i,:)),&
                 &' segment: ', isegment, ' bytes, starting @: ', ibytes
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
@@ -421,7 +421,7 @@ contains
             if( size(arr, 1) /= self%header(isegment)%n_records )then
                 stop 'First dimension of array not congruent with # records in file; binoris :: read_segment_3'
             endif
-            if( sizeof(arr(1,:)) /= self%header(isegment)%n_bytes_per_record )then
+            if( size(arr,2)*4 /= self%header(isegment)%n_bytes_per_record )then
                 stop 'Second dimension of array not congruent with # bytes per record in file; binoris :: read_segment_3'
             endif
             ! read orientation data into array of allocatable strings

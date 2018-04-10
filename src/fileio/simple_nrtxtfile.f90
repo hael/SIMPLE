@@ -122,7 +122,8 @@ contains
         do
             read(self%funit, '(a)', iostat=ios, iomsg=io_message) buffer
             if( ios .ne. 0 )then
-                call fileiochk('simple_nrtxtfile::readNextDataLine; Encountered iostat error: '//trim(io_message),ios)
+                call fileiochk('simple_nrtxtfile::readNextDataLine; Encountered iostat error: '//&
+                    trim(io_message),ios)
             endif
             if( .not. strIsComment(buffer) .and. .not. strIsBlank(buffer) )then
                 buffer = trim(adjustl(buffer))
@@ -140,7 +141,8 @@ contains
             stop 'simple_nrtxtfile::writeDataLineReal; File is not OPEN_TO_WRITE'
         endif
         if( size(data_to_write) .lt. self%recs_per_line )then
-             call simple_stop( 'simple_nrtxtfile::writeDataLineReal; Supplied array is smaller than records per line')
+            call simple_stop('simple_nrtxtfile::writeDataLineReal; Supplied array is smaller than records per line',&
+                __FILENAME__,__LINE__)
         endif
         do record_counter = 1, self%recs_per_line
             write(self%funit, '(g14.7,a)', advance='no',iostat=ios) data_to_write(record_counter), ' '
@@ -160,7 +162,7 @@ contains
         integer                         :: record_counter, ios
         ! Check we are open to write
         if (self%access_type .ne. OPEN_TO_WRITE) then
-            call simple_stop('simple_nrtxtfile::writeDataLineInt; File is not OPEN_TO_WRITE')
+            call simple_stop('simple_nrtxtfile::writeDataLineInt; File is not OPEN_TO_WRITE',__FILENAME__,__LINE__)
         endif
         ! Check size
         if( size(data_to_write) .lt. self%recs_per_line )then

@@ -38,8 +38,7 @@ contains
         else if (iostat_this == -2) then
             write(stderr,'(a)') "fileio: End-of-record reached (PGI version)"
         else if( iostat_this /= 0 ) then
-            write(stderr,'(a,1x,I0 )') 'ERROR: File I/O failure, IOS# ',iostat_this
-            call simple_error_check(iostat_this)
+            call simple_error_check(iostat_this,'File I/O Error#'//int2str(iostat_this),__FILENAME__,__LINE__)
             if(die_this)stop
         endif
     end subroutine fileiochk
@@ -78,7 +77,8 @@ contains
         present(round) .or. present(delim) .or. present(blank) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
             call fileiochk(trim(adjustl(errmsg_this))//" fopen basic open "//trim(filename), iostat_this,.false.)
-            if(is_io(funit)) call simple_stop( "simple_fileio::fopen newunit returned "//int2str(funit) )
+            if(is_io(funit)) call simple_stop( "simple_fileio::fopen newunit returned "//int2str(funit) ,&
+                __FILENAME__,__LINE__)
             return ! if ok
         end if
         ! Optional args
@@ -179,7 +179,8 @@ contains
             end if
             call fileiochk(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
             if(present(iostat))iostat=iostat_this
-            if(funit/=0 .and. is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
+            if(funit/=0 .and. is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit),&
+                __FILENAME__,__LINE__)
             return
         end if
         recl_this=-1
@@ -244,7 +245,7 @@ contains
             end if
         end if
         call fileiochk(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.)
-        if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
+        if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) ,__FILENAME__,__LINE__)
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
     end subroutine fopen
@@ -263,7 +264,7 @@ contains
 
         if (is_open(funit)) then
             CLOSE (funit,IOSTAT=iostat)
-            call simple_error_check(iostat, trim(msg_this))
+            call simple_error_check(iostat, trim(msg_this),__FILENAME__,__LINE__)
         end if
     end subroutine fclose_1
 
@@ -288,18 +289,10 @@ contains
         if(present(errmsg)) write(msg_this,'(A)') errmsg
         if (is_open(funit)) then
             CLOSE (funit,IOSTAT=iostat,STATUS=status_this)
-            call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)//" ; "//trim(msg_this))
+            call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)//&
+                &" ; "//trim(msg_this),__FILENAME__,__LINE__)
         end if
     end subroutine fclose_2
-
-    !> \brief Touch file, create file if necessary
-    subroutine simple_touch( fname , errmsg )
-        character(len=*), intent(in)           :: fname !< input filename
-        character(len=*), intent(in), optional :: errmsg
-        character(len=STDLEN) :: msg_this
-        integer               :: funit, io_status
-        call exec_cmdline(trim('touch -m '//trim(adjustl(fname))))
-    end subroutine simple_touch
 
 
     !> \brief return the number of lines in a textfile
@@ -362,7 +355,8 @@ contains
     end function funit_size
 
     ! computes an array of integers made of all currently opened units.
-    ! Output : nbunits : number of opened units, units ( iunit ) : unit number for the opened unit #iunit with 1<= iunit <= nbunits
+    ! Output : nbunits : number of opened units, units ( iunit ) : unit number for the opened unit
+    ! #iunit with 1<= iunit <= nbunits
     subroutine get_open_funits( nbunits , units )
         integer, intent ( out ) :: nbunits
         integer, allocatable    :: units(:)
