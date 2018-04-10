@@ -29,7 +29,7 @@ contains
         ! extract peak info
         call extract_peaks( self%s, corrs )
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights( self%s, corrs, self%spec%pp%tau, ws, included, best_loc, wcorr )
         ! B factors
         call fit_bfactors( self%s, ws )
         ! angular standard deviation

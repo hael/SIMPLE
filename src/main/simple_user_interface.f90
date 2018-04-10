@@ -80,6 +80,7 @@ type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
+type(simple_program), target :: project
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
@@ -171,11 +172,12 @@ contains
         call new_make_pickrefs
         call new_mask
         call new_motion_correct
+        ! call new_new_project
         call new_pick
         call new_postprocess
         call new_preprocess
         call new_preprocess_stream
-        call new_new_project
+        ! call new_project
         call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
@@ -234,6 +236,8 @@ contains
                 ptr2prg => preprocess
             case('preprocess_stream')
                 ptr2prg => preprocess_stream
+            case('project')
+                ptr2prg => project
             case('reconstruct3D')
                 ptr2prg => reconstruct3D
             case('refine3D')
@@ -288,8 +292,9 @@ contains
         write(*,'(A)') info_stktab%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
-        ! write(*,'(A)') new_project%name
+        write(*,'(A)') new_project%name
         write(*,'(A)') postprocess%name
+        write(*,'(A)') project%name
         write(*,'(A)') select_%name
         write(*,'(A)') simulate_movie%name
         write(*,'(A)') simulate_noise%name

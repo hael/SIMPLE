@@ -47,10 +47,10 @@ contains
         enddo
     end subroutine extract_peaks
 
-    subroutine corrs2softmax_weights( s, corrs, ws, included, best_loc, wcorr )
+    subroutine corrs2softmax_weights( s, corrs, tau, ws, included, best_loc, wcorr )
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: corrs(s%npeaks)
+        real,                   intent(in)    :: corrs(s%npeaks), tau
         real,                   intent(out)   :: ws(s%npeaks), wcorr
         logical,                intent(out)   :: included(s%npeaks)
         integer,                intent(out)   :: best_loc(1)
@@ -83,7 +83,7 @@ contains
             ! convert correlations to distances
             dists = 1.0 - corrs
             ! scale distances with TAU
-            dists = dists / TAU
+            dists = dists / tau
             ! argument for softmax function is negative distances
             arg4softmax = -dists
             ! subtract maxval of negative distances for numerical stability

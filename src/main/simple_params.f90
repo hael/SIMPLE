@@ -357,6 +357,8 @@ type :: params
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
+    real    :: tau=TAU_DEFAULT     !< tau fudge factor, controls the sharpness of the orientation weight distribution,
+                                   !! smaller number means sharper distribution
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: time_per_image=200.
     real    :: time_per_frame=0.
@@ -742,11 +744,12 @@ contains
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('snr',            self%snr)
+        call check_rarg('tau',            self%tau)
         call check_rarg('thres',          self%thres)
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
-        call check_rarg('motion_correctftol',     self%motion_correctftol)
-        call check_rarg('motion_correctgtol',     self%motion_correctgtol)
+        call check_rarg('motion_correctftol', self%motion_correctftol)
+        call check_rarg('motion_correctgtol', self%motion_correctgtol)
         call check_rarg('update_frac',    self%update_frac)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)

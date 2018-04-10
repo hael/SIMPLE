@@ -105,7 +105,7 @@ contains
         ! extract peak info
         call extract_peaks( self%s, corrs, state )
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights( self%s, corrs, self%spec%pp%tau, ws, included, best_loc, wcorr )
         ! state reweighting
         call states_reweight( self%s, corrs, ws, state_ws, included, state, best_loc, wcorr )
         ! B factors
