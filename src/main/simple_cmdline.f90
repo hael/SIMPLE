@@ -58,7 +58,7 @@ contains
         character(len=STDLEN)          :: arg
         integer :: i, cmdstat, cmdlen, ikey, pos, nreq, nargs_required, sz_keys_req
         ! parse command line
-        self%argcnt = command_argument_count()
+        self%argcnt  = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
         ! parse program name

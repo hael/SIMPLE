@@ -60,13 +60,19 @@ type :: simple_program
 end type simple_program
 
 ! declare protected program specifications here
+type(simple_program), target :: center
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
+type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: extract
+type(simple_program), target :: fsc
+type(simple_program), target :: info_image
+type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: make_cavgs
+type(simple_program), target :: make_pickrefs
 type(simple_program), target :: mask
 type(simple_program), target :: motion_correct
 type(simple_program), target :: new_project
@@ -77,6 +83,11 @@ type(simple_program), target :: preprocess_stream
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
+type(simple_program), target :: select_
+type(simple_program), target :: simulate_movie
+type(simple_program), target :: simulate_noise
+type(simple_program), target :: simulate_particles
+type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: volops
@@ -84,6 +95,7 @@ type(simple_program), target :: volops
 ! declare common params here, with name same as flag
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
+type(simple_input_param) :: box
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: eo
@@ -106,13 +118,16 @@ type(simple_input_param) :: mskfile
 type(simple_input_param) :: mw
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nparts
+type(simple_input_param) :: nptcls
 type(simple_input_param) :: ncls
 type(simple_input_param) :: nthr
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: outer
 type(simple_input_param) :: outfile
+type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
+type(simple_input_param) :: pcontrast
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: projfile
@@ -141,13 +156,19 @@ contains
 
     subroutine make_user_interface
         call set_common_params
+        call new_center
         call new_cluster2D
         call new_cluster2D_stream
         call new_cluster3D
+        call new_cluster_cavgs
         call new_ctf_estimate
         call new_extract
+        call new_fsc
+        call new_info_image
+        call new_info_stktab
         call new_initial_3Dmodel
         call new_make_cavgs
+        call new_make_pickrefs
         call new_mask
         call new_motion_correct
         call new_pick
@@ -158,6 +179,11 @@ contains
         call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
+        call new_select_
+        call new_simulate_movie
+        call new_simulate_noise
+        call new_simulate_particles
+        call new_simulate_subtomogram
         call new_scale
         call new_scale_project
         call new_volops
@@ -168,20 +194,32 @@ contains
         character(len=*), intent(in)   :: which_program
         class(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
+        case('center')
+                ptr2prg => center
             case('cluster2D')
                 ptr2prg => cluster2D
             case('cluster2D_stream')
                 ptr2prg => cluster2D_stream
             case('cluster3D')
                 ptr2prg => cluster3D
+            case('cluster_cavgs')
+                ptr2prg => cluster_cavgs
             case('ctf_estimate')
                 ptr2prg => ctf_estimate
             case('extract')
                 ptr2prg => extract
+            case('fsc')
+                ptr2prg => fsc
+            case('info_image')
+                ptr2prg => info_image
+            case('info_stktab')
+                ptr2prg => info_stktab
             case('initial_3Dmodel')
                 ptr2prg => initial_3Dmodel
             case('make_cavgs')
                 ptr2prg => make_cavgs
+            case('make_pickrefs')
+                ptr2prg => make_pickrefs
             case('mask')
                 ptr2prg => mask
             case('motion_correct')
@@ -202,6 +240,16 @@ contains
                 ptr2prg => refine3D
             case('refine3D_init')
                 ptr2prg => refine3D_init
+            case('select')
+                ptr2prg => select_
+            case('simulate_movie')
+                ptr2prg => simulate_movie
+            case('simulate_noise')
+                ptr2prg => simulate_noise
+            case('simulate_particles')
+                ptr2prg => simulate_particles
+            case('simulate_subtomogram')
+                ptr2prg => simulate_subtomogram
             case('scale')
                 ptr2prg => scale
             case('scale_project')
@@ -228,15 +276,28 @@ contains
         write(*,'(A)') refine3D%name
         write(*,'(A)') refine3D_init%name
         write(*,'(A)') scale_project%name
+        stop
     end subroutine list_distr_prgs_in_ui
 
     subroutine list_shmem_prgs_in_ui
+        write(*,'(A)') center%name
+        write(*,'(A)') cluster_cavgs%name
         write(*,'(A)') extract%name
+        write(*,'(A)') fsc%name
+        write(*,'(A)') info_image%name
+        write(*,'(A)') info_stktab%name
+        write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
-        write(*,'(A)') new_project%name
+        ! write(*,'(A)') new_project%name
         write(*,'(A)') postprocess%name
+        write(*,'(A)') select_%name
+        write(*,'(A)') simulate_movie%name
+        write(*,'(A)') simulate_noise%name
+        write(*,'(A)') simulate_particles%name
+        write(*,'(A)') simulate_subtomogram%name
         write(*,'(A)') scale%name
         write(*,'(A)') volops%name
+        stop
     end subroutine list_shmem_prgs_in_ui
 
     ! private class methods
@@ -261,7 +322,7 @@ contains
         &'max shift per iteration in pixels{5}', .false., 0.0)
         call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
-        call set_param(lp,            'hp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'high-pass limit in Angstroms', .false., 20.)
+        call set_param(lp,            'lp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true., 0.)
         call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
         &'inner mask radius in pixels', .false., 0.)
@@ -288,8 +349,8 @@ contains
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
         &'low-pass FSC criterion(0.143-0.5){0.3}', .false., 0.3)
-        call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in nm{2.7}', .false., 2.7)
-        call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', '{0.1}', .false., 0.1)
+        call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
+        call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
         call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false., 512.)
         call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.5}', 'in microns{0.5}', .false., 0.5)
         call set_param(dfmax,         'dfmax',         'num',    'Expected maximum defocus', 'Expected minimum defocus in microns{5.0}', 'in microns{5.0}', .false., 5.0)
@@ -305,6 +366,10 @@ contains
         call set_param(qsys_partition,'qsys_partition','str',    'Name of partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
         call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give yourpart', .false., '')
+        call set_param(box,            'box',          'num',  'Square image size','Square image size(in pixels)', 'in pixels', .true., 0.)
+        call set_param(nptcls,         'nptcls',       'num',  'Number of particles', 'Number of particle images', '# particles', .true., 0.)
+        call set_param(outstk,         'outstk',       'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
+        call set_param(pcontrast,      'pcontrast',    'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
     end subroutine set_common_params
 
     subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
@@ -350,6 +415,36 @@ contains
     ! mask controls
     ! <empty>
     ! computer controls
+
+    subroutine new_center
+        ! PROGRAM SPECIFICATION
+        call center%new(&
+        &'center',&                    ! name
+        &'Center volume',&             ! descr_short
+        &'s a program for centering a volume and mapping the shift parameters back to the particle images',& ! descr_long
+        &'simple_exec',&               ! executable
+        &1, 3, 0, 0, 1, 0, 1, .false.) ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call center%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to center', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call center%set_input('parm_ios', 1, smpd)
+        call center%set_input('parm_ios', 2, oritab)
+        call center%set_input('parm_ios', 3, outfile)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        call center%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call center%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_center
 
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION
@@ -503,6 +598,38 @@ contains
         call cluster3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cluster3D
 
+    subroutine new_cluster_cavgs
+        ! PROGRAM SPECIFICATION
+        call cluster_cavgs%new(&
+        &'cluster_cavgs',&                                                         ! name
+        &'analysis of class averages with affinity propagation',&                  ! descr_short
+        &'is a program for analyzing class averages with affinity propagation, &
+        &in order to get a better understanding of the view distribution. The balance flag is used &
+        &to apply a balancing restraint (on the class population). Adjust balance until you are &
+        &satisfied with the shape of the histogram',&                              ! descr_long
+        &'simple_exec',&                                                           ! executable
+        &1, 2, 0, 2, 2, 1, 1, .false.)                                             ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cluster_cavgs%set_input('img_ios', 1, 'stk', 'file', 'Stack of class averages', 'Stack of class averages', 'e.g. cavgs.mrc', .true., '')
+        ! parameter input/output
+        call cluster_cavgs%set_input('parm_ios', 1, smpd)
+        call cluster_cavgs%set_input('parm_ios', 2, 'classdoc', 'file', 'Class document', 'Class document associated with the stack of class averages', 'e.g. classdoc_iterX.txt', .true., '')
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        call cluster_cavgs%set_input('srch_ctrls', 1, 'balance', 'num', 'Max population for balance restraint', 'Max population for balance restraint', 'max # cluster members', .false., 0.)
+        call cluster_cavgs%set_input('srch_ctrls', 2, objfun)
+        ! filter controls
+        call cluster_cavgs%set_input('filt_ctrls', 1, hp)
+        call cluster_cavgs%set_input('filt_ctrls', 2, lp)
+        lp%required = .true.
+        ! mask controls
+        call cluster_cavgs%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call cluster_cavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_cluster_cavgs
+
     subroutine new_ctf_estimate
         ! PROGRAM SPECIFICATION
         call ctf_estimate%new(&
@@ -553,7 +680,7 @@ contains
         call extract%set_input('parm_ios', 1, 'dir', 'string', 'Ouput directory',&
         &'Ouput directory for single-particle images & CTF parameters', 'e.g. extract/', .false., 'extract')
         call extract%set_input('parm_ios', 2, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
-        call extract%set_input('parm_ios', 3, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call extract%set_input('parm_ios', 3, pcontrast)
         call extract%set_input('parm_ios', 4, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
@@ -566,6 +693,86 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_extract
+
+    subroutine new_fsc
+        ! PROGRAM SPECIFICATION
+        call fsc%new(&
+        &'fsc', &                                                               ! name
+        &'calculattes the FSC between the two input volumes',&                  ! descr_short
+        &'is a program for calculating the FSC between the two input volumes',& ! descr_long
+        &'simple_exec',&                                                        ! executable
+        &2, 1, 0, 0, 0, 2, 1, .false.)
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call fsc%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call fsc%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        ! parameter input/output
+        call fsc%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        call fsc%set_input('mask_ctrls', 1, msk)
+        call fsc%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call fsc%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_fsc
+
+    subroutine new_info_image
+        ! PROGRAM SPECIFICATION
+        call info_image%new(&
+        &'info_image', & ! name
+        &'prints header information',&                                                         ! descr_short
+        &'is a program for printing header information in MRC and SPIDER stacks and volumes',& ! descr_long
+        &'simple_exec',&                                                                       ! executable
+        &1, 2, 0, 0, 0, 0, 0, .false.)                                                         ! # entries in each group, requires sp_project
+        ! TEMPLATE
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call info_image%set_input('img_ios', 1, 'fname', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .true., '')
+        ! parameter input/output
+        call info_image%set_input('parm_ios', 1, 'stats', 'binary', 'Output statistics', 'Output statistics(yes|no){no}',             '(yes|no){no}', .false., 'no')
+        call info_image%set_input('parm_ios', 2, 'vis',   'binary', 'Visualize image',   'Visualize image with gnuplot(yes|no){yes}', '(yes|no){no}', .false., 'no')
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_info_image
+
+    subroutine new_info_stktab
+        ! PROGRAM SPECIFICATION
+        call info_stktab%new(&
+        &'info_stktab', & ! name
+        &'prints stktab information',&                                           ! descr_short
+        &'is a program for printing information about stktab (list of stacks)',& ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &1, 0, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
+        ! TEMPLATE
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        stktab%required = .true.
+        call info_stktab%set_input('img_ios', 1, stktab)
+
+        ! parameter input/output
+        !<empty>
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_info_stktab
 
     subroutine new_initial_3Dmodel
         ! PROGRAM SPECIFICATION
@@ -641,6 +848,33 @@ contains
         call make_cavgs%set_input('comp_ctrls', 2, nthr)
     end subroutine new_make_cavgs
 
+    subroutine new_make_pickrefs
+        ! PROGRAM SPECIFICATION
+        call make_pickrefs%new(&
+        &'make_pickrefs', &                            ! name
+        &'is used to produce picking references',&     ! descr_short
+        &'is a program for generating references for template-based particle picking',& ! descr_long
+        &'simple_exec',&                               ! executable
+        &0, 2, 2, 1, 0, 0, 1, .false.)                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call make_pickrefs%set_input('parm_ios', 1, smpd)
+        call make_pickrefs%set_input('parm_ios', 2, pcontrast)
+        ! alternative inputs
+        call make_pickrefs%set_input('alt_ios', 1, 'stk', 'file', 'Stack of 2D picking references', 'Stack of 2D picking references', 'e.g. refs.mrc', .false., '')
+        call make_pickrefs%set_input('alt_ios', 2, 'vol1', 'file', 'Volume', 'Volume to re-project', 'vol.mrc file', .false., '')
+        ! search controls
+        call make_pickrefs%set_input('srch_ctrls', 1, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call make_pickrefs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_make_pickrefs
+
     subroutine new_mask
         ! PROGRAM SPECIFICATION
         call mask%new(&
@@ -649,7 +883,7 @@ contains
         &'If you want to mask your images with a spherical mask with a soft &
         & falloff, set msk to the radius in pixels',&                         ! descr_long
         &'simple_exec',&                                                      ! executable
-        &0, 3, 2, 0, 1,11, 1, .false.)                                        ! # entries in each group, requires sp_project
+        &0, 3, 2, 1, 1,11, 1, .false.)                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -660,9 +894,10 @@ contains
         ! alternative inputs
         call mask%set_input('alt_ios', 1, stk)
         call mask%set_input('alt_ios', 2, 'vol1', 'file', 'Volume', 'Volume to mask', &
-        & 'input volume e.g. recvol.mrc', .false., '')
+        & 'input volume e.g. vol.mrc', .false., '')
         ! search controls
-        ! <empty>
+        call mask%set_input('srch_ctrls', 1, 'center', 'binary', 'Center input volume', 'Center input volume by its &
+        &center of gravity(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls
         call mask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
@@ -810,7 +1045,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process', &
-        & 'input volume e.g. recvol.mrc', .true., '')
+        & 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call postprocess%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -863,7 +1098,7 @@ contains
         call preprocess%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call preprocess%set_input('parm_ios', 3, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
-        call preprocess%set_input('parm_ios', 4, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call preprocess%set_input('parm_ios', 4, pcontrast)
         call preprocess%set_input('parm_ios', 5, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
         call preprocess%set_input('parm_ios', 6, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
@@ -923,7 +1158,7 @@ contains
         call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call preprocess_stream%set_input('parm_ios', 3, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
-        call preprocess_stream%set_input('parm_ios', 4, 'pcontrast', 'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call preprocess_stream%set_input('parm_ios', 4, pcontrast)
         call preprocess_stream%set_input('parm_ios', 5, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
         call preprocess_stream%set_input('parm_ios', 6, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
@@ -1011,7 +1246,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
-        & sections for particle image matching', 'input volume e.g. recvol.mrc', .false., 'vol1.mrc')
+        & sections for particle image matching', 'input volume e.g. vol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
         call refine3D%set_input('parm_ios', 1, projfile)
         ! alternative inputs
@@ -1088,6 +1323,173 @@ contains
         call refine3D_init%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_init
 
+    subroutine new_select_
+        ! PROGRAM SPECIFICATION
+        call select_%new(&
+        &'select',&                                         ! name
+        &'select images',&                                  ! descr_short
+        &'is a program for selecting files based on image correlation matching',& ! descr_long
+        &'simple_exec',&                                    ! executable
+        &8, 0, 0, 0, 0, 0, 1, .false.)                      ! # entries in each group
+        ! TEMPLATE
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call select_%set_input('img_ios', 1, stk )
+        call select_%set_input('img_ios', 2, 'stk2',    'file', 'Stack of selected images', 'Stack of selected images', 'e.g. selected(cavgs).mrc', .true., '')
+        call select_%set_input('img_ios', 3, 'stk3',    'file', 'Stack of images to select from', 'Stack of images to select from', 'e.g. (cavgs)2selectfrom.mrc', .false., '')
+        call select_%set_input('img_ios', 4, 'filetab', 'file', 'List of files to select from', 'List of files to select from', 'e.g. filetab.txt', .false., '')
+        call select_%set_input('img_ios', 5,  outfile)
+        call select_%set_input('img_ios', 6,  outstk)
+        call select_%set_input('img_ios', 7,  'dir_select', 'dir', 'Directory for selected images', 'Move selected files to here{selected}', 'select dir', .false., '')
+        call select_%set_input('img_ios', 8,  'dir_reject', 'dir', 'Directory for rejected images', 'Move rejected files to here{rejected}', 'reject dir', .false., '')
+        ! parameter input/output
+        !<empty>
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call select_%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_select_
+
+    subroutine new_simulate_movie
+        ! PROGRAM SPECIFICATION
+        call simulate_movie%new(&
+        &'simulate_movie',&                                 ! name
+        &'simulate DDD movie',&                             ! descr_short
+        &'is a program for crude simulation of a DDD movie. Input is a set of projection images to place. &
+        &Movie frames are then generated related by randomly shifting the base image and applying noise',& ! descr_long
+        &'simple_exec',&                                    ! executable
+        &1, 10, 0, 0, 1, 0, 1, .false.)                     ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call simulate_movie%set_input('img_ios', 1, stk)
+        ! parameter input/output
+        call simulate_movie%set_input('parm_ios',  1, smpd)
+        call simulate_movie%set_input('parm_ios',  2, 'snr', 'num', 'SNR', 'Signal-to-noise ratio of movie frame', 'signal-to-noise ratio(0.)', .false., 0.)
+        call simulate_movie%set_input('parm_ios',  3, kv)
+        call simulate_movie%set_input('parm_ios',  4, cs)
+        call simulate_movie%set_input('parm_ios',  5, fraca)
+        call simulate_movie%set_input('parm_ios',  6, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2.)
+        call simulate_movie%set_input('parm_ios',  7, trs)
+        call simulate_movie%set_input('parm_ios',  8, 'nframes',  'num', 'Number of frames', 'Number of movie frames', '# frames', .false., 0.)
+        call simulate_movie%set_input('parm_ios',  9, 'xdim',  'num', 'x-dimension', 'Number of pixels in x-direction', '# pixels in x', .false., 0.)
+        call simulate_movie%set_input('parm_ios', 10, 'ydim',  'num', 'y-dimension', 'Number of pixels in y-direction', '# pixels in y', .false., 0.)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        call simulate_movie%set_input('filt_ctrls', 1, bfac)
+        ! mask controls
+        !<empty>
+        ! computer controls
+        call simulate_movie%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_simulate_movie
+
+    subroutine new_simulate_noise
+        ! PROGRAM SPECIFICATION
+        call simulate_noise%new(&
+        &'simulate_noise',&                                ! name
+        &'white noise simulation',&                        ! descr_short
+        &'is a program for generating pure noise images',& ! descr_long
+        &'simple_exec',&                                   ! executable
+        &0, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !<empty>
+        ! parameter input/output
+        call simulate_noise%set_input('parm_ios', 1, box)
+        call simulate_noise%set_input('parm_ios', 2, nptcls)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        !<empty>
+        ! computer controls
+        !<empty>
+    end subroutine new_simulate_noise
+
+    subroutine new_simulate_particles
+        ! PROGRAM SPECIFICATION
+        call simulate_particles%new(&
+        &'simulate_particles',&                                          ! name
+        &'simulate single-particle images',&                             ! descr_short
+        &'is a program for simulating single-particle cryo-EM images. It is not a verysophisticated simulator, but &
+        &it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be &
+        &used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input &
+        &is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is &
+        &projected using Fourier interpolation, 20% of the total noise is added to the images (pink noise), they are &
+        &then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed &
+        &before the remaining 80% of the noise (white noise) is added',& ! descr_long
+        &'simple_exec',&                                                 ! executable
+        &1, 15, 0, 1, 2, 1, 1, .false.)                                   ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call simulate_particles%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
+        ! parameter input/output
+        call simulate_particles%set_input('parm_ios', 1,  smpd)
+        call simulate_particles%set_input('parm_ios', 2,  nptcls)
+        call simulate_particles%set_input('parm_ios', 3,  'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .false., 0.)
+        call simulate_particles%set_input('parm_ios', 4,  oritab)
+        call simulate_particles%set_input('parm_ios', 5,  outfile)
+        call simulate_particles%set_input('parm_ios', 6,  outstk)
+        call simulate_particles%set_input('parm_ios', 7,  'ndiscrete', 'num', '# discrete projection directions', 'Number of discrete projection directions used in simulation', '# discrete projs', .false., 0.)
+        call simulate_particles%set_input('parm_ios', 8,  'sherr',     'num', 'Shift error', 'Rotational origin shift error(in pixels)', 'shift error(in pixels)', .false., 0.)
+        call simulate_particles%set_input('parm_ios', 9,  kv)
+        call simulate_particles%set_input('parm_ios', 10, cs)
+        call simulate_particles%set_input('parm_ios', 11, fraca)
+        call simulate_particles%set_input('parm_ios', 12, deftab)
+        call simulate_particles%set_input('parm_ios', 13, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2.)
+        call simulate_particles%set_input('parm_ios', 14, 'dferr',    'num', 'Underfocus error',  'Uniform underfoucs error(in microns)',  'error in microns', .false., 1.)
+        call simulate_particles%set_input('parm_ios', 15, 'astigerr', 'num', 'Astigmatism error', 'Uniform astigmatism error(in microns)', 'error in microns', .false., 0.)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        call simulate_particles%set_input('srch_ctrls', 1, pgrp)
+        ! filter controls
+        call simulate_particles%set_input('filt_ctrls', 1, bfac)
+        call simulate_particles%set_input('filt_ctrls', 2, 'bfacerr', 'num', 'B-factor error', 'Uniform B-factor error(in Angstroms^2)', 'error(in Angstroms^2)', .false., 50.)
+        ! mask controls
+        call simulate_particles%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call simulate_particles%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_simulate_particles
+
+    subroutine new_simulate_subtomogram
+        ! PROGRAM SPECIFICATION
+        call simulate_subtomogram%new(&
+        &'simulate_subtomogram',&                               ! name
+        &'simulate subtomogram',&                               ! descr_short
+        &'is a program for crude simulation of a subtomogram',& ! descr_long
+        &'simple_exec',&                                        ! executable
+        &1, 3, 0, 0, 0,0, 1, .false.)                           ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call simulate_subtomogram%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to use for simulation', 'input volume e.g. vol.mrc', .false., '')
+        ! parameter input/output
+        call simulate_subtomogram%set_input('parm_ios', 1,  smpd)
+        call simulate_subtomogram%set_input('parm_ios', 2,  nptcls)
+        call simulate_subtomogram%set_input('parm_ios', 3,  'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .false., 0.)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        !<empty>
+        ! computer controls
+        call simulate_subtomogram%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_simulate_subtomogram
+
     subroutine new_scale
         ! PROGRAM SPECIFICATION
         call scale%new(&
@@ -1106,13 +1508,13 @@ contains
         call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
         call scale%set_input('parm_ios', 5, 'clip', 'num', 'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
         call scale%set_input('parm_ios', 6, outvol)
-        call scale%set_input('parm_ios', 7, 'outstk', 'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
+        call scale%set_input('parm_ios', 7, outstk)
         call scale%set_input('parm_ios', 8, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false., '')
         ! alternative inputs
         call scale%set_input('alt_ios', 1, stk)
         scale%alt_ios(1)%required = .false.
         call scale%set_input('alt_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
-        &'input volume e.g. recvol.mrc', .false., '')
+        &'input volume e.g. vol.mrc', .false., '')
         call scale%set_input('alt_ios', 3, 'filetab', 'file', 'Stacks list',&
         &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false., '')
         ! search controls
@@ -1163,14 +1565,14 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volops%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to mask', &
-        & 'input volume e.g. recvol.mrc', .false., '')
+        & 'input volume e.g. vol.mrc', .false., '')
         call volops%set_input('img_ios', 2, outvol)
         ! ! parameter input/output
         call volops%set_input('parm_ios', 1, smpd)
         volops%parm_ios(1)%required = .false.
         call volops%set_input('parm_ios', 2, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}', '(yes|no){no}', .false., 'no')
         call volops%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast','Invert volume contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call volops%set_input('parm_ios', 4, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal to noise ratio(0.)', .false., 0.)
+        call volops%set_input('parm_ios', 4, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0.)
         call volops%set_input('parm_ios', 5, mirr)
         call volops%set_input('parm_ios', 6, bfac)
         call volops%set_input('parm_ios', 7, 'e1', 'num', 'Rotation along alpha','Alpha Euler angle', 'in degrees', .false., 0.)
@@ -1415,7 +1817,6 @@ contains
         type(chash) :: ch
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_distr_exec'
-
         write(*,'(a)') format_str('USAGE', C_UNDERLINED)
         if( l_distr_exec )then
             write(*,'(a)') format_str('bash-3.2$ simple_distr_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)

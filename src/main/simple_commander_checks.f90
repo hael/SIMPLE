@@ -104,6 +104,10 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
         p = params(cline) ! constants & derived constants produced
+        if( .not. file_exists(p%stktab) )then
+            write(*,*) 'file: ', trim(p%stktab), ' not in cwd'
+            stop 'commander_checks :: exec_info_stktab'
+        endif
         write(*,*) '# micrograps: ', p%nmics
         write(*,*) '# particles : ', p%nptcls
         write(*,*) 'ldim        : ', p%ldim

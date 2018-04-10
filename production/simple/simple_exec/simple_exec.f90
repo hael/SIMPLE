@@ -1,9 +1,8 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
 #include "simple_lib.f08"
-use simple_gen_doc
-use simple_user_interface, only: make_user_interface
-use simple_cmdline,        only: cmdline, cmdline_err
+use simple_cmdline, only: cmdline, cmdline_err
+use simple_user_interface
 use simple_commander_checks
 use simple_commander_comlin
 use simple_commander_distr
@@ -20,35 +19,22 @@ use simple_commander_volops
 use simple_commander_tseries
 implicit none
 
-! SIMULATOR PROGRAMS
 type(simulate_noise_commander)       :: xsimulate_noise
 type(simulate_particles_commander)   :: xsimulate_particles
 type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
-
-! PRE-PROCESSING PROGRAMS
 type(select_commander)               :: xselect
 type(make_pickrefs_commander)        :: xmake_pickrefs
 type(extract_commander)              :: xextract
-
-! CLASS AVERAGE ANALYSIS
 type(cluster_cavgs_commander)        :: xcluster_cavgs
-
-! MASK PROGRAMS
 type(mask_commander)                 :: xmask
-
-! CHECKER PROGRAMS
 type(info_image_commander)           :: xinfo_image
 type(info_stktab_commander)          :: xinfo_stktab
-
-! VOLOPS PROGRAMS
 type(fsc_commander)                  :: xfsc
 type(center_commander)               :: xcenter
 type(postprocess_commander)          :: xpostprocess
 type(project_commander)              :: xproject
 type(volops_commander)               :: xvolops
-
-! GENERAL IMAGE PROCESSING PROGRAMS
 type(convert_commander)              :: xconvert
 type(ctfops_commander)               :: xctfops
 type(filter_commander)               :: xfilter
@@ -56,14 +42,10 @@ type(normalize_commander)            :: xnormalize
 type(scale_commander)                :: xscale
 type(stack_commander)                :: xstack
 type(stackops_commander)             :: xstackops
-
-! MISCELLANOUS PROGRAMS
 type(print_cmd_dict_commander)       :: xprint_cmd_dict
 type(print_fsc_commander)            :: xprint_fsc
 type(print_magic_boxes_commander)    :: xprint_magic_boxes
 type(shift_commander)                :: xshift
-
-! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(make_deftab_commander)          :: xmake_deftab
 type(make_oris_commander)            :: xmake_oris
 type(map2ptcls_commander)            :: xmap2ptcls
@@ -76,81 +58,23 @@ character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
-logical               :: describe
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
 call get_command(entire_line)
-if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_programs
-describe = str_has_substr(entire_line, 'describe=yes')
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
-if( str_has_substr(prg, 'simple') ) stop 'giving program names with simple* prefix is depreciated'
-
+! make UI
 call make_user_interface
+if( str_has_substr(entire_line, 'prg=list') ) call list_shmem_prgs_in_ui
 
 select case(prg)
-
-    ! SIMULATOR PROGRAMS
-
     case( 'simulate_noise' )
-        !==Program simulate_noise
-        !
-        ! <simulate_noise/begin>is a program for generating pure noise images<simulate_noise/end>
-        !
-          ! set required keys
-        keys_required(1) = 'box'
-        keys_required(2) = 'nptcls'
-        ! parse command line
-        if( describe ) call print_doc_simulate_noise
-        call cline%parse_oldschool(keys_required(:2))
-        ! execute
+        call cline%parse()
         call xsimulate_noise%execute(cline)
     case( 'simulate_particles' )
-        !==Program simulate_particles
-        !
-        ! <simulate_particles/begin>is a program for simulating single-particle cryo-EM images. It is not a very
-        ! sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-
-        ! slice simulation and it cannot be used for simulating molecules containing heavy atoms. It does not even
-        ! accept a PDB file as an input. Input is a cryo-EM map, which we usually generate from a PDB file using
-        ! EMANs program pdb2mrc. The volume is projected using Fourier interpolation, 20% of the total noise is
-        ! added to the images (pink noise), they are then Fourier transformed and multiplied with astigmatic CTF and
-        ! B-factor. Next, the they are inverse FTed before the remaining 80% of the noise (white noise) is added
-        ! <simulate_particles/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'vol1'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'nptcls'
-        keys_required(5)  = 'snr'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'xsh'
-        keys_optional(3)  = 'ysh'
-        keys_optional(4)  = 'sherr'
-        keys_optional(5)  = 'oritab'
-        keys_optional(6)  = 'outfile'
-        keys_optional(7)  = 'outstk'
-        keys_optional(8)  = 'single'
-        keys_optional(9)  = 'ndiscrete'
-        keys_optional(10) = 'diverse'
-        keys_optional(11) = 'pgrp'
-        ! set optional CTF-related keys
-        keys_optional(12) = 'ctf'
-        keys_optional(13) = 'kv'
-        keys_optional(14) = 'cs'
-        keys_optional(15) = 'fraca'
-        keys_optional(16) = 'deftab'
-        keys_optional(17) = 'defocus'
-        keys_optional(18) = 'dferr'
-        keys_optional(19) = 'astigerr'
-        keys_optional(20) = 'bfac'
-        keys_optional(21) = 'bfacerr'
-        ! parse command line
-        if( describe ) call print_doc_simulate_particles
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:21))
+        call cline%parse()
         ! set defaults
         call cline%set('nspace', cline%get_rarg('nptcls'))
         if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
@@ -162,36 +86,9 @@ select case(prg)
         call cline%set('winsz', 1.5)
         call cline%set('alpha',  2.)
         call cline%set('eo', '  no')
-        ! execute
         call xsimulate_particles%execute(cline)
     case( 'simulate_movie' )
-        !==Program simulate_movie
-        !
-        ! <simulate_movie/begin>is a program for crude simulation of a DDD movie. Input is a set of projection images to place.
-        ! Movie frames are then generated related by randomly shifting the base image and applying noise<simulate_movie/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'xdim'
-        keys_required(5)  = 'ydim'
-        keys_required(6)  = 'snr'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'nframes'
-        keys_optional(3)  = 'trs'
-        keys_optional(4)  = 'vis'
-        ! set optional CTF-related keys
-        keys_optional(5)  = 'kv'
-        keys_optional(6)  = 'cs'
-        keys_optional(7)  = 'fraca'
-        keys_optional(8)  = 'deftab'
-        keys_optional(9)  = 'defocus'
-        keys_optional(10) = 'bfac'
-        ! parse command line
-        if( describe ) call print_doc_simulate_movie
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:10))
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      3.)
         if( .not. cline%defined('ctf')     ) call cline%set('ctf',   'yes')
@@ -201,215 +98,53 @@ select case(prg)
         call cline%set('winsz', 1.5)
         call cline%set('alpha',  2.)
         call cline%set('eo',   'no')
-        ! execute
         call xsimulate_movie%execute(cline)
     case( 'simulate_subtomogram' )
-        !==Program simulate_subtomogram
-        !
-        ! <simulate_subtomogram/begin>is a program for crude simulation of a subtomogram<simulate_subtomogram/end>
-        !
-        ! set required keys
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'nptcls'
-        keys_required(4) = 'snr'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        ! parse command line
-        if( describe ) call print_doc_simulate_subtomogram
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
-        ! execute
+        call cline%parse()
         call xsimulate_subtomogram%execute(cline)
     case( 'select' )
-        !==Program select
-        !
-        ! <select/begin>is a program for selecting files based on image correlation matching<select/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'stk2'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'stk3'
-        keys_optional(3) = 'filetab'
-        keys_optional(4) = 'outfile'
-        keys_optional(5) = 'outstk'
-        keys_optional(6) = 'dir_select'
-        keys_optional(7) = 'dir_reject'
-        ! parse command line
-        if( describe ) call print_doc_select
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:7))
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('outfile') )  call cline%set('outfile', 'selected_lines.txt')
-        ! execute
         call xselect%execute(cline)
     case( 'make_pickrefs' )
-        !==Program pickrefs
-        !
-        ! <make_pickrefs/begin>is a program for generating references for template-based particle picking<make_pickrefs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'pgrp'
-        keys_required(2) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'vol1'
-        keys_optional(3) = 'stk'
-        keys_optional(4) = 'pcontrast'
-        ! parse command line
-        if( describe ) call print_doc_make_pickrefs
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
-        ! set defaults
+        call cline%parse()
         if( .not. cline%defined('pcontrast')) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('pgrp')     ) call cline%set('pgrp',      'd1'   )
         ! execute
         call xmake_pickrefs%execute(cline)
     case( 'extract' )
         call cline%parse()
-        ! parse command line
+        ! set defaults
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
-        ! execute
         call xextract%execute(cline)
-
-    ! CLUSTER2D PROGRAMS
-
     case('cluster_cavgs')
-        !==Program cluster_cavgs
-        !
-        ! <cluster_cavgs/begin>is a program for analyzing class averages with affinity propagation,
-        ! in order to get a better understanding of the view distribution. The balance flag is used
-        ! to apply a balancing restraint (on the class population). Adjust balance until you are
-        ! satisfied with the shape of the histogram. <cluster_cavgs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'lp'
-        keys_required(5) = 'classdoc'
-        ! set optional keys
-        keys_optional(1) = 'hp'
-        keys_optional(2) = 'nthr'
-        keys_optional(3) = 'balance'
-        keys_optional(4) = 'objfun'
-        ! parse command line
-        ! if( describe ) call print_doc_cluster_cavgs
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:4))
-        ! execute
+        call cline%parse()
         call xcluster_cavgs%execute(cline)
-
-    ! MASK PROGRAMS
-
     case( 'mask' )
-        !==Program mask
-        !
-        ! <mask/begin>is a program for masking images and volumes.
-        ! If you want to mask your images with a spherical mask with a soft falloff, set msk
-        ! to the radius in pixels<mask/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        ! set optional keys
-        keys_optional(1)  = 'stk'
-        keys_optional(2)  = 'vol1'
-        keys_optional(3)  = 'msktype'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'outer'
-        keys_optional(7)  = 'nthr'
-        keys_optional(8)  = 'mw'
-        keys_optional(9)  = 'edge'
-        keys_optional(10) = 'amsklp'
-        keys_optional(11) = 'automsk'
-        keys_optional(12) = 'smpd'
-        keys_optional(13) = 'outstk'
-        keys_optional(14) = 'outvol'
-        keys_optional(15) = 'mskfile'
-        keys_optional(16) = 'taper_edges'
-        keys_optional(17) = 'msk'
-        keys_optional(18) = 'pdbfile'
-        keys_optional(19) = 'oritab'
-        keys_optional(20) = 'outfile'
-        keys_optional(21) = 'center'
-        ! parse command line
-        if( describe ) call print_doc_mask
-        call cline%parse_oldschool( keys_required(:1), keys_optional(:21))
-        ! execute
+        call cline%parse()
         call xmask%execute(cline)
     case( 'info_image' )
-        !==Program info_image
-        !
-        ! <info_image/begin>is a program for printing header information in MRC and SPIDER stacks
-        ! and volumes<info_image/end>
-        !
-        ! set required keys
-        keys_required(1) = 'fname'
-        ! set optional keys
-        keys_optional(1) = 'box'
-        keys_optional(2) = 'smpd'
-        keys_optional(3) = 'stats'
-        keys_optional(4) = 'endian'
-        ! parse command line
-        if( describe ) call print_doc_info_image
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
-        ! execute
+        call cline%parse()
         call xinfo_image%execute(cline)
     case( 'info_stktab' )
-        !==Program info_stktab
-        !
-        ! <info_stktab/begin>is a program for for printing information about stktab <info_stktab/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stktab'
-        ! parse command line
-        ! if( describe ) call print_doc_info_stktab
-        call cline%parse_oldschool(keys_required(:1))
-        ! execute
+        call cline%parse()
         call xinfo_stktab%execute(cline)
-
-    ! VOLOPS PROGRAMS
-
     case( 'fsc' )
-        !==Program fsc
-        !
-        ! <fsc/begin>is a program for calculating the FSC between the two input volumes<fsc/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'vol1'
-        keys_required(3) = 'vol2'
-        keys_required(4) = 'msk'
-        ! set optional keys
-        keys_optional(1) = 'mskfile'
-        ! parse command line
-        if( describe ) call print_doc_fsc
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
-        ! execute
+        call cline%parse()
         call xfsc%execute(cline)
     case( 'center' )
-        !==Program center
-        !
-        ! <center/begin>is a program for centering a volume and mapping the shift parameters
-        ! back to the particle images<center/end>
-        !
-        ! set required keys
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'oritab'
-        keys_optional(2) = 'outfile'
-        keys_optional(3) = 'cenlp'
-        ! parse command line
-        if( describe ) call print_doc_center
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
+        call cline%parse()
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
-        ! execute
         call xcenter%execute(cline)
     case( 'postprocess' )
         call cline%parse()
         ! execute
         call xpostprocess%execute(cline)
+
+!!!!!!!!!!!!!!!!!!!!!!
+
     case( 'project' )
         !==Program project
         !
@@ -439,7 +174,6 @@ select case(prg)
         keys_optional(9)  = 'top'
         keys_optional(10) = 'msk'
         ! parse command line
-        if( describe ) call print_doc_project
         call cline%parse_oldschool(keys_required(:2), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
@@ -475,7 +209,6 @@ select case(prg)
         keys_optional(19) = 'vollist'
         keys_optional(20) = 'outfile'
         ! parse command line
-        if( describe ) call print_doc_volops
         call cline%parse_oldschool(keys_optional=keys_optional(:20))
         if( .not.cline%defined('vol1') .and. .not.cline%defined('vollist') )&
             &stop 'Input volume required!'
@@ -496,7 +229,6 @@ select case(prg)
         keys_optional(3) = 'outstk'
         keys_optional(4) = 'outvol'
         ! parse command line
-        if( describe ) call print_doc_convert
         call cline%parse_oldschool(keys_optional=keys_optional(:4))
         ! execute
         call xconvert%execute(cline)
@@ -517,7 +249,6 @@ select case(prg)
         keys_optional(5) = 'deftab'
         keys_optional(6) = 'bfac'
         ! parse command line
-        if( describe ) call print_doc_ctfops
         call cline%parse_oldschool(keys_required(:2), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('stk') ) call cline%set('box', 256.)
@@ -544,7 +275,6 @@ select case(prg)
         keys_optional(10) = 'real_filter'
         keys_optional(11) = 'width'
         ! parse command line
-        if( describe ) call print_doc_filter
         call cline%parse_oldschool(keys_required(:1), keys_optional(:11))
         ! execute
         call xfilter%execute(cline)
@@ -567,7 +297,6 @@ select case(prg)
         keys_optional(5) = 'shell_norm'
         keys_optional(6) = 'nthr'
         ! parse command line
-        ! if( describe ) call print_doc_normalize
         call cline%parse_oldschool(keys_required(:1), keys_optional(:6))
         ! execute
         call xnormalize%execute(cline)
@@ -592,7 +321,6 @@ select case(prg)
         keys_optional(6) = 'ydim'
         keys_optional(7) = 'endian'
         ! parse command line
-        if( describe ) call print_doc_stack
         call cline%parse_oldschool(keys_required(:3), keys_optional(:6))
         ! execute
         call xstack%execute(cline)
@@ -639,7 +367,6 @@ select case(prg)
         keys_optional(24) = 'stk'
         keys_optional(25) = 'stktab'
         ! parse command line
-        if( describe ) call print_doc_stackops
         call cline%parse_oldschool( keys_required(:1),keys_optional(:25) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -661,7 +388,6 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'outfile'
         ! parse command line
-        if( describe ) call print_doc_print_cmd_dict
         call cline%parse_oldschool(keys_optional=keys_optional(:1))
         ! execute
         call xprint_cmd_dict%execute(cline)
@@ -675,7 +401,6 @@ select case(prg)
         keys_required(2)  = 'box'
         keys_required(3)  = 'fsc'
         ! parse command line
-        if( describe ) call print_doc_print_fsc
         call cline%parse_oldschool(keys_required(:3))
         ! execute
         call xprint_fsc%execute(cline)
@@ -688,7 +413,6 @@ select case(prg)
         keys_required(1) = 'smpd'
         keys_required(2) = 'moldiam'
         ! parse command line
-        if( describe ) call print_doc_print_magic_boxes
         call cline%parse_oldschool(keys_required(:2))
         ! execute
         call xprint_magic_boxes%execute(cline)
@@ -706,7 +430,6 @@ select case(prg)
         keys_optional(2) = 'mul'
         keys_optional(3) = 'oritype'
         ! parse command line
-        if( describe ) call print_doc_shift
         call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! execute
         call xshift%execute(cline)
@@ -738,7 +461,6 @@ select case(prg)
         keys_optional(7) = 'phshiftunit'
         keys_optional(8) = 'oritype'
         ! parse command line
-        if( describe ) call print_doc_make_deftab
         call cline%parse_oldschool(keys_required(:5),keys_optional(:8))
         ! execute
         call xmake_deftab%execute(cline)
@@ -781,7 +503,6 @@ select case(prg)
         keys_optional(20) = 'iares'
         keys_optional(21) = 'oritype'
         ! parse command line
-        if( describe ) call print_doc_make_oris
         call cline%parse_oldschool(keys_required(:1),keys_optional(:21))
         ! execute
         call xmake_oris%execute(cline)
@@ -804,7 +525,6 @@ select case(prg)
         keys_optional(6) = 'stk'
         keys_optional(7) = 'stktab'
         ! parse command line
-        if( describe ) call print_doc_map2ptcls
         call cline%parse_oldschool(keys_required(:3), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
@@ -856,7 +576,6 @@ select case(prg)
         keys_optional(25) = 'ctfreslim'
         keys_optional(26) = 'oritype'
         ! parse command line
-        if( describe ) call print_doc_orisops
         call cline%parse_oldschool(keys_optional=keys_optional(:26))
         ! execute
         call xorisops%execute(cline)
@@ -892,7 +611,6 @@ select case(prg)
         keys_optional(17) = 'classtats'
         keys_optional(18) = 'oritype'
         ! parse command line
-        if( describe ) call print_doc_oristats
         call cline%parse_oldschool( keys_required(:1), keys_optional(:18) )
         ! set defaults
         if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
@@ -912,7 +630,6 @@ select case(prg)
         keys_optional(3) = 'tseries'
         keys_optional(4) = 'oritype'
         ! parse command line
-        if( describe ) call print_doc_vizoris
         call cline%parse_oldschool( keys_required(:1), keys_optional(:4) )
         ! execute
         call xvizoris%execute(cline)

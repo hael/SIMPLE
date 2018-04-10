@@ -76,7 +76,6 @@ type :: params
     character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: single='no'          !< simulate a single image(yes|no){no}
     character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
@@ -296,7 +295,7 @@ type :: params
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: deflim=4.
-    real    :: defocus=3.          !< defocus(in microns){3.}
+    real    :: defocus=2.          !< defocus(in microns){2.}
     real    :: dens=0.
     real    :: dfclose=1.
     real    :: dffar=4.
@@ -544,7 +543,6 @@ contains
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
-        call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)

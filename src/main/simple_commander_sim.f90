@@ -41,6 +41,7 @@ contains
         type(build)  :: b
         integer :: i, cnt, ntot
         p = params(cline, .false.) ! parameters generated
+        if( .not. cline%defined('outstk') ) p%outstk = 'simulated_noise'//p%ext
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         cnt  = 0
         ntot = p%top-p%fromp+1
@@ -94,10 +95,7 @@ contains
                 call b%a%rnd_oris_discrete(p%ndiscrete, p%nsym, p%eullims)
             endif
             call b%a%rnd_inpls(p%trs)
-        else if( p%diverse .eq. 'yes' )then
-            call b%a%gen_diverse
-            call b%a%rnd_trs(p%trs)
-        else if( .not. cline%defined('oritab') .and. p%single .eq. 'no' )then
+        else if( .not. cline%defined('oritab') )then
             call b%a%rnd_oris(p%sherr, p%eullims)
         endif
         if( debug )then
@@ -171,7 +169,7 @@ contains
         use simple_rnd,   only: ran3
         use simple_ctf,   only: ctf
         class(simulate_movie_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
+        class(cmdline),                  intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
         type(image)          :: base_image, shifted_base_image

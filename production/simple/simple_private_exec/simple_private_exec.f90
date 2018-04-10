@@ -123,7 +123,6 @@ call get_command(entire_line)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
-if( str_has_substr(prg, 'simple') ) stop 'giving program names with simple* prefix is depreciated'
 select case(prg)
 
     ! PRE-PROCESSING PROGRAMS

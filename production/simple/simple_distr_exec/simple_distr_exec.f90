@@ -47,18 +47,15 @@ character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
-logical               :: describe
 
 ! parse command line
 call get_command_argument(1, arg, cmdlen, cmdstat)
 call get_command(entire_line)
 if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_distr_programs
-describe = str_has_substr(entire_line, 'describe=yes')
 pos = index(arg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, arg, pos )
 prg = arg(pos+1:) ! this is the program name
-if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
-
+! make UI
 call make_user_interface
 
 select case(prg)
@@ -134,7 +131,6 @@ select case(prg)
         keys_optional(11) = 'nsig'
         keys_optional(12) = 'dir'
         ! parse command line
-        if( describe ) call print_doc_motion_correct_tomo
         call cline%parse_oldschool(keys_required(:3), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',       5.)
@@ -163,7 +159,6 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'clip'
         ! parse command line
-        if( describe ) call print_doc_powerspecs
         call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
         ! set defaults
         call cline%set('nthr', 1.0)
@@ -271,7 +266,6 @@ select case(prg)
         keys_optional(4) = 'nspace'
         keys_optional(5) = 'center'
         ! parse command line
-        if( describe ) call print_doc_symsrch
         call cline%parse_oldschool(keys_required(:8), keys_optional(:5))
         ! sanity check
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
@@ -306,7 +300,6 @@ select case(prg)
         keys_optional(2) = 'offset'
         keys_optional(3) = 'cenlp'
         ! parse command line
-        if( describe ) call print_doc_tseries_track
         call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
         ! set defaults
         call cline%set('nthr', 1.0)
@@ -356,7 +349,6 @@ select case(prg)
         keys_optional(15) = 'objfun'
         keys_optional(16) = 'refine'
         ! parse command line
-        ! if( describe ) call print_doc_cluster3D
         call cline%parse_oldschool(keys_required(:7), keys_optional(:16))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -402,7 +394,6 @@ select case(prg)
         keys_optional(16) = 'objfun'
         keys_optional(17) = 'update_frac'
         ! parse command line
-        ! if( describe ) call print_doc_cluster3D_refine
         call cline%parse_oldschool(keys_required(:6), keys_optional(:17))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
