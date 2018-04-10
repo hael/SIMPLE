@@ -110,7 +110,9 @@ contains
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
-        ! B-factor memoization first
+        ! calculate spectral score
+        self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
+        ! B-factor memoization
         if( self%pftcc_ptr%objfun_is_ccres() )then
             bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
             call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
@@ -126,8 +128,6 @@ contains
             self%prev_corr  = 0.
             self%best_corr  = 0.
         endif
-        ! calculate spectral score
-        self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
         if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
 

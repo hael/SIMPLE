@@ -140,7 +140,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         type(ctfparams)   :: ctfvars
         integer           :: alloc_stat, cnt, iptcl
-        cnt    = 0
+        cnt = 0
         ! fetch data from project
         do iptcl=istart,iend
             if(.not.pptcl_mask(iptcl)) cycle

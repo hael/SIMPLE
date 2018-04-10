@@ -50,7 +50,7 @@ contains
         class(strategy2D), pointer :: strategy2Dsrch(:)
         type(strategy2D_spec)      :: strategy2Dspec
         integer :: iptcl, icls, i, fnr, cnt
-        real    :: corr_bound, frac_srch_space, extr_thresh
+        real    :: corr_bound, frac_srch_space, extr_thresh, specscore_avg
         logical :: doprint, l_partial_sums, l_extr, l_frac_update
 
         if( L_BENCH )then
@@ -60,6 +60,13 @@ contains
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
+
+        ! SPECSCORE AVERAGE
+        if( b%a%isthere('specscore') )then
+            specscore_avg = b%a%get_avg('specscore')
+        else
+            specscore_avg = 0.
+        endif
 
         ! SWITCHES
         if( p%extr_iter == 1 )then
@@ -141,7 +148,6 @@ contains
         if( p%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
-                ! call b%a%calc_hard_weights(p%frac)
             else
                 if( p%weights2D .eq. 'yes' .and. which_iter > 3 )then
                     call b%a%get_pops(prev_pops, 'class', consider_w=.true., maxn=p%ncls)
@@ -151,7 +157,6 @@ contains
                 ! frac is one by default in cluster2D (no option to set frac)
                 ! so spectral weighting is done over all images
                 call b%a%calc_spectral_weights(1.0)
-                ! call b%a%calc_spectral_weights(p%frac)
                 if( any(prev_pops == 0) )then
                     ! now ensuring the spectral re-ranking does not re-populates
                     ! zero-populated classes, for congruence with empty cavgs
@@ -168,9 +173,12 @@ contains
                 deallocate(prev_pops)
             endif
         else
-            ! defaults to unitary weights
-            call b%a%set_all2single('w', 1.0)
-            ! call b%a%set_all2single('w', p%frac) ! should be done by class
+            ! defaults to frac, done by class
+            if( which_iter > 3 )then
+                call b%a%calc_hard_weights2D( p%frac, p%ncls )
+            else
+                call b%a%set_all2single('w', 1.0)
+            endif
         endif
 
         ! READ FOURIER RING CORRELATIONS
@@ -255,6 +263,7 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
+
         call cavger_transf_oridat( b%spproj )
         call cavger_assemble_sums( l_partial_sums )
         ! write results to disk

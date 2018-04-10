@@ -158,6 +158,7 @@ type :: oris
     procedure, private :: balance_2
     generic            :: balance => balance_1, balance_2
     procedure          :: calc_hard_weights
+    procedure          :: calc_hard_weights2D
     procedure          :: calc_spectral_weights
     procedure          :: reject_above
     procedure          :: find_closest_proj
@@ -2729,6 +2730,34 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_hard_weights
+
+    !>  \brief  calculates hard weights based on ptcl ranking
+    subroutine calc_hard_weights2D( self, frac, ncls )
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
+        integer,     intent(in)    :: ncls
+        type(oris)           :: os
+        integer, allocatable :: order(:), pinds(:)
+        integer :: i, icls, pop
+        if( frac < 0.99 )then
+            do icls=1,ncls
+                call self%get_pinds(icls, 'class', pinds, consider_w=.false.)
+                if(.not.allocated(pinds)) cycle
+                pop = size(pinds)
+                call os%new_clean(pop)
+                do i=1,pop
+                    call os%set_ori(i, self%get_ori(pinds(i)))
+                enddo
+                call os%calc_hard_weights(frac)
+                do i=1,pop
+                    call self%set(pinds(i), 'w', os%get(i,'w'))
+                enddo
+                deallocate(pinds)
+            enddo
+        else
+            call self%set_all2single('w', 1.)
+        endif
+    end subroutine calc_hard_weights2D
 
     !>  \brief  to find the closest matching projection direction
     function find_closest_proj( self, o_in, state ) result( closest )
