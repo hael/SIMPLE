@@ -1,7 +1,7 @@
 ! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
 include 'simple_lib.f08'
-use simple_image,   only: image
+!use simple_image,   only: image
 implicit none
 
 contains
@@ -78,6 +78,7 @@ contains
     !! \f$  \mathrm{dose}_\mathrm{acc} = \int^{N}_{1} \mathrm{dose\_weight}(a,F,V),\ n_\mathrm{e}/\si{\angstrom\squared}  \f$
     !! \param acc_dose accumulative dose (in \f$n_\mathrm{e}^- per \si{\angstrom\squared}\f$)
     function acc_dose2filter( img, acc_dose, kV ) result( filter )
+        use simple_image,   only: image
         type(image), intent(in) :: img           !< input image
         real,        intent(in) :: acc_dose, kV  !< acceleration voltage
         real, allocatable       :: filter(:)

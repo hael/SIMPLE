@@ -195,12 +195,14 @@ contains
         class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer :: i, ind
+        character(len=:), allocatable :: tmp
         ind = self%lookup( key )
         if( ind==0 .or. ind > self%hash_index ) return
         do i=ind,self%hash_index - 1
             ! replace key
             if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
-            allocate(self%keys(i)%str, source=self%keys(i + 1)%str)
+            allocate(tmp, source=self%keys(i + 1)%str)
+            self%keys(i)%str  = tmp
             ! replace value
             self%values(i) = self%values(i + 1)
         enddo

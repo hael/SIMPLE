@@ -173,13 +173,18 @@ contains
       integer, intent(in)    :: n
       integer :: start, index, i
       str    = trim(str)
+      index=1
       start=1
+      before=''
       do i=1,n
+          if (start >= len(str)) exit
           index  = scan(str(start:), delim)
-          start=index+1
+          start=index
       end do
-      before = adjustl(trim(str(1:index-1)))
-      str    = adjustl(str(index+1:))
+      if (index>1)then
+          before = trim(adjustl(str(1:index-1)))
+          str    = adjustl(str(index:))
+      endif
     end subroutine nsplit_str
 
     !> \brief  finds the first instance of a character 'delim' in the

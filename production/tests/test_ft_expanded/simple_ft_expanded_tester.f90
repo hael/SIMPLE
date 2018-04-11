@@ -17,18 +17,6 @@ type(image)              :: img, img_shifted
 type(image), allocatable :: noisy_imgs(:)
 integer                  :: x, y
 
-#if defined (PGI)
-interface
-    pure real function etime(tarray)
-        real, intent(out) :: tarray(2)
-    end function etime
-    
-    pure real function dtime(tarray)
-        real, intent(out) :: tarray(2)
-    end function dtime
-end interface
-#endif
-
 contains
 
     subroutine exec_ft_expanded_test

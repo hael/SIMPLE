@@ -142,9 +142,6 @@ contains
 
     subroutine constructor (self)
         class(jpg_img) :: self
-#if !defined (PGI)
-        DebugPrint 'In constructor address is: ', loc(self)
-#endif
         if(associated(self%img_buffer)) nullify(self%img_buffer)
     end subroutine constructor
 
@@ -331,9 +328,7 @@ contains
         end do
 
         img = c_loc(self%img_buffer)
-#if !defined(PGI)
-        VerbosePrint ">>>  save_jpeg_r4 img address: ", img
-#endif
+
         !   if(c_associated(img, c_loc(self%img_buffer))) &
         !       call simple_stop( 'save_jpeg img buffer and C pointer do not point to same target')
         !   print *, "shape img ", shape(img)
@@ -510,9 +505,8 @@ contains
 
     subroutine destructor(self)
         class(jpg_img) :: self
-#if !defined(PGI)
         DebugPrint 'Destructor of jpg_img object with address: ', loc(self)
-#endif
+
         if(associated(self%img_buffer)) nullify(self%img_buffer)
     end subroutine destructor
 

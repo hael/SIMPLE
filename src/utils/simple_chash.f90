@@ -240,15 +240,19 @@ contains
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer :: i, ind
+        character(len=:), allocatable :: tmp
         ind = self%lookup( key )
         if( ind == 0 .or. ind > self%chash_index ) return
         do i=ind,self%chash_index - 1
             ! replace key
             if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
-            allocate(self%keys(i)%str, source=self%keys(i + 1)%str)
+            allocate(tmp, source=self%keys(i + 1)%str)
+            self%keys(i)%str = tmp
+            deallocate(tmp)
             ! replace value
             if( allocated(self%values(i)%str) ) deallocate(self%values(i)%str)
-            allocate(self%values(i)%str, source=self%values(i + 1)%str)
+            allocate(tmp, source=self%values(i + 1)%str)
+            self%values(i)%str = tmp
         enddo
         ! remove previous last entry
         if( allocated(self%keys(self%chash_index)%str)   ) deallocate(self%keys(self%chash_index)%str)
