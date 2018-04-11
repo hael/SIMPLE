@@ -80,7 +80,11 @@ contains
                     call s%se_ptr%sym_dists( o_best, o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
                     ang_dist = deg2rad( ang_dist )
                 endif
-                ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
+                if( ang_dist > ang_lim )then
+                    ang_weights(ipeak) = 0.
+                else
+                    ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
+                endif
             enddo
             ! convert correlations to distances
             dists = 1.0 - corrs

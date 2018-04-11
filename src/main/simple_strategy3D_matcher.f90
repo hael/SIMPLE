@@ -149,7 +149,7 @@ contains
             ptcl_mask = .true.
         endif
 
-        ! ! SPECSCORE AND BFAC RECONSTRUCTION
+        ! SPECSCORE AND BFAC RECONSTRUCTION
         ! if( b%a%isthere('specscore') )then
         !     specscore_avg = b%a%get_avg('specscore')
         !     do iptcl = p%fromp,p%top
@@ -160,7 +160,7 @@ contains
         !     enddo
         ! else
         !     specscore_avg = 0.
-        !     call b%a%set_all2single('bfac', 1.)
+        !     call b%a%set_all2single('bfac_rec', 1.)
         ! endif
 
         ! EXTREMAL LOGICS
