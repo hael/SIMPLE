@@ -70,7 +70,7 @@ contains
         if( trim(p_master%projfile) .ne. '' )then
             call spproj%read_segment('compenv', p_master%projfile)
             compenv_o   = spproj%compenv%get_ori(1)
-            self%qdescr = compenv_o%get_chtab()
+            self%qdescr = compenv_o%ori2chash()
         else
             call parse_env_file(self%qdescr) ! parse .env file
         endif

@@ -249,38 +249,18 @@ contains
         endif
         if( cline%defined('user_account') )then
             call self%compenv%set(1, 'user_account', cline%get_carg('user_account'))
-        else
-            if( .not. self%compenv%isthere('user_account') )then
-                call self%compenv%set(1, 'user_account', NULL)
-            endif
         endif
         if( cline%defined('user_project') )then
             call self%compenv%set(1, 'user_project', cline%get_carg('user_project'))
-        else
-            if( .not. self%compenv%isthere('user_project') )then
-                call self%compenv%set(1, 'user_project', NULL)
-            endif
         endif
         if( cline%defined('qsys_partition') )then
             call self%compenv%set(1, 'qsys_partition', cline%get_carg('qsys_partition'))
-        else
-            if( .not. self%compenv%isthere('qsys_partition') )then
-                call self%compenv%set(1, 'qsys_partition', NULL)
-            endif
         endif
         if( cline%defined('qsys_qos') )then
             call self%compenv%set(1, 'qsys_qos', cline%get_carg('qsys_qos'))
-        else
-            if( .not. self%compenv%isthere('qsys_qos') )then
-                call self%compenv%set(1, 'qsys_qos', NULL)
-            endif
         endif
         if( cline%defined('qsys_reservation') )then
             call self%compenv%set(1, 'qsys_reservation', cline%get_carg('qsys_reservation'))
-        else
-            if( .not. self%compenv%isthere('qsys_reservation') )then
-                call self%compenv%set(1, 'qsys_reservation', NULL)
-            endif
         endif
         if( .not. self%compenv%isthere('job_name') )then
             call self%projinfo%getter(1, 'projname', projname)

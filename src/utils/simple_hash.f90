@@ -36,6 +36,7 @@ type :: hash
     procedure          :: lookup
     procedure          :: get
     procedure          :: get_values
+    procedure          :: push2chash
     procedure          :: hash2str
     procedure          :: size_of
     ! I/O
@@ -263,6 +264,19 @@ contains
         real, allocatable  :: values(:)
         allocate(values(self%hash_index), source=self%values(:self%hash_index))
     end function get_values
+
+    !>  \brief  pushes the hash content to chash
+    subroutine push2chash( self, ch )
+        use simple_chash, only: chash
+        class(hash),  intent(in)    :: self
+        class(chash), intent(inout) :: ch
+        integer :: i
+        if( self%hash_index >= 1 )then
+            do i=1,self%hash_index
+                call ch%push(trim(self%keys(i)%str), real2str(self%values(i)))
+            end do
+        endif
+    end subroutine push2chash
 
     !>  \brief  convert hash to string
     function hash2str( self ) result( str )

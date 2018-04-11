@@ -75,6 +75,7 @@ type :: ori
     procedure          :: key_is_real
     procedure          :: ori2str
     procedure          :: ori2strlen_trim
+    procedure          :: ori2chash
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print_ori
@@ -654,6 +655,14 @@ contains
         str = self%ori2str()
         len = len_trim(str)
     end function ori2strlen_trim
+
+    function ori2chash( self ) result( ch )
+        use simple_chash, only: chash
+        class(ori), intent(in) :: self
+        type(chash) :: ch
+        ch = self%chtab
+        call self%htab%push2chash(ch)
+    end function ori2chash
 
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
