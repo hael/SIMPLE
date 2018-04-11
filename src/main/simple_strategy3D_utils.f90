@@ -68,7 +68,7 @@ contains
             best_loc = maxloc(corrs)
             ! reweighting according to angular distance to best peak
             do ipeak = 1,s%npeaks
-                if( ipeak == best_loc(1))then
+                if( ipeak == best_loc(1) )then
                     ang_weights(ipeak) = 1.0
                     cycle
                 endif

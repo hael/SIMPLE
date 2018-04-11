@@ -102,6 +102,8 @@ foreach my$i (0 .. $#vars){
   print MODULE $str;
 }
 $j++;
+print MODULE  "    self%args(".$j.") = 'job_memory_per_task'\n";
+$j++;
 print MODULE  "    self%args(".$j.") = 'projname'\n";
 $j++;
 print MODULE  "    self%args(".$j.") = 'simple_path'\n";
@@ -111,6 +113,10 @@ $j++;
 print MODULE  "    self%args(".$j.") = 'qsys_name'\n";
 $j++;
 print MODULE  "    self%args(".$j.") = 'user_account'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'user_email'\n";
+$j++;
+print MODULE  "    self%args(".$j.") = 'user_project'\n";
 $j++;
 print MODULE  "    self%args(".$j.") = 'qsys_partition'\n";
 $j++;

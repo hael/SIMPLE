@@ -893,8 +893,9 @@ contains
                 if( o%isthere('smpd') )then
                     self%smpd = o%get('smpd')
                 else
-                    print *,'projfile exec requires smpd in mic or stk seg'
-                    stop 'ERROR! params :: new'
+!!!!!!!!!!!!!!!!!!!!!!!!!!! needs to be conditioned on something.....
+                    ! print *,'projfile exec requires smpd in mic or stk seg'
+                    ! stop 'ERROR! params :: new'
                 endif
                 ! box
                 call bos%read_first_segment_record(STK_SEG, o)
