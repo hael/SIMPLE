@@ -30,7 +30,7 @@ use simple_ran_tabu, only: ran_tabu
 !use simple_vector,   only: vector
 !use simple_set,      only: set
 !! File types
-!use simple_nrtxtfile, only: nrtxtfile
+use simple_nrtxtfile, only: nrtxtfile
 !use simple_imgfile,   only: imgfile
 !use simple_binoris_io
 !! Common functions

@@ -42,6 +42,7 @@
 #define FCOPY fcopy_
 #define FREE_FILE_LIST free_file_list_
 #define SUBPROCESS subprocess_
+#define WAIT_PID wait_pid_
 #define TOUCH touch_
 #define GET_SYSINFO get_sysinfo_
 #define RMDIRECTORIES rmDirectories_
@@ -881,18 +882,22 @@ int glob_rm_all(const char *match,  int*count, size_t ivf_match)
 #endif
                     //fprintf(f, "%s\n", globlist.gl_pathv[i]);
                     *count = *count + 1;
+                } else {
 #if _DEBUG
-                } else fprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
-            } else fprintf(stderr, "temp file found, stepping over\n");
-#else
-            }}
+                  fprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
 #endif
+                }
+            } else {
+#if _DEBUG
+              fprintf(stderr, "temp file found, stepping over\n");
+#endif
+            }
             i++;
         }
+#if _DEBUG
         fprintf(stderr, "Total glob items for deletion:  %d\n", *count);
+#endif
         *count = 0;
-
-
         i = 0;
         while(globlist.gl_pathv[i]) {
             if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
@@ -974,6 +979,36 @@ int subprocess(const char* args, int* arglen, size_t ivf_cmd)
     free(cargs);
     return pid;
 }
+
+int wait_pid(int* cpid )
+{
+
+    int status;
+    pid_t w;
+    if (cpid > 0) {
+
+      do {
+        w = waitpid((pid_t)cpid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+        if (w == -1) {
+          perror("waitpid");
+          exit(EXIT_FAILURE);
+        }
+
+        if (WIFEXITED(status)) {
+          printf("exited, status=%d\n", WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+          printf("killed by signal %d\n", WTERMSIG(status));
+        } else if (WIFSTOPPED(status)) {
+          printf("stopped by signal %d\n", WSTOPSIG(status));
+        } else if (WIFCONTINUED(status)) {
+          printf("continued\n");
+        }
+      } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }else return -1;
+
+    return (int) w;
+}
+
 
 /**
  * Copy file in chunks of MAX_CHAR_FILENAME bytes
