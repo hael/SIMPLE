@@ -102,6 +102,7 @@ real, parameter    :: TAU_DEFAULT             = 0.005     !< controls the sharpe
                                                           !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D           = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH         = 0.01      !< threshold for orientations softmax weights
+real,    parameter :: BSC                     = 200.      !< for Frealign b-factor calculation 
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

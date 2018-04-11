@@ -23,6 +23,7 @@ type sym
   contains
     procedure          :: new
     procedure          :: srchrange
+    procedure          :: srchrange_theta
     procedure          :: which
     procedure          :: get_nsym
     procedure          :: get_pgrp
@@ -154,6 +155,12 @@ contains
         eullims = self%eullims
     end function srchrange
 
+    !>  \brief  returns the search range for the point-group
+    real function srchrange_theta( self )
+        class(sym), intent(inout) :: self !< this instance
+        srchrange_theta = self%eullims(2,2)
+    end function srchrange_theta
+
     !>  \brief  to check which point-group symmetry
     pure function which( self ) result( pgrp )
         class(sym), intent(in) :: self !< this instance
@@ -226,7 +233,7 @@ contains
 
     !>  \brief  rotates orientations to the asymmetric unit
     subroutine rotall_to_asym( self, osyms )
-        class(sym),  intent(inout) :: self     
+        class(sym),  intent(inout) :: self
         class(oris), intent(inout) :: osyms     !< orientations
         type(ori) :: o
         integer   :: i
@@ -270,7 +277,7 @@ contains
         inplrotdist = rad2deg( inplrotdist )
     end subroutine sym_dists
 
-    !>  \brief  is a getter 
+    !>  \brief  is a getter
     function get_symori( self, symop ) result( e_sym )
         class(sym), intent(inout) :: self
         integer, intent(in)       :: symop !< symmetry orientation
@@ -278,7 +285,7 @@ contains
         e_sym = self%e_sym%get_ori(symop)
     end function get_symori
 
-    !>  \brief  is a symmetry adaptor 
+    !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in )
         class(sym),  intent(inout) :: self
         class(oris), intent(inout) :: e_in
@@ -309,7 +316,7 @@ contains
         if( euls(3)>=self%eullims(3,2) )return
         is_within = .true.
     end function within_asymunit
-    
+
     !>  apply symmetry orientations with shift
     subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )
         class(sym),        intent(inout) :: self
@@ -336,7 +343,7 @@ contains
         endif
     end subroutine apply_sym_with_shift
 
-    !>  \brief  is for retrieving nearest neighbors in symmetric cases 
+    !>  \brief  is for retrieving nearest neighbors in symmetric cases
     subroutine nearest_proj_neighbors( self, os_asym_unit, k, nnmat )
         use simple_math, only: hpsort
         class(sym),           intent(inout) :: self
@@ -586,7 +593,7 @@ contains
                     cnt            = cnt+1
                     pgrps(cnt)     = 'c1'
                     symorders(cnt) = 1.
-                endif  
+                endif
             endif
             call hpsort(symorders, inds)
             allocate( self%subgrps(cnt), stat=alloc_stat )
@@ -633,7 +640,7 @@ contains
             !> get even symmetry
             subroutine getevensym( cstr, o )
                 integer,intent(in)           :: o     !< order
-                character(len=1), intent(in) :: cstr  !< sym type 
+                character(len=1), intent(in) :: cstr  !< sym type
                 integer          :: i
                 do i=2,o
                     if( (mod( o, i).eq.0) )then
@@ -642,7 +649,7 @@ contains
                         if(cstr.eq.'c')then
                             symorders(cnt) = real(i)
                         else
-                            symorders(cnt) = real(2*i)                            
+                            symorders(cnt) = real(2*i)
                         endif
                     endif
                 enddo
@@ -651,7 +658,7 @@ contains
             !> format symmetry string
             !! \param symtype   symmetry type, one char options  c, d, t or i
             function fmtsymstr( symtype, iord ) result( ostr )
-                character(len=1), intent(in)  :: symtype 
+                character(len=1), intent(in)  :: symtype
                 integer, intent(in)           :: iord    !< order
                 character(len=2)              :: ord     !< temp
                 character(len=3)              :: ostr    !< formatted output

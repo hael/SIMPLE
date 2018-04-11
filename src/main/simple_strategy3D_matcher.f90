@@ -65,6 +65,7 @@ contains
         type(ctfparams)       :: ctfvars
         character(len=STDLEN) :: fname, refine
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
+        real    :: bfac_rec, specscore_avg, specscore
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
         integer :: batchlims(2)
         logical :: doprint, do_extr, is_virgin
@@ -147,6 +148,20 @@ contains
             pinds = (/(i,i=p%fromp,p%top)/)
             ptcl_mask = .true.
         endif
+
+        ! ! SPECSCORE AND BFAC RECONSTRUCTION
+        ! if( b%a%isthere('specscore') )then
+        !     specscore_avg = b%a%get_avg('specscore')
+        !     do iptcl = p%fromp,p%top
+        !         if( .not.ptcl_mask(iptcl) ) cycle
+        !         specscore = b%a%get(iptcl, 'specscore')
+        !         bfac_rec = 1. + exp(-BSC/4. * (specscore-specscore_avg))
+        !         call b%a%set(iptcl, 'bfac_rec', bfac_rec)
+        !     enddo
+        ! else
+        !     specscore_avg = 0.
+        !     call b%a%set_all2single('bfac', 1.)
+        ! endif
 
         ! EXTREMAL LOGICS
         do_extr  = .false.

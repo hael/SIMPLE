@@ -50,7 +50,7 @@ contains
         class(strategy2D), pointer :: strategy2Dsrch(:)
         type(strategy2D_spec)      :: strategy2Dspec
         integer :: iptcl, icls, i, fnr, cnt
-        real    :: corr_bound, frac_srch_space, extr_thresh, specscore_avg
+        real    :: corr_bound, frac_srch_space, extr_thresh
         logical :: doprint, l_partial_sums, l_extr, l_frac_update
 
         if( L_BENCH )then
@@ -60,13 +60,6 @@ contains
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
-
-        ! SPECSCORE AVERAGE
-        if( b%a%isthere('specscore') )then
-            specscore_avg = b%a%get_avg('specscore')
-        else
-            specscore_avg = 0.
-        endif
 
         ! SWITCHES
         if( p%extr_iter == 1 )then

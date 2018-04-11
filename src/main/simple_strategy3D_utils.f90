@@ -54,9 +54,9 @@ contains
         real,                   intent(out)   :: ws(s%npeaks), wcorr
         logical,                intent(out)   :: included(s%npeaks)
         integer,                intent(out)   :: best_loc(1)
-        type(ori) :: o
+        type(ori) :: o, o_best
         real      :: dists(s%npeaks), arg4softmax(s%npeaks), ang_dist, inpl_dist
-        real      :: ang_weights(s%npeaks)
+        real      :: ang_weights(s%npeaks), ang_lim
         integer   :: ipeak
         if( s%npeaks == 1 )then
             best_loc(1)  = 1
@@ -67,18 +67,20 @@ contains
         else
             best_loc = maxloc(corrs)
             ! reweighting according to angular distance to best peak
+            ang_lim = deg2rad( s%se_ptr%srchrange_theta()/2. )
+            o_best  = o_peaks(s%iptcl)%get_ori(best_loc(1))
             do ipeak = 1,s%npeaks
                 if( ipeak == best_loc(1) )then
                     ang_weights(ipeak) = 1.0
                     cycle
                 endif
                 if( trim(s%se_ptr%get_pgrp()).eq.'c1' )then
-                    ang_dist = o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_peaks(s%iptcl)%get_ori(best_loc(1))
+                    ang_dist = o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
                 else
-                    call s%se_ptr%sym_dists( o_peaks(s%iptcl)%get_ori(best_loc(1)),&
-                        &o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
+                    call s%se_ptr%sym_dists( o_best, o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
+                    ang_dist = deg2rad( ang_dist )
                 endif
-                ang_weights(ipeak) = max(0.,cos(ang_dist))**2.
+                ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
             enddo
             ! convert correlations to distances
             dists = 1.0 - corrs
