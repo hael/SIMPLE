@@ -1,7 +1,7 @@
 ! routines for generation of directed random numbers
 module simple_ran_tabu
 use simple_defs
-use simple_syslib, only:allocchk
+use simple_error, only:allocchk
 use simple_rnd, only: multinomal, irnd_gasdev, irnd_uni
 implicit none
 private

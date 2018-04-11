@@ -3,8 +3,9 @@ module simple_fileio
 use simple_defs
 use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
-use simple_syslib, only: file_exists, is_open, is_file_open, is_io, allocchk, &
-    &exec_cmdline, simple_stop, simple_error_check, del_file, simple_list_files, simple_glob_list_tofile
+use simple_error,   only: allocchk, simple_stop, simple_error_check
+use simple_syslib, only: file_exists, is_open, is_file_open, is_io,  &
+    &exec_cmdline, del_file, simple_list_files, simple_glob_list_tofile
 implicit none
 
 interface arr2file
@@ -38,8 +39,8 @@ contains
         else if (iostat_this == -2) then
             write(stderr,'(a)') "fileio: End-of-record reached (PGI version)"
         else if( iostat_this /= 0 ) then
-            call simple_error_check(iostat_this,'File I/O Error#'//int2str(iostat_this),__FILENAME__,__LINE__)
-            if(die_this)stop
+            call simple_error_check(iostat_this,'File I/O Error#'//int2str(iostat_this))
+            if(die_this)call simple_stop('File I/O stop ',__FILENAME__,__LINE__)
         endif
     end subroutine fileiochk
 
@@ -264,7 +265,7 @@ contains
 
         if (is_open(funit)) then
             CLOSE (funit,IOSTAT=iostat)
-            call simple_error_check(iostat, trim(msg_this),__FILENAME__,__LINE__)
+            call simple_error_check(iostat, trim(msg_this))
         end if
     end subroutine fclose_1
 
@@ -290,7 +291,7 @@ contains
         if (is_open(funit)) then
             CLOSE (funit,IOSTAT=iostat,STATUS=status_this)
             call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)//&
-                &" ; "//trim(msg_this),__FILENAME__,__LINE__)
+                &" ; "//trim(msg_this))
         end if
     end subroutine fclose_2
 
@@ -495,6 +496,7 @@ contains
             allocate(fname2ext, source=trim(fname(pos+1:length)))
         endif
     end function fname2ext
+
     !> strip directory and suffix from filenames
     pure function basename( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename
@@ -508,6 +510,7 @@ contains
             allocate(new_fname, source=trim(fname(pos+1:length)))
         endif
     end function
+
     !> strip last component from file name
     pure function dirname( fname ) result( abspath )
         character(len=*), intent(in)  :: fname !< abs filename

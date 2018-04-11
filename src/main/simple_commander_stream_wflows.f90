@@ -139,7 +139,7 @@ contains
                 type(ctfparams)               :: ctfvars
                 character(len=STDLEN)         :: ext, movie_here
                 character(len=LONGSTRLEN)     :: projname
-                movie_here = remove_abspath(trim(movie))
+                movie_here = basename(trim(movie))
                 ext        = fname2ext(trim(movie_here))
                 projname   = 'preprocess_'//trim(get_fbody(trim(movie_here), trim(ext)))
                 call cline_here%set('projname', trim(projname)) ! necessary?

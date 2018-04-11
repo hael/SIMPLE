@@ -1,7 +1,7 @@
 ! combinatorics module
 module simple_combinatorics
 use simple_defs
-use simple_syslib, only: allocchk
+use simple_error, only: allocchk
 use simple_rnd, only: seed_rnd, irnd_uni, irnd_uni_pair
 implicit none
 

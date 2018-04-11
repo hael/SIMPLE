@@ -127,7 +127,7 @@ contains
             call simple_mkdir(output_dir_picker)
             if( p%stream.eq.'yes' )then
                 output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
-                call mkdir(output_dir_extract)
+                call simple_mkdir(output_dir_extract)
             endif
         endif
         if( cline%defined('fbody') )then
@@ -948,7 +948,7 @@ contains
                 call o_ptcls%compress(oris_mask)
             endif
             ! output stack
-            stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(remove_abspath(mic_name))
+            stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
             ! extract windows from integrated movie
             call micrograph%read(mic_name, 1)
             ! filter out frequencies lower than the box can express to avoid aliasing

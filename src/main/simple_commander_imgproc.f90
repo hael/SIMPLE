@@ -587,7 +587,7 @@ contains
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
                 if( cline%defined('dir_target') )then
-                    fname = trim(p%dir_target)//'/'//add2fbody(remove_abspath(filenames(ifile)), p%ext, SCALE_SUFFIX)
+                    fname = trim(p%dir_target)//'/'//add2fbody(basename(filenames(ifile)), p%ext, SCALE_SUFFIX)
                 else
                     fname = add2fbody(trim(filenames(ifile)), p%ext, '_sc')
                 endif
@@ -616,7 +616,6 @@ contains
 
     !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
-      !  use simple_imgfile,      only: imgfile
         class(stack_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params)                          :: p

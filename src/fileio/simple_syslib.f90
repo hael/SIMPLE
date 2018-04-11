@@ -520,8 +520,7 @@ module simple_syslib
             err = .true.
         endif
         if( cmdstat /= 0 )then
-            call simple_error_check(cmdstat,' command could not be executed: '//&
-                trim(adjustl(cmd)),__FILENAME__,__LINE__)
+            call simple_error_check(cmdstat,' command could not be executed: '//trim(adjustl(cmd)))
             write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
@@ -595,7 +594,7 @@ module simple_syslib
         integer :: iostat
         iostat  = touch(trim(adjustl(fname)), len_trim(adjustl(fname)))
         if(iostat/=0)then
-            call simple_error_check(iostat, "In simple_touch  msg:"//trim(errmsg),__FILENAME__,__LINE__)
+            call simple_error_check(iostat, "In simple_touch  msg:"//trim(errmsg))
         endif
         if(present(status))status=iostat
     end subroutine simple_touch
@@ -674,13 +673,13 @@ module simple_syslib
                 close(in)
             else
                 print *,"In simple_copy_file, failed to open input file ", fname1
-                call simple_error_check(ioerr,"simple_copy_file input file not opened",__FILENAME__,__LINE__)
+                call simple_error_check(ioerr,"simple_copy_file input file not opened")
                 if(present(status))status = ioerr
             end if
             close(out)
         else
             print *,"In simple_copy_file, failed to open output file ", fname2
-            call simple_error_check(ioerr,"simple_copy_file output file not opened",__FILENAME__,__LINE__)
+            call simple_error_check(ioerr,"simple_copy_file output file not opened")
             if(present(status))status = ioerr
         end if
     end subroutine simple_copy_file_stream
@@ -703,8 +702,7 @@ module simple_syslib
             allocate(f2, source=trim(adjustl(fileout))//achar(0))
             file_status = rename(trim(f1), trim(f2))
             if(file_status /= 0)&
-                call simple_error_check(file_status,"simple_rename failed to rename file "//trim(filein),&
-                __FILENAME__,__LINE__)
+                call simple_error_check(file_status,"simple_rename failed to rename file "//trim(filein))
             deallocate(f1,f2)
         else
             call simple_stop( "simple_fileio::simple_rename, designated input filename doesn't exist "//&
@@ -735,8 +733,7 @@ module simple_syslib
         status = chmod(pathname, mode) !! intrinsic GNU
 #endif
         if(status/=0)&
-            call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname),&
-            __FILENAME__,__LINE__)
+            call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname))
     end function simple_chmod
 
 
@@ -766,14 +763,12 @@ module simple_syslib
 
         inquire(file=trim(adjustl(filename)), opened=currently_opened, iostat=status)
         if(status /= 0)&
-            call simple_error_check(status,"simple_syslib::simple_sys_stat inquire failed "//trim(filename),&
-            __FILENAME__,__LINE__)
+            call simple_error_check(status,"simple_syslib::simple_sys_stat inquire failed "//trim(filename))
         if(.not.currently_opened) open(newunit=funit,file=trim(adjustl(filename)),status='old')
         !allocate(buffer(13), source=0)
         status = STAT (trim(adjustl(filename)) , buffer)
         if (.NOT. status) then
-            call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename),&
-                __FILENAME__,__LINE__)
+            call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename))
             print *, buffer
         end if
         if(.not.currently_opened) close(funit)
@@ -878,7 +873,7 @@ module simple_syslib
         integer :: io_status
         io_status = getcwd(cwd)
         if(io_status /= 0) call simple_error_check(io_status, &
-            "syslib:: simple_getcwd failed to get path "//trim(cwd),__FILENAME__,__LINE__)
+            "syslib:: simple_getcwd failed to get path "//trim(cwd))
     end subroutine simple_getcwd
 
     !> \brief  Change working directory
@@ -901,7 +896,7 @@ module simple_syslib
         if(dir_e) then
             io_status = chdir(newd)
             if(io_status /= 0) call simple_error_check(io_status, &
-                "syslib:: simple_chdir failed to change path "//trim(newd),__FILENAME__,__LINE__)
+                "syslib:: simple_chdir failed to change path "//trim(newd))
         else
             call simple_stop("syslib:: simple_chdir directory does not exist ",__FILENAME__,__LINE__)
         endif
@@ -951,7 +946,7 @@ module simple_syslib
 
                 if(.not. ignore_here)then
                     if(io_status /= 0) call simple_error_check(io_status, &
-                        "syslib:: simple_mkdir failed to create "//trim(path),__FILENAME__,__LINE__)
+                        "syslib:: simple_mkdir failed to create "//trim(path))
                 endif
                 deallocate(path)
         else
@@ -991,8 +986,7 @@ module simple_syslib
             deallocate(path)
             if(io_status /= 0)then
                 err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
-                call simple_error_check(io_status, &
-                    "syslib:: simple_rmdir failed to remove "//trim(d),__FILENAME__,__LINE__)
+                call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
                 io_status=0
              endif
 

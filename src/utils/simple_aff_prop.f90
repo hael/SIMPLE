@@ -4,7 +4,7 @@ use simple_defs
 use simple_math, only:euclid
 use simple_rnd,  only:ran3
 use simple_stat, only: analyze_smat
-use simple_syslib, only: allocchk
+use simple_error, only: allocchk
 implicit none
 
 public :: aff_prop, test_aff_prop

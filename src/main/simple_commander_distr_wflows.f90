@@ -3,6 +3,7 @@ module simple_commander_distr_wflows
 include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline
 use simple_qsys_env,            only: qsys_env
+use simple_oris,                only: oris
 use simple_build,               only: build
 use simple_params,              only: params
 use simple_commander_base,      only: commander_base
@@ -119,12 +120,12 @@ contains
         endif
         output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
         output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
-        call mkdir(output_dir)
-        call mkdir(output_dir_ctf_estimate)
-        call mkdir(output_dir_motion_correct)
+        call simple_mkdir(output_dir)
+        call simple_mkdir(output_dir_ctf_estimate)
+        call simple_mkdir(output_dir_motion_correct)
         if( l_pick )then
             output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-            call mkdir(output_dir_picker)
+            call simple_mkdir(output_dir_picker)
         endif
         ! read in movies
         call spproj%read( p_master%projfile )
@@ -195,6 +196,7 @@ contains
     end subroutine exec_motion_correct_distr
 
     subroutine exec_motion_correct_tomo_distr( self, cline )
+        use simple_oris, only: oris
         class(motion_correct_tomo_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
@@ -662,7 +664,7 @@ contains
         character(len=STDLEN) :: vol_iter_odd, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real                  :: corr, corr_prev
-        integer               :: s, state, iter
+        integer               :: s, state, iter, iostat
         logical               :: vol_defined, have_oris, do_abinitio
         ! seed the random number generator
         call seed_rnd
@@ -1044,6 +1046,9 @@ contains
     subroutine exec_symsrch_distr( self, cline )
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
+        use simple_ori, only: ori
+        use simple_sym, only: sym
+        use simple_binoris_io, only: binread_nlines, binread_oritab, binwrite_oritab
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs

@@ -3,8 +3,9 @@ module simple_binoris
 use, intrinsic :: iso_c_binding
 use simple_defs    ! use all in there
 use simple_strings
+use simple_error,  only: allocchk
 use simple_fileio, only: file_exists, funit_size, fopen, fclose, fileiochk
-use simple_syslib, only: allocchk, del_file
+use simple_syslib, only: del_file
 implicit none
 
 public :: binoris

@@ -1,7 +1,7 @@
 ! runtime polymorphic singly linked list class
 module simple_sll
 use simple_defs
-use simple_syslib, only:allocchk
+use simple_error, only:allocchk
 use simple_arr,    only: arr
 implicit none
 

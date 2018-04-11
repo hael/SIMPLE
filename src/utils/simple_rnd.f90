@@ -3,7 +3,7 @@
 module simple_rnd
 use simple_defs ! singleton
 use simple_math
-use simple_syslib, only: allocchk
+use simple_error, only: allocchk
 implicit none
 
 private :: idum, r8po_fa
@@ -36,8 +36,8 @@ contains
         use iso_fortran_env, only: int64
         integer, allocatable :: seed(:)
         integer              :: i, n, istat, dt(8), pid
-        integer(int64)       :: t        
-        integer, parameter   :: un=703        
+        integer(int64)       :: t
+        integer, parameter   :: un=703
         call random_seed(size = n)
         allocate(seed(n))
         ! First try if the OS provides a random number generator
@@ -67,9 +67,9 @@ contains
             end do
         end if
         call random_seed(put=seed)
-        
+
     contains
-        
+
         function lcg(s) result(res)
             integer                       :: res
             integer(int64), intent(inout) :: s
@@ -81,7 +81,7 @@ contains
             s = mod(s * 279470273_int64, 4294967291_int64)
             res = int(mod(s, int(huge(0), 8)), kind(0))
         end function lcg
-    
+
         !this option is especially used for pgf90 to provide a getpid() function
         !Returns the process ID of the current process
         !todo: write the actual code, for now returns a fixed value
@@ -90,7 +90,7 @@ contains
             pid = 53 !just a prime number, no special meaning
         end function my_getpid
     end subroutine seed_rnd
-        
+
     !>  \brief  wrapper for the intrinsic Fortran random number generator
     function ran3( ) result( harvest )
         real :: harvest

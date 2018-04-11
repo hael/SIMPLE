@@ -7,7 +7,6 @@ use simple_params,                only: params
 use simple_commander_base,        only: commander_base
 use simple_qsys_env,              only: qsys_env
 use simple_oris,                  only: oris
-use simple_scaler,                only: scaler
 use simple_sp_project,            only: sp_project
 use simple_commander_distr_wflows ! use all in there
 use simple_commander_distr        ! use all in there
@@ -239,6 +238,7 @@ contains
         integer               :: ncavgs, orig_box, box, istk
         character(len=2)      :: str_state
         character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
+        character(len=STDLEN) :: vol_iter
         integer               :: status
         logical               :: srch4symaxis, doautoscale
         ! set cline defaults

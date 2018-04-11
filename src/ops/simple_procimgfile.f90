@@ -1,5 +1,5 @@
 ! stack image processing routines for SPIDER/MRC files
-module simple_imgfile_processing
+module simple_procimgfile
 include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_oris,    only: oris
@@ -942,4 +942,4 @@ contains
         call img_scaled%kill
     end subroutine random_selection_from_imgfile
 
-end module simple_imgfile_processing
+end module simple_procimgfile

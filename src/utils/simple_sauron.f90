@@ -3,8 +3,8 @@
 module simple_sauron
     use simple_defs
     use simple_strings
-    use simple_syslib, only: allocchk
-    use simple_hash, only: hash
+    use simple_error, only: allocchk
+    use simple_hash,  only: hash
     use simple_chash, only: chash
 implicit none
 

@@ -749,7 +749,7 @@ contains
         character(len=:), allocatable :: stk, tmp_dir, ext, imgkind, stkpart, dest_stkpart, ctfstr
         character(len=STDLEN) :: cwd
         integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
-        integer    :: nptcls, nptcls_part, numlen
+        integer    :: nptcls, nptcls_part, numlen, status
         real       :: smpd, cs, kv, fraca
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -800,11 +800,11 @@ contains
         kv    = self%os_stk%get(1,'kv')
         fraca = self%os_stk%get(1,'fraca')
         call self%os_stk%new_clean(nparts)
-        call simple_mkdir(trim(STKPARTSDIR))
+        call simple_mkdir(trim(STKPARTSDIR), status=status)
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
             allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//'.'//trim(ext))
-            call simple_rename(trim(stkpart), trim(dest_stkpart))
+            status = simple_rename(trim(stkpart), trim(dest_stkpart))
             nptcls_part = parts(istk,2)-parts(istk,1)+1
             call self%os_stk%set(istk, 'ctf',   ctfstr)
             call self%os_stk%set(istk, 'cs',    cs)

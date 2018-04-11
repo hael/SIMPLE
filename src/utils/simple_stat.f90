@@ -1,7 +1,7 @@
 ! statistics utility functions
 module simple_stat
 use simple_defs ! singleton
-use simple_syslib, only: allocchk
+use simple_error, only: allocchk
 use simple_math, only: hpsort, median
 implicit none
 

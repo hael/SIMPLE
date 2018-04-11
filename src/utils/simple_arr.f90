@@ -1,7 +1,7 @@
 ! array class (container class for the singly linked list)
 module simple_arr
 use simple_defs
-use simple_syslib, only: allocchk
+use simple_error, only: allocchk
 implicit none
 
 public :: arr

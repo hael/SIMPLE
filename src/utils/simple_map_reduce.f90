@@ -2,7 +2,7 @@
 module simple_map_reduce
  use simple_defs
  use simple_strings, only:int2str, int2str_pad
- use simple_syslib, only: allocchk
+ use simple_error, only: allocchk
  use simple_fileio, only: fopen, fileiochk, fclose
  use simple_jiffys, only: progress
 

@@ -13,8 +13,8 @@
 
 module simple_imghead
 use simple_defs
-use simple_syslib, only: allocchk, file_exists
-use simple_fileio, only: fopen, fileiochk, fclose, fname2format
+use simple_error,  only: allocchk
+use simple_fileio, only: fopen, fileiochk, fclose, fname2format, file_exists
 use simple_strings, only: int2str
 implicit none
 

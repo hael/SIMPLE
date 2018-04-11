@@ -5,7 +5,7 @@ use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_params,       only: params
 use simple_ori,          only: ori
-use simple_procimgfile,  only: frameavg_imgfile
+use simple_stackops,     only: frameavg_stack
 use simple_motion_correct       ! use all in there
 implicit none
 
@@ -40,7 +40,7 @@ contains
         character(len=*),           intent(in)    :: dir_out
         character(len=:), allocatable :: fbody_here, ext
         real, allocatable     :: shifts(:,:)
-        integer               :: ldim(3), ldim_thumb(3), iframe, nframes
+        integer               :: ldim(3), ldim_thumb(3)
         real                  :: corr, scale
         logical               :: err
         ! check, increment counter & print
@@ -48,7 +48,7 @@ contains
             write(*,*) 'inputted movie stack does not exist: ', moviename
         endif
         ! make filenames
-        fbody_here = remove_abspath(trim(moviename))
+        fbody_here = basename(trim(moviename))
         ext        = fname2ext(trim(fbody_here))
         if( fbody.ne.'' )then
             fbody_here = trim(fbody)//'_'//get_fbody(trim(fbody_here), trim(ext))
@@ -68,7 +68,7 @@ contains
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( p%nframesgrp > 0 )then
             self%moviename = 'tmpnframesgrpmovie'//p%ext
-            call frameavg_imgfile(trim(moviename), trim(self%moviename), p%nframesgrp, p%smpd)
+            call frameavg_stack(trim(moviename), trim(self%moviename), p%nframesgrp, p%smpd)
         else
             self%moviename = trim(moviename)
         endif

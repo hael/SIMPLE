@@ -1,8 +1,8 @@
 ! character hash
 module simple_chash
 use simple_defs
-use simple_syslib, only: allocchk, is_open
-use simple_fileio, only: fopen, fileiochk, fclose
+use simple_error,  only: allocchk
+use simple_fileio, only: fopen, fileiochk, fclose, is_open
 use simple_strings
 use simple_ansi_ctrls
 implicit none

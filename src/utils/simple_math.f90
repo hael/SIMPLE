@@ -2,7 +2,7 @@
 
 module simple_math
 use simple_defs
-use simple_syslib, only: allocchk
+use simple_error, only: allocchk
 implicit none
 
 interface is_a_number
@@ -2790,7 +2790,7 @@ contains
             pos1 = nint(real(n)/2.)
             pos2 = pos1
         endif
-        copy = arr 
+        copy = arr
         if( pos1 == pos2 )then
             val  = selec(pos1,n,copy)
         else
