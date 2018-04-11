@@ -661,7 +661,7 @@ contains
         class(ori), intent(in) :: self
         type(chash) :: ch
         ch = self%chtab
-        call self%htab%push2chash(ch)
+        call self%htab%push2chash(ch, as_ints=.true.)
     end function ori2chash
 
     !<  \brief  to print the rotation matrix

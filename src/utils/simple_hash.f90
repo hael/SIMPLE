@@ -1,7 +1,7 @@
 ! real hash data structure
 module simple_hash
 use simple_defs
-use simple_strings, only: real2str, parsestr
+use simple_strings, only: real2str, parsestr, int2str
 implicit none
 
 public :: hash
@@ -266,14 +266,19 @@ contains
     end function get_values
 
     !>  \brief  pushes the hash content to chash
-    subroutine push2chash( self, ch )
+    subroutine push2chash( self, ch, as_ints )
         use simple_chash, only: chash
         class(hash),  intent(in)    :: self
         class(chash), intent(inout) :: ch
+        logical,      intent(in)    :: as_ints
         integer :: i
         if( self%hash_index >= 1 )then
             do i=1,self%hash_index
-                call ch%push(trim(self%keys(i)%str), real2str(self%values(i)))
+                if( as_ints )then
+                    call ch%push(trim(self%keys(i)%str), int2str(int(self%values(i))))
+                else
+                    call ch%push(trim(self%keys(i)%str), real2str(self%values(i)))
+                endif
             end do
         endif
     end subroutine push2chash
