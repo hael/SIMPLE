@@ -944,7 +944,7 @@ contains
         ! set class pointers
         class_self1 => self1
         class_self2 => self2
-        class_self3 => otst
+        class_self3 => otst !! ICE Warning: Pointer in pointer assignment might outlive the pointer target [-Wtarget-lifetime]
         ! init
         lims(1,1) = 0.
         lims(1,2) = 359.99

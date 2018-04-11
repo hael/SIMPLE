@@ -1,13 +1,12 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 include 'simple_lib.f08'
-
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 use simple_projection_frcs, only: projection_frcs
-use simple_strategy2D3D_common  ! use all in there
+use simple_strategy2D3D_common, only:  gen_projection_frcs
 implicit none
 
 public :: reconstruct3D_commander
@@ -57,7 +56,7 @@ contains
     subroutine exec_volassemble_eo( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_filterer,         only: gen_anisotropic_optlp
-        use simple_timer             ! use all in there
+
         class(volassemble_eo_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)                  :: p
@@ -67,7 +66,7 @@ contains
         character(len=32)             :: eonames(2), resmskname, benchfname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, n, ss, state, ldim(3), find4eoavg, fnr
+        integer                       :: part, s, n, ss, state, find4eoavg, fnr
         logical, parameter            :: L_BENCH = .false.
         integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_gen_projection_frcs, t_gen_anisotropic_optlp
@@ -224,7 +223,7 @@ contains
         type(build)                   :: b
         character(len=:), allocatable :: fbody, finished_fname
         character(len=STDLEN)         :: recvolname, rho_name
-        integer                       :: part, s, ss, state, ldim(3)
+        integer                       :: part, s, ss, state
         type(reconstructor)           :: recvol_read
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built

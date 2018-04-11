@@ -12,7 +12,7 @@ implicit none
 public :: strategy2D_srch, strategy2D_spec
 private
 
-logical, parameter :: DEBUG   = .false.
+#include "simple_local_flags.inc"
 
 type strategy2D_spec
     class(params),           pointer :: pp         => null()
@@ -89,7 +89,7 @@ contains
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, maxits=MAXITS)
-        if( DEBUG ) print *, '>>> strategy2D_srch::CONSTRUCTED NEW SIMPLE_strategy2D_srch OBJECT'
+        DebugPrint  '>>> strategy2D_srch::CONSTRUCTED NEW SIMPLE_strategy2D_srch OBJECT'
     end subroutine new
 
     subroutine prep4srch( self )
@@ -146,7 +146,7 @@ contains
                 self%best_shvec = cxy(2:3)
             endif
         endif
-        if( DEBUG ) write(*,'(A)') '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
+        DebugPrint '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
 
     subroutine calc_corr( self )
@@ -164,7 +164,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        if( DEBUG ) print *, '>>> strategy2D_srch::FINISHED CALC_CORR'
+        DebugPrint  '>>> strategy2D_srch::FINISHED CALC_CORR'
     end subroutine calc_corr
 
     subroutine store_solution( self, entropy )
@@ -209,7 +209,7 @@ contains
         call self%a_ptr%set(self%iptcl, 'mi_joint',   mi_joint)
         call self%a_ptr%set(self%iptcl, 'frac',       100.*(real(self%nrefs_eval)/real(self%nrefs)))
         if( present(entropy) )call self%a_ptr%set(self%iptcl, 'ent', entropy)
-        if( DEBUG ) print *, '>>> strategy2D_srch::GOT BEST ORI'
+        DebugPrint  '>>> strategy2D_srch::GOT BEST ORI'
     end subroutine store_solution
 
     !>  placeholder for whatever metric we want to calculate

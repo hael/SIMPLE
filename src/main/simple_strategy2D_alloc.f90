@@ -6,8 +6,6 @@ implicit none
 integer, allocatable :: cls_pops(:)
 integer, allocatable :: srch_order(:,:)
 
-logical, private, parameter :: DEBUG = .false.
-
 contains
 
     subroutine clean_strategy2D

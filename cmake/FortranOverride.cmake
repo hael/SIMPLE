@@ -159,21 +159,26 @@ ENDIF(APPLE)
 message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
-  set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                 # preprocessor flags
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")   # language style
-  set(warn     "-Wall  -Warray-bounds -Wcharacter-truncation -Wline-truncation")                 # warnings
-  set(checks   "-fcheck=all -fcheck-array-temporaries -frange-check -fstack-check -fbounds-check") # checks
-  set(forspeed "-O3")                                                                           # optimisation
+  set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                # preprocessor flags
+  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
+  set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wtarget-lifetime -Wreal-q-constant")
+  #  -Waliasing, -Wampersand, -Wconversion, -Wsurprising, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow, -Wline-truncation, -Wtarget-lifetime, -Winteger-division, -Wreal-q-constant
+  # Wcompare-reals, -Wunused-parameter and -Wdo-subscript
+  set(checks   " -frange-check -fstack-protector -fstack-check -fbounds-check ")                # checks
+  set(forspeed "-O3 -ffrontend-optimize")                                                       # optimisation
   set(forpar   "-fopenmp  -Wp,-fopenmp")                                                        # parallel flags
   set(target   "${GNUNATIVE} -fPIC -mcmodel=medium")                                            # target platform
 
-  set(common   "${preproc} ${dialect} ${target} ")
+  set(common   "${preproc} ${dialect} ${target} ${warn}")
 
-  set(warnDebug "${warn} -Wextra -Wimplicit-interface  ${checks}")                              # extra warning flag
+  set(warnDebug "-Wall -Wextra -Wimplicit-interface  ${checks}")                              # extra warning flag
   set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
   #
+  set(cstd "-std=gnu1x" )
+  set(cppstd "-std=gnu++14" )
+
   option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
@@ -208,6 +213,10 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   else()
     set(FFTWDIR "/usr/local/pgi/src/fftw/")
   endif()
+
+  set(cstd   "-c1x" )
+  set(cppstd "--c++14")
+
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ifort
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
@@ -218,7 +227,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence ")
   set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port  ")
   set(forpar   "-qopenmp")
-  set(target   "-no-prec-div -static -fPIC -mcmodel=medium -shared-intel -traceback -xHost ")
+  set(target   "-no-prec-div -fPIC -mcmodel=medium -shared-intel -traceback -xHost ")
   set(common   "${preproc} ${dialect} ${checks} ${target}")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")
@@ -227,12 +236,13 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   else()
     message( "MKLROOT must be set using INTEL compilervars or mklvars ")
   endif()
-
+  set(cstd "-std=c11" )
+  set(cppstd "-std=gnu++14" )
 endif ()
 
 string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)
-set(CMAKE_C_FLAGS_RELEASE_INIT "-cpp -std=gnu1x -D${ID_STRING}"  CACHE STRING "Default C release flags -- this cannot be edited " FORCE)
-set(CMAKE_CXX_FLAGS_RELEASE_INIT "-cpp -std=gnu++14 -D${ID_STRING}"  CACHE STRING "Default CXX release flags -- this cannot be edited" FORCE)
+set(CMAKE_C_FLAGS_RELEASE_INIT "-cpp ${cstd} -D${ID_STRING}"  CACHE STRING "Default C release flags -- this cannot be edited " FORCE)
+set(CMAKE_CXX_FLAGS_RELEASE_INIT "-cpp ${cppstd} -D${ID_STRING}"  CACHE STRING "Default CXX release flags -- this cannot be edited" FORCE)
 set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} -D${ID_STRING}"  CACHE STRING "Default release flags -- this cannot be edited (see cmake/FortranOverride.cmake) -- Use CMAKE_Fortran_FLAGS_RELEASE instead" FORCE)
 set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -D${ID_STRING}"  CACHE STRING "Default debug flags -- this cannot be edited (see cmake/FortranOverride.cmake -- Use CMAKE_Fortran_FLAGS_DEBUG instead)" FORCE)
 message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")

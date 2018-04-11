@@ -15,8 +15,6 @@ integer,    allocatable :: prev_proj(:)            !< particle previous referenc
 integer,    allocatable :: srch_order(:,:)         !< stochastic search index
 logical,    allocatable :: state_exists(:)         !< indicates state existence
 
-logical, private, parameter :: DEBUG = .false.
-
 contains
 
     subroutine clean_strategy3D

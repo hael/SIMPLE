@@ -8,7 +8,7 @@ implicit none
 public :: strategy3D_single
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy3D_multi) :: strategy3D_single
 contains
@@ -63,7 +63,7 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      ang_sdev)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
-        if( DEBUG ) print *,  '>>> STRATEGY3D_SINGLE :: EXECUTED ORIS_ASSIGN_SINGLE'
+        DebugPrint   '>>> STRATEGY3D_SINGLE :: EXECUTED ORIS_ASSIGN_SINGLE'
     end subroutine oris_assign_single
 
 end module simple_strategy3D_single

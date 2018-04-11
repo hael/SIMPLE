@@ -7,7 +7,6 @@ use simple_build,          only: build
 use simple_image,          only: image
 use simple_ori,            only: ori
 use simple_ctf,            only: ctf
-use simple_gridding,       only: prep4cgrid
 use simple_simulator,      only: simimg
 use simple_commander_base, only: commander_base
 implicit none
@@ -65,6 +64,7 @@ contains
     subroutine exec_simulate_particles( self, cline )
         use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
+        use simple_gridding,   only: prep4cgrid
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)       :: p
@@ -167,11 +167,10 @@ contains
         type(build)          :: b
         type(image)          :: base_image, shifted_base_image
         type(ctf)            :: tfun
-        real                 :: snr_pink, snr_detector, ave, sdev, var, med, fracarea, x, y, sherr, dfx, dfy, deferr, angast
+        real                 :: snr_pink, snr_detector, fracarea, x, y, sherr, dfx, dfy, deferr, angast
         integer              :: i, ptclarea, mgrapharea, fixed_frame
         integer, allocatable :: ptcl_positions(:,:)
         real,    allocatable :: shifts(:,:)
-        logical              :: here
         debug=.false.                           ! declared in local flags
         p = params(cline, spproj_a_seg=STK_SEG) ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'

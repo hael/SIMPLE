@@ -94,7 +94,6 @@ contains
 
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
-        use simple_nrtxtfile, only: nrtxtfile
         use simple_qsys_funs, only: qsys_job_finished
         class(tseries_track_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -227,12 +226,12 @@ contains
 
     subroutine exec_tseries_split( self, cline )
         use simple_oris,     only: oris
-        use simple_ori,      only: ori
+       ! use simple_ori,      only: ori
         class(tseries_split_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        type(ori)    :: o
+        !type(ori)    :: o
         type(oris)   :: os
         character(len=:), allocatable :: stkname, oriname
         integer :: i, iptcl, numlen, istart, istop, cnt, cnt2, ntot
@@ -263,8 +262,8 @@ contains
             cnt2 = 0
             do iptcl=istart,istop
                 cnt2 = cnt2 + 1
-                o = b%a%get_ori(iptcl)
-                call os%set_ori(cnt2, o)
+                !o = b%a%get_ori(iptcl)
+                call os%set_ori(cnt2, b%a%get_ori(iptcl) )
                 call b%img%read(p%stk, iptcl)
                 call b%img%write(stkname,cnt2)
             end do

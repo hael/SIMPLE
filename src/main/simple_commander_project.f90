@@ -5,6 +5,8 @@ use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_sp_project,     only: sp_project
+use simple_oris,           only: oris
+use simple_binoris_io,     only: binread_nlines, binread_oritab
 implicit none
 
 public :: project2txt_commander
@@ -60,7 +62,6 @@ contains
 
     !> convert text (.txt) oris doc to binary (.simple)
     subroutine exec_txt2project( self, cline )
-        use simple_oris, only: oris
         class(txt2project_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params)     :: p

@@ -130,7 +130,7 @@ contains
         real              :: dfavg, dfavg_lower, dfavg_upper, dfx_lower, dfx_upper, dfy_lower
         real              :: dfy_upper, angast_lower, angast_upper, phshift_lower, phshift_upper
         real              :: cc_lower, cc_upper, df_avg
-        integer           :: filtsz, k, hpfind, lpfind
+        integer           :: filtsz, hpfind, lpfind
         ! determine parameters based on lower half of micrograph
         call init_srch( ppspec_lower, pspec_lower_roavg )
         call grid_srch(   dfx_lower, dfy_lower, angast_lower, phshift_lower, cc_lower )
@@ -171,7 +171,7 @@ contains
         dfavg_upper = (dfx_upper + dfy_upper / 2)
         dferr       = maxval([abs(dfavg - dfavg_lower), abs(dfavg - dfavg_upper), abs(dfavg_lower - dfavg_upper)])
         ! make a half-n-half diagnostic
-        999 if( l_phaseplate )then
+        if( l_phaseplate )then
             call ctf2pspecimg(tfun, pspec_ctf, dfx, dfy, angast, add_phshift=phshift)
         else
             call ctf2pspecimg(tfun, pspec_ctf, dfx, dfy, angast)
@@ -359,7 +359,7 @@ contains
         real,           intent(in)    :: angast      !< angle of astigmatism
         real, optional, intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
-        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), res, wght
+        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
         ! initialize
         aadd_phshift = 0.
         if( present(add_phshift) ) aadd_phshift = add_phshift
@@ -400,7 +400,7 @@ contains
         real,           intent(in)    :: angast           !< angle of astigmatism
         real, optional, intent(in)    :: add_phshift      !< aditional phase shift (radians), for phase plate
         integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
-        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), res, wght, df_avg, tval_roavg
+        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), df_avg, tval_roavg
         ! initialize
         aadd_phshift = 0.
         if( present(add_phshift) ) aadd_phshift = add_phshift

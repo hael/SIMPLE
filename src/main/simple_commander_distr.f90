@@ -43,7 +43,7 @@ contains
         type(str4arr), allocatable :: os_strings(:)
         integer,       allocatable :: parts(:,:)
         integer                    :: i, j, nj, numlen, funit, funit_merge, n_records
-        integer                    :: io_stat, partsz, cnt, fromto(2), isegment, strlen, strlen_max
+        integer                    :: io_stat, partsz, fromto(2), isegment, strlen, strlen_max
         type(binoris)              :: bos_doc, bos_merged
         character(len=STDLEN)      :: fname
         character(len=1024)        :: line

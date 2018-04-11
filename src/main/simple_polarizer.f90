@@ -5,9 +5,8 @@ module simple_polarizer
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 
-use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
-use simple_params,     only: params
+
 implicit none
 
 public :: polarizer
@@ -37,6 +36,7 @@ contains
     !> \brief  initialises the image polarizer
     subroutine init_polarizer( self, pftcc, alpha )
         use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_kbinterpol, only: kbinterpol
         class(polarizer),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
         real,                    intent(in)    :: alpha  !< oversampling factor

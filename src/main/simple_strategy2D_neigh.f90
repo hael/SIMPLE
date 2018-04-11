@@ -7,7 +7,7 @@ implicit none
 public :: strategy2D_neigh
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy2D) :: strategy2D_neigh
     type(strategy2D_srch) :: s
@@ -57,7 +57,7 @@ contains
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *, '>>> STRATEGY2D_NEIGH :: SRCH_NEIGH; FINISHED NEAREST-NEIGHBOR SEARCH'
+        DebugPrint '>>> STRATEGY2D_NEIGH :: SRCH_NEIGH; FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine srch_neigh
 
     subroutine kill_neigh( self )

@@ -5,8 +5,7 @@ use simple_image,    only: image
 use simple_cmdline,  only: cmdline
 use simple_build,    only: build
 use simple_params,   only: params
-use simple_ori,      only: ori
-use simple_oris,     only: oris
+
 implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
@@ -233,6 +232,7 @@ contains
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl_1( b, p, img, se, o, ctfvars )
         use simple_sym, only: sym
+        use simple_ori,      only: ori
         class(build),    intent(inout) :: b
         class(params),   intent(inout) :: p
         class(image),    intent(inout) :: img
@@ -261,7 +261,9 @@ contains
 
     !>  \brief  grids one particle image to the volume (distribution of weigted oris)
     subroutine grid_ptcl_2( b, p, img, se, o, os, ctfvars )
-        use simple_sym, only: sym
+        use simple_sym,  only: sym
+        use simple_ori,  only: ori
+        use simple_oris, only: oris
         class(build),    intent(inout) :: b
         class(params),   intent(inout) :: p
         class(image),    intent(inout) :: img
@@ -304,6 +306,7 @@ contains
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl_tst( b, p, img, orientation, ctfvars )
         use simple_kbinterpol, only: kbinterpol
+        use simple_ori,  only: ori
         class(build),          intent(inout) :: b
         class(params),         intent(inout) :: p
         class(image),          intent(inout) :: img

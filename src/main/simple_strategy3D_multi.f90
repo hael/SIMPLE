@@ -9,7 +9,7 @@ implicit none
 public :: strategy3D_multi
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_multi
     type(strategy3D_srch) :: s
@@ -68,7 +68,7 @@ contains
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *, '>>> STRATEGY3D_MULTI :: FINISHED STOCHASTIC SEARCH'
+        DebugPrint  '>>> STRATEGY3D_MULTI :: FINISHED STOCHASTIC SEARCH'
 
         contains
 
@@ -142,7 +142,7 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      ang_sdev)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
-        if( DEBUG ) print *,  '>>> STRATEGY3D_MULTI :: EXECUTED ORIS_ASSIGN_MULTI'
+        DebugPrint   '>>> STRATEGY3D_MULTI :: EXECUTED ORIS_ASSIGN_MULTI'
     end subroutine oris_assign_multi
 
     subroutine kill_multi( self )

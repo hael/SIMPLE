@@ -10,6 +10,7 @@ module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
+use simple_image, only: image
 implicit none
 
 public :: ctf, ctf_test
@@ -185,7 +186,6 @@ contains
     !>  \brief  is for making a CTF image
     !!          modes: abs, ctf, flip, flipneg, neg, square
     subroutine ctf2img( self, img, dfx, mode, dfy, angast, bfac, add_phshift )
-        use simple_image, only: image
         class(ctf),       intent(inout) :: self        !< instance
         class(image),     intent(inout) :: img         !< image (output)
         real,             intent(in)    :: dfx         !< defocus x-axis
@@ -254,7 +254,6 @@ contains
 
     !>  \brief  is for applying CTF to an image
     subroutine apply( self, img, dfx, mode, dfy, angast, bfac, add_phshift )
-        use simple_image, only: image
         class(ctf),       intent(inout) :: self        !< instance
         class(image),     intent(inout) :: img         !< image (output)
         real,             intent(in)    :: dfx         !< defocus x-axis
@@ -294,7 +293,6 @@ contains
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square
     subroutine apply_serial( self, img, dfx, mode, dfy, angast, add_phshift )
-        use simple_image, only: image
         class(ctf),       intent(inout) :: self        !< instance
         class(image),     intent(inout) :: img         !< image (output)
         real,             intent(in)    :: dfx         !< defocus x-axis
@@ -392,7 +390,6 @@ contains
     !>  \brief  is for applying CTF to an image and shifting it (used in classaverager)
     !!          KEEP THIS ROUTINE SERIAL
     subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift )
-        use simple_image, only: image
         class(ctf),   intent(inout) :: self        !< instance
         class(image), intent(inout) :: img         !< modified image (output)
         integer,      intent(in)    :: imode       !< 1=abs 2=ctf 3=no
@@ -438,8 +435,7 @@ contains
 
     !>  \brief This test compare ctf2img implementations
     subroutine ctf_test
-        use simple_image, only: image
-        use simple_timer
+
         type(ctf)               :: tfun
         type(image)             :: img1, img2
         real                    :: dfx_ran, dfy_ran, angast_ran, phshift_ran, err, minmax(2)

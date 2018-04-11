@@ -1247,7 +1247,7 @@ contains
     !!
     pure function get_cmat( self ) result( cmat )
         class(image), intent(in) :: self
-        integer :: array_shape(3)
+        !integer :: array_shape(3)
         complex, allocatable :: cmat(:,:,:)
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
         !! pure function cannot call allocchk

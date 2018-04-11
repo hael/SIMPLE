@@ -2,7 +2,6 @@
 module simple_qsys_env
 include 'simple_lib.f08'
 use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup,parse_env_file
-use simple_map_reduce   ! use all in there
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
 use simple_qsys_ctrl,    only: qsys_ctrl

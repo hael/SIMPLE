@@ -8,7 +8,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base
-use simple_nrtxtfile,      only: nrtxtfile
+!use simple_nrtxtfile,      only: nrtxtfile
 use simple_binoris_io      ! use all in there
 implicit none
 
@@ -60,9 +60,8 @@ contains
 
     !> cluster_oris is a program for clustering orientations based on geodesic distance
     subroutine exec_cluster_oris( self, cline )
-        use simple_cluster_shc, only: cluster_shc
+        !use simple_cluster_shc, only: cluster_shc
         use simple_clusterer,   only: cluster_shc_oris
-        use simple_oris,        only: oris
         class(cluster_oris_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(build)          :: b
@@ -100,6 +99,7 @@ contains
 
     !>  for creating a SIMPLE conformant file of CTF parameter values (deftab)
     subroutine exec_make_deftab( self, cline )
+        use simple_nrtxtfile,      only: nrtxtfile
         class(make_deftab_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(build)       :: b
@@ -328,7 +328,7 @@ contains
     !> for mapping parameters that have been obtained using class averages to the individual particle images
     subroutine exec_map2ptcls( self, cline )
         use simple_image,      only: image
-        use simple_corrmat   ! use all in there
+        use simple_corrmat, only: calc_cartesian_corrmat
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type state_organiser !> map2ptcls state struct
@@ -342,7 +342,7 @@ contains
         logical,               allocatable :: selected(:)
         integer              :: isel, nsel, loc(1), iptcl, pind, icls
         integer              :: nlines_oritab, nlines_oritab3D, nlines_deftab
-        integer              :: lfoo(3), ldim2(3), ldim3(3)
+        integer              :: ldim2(3), ldim3(3)
         real                 :: corr, rproj, rstate
         type(params)         :: p
         type(build)          :: b
@@ -376,7 +376,7 @@ contains
         endif
         if( cline%defined('stk2') )then
             allocate(imgs_sel(nsel), imgs_cls(p%ncls),stat=alloc_stat)
-        if(alloc_stat /= 0)call allocchk("commander_oris::map2ptcls imgs_sel/cls",alloc_stat)
+            if(alloc_stat /= 0)call allocchk("commander_oris::map2ptcls imgs_sel/cls",alloc_stat)
             ! read images
             do isel=1,nsel
                 call imgs_sel(isel)%new([p%box,p%box,1], p%smpd)
@@ -521,7 +521,6 @@ contains
 
     !> for analyzing SIMPLE orientation/parameter files
     subroutine exec_oristats(self, cline)
-        use simple_sp_project, only: sp_project
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
@@ -535,7 +534,7 @@ contains
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
         integer              :: nprojs, iptcl, icls, j
         integer              :: noris, ncls
-        real,    allocatable :: clustszs(:), sdevs(:)
+        real,    allocatable :: clustszs(:)
         integer, allocatable :: clustering(:), pops(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
@@ -797,7 +796,7 @@ contains
             ! output
             fname = trim(p%fbody)//'.bild'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname),iostat=io_stat)
-            call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             ! header
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 10"
@@ -837,7 +836,7 @@ contains
             fname  = trim(p%fbody)//'_motion.bild'
             radius = 0.02
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            call fileiochk("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
+             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
             do i = 1, n
@@ -865,7 +864,7 @@ contains
             allocate(euldists(n), stat=alloc_stat)
             fname  = trim(p%fbody)//'_motion.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
                 o = b%a%get_ori(i)
                 if( i==1 )then

@@ -8,9 +8,7 @@ use simple_commander_base,      only: commander_base
 use simple_strategy2D3D_common, only: gen2Dclassdoc
 use simple_qsys_funs,           only: qsys_job_finished
 use simple_projection_frcs,     only: projection_frcs
-use simple_binoris_io           ! use all in there
 use simple_classaverager
-use simple_cluster_cavgs
 implicit none
 
 public :: make_cavgs_commander
@@ -53,7 +51,7 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(params)  :: p
         type(build)   :: b
-        integer :: ncls_here, icls, fnr, file_stat, j
+        integer :: ncls_here
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_strategy2D_tbox(p)                   ! 2D Hadamard matcher built
@@ -116,7 +114,7 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: i, startit, ncls_from_refs, lfoo(3)
+        integer      ::  startit, ncls_from_refs, lfoo(3)
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_strategy2D_tbox(p)             ! 2D Hadamard matcher built
@@ -141,7 +139,6 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: fnr, file_stat, j
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         p%frcs = trim(FRCS_FILE)
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
@@ -203,7 +200,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: iclass, pop
+        integer      :: iclass
         type(oris)   :: clsdoc_ranked
         integer, allocatable :: order(:)
         real,    allocatable :: res(:)
@@ -241,6 +238,7 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
+        use simple_cluster_cavgs, only: cluster_cavgs_exec
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params) :: p

@@ -1,11 +1,9 @@
 ! for checking convergence
 module simple_convergence
 include 'simple_lib.f08'
-
 use simple_oris,     only: oris
 use simple_params,   only: params
 use simple_cmdline,  only: cmdline
-use simple_defs_conv ! use all in there
 implicit none
 
 public :: convergence

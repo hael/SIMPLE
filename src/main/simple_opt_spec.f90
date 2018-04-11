@@ -329,7 +329,7 @@ contains
         real                           :: f
         if (.not. associated(self%costfun)) then
             write (*,*) 'error : simple_opt_spec: costfun not associated'
-            return
+            return !  ‘f’ may be used uninitialized in this function
         end if
         f = self%costfun(fun_self, x, self%ndim)
         self%nevals = self%nevals  + 1
@@ -377,7 +377,7 @@ contains
         real(dp)                       :: f
         if ((.not. associated(self%costfun)).and.(.not. associated(self%costfun_8))) then
             write (*,*) 'error : simple_opt_spec: no costfun associated'
-            return
+            return !  ‘f’ may be used uninitialized in this function
         end if
         if (associated(self%costfun_8)) then
             f = self%costfun_8(fun_self, x, self%ndim)

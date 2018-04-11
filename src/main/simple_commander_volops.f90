@@ -8,7 +8,10 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_projector_hlev, only: project, rotvol
 use simple_ori,            only: ori
-use simple_masker,         only:masker
+!use simple_masker,         only: masker
+use simple_projector,      only: projector
+use simple_volprep,        only: read_and_prep_vol
+use simple_volpft_srch
 implicit none
 
 public :: fsc_commander
@@ -59,6 +62,7 @@ contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
+        use simple_masker,         only: masker
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(params)      :: p
@@ -146,7 +150,8 @@ contains
     end subroutine exec_center
 
     subroutine exec_postprocess(self, cline)
-        use simple_estimate_ssnr, only: fsc2optlp
+        use simple_estimate_ssnr,  only: fsc2optlp
+        use simple_masker,         only: masker
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
@@ -388,8 +393,6 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        real, allocatable :: serialvol(:)
-        integer           :: i, nvols, funit, iostat, npix
         logical           :: here
         type(ori)         :: o
         type(image)       :: vol_rot
@@ -443,9 +446,6 @@ contains
 
     !> calculate similarity matrix between volumes
     subroutine exec_volume_smat( self, cline )
-        use simple_projector, only: projector
-        use simple_volprep,   only: read_and_prep_vol
-        use simple_volpft_srch ! singleton
         class(volume_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target :: p
@@ -563,12 +563,6 @@ contains
     end subroutine exec_volume_smat
 
     subroutine exec_dock_volpair( self, cline )
-        use simple_projector,      only: projector
-        use simple_ori,            only: ori
-        use simple_projector_hlev, only: rotvol
-        use simple_image,          only: image
-        use simple_volprep,        only: read_and_prep_vol
-        use simple_volpft_srch     ! use all in there
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)    :: p

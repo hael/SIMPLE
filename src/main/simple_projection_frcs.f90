@@ -1,7 +1,7 @@
 module simple_projection_frcs
 include 'simple_lib.f08'
-use simple_estimate_ssnr, only: resample_filter
-use simple_oris,          only: oris
+!use simple_estimate_ssnr, only: resample_filter
+!use simple_oris,          only: oris
 implicit none
 
 public :: projection_frcs
@@ -154,6 +154,7 @@ contains
     end subroutine set_frc
 
     function get_frc( self, proj, box, state ) result( frc )
+        use simple_estimate_ssnr, only: resample_filter
         class(projection_frcs), intent(in) :: self
         integer,                intent(in) :: proj, box
         integer, optional,      intent(in) :: state

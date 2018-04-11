@@ -13,7 +13,7 @@ implicit none
 public :: strategy3D_srch, strategy3D_spec
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type strategy3D_spec
     class(params),           pointer :: pp            => null()
@@ -126,7 +126,7 @@ contains
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
             &shbarrier=spec%pp%shbarrier, maxits=MAXITS)
         self%exists = .true.
-        if( DEBUG ) print *, '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
+        DebugPrint  '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
     end subroutine new
 
     subroutine prep4srch( self, nnmat, target_projs )
@@ -175,7 +175,7 @@ contains
             call o_prev%print_ori()
         endif
         self%prev_corr = corr
-        if( DEBUG ) print *, '>>> STRATEGY3D_SRCH :: PREPARED FOR SIMPLE_STRATEGY3D_SRCH'
+        DebugPrint  '>>> STRATEGY3D_SRCH :: PREPARED FOR SIMPLE_STRATEGY3D_SRCH'
     end subroutine prep4srch
 
     subroutine greedy_subspace_srch( self, grid_projs, target_projs )
@@ -235,7 +235,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        if( DEBUG ) print *, '>>> STRATEGY3D_SRCH :: FINISHED GREEDY SUBSPACE SEARCH'
+        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED GREEDY SUBSPACE SEARCH'
 
         contains
 
@@ -269,7 +269,7 @@ contains
                 endif
             end do
         endif
-        if( DEBUG ) print *, '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
+        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
     end subroutine inpl_srch
 
     subroutine calc_corr( self )
@@ -285,7 +285,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        if( DEBUG ) print *, '>>> STRATEGY3D_SRCH :: FINISHED CALC_CORR'
+        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED CALC_CORR'
     end subroutine calc_corr
 
     subroutine store_solution( self, ind, ref, inpl_ind, corr )

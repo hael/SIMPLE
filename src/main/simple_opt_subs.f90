@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_opt_spec, only:  opt_spec, costfun
 implicit none
 
-
 logical :: warn=.false.
 
 contains
@@ -154,7 +153,7 @@ contains
                     iter = iter+1
                     if( iter == spec%maxits )then
 !                        if(warn) write(*,'(a)') 'brent exceeding maximum iterations; simple_opt_subs'
-                        return
+                        return ! ‘rbrent’ may be used uninitialized in this function
                     endif
                     xm=0.5*(a+b)
                     tol1=spec%ftol*abs(x)+ZEPS

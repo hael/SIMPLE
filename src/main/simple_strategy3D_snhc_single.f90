@@ -8,7 +8,7 @@ implicit none
 public :: strategy3D_snhc_single
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_snhc_single
     private
@@ -55,7 +55,7 @@ contains
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *, '>>> STRATEGY3D_SNHC_SINGLE :: FINISHED SEARCH'
+        DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: FINISHED SEARCH'
 
         contains
 
@@ -121,7 +121,7 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    1.)
         call self%s%a_ptr%set_euler(self%s%iptcl, proj_space_euls(self%s%iptcl_map,ref,1:3))
         call self%s%a_ptr%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
-        if( DEBUG ) print *, '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
+        DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single
 
     subroutine kill_snhc_single( self )

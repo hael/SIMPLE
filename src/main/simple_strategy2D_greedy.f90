@@ -7,7 +7,7 @@ implicit none
 public :: strategy2D_greedy
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy2D) :: strategy2D_greedy
     type(strategy2D_srch) :: s
@@ -53,7 +53,7 @@ contains
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *, '>>> STRATEGY2D_GREEDY :: FINISHED STOCHASTIC SEARCH'
+        DebugPrint  '>>> STRATEGY2D_GREEDY :: FINISHED STOCHASTIC SEARCH'
     end subroutine srch_greedy
 
     subroutine kill_greedy( self )

@@ -10,7 +10,8 @@ use simple_commander_base, only: commander_base
 use simple_projector_hlev, only: project
 use simple_sp_project,     only: sp_project
 use simple_comlin_srch     ! use all in there
-use simple_binoris_io      ! use all in there
+use simple_binoris_io,     only: binwrite_oritab, binread_oritab, binread_nlines
+!use simple_binoris_io      ! use all in there
 implicit none
 
 public :: symsrch_commander
@@ -33,11 +34,11 @@ contains
         type(ori)                    :: symaxis, orientation
         class(oris), pointer         :: symaxes => null()
         type(sp_project)             :: spproj
-        type(oris)                   :: os, oshift, orientation_best, tmp_os
+        type(oris)                   :: oshift, orientation_best, tmp_os
         real,            allocatable :: corrs(:)
         integer,         allocatable :: order(:)
-        integer                      :: fnr, file_stat, comlin_srch_nbest, cnt, i, j, nl
-        integer                      :: bestloc(1), nbest_here, noris
+        !integer                      :: fnr, file_stat, comlin_srch_nbest
+        integer                      :: bestloc(1), nbest_here, noris, cnt, i, j, nl
         real                         :: shvec(3)
         character(len=STDLEN)        :: fname_finished
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)

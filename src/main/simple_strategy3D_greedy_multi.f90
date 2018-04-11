@@ -9,7 +9,7 @@ implicit none
 public :: strategy3D_greedy_multi
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_greedy_multi
     type(strategy3D_srch) :: s
@@ -69,7 +69,7 @@ contains
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *,  '>>> STRATEGY3D_GREEDY_MULTI :: FINISHED GREEDY SEARCH'
+        DebugPrint   '>>> STRATEGY3D_GREEDY_MULTI :: FINISHED GREEDY SEARCH'
 
         contains
 
@@ -134,7 +134,7 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      ang_sdev)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
-        if( DEBUG ) print *, '>>> STRATEGY3D_GREEDY_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'
+        DebugPrint  '>>> STRATEGY3D_GREEDY_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'
     end subroutine oris_assign_greedy_multi
 
     subroutine kill_greedy_multi( self )

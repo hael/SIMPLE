@@ -59,7 +59,7 @@ contains
 
     !> motion_correct DDD movie
     subroutine motion_correct_movie( movie_stack_fname, p, corr, smpd_out, shifts, err, nsig )
-        use simple_ftexp_shsrch ! use all in there
+        use simple_ftexp_shsrch
         character(len=*),  intent(in)    :: movie_stack_fname !< filename
         class(params),     intent(inout) :: p                 !< param object
         real,              intent(out)   :: corr              !< ave correlation per frame

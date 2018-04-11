@@ -316,7 +316,7 @@ contains
     subroutine cavger_assemble_sums( do_frac_update )
         use simple_kbinterpol,      only: kbinterpol
         use simple_prep4cgrid,      only: prep4cgrid
-        use simple_map_reduce,      only: split_nobjs_even
+        !use simple_map_reduce,      only: split_nobjs_even
         use simple_strategy2D3D_common, only: read_img
         logical,           intent(in) :: do_frac_update
         type(kbinterpol)              :: kbwin
@@ -497,7 +497,8 @@ contains
                                             if( w(l,m) < TINY ) cycle
                                             logi       = [cyc1(l), cyc2(m), 0]
                                             phys       = cgrid_imgs(i)%comp_addr_phys(logi)
-                                            cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
+                                            cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
+                                                cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
                                                 &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
                                         end do
                                     end do
@@ -508,7 +509,8 @@ contains
                                             if( w(l,m) < TINY ) cycle
                                             logi       = [cyc1(l), cyc2(m), 0]
                                             phys       = cgrid_imgs(i)%comp_addr_phys(logi)
-                                            cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
+                                            cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
+                                                cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
                                                 &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
                                         end do
                                     end do

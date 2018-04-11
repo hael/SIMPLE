@@ -4,9 +4,10 @@ include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
-use simple_ori,           only: ori
+use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
+
 implicit none
 
 public :: npeaks_commander
@@ -82,8 +83,7 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_init( self, cline )
-        ! use simple_strategy3D_matcher, only: gen_random_model
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs,      only: qsys_job_finished
         class(refine3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)       :: p
@@ -109,7 +109,6 @@ contains
         contains
 
             subroutine gen_random_model( nsamp_in )
-                use simple_ran_tabu,           only: ran_tabu
                 use simple_kbinterpol,         only: kbinterpol
                 use simple_prep4cgrid,         only: prep4cgrid
                 use simple_strategy2D3D_common ! use all in there
@@ -120,7 +119,7 @@ contains
                 type(prep4cgrid)     :: gridprep
                 type(ctfparams)      :: ctfvars
                 integer, allocatable :: sample(:)
-                integer              :: i, nsamp, alloc_stat
+                integer              :: i, nsamp
 
                 ! init volumes
                 call preprecvols(b, p)
@@ -168,7 +167,7 @@ contains
 
     subroutine exec_multiptcl_init( self, cline )
         use simple_rec_master, only: exec_rec_master
-        use simple_binoris_io, only: binwrite_oritab    ! use all in there
+        use simple_binoris_io, only: binwrite_oritab
         class(multiptcl_init_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params) :: p
@@ -217,7 +216,7 @@ contains
         type(build)                :: b
         integer                    :: i, startit
         logical                    :: converged
-        real                       :: lpstop, corr, corr_prev
+        real                       :: corr, corr_prev
         converged  = .false.
         p = params(cline) ! parameters generated
         if( p%neigh.eq.'yes' .and. .not. cline%defined('oritab') )then
@@ -269,7 +268,7 @@ contains
     end subroutine exec_refine3D
 
     subroutine exec_rec_test( self, cline )
-        use simple_reconstructor_tester ! use all in there
+        use simple_reconstructor_tester, only: exec_rec_batch_gridprep
         class(rec_test_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)               :: p

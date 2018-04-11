@@ -1,7 +1,6 @@
 ! 2D/3D envelope and adaptive masking
 module simple_masker
 include 'simple_lib.f08'
-
 use simple_image,  only: image
 use simple_ori,    only: ori
 use simple_params, only: params
@@ -73,7 +72,7 @@ contains
     subroutine resmask( self, p )
         class(masker), intent(inout) :: self
         class(params), intent(in)    :: p
-        type(image) :: mskimg, distimg
+        type(image) :: distimg
         integer     :: winsz
         real        :: ave, sdev, maxv, minv, med
         ! create edge-less envelope
@@ -102,7 +101,7 @@ contains
         call img%cos_edge(self%edge)
         ! apply envelope mask to reference
         call ref%mul(img)
-        if( DEBUG )write(*,*)'simple_masker::update_cls done'
+        DebugPrint 'simple_masker::update_cls done'
     end subroutine apply_2Denvmask22Dref
 
     !>  \brief  is for
@@ -182,7 +181,7 @@ contains
         call img%bin_kmeans
         ! add one layer
         call img%grow_bins(self%binwidth)
-        if( DEBUG ) write(*,*)'simple_masker::bin_cavg done'
+        DebugPrint 'simple_masker::bin_cavg done'
     end subroutine bin_cavg
 
     !>  \brief  is for binarizing the 3D image using thresholding
@@ -198,7 +197,7 @@ contains
         call self%bin(nnvox)
         ! binary layers
         call self%grow_bins(self%binwidth)
-        if( DEBUG )write(*,*)'simple_masker::bin_vol done'
+        DebugPrint 'simple_masker::bin_vol done'
     end subroutine bin_vol_thres
 
     ! CALCULATORS
@@ -224,7 +223,7 @@ contains
         rad      = 0.
         vec      = 0
         rmat     = self%get_rmat()
-        if( DEBUG )then
+        if( global_debug.or.debug )then
             print *, 'maxrad:       ', maxrad
             print *, 'sqmaxrad:     ', sqmaxrad
             print *, 'maxval(rmat): ', maxval(rmat)
@@ -259,7 +258,7 @@ contains
         enddo
         !$omp end parallel do
         deallocate(rmat)
-        if( DEBUG )write(*,*)'simple_masker::env_rproject done'
+        DebugPrint 'simple_masker::env_rproject done'
     end subroutine env_rproject
 
 end module simple_masker

@@ -8,7 +8,7 @@ implicit none
 public :: strategy3D_cluster
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_cluster
     private
@@ -158,7 +158,7 @@ contains
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *,  '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
+        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
     end subroutine srch_cluster3D
 
     !>  placeholder

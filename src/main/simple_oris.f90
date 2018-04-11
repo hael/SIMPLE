@@ -3,7 +3,6 @@ module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-
 use simple_ori,         only: ori
 implicit none
 
@@ -2449,7 +2448,7 @@ contains
         call hpsort(specscores, inds)
         call reverse(inds)
         DebugPrint " oris order sorted"
-        ! PGI fails if specscores is not deallocated
+
         if(allocated(specscores))then
             deallocate( specscores, stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('order; simple_oris dealloc ',alloc_stat)

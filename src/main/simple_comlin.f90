@@ -54,7 +54,7 @@ contains
         self%nptcls = a%get_noris()
         self%a      => a
         self%fpls   => fpls
-        ld_here     = self%fpls(1)%get_ldim() ! <-- PGI does not like the pointer after targeting
+        ld_here     = self%fpls(1)%get_ldim()
         self%xdim   = ld_here(1)/2
         self%lims   = self%fpls(1)%get_clin_lims(lp) ! <-- as above
     end subroutine new

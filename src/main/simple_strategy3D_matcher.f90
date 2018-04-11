@@ -3,15 +3,17 @@ module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_polarft_corrcalc,         only: polarft_corrcalc
+
 use simple_ori,                      only: ori
 use simple_oris,                     only: oris
 use simple_build,                    only: build
 use simple_params,                   only: params
 use simple_cmdline,                  only: cmdline
 use simple_binoris_io,               only: binwrite_oritab
+use simple_qsys_funs,                only: qsys_job_finished
 use simple_kbinterpol,               only: kbinterpol
 use simple_prep4cgrid,               only: prep4cgrid
+use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec
 use simple_strategy3D_alloc,         only: o_peaks, clean_strategy3D, prep_strategy3D
@@ -22,6 +24,7 @@ use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
 use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
 use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
 use simple_strategy2D3D_common       ! use all in there
+
 implicit none
 
 public :: refine3D_exec!, gen_random_model
@@ -60,9 +63,8 @@ contains
         type(sym)             :: c1_symop
         type(prep4cgrid)      :: gridprep
         type(ctfparams)       :: ctfvars
-        character(len=STDLEN) :: fname, refine
-        real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
-        real    :: bfac_rec, specscore_avg, specscore
+        character(len=STDLEN) :: refine
+        real    :: frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
         integer :: batchlims(2)
         logical :: doprint, do_extr, is_virgin
@@ -145,20 +147,6 @@ contains
             pinds = (/(i,i=p%fromp,p%top)/)
             ptcl_mask = .true.
         endif
-
-        ! SPECSCORE AND BFAC RECONSTRUCTION
-        ! if( b%a%isthere('specscore') )then
-        !     specscore_avg = b%a%get_avg('specscore')
-        !     do iptcl = p%fromp,p%top
-        !         if( .not.ptcl_mask(iptcl) ) cycle
-        !         specscore = b%a%get(iptcl, 'specscore')
-        !         bfac_rec = 1. + exp(-BSC/4. * (specscore-specscore_avg))
-        !         call b%a%set(iptcl, 'bfac_rec', bfac_rec)
-        !     enddo
-        ! else
-        !     specscore_avg = 0.
-        !     call b%a%set_all2single('bfac_rec', 1.)
-        ! endif
 
         ! EXTREMAL LOGICS
         do_extr  = .false.
@@ -482,8 +470,8 @@ contains
         class(params),              intent(inout) :: p     !< param object
         class(cmdline),             intent(inout) :: cline !< command line
         type(polarizer), allocatable :: match_imgs(:)
-        integer   :: cnt, s, iptcl, ind, iref, nrefs
-        integer   :: batchlims(2), imatch, iptcl_batch
+        integer   :: cnt, s, ind, iref, nrefs
+        integer   :: imatch
         logical   :: do_center
         real      :: xyz(3)
         nrefs  = p%nspace * p%nstates

@@ -69,11 +69,15 @@ file(GLOB TESTDIRS
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
 else()
-  list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
-  list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
-  list(REMOVE_ITEM TESTDIRS "tests/test_cufft")
+  list(REMOVE_ITEM TESTDIRS "tests/test_pgi"
+   "tests/test_cuda"
+   "tests/test_cufft")
 endif()
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+  list(REMOVE_ITEM TESTDIRS "tests/test_openacc"
+   "tests/test_laplace_solver"
+   "tests/test_accuracy")
+
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_intel")
 endif()
@@ -156,20 +160,20 @@ list(APPEND CTESTDIRS
 
 add_test(NAME test_parse
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND  ${CMAKE_COMMAND} -E simple_test_parse nthr=4 verbose=yes)
+  COMMAND source add2.bashrc &&  simple_test_parse nthr=4 verbose=yes)
 
 add_test(NAME test_install
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND  ${CMAKE_COMMAND} -E simple_test_install nthr=4 verbose=yes)
+  COMMAND source add2.bashrc  && simple_test_install nthr=4 verbose=yes)
 
 
 add_test(NAME test_units
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND  ${CMAKE_COMMAND} -E simple_test_units nthr=4)
+  COMMAND source add2.bashrc &&  simple_test_units nthr=4)
 
 add_test(NAME test_timer
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND  ${CMAKE_COMMAND} -E simple_test_timer verbose=yes debug=yes)
+  COMMAND source add2.bashrc && ${CMAKE_COMMAND} -E simple_test_timer verbose=yes debug=yes)
 
 
 add_test(NAME YeahhhTest COMMAND ${CMAKE_COMMAND} -E echo 'Yeahh')
