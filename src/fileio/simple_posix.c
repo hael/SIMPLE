@@ -21,13 +21,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <dirent.h>
+#include <dirent.h>      /* DIR and scandir */
 #include <time.h>
 #include <glob.h>
 #include <limits.h>      /* PATH_MAX */
 #ifdef __linux__
 #include<linux/limits.h>
 #endif
+
+// testing for non-GNU systems #undef versionsort
 
 #define MAX_CHAR_FILENAME 256
 #define LINE_MAX_LEN 8192
@@ -104,7 +106,7 @@ static char *c2fstr(char* cstr, char *fstr, int elem_len, int sizeofcstr)
     return fstr - sizeofcstr + sizeofcstr / elem_len;
 }
 
-void f2cstr(const char* f_str, char* c_str, unsigned length)
+void f2cstr( char* f_str, char* c_str, unsigned length)
 {
     /* fprintf (stderr, "f2cstr in '%.*s'\n", length, f_str); */
 
@@ -121,7 +123,7 @@ void f2cstr(const char* f_str, char* c_str, unsigned length)
 }
 
 
-int isdir(const char* pathname, int* len, size_t ivf_pathname)
+int isdir(char* pathname, int* len, size_t ivf_pathname)
 {
     if(pathname == NULL  || *len < 1) {
         perror("Failed : simple_posix.c::isdir inputs poorly defined");
@@ -158,7 +160,7 @@ int isdir(const char* pathname, int* len, size_t ivf_pathname)
 /**
  * Recursive make directory
  */
-int makedir(const char *path, size_t ivf_path)
+int makedir(char *path, size_t ivf_path)
 {
     /* https://gist.github.com/JonathonReinhart/8c0d90191c38af2dcadb102c4e202950 */
     /* Adapted from http://stackoverflow.com/a/2336245/119527 */
@@ -254,7 +256,7 @@ int makedir(const char *path, size_t ivf_path)
 /**
  * Recursive remove directory
  */
-int removedir(const char *path, int* len, int* count, size_t ivf_path)
+int removedir(char *path, int* len, int* count, size_t ivf_path)
 {
     /* https://gist.github.com/JonathonReinhart/8c0d90191c38af2dcadb102c4e202950 */
     /* Adapted from http://stackoverflow.com/a/2336245/119527 */
@@ -351,7 +353,7 @@ int removedir(const char *path, int* len, int* count, size_t ivf_path)
 }
 
 /* let us make a recursive function to print the content of a given folder */
-void show_dir_content_recursive(const char * path, size_t ivf_path)
+void show_dir_content_recursive(char * path, size_t ivf_path)
 {
     char *cpath = F90toCstring(path, strlen(path));
     if(cpath == NULL) {
@@ -387,7 +389,7 @@ void show_dir_content_recursive(const char * path, size_t ivf_path)
  *  \param param
  *  \return return type
  */
-int get_file_list(const char * path,  const char * ext, int *count, size_t ivf_path)
+int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
 {
     char *cpath = F90toCstring(path, strlen(path));
     if(cpath == NULL) {
@@ -468,7 +470,7 @@ int get_file_list(const char * path,  const char * ext, int *count, size_t ivf_p
  *  \param flag dictates [reverse order] | [last modified time or alphanumeric sort]
  *  \return return status success=0
  */
-int get_file_list_modified(const char * path, const char* ext, int* count, int flag, size_t ivf_path)
+int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t ivf_path)
 {
     /*equivalent to 'ls -tr path' */
     struct dirent **namelist;
@@ -503,7 +505,11 @@ int get_file_list_modified(const char * path, const char* ext, int* count, int f
         }
     }
     if(mtime_alpha) { /* modified time sort */
+#if defined(versionsort)
         n = scandir(cpath, &namelist, NULL, versionsort);
+#else
+        n = scandir(cpath, &namelist, NULL, alphasort);
+#endif
     } else { /* alphanumeric sort */
         n = scandir(cpath, &namelist, NULL, alphasort);
     }
@@ -578,7 +584,7 @@ int get_file_list_modified(const char * path, const char* ext, int* count, int f
  *  \param count return ptr for number of dirss found
  *  \return return status success=0
  */
-int list_dirs(const char * path, int* count, size_t ivf_path)
+int list_dirs(char * path, int* count, size_t ivf_path)
 {
     char *cpath = F90toCstring(path, strlen(path));
     if(cpath == NULL) {
@@ -732,7 +738,7 @@ void quick_glob(glob_t*globlist, int start, int count)
  *  \param sort_by_time flag that dictates last modified time or alphanumeric sorting
  *  \return return status success=0
  */
-int glob_file_list(const char *match,  int*count, int* sort_by_time, size_t ivf_match)
+int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
 {
     /* Check input char pointer */
     if(match == NULL || strlen(match) <= 0) {
@@ -756,7 +762,7 @@ int glob_file_list(const char *match,  int*count, int* sort_by_time, size_t ivf_
     printf("DEBUG: In glob_file_list flag:%d \n", *sort_by_time);
 #endif
 
-    int glob_val = glob(cmatch, GLOB_PERIOD, NULL, &globlist);
+    int glob_val = glob(cmatch, 0, NULL, &globlist);
     free(cmatch);
     f = fopen("__simple_filelist__", "w");
     if(!f) {
@@ -815,155 +821,13 @@ int glob_file_list(const char *match,  int*count, int* sort_by_time, size_t ivf_
     return err;
 }
 
-/**
- *  \brief glob_rm_all removes dirs/files in relative directory using GLOB
- *
- *  \param match Fortran string input glob
- *  \param count return ptr for number of files/dirs found
- *  \return return status success=0
- */
-int glob_rm_all(const char *match,  int*count, size_t ivf_match)
-{
-    /* Check input char pointer */
-    if(match == NULL || strlen(match) <= 0) {
-        fprintf(stderr, "simple_posix.c::glob_rm_all match string null .. Failing\n");
-        return -1;
-    }
-    extern int errno;
-    char *cmatch = F90toCstring(match, strlen(match));
-    if(cmatch == NULL) {
-        printf("%d %s\n glob_rm_all failed to convert string (unprotected) %s\n", errno, strerror(errno), match);
-        perror("Failed : simple_posix.c::glob_rm_all 1");
-        return -1;
-    }
-    glob_t        globlist;
-    FILE* f;
-    int err;
-    err = 0;
-#if _DEBUG
-    printf("DEBUG: In glob_rm_all size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
-    printf("DEBUG: In glob_rm_all cmatch:%s\n", cmatch);
-#endif
-    int glob_val = glob(cmatch, GLOB_PERIOD, NULL, &globlist);
-    free(cmatch);
-    f = fopen("__simple_filelist__", "w");
-    if(!f) {
-        printf("%d %s\nglob_rm_all failed to open __simple_filelist__\n", errno, strerror(errno));
-        perror("Failed : simple_posix.c::glob_rm_all 2");
-        return -1;
-    }
-    fclose(f);
-
-
-    if(glob_val == GLOB_NOSPACE) {
-        fprintf(stderr, "simple_posix.c::glob_rm_all NOSPACE no memory left \n");
-        err = -2;
-    } else if(glob_val == GLOB_NOMATCH) {
-        fprintf(stderr, "simple_posix.c::glob_rm_all NOMATCH  glob:%s\n", cmatch);
-        err = 0; // Do nothing
-    } else if(glob_val == GLOB_ABORTED) {
-        fprintf(stderr, "simple_posix.c::glob_rm_all GLOB_ABORTED\n");
-        err = -1;
-    } else {
-        *count = (int) globlist.gl_pathc; //account for __simple_filelist__
-#if _DEBUG
-        printf(" glob_rm_all size before trimming %d \n", *count);
-#endif
-        *count = 0;
-        int i = 0;
-        while(globlist.gl_pathv[i]) {
-#if _DEBUG
-            fprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
-#endif
-            if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
-                if(strcmp(globlist.gl_pathv[i], ".") != 0 || strcmp(globlist.gl_pathv[i], "..") != 0) {
-#if _DEBUG
-                    fprintf(stderr, " for deletion\n");
-#endif
-                    //fprintf(f, "%s\n", globlist.gl_pathv[i]);
-                    *count = *count + 1;
-                } else {
-#if _DEBUG
-                  fprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
-#endif
-                }
-            } else {
-#if _DEBUG
-              fprintf(stderr, "temp file found, stepping over\n");
-#endif
-            }
-            i++;
-        }
-#if _DEBUG
-        fprintf(stderr, "Total glob items for deletion:  %d\n", *count);
-#endif
-        *count = 0;
-        i = 0;
-        while(globlist.gl_pathv[i]) {
-            if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
-                if(strcmp(globlist.gl_pathv[i], ".") != 0 || strcmp(globlist.gl_pathv[i], "..") != 0) {
-                    fprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
-                    struct stat s;
-                    int staterr = stat(globlist.gl_pathv[i], &s);
-                    if(staterr==0){
-#if _DEBUG
-                    if(S_ISDIR(s.st_mode)) {
-                        fprintf(stderr, " dir ");
-                    } else if(S_ISREG(s.st_mode)) {
-                        fprintf(stderr, " file ");
-                    } else if(S_ISLNK(s.st_mode)) {
-                        fprintf(stderr, " link ");
-                    } else {
-                        fprintf(stderr, " unsupported mode ");
-                    }
-#endif
-                    // remove is a stdlib function that uses unlink for files and rmdir for directories
-                    if(remove(globlist.gl_pathv[i]) == 0) {
-#if _DEBUG
-                        fprintf(stderr, " deleted\n");
-#endif
-                        *count = *count + 1;
-                        FILE* f = fopen("__simple_filelist__", "a");
-                        fprintf(f, "%s\n", globlist.gl_pathv[i]);
-                        fclose(f);
-                    } else {
-                        if(errno == ENOTEMPTY) {
-                            fprintf(stderr, " calling recursive delete\n");
-                            int len2 = (int)strlen(globlist.gl_pathv[i]);
-                            err = remove_directory_recursive(globlist.gl_pathv[i], &len2, count);
-                        }
-                        if(err != 0) {
-                            fprintf(stderr, "\n%d %s\nglob_rm_all failed to remove %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
-                            perror("Failed : simple_posix.c::glob_rm_all ");
-                        }
-
-                    }
-                    }else{
-                       fprintf(stderr, "\n%d %s\nglob_rm_all failed to stat %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
-                            perror("Failed : simple_posix.c::glob_rm_all ");
-                    }
-
-                }
-            }
-            i++;
-        }
-#if _DEBUG
-        fprintf(stderr, " glob_rm_all size after trimming %d \n", *count);
-#endif
-    }
-    globfree(&globlist);
-
-    return err;
-}
-
-
 void free_file_list(char**ptr, int n)
 {
     for(int i = 0; i < n; i++) free(ptr[i]);
     free(ptr);
 }
 
-int subprocess(const char* args, int* arglen, size_t ivf_cmd)
+int subprocess(char* args, int* arglen, size_t ivf_cmd)
 {
     char * cargs = F90toCstring(args, *arglen);
 
@@ -985,10 +849,10 @@ int wait_pid(int* cpid )
 
     int status;
     pid_t w;
-    if (cpid > 0) {
+    if (*cpid > 0) {
 
       do {
-        w = waitpid((pid_t)cpid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+        w = waitpid((pid_t) *cpid, &status, WNOHANG | WUNTRACED | WCONTINUED);
         if (w == -1) {
           perror("waitpid");
           exit(EXIT_FAILURE);
@@ -1133,7 +997,7 @@ int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
 /**
  * returns a null-terminated string containing the canonicalized absolute pathname corresponding to path.
  */
-int  get_absolute_pathname(const char* in, int* inlen, char* out, int* outlen, size_t ivf_in)
+int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t ivf_in)
 {
     // realpath(in, resolved_path);
     //      printf("\n%s\n",resolved_path);
@@ -1160,11 +1024,11 @@ int  get_absolute_pathname(const char* in, int* inlen, char* out, int* outlen, s
     printf("DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
     printf("DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
 #endif
-    *out = c2fstr(resolved, out, *outlen, sizeof(resolved));
+    char *out2 = c2fstr(resolved, out, *outlen, sizeof(resolved));
     out[0] = '/';
 
 #if _DEBUG
-    printf("DEBUG: In get_absolute_pathname c2fstr: %s\n", out);
+    printf("DEBUG: In get_absolute_pathname c2fstr: %s\n", out, out2);
     printf("DEBUG: In get_absolute_pathname %30s:%ld\n", " out path addr", *out);
     printf("DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
 #endif
@@ -1219,7 +1083,7 @@ static int rmFiles(const char *pathname, const struct stat *sbuf, int type, stru
     return 0;
 }
 
-int rmDirectories(const char* path, int *len, int*count)
+int rmDirectories(char* path, int *len, int*count)
 {
     char *cpath = F90toCstring(path, *len);
     *count = 0;
@@ -1236,7 +1100,7 @@ int rmDirectories(const char* path, int *len, int*count)
 }
 
 
-int remove_directory_recursive(const char *path, int *len, int*count)
+int remove_directory_recursive(char *path, int *len, int*count)
 {
     char *cpath = F90toCstring(path, *len);
     DIR *d = opendir(cpath);
@@ -1287,7 +1151,7 @@ int remove_directory_recursive(const char *path, int *len, int*count)
     return r;
 }
 
-int remove_directory(const char *path, int *len, int*count)
+int remove_directory(char *path, int *len, int*count)
 {
     FILE* f = fopen("__simple_filelist__", "w");
     fclose(f);
@@ -1296,7 +1160,7 @@ int remove_directory(const char *path, int *len, int*count)
 }
 
 
-int recursive_delete(const char *dir, int*len, int*count)
+int recursive_delete(char *dir, int*len, int*count)
 {
     int ret = 0;
     FTS *ftsp = NULL;
@@ -1386,8 +1250,150 @@ int recursive_delete(const char *dir, int*len, int*count)
 }
 
 
+/**
+ *  \brief glob_rm_all removes dirs/files in relative directory using GLOB
+ *
+ *  \param match Fortran string input glob
+ *  \param count return ptr for number of files/dirs found
+ *  \return return status success=0
+ */
+int glob_rm_all(char *match,  int*count, size_t ivf_match)
+{
+    /* Check input char pointer */
+    if(match == NULL || strlen(match) <= 0) {
+        fprintf(stderr, "simple_posix.c::glob_rm_all match string null .. Failing\n");
+        return -1;
+    }
+    extern int errno;
+    char *cmatch = F90toCstring(match, strlen(match));
+    if(cmatch == NULL) {
+        printf("%d %s\n glob_rm_all failed to convert string (unprotected) %s\n", errno, strerror(errno), match);
+        perror("Failed : simple_posix.c::glob_rm_all 1");
+        return -1;
+    }
+    glob_t        globlist;
+    FILE* f;
+    int err;
+    err = 0;
+#if _DEBUG
+    printf("DEBUG: In glob_rm_all size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
+    printf("DEBUG: In glob_rm_all cmatch:%s\n", cmatch);
+#endif
+    int glob_val = glob(cmatch, 0, NULL, &globlist);
+    free(cmatch);
+    f = fopen("__simple_filelist__", "w");
+    if(!f) {
+        printf("%d %s\nglob_rm_all failed to open __simple_filelist__\n", errno, strerror(errno));
+        perror("Failed : simple_posix.c::glob_rm_all 2");
+        return -1;
+    }
+    fclose(f);
 
-int touch(const char* path, int*len)
+
+    if(glob_val == GLOB_NOSPACE) {
+        fprintf(stderr, "simple_posix.c::glob_rm_all NOSPACE no memory left \n");
+        err = -2;
+    } else if(glob_val == GLOB_NOMATCH) {
+        fprintf(stderr, "simple_posix.c::glob_rm_all NOMATCH  glob:%s\n", cmatch);
+        err = 0; // Do nothing
+    } else if(glob_val == GLOB_ABORTED) {
+        fprintf(stderr, "simple_posix.c::glob_rm_all GLOB_ABORTED\n");
+        err = -1;
+    } else {
+        *count = (int) globlist.gl_pathc; //account for __simple_filelist__
+#if _DEBUG
+        printf(" glob_rm_all size before trimming %d \n", *count);
+#endif
+        *count = 0;
+        int i = 0;
+        while(globlist.gl_pathv[i]) {
+#if _DEBUG
+            fprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
+#endif
+            if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
+                if(strcmp(globlist.gl_pathv[i], ".") != 0 || strcmp(globlist.gl_pathv[i], "..") != 0) {
+#if _DEBUG
+                    fprintf(stderr, " for deletion\n");
+#endif
+                    //fprintf(f, "%s\n", globlist.gl_pathv[i]);
+                    *count = *count + 1;
+                } else {
+#if _DEBUG
+                  fprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
+#endif
+                }
+            } else {
+#if _DEBUG
+              fprintf(stderr, "temp file found, stepping over\n");
+#endif
+            }
+            i++;
+        }
+#if _DEBUG
+        fprintf(stderr, "Total glob items for deletion:  %d\n", *count);
+#endif
+        *count = 0;
+        i = 0;
+        while(globlist.gl_pathv[i]) {
+            if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
+                if(strcmp(globlist.gl_pathv[i], ".") != 0 || strcmp(globlist.gl_pathv[i], "..") != 0) {
+                    fprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
+                    struct stat s;
+                    int staterr = stat(globlist.gl_pathv[i], &s);
+                    if(staterr==0){
+#if _DEBUG
+                    if(S_ISDIR(s.st_mode)) {
+                        fprintf(stderr, " dir ");
+                    } else if(S_ISREG(s.st_mode)) {
+                        fprintf(stderr, " file ");
+                    } else if(S_ISLNK(s.st_mode)) {
+                        fprintf(stderr, " link ");
+                    } else {
+                        fprintf(stderr, " unsupported mode ");
+                    }
+#endif
+                    // remove is a stdlib function that uses unlink for files and rmdir for directories
+                    if(remove(globlist.gl_pathv[i]) == 0) {
+#if _DEBUG
+                        fprintf(stderr, " deleted\n");
+#endif
+                        *count = *count + 1;
+                        FILE* f = fopen("__simple_filelist__", "a");
+                        fprintf(f, "%s\n", globlist.gl_pathv[i]);
+                        fclose(f);
+                    } else {
+                        if(errno == ENOTEMPTY) {
+                            fprintf(stderr, " calling recursive delete\n");
+                            int len2 = (int)strlen(globlist.gl_pathv[i]);
+                            err = remove_directory_recursive(globlist.gl_pathv[i], &len2, count);
+                        }
+                        if(err != 0) {
+                            fprintf(stderr, "\n%d %s\nglob_rm_all failed to remove %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
+                            perror("Failed : simple_posix.c::glob_rm_all ");
+                        }
+
+                    }
+                    }else{
+                       fprintf(stderr, "\n%d %s\nglob_rm_all failed to stat %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
+                            perror("Failed : simple_posix.c::glob_rm_all ");
+                    }
+
+                }
+            }
+            i++;
+        }
+#if _DEBUG
+        fprintf(stderr, " glob_rm_all size after trimming %d \n", *count);
+#endif
+    }
+    globfree(&globlist);
+
+    return err;
+}
+
+
+
+int touch(char* path, int*len)
 {
     char*cpath = F90toCstring(path, *len);
     int fd2 = open(cpath, O_RDWR | O_CREAT, 0777);
