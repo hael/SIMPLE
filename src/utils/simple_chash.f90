@@ -246,6 +246,7 @@ contains
         do i=ind,self%chash_index - 1
             ! replace key
             if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
+            if(allocated(tmp)) deallocate(tmp)
             allocate(tmp, source=self%keys(i + 1)%str)
             self%keys(i)%str = tmp
             deallocate(tmp)

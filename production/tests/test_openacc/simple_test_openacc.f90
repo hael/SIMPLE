@@ -6,9 +6,9 @@ program simple_test_openacc
     implicit none
 
 #ifndef _OPENACC
-#warning " _OPENACC not defined use -fopenacc in FFLAGS or enable USE_OPENACC in cmake build"
+    write(*,*) " _OPENACC not defined use -fopenacc in FFLAGS or enable USE_OPENACC in cmake build"
 #else
-#warning "C Preprocessor got here!"  _OPENACC
+!!  warning "C Preprocessor got here!"  _OPENACC
     write(*,'(a,1x,i0)')"OpenACC preprocessor version:",  _OPENACC
 #endif
 
