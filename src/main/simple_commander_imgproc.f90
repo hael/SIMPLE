@@ -702,6 +702,7 @@ contains
     !> processing routines that are applied to MRC or SPIDER stacks.
     subroutine exec_stackops( self, cline )
         use simple_oris,        only: oris
+        use simple_stackops
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)                             :: p
@@ -894,7 +895,7 @@ contains
         endif
         ! auto correlation function
         if( p%acf .eq. 'yes' )then
-            call acf_imgfile(p%stk, p%outstk)
+            call acf_stack(p%stk, p%outstk)
             goto 999
         endif
         ! produce image statistics
@@ -905,7 +906,7 @@ contains
         endif
         ! create frame averages
         if( p%nframesgrp > 0 )then
-            call frameavg_imgfile(p%stk, p%outstk, p%nframesgrp, p%smpd)
+            call frameavg_stack(p%stk, p%outstk, p%nframesgrp, p%smpd)
             goto 999
         endif
         ! visualize
@@ -918,7 +919,7 @@ contains
         endif
         ! average
         if( p%avg .eq. 'yes' )then
-            call make_avg_imgfile(p%stk, p%outstk, p%smpd)
+            call make_avg_stack(p%stk, p%outstk, p%smpd)
             goto 999
         endif
         ! add noise
