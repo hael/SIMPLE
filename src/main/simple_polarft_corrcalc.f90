@@ -148,8 +148,12 @@ type :: polarft_corrcalc
     procedure, private :: calc_k_corrs
     procedure, private :: calc_corr_for_rot
     procedure, private :: calc_corr_for_rot_8
+    procedure, private :: calc_euclid_for_rot
+    procedure, private :: calc_euclid_for_rot_8
     procedure, private :: calc_corrk_for_rot
     procedure, private :: calc_corrk_for_rot_8
+    procedure, private :: calc_euclidk_for_rot
+    procedure, private :: calc_euclidk_for_rot_8
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
     procedure, private :: gencorrs_cc_3
@@ -343,7 +347,7 @@ contains
                 &self%heap_vars(ithr)%argmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &stat=alloc_stat)
         end do
-         if(alloc_stat.ne.0)call allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
+        if(alloc_stat.ne.0)call allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
@@ -577,6 +581,7 @@ contains
         loc = minloc(dists)
         ind = loc(1)
     end function get_roind
+
     !>  \brief returns polar coordinate for rotation rot
     !!         and Fourier index k
     function get_coord( self, rot, k ) result( xy )
@@ -632,7 +637,7 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iptcl
         logical :: is
-        is = self%iseven(iptcl)
+        is = self%iseven(self%pinds(iptcl))
     end function ptcl_iseven
 
     ! PRINTERS/VISUALISERS
@@ -817,8 +822,8 @@ contains
 
     subroutine calc_corrs_over_k( self, pft_ref, i, kstop, corrs_over_k )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
+        integer,                 intent(in)    :: i, kstop
         real,                    intent(out)   :: corrs_over_k(self%nrots)
         integer :: ithr, ik
         ! get thread index
@@ -881,9 +886,8 @@ contains
 
     function calc_corr_for_rot(self, pft_ref, i, kstop, irot) result(corr)
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
-        integer,                 intent(in)    :: irot
+        integer,                 intent(in)    :: i, kstop, irot
         integer :: rot
         real    :: corr
         complex :: tmp
@@ -908,40 +912,90 @@ contains
         corr = real(tmp)
     end function calc_corr_for_rot
 
-    function calc_corr_for_rot_8(self, pft_ref, i, kstop, irot) result(corr)
+    function calc_corr_for_rot_8( self, pft_ref, i, kstop, irot ) result( corr )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop
         complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
-        integer,                 intent(in)    :: irot
+        integer,                 intent(in)    :: i, kstop, irot
         integer     :: rot
         real(dp)    :: corr
-        complex(dp) :: tmp
-        corr = 0.
+        complex(sp) :: tmp
         tmp = 0.
-        if (irot >= self%pftsz + 1) then
+        if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
             rot = irot
         end if
-        if (irot == 1) then
+        if( irot == 1 )then
             tmp = sum( pft_ref(:,:) * conjg(self%pfts_ptcls(i,:,:)))
-        else if (irot <= self%pftsz) then
+        else if( irot <= self%pftsz )then
             tmp =       sum( pft_ref(               1:self%pftsz-rot+1,:) * conjg(self%pfts_ptcls(i,rot:self%pftsz,:)))
             tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      :) *       self%pfts_ptcls(i,  1:rot-1,     :))
-        else if (irot == self%pftsz + 1) then
+        else if( irot == self%pftsz + 1 ) then
             tmp = sum( pft_ref(:,:) * self%pfts_ptcls(i,:,:) )
         else
             tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(i,rot:self%pftsz,:))
             tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,:) * conjg( self%pfts_ptcls(i,1:rot-1,:) ))
         end if
-        corr = real(tmp)
+        corr = real(tmp, kind=8)
     end function calc_corr_for_rot_8
 
-    function calc_corrk_for_rot(self, pft_ref, i, kstop, k, irot) result(corr)
+    function calc_euclid_for_rot( self, pft_ref, i, kstop, irot ) result( euclid )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop, k
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
-        integer,                 intent(in)    :: irot
+        integer,                 intent(in)    :: i, kstop, irot
+        integer     :: rot
+        real(sp)    :: euclid
+        complex(sp) :: tmp
+        if( irot >= self%pftsz + 1 )then
+            rot = irot - self%pftsz
+        else
+            rot = irot
+        end if
+        if( irot == 1 )then
+            tmp =       sum((pft_ref(:,:) - self%pfts_ptcls(i,:,:))**2.0)
+        else if( irot <= self%pftsz )then
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:) - self%pfts_ptcls(i,rot:self%pftsz,:))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - conjg(self%pfts_ptcls(i,1:rot-1,:)))**2.0)
+        else if( irot == self%pftsz + 1 )then
+            tmp = sum((pft_ref(:,:) - conjg(self%pfts_ptcls(i,:,:)))**2.0)
+        else
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:) - conjg(self%pfts_ptcls(i,rot:self%pftsz,:)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(i,1:rot-1,:))**2.0)
+        end if
+        euclid = abs(tmp)
+    end function calc_euclid_for_rot
+
+    function calc_euclid_for_rot_8( self, pft_ref, i, kstop, irot ) result( euclid )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
+        integer,                 intent(in)    :: i, kstop, irot
+        integer     :: rot
+        real(dp)    :: euclid
+        complex(dp) :: tmp
+        tmp = 0.0
+        if( irot >= self%pftsz + 1 )then
+            rot = irot - self%pftsz
+        else
+            rot = irot
+        end if
+        if( irot == 1 )then
+            tmp =       sum((pft_ref(:,:) - self%pfts_ptcls(i,:,:))**2.0)
+        else if( irot <= self%pftsz )then
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:)          - self%pfts_ptcls(i,rot:self%pftsz,:))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - conjg(self%pfts_ptcls(i,1:rot-1,:)))**2.0)
+        else if( irot == self%pftsz + 1 )then
+            tmp =       sum((pft_ref(:,:) - conjg(self%pfts_ptcls(i,:,:)))**2.0)
+        else
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:)          - conjg(self%pfts_ptcls(i,rot:self%pftsz,:)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(i,1:rot-1,:))**2.0)
+        end if
+        euclid = abs(tmp)
+    end function calc_euclid_for_rot_8
+
+    function calc_corrk_for_rot( self, pft_ref, i, kstop, k, irot ) result( corr )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
+        integer,                 intent(in)    :: i, kstop, k, irot
         integer :: rot
         real    :: corr
         complex :: tmp
@@ -966,11 +1020,10 @@ contains
         corr = real(tmp)
     end function calc_corrk_for_rot
 
-    function calc_corrk_for_rot_8(self, pft_ref, i, kstop, k, irot) result(corr)
+    function calc_corrk_for_rot_8( self, pft_ref, i, kstop, k, irot ) result( corr )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop, k
         complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
-        integer,                 intent(in)    :: irot
+        integer,                 intent(in)    :: i, kstop, k, irot
         integer     :: rot
         real(dp)    :: corr
         complex(dp) :: tmp
@@ -994,6 +1047,60 @@ contains
         end if
         corr = real(tmp)
     end function calc_corrk_for_rot_8
+
+    function calc_euclidk_for_rot( self, pft_ref, i, kstop, k, irot ) result( euclid )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
+        integer,                 intent(in)    :: i, kstop, k, irot
+        integer :: rot
+        real    :: euclid
+        complex :: tmp
+        tmp  = cmplx(0.,0.)
+        if( irot >= self%pftsz + 1 )then
+            rot = irot - self%pftsz
+        else
+            rot = irot
+        end if
+        if( irot == 1 )then
+            tmp =       sum((pft_ref(:,k) - self%pfts_ptcls(i,:,k))**2.0)
+        else if( irot <= self%pftsz )then
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(i,rot:self%pftsz,k))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(i,1:rot-1,k)))**2.0)
+        else if( irot == self%pftsz + 1 )then
+            tmp =       sum((pft_ref(:,k) - conjg(self%pfts_ptcls(i,:,k)))**2.0)
+        else
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(i,rot:self%pftsz,k)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(i,1:rot-1,k))**2.0)
+        end if
+        euclid = abs(tmp)
+    end function calc_euclidk_for_rot
+
+    function calc_euclidk_for_rot_8( self, pft_ref, i, kstop, k, irot ) result( euclid )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
+        integer,                 intent(in)    :: i, kstop, k, irot
+        integer     :: rot
+        real(dp)    :: euclid
+        complex(dp) :: tmp
+        tmp  = cmplx(0.d0,0.d0)
+        if( irot >= self%pftsz + 1 )then
+            rot = irot - self%pftsz
+        else
+            rot = irot
+        end if
+        if( irot == 1 )then
+            tmp =       sum((pft_ref(:,k) - self%pfts_ptcls(i,:,k))**2.0)
+        else if( irot <= self%pftsz )then
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(i,rot:self%pftsz,k))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(i,1:rot-1,k)))**2.0)
+        else if( irot == self%pftsz + 1 )then
+            tmp =       sum((pft_ref(:,k) - conjg(self%pfts_ptcls(i,:,k)))**2.0)
+        else
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(i,rot:self%pftsz,k)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(i,1:rot-1,k))**2.0)
+        end if
+        euclid = abs(tmp)
+    end function calc_euclidk_for_rot_8
 
     !>  \brief  is for generating resolution dependent correlations
     subroutine genfrc( self, iref, i, irot, frc )

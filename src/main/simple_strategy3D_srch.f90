@@ -1,6 +1,7 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 include 'simple_lib.f08'
+use simple_build,             only: build
 use simple_params,            only: params
 use simple_oris,              only: oris
 use simple_ori,               only: ori
@@ -16,6 +17,7 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
+    class(build),            pointer :: pb            => null()
     class(params),           pointer :: pp            => null()
     class(polarft_corrcalc), pointer :: ppftcc        => null()
     class(oris),             pointer :: pa            => null()

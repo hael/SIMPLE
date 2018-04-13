@@ -1,4 +1,19 @@
-CTFFIT
+
+To consider:
+
+* merging global searches with neigh searches for improved robustness (and single program)
+* drop map2ptcls (only use the shifts and re-search angles on the starting model)
+* anisotropic scale?
+* per-particle CTF refinement
+* Pawel says Euclidean distance better for shifts
+* Pawel says ranking different for Euclidean distance
+
+STRATEGY:
+
+* identify set of candidates with in-plane rotations using correlations
+* refine shifts using Euclidean distance
+* rank and calculate weights from Euclidean distances
+
 
 TESTING
 * test greedy in conjunction with frac update and measure convergence rate vs SHC

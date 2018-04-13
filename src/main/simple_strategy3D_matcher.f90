@@ -253,6 +253,7 @@ contains
                 strategy3Dspec%iptcl_map   =  cnt
                 strategy3Dspec%szsn        =  p%szsn
                 strategy3Dspec%corr_thresh =  corr_thresh
+                strategy3Dspec%pb          => b
                 strategy3Dspec%pp          => p
                 strategy3Dspec%ppftcc      => pftcc
                 strategy3Dspec%pa          => b%a
@@ -444,12 +445,15 @@ contains
                         call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
                     end do
                     !$omp end parallel do
+                    ! copy even volume
+                    b%vol_even = b%vol
                     call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
                         call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.false.)
                     end do
                     !$omp end parallel do
+                    ! odd volume in b%vol
                 else
                     call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)

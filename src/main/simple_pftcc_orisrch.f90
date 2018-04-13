@@ -115,7 +115,7 @@ contains
         if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
             call self%bp%vol_even%fproject_polar(1, e, self%pftcc_ptr, iseven=.true.)
         else
-            call self%bp%vol_odd%fproject_polar(1, e, self%pftcc_ptr, iseven=.false.)
+            call self%bp%vol%fproject_polar(1, e, self%pftcc_ptr, iseven=.false.)
         endif
         ! correlate
         call self%pftcc_ptr%gencorrs(1, self%particle, vec(3:4), corrs)
@@ -130,9 +130,13 @@ contains
         class(pftcc_orisrch), intent(inout) :: self
         class(ori),           intent(inout) :: o_inout
         integer,              intent(out)   :: irot
-        real, allocatable :: cxy(:)
-        real              :: cost, cost_init, corrs(self%nrots)
-        integer           :: loc(1)
+        complex, allocatable :: pft_ref1_even(:,:), pft_ref1_odd(:,:)
+        real,    allocatable :: cxy(:)
+        real    :: cost, cost_init, corrs(self%nrots)
+        integer :: loc(1)
+        ! copy reference 1 position so we can put it back after minimization is done
+        pft_ref1_even = self%pftcc_ptr%get_ref_pft(1, iseven=.true.)
+        pft_ref1_odd  = self%pftcc_ptr%get_ref_pft(1, iseven=.false.)
         allocate(cxy(3))
         ! minimisation
         self%ospec%x(1)   = o_inout%e1get()
@@ -159,6 +163,9 @@ contains
             cxy(1)  = -cost_init ! correlation
             cxy(2:) = 0.
         endif
+        ! put back reference
+        call self%pftcc_ptr%set_ref_pft(1, pft_ref1_even, iseven=.true.)
+        call self%pftcc_ptr%set_ref_pft(1, pft_ref1_odd,  iseven=.false.)
     end function minimize
 
     function get_nevals( self ) result( nevals )
