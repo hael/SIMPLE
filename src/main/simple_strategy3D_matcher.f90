@@ -403,66 +403,6 @@ contains
         endif
     end subroutine refine3D_exec
 
-    ! subroutine gen_random_model( b, p, nsamp_in )
-    !     use simple_ran_tabu,   only: ran_tabu
-    !     class(build),      intent(inout) :: b         !< build object
-    !     class(params),     intent(inout) :: p         !< param object
-    !     integer, optional, intent(in)    :: nsamp_in  !< num input samples
-    !     type(ran_tabu)       :: rt
-    !     type(ori)            :: orientation
-    !     integer, allocatable :: sample(:)
-    !     integer              :: i, nsamp, alloc_stat
-    !     type(kbinterpol)     :: kbwin
-    !     type(prep4cgrid)     :: gridprep
-    !     if( p%vols(1) == '' )then
-    !         ! init volumes
-    !         call preprecvols(b, p)
-    !         p%oritab = 'prime3D_startdoc'//trim(METADATA_EXT)
-    !         if( trim(p%refine).eq.'tseries' )then
-    !             call b%a%spiral
-    !         else
-    !             call b%a%rnd_oris
-    !             call b%a%zero_shifts
-    !         endif
-    !         if( p%part .ne. 1 )then
-    !             ! so random oris only written once in distributed mode
-    !         else
-    !             call binwrite_oritab(p%oritab, b%spproj, b%a, [1,p%nptcls])
-    !         endif
-    !         p%vols(1) = 'startvol'//p%ext
-    !         if( p%noise .eq. 'yes' )then
-    !             call b%vol%ran
-    !             call b%vol%write(p%vols(1), del_if_exists=.true.)
-    !             return
-    !         endif
-    !         nsamp = p%top - p%fromp + 1
-    !         if( present(nsamp_in) ) nsamp = nsamp_in
-    !         allocate( sample(nsamp), stat=alloc_stat )
-    !         call alloc_errchk("In: gen_random_model; simple_strategy3D_matcher", alloc_stat)
-    !         if( present(nsamp_in) )then
-    !             rt = ran_tabu(p%top - p%fromp + 1)
-    !             call rt%ne_ran_iarr(sample)
-    !             call rt%kill
-    !         else
-    !             forall(i=1:nsamp) sample(i) = i
-    !         endif
-    !         write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
-    !         ! make the gridding prepper
-    !         kbwin = b%recvols(1)%get_kbwin()
-    !         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
-    !         do i=1,nsamp
-    !             call progress(i, nsamp)
-    !             orientation = b%a%get_ori(sample(i) + p%fromp - 1)
-    !             call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
-    !             call gridprep%prep(b%img, b%img_pad)
-    !             call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
-    !         end do
-    !         deallocate(sample)
-    !         call norm_struct_facts(b, p)
-    !         call killrecvols(b, p)
-    !     endif
-    ! end subroutine gen_random_model
-
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline )
         use simple_polarizer, only: polarizer

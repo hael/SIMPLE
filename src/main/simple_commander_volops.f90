@@ -274,39 +274,21 @@ contains
             p%nptcls = binread_nlines(p, p%oritab)
             call b%build_general_tbox(p, cline)
             p%nspace = b%a%get_noris()
-        else if( p%rnd .eq. 'yes' )then
-            p%nptcls = p%nspace
-            call b%build_general_tbox(p, cline)
-            call b%a%rnd_oris(p%trs, p%eullims)
         else
             p%nptcls = p%nspace
             call b%build_general_tbox(p, cline)
             call b%a%spiral(p%nsym, p%eullims)
-            if( cline%defined('trs') ) call b%a%rnd_inpls(p%trs)
         endif
         ! fix volumes and stacks
         call b%vol%read(p%vols(1))
         DebugPrint 'read volume'
         ! masking
-        if(cline%defined('msk'))then
-            call b%vol%mask(p%msk, 'soft')
-        endif
+        if(cline%defined('msk')) call b%vol%mask(p%msk, 'soft')
         ! generate projections
-        if( p%swap .eq. 'yes' ) call b%a%swape1e3
-        if( cline%defined('top') )then
-            imgs = project(b%vol, b%a, p, p%top)
-            loop_end = p%top
-        else
-            imgs = project(b%vol, b%a, p)
-            loop_end = p%nspace
-        endif
+        imgs = project(b%vol, b%a, p)
+        loop_end = p%nspace
         if( file_exists(p%outstk) ) call del_file(p%outstk)
         do i=1,loop_end
-            if( cline%defined('oritab') .or. (p%rnd .eq. 'yes' .or. cline%defined('trs')) )then
-                x = b%a%get(i, 'x')
-                y = b%a%get(i, 'y')
-                call imgs(i)%shift([x,y,0.])
-            endif
             if( p%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(p%outstk,i)
         end do

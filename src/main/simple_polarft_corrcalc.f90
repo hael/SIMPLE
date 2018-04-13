@@ -131,6 +131,7 @@ type :: polarft_corrcalc
     procedure          :: get_ref_pft
     procedure          :: objfun_is_ccres
     procedure          :: exists
+    procedure          :: ptcl_iseven
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
@@ -626,6 +627,13 @@ contains
         logical :: yes
         yes = self%existence
     end function exists
+
+    function ptcl_iseven( self, iptcl ) result( is )
+        class(polarft_corrcalc), intent(in) :: self
+        integer,                 intent(in) :: iptcl
+        logical :: is
+        is = self%iseven(iptcl)
+    end function ptcl_iseven
 
     ! PRINTERS/VISUALISERS
 

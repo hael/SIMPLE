@@ -365,7 +365,7 @@ contains
         call cline%set('frac', b%conv%get('frac'))
         ! end gracefully
         call b%kill_general_tbox
-        call simple_end('**** SIMPLE_check_3Dconv NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_CHECK_3DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_3Dconv
 
 end module simple_commander_refine3D
