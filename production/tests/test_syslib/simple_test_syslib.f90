@@ -98,7 +98,7 @@ call simple_getcwd (cur_working_dir)
 print *, '      CWD:', cur_working_dir
 
 print *, '>>> Syslib function Test 1d: simple_full_path / canonicalize_file_name'
-aname = simple_full_path("./")
+! aname = simple_full_path("./")
 print *,'      absolute path "./": ', trim(aname)
 if(allocated(aname)) deallocate(aname)
 
