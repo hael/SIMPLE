@@ -894,115 +894,154 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
     return flag;
 }
 
-// int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
-// {
-//     printf("In fcopy2\n");
-//     extern int errno;
-//
-//     char *buffer1, *buffer2;
-//     int flag = 0;
-//     if(!(buffer1 = F90toCstring(file1, *len1))) {
-//         printf("%d %s\nfcopy2 failed to interpret file str %30s\n", errno, strerror(errno), file1);
-//         perror("Failed : F90toCstring (buf) in simple_posix.c:fcopy2");
-//         free(buffer1);
-//         flag = 1;
-//     } else if(!(buffer2 = F90toCstring(file2, *len2))) {
-//         printf("%d %s\nfcopy2 failed to interpret file str %30s\n", errno, strerror(errno), file2);
-//         perror("Failed : F90toCstring (buf) in simple_posix::fcopy2");
-//         free(buffer2);
-//         flag = 1;
-//     } else {
-//         struct stat st;
-//         if(0 == stat(buffer1, &st)) {
-//             int INPUTsize = st.st_size;
-//
-//             printf("In fcopy2 opening files\n");
-//             FILE *fin = fopen(buffer1, "r");
-//             if(fin) {
-//                 FILE *fout = fopen(buffer2, "w");
-//                 if(fout) {
-//                   fflush(fout);
-//
-//                     //        fseek(fin, 0L, SEEK_END);
-//                     //size_t toCopy = ftell(fin);
-//                     //rewind(fin); //fseek(fin, 0L, SEEK_SET);
-//
-//
-//                     off_t offset = ftello64(fin);
-//                     ssize_t sent = sendfile(fileno(fout), fileno(fin), &offset, INPUTsize);
-//                     fseeko64(fin, offset, SEEK_SET);
-//                     if(sent != INPUTsize) {
-//                         printf("%d %s\nfcopy2 failed to copy file %s to %s\n", errno, strerror(errno), buffer1, buffer2);
-//                         perror("Failed : simple_posix.c::fcopy2 copying file\n");
-//                         flag = 1;
-//                     }
-//                     fclose(fout);
-//                 } else {
-//                     printf("%d %s\nfcopy2 failed to open  file %s\n", errno, strerror(errno), buffer2);
-//                     perror("Failed : simple_posix.c::fcopy2 opening output file\n");
-//                     flag = 1;
-//                 }
-//                 fclose(fin);
-//             } else {
-//                 printf("%d %s\nfcopy2 failed to open file %s\n", errno, strerror(errno), buffer1);
-//                 perror("Failed : simple_posix.c::fcopy2 ");
-//                 flag = 1;
-//             }
-//         } else {
-//             printf("%d %s\nfcopy2 failed to stat file %s\n", errno, strerror(errno), buffer1);
-//             perror("Failed : simple_posix.c::fcopy2 ");
-//             flag = 1;
-//         }
-//         free(buffer1);
-//         free(buffer2);
-//     }
-//     return flag;
-// }
+#ifdef __APPLE__
+    #include <sys/socket.h>
+    #include <sys/uio.h>
+#else
+    #include <sys/sendfile.h>
+#endif
+int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
+{
+    printf("In fcopy2\n");
+    extern int errno;
+
+    char *buffer1, *buffer2;
+    int flag = 0;
+    if(!(buffer1 = F90toCstring(file1, *len1))) {
+        printf("%d %s\nfcopy2 failed to interpret file str %30s\n", errno, strerror(errno), file1);
+        perror("Failed : F90toCstring (buf) in simple_posix.c:fcopy2");
+        free(buffer1);
+        flag = 1;
+    } else if(!(buffer2 = F90toCstring(file2, *len2))) {
+        printf("%d %s\nfcopy2 failed to interpret file str %30s\n", errno, strerror(errno), file2);
+        perror("Failed : F90toCstring (buf) in simple_posix::fcopy2");
+        free(buffer2);
+        flag = 1;
+    } else {
+        struct stat st;
+        if(0 == stat(buffer1, &st)) {
+            int INPUTsize = st.st_size;
+            off_t OSX_INPUTsize = (off_t) INPUTsize;
+            printf("In fcopy2 opening files\n");
+            FILE *fin = fopen(buffer1, "r");
+            if(fin) {
+                FILE *fout = fopen(buffer2, "w");
+                if(fout) {
+                  fflush(fout);
+                    //        fseek(fin, 0L, SEEK_END);
+                    //size_t toCopy = ftell(fin);
+                    //rewind(fin); //fseek(fin, 0L, SEEK_SET);
+                    #ifdef __APPLE__
+                        off_t offset = ftello(fin);
+                        ssize_t sent;
+                        //ssize_t sent = sendfile(fileno(fout), fileno(fin), offset, OSX_INPUTsize);
+                        fseeko(fin, offset, SEEK_SET);
+                    #else
+                        off_t offset = ftello64(fin);
+                        ssize_t sent = sendfile(fileno(fout), fileno(fin), &offset, INPUTsize);
+                        fseeko64(fin, offset, SEEK_SET);
+                    #endif
+                    if(sent != INPUTsize) {
+                        printf("%d %s\nfcopy2 failed to copy file %s to %s\n", errno, strerror(errno), buffer1, buffer2);
+                        perror("Failed : simple_posix.c::fcopy2 copying file\n");
+                        flag = 1;
+                    }
+                    fclose(fout);
+                } else {
+                    printf("%d %s\nfcopy2 failed to open  file %s\n", errno, strerror(errno), buffer2);
+                    perror("Failed : simple_posix.c::fcopy2 opening output file\n");
+                    flag = 1;
+                }
+                fclose(fin);
+            } else {
+                printf("%d %s\nfcopy2 failed to open file %s\n", errno, strerror(errno), buffer1);
+                perror("Failed : simple_posix.c::fcopy2 ");
+                flag = 1;
+            }
+        } else {
+            printf("%d %s\nfcopy2 failed to stat file %s\n", errno, strerror(errno), buffer1);
+            perror("Failed : simple_posix.c::fcopy2 ");
+            flag = 1;
+        }
+        free(buffer1);
+        free(buffer2);
+    }
+    return flag;
+}
+
+char * lrealpath (const char *filename)
+{
+    /* Method 3: Now we're getting desperate!  The system doesn't have a
+       compile time buffer size and no alternative function.  Query the
+       OS, using pathconf(), for the buffer limit.  Care is needed
+       though, some systems do not limit PATH_MAX (return -1 for
+       pathconf()) making it impossible to pass a correctly sized buffer
+       to realpath() (it could always overflow).  On those systems, we
+       skip this.  */
+      /* Find out the max path size.  */
+      long path_max = pathconf ("/", _PC_PATH_MAX);
+      if (path_max > 0)
+        {
+  	/* PATH_MAX is bounded.  */
+  	char *buf, *rp, *ret;
+  	buf = (char *) malloc (path_max);
+  	if (buf == NULL)
+  	  return NULL;
+  	rp = realpath (filename, buf);
+  	ret = strdup (rp ? rp : filename);
+  	free (buf);
+  	return ret;
+        }
+}
 
 /**
  * returns a null-terminated string containing the canonicalized absolute pathname corresponding to path.
  */
-// int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t ivf_in)
-// {
-//     // realpath(in, resolved_path);
-//     //      printf("\n%s\n",resolved_path);
-//     //      return 0;
-//     char *filein = F90toCstring(in, *inlen);
-//     char *resolved = canonicalize_file_name(filein);
-// #if _DEBUG
-//     printf("DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
-//     printf("DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
-//     printf("DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
-//     printf("DEBUG: In get_absolute_pathname %30s: %zd\n", "strlen resolved", strlen(resolved));
-//     printf("DEBUG:In get_absolute_pathname %30s: %ld\n", "out addr", *out);
-// #endif
-//
-//     if(resolved == NULL) {
-//         printf("%d %s\nget_absolute_path failed to canonicalize  file %s\n", errno, strerror(errno), filein);
-//         perror("Failed : simple_posix.c::get_absolute_pathname ");
-//         return 1;
-//     }
-//     *outlen = strlen(resolved) ;
-//     strncpy(out, resolved, *outlen); for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
-//
-// #if _DEBUG
-//     printf("DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
-//     printf("DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
-// #endif
-//     char *out2 = c2fstr(resolved, out, *outlen, sizeof(resolved));
-//     out[0] = '/';
-//
-// #if _DEBUG
-//     printf("DEBUG: In get_absolute_pathname c2fstr: %s\n", out, out2);
-//     printf("DEBUG: In get_absolute_pathname %30s:%ld\n", " out path addr", *out);
-//     printf("DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
-// #endif
-//
-//     free(filein);
-//     free(resolved);
-//     //out = resolved;
-//     return 0;
-// }
+int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t ivf_in)
+{
+    // realpath(in, resolved_path);
+    //      printf("\n%s\n",resolved_path);
+    //      return 0;
+    char *filein = F90toCstring(in, *inlen);
+#if defined(HAVE_CANONICALIZE_FILE_NAME)
+    char *resolved = canonicalize_file_name(filein);
+#else
+    char *resolved = lrealpath(filein);
+#endif
+#if _DEBUG
+    printf("DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
+    printf("DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
+    printf("DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
+    printf("DEBUG: In get_absolute_pathname %30s: %zd\n", "strlen resolved", strlen(resolved));
+    printf("DEBUG:In get_absolute_pathname %30s: %ld\n", "out addr", *out);
+#endif
+
+    if(resolved == NULL) {
+        printf("%d %s\nget_absolute_path failed to canonicalize  file %s\n", errno, strerror(errno), filein);
+        perror("Failed : simple_posix.c::get_absolute_pathname ");
+        return 1;
+    }
+    *outlen = strlen(resolved) ;
+    strncpy(out, resolved, *outlen); for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
+
+#if _DEBUG
+    printf("DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
+    printf("DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
+#endif
+    char *out2 = c2fstr(resolved, out, *outlen, sizeof(resolved));
+    out[0] = '/';
+
+#if _DEBUG
+    printf("DEBUG: In get_absolute_pathname c2fstr: %s\n", out, out2);
+    printf("DEBUG: In get_absolute_pathname %30s:%ld\n", " out path addr", *out);
+    printf("DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
+#endif
+
+    free(filein);
+    free(resolved);
+    //out = resolved;
+    return 0;
+}
 
 // int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram, long* totalhigh)
 // {
