@@ -191,7 +191,7 @@ contains
             call cline%set('converged', 'no')
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_check_2Dconv NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_CHECK_2DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_2Dconv
 
     subroutine exec_rank_cavgs( self, cline )

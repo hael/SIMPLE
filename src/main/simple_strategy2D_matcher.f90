@@ -318,8 +318,6 @@ contains
         logical   :: do_center
         real      :: xyz(3)
         ! create the polarft_corrcalc object
-        print *,p%ctf
-
         call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)

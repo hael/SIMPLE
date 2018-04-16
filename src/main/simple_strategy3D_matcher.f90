@@ -23,16 +23,16 @@ use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
 use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
 use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
+use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy2D3D_common       ! use all in there
-
 implicit none
 
-public :: refine3D_exec!, gen_random_model
+public :: refine3D_exec
 public :: preppftcc4align, pftcc
 private
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
-logical, parameter             :: L_BENCH = .false.
+logical, parameter             :: L_BENCH = .false., DEBUG = .true.
 type(polarft_corrcalc), target :: pftcc
 integer, allocatable           :: pinds(:)
 logical, allocatable           :: ptcl_mask(:)
@@ -63,7 +63,6 @@ contains
         type(sym)             :: c1_symop
         type(prep4cgrid)      :: gridprep
         type(ctfparams)       :: ctfvars
-        character(len=STDLEN) :: refine
         real    :: frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
         integer :: batchlims(2)
@@ -90,11 +89,11 @@ contains
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         reslim   = p%lp
-        DebugPrint '*** strategy3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
+        if( DEBUG ) print *, '*** strategy3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(p%refine)
-            case('cluster', 'snhc', 'clustersym', 'clusterdev')
+            case('cluster', 'snhc', 'clustersym', 'clusterdev', 'cont_single')
                 npeaks = 1
             case DEFAULT
                 if( p%eo .ne. 'no' )then
@@ -103,7 +102,7 @@ contains
                     npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
                 endif
         end select
-        DebugPrint '*** strategy3D_matcher ***: determined the number of peaks'
+        if( DEBUG ) print *, '*** strategy3D_matcher ***: determined the number of peaks'
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
@@ -188,28 +187,21 @@ contains
         call preppftcc4align( b, p, cline )
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
-        write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        write(*,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
 
         ! STOCHASTIC IMAGE ALIGNMENT
         if( L_BENCH ) t_prep_primesrch3D = tic()
         ! clean big objects before starting to allocate new big memory chunks
-        call b%vol%kill
+        ! cannot kill b%vol since used in continuous search
         call b%vol2%kill
 
         ! array allocation for strategy3D
+        if( DEBUG ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D( b, p, ptcl_mask, npeaks )
+        if( DEBUG ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
         ! switch for polymorphic strategy3D construction
-        if( p%oritab.eq.'' )then
-            if( p%nstates==1 )then
-                refine = 'greedy_single'
-            else
-                stop 'Refinement mode unsupported'
-            endif
-        else
-            refine = p%refine
-        endif
-        select case(trim(refine))
+        select case(trim(p%refine))
             case('snhc')
                 allocate(strategy3D_snhc_single :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case('single')
@@ -231,6 +223,8 @@ contains
                 endif
             case('multi')
                 allocate(strategy3D_multi         :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+            case('cont_single')
+                allocate(strategy3D_cont_single   :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case('greedy_single')
                 allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case('greedy_multi')
@@ -238,12 +232,11 @@ contains
             case('cluster','clustersym','clusterdev')
                 allocate(strategy3D_cluster       :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
             case DEFAULT
-                write(*,*) 'refine flag: ', trim(refine)
+                write(*,*) 'refine flag: ', trim(p%refine)
                 stop 'Refinement mode unsupported'
         end select
         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::prime3D_exec strategy3D objects ",alloc_stat)
-        ! actual construction
-
+        ! construct search objects
         cnt = 0
         do iptcl=p%fromp,p%top
             if( ptcl_mask(iptcl) )then
@@ -258,14 +251,15 @@ contains
                 strategy3Dspec%ppftcc      => pftcc
                 strategy3Dspec%pa          => b%a
                 strategy3Dspec%pse         => b%se
-                if(allocated(b%nnmat))      strategy3Dspec%nnmat      => b%nnmat
-                if(allocated(b%grid_projs)) strategy3Dspec%grid_projs => b%grid_projs
-                if( allocated(het_mask) )   strategy3Dspec%do_extr    =  het_mask(iptcl)
-                if( allocated(symmat) )     strategy3Dspec%symmat     => symmat
+                if( allocated(b%nnmat) )      strategy3Dspec%nnmat      => b%nnmat
+                if( allocated(b%grid_projs) ) strategy3Dspec%grid_projs => b%grid_projs
+                if( allocated(het_mask) )     strategy3Dspec%do_extr    =  het_mask(iptcl)
+                if( allocated(symmat) )       strategy3Dspec%symmat     => symmat
                 ! search object
                 call strategy3Dsrch(iptcl)%new(strategy3Dspec, npeaks)
             endif
         end do
+        if( DEBUG ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
         ! memoize CTF matrices
         if( trim(p%oritype) .eq. 'ptcl3D' )then
             if( b%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl3D')
@@ -290,6 +284,8 @@ contains
         ! clean
         call clean_strategy3D()
         call pftcc%kill
+        call b%vol%kill
+        call b%vol_even%kill
         do iptcl = p%fromp,p%top
             if( ptcl_mask(iptcl) ) call strategy3Dsrch(iptcl)%kill
         end do
@@ -447,6 +443,8 @@ contains
                     !$omp end parallel do
                     ! copy even volume
                     b%vol_even = b%vol
+                    ! expand for fast interpolation
+                    call b%vol_even%expand_cmat(p%alpha)
                     call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
@@ -474,10 +472,6 @@ contains
                 !$omp end parallel do
             endif
         end do
-        ! cleanup
-        call b%vol%kill_expanded
-        ! bring back the original b%vol size
-        call b%vol%new([p%box,p%box,p%box], p%smpd)
 
         ! PREPARATION OF PARTICLES IN PFTCC
         ! prepare the polarizer images
@@ -496,7 +490,7 @@ contains
             call b%imgbatch(imatch)%kill
         end do
         deallocate(match_imgs, b%imgbatch)
-        DebugPrint '*** strategy3D_matcher ***: finished preppftcc4align'
+        if( DEBUG ) print *, '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
 end module simple_strategy3D_matcher

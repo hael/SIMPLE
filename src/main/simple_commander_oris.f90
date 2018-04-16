@@ -8,7 +8,6 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base
-!use simple_nrtxtfile,      only: nrtxtfile
 use simple_binoris_io      ! use all in there
 implicit none
 
@@ -21,7 +20,6 @@ public :: oristats_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
 private
-! #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: cluster_oris_commander
   contains

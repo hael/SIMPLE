@@ -1332,6 +1332,7 @@ select case(prg)
         !
         ! set required keys
         keys_required(1)  = 'ctf'
+        keys_required(2)  = 'projfile'
         ! set optional keys
         keys_optional(1)  = 'smpd'
         keys_optional(2)  = 'cs'
@@ -1347,7 +1348,7 @@ select case(prg)
         keys_optional(12) = 'angastunit'
         keys_optional(13) = 'phshiftunit'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:13))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:13))
         ! set defaults
         call cline%set('oritype', 'stk')
         ! execute

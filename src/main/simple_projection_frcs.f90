@@ -86,6 +86,8 @@ contains
         logical :: l_outside
         l_outside = .false.
         if( proj  < 1 .or. proj  > self%nprojs  )then
+            write(*,*) self%nprojs
+            write(*,*) 'exists: ', self%exists
             write(*,*) 'proj: ', proj
             l_outside = .true.
         endif

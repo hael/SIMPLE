@@ -1,9 +1,9 @@
 ! provides global distribution of constants and derived constants
 module simple_params
 include 'simple_lib.f08'
-use simple_ori,            only: ori
-use simple_cmdline,        only: cmdline
-use simple_binoris,        only: binoris
+use simple_ori,     only: ori
+use simple_cmdline, only: cmdline
+use simple_binoris, only: binoris
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none
@@ -564,7 +564,7 @@ contains
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
         call check_file('classdoc',       self%classdoc,     'T')
-        call check_file('ctf_estimate_doc',    self%ctf_estimate_doc,  'T', 'O')
+        call check_file('ctf_estimate_doc', self%ctf_estimate_doc,  'T', 'O')
         call check_file('comlindoc',      self%comlindoc,    'T')
         call check_file('deftab',         self%deftab,       'T', 'O')
         call check_file('doclist',        self%doclist,      'T')
@@ -774,7 +774,7 @@ contains
         endif
         ! determines whether at least one volume is on the cmdline
         do i=1,self%nstates
-            if( cline%defined( trim('vol')//int2str(i) ))vol_defined(i) = .true.
+            if( cline%defined( trim('vol')//int2str(i) )) vol_defined(i) = .true.
         enddo
         ! check inputted vols
         if( cline%defined('vollist') )then
@@ -793,7 +793,7 @@ contains
         endif
         ! check inputted mask vols
         if( cline%defined('msklist') )then
-            if( nlines(self%msklist)< MAXS )call read_masks
+            if( nlines(self%msklist)< MAXS ) call read_masks
         endif
         ! no stack given, get ldim from volume if present
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
@@ -876,7 +876,7 @@ contains
             ! get nptcls/box/smpd from project file
             call bos%open(trim(self%projfile))
             if( self%stream.eq.'no' )then
-                self%nptcls = bos%get_n_records(self%spproj_a_seg)
+                if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_a_seg)
                 call o%new_ori_clean
                 select case(self%spproj_a_seg)
                     case(MIC_SEG)
@@ -886,16 +886,9 @@ contains
                     case(OUT_SEG)
                         call bos%read_first_segment_record(OUT_SEG, o)
                 end select
-                if( o%isthere('smpd') )then
-                    self%smpd = o%get('smpd')
-                else
-!!!!!!!!!!!!!!!!!!!!!!!!!!! needs to be conditioned on something.....
-                    ! print *,'projfile exec requires smpd in mic or stk seg'
-                    ! stop 'ERROR! params :: new'
-                endif
-                ! box
+                if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
                 call bos%read_first_segment_record(STK_SEG, o)
-                if( o%isthere('box') ) self%box = nint(o%get('box'))
+                if( o%isthere('box') .and. .not. cline%defined('box')   ) self%box = nint(o%get('box'))
                 call o%kill
             else
                 ! nothing to do for streaming, values set at runtime
@@ -905,19 +898,27 @@ contains
                 case('ptcl2D', 'ptcl3D')
                     call bos%read_first_segment_record(STK_SEG, o)
             end select
-            self%tfplan%flag = 'no'
-            if( o%exists() )then
-                if( o%isthere('ctf') )then
-                    call o%getter('ctf', ctfflag)
-                    self%tfplan%flag = trim(ctfflag)
+            if( .not. cline%defined('ctf') )then
+                self%tfplan%flag = 'no'
+                if( o%exists() )then
+                    if( o%isthere('ctf') )then
+                        call o%getter('ctf', ctfflag)
+                        self%tfplan%flag = trim(ctfflag)
+                    endif
                 endif
-            endif
-            self%ctf = trim(self%tfplan%flag)
-            if( o%isthere('phaseplate') )then
-                call o%getter('phaseplate', phaseplate)
-                self%tfplan%l_phaseplate = trim(phaseplate).eq.'yes'
+                self%ctf = trim(self%tfplan%flag)
             else
-                self%tfplan%l_phaseplate = .false.
+                self%tfplan%flag = self%ctf
+            endif
+            if( .not. cline%defined('phaseplate') )then
+                if( o%isthere('phaseplate') )then
+                    call o%getter('phaseplate', phaseplate)
+                    self%tfplan%l_phaseplate = trim(phaseplate).eq.'yes'
+                else
+                    self%tfplan%l_phaseplate = .false.
+                endif
+            else
+                self%tfplan%l_phaseplate = trim(self%phaseplate).eq.'yes'
             endif
             call bos%close
         else if( self%stk .ne. '' )then
@@ -987,46 +988,28 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
-        ! self%l_stktab_input = .false.
-        if( cline%defined('stktab') )then
-            ! if( cline%defined('stk') )&
-            !     &stop 'stk and stktab cannot simultaneously be defined; params :: new'
-            ! ! prepare stktab handler and set everything accordingly in this instance
-            ! if( self%l_distr_exec )then
-            !     call self%stkhandle%new(trim(self%stktab), self%part)
-            ! else
-            !     call self%stkhandle%new(trim(self%stktab))
-            ! endif
-            ! self%nmics   = self%stkhandle%get_nmics()
-            ! self%nptcls  = self%stkhandle%get_nptcls()
-            ! self%ldim    = self%stkhandle%get_ldim()
-            ! self%ldim(3) = 1
-            ! self%box     = self%ldim(1)
-            ! self%l_stktab_input = .true.
-        else
-            if( ddel_scaled )then
-                ! delete possibly pre-existing scaled stack parts
-                call del_files(trim(STKPARTFBODY), self%nparts, ext=self%ext, suffix='_sc')
+        if( ddel_scaled )then
+            ! delete possibly pre-existing scaled stack parts
+            call del_files(trim(STKPARTFBODY), self%nparts, ext=self%ext, suffix='_sc')
+        endif
+        ! set name of partial files in parallel execution
+        stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
+        stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
+        self%stk_part     = stk_part_fname
+        if( self%autoscale .eq. 'yes' )then
+            if( file_exists(stk_part_fname_sc) )then
+                self%stk_part = stk_part_fname_sc
             endif
-            ! set name of partial files in parallel execution
-            stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
-            stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
-            self%stk_part     = stk_part_fname
-            if( self%autoscale .eq. 'yes' )then
-                if( file_exists(stk_part_fname_sc) )then
-                    self%stk_part = stk_part_fname_sc
-                endif
-            endif
-            call set_ldim_box_from_stk( self%stk )
-            self%box_original = self%box
-            if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
-                call set_ldim_box_from_stk( self%stk_part )
-                if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
-                    if( self%box /= self%box_original )then
-                        write(*,*) 'original box:                ', self%box_original
-                        write(*,*) 'box read from partial stack: ', self%box
-                        call simple_stop('dim mismatch; simple_params :: new')
-                    endif
+        endif
+        call set_ldim_box_from_stk( self%stk )
+        self%box_original = self%box
+        if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
+            call set_ldim_box_from_stk( self%stk_part )
+            if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
+                if( self%box /= self%box_original )then
+                    write(*,*) 'original box:                ', self%box_original
+                    write(*,*) 'box read from partial stack: ', self%box
+                    call simple_stop('dim mismatch; simple_params :: new')
                 endif
             endif
         endif

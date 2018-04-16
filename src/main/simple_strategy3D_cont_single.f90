@@ -59,11 +59,11 @@ contains
             cxy       = self%cont_srch%minimize(self%o, self%irot)
             self%corr = cxy(1)
             ! prepare weights and orientations
-            call self%oris_assign_cont_single
+            call self%oris_assign
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif
-        DebugPrint  '>>> STRATEGY3D_CONT_SINGLE :: FINISHED STOCHASTIC SEARCH'
+        DebugPrint  '>>> STRATEGY3D_CONT_SINGLE :: FINISHED CONTINUOUS SEARCH'
     end subroutine srch_cont_single
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
@@ -71,7 +71,7 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_cont_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: ws(1), dist_inpl, euldist, mi_proj, mi_inpl, mi_joint, frac
+        real      :: ws(1), dist_inpl, euldist, mi_proj, mi_inpl, mi_joint, frac, ang_sdev
         ! B factors
         ws = 1.0
         call fit_bfactors(self%s, ws)
@@ -87,15 +87,15 @@ contains
             mi_proj  = 1.
             mi_joint = mi_joint + 1.
         endif
-        if( self%irot == 0 .or. s%prev_roind == self%irot )then
+        if( self%irot == 0 .or. self%s%prev_roind == self%irot )then
             mi_inpl  = 1.
             mi_joint = mi_joint + 1.
         endif
         mi_joint = mi_joint / 2.
-        call s%a_ptr%set(s%iptcl, 'mi_proj',   mi_proj)
-        call s%a_ptr%set(s%iptcl, 'mi_inpl',   mi_inpl)
-        call s%a_ptr%set(s%iptcl, 'mi_state',  1.)
-        call s%a_ptr%set(s%iptcl, 'mi_joint',  mi_joint)
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_proj',   mi_proj)
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_inpl',   mi_inpl)
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_state',  1.)
+        call self%s%a_ptr%set(self%s%iptcl, 'mi_joint',  mi_joint)
         ! fraction of search space scanned
         frac = 100.
         ! set the distances before we update the orientation
@@ -114,7 +114,8 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'ow',        1.0)
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      0.)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    1.)
-        DebugPrint   '>>> STRATEGY3D_CONT_SINGLE :: EXECUTED ORIS_ASSIGN_cont_single'
+        ! transfer data to o_peaks
+        call o_peaks(self%s%iptcl)%set_ori(1,self%s%a_ptr%get_ori(self%s%iptcl))
     end subroutine oris_assign_cont_single
 
     subroutine kill_cont_single( self )

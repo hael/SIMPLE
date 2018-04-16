@@ -64,6 +64,8 @@ contains
         call opt_fact%new(self%ospec, self%nlopt)
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
+        ! set pointer to build
+        self%bp => b
         ! get # rotations
         self%nrots = pftcc%get_nrots()
         ! associate costfun
@@ -149,6 +151,9 @@ contains
         if( cost <= cost_init )then
             ! call the costfun to get the rotation index
             cost = self%costfun(self%ospec%x, self%ospec%ndim)
+
+            print *, 'cost_init/cost: ', cost_init, cost
+
             irot = self%irot
             ! set output
             cxy(1)  = -cost ! correlation

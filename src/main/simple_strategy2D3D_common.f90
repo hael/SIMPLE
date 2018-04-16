@@ -500,6 +500,9 @@ contains
         endif
         if( p%l_match_filt )then
             ! anisotropic matched filter
+
+            print *, 'prep2Dref, trying to get frc'
+
             call b%projfrcs%frc_getter(icls, p%hpind_fsc, p%tfplan%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
