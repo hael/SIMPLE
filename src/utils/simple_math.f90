@@ -2035,7 +2035,7 @@ contains
     end subroutine spiral_2d
 
     !>    is for calculating the radius
-    function hyp( x1, x2, x3 ) result( h )
+    pure function hyp( x1, x2, x3 ) result( h )
         real, intent(in) :: x1, x2
         real, intent(in), optional :: x3
         real :: h
@@ -2071,7 +2071,7 @@ contains
     pure function arg( vec ) result( length )
         real, intent(in) :: vec(:)
         real :: length
-        length = sqrt(sum(vec**2.))
+        length = sqrt(sum(vec*vec))
     end function arg
 
     !>   normalizes the length of a vector to 1

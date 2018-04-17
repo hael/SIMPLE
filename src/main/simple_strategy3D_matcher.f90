@@ -64,6 +64,7 @@ contains
         type(prep4cgrid)      :: gridprep
         type(ctfparams)       :: ctfvars
         real    :: frac_srch_space, reslim, extr_thresh, corr_thresh
+        real    :: bfac_rec, specscore_avg
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
         integer :: batchlims(2)
         logical :: doprint, do_extr, is_virgin
@@ -145,6 +146,19 @@ contains
             allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
             pinds = (/(i,i=p%fromp,p%top)/)
             ptcl_mask = .true.
+        endif
+
+        ! SPECSCORE & B-FACTOR RECONSTRUCTION
+        if( b%a%isthere('specscore') )then
+            specscore_avg = b%a%get_avg('specscore')
+            do iptcl = p%fromp,p%top
+                if( .not.ptcl_mask(iptcl) ) cycle
+                bfac_rec  = BSC * (b%a%get(iptcl,'specscore') - specscore_avg)
+                call b%a%set(iptcl, 'bfac_rec', bfac_rec)
+            enddo
+        else
+            specscore_avg = 0.
+            call b%a%set_all2single('bfac_rec', 0.)
         endif
 
         ! EXTREMAL LOGICS

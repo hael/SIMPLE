@@ -269,9 +269,11 @@ contains
         real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
-        integer   :: logi(3), phys(3), sh, i, h, k, nsym, isym, iwinsz, win(2,3)
+        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
         complex   :: comp, oshift
-        real      :: w(self%wdim,self%wdim,self%wdim), vec(3), loc(3), dists(3), shconst_here(2), arg, tval, tvalsq
+        real      :: w(self%wdim,self%wdim,self%wdim), vec(3), loc(3), dists(3), shconst_here(2)
+        real      :: bfac_rec, arg, tval, tvalsq, rsh_sq
+        logical   :: do_bfac_rec
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
@@ -280,6 +282,10 @@ contains
             tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
         endif
+        ! b-factor weighted recontruction inactive for now
+        do_bfac_rec = .false.
+        ! do_bfac_rec = o%isthere('bfac_rec')
+        if( do_bfac_rec )bfac_rec = o%get('bfac_rec')
         ! setup rotation matrices
         nsym = se%get_nsym()
         allocate(rotmats(nsym,3,3), source=0.0)
@@ -296,12 +302,13 @@ contains
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint. The speeduop
         ! (on 5000 images of betagal) is modest (10%) but significant
-        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys) proc_bind(close)
+        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys,rsh_sq) proc_bind(close)
         do isym=1,nsym
             !$omp do collapse(2) schedule(static)
             do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
                 do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                    sh = nint(hyp(real(h),real(k)))
+                    rsh_sq = real(h*h + k*k)
+                    sh     = nint(sqrt(rsh_sq))
                     if( sh > self%nyq + 1 ) cycle
                     logi = [h,k,0]
                     vec  = real(logi)
@@ -335,7 +342,11 @@ contains
                         tvalsq = tval
                     endif
                     ! (weighted) kernel values
-                    w = pwght
+                    if( do_bfac_rec )then
+                        w = pwght * exp(-bfac_rec/4. * rsh_sq/real(self%nyq*self%nyq))
+                    else
+                        w = pwght
+                    endif
                     do i=1,self%wdim
                         dists    = real(win(1,:) + i - 1) - loc
                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
@@ -651,7 +662,6 @@ contains
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
         type(ctfparams)  :: ctfvars
-        real             :: skewness
         integer          :: statecnt(p%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state

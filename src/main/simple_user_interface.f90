@@ -829,17 +829,18 @@ contains
         &'is used to produce class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &1, 4, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 5, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
         &'Output 2D references', 'xxx.mrc file with references', .false., '')
         ! parameter input/output
-        call make_cavgs%set_input('parm_ios', 1, ncls)
-        call make_cavgs%set_input('parm_ios', 2, 'mul', 'num', 'Shift multiplication factor',&
+        call make_cavgs%set_input('parm_ios', 1, projfile)
+        call make_cavgs%set_input('parm_ios', 2, ncls)
+        call make_cavgs%set_input('parm_ios', 3, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
-        call make_cavgs%set_input('parm_ios', 3, weights2D)
-        call make_cavgs%set_input('parm_ios', 4, remap_cls)
+        call make_cavgs%set_input('parm_ios', 4, weights2D)
+        call make_cavgs%set_input('parm_ios', 5, remap_cls)
         ! alternative inputs
         ! <empty>
         ! search controls

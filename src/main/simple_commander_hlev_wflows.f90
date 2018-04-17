@@ -330,16 +330,18 @@ contains
             smpd_target = p_master%smpd
             projfile    = p_master%projfile
         endif
+        ! prepare command lines from prototype for original scaling
+        cline_reconstruct3D   = cline
+        cline_project         = cline
+        ! updates scaling parameters
         call cline%set('projfile', trim(WORK_PROJFILE))
         call cline%set('msk',      msk)
         call cline%set('box',      real(box))
-        ! prepare command lines from prototype master
+        ! prepare command lines from prototype
         cline_refine3D_snhc   = cline
         cline_refine3D_init   = cline
         cline_refine3D_refine = cline
         cline_symsrch         = cline
-        cline_reconstruct3D   = cline
-        cline_project         = cline
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
         call cline_project%delete('nparts')
@@ -469,9 +471,9 @@ contains
             ! re-reconstruct volume
             call cline_reconstruct3D%set('projfile',WORK_PROJFILE)
             call xreconstruct3D%execute(cline_reconstruct3D)
-            status=simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+            status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         else
-            status=simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
+            status = simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
         endif
         call work_proj%kill()
         ! update the original project cls3D segment with orientations

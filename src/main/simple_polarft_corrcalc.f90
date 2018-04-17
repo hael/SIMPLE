@@ -113,6 +113,7 @@ type :: polarft_corrcalc
     procedure          :: zero_ref
     procedure          :: cp_even2odd_ref
     procedure          :: cp_even_ref2ptcl
+    procedure          :: swap_ptclsevenodd
     ! GETTERS
     procedure          :: get_pfromto
     procedure          :: get_nptcls
@@ -482,6 +483,12 @@ contains
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine cp_even_ref2ptcl
 
+    !>  \brief  swaps particles even/odd labels
+    subroutine swap_ptclsevenodd( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        self%iseven = .not.self%iseven
+    end subroutine swap_ptclsevenodd
+
     ! GETTERS
 
     !>  \brief  for getting the logical particle range
@@ -805,9 +812,9 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, i
+        integer,                 intent(in)    :: kstop
         complex(sp),             intent(out)   :: pft_ref(self%pftsz,self%kfromto(1):kstop)
         real(sp),                intent(out)   :: sqsum_ref
-        integer,                 intent(in)    :: kstop
         ! copy
         if( self%iseven(i) )then
             pft_ref = self%pfts_refs_even(iref,:,:)
@@ -822,8 +829,8 @@ contains
 
     subroutine calc_corrs_over_k( self, pft_ref, i, kstop, corrs_over_k )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         real,                    intent(out)   :: corrs_over_k(self%nrots)
         integer :: ithr, ik
         ! get thread index
@@ -886,8 +893,8 @@ contains
 
     function calc_corr_for_rot(self, pft_ref, i, kstop, irot) result(corr)
         class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, irot
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer :: rot
         real    :: corr
         complex :: tmp
@@ -918,7 +925,7 @@ contains
         integer,                 intent(in)    :: i, kstop, irot
         integer     :: rot
         real(dp)    :: corr
-        complex(sp) :: tmp
+        complex(dp) :: tmp
         tmp = 0.
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
@@ -1082,7 +1089,7 @@ contains
         integer     :: rot
         real(dp)    :: euclid
         complex(dp) :: tmp
-        tmp  = cmplx(0.d0,0.d0)
+        tmp  = cmplx(0.,0.,kind=dp)
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else

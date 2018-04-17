@@ -194,7 +194,7 @@ contains
                         write(*,*) 'Inputted projfile: ', trim(projfile)
                         stop 'has unsupported format'
                 end select
-                projname = get_fbody(projfile, '.simple')
+                projname = get_fbody(projfile, 'simple')
                 call self%projinfo%set(1, 'projname', trim(projname))
             endif
             if( cline%defined('projname') )then

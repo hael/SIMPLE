@@ -105,19 +105,11 @@ contains
                 enddo
             endif
         endif
-        self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))     ! in-plane angle index
-        self%prev_shvec = [self%a_ptr%get(self%iptcl,'x'),self%a_ptr%get(self%iptcl,'y')] ! shift vector
+        self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))  ! in-plane angle index
+        self%prev_shvec = self%a_ptr%get_2Dshift(self%iptcl)                           ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
-        ! calculate spectral score
-        self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
-        ! B-factor memoization
-        if( self%pftcc_ptr%objfun_is_ccres() )then
-            bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
-            call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
-            call self%a_ptr%set(self%iptcl, 'bfac', bfac)
-        endif
         ! calculate previous best corr (treshold for better)
         if( self%prev_class > 0 )then
             call self%pftcc_ptr%gencorrs(self%prev_class, self%iptcl, corrs)
@@ -127,6 +119,14 @@ contains
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_corr  = 0.
             self%best_corr  = 0.
+        endif
+        ! calculate spectral score
+        self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
+        ! B-factor memoization
+        if( self%pftcc_ptr%objfun_is_ccres() )then
+            bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
+            call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
+            call self%a_ptr%set(self%iptcl, 'bfac', bfac)
         endif
         if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
