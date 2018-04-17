@@ -94,7 +94,7 @@ contains
 
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
-        real :: corrs(self%pftcc_ptr%get_nrots()), bfac
+        real :: corrs(self%pftcc_ptr%get_nrots())
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index
         if( self%dyncls )then
@@ -112,6 +112,7 @@ contains
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
         if( self%prev_class > 0 )then
+            call memoize_bfac ! prior to any correlation calculation
             call self%pftcc_ptr%gencorrs(self%prev_class, self%iptcl, corrs)
             self%prev_corr  = max(0., corrs(self%prev_rot))
             self%best_corr  = self%prev_corr
@@ -119,16 +120,22 @@ contains
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_corr  = 0.
             self%best_corr  = 0.
+            call memoize_bfac
         endif
         ! calculate spectral score
         self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
-        ! B-factor memoization
-        if( self%pftcc_ptr%objfun_is_ccres() )then
-            bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
-            call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
-            call self%a_ptr%set(self%iptcl, 'bfac', bfac)
-        endif
         if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
+
+        contains
+
+            subroutine memoize_bfac
+                real :: bfac
+                if( self%pftcc_ptr%objfun_is_ccres() )then
+                    bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
+                    call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
+                    call self%a_ptr%set(self%iptcl, 'bfac', bfac)
+                endif
+            end subroutine memoize_bfac
     end subroutine prep4srch
 
     subroutine inpl_srch( self )
@@ -151,7 +158,7 @@ contains
 
     subroutine calc_corr( self )
         class(strategy2D_srch),   intent(inout) :: self
-        integer :: iref, prev_roind, state
+        integer :: prev_roind, state
         real    :: cc
         state = self%a_ptr%get_state(self%iptcl)
         if( state > 0 )then
