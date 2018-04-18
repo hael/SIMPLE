@@ -1027,10 +1027,11 @@ char * lrealpath (const char *filename)
         }
 }
 
+
 /**
  * returns a null-terminated string containing the canonicalized absolute pathname corresponding to path.
  */
-int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t ivf_in)
+int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 {
     // realpath(in, resolved_path);
     //      printf("\n%s\n",resolved_path);
@@ -1053,8 +1054,8 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t 
         return 1;
     }
     *outlen = strlen(resolved) ;
-    strncpy(out, resolved, *outlen); for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
-
+    strncpy(out, resolved, *outlen); //for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
+    out[*outlen]='\0';
 #if _DEBUG
     printf("DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
     printf("DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
@@ -1074,22 +1075,31 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t 
     return 0;
 }
 
-// int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram, long* totalhigh)
-// {
+ int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram, long* totalhigh)
+ {
 // #if _DEBUG
 //     printf("DEBUG: In  get_sysinfo\n");
 // #endif
-//
-//     struct sysinfo s;
-//     int i = sysinfo(&s);
-//     *totalram = s.totalram;           /* Total usable main memory size */
-//     //*freeram=s.freeram;               /* Available memory size */
-//     *sharedram = s.sharedram;       /* Amount of shared memory */
-//     *bufferram = s.bufferram;              /* Memory used by buffers */
-//     *totalhigh = s.totalhigh;              /* Total high memory size */
-//     *HWMusage = s.totalhigh - s.freehigh; /* high memory size used */
-//     return i;
-// }
+   #ifdef __APPLE__
+     *totalram = 0;           /* Total usable main memory size */
+
+     *sharedram = 0;       /* Amount of shared memory */
+     *bufferram = 0;              /* Memory used by buffers */
+     *totalhigh = 0;              /* Total high memory size */
+     *HWMusage = 0; /* high memory size used */
+     return 0;
+#else
+     struct sysinfo s;
+     int i = sysinfo(&s);
+     *totalram = s.totalram;           /* Total usable main memory size */
+     //*freeram=s.freeram;               /* Available memory size */
+     *sharedram = s.sharedram;       /* Amount of shared memory */
+     *bufferram = s.bufferram;              /* Memory used by buffers */
+     *totalhigh = s.totalhigh;              /* Total high memory size */
+     *HWMusage = s.totalhigh - s.freehigh; /* high memory size used */
+     return i;
+#endif
+ }
 
 int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {

@@ -3,10 +3,10 @@ module simple_fastkbinterpol
 use simple_defs
 implicit none
 
-public :: kbinterpol
+public :: fastkbinterpol
 private
 
-type :: kbinterpol
+type :: fastkbinterpol
    private
    real :: alpha, beta, betasq, oneoW, piW, twooW, W, Whalf, threshInstr
  contains
@@ -16,22 +16,22 @@ type :: kbinterpol
     procedure :: get_wdim
     procedure :: apod
     procedure :: instr
-end type kbinterpol
+end type fastkbinterpol
 
-interface kbinterpol
+interface fastkbinterpol
    module procedure constructor
-end interface kbinterpol
+end interface fastkbinterpol
 
 contains
 
     function constructor( Whalf_in, alpha_in ) result( self )
         real, intent(in) :: Whalf_in, alpha_in
-        type(kbinterpol) :: self
+        type(fastkbinterpol) :: self
         call self%new(Whalf_in, alpha_in)
     end function constructor
 
     subroutine new( self, Whalf_in, alpha_in )
-        class(kbinterpol), intent(inout) :: self
+        class(fastkbinterpol), intent(inout) :: self
         real,              intent(in)    :: Whalf_in, alpha_in
         self%Whalf  = Whalf_in
         self%alpha  = alpha_in
@@ -50,18 +50,18 @@ contains
     end subroutine new
 
     pure real function get_winsz( self )
-        class(kbinterpol), intent(in) :: self
+        class(fastkbinterpol), intent(in) :: self
         get_winsz = self%Whalf
     end function get_winsz
 
     pure real function get_alpha( self )
-        class(kbinterpol), intent(in) :: self
+        class(fastkbinterpol), intent(in) :: self
         get_alpha = self%alpha
     end function get_alpha
 
     pure integer function get_wdim( self )
         use simple_math, only: sqwin_1d
-        class(kbinterpol), intent(in) :: self
+        class(fastkbinterpol), intent(in) :: self
         integer :: win(2)
         call sqwin_1d(0., self%Whalf, win)
         get_wdim = win(2) - win(1) + 1
@@ -69,7 +69,7 @@ contains
 
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
     pure function apod( self, x ) result( r )
-        class(kbinterpol), intent(in) :: self
+        class(fastkbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: r, arg
         if( abs(x) > self%Whalf )then
@@ -83,7 +83,7 @@ contains
 
     !>  \brief  is the Kaiser-Bessel instrument function
     elemental function instr( self, x ) result( r )
-        class(kbinterpol), intent(in) :: self
+        class(fastkbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: r, arg1, arg2
         ! arg1 = self%piW * x

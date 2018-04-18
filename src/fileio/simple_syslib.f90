@@ -439,16 +439,16 @@ module simple_syslib
             integer(c_int), intent(in), value :: n
         end subroutine free_file_list
 
-!         function get_absolute_pathname(infile, inlen, outfile, outlen) bind(c,name="get_absolute_pathname")
-!             use, intrinsic :: iso_c_binding
-!             implicit none
-!             integer(c_int) :: get_absolute_pathname
-!             character(kind=c_char,len=1),dimension(*),intent(in) :: infile
-!             integer(c_int), intent(in) :: inlen  !> string lengths
-!             character(kind=c_char,len=1),dimension(*),intent(inout) :: outfile
-! !            type(c_ptr) :: outfile   !character(kind=c_char,len=1),dimension(*),intent(in) :: outfile
-!             integer(c_int), intent(out) :: outlen  !> string lengths
-!         end function get_absolute_pathname
+        function get_absolute_pathname(infile, inlen, outfile, outlen) bind(c,name="get_absolute_pathname")
+            use, intrinsic :: iso_c_binding
+            implicit none
+            integer(c_int) :: get_absolute_pathname
+            character(kind=c_char,len=1),dimension(*),intent(in) :: infile
+            integer(c_int), intent(in) :: inlen  !> string lengths
+            character(kind=c_char,len=1),dimension(*),intent(inout) :: outfile
+!            type(c_ptr) :: outfile   !character(kind=c_char,len=1),dimension(*),intent(in) :: outfile
+            integer(c_int), intent(out) :: outlen  !> string lengths
+        end function get_absolute_pathname
         function get_sysinfo(HWM, totRAM, shRAM, bufRAM, peakBuf) bind(c,name="get_sysinfo")
             use, intrinsic :: iso_c_binding
             implicit none
@@ -1503,7 +1503,9 @@ module simple_syslib
         logical            :: ifxst, debug
         debug=.false.
         valueRSS=-1    ! return negative number if not found
-
+        if(present(valuePeak))valuePeak=-1
+        if(present(valueSize))valueSize=-1
+        if(present(valueHWM))valueHWM=-1
         !--- get process ID
 
         pid=getpid()
@@ -1589,31 +1591,31 @@ module simple_syslib
     end subroutine simple_dump_mem_usage
 
 
-    ! function simple_full_path (infile) result(absolute_name)
-    !     character(len=*), intent(in)  :: infile
-    !     character(len=PATH_MAX) :: absolute_name
-    !     integer(1), dimension(:), pointer          :: iptr
-    !     type(c_ptr)                                :: cstring
-    !     character(kind=c_char), pointer            :: fstring(:)
-    !     integer :: slen, i
-    !     integer :: lengthin, status, lengthout
-    !     character(len=LINE_MAX_LEN), target :: fstr
-    !     character(kind=c_char,len=STDLEN)   :: infilename_c
-    !     character(kind=c_char,len=PATH_MAX) :: outfilename_c
-    !
-    !     lengthin = len_trim(infile)
-    !     cstring = c_loc(fstr)
-    !     infilename_c = trim(infile)//achar(0)
-    !     status = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
-    !     if(global_debug) print *, " out string ", trim(outfilename_c(1:lengthout))
-    !     if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
-    !     !   print *," fstr ", trim(adjustl(fstr))
-    !     if( lengthout > 1)then
-    !        absolute_name= trim(outfilename_c(1:lengthout))
-    !     else
-    !         absolute_name =infile
-    !     end if
-    ! end function simple_full_path
+    function simple_full_path (infile) result(absolute_name)
+        character(len=*), intent(in)  :: infile
+        character(len=PATH_MAX) :: absolute_name
+        integer(1), dimension(:), pointer          :: iptr
+        type(c_ptr)                                :: cstring
+        character(kind=c_char), pointer            :: fstring(:)
+        integer :: slen, i
+        integer :: lengthin, status, lengthout
+        character(len=LINE_MAX_LEN), target :: fstr
+        character(kind=c_char,len=STDLEN)   :: infilename_c
+        character(kind=c_char,len=PATH_MAX) :: outfilename_c
+    
+        lengthin = len_trim(infile)
+        cstring = c_loc(fstr)
+        infilename_c = trim(infile)//achar(0)
+        status = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
+        if(global_debug) print *, " out string ", trim(outfilename_c(1:lengthout))
+        if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
+        !   print *," fstr ", trim(adjustl(fstr))
+        if( lengthout > 1)then
+           absolute_name= trim(outfilename_c(1:lengthout))
+        else
+            absolute_name =infile
+        end if
+    end function simple_full_path
 
 
 end module simple_syslib

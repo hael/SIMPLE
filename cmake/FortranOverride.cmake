@@ -161,7 +161,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
   set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                # preprocessor flags
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
-  set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wtarget-lifetime -Wreal-q-constant")
+  set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wreal-q-constant")
   #  -Waliasing, -Wampersand, -Wconversion, -Wsurprising, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow, -Wline-truncation, -Wtarget-lifetime, -Winteger-division, -Wreal-q-constant
   # Wcompare-reals, -Wunused-parameter and -Wdo-subscript
   set(checks   " -frange-check -fstack-protector -fstack-check -fbounds-check ")                # checks
