@@ -1025,6 +1025,7 @@ char * lrealpath (const char *filename)
   	free (buf);
   	return ret;
         }
+      return filename;
 }
 
 

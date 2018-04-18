@@ -1577,6 +1577,9 @@ module simple_syslib
         integer               :: pid,unit
         logical               :: ifxst
 
+#ifdef MACOSX
+        return
+#endif
         !--- get process ID --  make thread safe
 
         !  omp critical dump_mem
