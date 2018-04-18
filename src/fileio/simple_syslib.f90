@@ -600,24 +600,29 @@ module simple_syslib
     end subroutine simple_touch
 
     !> \brief Copy file1 to file1
-    subroutine simple_copy_file(fname1, fname2, status)
+    subroutine syslib_copy_file(fname1, fname2, status)
         character(len=*), intent(in)           :: fname1, fname2 !< input filenames
         integer, intent(out), optional :: status
         character(kind=c_char, len=:), allocatable :: f1, f2
         character(len=1) c
         integer:: in, out, ioerr
-        status = 1
-        if(global_debug) print *,"In simple_copy_file"
-        allocate(f1, source=trim(adjustl(fname1))//achar(0))
-        allocate(f2, source=trim(adjustl(fname2))//achar(0))
-        status = fcopy(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
-        if (status/=0)&
-            call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
-            trim(fname2),__FILENAME__,__LINE__)
-        deallocate(f1,f2)
-    end subroutine simple_copy_file
+        status = 0
+        if(.not. file_exists(fname1) )&
+            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" does not exist",__FILENAME__,__LINE__)
+        if( dir_exists(fname1) )&
+            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
+        call exec_cmdline("cp "//trim(fname1)//" "//trim(fname2))
+        ! if(global_debug) print *,"In simple_copy_file"
+        ! allocate(f1, source=trim(adjustl(fname1))//achar(0))
+        ! allocate(f2, source=trim(adjustl(fname2))//achar(0))
+        ! status = fcopy(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
+        ! if (status/=0)&
+        !     call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
+        !     trim(fname2),__FILENAME__,__LINE__)
+        ! deallocate(f1,f2)
+    end subroutine syslib_copy_file
 
-    subroutine simple_copy_file_direct(fname1, fname2, status)
+    subroutine syslib_copy_file_direct(fname1, fname2, status)
         character(len=*), intent(in)           :: fname1, fname2 !< input filenames
         integer, intent(out), optional :: status
         character(kind=c_char, len=:), allocatable :: f1, f2
@@ -634,7 +639,7 @@ module simple_syslib
                     read(unit=in, rec=irec, iostat=ioerr) c
                     if (ioerr.ne.0) exit
                     write(unit=out, rec=i, iostat=ioerr) c
-                    if(ioerr/=0) call simple_stop("simple_syslib::simple_copy_file failed write char:"//c,&
+                    if(ioerr/=0) call simple_stop("simple_syslib::syslib_copy_file failed write char:"//c,&
                         __FILENAME__,__LINE__)
                     irec = irec + 1
                 end do
@@ -646,9 +651,9 @@ module simple_syslib
         else
             if(present(status))status=ioerr
         endif
-    end subroutine simple_copy_file_direct
+    end subroutine syslib_copy_file_direct
 
-    subroutine simple_copy_file_stream(fname1, fname2, status)
+    subroutine syslib_copy_file_stream(fname1, fname2, status)
         character(len=*), intent(in)           :: fname1, fname2 !< input filenames
         integer, intent(out), optional :: status
         character(kind=c_char, len=:), allocatable :: f1, f2
@@ -666,23 +671,23 @@ module simple_syslib
                     read(unit=in, iostat=ioerr) c
                     if (ioerr == 0) then
                         write(out, iostat=ioerr) c
-                        if(ioerr/=0) call simple_stop("simple_syslib::simple_copy_file failed write char:"//c,&
+                        if(ioerr/=0) call simple_stop("simple_syslib::syslib_copy_file failed write char:"//c,&
                             __FILENAME__,__LINE__)
                     endif
                 end do
                 close(in)
             else
-                print *,"In simple_copy_file, failed to open input file ", fname1
-                call simple_error_check(ioerr,"simple_copy_file input file not opened")
+                print *,"In syslib_copy_file, failed to open input file ", fname1
+                call simple_error_check(ioerr,"syslib_copy_file input file not opened")
                 if(present(status))status = ioerr
             end if
             close(out)
         else
-            print *,"In simple_copy_file, failed to open output file ", fname2
-            call simple_error_check(ioerr,"simple_copy_file output file not opened")
+            print *,"In syslib_copy_file, failed to open output file ", fname2
+            call simple_error_check(ioerr,"syslib_copy_file output file not opened")
             if(present(status))status = ioerr
         end if
-    end subroutine simple_copy_file_stream
+    end subroutine syslib_copy_file_stream
 
 
     !> \brief  Rename or move file
@@ -1056,7 +1061,7 @@ module simple_syslib
         if(stat/=0)call simple_stop("simple_syslib::simple_list_dirs failed to process list_dirs "//trim(pathhere),&
             __FILENAME__,__LINE__)
         if(present(outfile))then
-            call simple_copy_file('__simple_filelist__', trim(outfile))
+            call syslib_copy_file('__simple_filelist__', trim(outfile))
         endif
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(num_dirs) )
@@ -1087,93 +1092,101 @@ module simple_syslib
        ! type(c_ptr)                                         :: file_list_ptr
        ! character(kind=c_char,len=1), pointer, dimension(:) :: tmp
         character(len=STDLEN), allocatable :: list(:)
+         character(len=STDLEN), pointer :: plist(:)
         character(len=STDLEN)              :: cur
         character(len=1)                   :: sep='/'
         character(kind=c_char,len=:),allocatable  :: pathhere, thisglob, thisext !> pass these to C routines
         integer                            :: i,stat, luntmp
         integer(c_int)                     :: time_sorted_flag,num_files
-print *," in simple_list_files"
-        time_sorted_flag = 0
-        global_debug=.true.
-        pathhere= ""; thisglob=""; thisext=""
-        if(present(glob)) then
-            thisglob =trim(adjustl(glob))//achar(0)
-            if (global_debug) print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":"
-        else
-            thisglob =trim('*')//achar(0)
-        end if
-        if(present(path))then
-            if (global_debug) print *," In simple_syslib::simple_list_files path:", trim(path),":"
-            if (len_trim(path)==0)then
-                pathhere=trim("./")//achar(0)
-            elseif (index(trim(path),sep)==len_trim(path)) then
-                if (global_debug) &
-                print *," In simple_syslib::simple_list_files path is not empty and contains a slash"
-                pathhere =trim(adjustl(path))//achar(0)
-            else
-                if (global_debug) print *," In simple_syslib::simple_list_files appending a separator to path"
-                pathhere =trim(adjustl(path))//trim(sep)//achar(0)
-            end if
-            ! ext only has effect in path method
-            if(present(ext)) then
-                thisext=trim(ext)//achar(0)
-            else
-                thisext = ""//achar(0)
-            end if
-            if (global_debug) print *," In simple_syslib::simple_list_files pathhere:", trim(pathhere),":"
-        end if
-        !! Check both path and glob methods
-        if(present(path) .and. present(glob)) then
-            !deallocate(thisglob)
-            thisglob =trim(pathhere)//trim(thisglob)//achar(0)
-            if (global_debug) print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":"
-        else if(present(path) .and. (.not. present(glob))) then
-            ! path already set above
-        else if( (.not.present(path)) .and. present(glob)) then
-            ! glob already set above
-        else
-            call simple_stop("simple_syslib::simple_list_files Error must have either path or glob in args",&
-                __FILENAME__,__LINE__)
-        end if
-        time_sorted_flag = 0
-        if(present(tr)) then
-            if(tr) time_sorted_flag = 1 ! .eqv. .true.)
-        end if
-        print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":", " path:", trim(pathhere)
-
-        !! Arguments all parsed -- Calling get_file_list or glob_file_list
-        if(present(glob)) then
-            !! GLOB takes precedence over get_file_list
-            if(global_debug) print *, ' Calling  glob_file_list thisglob:', trim(thisglob),":"
-            stat = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
-        else
-            if(global_debug) print *, ' Calling  get_file_list pathhere:', trim(pathhere),":  ext:",trim(thisext),":"
-            if(time_sorted_flag == 1) then
-                stat = get_file_list_modified(trim(pathhere),trim(thisext), num_files, 3)
-            else
-                stat = get_file_list_modified(trim(pathhere),trim(thisext), num_files, 0)
-            end if
-        end if
-        if(stat/=0)call simple_stop("simple_syslib::simple_list_files failed to process file list "//trim(pathhere),&
-            __FILENAME__,__LINE__)
-        if(global_debug) print *, ' In simple_syslib::simple_list_files  num_files : ',  num_files
-
-        if(present(outfile))then
-            if(global_debug) print *, ' In simple_syslib::simple_list_files  outfile : ', outfile
-            if(file_exists(trim(outfile))) call del_file(trim(outfile))
-            call simple_copy_file('__simple_filelist__', trim(outfile))
-        endif
-
-        open(newunit = luntmp, file = '__simple_filelist__')
-        allocate( list(num_files) )
+        status=0
+        call simple_filetmp_list(trim(glob), plist)
+        num_files=size(plist)
+        allocate( list(num_files))
         do i = 1,num_files
-            read( luntmp, '(a)' ) list(i)
-        enddo
-        close( luntmp, status = 'delete' )
-        if(present(status)) status = stat
-        if(allocated(pathhere)) deallocate(pathhere)
-        if(allocated(thisglob)) deallocate(thisglob)
-        if(allocated(thisext)) deallocate(thisext)
+             list(i) = plist(i)
+         enddo
+!        !! print *," in simple_list_files"
+!         time_sorted_flag = 0
+!         global_debug=.true.
+!         pathhere= ""; thisglob=""; thisext=""
+!         if(present(glob)) then
+!             thisglob =trim(adjustl(glob))//achar(0)
+!             if (global_debug) print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":"
+!         else
+!             thisglob =trim('*')//achar(0)
+!         end if
+!         if(present(path))then
+!             if (global_debug) print *," In simple_syslib::simple_list_files path:", trim(path),":"
+!             if (len_trim(path)==0)then
+!                 pathhere=trim("./")//achar(0)
+!             elseif (index(trim(path),sep)==len_trim(path)) then
+!                 if (global_debug) &
+!                 print *," In simple_syslib::simple_list_files path is not empty and contains a slash"
+!                 pathhere =trim(adjustl(path))//achar(0)
+!             else
+!                 if (global_debug) print *," In simple_syslib::simple_list_files appending a separator to path"
+!                 pathhere =trim(adjustl(path))//trim(sep)//achar(0)
+!             end if
+!             ! ext only has effect in path method
+!             if(present(ext)) then
+!                 thisext=trim(ext)//achar(0)
+!             else
+!                 thisext = ""//achar(0)
+!             end if
+!             if (global_debug) print *," In simple_syslib::simple_list_files pathhere:", trim(pathhere),":"
+!         end if
+!         !! Check both path and glob methods
+!         if(present(path) .and. present(glob)) then
+!             !deallocate(thisglob)
+!             thisglob =trim(pathhere)//trim(thisglob)//achar(0)
+!             if (global_debug) print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":"
+!         else if(present(path) .and. (.not. present(glob))) then
+!             ! path already set above
+!         else if( (.not.present(path)) .and. present(glob)) then
+!             ! glob already set above
+!         else
+!             call simple_stop("simple_syslib::simple_list_files Error must have either path or glob in args",&
+!                 __FILENAME__,__LINE__)
+!         end if
+!         time_sorted_flag = 0
+!         if(present(tr)) then
+!             if(tr) time_sorted_flag = 1 ! .eqv. .true.)
+!         end if
+!         print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":", " path:", trim(pathhere)
+
+!         !! Arguments all parsed -- Calling get_file_list or glob_file_list
+!         if(present(glob)) then
+!             !! GLOB takes precedence over get_file_list
+!             if(global_debug) print *, ' Calling  glob_file_list thisglob:', trim(thisglob),":"
+!             stat = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
+!         else
+!             if(global_debug) print *, ' Calling  get_file_list pathhere:', trim(pathhere),":  ext:",trim(thisext),":"
+!             if(time_sorted_flag == 1) then
+!                 stat = get_file_list_modified(trim(pathhere),trim(thisext), num_files, 3)
+!             else
+!                 stat = get_file_list_modified(trim(pathhere),trim(thisext), num_files, 0)
+!             end if
+!         end if
+!         if(stat/=0)call simple_stop("simple_syslib::simple_list_files failed to process file list "//trim(pathhere),&
+!             __FILENAME__,__LINE__)
+!         if(global_debug) print *, ' In simple_syslib::simple_list_files  num_files : ',  num_files
+
+!         if(present(outfile))then
+!             if(global_debug) print *, ' In simple_syslib::simple_list_files  outfile : ', outfile
+!             if(file_exists(trim(outfile))) call del_file(trim(outfile))
+!             call syslib_copy_file('__simple_filelist__', trim(outfile))
+!         endif
+
+!         open(newunit = luntmp, file = '__simple_filelist__')
+!         allocate( list(num_files) )
+!         do i = 1,num_files
+!             read( luntmp, '(a)' ) list(i)
+!         enddo
+!         close( luntmp, status = 'delete' )
+!         if(present(status)) status = stat
+!         if(allocated(pathhere)) deallocate(pathhere)
+!         if(allocated(thisglob)) deallocate(thisglob)
+!         if(allocated(thisext)) deallocate(thisext)
     end function simple_list_files
 
 
@@ -1190,26 +1203,28 @@ print *," in simple_list_files"
         type(c_ptr)  :: file_list_ptr
         integer      :: i,num_files, luntmp, time_sorted_flag
         time_sorted_flag = 0 !   call simple_chdir(path, cur)
+        status=0
+        call exec_cmdline(trim(ls_command)//' -tr '//trim(glob)//' > '//trim(outfile))
         ! call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
-        if(len(glob)==0) then
-            allocate(thisglob, source=trim(glob)//achar(0))
-        else
-            allocate(thisglob, source='*'//achar(0))
-        end if
-        time_sorted_flag = 0
-        if(present(tr))then
-            if(tr) time_sorted_flag = 1
-        end if
-        if(global_debug) print *, 'Calling  glob_file_list ', trim(thisglob)
-        status = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
-        if(status/=0)call simple_stop("simple_syslib::simple_glob_list_files failed to process file list "//&
-            &trim(thisglob),__FILENAME__,__LINE__)
-        if(global_debug) print *, ' In simple_syslib::simple_glob_list_tofile  outfile : ', outfile
-        if(file_exists(trim(outfile))) call del_file(trim(outfile))
-        call simple_copy_file(trim('__simple_filelist__'), trim(outfile), status)
-        if(status/=0) call simple_stop("simple_syslib::simple_glob_list_files failed to copy tmpfile to "//&
-            &trim(outfile),__FILENAME__,__LINE__)
-        deallocate(thisglob)
+        ! if(len(glob)==0) then
+        !     allocate(thisglob, source=trim(glob)//achar(0))
+        ! else
+        !     allocate(thisglob, source='*'//achar(0))
+        ! end if
+        ! time_sorted_flag = 0
+        ! if(present(tr))then
+        !     if(tr) time_sorted_flag = 1
+        ! end if
+        ! if(global_debug) print *, 'Calling  glob_file_list ', trim(thisglob)
+        ! status = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
+        ! if(status/=0)call simple_stop("simple_syslib::simple_glob_list_files failed to process file list "//&
+        !     &trim(thisglob),__FILENAME__,__LINE__)
+        ! if(global_debug) print *, ' In simple_syslib::simple_glob_list_tofile  outfile : ', outfile
+        ! if(file_exists(trim(outfile))) call del_file(trim(outfile))
+        ! call syslib_copy_file(trim('__simple_filelist__'), trim(outfile), status)
+        ! if(status/=0) call simple_stop("simple_syslib::simple_glob_list_files failed to copy tmpfile to "//&
+        !     &trim(outfile),__FILENAME__,__LINE__)
+        ! deallocate(thisglob)
     end function simple_glob_list_tofile
 
 
@@ -1311,7 +1326,6 @@ print *," in simple_list_files"
 
         if ( glob_elems > 0) then
             do i=1, glob_elems
-                if(global_debug) print*, 'Checking deleted file or dir ', list(i)
                 if(file_exists(list(i))) then
                     print *, " failed to delete "//trim(list(i))
                     call simple_stop(" simple_syslib::simple_rm_force ",__FILENAME__,__LINE__)
@@ -1567,7 +1581,7 @@ print *," in simple_list_files"
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        command = 'grep -E "^(VmPeak|VmSize|VmHWM|VmRSS):"<'//trim(filename)//'|awk {a[NR-1]=$2}END{print a[0],a[1],a[2],a[3]} '
+        command = 'grep -E "^(VmPeak|VmSize|VmHWM|VmRSS):"<'//trim(filename)//'|awk "{a[NR-1]=\$2}END{print a[0],a[1],a[2],a[3]}" '
 !!         | awk {a[NR-1]=$2} END{print a[0],a[1],a[2],a[3]}
         if(present(dump_file)) command = trim(command)//' >> '//trim(dump_file)
         call exec_cmdline(trim(command))

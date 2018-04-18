@@ -52,6 +52,7 @@
 #define REMOVE_DIRECTORY remove_directory_
 #define RECURSIVE_DELETE recursive_delete_
 
+//#define __POSIX_PURE__
 /**
  *  \brief Protect fortran strings by appending '\0' to end
  *
@@ -724,7 +725,6 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
         return -1;
     }
     glob_t        globlist;
-    FILE* f;
     int err;
     err = 0;
 #if _DEBUG
@@ -735,7 +735,16 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
 
     int glob_val = glob(cmatch, 0, NULL, &globlist);
     free(cmatch);
-    f = fopen("__simple_filelist__", "w");
+    // Remove temp file if it exists
+    if(access("./__simple_filelist__", F_OK) != -1) {
+      if(remove("./__simple_filelist__") != 0) {
+        printf("%d %s\nglob_file_list failed to remove __simple_filelist__ in glob %s\n", errno, strerror(errno), cmatch);
+        perror("Failed : simple_posix.c::glob_file_list ");
+        return -1;
+      }
+    }
+
+    FILE* f = fopen("__simple_filelist__", "w");
     if(!f) {
         printf("%d %s\nglob_file_list failed to open __simple_filelist__\n", errno, strerror(errno));
         perror("Failed : simple_posix.c::glob_file_list 2");
@@ -767,6 +776,7 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
                 }
                 i++;
             }
+            /*
 #if 0
             (*results)[*count] = malloc(sizeof(char) * (*count));
             for(i = 0; i < *count; i++) {
@@ -783,6 +793,7 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
             }
             printf(" glob_file_list freeing globlist struct \n");
 #endif
+            */
         }
         fprintf(stderr, " glob_file_list size after trimming %d \n", *count);
     }
@@ -817,11 +828,9 @@ int subprocess(char* args, int* arglen, size_t ivf_cmd)
 
 int wait_pid(int* cpid )
 {
-
     int status;
     pid_t w;
     if (*cpid > 0) {
-
       do {
         w = waitpid((pid_t) *cpid, &status, WNOHANG | WUNTRACED | WCONTINUED);
         if (w == -1) {
@@ -843,6 +852,30 @@ int wait_pid(int* cpid )
 
     return (int) w;
 }
+
+
+#if defined(__POSIX_PURE__)
+#include <assert.h>
+int fcopy(char*file1, int*len1,char*file2,int*len2)
+{
+  char* cfile1 = F90toCstring(file1,*len1);
+  int infile = open(cfile1, O_RDONLY);free(cfile1);
+  assert(infile >= 0);
+  char*cfile2 = F90toCstring(file2,*len2);
+  int outfile = open(cfile2, O_CREAT|O_WRONLY);
+  free(cfile2);
+
+  assert(outfile >= 0);
+
+  char buf[4096];
+  while (1) {
+    ssize_t result = read(infile, &buf[0], sizeof(buf));
+    if (!result) break;
+    assert(result > 0);
+    assert(write(outfile, &buf[0], result) == result);
+  }
+}
+#else
 
 // Copy file in chunks of MAX_CHAR_FILENAME bytes
 int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
@@ -968,7 +1001,7 @@ int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
     }
     return flag;
 }
-
+#endif
 char * lrealpath (const char *filename)
 {
     /* Method 3: Now we're getting desperate!  The system doesn't have a
@@ -983,7 +1016,7 @@ char * lrealpath (const char *filename)
       if (path_max > 0)
         {
   	/* PATH_MAX is bounded.  */
-  	char *buf, *rp, *ret;
+          char *buf, *rp, *ret;
   	buf = (char *) malloc (path_max);
   	if (buf == NULL)
   	  return NULL;
@@ -1012,8 +1045,6 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t 
     printf("DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
     printf("DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
     printf("DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
-    printf("DEBUG: In get_absolute_pathname %30s: %zd\n", "strlen resolved", strlen(resolved));
-    printf("DEBUG:In get_absolute_pathname %30s: %ld\n", "out addr", *out);
 #endif
 
     if(resolved == NULL) {
@@ -1028,11 +1059,11 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen, size_t 
     printf("DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
     printf("DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
 #endif
-    char *out2 = c2fstr(resolved, out, *outlen, sizeof(resolved));
+    c2fstr(resolved, out, *outlen, sizeof(resolved));
     out[0] = '/';
 
 #if _DEBUG
-    printf("DEBUG: In get_absolute_pathname c2fstr: %s\n", out, out2);
+    printf("DEBUG: In get_absolute_pathname c2fstr: %s\n", out);
     printf("DEBUG: In get_absolute_pathname %30s:%ld\n", " out path addr", *out);
     printf("DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
 #endif

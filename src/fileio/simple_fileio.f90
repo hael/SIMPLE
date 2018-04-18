@@ -967,39 +967,47 @@ contains
         close( luntmp, status = 'delete' )
     end subroutine file_list_old
 
+    subroutine simple_copy_file(fname1, fname2, status)
+        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
+        integer, intent(out), optional :: status
+        character(len=STDLEN) :: cmd
+        status=0
+        cmd = 'cp '//trim(fname1)//'  '//trim(fname2)
+        call exec_cmdline(cmd)
+    end subroutine simple_copy_file
 
     subroutine ls_mrcfiletab( dir, filetabname )
         character(len=*),intent(in)  :: dir, filetabname
-        ! character(len=STDLEN) :: cmd
-        ! cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
-        ! call exec_cmdline(cmd)
+         character(len=STDLEN) :: cmd
+         cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
+         call exec_cmdline(cmd)
 
-        integer :: stat
-        stat = simple_glob_list_tofile(glob=trim(dir//'/*.mrc*'), outfile=trim(filetabname), tr=.true.)
-        if(stat/=0) call fileiochk("ls_mrcfiletab failed "//trim(dir))
+        ! integer :: stat
+        ! stat = simple_glob_list_tofile(glob=trim(dir//'/*.mrc*'), outfile=trim(filetabname), tr=.true.)
+        ! if(stat/=0) call fileiochk("ls_mrcfiletab failed "//trim(dir))
     end subroutine ls_mrcfiletab
 
     subroutine ls_fbody_mrcfiletab( fbody, filetabname )
         character(len=*),intent(in)  :: fbody, filetabname
-        ! character(len=STDLEN) :: cmd
-        ! cmd = 'ls -tr '//trim(fbody)//'*.mrc*'//' > '//trim(filetabname)
-        ! print *,trim(cmd)
-        ! call exec_cmdline(cmd)
+        character(len=STDLEN) :: cmd
+        cmd = 'ls -tr '//trim(fbody)//'*.mrc*'//' > '//trim(filetabname)
+        print *,trim(cmd)
+        call exec_cmdline(cmd)
 
-        integer :: stat
-        stat = simple_glob_list_tofile(glob=trim(fbody//'*.mrc*'), outfile=trim(filetabname), tr=.true.)
-        if(stat/=0) call fileiochk("ls_fbody_mrcfiletab failed "//trim(fbody))
+        ! integer :: stat
+        ! stat = simple_glob_list_tofile(glob=trim(fbody//'*.mrc*'), outfile=trim(filetabname), tr=.true.)
+        ! if(stat/=0) call fileiochk("ls_fbody_mrcfiletab failed "//trim(fbody))
     end subroutine ls_fbody_mrcfiletab
 
     subroutine ls_filetab( fbody, ext, filetabname )
         character(len=*), intent(in)  :: fbody, ext, filetabname
-        ! character(len=STDLEN) :: cmd
-        ! cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
-        ! call exec_cmdline(cmd)
+        character(len=STDLEN) :: cmd
+        cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
+        call exec_cmdline(cmd)
 
-        integer :: stat
-        stat = simple_glob_list_tofile(glob=trim(fbody)//'*.'//trim(ext), outfile=trim(filetabname), tr=.true.)
-        if(stat/=0) call fileiochk("ls_filetab failed "//trim(fbody))
+        ! integer :: stat
+        ! stat = simple_glob_list_tofile(glob=trim(fbody)//'*.'//trim(ext), outfile=trim(filetabname), tr=.true.)
+        ! if(stat/=0) call fileiochk("ls_filetab failed "//trim(fbody))
     end subroutine ls_filetab
 
     ! subroutine sys_del_files( fbody, ext )
