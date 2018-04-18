@@ -7845,7 +7845,7 @@ contains
                 if( doplot ) call img_2%vis
             endif
 
-            if( img%square_dims() )then
+            if( img%square_dims() .and. nthr_glob > 2 )then
                 write(*,'(a)') '**info(simple_image_unit_test, part 19): testing rotational averager'
                 call img%square( 10 )
                 if( doplot ) call img%vis
