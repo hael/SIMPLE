@@ -13,15 +13,15 @@ fi
 
 echo "${SIMPLE_PATH}"
 echo "${SIMPLE_TESTBENCH_DATA}"
-cd "${SIMPLE_TESTBENCH_DATA}"/bgal
+cd "${SIMPLE_TESTBENCH_DATA}"/betagal
 prime_cleanup.pl
 pkill simple_exec
 [ -d prime2D_bench ] && rm -rf prime2D_bench
 mkdir prime2D_bench && cd prime2D_bench
+simple_private_exec prg=import_particles ctf=yes cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc smpd=1.275 projfile=betagal.simple
+nohup simple_distr_exec prg=cluster2D projfile=betagal.simple nparts=2 nthr=4 ncls=100 msk=88
 
-nohup simple_distr_exec prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt > PRIME2D &
+#nohup simple_distr_exec prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt > PRIME2D &
 # BGAL
-
-
 
 ## valgrind --tool=cachegrind simple_exec  prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt
