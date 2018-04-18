@@ -27,11 +27,18 @@ echo " ## real 0m3.263s                                                         
 echo " ## user 0m47.543s                                                                "
 echo " ## sys 0m0.345s                                                                  "
 echo "                                                                                  "
-[ -f recvol_state01.mrc ] &&  rm -f recvol_state01.mrc
+
 #time simple_distr_exec prg=reconstruct3D ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
-time simple_private_exec prg=reconstruct3D ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
+[ ! -d reconstruct3D_test ] && mkdir reconstruct3D_test
+cd reconstruct3D_test
+[ -f recvol_state01.mrc ] &&  rm -f recvol_state01.mrc
+simple_private_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projfile=recvol.simple
+# cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc smpd=1.275 projfile=recvol.simple
+time simple_private_exec prg=reconstruct3D ctf=no msk=50 oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projfile=recvol.simple
 
 echo " ## >>> TESTING AGAINST REFERENCE IMAGE                                           "
 #[ -f recvol_diff.mrc ] &&  rm -f recvol_diff.mrc
 #simple_exec prg=image_diff stk=recvol_state01.mrc stk2=reference/recvol_state01.mrc outstk=recvol_diff.mrc
-chimera recvol_state01.mrc reference/recvol_state01.mrc
+if [ -z "${DISPLAY+defined}" ];then
+   chimera recvol_state01.mrc reference/recvol_state01.mrc
+fi
