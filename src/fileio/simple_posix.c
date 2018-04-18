@@ -30,6 +30,10 @@
 #include <ftw.h>
 #endif
 
+#if !defined(__APPLE__)
+#include <sys/sysinfo.h>
+#endif
+
 // testing for non-GNU systems #undef versionsort
 
 #define MAX_CHAR_FILENAME 256
@@ -1081,7 +1085,7 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 // #if _DEBUG
 //     printf("DEBUG: In  get_sysinfo\n");
 // #endif
-   #ifdef __APPLE__
+#ifdef __APPLE__
      *totalram = 0;           /* Total usable main memory size */
 
      *sharedram = 0;       /* Amount of shared memory */
