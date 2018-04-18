@@ -111,7 +111,7 @@ contains
     subroutine exec_cluster2D( self, cline )
         use simple_strategy2D_matcher, only: cluster2D_exec
         class(cluster2D_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
+        class(cmdline),             intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
         integer      ::  startit, ncls_from_refs, lfoo(3)

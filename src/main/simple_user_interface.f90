@@ -65,8 +65,11 @@ type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster_cavgs
+type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
+type(simple_program), target :: ctfops
 type(simple_program), target :: extract
+type(simple_program), target :: filter
 type(simple_program), target :: fsc
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
@@ -76,6 +79,7 @@ type(simple_program), target :: make_pickrefs
 type(simple_program), target :: mask
 type(simple_program), target :: motion_correct
 type(simple_program), target :: new_project_
+type(simple_program), target :: normalize_
 type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
@@ -84,19 +88,22 @@ type(simple_program), target :: project
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
+type(simple_program), target :: scale
+type(simple_program), target :: scale_project
 type(simple_program), target :: select_
 type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
 type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
-type(simple_program), target :: scale
-type(simple_program), target :: scale_project
+type(simple_program), target :: stack
+type(simple_program), target :: stackops
 type(simple_program), target :: volops
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
+type(simple_input_param) :: clip
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: eo
@@ -162,8 +169,11 @@ contains
         call new_cluster2D_stream
         call new_cluster3D
         call new_cluster_cavgs
+        call new_convert
         call new_ctf_estimate
+        call new_ctfops
         call new_extract
+        call new_filter
         call new_fsc
         call new_info_image
         call new_info_stktab
@@ -173,6 +183,7 @@ contains
         call new_mask
         call new_motion_correct
         ! call new_new_project
+        call new_normalize
         call new_pick
         call new_postprocess
         call new_preprocess
@@ -181,13 +192,15 @@ contains
         call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
+        call new_scale
+        call new_scale_project
         call new_select_
         call new_simulate_movie
         call new_simulate_noise
         call new_simulate_particles
         call new_simulate_subtomogram
-        call new_scale
-        call new_scale_project
+        call new_stack
+        call new_stackops
         call new_volops
         ! ...
     end subroutine make_user_interface
@@ -206,10 +219,16 @@ contains
                 ptr2prg => cluster3D
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
+            case('convert')
+                ptr2prg => convert
             case('ctf_estimate')
                 ptr2prg => ctf_estimate
+            case('ctfops')
+                ptr2prg => ctfops
             case('extract')
                 ptr2prg => extract
+            case('filter')
+                ptr2prg => filter
             case('fsc')
                 ptr2prg => fsc
             case('info_image')
@@ -228,6 +247,8 @@ contains
                 ptr2prg => motion_correct
             case('new_project')
                 ptr2prg => new_project_
+            case('normalize')
+                ptr2prg => normalize_
             case('pick')
                 ptr2prg => pick
             case('postprocess')
@@ -244,6 +265,10 @@ contains
                 ptr2prg => refine3D
             case('refine3D_init')
                 ptr2prg => refine3D_init
+            case('scale')
+                ptr2prg => scale
+            case('scale_project')
+                ptr2prg => scale_project
             case('select')
                 ptr2prg => select_
             case('simulate_movie')
@@ -254,10 +279,10 @@ contains
                 ptr2prg => simulate_particles
             case('simulate_subtomogram')
                 ptr2prg => simulate_subtomogram
-            case('scale')
-                ptr2prg => scale
-            case('scale_project')
-                ptr2prg => scale_project
+            case('stack')
+                ptr2prg => stack
+            case('stackops')
+                ptr2prg => stackops
             case('volops')
                 ptr2prg => volops
             case DEFAULT
@@ -286,13 +311,17 @@ contains
     subroutine list_shmem_prgs_in_ui
         write(*,'(A)') center%name
         write(*,'(A)') cluster_cavgs%name
+        write(*,'(A)') convert%name
+        write(*,'(A)') ctfops%name
         write(*,'(A)') extract%name
+        write(*,'(A)') filter%name
         write(*,'(A)') fsc%name
         write(*,'(A)') info_image%name
         write(*,'(A)') info_stktab%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
         write(*,'(A)') new_project_%name
+        write(*,'(A)') normalize_%name
         write(*,'(A)') postprocess%name
         write(*,'(A)') project%name
         write(*,'(A)') select_%name
@@ -301,6 +330,8 @@ contains
         write(*,'(A)') simulate_particles%name
         write(*,'(A)') simulate_subtomogram%name
         write(*,'(A)') scale%name
+        write(*,'(A)') stack%name
+        write(*,'(A)') stackops%name
         write(*,'(A)') volops%name
         stop
     end subroutine list_shmem_prgs_in_ui
@@ -375,6 +406,7 @@ contains
         call set_param(nptcls,         'nptcls',       'num',  'Number of particles', 'Number of particle images', '# particles', .true., 0.)
         call set_param(outstk,         'outstk',       'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
     end subroutine set_common_params
 
     subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
@@ -420,6 +452,7 @@ contains
     ! mask controls
     ! <empty>
     ! computer controls
+    ! <empty>
 
     subroutine new_center
         ! PROGRAM SPECIFICATION
@@ -635,6 +668,35 @@ contains
         call cluster_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cluster_cavgs
 
+    subroutine new_convert
+        ! PROGRAM SPECIFICATION
+        call convert%new(&
+        &'convert',&                                                    ! name
+        &'converts between SPIDER and MRC formats',&                    ! descr_short
+        &'is a program for converting between SPIDER and MRC formats',& ! descr_long
+        &'simple_exec',&                                                ! executable
+        &2, 0, 2, 0, 0, 0, 0, .false.)                                  ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call convert%set_input('img_ios', 1, outvol)
+        call convert%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        !<empty>
+        ! alternative inputs
+        call convert%set_input('alt_ios', 1, 'vol1', 'file', 'Volume', 'Volume to convert', &
+        & 'input volume e.g. vol.spi', .false., '')
+        call convert%set_input('alt_ios', 2, 'stk', 'file', 'Stack', 'Stack to convert',&
+        & 'input stack e.g. imgs.spi', .false., '')
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_convert
+
     subroutine new_ctf_estimate
         ! PROGRAM SPECIFICATION
         call ctf_estimate%new(&
@@ -666,18 +728,49 @@ contains
         call ctf_estimate%set_input('comp_ctrls', 2, nthr)
     end subroutine new_ctf_estimate
 
+    subroutine new_ctfops
+        ! PROGRAM SPECIFICATION
+        call ctfops%new(&
+        &'ctfops', &                                         ! name
+        &'is a program for applying CTF to stacked images',& ! descr_short
+        &'is a program for applying CTF to stacked images',& ! descr long
+        &'simple_exec',&                                     ! executable
+        &2, 4, 0, 0, 2, 0, 1, .false.)                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call ctfops%set_input('img_ios', 1, stk)
+        ctfops%img_ios(1)%required = .false.
+        call ctfops%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call ctfops%set_input('parm_ios', 1, smpd)
+        call ctfops%set_input('parm_ios', 2, 'neg', 'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call ctfops%set_input('parm_ios', 3, oritab)
+        call ctfops%set_input('parm_ios', 4, deftab)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        call ctfops%set_input('filt_ctrls', 1, ctf)
+        call ctfops%set_input('filt_ctrls', 2, bfac)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call ctfops%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_ctfops
+
     subroutine new_extract
         ! PROGRAM SPECIFICATION
         call extract%new(&
-        &'extract', & ! name
-        &'is a program that extracts particle images from integrated movies',&                  ! descr_short
-        &'Boxfiles are assumed to be in EMAN format but we provide a conversion script'//&      ! descr long
+        &'extract', &                                                                      ! name
+        &'is a program that extracts particle images from integrated movies',&             ! descr_short
+        &'Boxfiles are assumed to be in EMAN format but we provide a conversion script'//& ! descr long
         &' (relion2emanbox.pl) for *.star files containing particle coordinates obtained&
         & with Relion. In addition to one single-particle image stack per micrograph the&
         & program produces a parameter files that should be concatenated for use in&
         & conjunction with other SIMPLE programs.',&
-        &'simple_exec',&                                                                        ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true.)                                                           ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                                   ! executable
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -699,6 +792,42 @@ contains
         ! <empty>
     end subroutine new_extract
 
+    subroutine new_filter
+        ! PROGRAM SPECIFICATION
+        call filter%new(&
+        &'filter',&                                     ! name
+        &'filters stacks/volumes',&                     ! descr_short
+        &'is a program for filtering stacks/volumes',&  ! descr_long
+        &'simple_exec',&                                ! executable
+        &2, 1, 2, 0, 7, 0, 1, .false.)                  ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call filter%set_input('img_ios', 1, outstk)
+        call filter%set_input('img_ios', 2, outvol)
+        ! parameter input/output
+        call filter%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. refs.mrc',     .false., '')
+        call filter%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')
+        ! search controls
+        !<empty>
+        ! filter controls
+        call filter%set_input('filt_ctrls', 1, lp)
+        filter%filt_ctrls(1)%required = .false.
+        call filter%set_input('filt_ctrls', 2, hp)
+        call filter%set_input('filt_ctrls', 3, 'phrand', 'binary', 'Phase randomization', 'Fouirer phase randomization by white noise substitution(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call filter%set_input('filt_ctrls', 4, bfac)
+        call filter%set_input('filt_ctrls', 5, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'give winsz in pixels', .false., 1.0)
+        call filter%set_input('filt_ctrls', 6, 'width', 'num', 'Cosine low-pass filter falloff',&
+        &'Number of cosine edge pixels of Fourier low-pass filter in pixels', '# pixels cosine edge', .false., 10.)
+        call filter%set_input('filt_ctrls', 7, 'real_filter', 'binary', 'Real-space filter',&
+        &'Real-space filter(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call filter%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_filter
+
     subroutine new_fsc
         ! PROGRAM SPECIFICATION
         call fsc%new(&
@@ -706,7 +835,7 @@ contains
         &'calculattes the FSC between the two input volumes',&                  ! descr_short
         &'is a program for calculating the FSC between the two input volumes',& ! descr_long
         &'simple_exec',&                                                        ! executable
-        &2, 1, 0, 0, 0, 2, 1, .false.)
+        &2, 1, 0, 0, 0, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call fsc%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -1215,7 +1344,7 @@ contains
         ! PROGRAM SPECIFICATION
         call project%new(&
         &'project',&                           ! name
-        &'project volume',&                    ! descr_long
+        &'project volume',&                    ! descr_short
         &'is a program for projecting a volume using Fourier interpolation. Input is a SPIDER or &
         &MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections &
         &are generated by extracting central sections from the Fourier volume and back transforming the 2D FTs. &
@@ -1247,6 +1376,37 @@ contains
         ! computer controls
         call project%set_input('comp_ctrls', 1, nthr)
     end subroutine new_project
+
+    subroutine new_normalize
+        call normalize_%new(&
+        &'normalize',&                           ! name
+        &'normalize volume/stack',&              ! descr_short
+        &'is a program for normalization of MRC or SPIDER stacks and volumes. If you want to '&
+        &'normalize your images inputted with stk, set norm=yes. If you want to perform noise normalisation '&
+        &'of the images set noise_norm=yes given a mask radius msk (pixels). If you want to normalize '&
+        &'with respect to their power spectrum set shell_norm=yes',&
+        &'simple_exec',&                       ! executable
+        &0, 4, 2, 0, 0, 1, 1, .false.)         ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !<empty>
+        ! parameter input/output
+        call normalize_%set_input('parm_ios', 1, smpd)
+        call normalize_%set_input('parm_ios', 2, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}',     '(yes|no){no}', .false., 'no')
+        call normalize_%set_input('parm_ios', 3, 'noise_norm', 'binary', 'Noise normalize', 'Statistical normalization based on background(yes|no){no}',  '(yes|no){no}', .false., 'no')
+        call normalize_%set_input('parm_ios', 4, 'shell_norm', 'binary', 'Power whitening', 'Normalisation of each Fourier shell to power=1(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! alternative inputs
+        call normalize_%set_input('alt_ios', 1, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
+        call normalize_%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        call normalize_%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call normalize_%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_normalize
 
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
@@ -1365,6 +1525,70 @@ contains
         call refine3D_init%set_input('comp_ctrls', 1, nparts)
         call refine3D_init%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_init
+
+    subroutine new_scale
+        ! PROGRAM SPECIFICATION
+        call scale%new(&
+        &'scale', & ! name
+        &'is a program for re-scaling MRC & SPIDER stacks and volumes',&                        ! descr_short
+        &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
+        &'simple_exec',&                                                                        ! executable
+        &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call scale%set_input('parm_ios', 1, smpd)
+        call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
+        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
+        call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
+        call scale%set_input('parm_ios', 5, clip)
+        call scale%set_input('parm_ios', 6, outvol)
+        call scale%set_input('parm_ios', 7, outstk)
+        call scale%set_input('parm_ios', 8, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false., '')
+        ! alternative inputs
+        call scale%set_input('alt_ios', 1, stk)
+        scale%alt_ios(1)%required = .false.
+        call scale%set_input('alt_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
+        &'input volume e.g. vol.mrc', .false., '')
+        call scale%set_input('alt_ios', 3, 'filetab', 'file', 'Stacks list',&
+        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call scale%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_scale
+
+    subroutine new_scale_project
+        ! PROGRAM SPECIFICATION
+        call scale_project%new(&
+        &'scale', & ! name
+        &'is a program for re-scaling MRC & SPIDER stacks',&                               ! descr_short
+        &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
+        &'simple_exec',&                                                                   ! executable
+        &0, 2, 0, 0, 0, 0, 2, .false.)                                                     ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call scale_project%set_input('parm_ios', 1, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
+        call scale_project%set_input('parm_ios', 2, projfile)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call scale_project%set_input('comp_ctrls', 1, nparts)
+        call scale_project%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_scale_project
 
     subroutine new_select_
         ! PROGRAM SPECIFICATION
@@ -1533,69 +1757,75 @@ contains
         call simulate_subtomogram%set_input('comp_ctrls', 1, nthr)
     end subroutine new_simulate_subtomogram
 
-    subroutine new_scale
+    subroutine new_stack
         ! PROGRAM SPECIFICATION
-        call scale%new(&
-        &'scale', & ! name
-        &'is a program for re-scaling MRC & SPIDER stacks and volumes',&                        ! descr_short
-        &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
-        &'simple_exec',&                                                                        ! executable
-        &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group
+        call stack%new(&
+        &'stack',&                     ! name
+        &'stack images',&              ! descr_short
+        &'is a program for stacking individual images or multiple stacks into one',& ! descr_long
+        &'simple_exec',&               ! executable
+        &2, 2, 0, 0, 0, 0, 0, .false.) ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call stack%set_input('img_ios', 1, 'filetab', 'file', 'Stacks list',&
+        &'List of stacks of images to stack into one', 'list input e.g. stktab.txt', .true., '')
+        call stack%set_input('img_ios', 2, outstk)
         ! parameter input/output
-        call scale%set_input('parm_ios', 1, smpd)
-        call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
-        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
-        call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
-        call scale%set_input('parm_ios', 5, 'clip', 'num', 'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
-        call scale%set_input('parm_ios', 6, outvol)
-        call scale%set_input('parm_ios', 7, outstk)
-        call scale%set_input('parm_ios', 8, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false., '')
+        call stack%set_input('parm_ios', 1, smpd)
+        call stack%set_input('parm_ios', 2, clip)
         ! alternative inputs
-        call scale%set_input('alt_ios', 1, stk)
-        scale%alt_ios(1)%required = .false.
-        call scale%set_input('alt_ios', 2, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
-        &'input volume e.g. vol.mrc', .false., '')
-        call scale%set_input('alt_ios', 3, 'filetab', 'file', 'Stacks list',&
-        &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false., '')
+        !<empty>
         ! search controls
-        ! <empty>
+        !<empty>
         ! filter controls
-        ! <empty>
+        !<empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call scale%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_scale
+        ! <empty>
+    end subroutine new_stack
 
-    subroutine new_scale_project
+    subroutine new_stackops
         ! PROGRAM SPECIFICATION
-        call scale_project%new(&
-        &'scale', & ! name
-        &'is a program for re-scaling MRC & SPIDER stacks',&                               ! descr_short
-        &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
-        &'simple_exec',&                                                                   ! executable
-        &0, 2, 0, 0, 0, 0, 2, .false.)                                                     ! # entries in each group
+        call stackops%new(&
+        &'stack',&                                   ! name
+        &'is a program for standard stack editing',& ! descr_short
+        &'is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER '&
+        &'stacks. If you want to extract a particular state, give an alignment document (oritab) and set state '&
+        &'to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input '&
+        &'an alignment doc (oritab) and set frac. You can combine the state and frac options. If you '&
+        &'want to apply noise to images, give the desired signal-to-noise ratio via snr. If you want to calculate the autocorrelation '&
+        &'function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set '&
+        &'fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to '&
+        &'some nonzero integer number less than nptcls. With avg=yes the global average of the inputted stack is calculated. '&
+        &'If you define nframesgrp to some integer number larger than one averages with chunk sizes of nframesgrp are produced, '&
+        &'which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
+        &'simple_exec',&                             ! executable
+        &0, 0, 0, 0, 0, 0, 0, .false.)               ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call stackops%set_input('img_ios', 1, stk)
+        call stackops%set_input('img_ios', 2, outstk)
         ! parameter input/output
-        call scale_project%set_input('parm_ios', 1, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
-        call scale_project%set_input('parm_ios', 2, projfile)
+        call stackops%set_input('parm_ios', 1, smpd)
+        call stackops%set_input('parm_ios', 2, oritab)
+        call stackops%set_input('parm_ios', 3, mirr)
+        call stackops%set_input('parm_ios', 4, 'nran', 'num', 'Number of random samples', 'Number of images to randomly sample', '# random samples', .false., 0.)
+        call stackops%set_input('parm_ios', 5, frac)
+        call stackops%set_input('parm_ios', 6, 'state', 'num', 'State index', 'Index of state to extract', 'give state', .false., 1.)
+        call stackops%set_input('parm_ios', 7, 'class', 'num', 'Class index', 'Index of class to extract', 'give class', .false., 1.)
         ! alternative inputs
-        ! <empty>
+        !<empty>
         ! search controls
-        ! <empty>
+        !<empty>
         ! filter controls
-        ! <empty>
+        !<empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call scale_project%set_input('comp_ctrls', 1, nparts)
-        call scale_project%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_scale_project
+        ! <empty>
+
+    end subroutine new_stackops
 
     subroutine new_volops
         ! PROGRAM SPECIFICATION
@@ -1604,36 +1834,38 @@ contains
         &'is a program for standard volume editing',&                                             ! descr_short
         &'provides standard single-particle image processing routines to MRC or SPIDER volumes',& ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &2, 13, 0, 0, 2, 0, 1, .false.)                                                            ! # entries in each group
+        &2, 12, 0, 0, 3, 1, 1, .false.)                                                           ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volops%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to mask', &
-        & 'input volume e.g. vol.mrc', .false., '')
+        & 'input volume e.g. vol.mrc', .true., '')
         call volops%set_input('img_ios', 2, outvol)
         ! ! parameter input/output
         call volops%set_input('parm_ios', 1, smpd)
         volops%parm_ios(1)%required = .false.
         call volops%set_input('parm_ios', 2, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call volops%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast','Invert volume contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call volops%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast', 'Invert volume contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
         call volops%set_input('parm_ios', 4, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0.)
         call volops%set_input('parm_ios', 5, mirr)
-        call volops%set_input('parm_ios', 6, bfac)
-        call volops%set_input('parm_ios', 7, 'e1', 'num', 'Rotation along alpha','Alpha Euler angle', 'in degrees', .false., 0.)
-        call volops%set_input('parm_ios', 8, 'e2', 'num', 'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
-        call volops%set_input('parm_ios', 9, 'e3', 'num', 'Rotation along Psi','Psi Euler angle', 'in degrees', .false., 0.)
-        call volops%set_input('parm_ios',10, 'xsh', 'num', 'Translation along x-axis','Shift along X in pixels', 'in pixels', .false., 0.)
-        call volops%set_input('parm_ios',11, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0.)
-        call volops%set_input('parm_ios',12, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)
-        call volops%set_input('parm_ios',13, outfile)
+        call volops%set_input('parm_ios', 6, 'e1', 'num', 'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
+        call volops%set_input('parm_ios', 7, 'e2', 'num', 'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
+        call volops%set_input('parm_ios', 8, 'e3', 'num', 'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
+        call volops%set_input('parm_ios', 9, 'xsh', 'num', 'Translation along x-axis','Shift along X in pixels', 'in pixels', .false., 0.)
+        call volops%set_input('parm_ios',10, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0.)
+        call volops%set_input('parm_ios',11, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)
+        call volops%set_input('parm_ios',12, outfile)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
         call volops%set_input('filt_ctrls', 1, lp)
+        volops%filt_ctrls(1)%required = .false.
         call volops%set_input('filt_ctrls', 2, hp)
+        call volops%set_input('filt_ctrls', 3, bfac)
         ! mask controls
-        ! <empty>
+        call volops%set_input('mask_ctrls', 1, msk)
+        volops%mask_ctrls(1)%required = .false.
         ! computer controls
         call volops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_volops
@@ -2024,6 +2256,8 @@ contains
         get_nrequired_keys = nreq_counter(self%img_ios) + nreq_counter(self%parm_ios) +&
         &nreq_counter(self%alt_ios) + nreq_counter(self%srch_ctrls) + nreq_counter(self%filt_ctrls) +&
         &nreq_counter(self%mask_ctrls) + nreq_counter(self%comp_ctrls)
+        if( allocated(self%alt_ios) ) get_nrequired_keys = get_nrequired_keys + 1
+
 
         contains
 

@@ -8,7 +8,7 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_projector_hlev, only: project, rotvol
 use simple_ori,            only: ori
-!use simple_masker,         only: masker
+use simple_masker,         only: masker
 use simple_projector,      only: projector
 use simple_volprep,        only: read_and_prep_vol
 use simple_volpft_srch
@@ -62,7 +62,6 @@ contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
-        use simple_masker,         only: masker
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(params)      :: p
@@ -150,10 +149,9 @@ contains
     end subroutine exec_center
 
     subroutine exec_postprocess(self, cline)
-        use simple_estimate_ssnr,  only: fsc2optlp
-        use simple_masker,         only: masker
+        use simple_estimate_ssnr, only: fsc2optlp
         class(postprocess_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(cmdline),               intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
         type(image)       :: vol_copy, vol_filt
@@ -194,7 +192,7 @@ contains
             call b%vol%bp(0., p%lp)
         else
             write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
-            stop 'comple_commander_volops :: exec_postprocess'
+            stop 'simple_commander_volops :: exec_postprocess'
         endif
         call vol_copy%copy(b%vol)
         ! B-fact

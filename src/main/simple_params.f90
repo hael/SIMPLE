@@ -378,7 +378,6 @@ type :: params
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
     logical :: l_remap_cls    = .false.
-    ! logical :: l_stktab_input = .false.
     logical :: l_cc_objfun    = .true.
     logical :: l_cc_bfac      = .true.
     logical :: l_dev          = .false.
@@ -1013,7 +1012,7 @@ contains
                 endif
             endif
         endif
-        ! fractional search and volume update (nneds to be here for stktab exec route)
+        ! fractional search and volume update
         if( self%update_frac <= .99)then
             if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
             if( nint(self%update_frac*real(self%nptcls)) < 1 )&

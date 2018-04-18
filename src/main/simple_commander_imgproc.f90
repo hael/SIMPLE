@@ -621,7 +621,7 @@ contains
         type(params)                          :: p
         type(build)                           :: b
         integer                               :: nfiles, ldim(3), ifile, ifoo, nmovies, cnt
-        integer                               :: imovie, iframe, numlen, lfoo(3), nimgs, iimg
+        integer                               :: imovie, iframe, lfoo(3), nimgs, iimg
         character(len=STDLEN), allocatable    :: filenames(:)
         character(len=:), allocatable         :: moviename
         type(image)                           :: tmp, frameimg
@@ -633,67 +633,33 @@ contains
         call b%build_general_tbox(p,cline,do3d=.false.) ! general stuff built
         call read_filetable(p%filetab, filenames)
         nfiles = size(filenames)
-        DebugPrint  'read the filenames'
-        if( cline%defined('xdim') .and. cline%defined('ydim') )then
-            ldim = [p%xdim,p%ydim,1]
-        else
-            call find_ldim_nptcls(filenames(1),ldim,ifoo)
-            ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
-        endif
-        DebugPrint  'logical dimension: ', ldim
-        if( cline%defined('nframes') )then
-            if( .not. cline%defined('fbody') ) stop 'need fbody (file body of output stacks) on the command line'
-            if( mod(nfiles,p%nframes) .eq. 0 )then
-                ! fine, go ahead
-            else
-                stop 'Number of mrc files not a multiple of nframes!'
+        call find_ldim_nptcls(filenames(1),ldim,ifoo)
+        ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
+        p%box = ldim(1)
+        ! prepare b%img and tmp for reading
+        call b%img%new([p%box,p%box,1], p%smpd)
+        if( cline%defined('clip') ) call tmp%new([p%clip,p%clip,1], p%smpd)
+        ! loop over files
+        cnt = 0
+        do ifile=1,nfiles
+            if( .not. file_exists(filenames(ifile)) )then
+                write(*,*) 'inputted spec file does not exist: ', trim(adjustl(filenames(ifile)))
             endif
-            call frameimg%new(ldim,p%smpd)
-            nmovies = nfiles/p%nframes
-            if( cline%defined('numlen') )then
-                numlen = p%numlen
-            else
-                numlen = len(int2str(nmovies))
-            endif
-            ifile = 0
-            do imovie=1,nmovies
-                allocate(moviename, source=trim(adjustl(p%fbody))//int2str_pad(imovie, numlen)//'.mrcs')
-                call del_file(moviename)
-                do iframe=1,p%nframes
-                    ifile = ifile+1
-                    call progress(ifile, nfiles)
-                    call frameimg%read(filenames(ifile),1,readhead=.false.)
-                    call frameimg%write(moviename,iframe)
-                end do
-                deallocate(moviename)
-            end do
-        else
-            p%box = ldim(1)
-            ! prepare b%img and tmp for reading
-            call b%img%new([p%box,p%box,1], p%smpd)
-            if( cline%defined('clip') ) call tmp%new([p%clip,p%clip,1], p%smpd)
-            ! loop over files
-            cnt = 0
-            do ifile=1,nfiles
-                if( .not. file_exists(filenames(ifile)) )then
-                    write(*,*) 'inputted spec file does not exist: ', trim(adjustl(filenames(ifile)))
+            call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
+            do iimg=1,nimgs
+                cnt = cnt+1
+                call b%img%read(filenames(ifile), iimg, readhead=.false.)
+                if( cline%defined('clip') )then
+                    call b%img%clip(tmp)
+                    mm = tmp%minmax()
+                    DebugPrint 'min/max: ', mm(1), mm(2)
+                    call tmp%write(p%outstk, cnt)
+                else
+                    call b%img%write(p%outstk, cnt)
                 endif
-                call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
-                do iimg=1,nimgs
-                    cnt = cnt+1
-                    call b%img%read(filenames(ifile), iimg, readhead=.false.)
-                    if( cline%defined('clip') )then
-                        call b%img%clip(tmp)
-                        mm = tmp%minmax()
-                        DebugPrint 'min/max: ', mm(1), mm(2)
-                        call tmp%write(p%outstk, cnt)
-                    else
-                        call b%img%write(p%outstk, cnt)
-                    endif
-                end do
-                call progress(ifile, nfiles)
             end do
-        endif
+            call progress(ifile, nfiles)
+        end do
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
@@ -729,7 +695,7 @@ contains
             call os_ran%new(p%nran)
             do i=1,p%nran
                 call progress(i, p%nran)
-                call read_image(pinds(i))
+                call b%img%read(p%stk, pinds(i))
                 call b%img%write(p%outstk, i)
                 if( cline%defined('oritab') .or. cline%defined('deftab') )then
                     call os_ran%set_ori(i, b%a%get_ori(pinds(i)))
@@ -750,7 +716,7 @@ contains
                 do i=1,p%nptcls
                     cnt = cnt + 1
                     call progress(i, p%nptcls)
-                    call read_image(pinds(i))
+                    call b%img%read(p%stk, pinds(i))
                     call b%img%write(p%outstk, cnt)
                 end do
             endif
@@ -775,7 +741,7 @@ contains
                     s = nint(b%a%get(pinds(i), 'state'))
                     if( s == p%state )then
                         cnt = cnt+1
-                        call read_image(pinds(i))
+                        call b%img%read(p%stk, pinds(i))
                         call b%img%write(p%outstk, cnt)
                     endif
                 end do
@@ -798,7 +764,7 @@ contains
                     s = nint(b%a%get(pinds(i), 'class'))
                     if( s == p%class )then
                         cnt = cnt+1
-                        call read_image(pinds(i))
+                        call b%img%read(p%stk, pinds(i))
                         call b%img%write(p%outstk, cnt)
                     endif
                 end do
@@ -818,7 +784,7 @@ contains
                 o_here = oris(nincl)
                 do i=1,nincl
                     call progress(i, nincl)
-                    call read_image(pinds(i))
+                    call b%img%read(p%stk, pinds(i))
                     call b%img%write(p%outstk, i)
                     call o_here%set_ori(i, b%a%get_ori(pinds(i)))
                 end do
@@ -841,7 +807,7 @@ contains
                     s = nint(b%a%get(i, 'state'))
                     if( s == p%state )then
                         cnt = cnt+1
-                        call read_image(i)
+                        call b%img%read(p%stk, i)
                         call b%img%write(p%outstk, cnt)
                     endif
                 end do
@@ -864,7 +830,7 @@ contains
                     s = nint(b%a%get(i, 'class'))
                     if( s == p%class )then
                         cnt = cnt+1
-                        call read_image(i)
+                        call b%img%read(p%stk, i)
                         call b%img%write(p%outstk, cnt)
                     endif
                 end do
@@ -912,7 +878,7 @@ contains
         ! visualize
         if( p%vis .eq. 'yes' )then
             do i=1,p%nptcls
-                call read_image(i)
+                call b%img%read(p%stk, i)
                 call b%img%vis()
             end do
             goto 999
@@ -932,69 +898,10 @@ contains
             call copy_imgfile(p%stk, p%outstk, p%smpd, fromto=[p%fromp,p%top])
             goto 999
         endif
-        !set state flag on basis of ctfreslim and/or defocus limits
-        if( cline%defined('ctfreslim') .or. cline%defined('dfclose') .or. cline%defined('dffar')) then
-            if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_stackops'
-            !first do selection on basis of ctfreslim
-            if( cline%defined('ctfreslim') )then
-                cnt=0
-                do i=1,p%nptcls
-                    call progress(i, p%nptcls)
-                    p_ctf = (b%a%get(i, 'ctfres'))
-                    if( p_ctf > p%ctfreslim ) then
-                        cnt=cnt+1
-                        call b%a%set(i, 'state', 0.)
-                    endif
-                end do
-                print *, 'ctfreslim                  --> ptcls set state 1: ', (p%nptcls-cnt), ' ptcls set state 0: ', cnt
-            endif
-            !now select on defocus limits
-            if( cline%defined('dfclose') .and. .not. cline%defined('dffar') ) &
-                stop 'need both dfclose and dffar for state setting on basis of defocus values'
-            if( cline%defined('dffar') .and. .not. cline%defined('dfclose') ) &
-                stop 'need both dfclose and dffar for state setting on basis of defocus values'
-            if( cline%defined('dfclose') ) then
-                cnt2=0
-                do i=1,p%nptcls
-                    call progress(i, p%nptcls)
-                    p_dfx = (b%a%get(i, 'dfx'))
-                    if( (p_dfx < p%dfclose ) .or. (p_dfx > p%dffar) ) then
-                        cnt2=cnt2+1
-                        call b%a%set(i, 'state', 0.)
-                    endif
-                end do
-                print *, 'defocus limits             --> ptcls set state 1: ', (p%nptcls-cnt2), ' ptcls set state 0: ', cnt2
-            endif
-            !if both ctfreslim and defocus limits were set now work out the overall change in states and report on what has happened
-             if( cline%defined('ctfreslim') .and. cline%defined('dfclose')) then
-                cnt3=0
-                do i=1,p%nptcls
-                    ipst = b%a%get_state(i)
-                    if( ipst == 0) then
-                        cnt3 = cnt3+1
-                    endif
-                end do
-                print *, 'ctfreslim + defocus limits --> ptcls set state 1: ', (p%nptcls-cnt3), ' ptcls set state 0: ', cnt3
-            endif
-            ! write the oritab with appropriate states
-            call del_file(p%outfile)
-            call b%a%write(p%outfile, [1,p%nptcls])
-            goto 999
-        endif
         ! default
         write(*,*)'Nothing to do!'
         ! end gracefully
     999 call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
-
-    contains
-
-        subroutine read_image( iptcl )
-            integer, intent(in) :: iptcl
-            character(len=:), allocatable :: stkname
-            integer :: ind
-            call b%img%read(p%stk, iptcl)
-        end subroutine read_image
-
     end subroutine exec_stackops
 
 end module simple_commander_imgproc

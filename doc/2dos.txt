@@ -9,10 +9,14 @@ To consider:
 * Pawel says ranking different for Euclidean distance
 
 STRATEGY:
-
 * identify set of candidates with in-plane rotations using correlations
 * refine shifts using Euclidean distance
 * rank and calculate weights from Euclidean distances
+
+HYBRID SHC/CONTINUOUS
+* search all projections
+* always subject best to continuous, select say two most diverse among the improving ones as well for continuous refinement
+* how to deal with weights? Should probably include all local minima identified with BFGS as well
 
 
 TESTING
