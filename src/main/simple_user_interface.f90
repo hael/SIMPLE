@@ -5,7 +5,7 @@ implicit none
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
 private
 
-#include "simple_local_flags.inc"
+logical, parameter :: DEBUG = .false.
 
 type simple_input_param
     character(len=:), allocatable :: key
@@ -75,6 +75,7 @@ type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: make_cavgs
+type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
 type(simple_program), target :: mask
 type(simple_program), target :: motion_correct
@@ -84,6 +85,8 @@ type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
+type(simple_program), target :: print_fsc
+type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: project
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
@@ -91,6 +94,7 @@ type(simple_program), target :: refine3D_init
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: select_
+type(simple_program), target :: shift
 type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
 type(simple_program), target :: simulate_particles
@@ -100,6 +104,7 @@ type(simple_program), target :: stackops
 type(simple_program), target :: volops
 
 ! declare common params here, with name same as flag
+type(simple_input_param) :: angerr
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
@@ -124,6 +129,7 @@ type(simple_input_param) :: mirr
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: mw
+type(simple_input_param) :: neg
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nptcls
@@ -131,6 +137,7 @@ type(simple_input_param) :: ncls
 type(simple_input_param) :: nthr
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
+type(simple_input_param) :: oritype
 type(simple_input_param) :: outer
 type(simple_input_param) :: outfile
 type(simple_input_param) :: outstk
@@ -145,6 +152,7 @@ type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: remap_cls
+type(simple_input_param) :: sherr
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
 type(simple_input_param) :: stk
@@ -179,6 +187,7 @@ contains
         call new_info_stktab
         call new_initial_3Dmodel
         call new_make_cavgs
+        call new_make_oris
         call new_make_pickrefs
         call new_mask
         call new_motion_correct
@@ -188,6 +197,8 @@ contains
         call new_postprocess
         call new_preprocess
         call new_preprocess_stream
+        call new_print_fsc
+        call new_print_magic_boxes
         call new_project
         call new_reconstruct3D
         call new_refine3D
@@ -195,6 +206,7 @@ contains
         call new_scale
         call new_scale_project
         call new_select_
+        call new_shift
         call new_simulate_movie
         call new_simulate_noise
         call new_simulate_particles
@@ -203,13 +215,14 @@ contains
         call new_stackops
         call new_volops
         ! ...
+        if( DEBUG ) print *, '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
     subroutine get_prg_ptr( which_program, ptr2prg )
         character(len=*), intent(in)   :: which_program
         class(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
-        case('center')
+            case('center')
                 ptr2prg => center
             case('cluster2D')
                 ptr2prg => cluster2D
@@ -239,6 +252,8 @@ contains
                 ptr2prg => initial_3Dmodel
             case('make_cavgs')
                 ptr2prg => make_cavgs
+            case('make_oris')
+                ptr2prg => make_oris
             case('make_pickrefs')
                 ptr2prg => make_pickrefs
             case('mask')
@@ -257,6 +272,10 @@ contains
                 ptr2prg => preprocess
             case('preprocess_stream')
                 ptr2prg => preprocess_stream
+            case('print_fsc')
+                ptr2prg => print_fsc
+            case('print_magic_boxes')
+                ptr2prg => print_magic_boxes
             case('project')
                 ptr2prg => project
             case('reconstruct3D')
@@ -271,6 +290,8 @@ contains
                 ptr2prg => scale_project
             case('select')
                 ptr2prg => select_
+            case('shift')
+                ptr2prg => shift
             case('simulate_movie')
                 ptr2prg => simulate_movie
             case('simulate_noise')
@@ -318,13 +339,17 @@ contains
         write(*,'(A)') fsc%name
         write(*,'(A)') info_image%name
         write(*,'(A)') info_stktab%name
+        write(*,'(A)') make_oris%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
         write(*,'(A)') new_project_%name
         write(*,'(A)') normalize_%name
         write(*,'(A)') postprocess%name
+        write(*,'(A)') print_fsc%name
+        write(*,'(A)') print_magic_boxes%name
         write(*,'(A)') project%name
         write(*,'(A)') select_%name
+        write(*,'(A)') shift%name
         write(*,'(A)') simulate_movie%name
         write(*,'(A)') simulate_noise%name
         write(*,'(A)') simulate_particles%name
@@ -373,7 +398,7 @@ contains
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
         &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
-        'fraction of particles used(0.1-0.9){1.0}', .false., 1.0)
+        'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
         call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
@@ -398,15 +423,20 @@ contains
         call set_param(outvol,        'outvol',        'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
         call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
         &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
-        call set_param(job_memory_per_task, 'job_memory_per_task', 'str', 'Memory per part', 'Memory in MB per part in distributed execution{1600}', 'MB per part{1600}', .false., 1600.)
+        call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per part', 'Memory in MB per part in distributed execution{1600}', 'MB per part{1600}', .false., 1600.)
         call set_param(qsys_partition,'qsys_partition','str',    'Name of partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
         call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give yourpart', .false., '')
-        call set_param(box,            'box',          'num',  'Square image size','Square image size(in pixels)', 'in pixels', .true., 0.)
-        call set_param(nptcls,         'nptcls',       'num',  'Number of particles', 'Number of particle images', '# particles', .true., 0.)
-        call set_param(outstk,         'outstk',       'file', 'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
+        call set_param(box,            'box',          'num',    'Square image size','Square image size(in pixels)', '# pixels of box', .true., 0.)
+        call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
+        call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
+        call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error(in pixels)', .false., 0.)
+        call set_param(angerr,          'angerr',       'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error(in degrees)', .false., 0.)
+        call set_param(oritype,        'oritype',      'multi',  'Oritype segment in project',  'Oritype segment in project(ptcl2D|ptcl3D|cls3D){ptcl3D}', '(ptcl2D|ptcl3D|cls3D){ptcl3D}', .false., 'ptcl3D')
+        if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
     subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
@@ -817,7 +847,7 @@ contains
         call filter%set_input('filt_ctrls', 2, hp)
         call filter%set_input('filt_ctrls', 3, 'phrand', 'binary', 'Phase randomization', 'Fouirer phase randomization by white noise substitution(yes|no){no}', '(yes|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls', 4, bfac)
-        call filter%set_input('filt_ctrls', 5, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'give winsz in pixels', .false., 1.0)
+        call filter%set_input('filt_ctrls', 5, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'winsz in pixels', .false., 1.0)
         call filter%set_input('filt_ctrls', 6, 'width', 'num', 'Cosine low-pass filter falloff',&
         &'Number of cosine edge pixels of Fourier low-pass filter in pixels', '# pixels cosine edge', .false., 10.)
         call filter%set_input('filt_ctrls', 7, 'real_filter', 'binary', 'Real-space filter',&
@@ -982,6 +1012,46 @@ contains
         call make_cavgs%set_input('comp_ctrls', 1, nparts)
         call make_cavgs%set_input('comp_ctrls', 2, nthr)
     end subroutine new_make_cavgs
+
+    subroutine new_make_oris
+        ! PROGRAM SPECIFICATION
+        call make_oris%new(&
+        &'make_oris',&                       ! name
+        &'is used to produce orientations',& ! descr_short
+        &'is a program for making SIMPLE orientation files. Make_oris generates random Euler angles e1.in.[0,360], e2.in.[0,180] '&
+        &'and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number '&
+        &'> 0, the shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the orientations '&
+        &'produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane parameters '&
+        &'are assigned randomly. If even=yes, then all nptcls orientations are assigned quasi-even projection directions and '&
+        &'random in-plane parameters. If nstates is set to some integer number > 0, then states are assigned randomly .in.[1,nstates]',&
+        &'simple_exec',&                     ! executable
+        &0, 10, 0, 0, 0, 0, 1, .false.)      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !<empty>
+        ! parameter input/output
+        call make_oris%set_input('parm_ios', 1,  'nptcls', 'num', 'Number of per-particle orientations', 'Number of per-particle orientations to produce', '# per-ptcl oris', .true., 1.0)
+        call make_oris%set_input('parm_ios', 2,  'ncls', 'num', 'Number of random class labels', 'Number of random class labels to produce', '# classes', .false., 0.)
+        call make_oris%set_input('parm_ios', 3,  outfile)
+        call make_oris%set_input('parm_ios', 4,  'nstates', 'num', 'Number of random state labels', 'Number of random state labels to produce', '# states', .false., 0.0)
+        call make_oris%set_input('parm_ios', 5,  pgrp)
+        make_oris%parm_ios(5)%required = .false.
+        call make_oris%set_input('parm_ios', 6,  sherr)
+        call make_oris%set_input('parm_ios', 7,  angerr)
+        call make_oris%set_input('parm_ios', 8,  'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call make_oris%set_input('parm_ios', 9,  'ndiscrete', 'num', 'Number of discrete projection directions', 'Number of discrete projection directions to sample from', '# discrete projs', .false., 0.)
+        call make_oris%set_input('parm_ios', 10, oritype)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call make_oris%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_make_oris
 
     subroutine new_make_pickrefs
         ! PROGRAM SPECIFICATION
@@ -1194,7 +1264,7 @@ contains
         call postprocess%set_input('filt_ctrls', 3, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
         call postprocess%set_input('filt_ctrls', 4, 'vol_filt', 'file', 'Input filter volume', 'Input filter volume',&
         & 'input filter volume e.g. aniso_optlp_state01.mrc', .false., '')
-        call postprocess%set_input('filt_ctrls', 5, 'fsc', 'file', 'Binary file with FSC info', 'Binary file with FSC info&
+        call postprocess%set_input('filt_ctrls', 5, 'fsc', 'file', 'FSC file', 'Binary file with FSC info&
         & for filtering', 'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin')
         call postprocess%set_input('filt_ctrls', 6, bfac)
         call postprocess%set_input('filt_ctrls', 7, mirr)
@@ -1339,6 +1409,62 @@ contains
         call preprocess_stream%set_input('comp_ctrls', 1, nparts)
         call preprocess_stream%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess_stream
+
+    subroutine new_print_fsc
+        ! PROGRAM SPECIFICATION
+        call print_fsc%new(&
+        &'print_fsc', &                                                          ! name
+        &'prints the binary FSC files produced by REFINE3D',&                    ! descr_short
+        &'is a program for printing the binary FSC files produced by REFINE3D',& ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &0, 3, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !<empty>
+        ! parameter input/output
+        call print_fsc%set_input('parm_ios', 1, smpd)
+        call print_fsc%set_input('parm_ios', 2, box)
+        call print_fsc%set_input('parm_ios', 3, 'fsc', 'file', 'FSC file', 'Binary file with FSC info',&
+        'input binary file e.g. fsc_state01.bin', .true., 'fsc_state01.bin')
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_print_fsc
+
+    subroutine new_print_magic_boxes
+        ! PROGRAM SPECIFICATION
+        call print_magic_boxes%new(&
+        &'print_magic_boxes', &                                   ! name
+        &'prints magic boxes(fast FFT)',&                         ! descr_short
+        &'is a program for printing magic box sizes (fast FFT)',& ! descr_long
+        &'simple_exec',&                                          ! executable
+        &0, 3, 0, 0, 0, 0, 0, .false.)                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        !<empty>
+        ! parameter input/output
+        call print_magic_boxes%set_input('parm_ios', 1, smpd)
+        call print_magic_boxes%set_input('parm_ios', 2, box)
+        call print_magic_boxes%set_input('parm_ios', 3, 'moldiam', 'num', 'Molecular diameter', 'Molecular diameter(in pixels)',&
+        'give # pixels of diameter', .false., 140.)
+        ! alternative inputs
+        !<empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_print_magic_boxes
 
     subroutine new_project
         ! PROGRAM SPECIFICATION
@@ -1623,6 +1749,36 @@ contains
         call select_%set_input('comp_ctrls', 1, nthr)
     end subroutine new_select_
 
+    subroutine new_shift
+        ! PROGRAM SPECIFICATION
+        call shift%new(&
+        &'shift',&                                                                           ! name
+        &'shift images to rotational origin',&                                               ! descr_short
+        &'is a program for shifting a stack according to origin shifts in oritab/projfile',& ! descr_long
+        &'simple_exec',&                                                                     ! executable
+        &3, 3, 0, 0, 0, 0, 1, .false.)                                                       ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call shift%set_input('img_ios', 1, stk)
+        shift%img_ios(1)%required = .true.
+        call shift%set_input('img_ios', 2, outstk)
+        call shift%set_input('img_ios', 3, oritab)
+        ! parameter input/output
+        call shift%set_input('parm_ios', 1, smpd)
+        call shift%set_input('parm_ios', 2, 'mul',     'num',   'Shift multiplication factor', 'Shift multiplication factor{1.0}', 'multiplier', .false., 1.0)
+        call shift%set_input('parm_ios', 3, oritype)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        !<empty>
+        ! filter controls
+        !<empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call shift%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_shift
+
     subroutine new_simulate_movie
         ! PROGRAM SPECIFICATION
         call simulate_movie%new(&
@@ -1708,8 +1864,8 @@ contains
         call simulate_particles%set_input('parm_ios', 4,  oritab)
         call simulate_particles%set_input('parm_ios', 5,  outfile)
         call simulate_particles%set_input('parm_ios', 6,  outstk)
-        call simulate_particles%set_input('parm_ios', 7,  'ndiscrete', 'num', '# discrete projection directions', 'Number of discrete projection directions used in simulation', '# discrete projs', .false., 0.)
-        call simulate_particles%set_input('parm_ios', 8,  'sherr',     'num', 'Shift error', 'Rotational origin shift error(in pixels)', 'shift error(in pixels)', .false., 0.)
+        call simulate_particles%set_input('parm_ios', 7,  'ndiscrete', 'num', 'Number of discrete projection directions', 'Number of discrete projection directions used in simulation', '# discrete projs', .false., 0.)
+        call simulate_particles%set_input('parm_ios', 8,  sherr)
         call simulate_particles%set_input('parm_ios', 9,  kv)
         call simulate_particles%set_input('parm_ios', 10, cs)
         call simulate_particles%set_input('parm_ios', 11, fraca)
@@ -1801,19 +1957,30 @@ contains
         &'If you define nframesgrp to some integer number larger than one averages with chunk sizes of nframesgrp are produced, '&
         &'which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
-        &0, 0, 0, 0, 0, 0, 0, .false.)               ! # entries in each group
+        &2, 17, 0, 0, 0, 0, 1, .false.)               ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%set_input('img_ios', 1, stk)
+        stackops%img_ios(1)%required = .true.
         call stackops%set_input('img_ios', 2, outstk)
         ! parameter input/output
-        call stackops%set_input('parm_ios', 1, smpd)
-        call stackops%set_input('parm_ios', 2, oritab)
-        call stackops%set_input('parm_ios', 3, mirr)
-        call stackops%set_input('parm_ios', 4, 'nran', 'num', 'Number of random samples', 'Number of images to randomly sample', '# random samples', .false., 0.)
-        call stackops%set_input('parm_ios', 5, frac)
-        call stackops%set_input('parm_ios', 6, 'state', 'num', 'State index', 'Index of state to extract', 'give state', .false., 1.)
-        call stackops%set_input('parm_ios', 7, 'class', 'num', 'Class index', 'Index of class to extract', 'give class', .false., 1.)
+        call stackops%set_input('parm_ios', 1,  smpd)
+        call stackops%set_input('parm_ios', 2,  oritab)
+        call stackops%set_input('parm_ios', 3,  mirr)
+        call stackops%set_input('parm_ios', 4,  'nran',  'num', 'Number of random samples', 'Number of images to randomly sample', '# random samples', .false., 0.)
+        call stackops%set_input('parm_ios', 5,  frac)
+        call stackops%set_input('parm_ios', 6,  'state', 'num', 'State index', 'Index of state to extract', 'give state', .false., 1.)
+        call stackops%set_input('parm_ios', 7,  'class', 'num', 'Class index', 'Index of class to extract', 'give class', .false., 1.)
+        call stackops%set_input('parm_ios', 8,  neg)
+        call stackops%set_input('parm_ios', 9,  'acf',   'binary', 'Autocorrelation, A * conjg(A)', 'Generate autocorrelation function: A * conjg(A)(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 10, 'avg',   'binary', 'Average stack', 'Generate global stack average(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 11, 'nframesgrp', 'num', 'Number of stack entries to group & average', 'Number of stack entries to group & average{0}', '# frames', .false., 0.)
+        call stackops%set_input('parm_ios', 12, 'vis',   'binary', 'Visualize stack images', 'Visualize stack images with gnuplot(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 13, 'snr',   'num', 'Apply noise to give SNR', 'Apply noise to give this signal-to-noise ratio of output', 'signal-to-noise ratio(0.)', .false., 0.)
+        call stackops%set_input('parm_ios', 14, 'fromp', 'num', 'From particle index', 'Start index for stack copy', 'start index', .false., 1.0)
+        call stackops%set_input('parm_ios', 15, 'top',   'num', 'To particle index', 'Stop index for stack copy', 'stop index', .false., 1.0)
+        call stackops%set_input('parm_ios', 16, outfile)
+        call stackops%set_input('parm_ios', 17, 'stats', 'binary', 'Provide statistics', 'Provide statistics about images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         !<empty>
         ! search controls
@@ -1823,8 +1990,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! <empty>
-
+        call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
 
     subroutine new_volops

@@ -57,7 +57,6 @@ type :: oris
     procedure, private :: calc_nonzero_sum
     procedure          :: get_nonzero_sum
     procedure          :: get_nonzero_avg
-    procedure          :: extract_table
     procedure          :: ang_sdev
     procedure          :: included
     procedure          :: get_nevenodd
@@ -132,7 +131,6 @@ type :: oris
     procedure          :: expand_classes
     procedure          :: fill_empty_classes
     procedure          :: remap_cls
-    procedure          :: create_conforming_npeaks_set
     procedure          :: merge_classes
     procedure          :: round_shifts
     procedure          :: introd_alig_err
@@ -147,7 +145,6 @@ type :: oris
     procedure          :: spiral_1
     procedure          :: spiral_2
     generic            :: spiral => spiral_1, spiral_2
-    procedure          :: qspiral
     procedure          :: order
     procedure          :: order_corr
     procedure          :: order_cls
@@ -185,13 +182,8 @@ type :: oris
     procedure          :: mirror3d
     procedure          :: add_shift2class
     procedure, nopass  :: corr_oris
-    procedure          :: gen_diverse
-    procedure          :: gen_diversity_score
-    procedure          :: gen_diversity_scores
-    procedure          :: ori_generator
     procedure          :: gen_smat
     procedure          :: geodesic_dist
-    procedure          :: gen_subset
     procedure, private :: diststat_1
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
@@ -204,11 +196,6 @@ end type oris
 interface oris
     module procedure constructor
 end interface oris
-
-type(oris), pointer  :: ops  =>null()
-logical, allocatable :: class_part_of_set(:)
-real,    allocatable :: class_weights(:)
-type(ori)            :: o_glob
 
 contains
 
@@ -781,50 +768,6 @@ contains
         deallocate(clspops)
     end subroutine remap_cls
 
-    !>  \brief  is for contracting/expanding the ori set in self to make
-    !!          a set of conforming size
-    function create_conforming_npeaks_set( self, npeaks ) result( os_conf )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: npeaks
-        real, allocatable :: ows(:)
-        type(ori)         :: o_template
-        type(oris)        :: os_conf
-        integer           :: inds(self%n), i, cnt
-        if( .not. self%isthere('ow') )&
-        &call simple_stop('orientation weights (ow) needs to be set; oris :: create_conforming_npeaks_set')
-        if( self%n == npeaks )then
-            ! set is conforming
-            os_conf = self
-        else if( self%n > npeaks )then
-            ! shrink set
-            !$ allocate(ows(self%n))
-            ows  = self%get_all('ow')
-            inds = (/(i,i=1,self%n)/)
-            call hpsort(ows, inds)
-            cnt = 0
-            do i=self%n,self%n - npeaks + 1,-1
-                cnt = cnt + 1
-                os_conf%o(cnt) = self%o(inds(i))
-            end do
-        else
-            ! expand set
-            o_template = self%o(1)
-            call o_template%set_euler([0.,0.,0.])
-            call o_template%set_shift([0.,0.])
-            call o_template%set('state', 0.0)
-            call o_template%set('ow', 0.0)
-            call os_conf%new(npeaks)
-            do i=1,npeaks
-                if( i <= self%n )then
-                    os_conf%o(i) = self%o(i)
-                else
-                    os_conf%o(i) = o_template
-                endif
-            end do
-        endif
-        if(allocated(ows))deallocate(ows)
-    end function create_conforming_npeaks_set
-
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
     subroutine get_pinds( self, ind, label, indices, consider_w )
         class(oris),          intent(inout) :: self
@@ -1098,21 +1041,6 @@ contains
         call self%calc_nonzero_sum(which, sum, cnt, class, state, fromto)
         avg = sum/real(cnt)
     end function get_nonzero_avg
-
-    !>  \brief  is for extracting a table from the character hash
-    function extract_table( self, which ) result( table )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        character(len=STDLEN), allocatable :: table(:)
-        character(len=:),      allocatable :: str
-        integer :: i
-        allocate(table(self%n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: extract_table, module: simple_oris',alloc_stat)
-        do i=1,self%n
-            call self%getter(i, which, str)
-            table(i) = str
-        end do
-    end function extract_table
 
     !>  \brief  angular standard deviation
     real function ang_sdev( self, nstates, npeaks )
@@ -1713,7 +1641,7 @@ contains
             end do
         end do
         if(allocated(parts))deallocate(parts)
-        end subroutine ini_tseries
+    end subroutine ini_tseries
 
     !>  \brief  randomizes eulers in oris
     subroutine rnd_oris_discrete( self, discrete, nsym, eullims )
@@ -2204,7 +2132,6 @@ contains
                     dfx = self%o(i)%get('dfx')+ran3()*dferr-dferr/2.
                     if( dfx > 0. ) exit
                 end do
-
                 call self%o(i)%set('dfx', dfx)
             endif
             if( self%o(i)%isthere('dfy') )then
@@ -2251,7 +2178,6 @@ contains
             med = 0.
             pop = self%get_pop(class, 'class')
             if( pop == 0 ) return
-            !$ allocate(vals(self%n))
             vals = self%get_arr(which, class)
             if( pop == 1 )then
                 med = vals(1)
@@ -2272,7 +2198,7 @@ contains
         ! calculate median
         med = median_nocopy(vals)
         if(allocated(vals))deallocate(vals)
-        end function median_1
+    end function median_1
 
     !>  \brief  is for calculating variable statistics
     subroutine stats( self, which, ave, sdev, var, err )
@@ -2408,30 +2334,6 @@ contains
             end subroutine gen_c1
     end subroutine spiral_2
 
-    !>  \brief  is for generating a quasi-spiral within the asymetric unit
-    subroutine qspiral( self, thresh, nsym, eullims )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nsym
-        real,        intent(inout) :: eullims(3,2)
-        real,        intent(in)    :: thresh
-        type(ori) :: o, o_prev
-        integer   :: i
-        logical   :: found
-        call self%spiral_2( nsym, eullims )
-        do i=1,self%n
-            o_prev = self%o(i)
-            o      = o_prev
-            found  = .false.
-            do while( .not.found )
-                call o%rnd_euler( eullims )
-                if( rad2deg( o.euldist.o_prev ) > 2.*thresh )cycle
-                found = .true.
-                call o%e3set( 0.)
-                self%o( i ) = o
-            end do
-        enddo
-    end subroutine qspiral
-
     !>  \brief  orders oris according to specscore
     function order( self ) result( inds )
         class(oris), intent(inout) :: self
@@ -2448,7 +2350,6 @@ contains
         call hpsort(specscores, inds)
         call reverse(inds)
         DebugPrint " oris order sorted"
-
         if(allocated(specscores))then
             deallocate( specscores, stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('order; simple_oris dealloc ',alloc_stat)
@@ -2707,8 +2608,6 @@ contains
                 end do
                 deallocate(specscores,weights)
             endif
-        else
-            !call simple_stop('specscore not part of oris; simple_oris :: calc_spectral_weights')
         endif
     end subroutine calc_spectral_weights
 
@@ -3054,9 +2953,7 @@ contains
         integer :: n_incl, thresh_ind
         real    :: corr_bound
         ! grab relevant correlations
-        !$ allocate(corrs(self%n))
         corrs      = self%get_all('corr')
-        !$ allocate(incl(self%n))
         incl       = self%included()
         corrs_incl = pack(corrs, mask=incl)
         ! sort correlations & determine threshold
@@ -3215,131 +3112,6 @@ contains
         corr = corr/real(self1%n)
     end function corr_oris
 
-    !>  \brief  uses a greedy approach to generate a maximally diverse set of
-    !!          orientations by maximizing the geodesic distance upon every
-    !!          addition to the growing set
-    subroutine gen_diverse( self )
-        class(oris), intent(inout) :: self
-        logical, allocatable       :: o_is_set(:)
-        integer                    :: i
-        type(ori)                  :: o1, o2
-        ! create the first diverse pair
-        call o1%oripair_diverse(o2)
-        allocate(o_is_set(self%n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: gen_diverse, module: simple_oris',alloc_stat)
-        o_is_set = .false.
-        call self%set_ori(1,o1)
-        call self%set_ori(2,o2)
-        o_is_set(1) = .true.
-        o_is_set(2) = .true.
-        ! use a greedy approach to generate the maximally diverse set
-        do i=3,self%n
-            call progress(i,self%n)
-            o1 = self%ori_generator('diverse', o_is_set)
-            call self%set_ori(i,o1)
-            o_is_set(i) = .true.
-        end do
-        deallocate(o_is_set)
-    end subroutine gen_diverse
-
-    !>  \brief  scores the orientation (o) according to diversity with
-    !!          respect to the orientations in self
-    function gen_diversity_score( self, o ) result( diversity_score )
-        class(oris), intent(in) :: self
-        class(ori),  intent(in) :: o
-        real    :: diversity_score
-        real    :: dist, dist_min
-        integer :: i
-        dist_min = 2.0*sqrt(2.0)
-        do i=1,self%n
-            dist = self%o(i).geod.o
-            if( dist < dist_min ) dist_min = dist
-        end do
-        diversity_score = dist_min
-    end function gen_diversity_score
-
-    !>  \brief  scores the orientations in self according to diversity with respect to ref_set
-    function gen_diversity_scores( self, ref_set ) result( diversity_scores )
-        class(oris), intent(in) :: self, ref_set
-        real, allocatable :: diversity_scores(:)
-        real    :: dist, dist_min
-        integer :: i, j
-        allocate(diversity_scores(self%n))
-        do i=1,self%n
-            dist_min = 2.0*sqrt(2.0)
-            do j=1,ref_set%n
-                dist = self%o(i).geod.ref_set%o(j)
-                if( dist < dist_min ) dist_min = dist
-            end do
-            diversity_scores(i) = dist_min
-        end do
-    end function gen_diversity_scores
-
-    !>  \brief  if mode='median' this routine creates a spatial median rotation matrix that
-    !!          is representative of the rotation matrices in the instance in a geodesic
-    !!          distance sense. If mode='diverse' it creates the rotation matrix that is
-    !!          maximally diverse to the rotation matrices in the instance
-    function ori_generator( self, mode, part_of_set, weights ) result( oout )
-        use simple_opt_simplex, only: opt_simplex
-        use simple_opt_spec,    only: opt_spec
-        class(oris), target, intent(in) :: self
-        character(len=*),    intent(in) :: mode
-        logical, optional,   intent(in) :: part_of_set(self%n)
-        real,    optional,   intent(in) :: weights(self%n)
-        real, parameter                 :: TOL=1e-6
-        type(ori)                       :: oout
-        type(opt_spec)                  :: ospec
-        type(opt_simplex)               :: opt
-        real                            :: dist, lims(3,2)
-        class(*), pointer               :: fun_self => null()
-        ! manage class vars
-        if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
-        if( allocated(class_weights)     ) deallocate(class_weights)
-        if( present(part_of_set) )then
-            allocate(class_part_of_set(self%n), source=part_of_set, stat=alloc_stat)
-        else
-            allocate(class_part_of_set(self%n), stat=alloc_stat)
-            class_part_of_set = .true.
-        endif
-        if(alloc_stat.ne.0)call allocchk('In: ori_generator, module: simple_oris part_of_set',alloc_stat)
-        if( present(weights) )then
-            allocate(class_weights(self%n), source=weights, stat=alloc_stat)
-        else
-            allocate(class_weights(self%n), stat=alloc_stat)
-            class_weights = 1.0
-        endif
-        if(alloc_stat.ne.0)call allocchk('In: ori_generator, module: simple_oris weights',alloc_stat)
-        ! set globals
-        ops => self
-        call o_glob%new
-        call o_glob%rnd_euler
-        ! init
-        call oout%new
-        lims(1,1) = 0.
-        lims(1,2) = 359.99
-        lims(2,1) = 0.
-        lims(2,2) = 180.
-        lims(3,1) = 0.
-        lims(3,2) = 359.99
-        call ospec%specify('simplex', 3, ftol=TOL, limits=lims)
-        ospec%x(1) = o_glob%e1get()
-        ospec%x(2) = o_glob%e2get()
-        ospec%x(3) = o_glob%e3get()
-        call opt%new(ospec)
-        select case(mode)
-            case('median')
-                call ospec%set_costfun(costfun_median)
-            case('diverse')
-                call ospec%set_costfun(costfun_diverse)
-            case DEFAULT
-                call simple_stop('unsupported mode inputted; simple_ori :: ori_generator')
-        end select
-        call opt%minimize(ospec, fun_self, dist)
-        call oout%set_euler(ospec%x)
-        call ospec%kill
-        call opt%kill
-    end function ori_generator
-
     !>  \brief  generates a similarity matrix for the oris in self
     function gen_smat( self ) result( smat )
         class(oris), intent(in) :: self
@@ -3365,21 +3137,19 @@ contains
         class(ori),        intent(in) :: o
         logical, optional, intent(in) :: part_of_set(self%n)
         real,    optional, intent(in) :: weights(self%n)
+        logical, allocatable :: class_part_of_set(:)
+        real,    allocatable :: class_weights(:)
         integer :: i
         real    :: dists(self%n)
-        if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
-        if( allocated(class_weights)     ) deallocate(class_weights)
         if( present(part_of_set) )then
             allocate(class_part_of_set(self%n), source=part_of_set)
         else
-            allocate(class_part_of_set(self%n))
-            class_part_of_set = .true.
+            allocate(class_part_of_set(self%n), source=.true.)
         endif
         if( present(weights) )then
             allocate(class_weights(self%n), source=weights)
         else
-            allocate(class_weights(self%n))
-            class_weights = 1.0
+            allocate(class_weights(self%n), source=1.0)
         endif
         dists = 0.
         !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
@@ -3388,25 +3158,8 @@ contains
         end do
         !$omp end parallel do
         geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
+        deallocate(class_part_of_set, class_weights)
     end function geodesic_dist
-
-    !>  \brief  for generation a subset of orientations (spatial medians of all pairs)
-    function gen_subset( self ) result( os )
-        class(oris), intent(in) :: self
-        type(ori)  :: omed
-        type(oris) :: os
-        integer    :: iref, jref, nsub, cnt
-        nsub = (self%n*(self%n-1))/2
-        call os%new(nsub)
-        cnt = 0
-        do iref=1,self%n-1
-            do jref=iref+1,self%n
-                cnt  = cnt + 1
-                omed = self%o(iref)%ori_generator(self%o(jref), 'median')
-                call os%set_ori(cnt, omed)
-            end do
-        end do
-    end function gen_subset
 
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
@@ -3500,28 +3253,6 @@ contains
         maxd  = maxd/real(nobs)
         mind  = mind/real(nobs)
     end subroutine cluster_diststat
-
-    ! PRIVATE ROUTINES
-
-    function costfun_median( fun_self, vec, D ) result( dist )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: dist
-        call o_glob%set_euler(vec)
-        ! we are minimizing the distance
-        dist = ops%geodesic_dist(o_glob,class_part_of_set,class_weights)
-    end function costfun_median
-
-    function costfun_diverse( fun_self, vec, D ) result( dist )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: dist
-        call o_glob%set_euler(vec)
-        ! we are maximizing the distance
-        dist = -ops%geodesic_dist(o_glob,class_part_of_set,class_weights)
-    end function costfun_diverse
 
     ! UNIT TEST
 

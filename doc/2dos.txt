@@ -1,4 +1,8 @@
 
+Qs 2 Michael
+* go over new structure
+* what is simple_modules ???
+
 To consider:
 
 * merging global searches with neigh searches for improved robustness (and single program)

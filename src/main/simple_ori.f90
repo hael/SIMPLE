@@ -3,7 +3,7 @@ module simple_ori
 include 'simple_lib.f08'
 implicit none
 
-public :: ori, test_ori, test_ori_dists
+public :: ori, test_ori
 private
 
 !>  orientation parameter stuct and operations
@@ -90,9 +90,6 @@ type :: ori
     procedure          :: mirror2d
     procedure, private :: geodesic_dist
     procedure, private :: geodesic_dist_scaled
-    procedure          :: oripair_diverse
-    procedure          :: oripair_diverse_projdir
-    procedure          :: ori_generator
     generic            :: operator(.geod.)   => geodesic_dist
     generic            :: operator(.geodsc.) => geodesic_dist_scaled
     procedure, private :: euldist
@@ -111,9 +108,7 @@ interface ori
     module procedure constructor
 end interface
 
-real,       parameter :: zvec(3)  = [0.,0.,1.]
-class(ori), pointer   :: class_self1=>null(), class_self2=>null(), class_self3=>null()
-real                  :: angthres = 0.
+real, parameter :: zvec(3) = [0.,0.,1.]
 
 contains
 
@@ -665,11 +660,7 @@ contains
             &      self%rmat(3,1), self%rmat(3,2), self%rmat(3,3)
     end subroutine print_mat
 
-    !>  \brief prints oris data based on the existence of intent(in) character
-    !! strings whose variable names are equivalent to the variables contained in
-    !! the align derived type. The input character variables are printed first,
-    !! preceeding printing of their associated value (key-value style for simple
-    !! parsing of data)
+    !>  \brief prints ori data
     subroutine print_ori( self )
         class(ori), intent(inout) :: self
         call self%htab%print()
@@ -849,127 +840,6 @@ contains
         call self%set('e3',self%euls(3))
         self%normal = matmul(zvec, self%rmat)
     end subroutine mirror2d
-
-    !! \param self1,self2 ori class type rotational matrices
-    subroutine oripair_diverse( self1, self2 )
-        use simple_opt_simplex, only: opt_simplex
-        use simple_opt_spec,    only: opt_spec
-        class(ori), target, intent(inout) :: self1, self2
-        real, parameter                   :: TOL=1e-6
-        type(opt_spec)                    :: ospec
-        type(opt_simplex)                 :: opt
-        real                              :: dist, lims(3,2)
-        class(*), pointer                 :: fun_self
-        if( .not. self1%exists() ) call self1%new_ori
-        if( .not. self2%exists() ) call self2%new_ori
-        call self1%rnd_euler ! fixed
-        call self2%rnd_euler ! changing
-        ! associate class pointers
-        class_self1 => self1
-        class_self2 => self2
-        lims(1,1) = 0.
-        lims(1,2) = 359.99
-        lims(2,1) = 0.
-        lims(2,2) = 180.
-        lims(3,1) = 0.
-        lims(3,2) = 359.99
-        call ospec%specify('simplex', 3, ftol=TOL, limits=lims)
-        ospec%x(1) = self2%e1get()
-        ospec%x(2) = self2%e2get()
-        ospec%x(3) = self2%e3get()
-        call ospec%set_costfun(costfun_diverse_1)
-        call opt%new(ospec)
-        call opt%minimize(ospec, fun_self, dist)
-        call self2%set_euler(ospec%x)
-        call ospec%kill
-        call opt%kill
-    end subroutine oripair_diverse
-
-    subroutine oripair_diverse_projdir( self1, self2, rangthres )
-        use simple_opt_simplex, only: opt_simplex
-        use simple_opt_spec,    only: opt_spec
-        class(ori), target, intent(inout) :: self1, self2
-        real,               intent(in)    :: rangthres
-        real, parameter                   :: TOL=1e-6
-        type(opt_spec)                    :: ospec
-        type(opt_simplex)                 :: opt
-        real                              :: e3,dist,lims(2,2)
-        class(*), pointer                 :: fun_self => null()
-        if( .not. self1%exists() )stop 'need a fixed ori! simple_oris::oripair_diverse_projdir'
-        if( .not. self2%exists() )call self2%new_ori
-        angthres = rangthres
-        e3 = self1%e3get()
-        call self2%rnd_euler_2( self1, angthres, .true. )
-        ! associate class pointers
-        class_self1 => self1
-        class_self2 => self2
-        lims(1,1) = 0.
-        lims(1,2) = 359.99
-        lims(2,1) = 0.
-        lims(2,2) = 180.
-        call ospec%specify('simplex', 2, ftol=TOL, limits=lims)
-        ospec%x(1) = self2%e1get()
-        ospec%x(2) = self2%e2get()
-        call ospec%set_costfun(costfun_diverse_projdir)
-        call opt%new(ospec)
-        call opt%minimize(ospec, fun_self, dist)
-        call self2%set_euler([ospec%x(1),ospec%x(2),e3])
-        call ospec%kill
-        call opt%kill
-        angthres = 0.
-    end subroutine oripair_diverse_projdir
-
-    !>  \brief creates a spatial median or maximally diverse rotation matrix
-    !!  if mode='median' this function creates a spatial median rotation matrix
-    !!          that is "in between" the two inputted rotation matrices in a geodesic
-    !!          distance sense and if mode='diverse' it creates the rotation matrix that
-    !!          is maximally diverse with respect to the inputted two
-    !! \param mode 'median' or 'diverse'
-    !! \param self1,self2 ori class type rotaional matrices
-    function ori_generator( self1, self2, mode ) result( oout )
-        use simple_opt_simplex, only: opt_simplex
-        use simple_opt_spec,    only: opt_spec
-        class(ori), target, intent(in) :: self1, self2
-        character(len=*),   intent(in) :: mode
-        real,      parameter           :: TOL=1e-6
-        type(ori)                      :: oout
-        type(ori), target              :: otst
-        type(opt_spec)                 :: ospec
-        type(opt_simplex)              :: opt
-        real                           :: dist, lims(3,2)
-        class(*), pointer              :: fun_self => null()
-        call oout%new_ori
-        call otst%new_ori
-        call otst%rnd_euler
-        ! set class pointers
-        class_self1 => self1
-        class_self2 => self2
-        class_self3 => otst !! ICE Warning: Pointer in pointer assignment might outlive the pointer target [-Wtarget-lifetime]
-        ! init
-        lims(1,1) = 0.
-        lims(1,2) = 359.99
-        lims(2,1) = 0.
-        lims(2,2) = 180.
-        lims(3,1) = 0.
-        lims(3,2) = 359.99
-        call ospec%specify('simplex', 3, ftol=TOL, limits=lims)
-        ospec%x(1) = otst%e1get()
-        ospec%x(2) = otst%e2get()
-        ospec%x(3) = otst%e3get()
-        call opt%new(ospec)
-        select case(mode)
-            case('median')
-                call ospec%set_costfun(costfun_median)
-            case('diverse')
-                call ospec%set_costfun(costfun_diverse_2)
-            case DEFAULT
-                call simple_stop('unsupported mode inputted; simple_ori :: ori_generator')
-        end select
-        call opt%minimize(ospec, fun_self, dist)
-        call oout%set_euler(ospec%x)
-        call ospec%kill
-        call opt%kill
-    end function ori_generator
 
     ! GEODESIC DISTANCE METRIC
 
@@ -1174,92 +1044,7 @@ contains
         endif
     end function rotmat
 
-    function costfun_diverse_1( fun_self, vec, D ) result( dist )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: dist
-        call class_self2%set_euler(vec)
-        ! negation because we try to maximize the distance
-        dist = -class_self1%geodesic_dist(class_self2)
-    end function costfun_diverse_1
-
-    function costfun_diverse_2( fun_self, vec, D ) result( dist )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: d1, d2, dist
-        call class_self3%set_euler(vec)
-        d1   = class_self3%geodesic_dist(class_self1)
-        d2   = class_self3%geodesic_dist(class_self2)
-        dist = -d1-d2
-    end function costfun_diverse_2
-
-    !>  \brief  uses an angular threshold
-    function costfun_diverse_projdir( fun_self, vec, D ) result( dist )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: dist
-        call class_self2%e1set(vec(1))
-        call class_self2%e2set(vec(2))
-        dist = class_self1.euldist.class_self2
-        if(rad2deg(dist) > angthres) dist=0.
-        ! negation because we try to maximize the distance
-        dist = -dist
-    end function costfun_diverse_projdir
-
-    function costfun_median( fun_self, vec, D ) result( dist )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: d1, d2, dist
-        call class_self3%set_euler(vec)
-        d1   = class_self3%geodesic_dist(class_self1)
-        d2   = class_self3%geodesic_dist(class_self2)
-        dist = abs(d1-d2)
-    end function costfun_median
-
-    ! UNIT TESTS
-
-    subroutine test_ori_dists
-        type(ori) :: o1, o2, omed
-        real    :: frob_lim, dist, adist
-        integer :: itst
-        integer, parameter :: NTESTS=5000
-        frob_lim = 2.*sqrt(2.)
-        call o1%new_ori
-        call o2%new_ori
-        do itst=1,NTESTS
-            call o1%rnd_euler
-            call o2%rnd_euler
-            dist = o1%geodesic_dist(o2)
-            if( dist > frob_lim )then
-                print *, 'ERROR dist > lim, dist/lim: ', dist, frob_lim
-            endif
-        end do
-        adist = 0.
-        do itst=1,NTESTS
-            call o1%rnd_euler
-            call o2%rnd_euler
-            omed  = o1%ori_generator(o2, 'median')
-            dist  = abs(omed%geodesic_dist(o1)-omed%geodesic_dist(o2))
-            adist = adist+dist
-        end do
-        print *, 'average distance for spatial medians: ', adist/real(NTESTS)
-        adist = 0.
-        do itst=1,NTESTS
-            call o1%rnd_euler
-            call o2%rnd_euler
-            omed  = o1%ori_generator(o2, 'diverse')
-            dist  = (omed%geodesic_dist(o1)+omed%geodesic_dist(o2))/2.
-            adist = adist+dist
-        end do
-        adist = adist/real(NTESTS)
-        print *, 'average distance for spatial extremes: ', adist, ' maxdist: ',&
-        frob_lim, ' frac_of_max: ', 100*(adist/frob_lim), ' %'
-        write(*,'(a)') 'SIMPLE_ORI_DISTS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine test_ori_dists
+    ! UNIT TEST
 
     !>  \brief  is the unit test for the ori class
     subroutine test_ori

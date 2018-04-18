@@ -42,13 +42,10 @@ type(normalize_commander)            :: xnormalize
 type(scale_commander)                :: xscale
 type(stack_commander)                :: xstack
 type(stackops_commander)             :: xstackops
-type(print_cmd_dict_commander)       :: xprint_cmd_dict
 type(print_fsc_commander)            :: xprint_fsc
 type(print_magic_boxes_commander)    :: xprint_magic_boxes
 type(shift_commander)                :: xshift
-type(make_deftab_commander)          :: xmake_deftab
 type(make_oris_commander)            :: xmake_oris
-type(map2ptcls_commander)            :: xmap2ptcls
 type(orisops_commander)              :: xorisops
 type(oristats_commander)             :: xoristats
 type(vizoris_commander)              :: xvizoris
@@ -75,7 +72,6 @@ select case(prg)
         call xsimulate_noise%execute(cline)
     case( 'simulate_particles' )
         call cline%parse()
-        ! set defaults
         call cline%set('nspace', cline%get_rarg('nptcls'))
         if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
@@ -89,7 +85,6 @@ select case(prg)
         call xsimulate_particles%execute(cline)
     case( 'simulate_movie' )
         call cline%parse()
-        ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      3.)
         if( .not. cline%defined('ctf')     ) call cline%set('ctf',   'yes')
         if( .not. cline%defined('bfac')    ) call cline%set('bfac',   200.)
@@ -104,7 +99,6 @@ select case(prg)
         call xsimulate_subtomogram%execute(cline)
     case( 'select' )
         call cline%parse()
-        ! set defaults
         if( .not. cline%defined('outfile') )  call cline%set('outfile', 'selected_lines.txt')
         call xselect%execute(cline)
     case( 'make_pickrefs' )
@@ -114,7 +108,6 @@ select case(prg)
         call xmake_pickrefs%execute(cline)
     case( 'extract' )
         call cline%parse()
-        ! set defaults
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         call xextract%execute(cline)
     case('cluster_cavgs')
@@ -134,7 +127,6 @@ select case(prg)
         call xfsc%execute(cline)
     case( 'center' )
         call cline%parse()
-        ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         call xcenter%execute(cline)
     case( 'postprocess' )
@@ -142,18 +134,13 @@ select case(prg)
         call xpostprocess%execute(cline)
     case( 'project' )
         call cline%parse()
-        ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
         if( .not. cline%defined('alpha') ) call cline%set('alpha', 2.)
-        ! execute
         call xproject%execute(cline)
     case( 'volops' )
         call cline%parse()
         call xvolops%execute(cline)
-
-    ! GENERAL IMAGE PROCESSING PROGRAMS
-
     case( 'convert' )
         call cline%parse()
         call xconvert%execute(cline)
@@ -174,183 +161,20 @@ select case(prg)
         call cline%parse()
         call xstack%execute(cline)
     case( 'stackops' )
-        !==Program stackops
-        !
-        ! <stackops/begin>is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER
-        ! stacks. If you want to extract a particular state, give an alignment document (oritab) and set state
-        ! to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input
-        ! an alignment doc (oritab) and set frac. You can combine the state and frac options. If you
-        ! want to apply noise to images, give the desired signal-to-noise ratio via snr. If you want to calculate the autocorrelation
-        ! function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set
-        ! fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to
-        ! some nonzero integer number less than nptcls. With avg=yes the global average of the inputted stack is calculated.
-        ! If you define nframesgrp to some integer number larger than one averages with chunk sizes of nframesgrp are produced,
-        ! which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images<stackops/end>
-        !
-        ! Required keys
-        ! keys_required(1)  = 'smpd'
-        ! set optional keys
-        ! keys_optional(1)  = 'oritab'
-        ! keys_optional(2)  = 'outstk'
-        ! keys_optional(3)  = 'mirr'
-        ! keys_optional(4)  = 'nran'
-        ! keys_optional(5)  = 'frac'
-        ! keys_optional(6)  = 'state'
-        ! keys_optional(7)  = 'class'
-        keys_optional(8)  = 'neg'
-        keys_optional(9)  = 'acf'
-        keys_optional(10) = 'avg'
-        keys_optional(11) = 'nframesgrp'
-        keys_optional(12) = 'vis'
-        keys_optional(13) = 'snr'
-        keys_optional(14) = 'fromp'
-        keys_optional(15) = 'top'
-        keys_optional(16) = 'nptcls'
-        keys_optional(17) = 'order'
-        keys_optional(18) = 'bfac'
-        keys_optional(19) = 'outfile'
-        keys_optional(23) = 'stats'
-        ! keys_optional(24) = 'stk'
-
-        ! parse command line
-        call cline%parse_oldschool( keys_required(:1),keys_optional(:25) )
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
+        call cline%parse()
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
-        ! execute
         call xstackops%execute(cline)
-
-    ! MISCELLANOUS PROGRAMS
-
-    case( 'print_cmd_dict' )
-        !==Program print_cmd_dict
-        !
-        ! <print_cmd_dict/begin>is a program for printing the command line key dictonary<print_cmd_dict/end>
-        !
-        ! set optional keys
-        keys_optional(1) = 'outfile'
-        ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:1))
-        ! execute
-        call xprint_cmd_dict%execute(cline)
     case( 'print_fsc' )
-        !==Program print_fsc
-        !
-        ! <print_fsc/begin>is a program for printing the binary FSC files produced by PRIME3D<print_fsc/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'box'
-        keys_required(3)  = 'fsc'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:3))
-        ! execute
+        call cline%parse()
         call xprint_fsc%execute(cline)
     case( 'print_magic_boxes' )
-        !==Program print_magic_boxes
-        !
-        ! <print_magic_boxes/begin>is a program for printing magic box sizes (fast FFT)<print_magic_boxes/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'moldiam'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:2))
-        ! execute
+        call cline%parse()
         call xprint_magic_boxes%execute(cline)
     case( 'shift' )
-        !==Program shift
-        !
-        ! <shift/begin>is a program for shifting a stack according to shifts in oritab<shift/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'oritab'
-        ! set optional keys
-        keys_optional(1) = 'outstk'
-        keys_optional(2) = 'mul'
-        keys_optional(3) = 'oritype'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
-        ! execute
+        call cline%parse()
         call xshift%execute(cline)
-
-    ! ORIENTATION DATA MANAGEMENT PROGRAMS
-
-    case( 'make_deftab' )
-        !==Program make_deftab
-        !
-        ! <make_deftab/begin>is a program for creating a SIMPLE conformant file of CTF parameter values (deftab).
-        ! Input is either an earlier SIMPLE deftab/oritab. The purpose is to get the kv, cs, and fraca parameters
-        ! as part of the CTF input doc as that is the new convention. The other alternative is to input a plain text
-        ! file with CTF parameters dfx, dfy, angast, phshift according to the Frealign convention. Unit conversions are dealt
-        ! with using optional variables. The units refer to the units in the inputted document<make_deftab/end>
-        !
-        ! Required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'kv'
-        keys_required(3) = 'cs'
-        keys_required(4) = 'fraca'
-        keys_required(5) = 'outfile'
-        ! set optional keys
-        keys_optional(1) = 'plaintexttab'
-        keys_optional(2) = 'oritab'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'dfunit'
-        keys_optional(5) = 'angastunit'
-        keys_optional(6) = 'phaseplate'
-        keys_optional(7) = 'phshiftunit'
-        keys_optional(8) = 'oritype'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:5),keys_optional(:8))
-        ! execute
-        call xmake_deftab%execute(cline)
     case( 'make_oris' )
-        !==Program make_oris
-        !
-        ! <make_oris/begin>is a program for making SIMPLE orientation/parameter files (text files containing input parameters and/or
-        ! parameters estimated by cluster2D or refine3D). The program generates random
-        ! Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,360] and random origin
-        ! shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the
-        ! orientations produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane
-        ! parameters are assigned randomly. If even=yes, then all nptcls orientations are assigned
-        ! quasi-even projection directions,and random in-plane parameters. If nstates is set to some integer number > 0, then
-        ! states are assigned randomly .in.[1,nstates]. If zero=yes in this mode of execution, the projection
-        ! directions are zeroed and only the in-plane parameters are kept intact. If errify=yes and astigerr is defined,
-        ! then uniform random astigmatism errors are introduced .in.[-astigerr,astigerr]<make_oris/end>
-        !
-        ! Required keys
-        keys_required(1)  = 'nptcls'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'minp'
-        keys_optional(3)  = 'ncls'
-        keys_optional(4)  = 'outfile'
-        keys_optional(5)  = 'trs'
-        keys_optional(6)  = 'nstates'
-        keys_optional(7)  = 'pgrp'
-        keys_optional(8)  = 'ctf'
-        keys_optional(9)  = 'defocus'
-        keys_optional(10) = 'angerr'
-        keys_optional(11) = 'sherr'
-        keys_optional(12) = 'dferr'
-        keys_optional(13) = 'even'
-        keys_optional(14) = 'zero'
-        keys_optional(15) = 'discrete'
-        keys_optional(16) = 'ndiscrete'
-        keys_optional(17) = 'diverse'
-        keys_optional(18) = 'state'
-        keys_optional(19) = 'nspace'
-        keys_optional(20) = 'iares'
-        keys_optional(21) = 'oritype'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:1),keys_optional(:21))
-        ! execute
+        call cline%parse()
         call xmake_oris%execute(cline)
     case( 'orisops' )
         !==Program orisops

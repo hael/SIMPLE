@@ -12,7 +12,6 @@ use simple_binoris_io      ! use all in there
 implicit none
 
 public :: cluster_oris_commander
-public :: make_deftab_commander
 public :: make_oris_commander
 public :: map2ptcls_commander
 public :: orisops_commander
@@ -25,10 +24,6 @@ type, extends(commander_base) :: cluster_oris_commander
   contains
     procedure :: execute      => exec_cluster_oris
 end type cluster_oris_commander
-type, extends(commander_base) :: make_deftab_commander
-  contains
-    procedure :: execute      => exec_make_deftab
-end type make_deftab_commander
 type, extends(commander_base) :: make_oris_commander
   contains
     procedure :: execute      => exec_make_oris
@@ -95,229 +90,49 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_ORIS NORMAL STOP ****')
     end subroutine exec_cluster_oris
 
-    !>  for creating a SIMPLE conformant file of CTF parameter values (deftab)
-    subroutine exec_make_deftab( self, cline )
-        use simple_nrtxtfile,      only: nrtxtfile
-        class(make_deftab_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(build)       :: b
-        type(params)      :: p
-        integer           :: nptcls, iptcl, ndatlines, nrecs
-        type(nrtxtfile)   :: ctfparamfile
-        real, allocatable :: line(:)
-        p = params(cline)
-        call b%build_general_tbox(p, cline, do3d=.false.)
-        if( cline%defined('oritab') .or. cline%defined('deftab')  )then
-            if( cline%defined('oritab') )then
-                nptcls = binread_nlines(p, p%oritab)
-                call b%a%new(nptcls)
-                call binread_oritab(p%oritab, b%spproj, b%a, [1,nptcls])
-            endif
-            if( cline%defined('deftab') )then
-                nptcls = binread_nlines(p, p%deftab)
-                call binread_oritab(p%deftab, b%spproj, b%a, [1,nptcls])
-            endif
-            if( b%a%isthere('dfx') .and. b%a%isthere('dfy') .and. b%a%isthere('angast') )then
-                ! all ok, astigmatic CTF
-            else if( b%a%isthere('dfx') )then
-                ! all ok, non-astigmatic CTF
-            else
-                write(*,*) 'defocus params (dfx, dfy, anagst) need to be in inputted via oritab/deftab'
-                stop 'simple_commander_oris :: exec_make_deftab'
-            endif
-            if( p%tfplan%l_phaseplate )then
-                if( .not. b%a%isthere('phshift') )then
-                    write(*,*) 'ERROR! l_phaseplate = .true. and input doc lacks radian phshift'
-                    stop
-                endif
-            endif
-            do iptcl=1,nptcls
-                call b%a%set(iptcl, 'smpd',  p%smpd )
-                call b%a%set(iptcl, 'kv',    p%kv   )
-                call b%a%set(iptcl, 'cs',    p%cs   )
-                call b%a%set(iptcl, 'fraca', p%fraca)
-            end do
-        else if( cline%defined('plaintexttab') )then
-            call ctfparamfile%new(p%plaintexttab, 1)
-            ndatlines = ctfparamfile%get_ndatalines()
-            nrecs     = ctfparamfile%get_nrecs_per_line()
-            if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-                write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'simple_commander_oris :: exec_make_deftab'
-            endif
-            call b%a%new(ndatlines)
-            allocate( line(nrecs), stat=alloc_stat)
-            if(alloc_stat /= 0)call allocchk("commander_oris:: makedeftab line",alloc_stat)
-            do iptcl=1,ndatlines
-                call ctfparamfile%readNextDataLine(line)
-                select case(p%dfunit)
-                    case( 'A' )
-                        line(1) = line(1)/1.0e4
-                        if( nrecs > 1 )  line(2) = line(2)/1.0e4
-                    case( 'microns' )
-                        ! nothing to do
-                    case DEFAULT
-                        call simple_stop( 'unsupported dfunit; simple_commander_oris :: exec_make_deftab')
-                end select
-                select case(p%angastunit)
-                    case( 'radians' )
-                        if( nrecs == 3 ) line(3) = rad2deg(line(3))
-                    case( 'degrees' )
-                        ! nothing to do
-                    case DEFAULT
-                        call simple_stop( 'unsupported angastunit; simple_commander_oris :: exec_make_deftab')
-                end select
-                select case(p%phshiftunit)
-                    case( 'radians' )
-                        ! nothing to do
-                    case( 'degrees' )
-                        if( nrecs == 4 ) line(4) = deg2rad(line(4))
-                    case DEFAULT
-                        call simple_stop( 'unsupported phshiftunit; simple_commander_oris :: exec_make_deftab')
-                end select
-                call b%a%set(iptcl, 'smpd',  p%smpd )
-                call b%a%set(iptcl, 'kv',    p%kv   )
-                call b%a%set(iptcl, 'cs',    p%cs   )
-                call b%a%set(iptcl, 'fraca', p%fraca)
-                call b%a%set(iptcl, 'dfx',   line(1))
-                if( nrecs > 1 )then
-                    call b%a%set(iptcl, 'dfy',    line(2))
-                    call b%a%set(iptcl, 'angast', line(3))
-                endif
-                if( nrecs > 3 )then
-                    call b%a%set(iptcl, 'phshift', line(4))
-                endif
-            end do
-        else
-            write(*,*) 'Nothing to do!'
-        endif
-        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
-        ! end gracefully
-        call simple_end('**** SIMPLE_MAKE_DEFTAB NORMAL STOP ****')
-    end subroutine exec_make_deftab
-
     !> for making SIMPLE orientation/parameter files
     subroutine exec_make_oris( self, cline )
         class(make_oris_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        character(len=STDLEN), allocatable :: oritabs(:)
-        integer, allocatable :: labels(:,:), consensus(:)
-        real,    allocatable :: corrs(:)
-        type(build)          :: b
-        type(ori)            :: orientation
-        type(oris)           :: o_even
-        class(oris), pointer :: o => null()
-        type(params)         :: p
-        type(sp_project)     :: spproj
-        real                 :: e3, x, y
-        integer              :: i, j, cnt, ispace, irot, class, loc(1)
-        integer              :: ioritab, noritabs, nl, nl1
+        type(build)  :: b
+        type(ori)    :: orientation
+        type(oris)   :: os_even
+        type(params) :: p
+        real         :: e3, x, y
+        integer      :: i, class
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
         if( cline%defined('ncls') )then
-            if( cline%defined('angerr') )then
-                o_even = oris(p%ncls)
-                call o_even%spiral(p%nsym, p%eullims)
-                call b%a%new(p%nptcls)
-                do i=1,p%nptcls
-                    class = irnd_uni(p%ncls)
-                    orientation = o_even%get_ori(class)
-                    call b%a%set_ori(i, orientation)
-                    e3 = ran3()*2.*p%angerr-p%angerr
-                    x  = ran3()*2.0*p%trs-p%trs
-                    y  = ran3()*2.0*p%trs-p%trs
-                    call b%a%set(i, 'x', x)
-                    call b%a%set(i, 'y', y)
-                    call b%a%e3set(i, e3)
-                    call b%a%set(i, 'class', real(class))
-                end do
-            else
-                call spproj%new_seg_with_ptr(p%ncls, p%oritype, o)
-                call o%spiral(p%nsym, p%eullims)
-                call b%a%new(p%ncls*p%minp)
-                cnt = 0
-                do i=1,p%ncls
-                    orientation = o%get_ori(i)
-                    do j=1,p%minp
-                        cnt = cnt+1
-                        call b%a%set_ori(cnt, orientation)
-                    end do
-                end do
-                if( p%zero .ne. 'yes' ) call b%a%rnd_inpls(p%trs)
-            endif
+            os_even = oris(p%ncls)
+            call os_even%spiral(p%nsym, p%eullims)
+            call b%a%new(p%nptcls)
+            do i=1,p%nptcls
+                class = irnd_uni(p%ncls)
+                orientation = os_even%get_ori(class)
+                call b%a%set_ori(i, orientation)
+                e3 = ran3()*2.*p%angerr-p%angerr
+                x  = ran3()*2.0*p%sherr-p%sherr
+                y  = ran3()*2.0*p%sherr-p%sherr
+                call b%a%set(i, 'x', x)
+                call b%a%set(i, 'y', y)
+                call b%a%e3set(i, e3)
+                call b%a%set(i, 'class', real(class))
+            end do
         else if( cline%defined('ndiscrete') )then
             if( p%ndiscrete > 0 )then
                 call b%a%rnd_oris_discrete(p%ndiscrete, p%nsym, p%eullims)
             endif
-            call b%a%rnd_inpls(p%trs)
+            call b%a%rnd_inpls(p%sherr)
         else if( p%even .eq. 'yes' )then
             call b%a%spiral(p%nsym, p%eullims)
-            call b%a%rnd_inpls(p%trs)
-        else if( p%diverse .eq. 'yes' )then
-            call b%a%gen_diverse
-        else if( cline%defined('nspace') )then
-            ! create the projection directions
-            call o%new(p%nspace)
-            call o%spiral
-            ! count the number of orientations
-            cnt = 0
-            do ispace=1,p%nspace
-                do irot=0,359,p%iares
-                    cnt = cnt+1
-                end do
-            end do
-            ! fill up
-            call b%a%new(cnt)
-            cnt = 0
-            do ispace=1,p%nspace
-                orientation = o%get_ori(ispace)
-                 do irot=0,359,p%iares
-                    cnt = cnt+1
-                    call orientation%e3set(real(irot))
-                    call b%a%set_ori(cnt, orientation)
-                end do
-            end do
-        else if( cline%defined('doclist') )then
-            call read_filetable(p%doclist, oritabs)
-            noritabs = size(oritabs)
-            do ioritab=1,noritabs
-                nl = binread_nlines(p, oritabs(ioritab))
-                if( ioritab == 1 )then
-                    nl1 = nl
-                else
-                    if( nl /= nl1 ) stop 'nonconfoming nr of oris in oritabs;&
-                    &simple_commander_oris :: make_oris'
-                endif
-            end do
-            allocate(labels(noritabs,nl), consensus(nl), corrs(noritabs),stat=alloc_stat)
-            if(alloc_stat /= 0)call allocchk("commander_oris:: makeoris corrs,consensus",alloc_stat)
-
-            call o%new(nl)
-            do ioritab=1,noritabs
-                call binread_oritab(oritabs(ioritab), spproj, o, [1,nl])
-                labels(ioritab,:) = nint(o%get_all('state'))
-                corrs(ioritab)    = sum(o%get_all('corrs'), mask=(labels(ioritab,:)>0))&
-                &/real(count(labels(ioritab,:)>0))
-            end do
-            loc = maxloc(corrs)
-            call shc_aggregation(noritabs, nl, labels, consensus, loc(1))
-            do i=1,nl
-                call o%set(i,'state', real(consensus(i)))
-            end do
-            call o%write('aggregated_oris'//trim(TXT_EXT), [1,nl])
-            return
+            call b%a%rnd_inpls(p%sherr)
         else
-            call b%a%rnd_oris(p%trs)
+            call b%a%rnd_oris(p%sherr)
             if( p%doprint .eq. 'yes' )then
                 call b%a%print_matrices
             endif
         endif
         if( p%nstates > 1 ) call b%a%rnd_states(p%nstates)
-        if( cline%defined('astigerr') )then
-            if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr, p%astigerr)
-        else
-            if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr)
-        endif
         call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_ORIS NORMAL STOP ****')
@@ -325,7 +140,7 @@ contains
 
     !> for mapping parameters that have been obtained using class averages to the individual particle images
     subroutine exec_map2ptcls( self, cline )
-        use simple_image,      only: image
+        use simple_image,   only: image
         use simple_corrmat, only: calc_cartesian_corrmat
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline

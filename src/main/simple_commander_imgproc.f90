@@ -667,7 +667,7 @@ contains
     !> provides standard single-particle image
     !> processing routines that are applied to MRC or SPIDER stacks.
     subroutine exec_stackops( self, cline )
-        use simple_oris,        only: oris
+        use simple_oris, only: oris
         use simple_stackops
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -707,21 +707,6 @@ contains
             goto 999
         endif
         ! fishing expeditions
-        ! order
-        if( cline%defined('order') )then
-            if( p%order .eq. 'yes' )then
-                ! order the particles
-                pinds = b%a%order_corr()
-                cnt = 0
-                do i=1,p%nptcls
-                    cnt = cnt + 1
-                    call progress(i, p%nptcls)
-                    call b%img%read(p%stk, pinds(i))
-                    call b%img%write(p%outstk, cnt)
-                end do
-            endif
-            goto 999
-        endif
         ! frac only
         if( cline%defined('frac') )then
             if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_stackops'

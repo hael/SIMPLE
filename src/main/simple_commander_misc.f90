@@ -18,7 +18,6 @@ implicit none
 public :: cluster_smat_commander
 public :: intgpeaks_commander
 public :: masscen_commander
-public :: print_cmd_dict_commander
 public :: print_dose_weights_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
@@ -41,10 +40,6 @@ type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
 end type masscen_commander
-type, extends(commander_base) :: print_cmd_dict_commander
-  contains
-    procedure :: execute       => exec_print_cmd_dict
-end type print_cmd_dict_commander
 type, extends(commander_base) :: print_dose_weights_commander
   contains
     procedure :: execute       => exec_print_dose_weights
@@ -220,17 +215,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen
-
-    !> for printing the command line key dictonary
-    subroutine exec_print_cmd_dict( self, cline )
-        use simple_cmd_dict, only: print_cmd_key_descr
-        class(print_cmd_dict_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(params) :: p
-        p = params(cline) ! parameters generated
-        call print_cmd_key_descr( p%outfile )
-        call simple_end('**** SIMPLE_PRINT_CMD_DICT NORMAL STOP ****')
-    end subroutine exec_print_cmd_dict
 
     !> for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
