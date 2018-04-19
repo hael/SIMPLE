@@ -31,7 +31,7 @@ contains
     subroutine srch_stochastic( self )
         class(strategy2D_stochastic), intent(inout) :: self
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
-        real    :: corrs(self%s%nrots), inpl_corr, corr_bound, cc_glob, cls_corrs(self%s%nrefs)
+        real    :: corrs(self%s%nrots), inpl_corr, corr_bound, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set
         if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             do_inplsrch   = .true.
@@ -39,10 +39,6 @@ contains
             cc_glob       = -1.
             glob_best_set = .false.
             call self%s%prep4srch
-            cls_corrs = -1.
-            if( self%s%prev_class > 0 )then
-                cls_corrs(self%s%prev_class) = self%s%prev_corr
-            endif
             if( self%spec%corr_bound < 0. .or. self%s%prev_corr > self%spec%corr_bound )then
                 ! SHC move
                 found_better = .false.
@@ -76,8 +72,6 @@ contains
                         inpl_glob     = inpl_ind
                         glob_best_set = .true.
                     endif
-                    ! updates all refs correlations vector
-                    cls_corrs(iref) = inpl_corr
                     ! first improvement heuristic
                     if( found_better ) exit
                 end do
@@ -117,8 +111,6 @@ contains
                 self%s%best_corr  = inpl_corr
                 self%s%best_rot   = inpl_ind
                 found_better      = .true.
-                ! updates all refs correlations vector
-                cls_corrs(iref) = inpl_corr
             endif
             if( found_better )then
                 ! best ref has already been updated
@@ -143,7 +135,7 @@ contains
                 print *, self%s%iptcl, self%s%best_class, self%s%best_corr, self%s%best_rot
                 print *, (corr_bound < 0. .or. self%s%prev_corr > corr_bound)
             endif
-            call self%s%store_solution( entropy=self%s%calc_entropy(cls_corrs) )
+            call self%s%store_solution
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif

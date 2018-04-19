@@ -23,7 +23,7 @@ public :: cluster2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter             :: L_BENCH         = .false.
+logical, parameter             :: L_BENCH           = .false.
 logical, parameter             :: L_BENCH_CLUSTER2D = .false.
 type(polarft_corrcalc), target :: pftcc
 integer                        :: nptcls2update
@@ -215,6 +215,8 @@ contains
                 strategy2Dspec%ppftcc     => pftcc
                 strategy2Dspec%pa         => b%a
                 if( allocated(b%nnmat) ) strategy2Dspec%nnmat => b%nnmat
+                strategy2Dspec%fit_bfac = .false.
+                if( p%objfun.eq.'ccres' .and. which_iter>10 ) strategy2Dspec%fit_bfac = .true.
                 ! search object
                 call strategy2Dsrch(iptcl)%new(strategy2Dspec)
             endif

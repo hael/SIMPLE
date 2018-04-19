@@ -522,7 +522,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 10, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 11, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -547,7 +547,8 @@ contains
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
         call cluster2D%set_input('srch_ctrls', 9, frac)
         call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function Angstroms^2', 'B-factor in Angstroms^2 (>0.0)', .false., 1000.)
-        ! filter controls
+        call cluster2D%set_input('srch_ctrls',11, 'objfun','binary', 'Objective function', 'Objective function(cc|ccres){ccres}', '(cc|ccres){ccres}', .false., 'ccres')
+                ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &

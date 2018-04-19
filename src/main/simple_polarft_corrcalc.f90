@@ -925,7 +925,7 @@ contains
         integer,                 intent(in)    :: i, kstop, irot
         integer     :: rot
         real(dp)    :: corr
-        complex(dp) :: tmp
+        complex(sp) :: tmp
         tmp = 0.
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
@@ -943,7 +943,7 @@ contains
             tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(i,rot:self%pftsz,:))
             tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,:) * conjg( self%pfts_ptcls(i,1:rot-1,:) ))
         end if
-        corr = real(tmp, kind=8)
+        corr = real(tmp, kind=dp)
     end function calc_corr_for_rot_8
 
     function calc_euclid_for_rot( self, pft_ref, i, kstop, irot ) result( euclid )
@@ -1089,7 +1089,7 @@ contains
         integer     :: rot
         real(dp)    :: euclid
         complex(dp) :: tmp
-        tmp  = cmplx(0.,0.,kind=dp)
+        tmp = cmplx(0.,0.,kind=dp)
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else

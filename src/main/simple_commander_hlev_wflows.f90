@@ -68,12 +68,12 @@ contains
         logical               :: scaling
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        ! default goal function is b-factor weighted standard cross-correlation
+        if( .not.cline%defined('objfun') )call cline%set('objfun', 'ccres')
         ! parameters
         p_master = params(cline, del_scaled=.true.)
         nparts   = p_master%nparts
         if( p_master%l_autoscale )then
-            ! remove possible objfun flag from cline
-            call cline%delete('objfun')
             ! SPLITTING
             call spproj%read(p_master%projfile )
             call spproj%split_stk(p_master%nparts)
@@ -82,7 +82,6 @@ contains
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%set('objfun', 'cc')       ! goal function is standard cross-correlation
             call cline_cluster2D_stage1%delete('automsk')
             if( p_master%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
@@ -136,7 +135,6 @@ contains
             cline_cluster2D_stage2 = cline
             if( p_master%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
-            call cline_cluster2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
             if( cline%defined('update_frac') )then
                 call cline_cluster2D_stage2%set('update_frac', p_master%update_frac)
             endif

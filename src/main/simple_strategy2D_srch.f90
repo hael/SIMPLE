@@ -19,9 +19,11 @@ type strategy2D_spec
     class(polarft_corrcalc), pointer :: ppftcc     => null()
     class(oris),             pointer :: pa         => null()
     integer,                 pointer :: nnmat(:,:) => null()
-    integer :: iptcl=0, iptcl_map=0
-    logical :: do_extr=.false.
-    real    :: corr_bound=0.
+    real    :: corr_bound = 0.
+    integer :: iptcl      = 0
+    integer :: iptcl_map  = 0
+    logical :: do_extr    = .false.
+    logical :: fit_bfac   = .true.
 end type strategy2D_spec
 
 type strategy2D_srch
@@ -49,13 +51,12 @@ type strategy2D_srch
     real                             :: specscore     =  0.  !< spectral score
     logical                          :: dyncls     = .true.  !< whether to turn on dynamic class update (use of low population threshold)
     logical                          :: doshift    = .true.  !< origin shift search indicator
-    logical                          :: staticbfac = .false. !< static/fitted b-factor for objfun=ccres
+    logical                          :: fit_bfac   = .true.  !< static/fitted b-factor for objfun=ccres
   contains
     procedure :: new
     procedure :: prep4srch
     procedure :: inpl_srch
     procedure :: calc_corr
-    procedure :: calc_entropy
     procedure :: store_solution
     procedure :: kill
 end type strategy2D_srch
@@ -83,6 +84,7 @@ contains
         self%top        =  spec%pp%top
         self%nnn        =  spec%pp%nnn
         self%dyncls     =  (spec%pp%dyncls.eq.'yes')
+        self%fit_bfac   =  spec%fit_bfac
         ! construct composites
         lims(:,1)       = -spec%pp%trs
         lims(:,2)       =  spec%pp%trs
@@ -130,10 +132,12 @@ contains
 
             subroutine memoize_bfac
                 real :: bfac
-                if( self%pftcc_ptr%objfun_is_ccres() )then
+                if( self%fit_bfac )then
                     bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
                     call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
                     call self%a_ptr%set(self%iptcl, 'bfac', bfac)
+                else
+                    if(self%pftcc_ptr%objfun_is_ccres()) call self%a_ptr%set(self%iptcl, 'bfac', 200.)
                 endif
             end subroutine memoize_bfac
     end subroutine prep4srch
@@ -218,31 +222,6 @@ contains
         if( present(entropy) )call self%a_ptr%set(self%iptcl, 'ent', entropy)
         DebugPrint  '>>> strategy2D_srch::GOT BEST ORI'
     end subroutine store_solution
-
-    !>  placeholder for whatever metric we want to calculate
-    real function calc_entropy( self, corrs )
-        class(strategy2D_srch), intent(in) :: self
-        real,                   intent(in) :: corrs(self%nrefs)
-        real    :: p, sum_cc
-        integer :: i, nonzero
-        logical :: msk(self%nrefs)
-        msk    = corrs > TINY
-        nonzero = count(msk)
-        if( nonzero <= 2 )then
-            ! This would have come from a random assignement or move so set to random
-            ! This theshold of 2 should be updated to a sensible value that takes
-            ! search space explored into account
-            calc_entropy = - log(1./real(self%nrefs)) / log(2.) ! base 2, in bits
-        else
-            sum_cc = sum(corrs, mask=msk)
-            do i = 1,self%nrefs
-                if( .not. msk(i) )cycle
-                p = corrs(i) / sum_cc
-                calc_entropy = calc_entropy - p*log(p)
-            enddo
-            calc_entropy = calc_entropy / log(2.)
-        endif
-    end function calc_entropy
 
     subroutine kill( self )
         class(strategy2D_srch),  intent(inout) :: self !< instance
