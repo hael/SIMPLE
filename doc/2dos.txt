@@ -3,6 +3,9 @@ Qs 2 Michael
 * go over new structure
 * what is simple_modules ???
 
+Ideas
+* multi-criteria B-factors for hard data exclusion (Euclidean distance-based, specscore-based, bfac_rec)
+
 To consider:
 
 * merging global searches with neigh searches for improved robustness (and single program)

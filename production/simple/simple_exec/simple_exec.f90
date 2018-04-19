@@ -177,109 +177,14 @@ select case(prg)
         call cline%parse()
         call xmake_oris%execute(cline)
     case( 'orisops' )
-        !==Program orisops
-        !
-        ! <orisops/begin>is a program for analyzing SIMPLE orientation/parameter files (text files containing input parameters
-        ! and/or parameters estimated by cluster2D or refine3D). If only oritab is inputted, there
-        ! are a few options available. If errify=yes, then the program introduces uniform random angular errors
-        ! .in.[-angerr,angerr], and uniform origin shift errors
-        ! .in.[-sherr,sherr], and uniform random defocus errors .in.[-dferr,dferr]. If nstates > 1
-        ! then random states are assigned .in.[1,nstates]. If mirr=2d, then the Euler angles in oritab
-        ! are mirrored according to the relation e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in
-        ! oritab are mirrored according to the relation R=M(M*R), where R is the rotation matrix calculated from
-        ! the Euler angle triplet and M is a 3D reflection matrix (like a unit matrix but with the 3,3-component sign swapped).
-        ! If e1, e2, or e3 is inputted, the orientations in oritab are rotated correspondingly. If
-        ! you input state as well, you rotate only the orientations assigned to state state. If mul
-        ! is defined, you multiply the origin shifts with mul. If zero=yes, then the shifts are zeroed. If none of
-        ! the above described parameter are defined, and oritab is still defined, the program projects the 3D orientation into
-        ! the xy-plane and plots the resulting vector (this is useful for checking orientation coverage)<orisops/end>
-        !
-        ! set optional keys
-        keys_optional(1)  = 'oritab'
-        keys_optional(2)  = 'nptcls'
-        keys_optional(3)  = 'outfile'
-        keys_optional(4)  = 'e1'
-        keys_optional(5)  = 'e2'
-        keys_optional(6)  = 'e3'
-        keys_optional(7)  = 'trs'
-        keys_optional(8)  = 'nstates'
-        keys_optional(9)  = 'pgrp'
-        keys_optional(10) = 'defocus'
-        keys_optional(11) = 'deftab'
-        keys_optional(12) = 'angerr'
-        keys_optional(13) = 'sherr'
-        keys_optional(14) = 'dferr'
-        keys_optional(15) = 'zero'
-        keys_optional(16) = 'discrete'
-        keys_optional(17) = 'ndiscrete'
-        keys_optional(18) = 'state'
-        keys_optional(19) = 'errify'
-        keys_optional(20) = 'mul'
-        keys_optional(21) = 'mirr'
-        keys_optional(22) = 'xsh'
-        keys_optional(23) = 'ysh'
-        keys_optional(24) = 'zsh'
-        keys_optional(25) = 'ctfreslim'
-        keys_optional(26) = 'oritype'
-        ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:26))
-        ! execute
+        call cline%parse()
         call xorisops%execute(cline)
     case( 'oristats' )
-        !==Program oristats
-        !
-        ! <oristats/begin>is a program for analyzing SIMPLE orientation/parameter files (text files containing input
-        ! parameters and/or parameters estimated by cluster2D or refine3D). If two orientation
-        ! tables (oritab and oritab2) are inputted, the program provides statistics of the distances between the orientations
-        ! in the two documents. These statistics include the sum of angular distances between the orientations, the average
-        ! angular distance between the orientations, the standard deviation of angular distances, the minimum angular
-        ! distance, and the maximum angular distance<oristats/end>
-        !
-        ! Required keys
-        keys_required(1)  = 'oritab'
-        ! set optional keys
-        keys_optional(1)  = 'nptcls'
-        keys_optional(2)  = 'oritab2'
-        keys_optional(3)  = 'outfile'
-        keys_optional(4)  = 'nstates'
-        keys_optional(5)  = 'state'
-        keys_optional(6)  = 'ctfstats'
-        keys_optional(7)  = 'trsstats'
-        keys_optional(8)  = 'ncls'
-        keys_optional(9)  = 'minp'
-        keys_optional(10) = 'thres'
-        keys_optional(11) = 'projstats'
-        keys_optional(12) = 'nspace'
-        keys_optional(13) = 'pgrp'
-        keys_optional(14) = 'ndiscrete'
-        keys_optional(15) = 'weights2D'
-        keys_optional(16) = 'weights3D'
-        keys_optional(17) = 'classtats'
-        keys_optional(18) = 'oritype'
-        ! parse command line
-        call cline%parse_oldschool( keys_required(:1), keys_optional(:18) )
-        ! set defaults
-        if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
-        ! execute
+        call cline%parse()
         call xoristats%execute(cline)
     case( 'vizoris' )
-        !==Program vizoris
-        !
-        ! <vizoris/begin>extract projection direction from an orientation direction
-        ! for visualization in UCSF Chimera<vizoris/end>
-        !
-        ! Required keys
-        keys_required(1) = 'oritab'
-        ! set optional keys
-        keys_optional(1) = 'nspace'
-        keys_optional(2) = 'pgrp'
-        keys_optional(3) = 'tseries'
-        keys_optional(4) = 'oritype'
-        ! parse command line
-        call cline%parse_oldschool( keys_required(:1), keys_optional(:4) )
-        ! execute
+        call cline%parse()
         call xvizoris%execute(cline)
-
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'

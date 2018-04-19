@@ -5,11 +5,11 @@ implicit none
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
 private
 
-logical, parameter :: DEBUG = .false.
+logical, parameter :: DEBUG = .true.
 
 type simple_input_param
     character(len=:), allocatable :: key
-    character(len=:), allocatable :: keytype ! (binary|multi|num|str|file)
+    character(len=:), allocatable :: keytype ! (binary|multi|num|str|file|dir)
     character(len=:), allocatable :: descr_short
     character(len=:), allocatable :: descr_long
     character(len=:), allocatable :: descr_placeholder
@@ -79,10 +79,14 @@ type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
 type(simple_program), target :: mask
 type(simple_program), target :: motion_correct
+type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: new_project_
 type(simple_program), target :: normalize_
+type(simple_program), target :: orisops
+type(simple_program), target :: oristats
 type(simple_program), target :: pick
 type(simple_program), target :: postprocess
+type(simple_program), target :: powerspecs
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
 type(simple_program), target :: print_fsc
@@ -101,6 +105,7 @@ type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
+type(simple_program), target :: vizoris
 type(simple_program), target :: volops
 
 ! declare common params here, with name same as flag
@@ -111,8 +116,11 @@ type(simple_input_param) :: box
 type(simple_input_param) :: clip
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
+type(simple_input_param) :: dferr
+type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eo
 type(simple_input_param) :: fraca
+type(simple_input_param) :: fromf
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: deftab
@@ -129,14 +137,17 @@ type(simple_input_param) :: mirr
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: mw
+type(simple_input_param) :: ncls
 type(simple_input_param) :: neg
+type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nptcls
-type(simple_input_param) :: ncls
+type(simple_input_param) :: numlen
 type(simple_input_param) :: nthr
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
+type(simple_input_param) :: oritab2
 type(simple_input_param) :: oritype
 type(simple_input_param) :: outer
 type(simple_input_param) :: outfile
@@ -157,9 +168,11 @@ type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
 type(simple_input_param) :: stk
 type(simple_input_param) :: stktab
+type(simple_input_param) :: tof
 type(simple_input_param) :: trs
 type(simple_input_param) :: update_frac
 type(simple_input_param) :: weights2D
+type(simple_input_param) :: weights3D
 
 interface set_param
     module procedure set_param_1
@@ -191,10 +204,14 @@ contains
         call new_make_pickrefs
         call new_mask
         call new_motion_correct
+        call new_motion_correct_tomo
         ! call new_new_project
         call new_normalize
+        call new_orisops
+        call new_oristats
         call new_pick
         call new_postprocess
+        call new_powerspecs
         call new_preprocess
         call new_preprocess_stream
         call new_print_fsc
@@ -213,6 +230,7 @@ contains
         call new_simulate_subtomogram
         call new_stack
         call new_stackops
+        call new_vizoris
         call new_volops
         ! ...
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; make_user_interface, DONE'
@@ -260,14 +278,22 @@ contains
                 ptr2prg => mask
             case('motion_correct')
                 ptr2prg => motion_correct
+            case('motion_correct_tomo')
+                ptr2prg => motion_correct_tomo
             case('new_project')
                 ptr2prg => new_project_
             case('normalize')
                 ptr2prg => normalize_
+            case('orisops')
+                ptr2prg => orisops
+            case('oristats')
+                ptr2prg => oristats
             case('pick')
                 ptr2prg => pick
             case('postprocess')
                 ptr2prg => postprocess
+            case('powerspecs')
+                ptr2prg => powerspecs
             case('preprocess')
                 ptr2prg => preprocess
             case('preprocess_stream')
@@ -304,6 +330,8 @@ contains
                 ptr2prg => stack
             case('stackops')
                 ptr2prg => stackops
+            case('vizoris')
+                ptr2prg => vizoris
             case('volops')
                 ptr2prg => volops
             case DEFAULT
@@ -319,7 +347,9 @@ contains
         write(*,'(A)') initial_3Dmodel%name
         write(*,'(A)') make_cavgs%name
         write(*,'(A)') motion_correct%name
+        write(*,'(A)') motion_correct_tomo%name
         write(*,'(A)') pick%name
+        write(*,'(A)') powerspecs%name
         write(*,'(A)') preprocess%name
         write(*,'(A)') preprocess_stream%name
         write(*,'(A)') reconstruct3D%name
@@ -344,6 +374,8 @@ contains
         write(*,'(A)') mask%name
         write(*,'(A)') new_project_%name
         write(*,'(A)') normalize_%name
+        write(*,'(A)') orisops%name
+        write(*,'(A)') oristats%name
         write(*,'(A)') postprocess%name
         write(*,'(A)') print_fsc%name
         write(*,'(A)') print_magic_boxes%name
@@ -357,6 +389,7 @@ contains
         write(*,'(A)') scale%name
         write(*,'(A)') stack%name
         write(*,'(A)') stackops%name
+        write(*,'(A)') vizoris%name
         write(*,'(A)') volops%name
         stop
     end subroutine list_shmem_prgs_in_ui
@@ -376,9 +409,11 @@ contains
         &'.simple|.txt parameter file', .false., 'deftab'//trim(METADATA_EXT))
         call set_param(oritab,        'oritab',        'file',   'Orientation and CTF parameter file', 'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
         &'.simple|.txt parameter file', .false., 'oritab'//trim(METADATA_EXT))
+        call set_param(oritab2,       'oritab2',        'file',   '2nd orientation and CTF parameter file', '2nd orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
+        &'.simple|.txt parameter file', .false., 'oritab2'//trim(METADATA_EXT))
         call set_param(outfile,       'outfile',       'file',   'Output orientation and CTF parameter file', 'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
         &'.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
-        call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous solution', 'start iterations from here', .false., 1.0)
+        call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous run', 'start iterations from here', .false., 1.0)
         call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
         &'max shift per iteration in pixels{5}', .false., 0.0)
         call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
@@ -406,6 +441,8 @@ contains
         call set_param(objfun,        'objfun',        'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
         call set_param(weights2D,     'weights2D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(weights3D,     'weights3D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
+        &the median FRC between the particle and its corresponding re-projection(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
@@ -433,9 +470,17 @@ contains
         call set_param(pcontrast,      'pcontrast',    'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
         call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error(in pixels)', .false., 0.)
-        call set_param(angerr,          'angerr',       'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error(in degrees)', .false., 0.)
+        call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
+        call set_param(angerr,         'angerr',       'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error in degrees', .false., 0.)
+        call set_param(dferr,          'dferr',        'num',    'Underfocus error half-width',  'Uniform underfoucs error half-width(in microns)',  'defocus error in microns', .false., 1.)
         call set_param(oritype,        'oritype',      'multi',  'Oritype segment in project',  'Oritype segment in project(ptcl2D|ptcl3D|cls3D){ptcl3D}', '(ptcl2D|ptcl3D|cls3D){ptcl3D}', .false., 'ptcl3D')
+        call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
+        call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
+        call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
+        call set_param(numlen,         'numlen',       'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
+        call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
+        call set_param(fromf,          'fromf',        'num',    'First frame to include in subsum', 'First frame index to include in subsum', 'give index', .false., 1.)
+        call set_param(tof,            'tof',          'num',    'Last frame to include in subsum', 'Last frame index to include in subsum', 'give index', .false., 1.)
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -470,15 +515,15 @@ contains
     ! TEMPLATE
     ! INPUT PARAMETER SPECIFICATIONS
     ! image input/output
-    !<empty>
+    ! <empty>
     ! parameter input/output
-    !<empty>
+    ! <empty>
     ! alternative inputs
-    !<empty>
+    ! <empty>
     ! search controls
-    !<empty>
+    ! <empty>
     ! filter controls
-    !<empty>
+    ! <empty>
     ! mask controls
     ! <empty>
     ! computer controls
@@ -489,7 +534,7 @@ contains
         call center%new(&
         &'center',&                    ! name
         &'Center volume',&             ! descr_short
-        &'s a program for centering a volume and mapping the shift parameters back to the particle images',& ! descr_long
+        &'is a program for centering a volume and mapping the shift parameters back to the particle images',& ! descr_long
         &'simple_exec',&               ! executable
         &1, 3, 0, 0, 1, 0, 1, .false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -501,9 +546,9 @@ contains
         call center%set_input('parm_ios', 2, oritab)
         call center%set_input('parm_ios', 3, outfile)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
         call center%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
@@ -585,9 +630,9 @@ contains
         call cluster2D_stream%set_input('img_ios', 1, 'projfile_target', 'file', 'Target project',&
         &'Project encapsulating new particles and parameters to be classified in 2D', 'e.g. mytargetprojfile.simple', .true., '')
         ! parameter input/output
-        !<empty>
+        ! <empty>
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call cluster2D_stream%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting number of clusters',&
         &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
@@ -636,7 +681,7 @@ contains
         call cluster3D%set_input('parm_ios', 1, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to separate',&
         '# states to separate', .true., 2.0)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call cluster3D%set_input('srch_ctrls', 1, nspace)
         call cluster3D%set_input('srch_ctrls', 2, startit)
@@ -671,7 +716,7 @@ contains
         ! PROGRAM SPECIFICATION
         call cluster_cavgs%new(&
         &'cluster_cavgs',&                                                         ! name
-        &'analysis of class averages with affinity propagation',&                  ! descr_short
+        &'Analysis of class averages with affinity propagation',&                  ! descr_short
         &'is a program for analyzing class averages with affinity propagation, &
         &in order to get a better understanding of the view distribution. The balance flag is used &
         &to apply a balancing restraint (on the class population). Adjust balance until you are &
@@ -685,7 +730,7 @@ contains
         call cluster_cavgs%set_input('parm_ios', 1, smpd)
         call cluster_cavgs%set_input('parm_ios', 2, 'classdoc', 'file', 'Class document', 'Class document associated with the stack of class averages', 'e.g. classdoc_iterX.txt', .true., '')
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call cluster_cavgs%set_input('srch_ctrls', 1, 'balance', 'num', 'Max population for balance restraint', 'Max population for balance restraint', 'max # cluster members', .false., 0.)
         call cluster_cavgs%set_input('srch_ctrls', 2, objfun)
@@ -703,7 +748,7 @@ contains
         ! PROGRAM SPECIFICATION
         call convert%new(&
         &'convert',&                                                    ! name
-        &'converts between SPIDER and MRC formats',&                    ! descr_short
+        &'Convert between SPIDER and MRC formats',&                     ! descr_short
         &'is a program for converting between SPIDER and MRC formats',& ! descr_long
         &'simple_exec',&                                                ! executable
         &2, 0, 2, 0, 0, 0, 0, .false.)                                  ! # entries in each group, requires sp_project
@@ -712,16 +757,16 @@ contains
         call convert%set_input('img_ios', 1, outvol)
         call convert%set_input('img_ios', 2, outstk)
         ! parameter input/output
-        !<empty>
+        ! <empty>
         ! alternative inputs
         call convert%set_input('alt_ios', 1, 'vol1', 'file', 'Volume', 'Volume to convert', &
         & 'input volume e.g. vol.spi', .false., '')
         call convert%set_input('alt_ios', 2, 'stk', 'file', 'Stack', 'Stack to convert',&
         & 'input stack e.g. imgs.spi', .false., '')
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -731,16 +776,16 @@ contains
     subroutine new_ctf_estimate
         ! PROGRAM SPECIFICATION
         call ctf_estimate%new(&
-        &'ctf_estimate', & ! name
-        &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_short
-        &'is a distributed SIMPLE workflow for CTF parameter fitting',&        ! descr_long
-        &'simple_distr_exec',&                                                 ! executable
-        &0, 2, 0, 4, 2, 0, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &'ctf_estimate', &                                              ! name
+        &'CTF parameter fitting',&                                      ! descr_short
+        &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
+        &'simple_distr_exec',&                                          ! executable
+        &0, 2, 0, 4, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call ctf_estimate%set_input('parm_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. ctf_estimate/', .false., 'ctf_estimate')
+        call ctf_estimate%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. ctf_estimate/', .false., 'ctf_estimate')
         call ctf_estimate%set_input('parm_ios', 2, pspecsz)
         ! alternative inputs
         ! <empty>
@@ -763,7 +808,7 @@ contains
         ! PROGRAM SPECIFICATION
         call ctfops%new(&
         &'ctfops', &                                         ! name
-        &'is a program for applying CTF to stacked images',& ! descr_short
+        &'Apply CTF to stacked images',&                     ! descr_short
         &'is a program for applying CTF to stacked images',& ! descr long
         &'simple_exec',&                                     ! executable
         &2, 4, 0, 0, 2, 0, 1, .false.)                       ! # entries in each group, requires sp_project
@@ -778,9 +823,9 @@ contains
         call ctfops%set_input('parm_ios', 3, oritab)
         call ctfops%set_input('parm_ios', 4, deftab)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
         call ctfops%set_input('filt_ctrls', 1, ctf)
         call ctfops%set_input('filt_ctrls', 2, bfac)
@@ -793,20 +838,16 @@ contains
     subroutine new_extract
         ! PROGRAM SPECIFICATION
         call extract%new(&
-        &'extract', &                                                                      ! name
-        &'is a program that extracts particle images from integrated movies',&             ! descr_short
-        &'Boxfiles are assumed to be in EMAN format but we provide a conversion script'//& ! descr long
-        &' (relion2emanbox.pl) for *.star files containing particle coordinates obtained&
-        & with Relion. In addition to one single-particle image stack per micrograph the&
-        & program produces a parameter files that should be concatenated for use in&
-        & conjunction with other SIMPLE programs.',&
-        &'simple_exec',&                                                                   ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true.)                                                      ! # entries in each group, requires sp_project
+        &'extract', &                                                           ! name
+        &'Extract particle images from integrated movies',&                     ! descr_short
+        &'is a program for extracting particle images from integrated movies',& ! descr long
+        &'simple_exec',&                                                        ! executable
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call extract%set_input('parm_ios', 1, 'dir', 'string', 'Ouput directory',&
+        call extract%set_input('parm_ios', 1, 'dir', 'dir', 'Ouput directory',&
         &'Ouput directory for single-particle images & CTF parameters', 'e.g. extract/', .false., 'extract')
         call extract%set_input('parm_ios', 2, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
         call extract%set_input('parm_ios', 3, pcontrast)
@@ -826,11 +867,11 @@ contains
     subroutine new_filter
         ! PROGRAM SPECIFICATION
         call filter%new(&
-        &'filter',&                                     ! name
-        &'filters stacks/volumes',&                     ! descr_short
-        &'is a program for filtering stacks/volumes',&  ! descr_long
-        &'simple_exec',&                                ! executable
-        &2, 1, 2, 0, 7, 0, 1, .false.)                  ! # entries in each group, requires sp_project
+        &'filter',&                                   ! name
+        &'Filter stack/volume',&                      ! descr_short
+        &'is a program for filtering stack/volume',&  ! descr_long
+        &'simple_exec',&                              ! executable
+        &2, 1, 2, 0, 7, 0, 1, .false.)                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%set_input('img_ios', 1, outstk)
@@ -841,7 +882,7 @@ contains
         call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. refs.mrc',     .false., '')
         call filter%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
         call filter%set_input('filt_ctrls', 1, lp)
         filter%filt_ctrls(1)%required = .false.
@@ -863,7 +904,7 @@ contains
         ! PROGRAM SPECIFICATION
         call fsc%new(&
         &'fsc', &                                                               ! name
-        &'calculattes the FSC between the two input volumes',&                  ! descr_short
+        &'Calculate FSC between the two input volumes',&                        ! descr_short
         &'is a program for calculating the FSC between the two input volumes',& ! descr_long
         &'simple_exec',&                                                        ! executable
         &2, 1, 0, 0, 0, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
@@ -874,11 +915,11 @@ contains
         ! parameter input/output
         call fsc%set_input('parm_ios', 1, smpd)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         call fsc%set_input('mask_ctrls', 1, msk)
         call fsc%set_input('mask_ctrls', 2, mskfile)
@@ -890,7 +931,7 @@ contains
         ! PROGRAM SPECIFICATION
         call info_image%new(&
         &'info_image', & ! name
-        &'prints header information',&                                                         ! descr_short
+        &'Print header information',&                                                          ! descr_short
         &'is a program for printing header information in MRC and SPIDER stacks and volumes',& ! descr_long
         &'simple_exec',&                                                                       ! executable
         &1, 2, 0, 0, 0, 0, 0, .false.)                                                         ! # entries in each group, requires sp_project
@@ -902,11 +943,11 @@ contains
         call info_image%set_input('parm_ios', 1, 'stats', 'binary', 'Output statistics', 'Output statistics(yes|no){no}',             '(yes|no){no}', .false., 'no')
         call info_image%set_input('parm_ios', 2, 'vis',   'binary', 'Visualize image',   'Visualize image with gnuplot(yes|no){yes}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -916,7 +957,7 @@ contains
         ! PROGRAM SPECIFICATION
         call info_stktab%new(&
         &'info_stktab', & ! name
-        &'prints stktab information',&                                           ! descr_short
+        &'Print stktab information',&                                            ! descr_short
         &'is a program for printing information about stktab (list of stacks)',& ! descr_long
         &'simple_exec',&                                                         ! executable
         &1, 0, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
@@ -927,13 +968,13 @@ contains
         call info_stktab%set_input('img_ios', 1, stktab)
 
         ! parameter input/output
-        !<empty>
+        ! <empty>
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -942,19 +983,19 @@ contains
     subroutine new_initial_3Dmodel
         ! PROGRAM SPECIFICATION
         call initial_3Dmodel%new(&
-        &'initial_3Dmodel',& ! name
-        &'3D abinitio model generation from class averages',&                           ! descr_short
+        &'initial_3Dmodel',&                                                            ! name
+        &'3D ab initio model generation from class averages',&                          ! descr_short
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                          ! descr_long
         &'simple_distr_exec',&                                                          ! executable
         &0, 1, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call initial_3Dmodel%set_input('parm_ios', 1, projfile)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call initial_3Dmodel%set_input('srch_ctrls', 1, nspace)
         call initial_3Dmodel%set_input('srch_ctrls', 2, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
@@ -984,9 +1025,9 @@ contains
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION
         call make_cavgs%new(&
-        &'make_cavgs', &     ! name
-        &'is used to produce class averages',&     ! descr_short
-        &'is used to produce class averages or initial random references&
+        &'make_cavgs', &                           ! name
+        &'Make class averages',&               ! descr_short
+        &'is a distributed workflow for generating class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
         &1, 5, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
@@ -1018,7 +1059,7 @@ contains
         ! PROGRAM SPECIFICATION
         call make_oris%new(&
         &'make_oris',&                       ! name
-        &'is used to produce orientations',& ! descr_short
+        &'Make orientations',&           ! descr_short
         &'is a program for making SIMPLE orientation files. Make_oris generates random Euler angles e1.in.[0,360], e2.in.[0,180] '&
         &'and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number '&
         &'> 0, the shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the orientations '&
@@ -1029,7 +1070,7 @@ contains
         &0, 10, 0, 0, 0, 0, 1, .false.)      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call make_oris%set_input('parm_ios', 1,  'nptcls', 'num', 'Number of per-particle orientations', 'Number of per-particle orientations to produce', '# per-ptcl oris', .true., 1.0)
         call make_oris%set_input('parm_ios', 2,  'ncls', 'num', 'Number of random class labels', 'Number of random class labels to produce', '# classes', .false., 0.)
@@ -1043,11 +1084,11 @@ contains
         call make_oris%set_input('parm_ios', 9,  'ndiscrete', 'num', 'Number of discrete projection directions', 'Number of discrete projection directions to sample from', '# discrete projs', .false., 0.)
         call make_oris%set_input('parm_ios', 10, oritype)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1058,7 +1099,7 @@ contains
         ! PROGRAM SPECIFICATION
         call make_pickrefs%new(&
         &'make_pickrefs', &                            ! name
-        &'is used to produce picking references',&     ! descr_short
+        &'Generate picking references',&               ! descr_short
         &'is a program for generating references for template-based particle picking',& ! descr_long
         &'simple_exec',&                               ! executable
         &0, 2, 2, 1, 0, 0, 1, .false.)                 ! # entries in each group, requires sp_project
@@ -1085,8 +1126,8 @@ contains
         ! PROGRAM SPECIFICATION
         call mask%new(&
         &'mask',& ! name
-        &'is a program for masking images and volumes',&                      ! descr_short
-        &'If you want to mask your images with a spherical mask with a soft &
+        &'Mask images/volumes',&                                         ! descr_short
+        &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
         & falloff, set msk to the radius in pixels',&                         ! descr_long
         &'simple_exec',&                                                      ! executable
         &0, 3, 2, 1, 1,11, 1, .false.)                                        ! # entries in each group, requires sp_project
@@ -1133,25 +1174,24 @@ contains
     subroutine new_motion_correct
         ! PROGRAM SPECIFICATION
         call motion_correct%new(&
-        &'motion_correct', & ! name
-        &'is a program that performs for movie alignment',&                                     ! descr_short
-        &'is a distributed workflow for movie alignment or or motion correction based on the same&
-        & principal strategy as Grigorieffs program (hence the name). There are two important&
+        &'motion_correct', &                                                                  ! name
+        &'Motion correction of movies',&                                                      ! descr_short
+        &'is a distributed workflow for motion correction of movies based on the same&
+        & principal strategy as Grigorieffs program. There are two important&
         & differences: automatic weighting of the frames using a correlation-based M-estimator and&
-        & continuous optimisation of the shift parameters. Input is a textfile with absolute paths&
-        & to movie files in addition to a few input parameters, some of which deserve a comment. If&
+        & continuous optimisation of the shift parameters. If&
         & dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
-        & contiguous subset of frames will be averaged without any dose-weighting applied.',&   ! descr_long
-        &'simple_distr_exec',&                                                                  ! executable
-        &0, 6, 0, 6, 2, 0, 2, .true.)                                                           ! # entries in each group, requires sp_project
+        & contiguous subset of frames will be averaged without any dose-weighting applied',&   ! descr_long
+        &'simple_distr_exec',&                                                                 ! executable
+        &0, 6, 0, 6, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call motion_correct%set_input('parm_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
+        call motion_correct%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
         call motion_correct%set_input('parm_ios', 2, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
         call motion_correct%set_input('parm_ios', 3, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call motion_correct%set_input('parm_ios', 4, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.)
@@ -1162,11 +1202,11 @@ contains
         ! <empty>
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
-        call motion_correct%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial iteration', 'Initial iteration', '...', .false., 1.)
-        call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false., 0.)
-        call motion_correct%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false., 1.)
-        call motion_correct%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false., 1.)
-        call motion_correct%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas', '# of standard deviation threshold for outlier removal', '{6}', .false., 6.)
+        call motion_correct%set_input('srch_ctrls', 2, startit)
+        call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call motion_correct%set_input('srch_ctrls', 4, fromf)
+        call motion_correct%set_input('srch_ctrls', 5, tof)
+        call motion_correct%set_input('srch_ctrls', 6, nsig)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
@@ -1178,6 +1218,55 @@ contains
         call motion_correct%set_input('comp_ctrls', 1, nparts)
         call motion_correct%set_input('comp_ctrls', 2, nthr)
     end subroutine new_motion_correct
+
+    subroutine new_motion_correct_tomo
+        ! PROGRAM SPECIFICATION
+        call motion_correct_tomo%new(&
+        &'motion_correct_tomo', &                   ! name
+        &'Motion correction of tomography movies',& ! descr_short
+        &'is a distributed workflow for motion correction of tomography movies based on the same &
+        &principal strategy as Grigorieffs program. There are two important differences: automatic &
+        &weighting of the frames using a correlation-based M-estimator and continuous optimisation of &
+        &the shift parameters. If dose_rate and exp_time are given, the individual frames will be &
+        &low-pass filtered accordingly (dose-weighting strategy). The exp_doc document should contain &
+        &per line exp_time=X and dose_rate=Y. It is asssumed that the input list of movies (one per tilt) &
+        &are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. &
+        &If scale is given, the movie will be Fourier cropped according to the down-scaling factor &
+        &(for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given &
+        &chunk size (Falcon 3 movies)',& ! descr_long
+        &'simple_distr_exec',&           ! executable
+        &0, 7, 0, 4, 3, 0, 1, .false.)   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call motion_correct_tomo%set_input('parm_ios', 1, 'tomoseries', 'file', '.txt filetable of filetables of tomograms',&
+        &'.txt filetable of filetables; each line referring to a .txt file listing all movies in the tilt-series', 'e.g. filetab_of_filetabs.txt', .true., '')
+        call motion_correct_tomo%set_input('parm_ios', 2, 'exp_doc', 'file', '.txt file with exp_time and dose_rate per tomogram',&
+        &'.txt file with exp_time and dose_rate per tomogram', 'e.g. exp_doc.txt', .true., '')
+        call motion_correct_tomo%set_input('parm_ios', 3, smpd)
+        call motion_correct_tomo%set_input('parm_ios', 4, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
+        call motion_correct_tomo%set_input('parm_ios', 5, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.)
+        call motion_correct_tomo%set_input('parm_ios', 6, pspecsz)
+        call motion_correct_tomo%set_input('parm_ios', 7, numlen)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call motion_correct_tomo%set_input('srch_ctrls', 1, trs)
+        call motion_correct_tomo%set_input('srch_ctrls', 2, startit)
+        call motion_correct_tomo%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call motion_correct_tomo%set_input('srch_ctrls', 4, nsig)
+        ! filter controls
+        call motion_correct_tomo%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
+        call motion_correct_tomo%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 8.)
+        call motion_correct_tomo%set_input('filt_ctrls', 3, kv)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call motion_correct_tomo%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_motion_correct_tomo
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
@@ -1191,7 +1280,7 @@ contains
         ! &0, 1, 0, 0, 0, 0, 0, .false.)                                                                         ! # entries in each group, requires sp_project
         ! ! INPUT PARAMETER SPECIFICATIONS
         ! ! image input/output
-        ! !<empty>
+        ! ! <empty>
         ! ! parameter input/output
         ! call new_project_%set_input('parm_ios', 1, 'projname', 'str', 'Project name', 'Name of project to create myproject.simple file for meta-data management',&
         ! &'e.g. to create myproject.simple', .true., '')
@@ -1201,11 +1290,11 @@ contains
         ! call new_project_%set_input('parm_ios', 5, qsys_reservation)
 
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1216,17 +1305,17 @@ contains
         ! PROGRAM SPECIFICATION
         call pick%new(&
         &'pick', & ! name
-        &'is a distributed workflow for template-based particle picking',&      ! descr_short
-        &'is a distributed workflow for template-based particle picking',&      ! descr_long
-        &'simple_distr_exec',&                                                  ! executable
-        &0, 2, 0, 2, 1, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
+        &'Template-based particle picking',&                               ! descr_short
+        &'is a distributed workflow for template-based particle picking',& ! descr_long
+        &'simple_distr_exec',&                                             ! executable
+        &0, 2, 0, 2, 1, 0, 1, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
-        call pick%set_input('parm_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
+        call pick%set_input('parm_ios', 2, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1244,8 +1333,8 @@ contains
         ! PROGRAM SPECIFICATION
         call postprocess%new(&
         &'postprocess',& ! name
-        &'is a program for post-processing of volumes',&                            ! descr_short
-        &'Use program volops to estimate the B-factor with the Guinier plot',&      ! descr_long
+        &'Post-processing of volume',&                                        ! descr_short
+        &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                            ! executable
         &1, 1, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1288,18 +1377,50 @@ contains
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess
 
+    subroutine new_powerspecs
+        ! PROGRAM SPECIFICATION
+        call powerspecs%new(&
+        &'powerspecs', &                                                              ! name
+        &'Calculate powerspectra from micrographs',&                                  ! descr_short
+        &'is a program for generating powerspectra from a filetable of micrographs',& ! descr_long
+        &'simple_distr_exec',&                                                        ! executable
+        &0, 5, 2, 0, 1, 0, 2, .false.)                                                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call powerspecs%set_input('parm_ios', 1, smpd)
+        call powerspecs%set_input('parm_ios', 2, 'fbody', 'string', 'Template output powerspec name',&
+        &'Template output powerspec name', 'e.g. spec_', .false., '')
+        call powerspecs%set_input('parm_ios', 3, pspecsz)
+        call powerspecs%set_input('parm_ios', 4, 'speckind', 'multi', 'Power spectrum kind', 'Power spectrum kind(real|power|sqrt|log|phase){sqrt}', '(real|power|sqrt|log|phase){sqrt}', .false., 'sqrt')
+        call powerspecs%set_input('parm_ios', 5, clip)
+        ! alternative inputs
+        call powerspecs%set_input('alt_ios', 1, stk)
+        call powerspecs%set_input('alt_ios', 2, 'filetab', 'file', 'List of micrograph files', 'List of micrograph files to generate powerspectra from', 'e.g. filetab.txt', .true., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call powerspecs%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit of resolution mask', 'Low-pass resolution limit of resolution mask', 'low-pass limit in Angstroms', .false., 6.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call powerspecs%set_input('comp_ctrls', 1, nparts)
+        call powerspecs%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_powerspecs
+
     subroutine new_preprocess
         ! PROGRAM SPECIFICATION
         call preprocess%new(&
         &'preprocess', & ! name
-        &'is a program that performs for movie alignment',&                                 ! descr_short
+        &'Preprocessing',&                                                                  ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 9, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 9, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess%set_input('img_ios', 1, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
+        call preprocess%set_input('img_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -1311,16 +1432,16 @@ contains
         call preprocess%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess%set_input('parm_ios', 8, pspecsz)
-        call preprocess%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
+        call preprocess%set_input('parm_ios', 9, numlen)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call preprocess%set_input('srch_ctrls', 1, trs)
-        call preprocess%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false., 1.0)
-        call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false., 0.)
-        call preprocess%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false., 1.0)
-        call preprocess%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false., 1.0)
-        call preprocess%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas in motion_correct', '# of standard deviation threshold for outlier removal in motion_correct{6}', '{6}', .false., 6.)
+        call preprocess%set_input('srch_ctrls', 2, startit)
+        call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call preprocess%set_input('srch_ctrls', 4, fromf)
+        call preprocess%set_input('srch_ctrls', 5, tof)
+        call preprocess%set_input('srch_ctrls', 6, nsig)
         call preprocess%set_input('srch_ctrls', 7, dfmin)
         call preprocess%set_input('srch_ctrls', 8, dfmax)
         call preprocess%set_input('srch_ctrls', 9, dfstep)
@@ -1351,15 +1472,15 @@ contains
         ! PROGRAM SPECIFICATION
         call preprocess_stream%new(&
         &'preprocess_stream', & ! name
-        &'is a program that performs for movie alignment',&                                 ! descr_short
+        &'Preprocessing in streaming mode',&                                                ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &2,13, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &2,13, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'file', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
-        call preprocess_stream%set_input('img_ios', 2, 'dir', 'file', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
+        call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
+        call preprocess_stream%set_input('img_ios', 2, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -1371,20 +1492,20 @@ contains
         call preprocess_stream%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess_stream%set_input('parm_ios', 8, pspecsz)
-        call preprocess_stream%set_input('parm_ios', 9, 'numlen', 'num', 'Length of number string', 'Length of number string', '...', .false., 5.0)
+        call preprocess_stream%set_input('parm_ios', 9, numlen)
         call preprocess_stream%set_input('parm_ios', 10, kv)
         call preprocess_stream%set_input('parm_ios', 11, cs)
         call preprocess_stream%set_input('parm_ios', 12, fraca)
         call preprocess_stream%set_input('parm_ios', 13, smpd)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call preprocess_stream%set_input('srch_ctrls', 1, trs)
-        call preprocess_stream%set_input('srch_ctrls', 2, 'startit', 'num', 'Initial movie alignment iteration', 'Initial movie alignment iteration', '...', .false., 1.0)
-        call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', '# frames to group', '# frames to group before motion_correct(Falcon 3)', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls', 4, 'fromf', 'num', 'First frame index', 'First frame to include in the alignment', '...', .false., 1.0)
-        call preprocess_stream%set_input('srch_ctrls', 5, 'tof', 'num', 'Last frame index', 'Last frame to include in the alignment', '...', .false., 1.0)
-        call preprocess_stream%set_input('srch_ctrls', 6, 'nsig', 'num', '# of sigmas in motion_correct', '# of standard deviation threshold for outlier removal in motion_correct{6}', '{6}', .false., 6.)
+        call preprocess_stream%set_input('srch_ctrls', 2, startit)
+        call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls', 4, fromf)
+        call preprocess_stream%set_input('srch_ctrls', 5, tof)
+        call preprocess_stream%set_input('srch_ctrls', 6, nsig)
         call preprocess_stream%set_input('srch_ctrls', 7, dfmin)
         call preprocess_stream%set_input('srch_ctrls', 8, dfmax)
         call preprocess_stream%set_input('srch_ctrls', 9, dfstep)
@@ -1415,24 +1536,24 @@ contains
         ! PROGRAM SPECIFICATION
         call print_fsc%new(&
         &'print_fsc', &                                                          ! name
-        &'prints the binary FSC files produced by REFINE3D',&                    ! descr_short
+        &'Print FSC file produced by REFINE3D',&                                 ! descr_short
         &'is a program for printing the binary FSC files produced by REFINE3D',& ! descr_long
         &'simple_exec',&                                                         ! executable
         &0, 3, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call print_fsc%set_input('parm_ios', 1, smpd)
         call print_fsc%set_input('parm_ios', 2, box)
         call print_fsc%set_input('parm_ios', 3, 'fsc', 'file', 'FSC file', 'Binary file with FSC info',&
         'input binary file e.g. fsc_state01.bin', .true., 'fsc_state01.bin')
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1443,24 +1564,24 @@ contains
         ! PROGRAM SPECIFICATION
         call print_magic_boxes%new(&
         &'print_magic_boxes', &                                   ! name
-        &'prints magic boxes(fast FFT)',&                         ! descr_short
+        &'Print magic boxes (fast FFT)',&                         ! descr_short
         &'is a program for printing magic box sizes (fast FFT)',& ! descr_long
         &'simple_exec',&                                          ! executable
         &0, 3, 0, 0, 0, 0, 0, .false.)                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call print_magic_boxes%set_input('parm_ios', 1, smpd)
         call print_magic_boxes%set_input('parm_ios', 2, box)
         call print_magic_boxes%set_input('parm_ios', 3, 'moldiam', 'num', 'Molecular diameter', 'Molecular diameter(in pixels)',&
         'give # pixels of diameter', .false., 140.)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1471,7 +1592,7 @@ contains
         ! PROGRAM SPECIFICATION
         call project%new(&
         &'project',&                           ! name
-        &'project volume',&                    ! descr_short
+        &'Project volume',&                    ! descr_short
         &'is a program for projecting a volume using Fourier interpolation. Input is a SPIDER or &
         &MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections &
         &are generated by extracting central sections from the Fourier volume and back transforming the 2D FTs. &
@@ -1492,12 +1613,12 @@ contains
         call project%set_input('parm_ios', 2, oritab)
         call project%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast','Invert contrast of projections(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call project%set_input('srch_ctrls', 1, nspace)
         call project%set_input('srch_ctrls', 2, pgrp)
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         call project%set_input('mask_ctrls', 1, msk)
         ! computer controls
@@ -1505,18 +1626,16 @@ contains
     end subroutine new_project
 
     subroutine new_normalize
+        ! PROGRAM SPECIFICATION
         call normalize_%new(&
-        &'normalize',&                           ! name
-        &'normalize volume/stack',&              ! descr_short
-        &'is a program for normalization of MRC or SPIDER stacks and volumes. If you want to '&
-        &'normalize your images inputted with stk, set norm=yes. If you want to perform noise normalisation '&
-        &'of the images set noise_norm=yes given a mask radius msk (pixels). If you want to normalize '&
-        &'with respect to their power spectrum set shell_norm=yes',&
+        &'normalize',&                         ! name
+        &'Normalize volume/stack',&            ! descr_short
+        &'is a program for normalization of MRC or SPIDER stacks and volumes',&
         &'simple_exec',&                       ! executable
         &0, 4, 2, 0, 0, 1, 1, .false.)         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call normalize_%set_input('parm_ios', 1, smpd)
         call normalize_%set_input('parm_ios', 2, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}',     '(yes|no){no}', .false., 'no')
@@ -1526,32 +1645,130 @@ contains
         call normalize_%set_input('alt_ios', 1, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
         call normalize_%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         call normalize_%set_input('mask_ctrls', 1, msk)
         ! computer controls
         call normalize_%set_input('comp_ctrls', 1, nthr)
     end subroutine new_normalize
 
+    subroutine new_orisops
+        ! PROGRAM SPECIFICATION
+        call orisops%new(&
+        &'orisops',&                      ! name
+        &'Standard orientation editing',& ! descr_short
+        &'is a program for modifying SIMPLE orientation/parameter files. If errify=yes, '&
+        &'uniform random angular errors .in.[-angerr,angerr], and uniform origin shift errors .in.[-sherr,sherr], '&
+        &'and uniform random defocus errors .in.[-dferr,dferr] are introduced. If nstates > 1 then random states are assigned '&
+        &'.in.[1,nstates]. If mirr=2d, then the Euler angles in oritab are mirrored according to the relation '&
+        &'e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are mirrored according to the '&
+        &'relation R=M(M*R), where R is the rotation matrix calculated from the Euler angle triplet and M is a '&
+        &'3D reflection matrix. If e1, e2, or e3 is '&
+        &'inputted, the orientations are rotated correspondingly. If you input state, '&
+        &'only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul. '&
+        &'If zero=yes, then the shifts are zeroed',&
+        &'simple_exec',&                       ! executable
+        &0, 18, 0, 0, 0, 0, 0, .false.)        ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call orisops%set_input('parm_ios', 1,  oritab)
+        orisops%parm_ios(1)%required = .true.
+        call orisops%set_input('parm_ios', 2,  outfile)
+        call orisops%set_input('parm_ios', 3,  e1)
+        call orisops%set_input('parm_ios', 4,  e2)
+        call orisops%set_input('parm_ios', 5,  e3)
+        call orisops%set_input('parm_ios', 6,  'nstates', 'num', 'Number of random state labels', 'Number of random state labels to insert', '# states', .false., 0.0)
+        call orisops%set_input('parm_ios', 7,  pgrp)
+        orisops%parm_ios(7)%required = .false.
+        call orisops%set_input('parm_ios', 8,  ctf)
+        orisops%parm_ios(8)%required = .false.
+        call orisops%set_input('parm_ios', 9,  angerr)
+        call orisops%set_input('parm_ios', 10, sherr)
+        call orisops%set_input('parm_ios', 11, dferr)
+        call orisops%set_input('parm_ios', 12, 'zero', 'binary', 'Zero shifts', 'Zero shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call orisops%set_input('parm_ios', 13, 'ndiscrete', 'num', 'Number of discrete projection directions',&
+        &'Number of projection directions to use for discretization of input orientations', '# discrete projs', .false., 0.)
+        call orisops%set_input('parm_ios', 14,  'state', 'num', 'State to modify', 'Index of state to modify', 'give state index', .false., 1.)
+        call orisops%set_input('parm_ios', 15, 'errify', 'binary', 'Errify input orientations/CTF parameters',&
+        &'Introduce uniform random errors in input orientations/CTF parameters(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call orisops%set_input('parm_ios', 16, 'mul', 'num', 'Shift multiplication factor',&
+        &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
+        call orisops%set_input('parm_ios', 17, 'mirr', 'multi', 'Mirror orientations', 'Mirror orientations(2d|3d|no){no}', '(2d|3d|no){no}', .false., 'no')
+        call orisops%set_input('parm_ios', 18, 'symrnd', 'binary', 'Randomize over subgroubs of point-group', 'Expand orientations over entire unit sphere by &
+        &permutation according to randomly selected subgroup symmetry(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call orisops%set_input('parm_ios', 19, oritype)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_orisops
+
+    subroutine new_oristats
+        ! PROGRAM SPECIFICATION
+        call oristats%new(&
+        &'oristats',&                             ! name
+        &'Statistical analyses of orientations',& ! descr_short
+        &'is a program for analyzing SIMPLE orientation/parameter files. If two orientation '&
+        &'tables (oritab and oritab2) are inputted, statistics of the distances between the orientations '&
+        &'in the two documents are provided',&
+        &'simple_exec',&                          ! executable
+        &0, 11, 0, 0, 0, 0, 1, .false.)           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call oristats%set_input('parm_ios', 1,  oritab)
+        oristats%parm_ios(1)%required = .true.
+        call oristats%set_input('parm_ios', 2,  oritab2)
+        call oristats%set_input('parm_ios', 3,  pgrp)
+        oristats%parm_ios(3)%required = .false.
+        call oristats%set_input('parm_ios', 4,  nspace)
+        call oristats%set_input('parm_ios', 5,  oritype)
+        call oristats%set_input('parm_ios', 6,  weights2D)
+        call oristats%set_input('parm_ios', 7,  weights3D)
+        call oristats%set_input('parm_ios', 8,  'ctfstats', 'binary', 'CTF statistics',         'Provide statistics about CTF(yes|no){no}',                      '(yes|no){no}', .false., 'no')
+        call oristats%set_input('parm_ios', 9,  'classtats', 'binary', 'Class statistics',      'Provide statistics about 2D clusters(yes|no){no}',              '(yes|no){no}', .false., 'no')
+        call oristats%set_input('parm_ios', 10, 'projstats', 'binary', 'Projection statistics', 'Provide statistics about projection directions(yes|no){no}',    '(yes|no){no}', .false., 'no')
+        call oristats%set_input('parm_ios', 11, 'trsstats', 'binary', 'Shift statistics',       'Provide statistics about rotational origin shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call oristats%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_oristats
+
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
         call reconstruct3D%new(&
-        &'reconstruct3D',&                                                                    ! name
-        &'3D reconstruction from oriented particles',&                                        ! descr_long
+        &'reconstruct3D',&                                                     ! name
+        &'3D reconstruction from oriented particles',&                         ! descr_long
         &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, '&
         &'given input orientations and state assignments. The algorithm is based on direct Fourier inversion '&
         &'with a Kaiser-Bessel (KB) interpolation kernel',&
-        &'simple_distr_exec',&                                                                ! executable
-        &0, 1, 0, 2, 1, 2, 2, .true.)                                                         ! # entries in each group, requires sp_project
+        &'simple_distr_exec',&                                                 ! executable
+        &0, 1, 0, 2, 1, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call reconstruct3D%set_input('parm_ios', 1, projfile)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call reconstruct3D%set_input('srch_ctrls', 1, pgrp)
         call reconstruct3D%set_input('srch_ctrls', 2, frac)
@@ -1568,11 +1785,11 @@ contains
     subroutine new_refine3D
         ! PROGRAM SPECIFICATION
         call refine3D%new(&
-        &'refine3D',&                                                                                      ! name
-        &'3D volume refinement',&                                                                          ! descr_short
-        &'is a distributed workflow for 3D volume refinement based on probabilistic projection matching',& ! descr_long
-        &'simple_distr_exec',&                                                                             ! executable
-        &1, 1, 0, 12, 7, 5, 2, .true.)                                                                     ! # entries in each group
+        &'refine3D',&                                                                               ! name
+        &'3D refinement',&                                                                          ! descr_short
+        &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
+        &'simple_distr_exec',&                                                                      ! executable
+        &1, 1, 0, 12, 7, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -1580,7 +1797,7 @@ contains
         ! parameter input/output
         call refine3D%set_input('parm_ios', 1, projfile)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call refine3D%set_input('srch_ctrls', 1, nspace)
         call refine3D%set_input('srch_ctrls', 2, startit)
@@ -1627,24 +1844,24 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D_init%new(&
         &'refine3D_init',& ! name
-        &'random initialisation of 3D volume refinement',&                                                     ! descr_short
+        &'Random initialisation of 3D refinement',&                                                            ! descr_short
         &'is a distributed workflow for generating a random initial 3D model for initialisation of refine3D',& ! descr_long
         &'simple_distr_exec',&                                                                                 ! executable
         &0, 1, 0, 3, 0, 2, 2, .true.)                                                                          ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call refine3D_init%set_input('parm_ios', 1, projfile)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call refine3D_init%set_input('srch_ctrls', 1, nspace)
         call refine3D_init%set_input('srch_ctrls', 2, pgrp)
         call refine3D_init%set_input('srch_ctrls', 3, 'nran', 'num', 'Number of random samples', 'Number of images to randomly sample for 3D reconstruction',&
         &'# random samples', .false., 0.)
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         call refine3D_init%set_input('mask_ctrls', 1, msk)
         call refine3D_init%set_input('mask_ctrls', 2, inner)
@@ -1657,7 +1874,7 @@ contains
         ! PROGRAM SPECIFICATION
         call scale%new(&
         &'scale', & ! name
-        &'is a program for re-scaling MRC & SPIDER stacks and volumes',&                        ! descr_short
+        &'Re-scaling MRC & SPIDER stacks and volumes',&                                         ! descr_short
         &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
         &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group
@@ -1694,7 +1911,7 @@ contains
         ! PROGRAM SPECIFICATION
         call scale_project%new(&
         &'scale', & ! name
-        &'is a program for re-scaling MRC & SPIDER stacks',&                               ! descr_short
+        &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
         &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
         &0, 2, 0, 0, 0, 0, 2, .false.)                                                     ! # entries in each group
@@ -1721,7 +1938,7 @@ contains
         ! PROGRAM SPECIFICATION
         call select_%new(&
         &'select',&                                         ! name
-        &'select images',&                                  ! descr_short
+        &'Select images',&                                  ! descr_short
         &'is a program for selecting files based on image correlation matching',& ! descr_long
         &'simple_exec',&                                    ! executable
         &8, 0, 0, 0, 0, 0, 1, .false.)                      ! # entries in each group
@@ -1737,13 +1954,13 @@ contains
         call select_%set_input('img_ios', 7,  'dir_select', 'dir', 'Directory for selected images', 'Move selected files to here{selected}', 'select dir', .false., '')
         call select_%set_input('img_ios', 8,  'dir_reject', 'dir', 'Directory for rejected images', 'Move rejected files to here{rejected}', 'reject dir', .false., '')
         ! parameter input/output
-        !<empty>
+        ! <empty>
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1754,7 +1971,7 @@ contains
         ! PROGRAM SPECIFICATION
         call shift%new(&
         &'shift',&                                                                           ! name
-        &'shift images to rotational origin',&                                               ! descr_short
+        &'Shift images to rotational origin',&                                               ! descr_short
         &'is a program for shifting a stack according to origin shifts in oritab/projfile',& ! descr_long
         &'simple_exec',&                                                                     ! executable
         &3, 3, 0, 0, 0, 0, 1, .false.)                                                       ! # entries in each group
@@ -1771,9 +1988,9 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1784,7 +2001,7 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_movie%new(&
         &'simulate_movie',&                                 ! name
-        &'simulate DDD movie',&                             ! descr_short
+        &'Simulate DDD movie',&                             ! descr_short
         &'is a program for crude simulation of a DDD movie. Input is a set of projection images to place. &
         &Movie frames are then generated related by randomly shifting the base image and applying noise',& ! descr_long
         &'simple_exec',&                                    ! executable
@@ -1804,13 +2021,13 @@ contains
         call simulate_movie%set_input('parm_ios',  9, 'xdim',  'num', 'x-dimension', 'Number of pixels in x-direction', '# pixels in x', .false., 0.)
         call simulate_movie%set_input('parm_ios', 10, 'ydim',  'num', 'y-dimension', 'Number of pixels in y-direction', '# pixels in y', .false., 0.)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
         call simulate_movie%set_input('filt_ctrls', 1, bfac)
         ! mask controls
-        !<empty>
+        ! <empty>
         ! computer controls
         call simulate_movie%set_input('comp_ctrls', 1, nthr)
     end subroutine new_simulate_movie
@@ -1819,33 +2036,33 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_noise%new(&
         &'simulate_noise',&                                ! name
-        &'white noise simulation',&                        ! descr_short
+        &'White noise simulation',&                        ! descr_short
         &'is a program for generating pure noise images',& ! descr_long
         &'simple_exec',&                                   ! executable
         &0, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !<empty>
+        ! <empty>
         ! parameter input/output
         call simulate_noise%set_input('parm_ios', 1, box)
         call simulate_noise%set_input('parm_ios', 2, nptcls)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
-        !<empty>
+        ! <empty>
         ! computer controls
-        !<empty>
+        ! <empty>
     end subroutine new_simulate_noise
 
     subroutine new_simulate_particles
         ! PROGRAM SPECIFICATION
         call simulate_particles%new(&
         &'simulate_particles',&                                          ! name
-        &'simulate single-particle images',&                             ! descr_short
+        &'Simulate single-particle images',&                             ! descr_short
         &'is a program for simulating single-particle cryo-EM images. It is not a verysophisticated simulator, but &
         &it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be &
         &used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input &
@@ -1872,10 +2089,10 @@ contains
         call simulate_particles%set_input('parm_ios', 11, fraca)
         call simulate_particles%set_input('parm_ios', 12, deftab)
         call simulate_particles%set_input('parm_ios', 13, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2.)
-        call simulate_particles%set_input('parm_ios', 14, 'dferr',    'num', 'Underfocus error',  'Uniform underfoucs error(in microns)',  'error in microns', .false., 1.)
+        call simulate_particles%set_input('parm_ios', 14, dferr)
         call simulate_particles%set_input('parm_ios', 15, 'astigerr', 'num', 'Astigmatism error', 'Uniform astigmatism error(in microns)', 'error in microns', .false., 0.)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
         call simulate_particles%set_input('srch_ctrls', 1, pgrp)
         ! filter controls
@@ -1891,7 +2108,7 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_subtomogram%new(&
         &'simulate_subtomogram',&                               ! name
-        &'simulate subtomogram',&                               ! descr_short
+        &'Simulate subtomogram',&                               ! descr_short
         &'is a program for crude simulation of a subtomogram',& ! descr_long
         &'simple_exec',&                                        ! executable
         &1, 3, 0, 0, 0,0, 1, .false.)                           ! # entries in each group
@@ -1903,13 +2120,13 @@ contains
         call simulate_subtomogram%set_input('parm_ios', 2,  nptcls)
         call simulate_subtomogram%set_input('parm_ios', 3,  'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .false., 0.)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
-        !<empty>
+        ! <empty>
         ! computer controls
         call simulate_subtomogram%set_input('comp_ctrls', 1, nthr)
     end subroutine new_simulate_subtomogram
@@ -1918,8 +2135,8 @@ contains
         ! PROGRAM SPECIFICATION
         call stack%new(&
         &'stack',&                     ! name
-        &'stack images',&              ! descr_short
-        &'is a program for stacking individual images or multiple stacks into one',& ! descr_long
+        &'Stack images',&              ! descr_short
+        &'is a program for stacking individual images (list) or multiple stacks into one',& ! descr_long
         &'simple_exec',&               ! executable
         &2, 2, 0, 0, 0, 0, 0, .false.) ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1931,11 +2148,11 @@ contains
         call stack%set_input('parm_ios', 1, smpd)
         call stack%set_input('parm_ios', 2, clip)
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1946,19 +2163,19 @@ contains
         ! PROGRAM SPECIFICATION
         call stackops%new(&
         &'stack',&                                   ! name
-        &'is a program for standard stack editing',& ! descr_short
-        &'is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER '&
-        &'stacks. If you want to extract a particular state, give an alignment document (oritab) and set state '&
-        &'to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input '&
-        &'an alignment doc (oritab) and set frac. You can combine the state and frac options. If you '&
-        &'want to apply noise to images, give the desired signal-to-noise ratio via snr. If you want to calculate the autocorrelation '&
-        &'function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set '&
-        &'fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to '&
-        &'some nonzero integer number less than nptcls. With avg=yes the global average of the inputted stack is calculated. '&
-        &'If you define nframesgrp to some integer number larger than one averages with chunk sizes of nframesgrp are produced, '&
+        &'Standard stack editing',&                  ! descr_short
+        &'is a program that provides standard single-particle image processing routines for MRC or SPIDER '&
+        &'stacks. To extract a particular state, give oritab and set state. '&
+        &'To select the fraction of best particles, give oritab '&
+        &'and set frac. State and frac options can be combined. '&
+        &'To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation '&
+        &'function, set acf=yes. To extract a contiguous subset of images from the stack, set '&
+        &'fromp and top. To extract a number of particle images at random, set nran to the desired number.'&
+        &'With avg=yes the global average of the stack is calculated. '&
+        &'If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced, '&
         &'which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
-        &2, 17, 0, 0, 0, 0, 1, .false.)               ! # entries in each group
+        &2, 17, 0, 0, 0, 0, 1, .false.)              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%set_input('img_ios', 1, stk)
@@ -1970,8 +2187,8 @@ contains
         call stackops%set_input('parm_ios', 3,  mirr)
         call stackops%set_input('parm_ios', 4,  'nran',  'num', 'Number of random samples', 'Number of images to randomly sample', '# random samples', .false., 0.)
         call stackops%set_input('parm_ios', 5,  frac)
-        call stackops%set_input('parm_ios', 6,  'state', 'num', 'State index', 'Index of state to extract', 'give state', .false., 1.)
-        call stackops%set_input('parm_ios', 7,  'class', 'num', 'Class index', 'Index of class to extract', 'give class', .false., 1.)
+        call stackops%set_input('parm_ios', 6,  'state', 'num', 'State index', 'Index of state to extract', 'give state index', .false., 1.)
+        call stackops%set_input('parm_ios', 7,  'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .false., 1.)
         call stackops%set_input('parm_ios', 8,  neg)
         call stackops%set_input('parm_ios', 9,  'acf',   'binary', 'Autocorrelation, A * conjg(A)', 'Generate autocorrelation function: A * conjg(A)(yes|no){no}', '(yes|no){no}', .false., 'no')
         call stackops%set_input('parm_ios', 10, 'avg',   'binary', 'Average stack', 'Generate global stack average(yes|no){no}', '(yes|no){no}', .false., 'no')
@@ -1983,23 +2200,53 @@ contains
         call stackops%set_input('parm_ios', 16, outfile)
         call stackops%set_input('parm_ios', 17, 'stats', 'binary', 'Provide statistics', 'Provide statistics about images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
-        !<empty>
+        ! <empty>
         ! search controls
-        !<empty>
+        ! <empty>
         ! filter controls
-        !<empty>
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
         call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
 
+    subroutine new_vizoris
+        ! PROGRAM SPECIFICATION
+        call vizoris%new(&
+        &'vizoris',&                                                                                               ! name
+        &'Visualization of orientation distribution',&                                                             ! descr_short
+        &'is a program for extracting projection directions from orientations for visualization in UCSF Chimera',& ! descr_long
+        &'simple_exec',&                                                                                           ! executable
+        &0, 5, 0, 0, 0, 0, 0, .false.)                                                                             ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call vizoris%set_input('parm_ios', 1, oritab)
+        vizoris%parm_ios(1)%required = .true.
+        call vizoris%set_input('parm_ios', 2, nspace)
+        call vizoris%set_input('parm_ios', 3, pgrp)
+        call vizoris%set_input('parm_ios', 4, oritype)
+        call vizoris%set_input('parm_ios', 5, 'tseries', 'binary', 'Time series anlysis', 'Orientations come from analysis of a time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_vizoris
+
     subroutine new_volops
         ! PROGRAM SPECIFICATION
         call volops%new(&
-        &'volops',& ! name
-        &'is a program for standard volume editing',&                                             ! descr_short
-        &'provides standard single-particle image processing routines to MRC or SPIDER volumes',& ! descr_long
+        &'volops',&                                                                               ! name
+        &'Standard volume editing',&                                                              ! descr_short
+        &'is a program that provides standard single-particle image processing routines for MRC or SPIDER volumes',& ! descr_long
         &'simple_exec',&                                                                          ! executable
         &2, 12, 0, 0, 3, 1, 1, .false.)                                                           ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2014,9 +2261,9 @@ contains
         call volops%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast', 'Invert volume contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
         call volops%set_input('parm_ios', 4, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0.)
         call volops%set_input('parm_ios', 5, mirr)
-        call volops%set_input('parm_ios', 6, 'e1', 'num', 'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
-        call volops%set_input('parm_ios', 7, 'e2', 'num', 'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
-        call volops%set_input('parm_ios', 8, 'e3', 'num', 'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
+        call volops%set_input('parm_ios', 6, e1)
+        call volops%set_input('parm_ios', 7, e2)
+        call volops%set_input('parm_ios', 8, e3)
         call volops%set_input('parm_ios', 9, 'xsh', 'num', 'Translation along x-axis','Shift along X in pixels', 'in pixels', .false., 0.)
         call volops%set_input('parm_ios',10, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0.)
         call volops%set_input('parm_ios',11, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)

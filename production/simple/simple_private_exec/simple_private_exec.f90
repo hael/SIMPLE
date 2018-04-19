@@ -23,7 +23,6 @@ implicit none
 ! PRE-PROCESSING PROGRAMS
 type(preprocess_commander)           :: xpreprocess
 type(select_frames_commander)        :: xselect_frames
-type(boxconvs_commander)             :: xboxconvs
 type(powerspecs_commander)           :: xpowerspecs
 type(motion_correct_commander)       :: xmotion_correct
 type(ctf_estimate_commander)         :: xctf_estimate
@@ -195,25 +194,6 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:5), keys_optional(:1))
         ! execute
         call xselect_frames%execute(cline)
-    case( 'boxconvs' )
-        !==Program boxconvs
-        !
-        ! <boxconvs/begin>is a program for averaging overlapping boxes across a micrograph
-        ! in order to check if gain correction was appropriately done<boxconvs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'fbody'
-        ! set optional keys
-        keys_optional(1) = 'stk'
-        keys_optional(2) = 'filetab'
-        keys_optional(3) = 'boxconvsz'
-        keys_optional(4) = 'startit'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
-        ! set defaults
-        if( .not. cline%defined('boxconvsz') ) call cline%set('boxconvsz', 512.)
-        ! execute
-        call xboxconvs%execute(cline)
     case( 'powerspecs' )
         !==Program powerspecs
         !

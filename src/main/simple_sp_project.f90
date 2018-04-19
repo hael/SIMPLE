@@ -1401,6 +1401,8 @@ contains
         call self%write()
     end subroutine merge_algndocs
 
+    ! this map2ptcls routine assumes that any selection of class averages is done
+    ! exclusively by state=0 flagging without any physical deletion
     subroutine map2ptcls( self )
         class(sp_project), intent(inout) :: self
         type state_organiser
@@ -1409,7 +1411,7 @@ contains
         end type state_organiser
         type(state_organiser), allocatable :: labeler(:)
         type(ori) :: ori2d, ori_comp, o
-        integer   :: ncls, icls, iptcl, pind
+        integer   :: ncls, icls, iptcl, pind, ncls_cls3D
         real      :: corr, rproj, rstate
         if( self%is_virgin_field('cls3D') )then
             write(*,*) 'ERROR! os_cls3D is virgin field; nothing to map back'
@@ -1419,8 +1421,13 @@ contains
             write(*,*) 'ERROR! os_ptcl2D is virgin field; nothing to map back to'
             stop 'sp_project :: map2ptcls'
         endif
-        call self%os_ptcl2D%remap_cls()
-        ncls = self%os_ptcl2D%get_n('class')
+        ncls       = self%os_ptcl2D%get_n('class')
+        ncls_cls3D = self%os_cls3D%get_noris()
+        if( ncls /= ncls_cls3D )then
+            write(*,*) 'ncls from ptcl2D field:      ', ncls
+            write(*,*) 'ncls as sizeof(cls3D field): ', ncls_cls3D
+            stop 'ERROR! inconsistent ncls in ptcl2D/cls3D fields; sp_project :: map2ptcls'
+        endif
         allocate(labeler(ncls))
         do icls=1,ncls
             call self%os_ptcl2D%get_pinds(icls, 'class', labeler(icls)%particles)
@@ -1431,21 +1438,23 @@ contains
             rproj  = o%get('proj')
             rstate = o%get('state')
             corr   = o%get('corr')
-            do iptcl=1,size(labeler(icls)%particles)
-                ! get particle index
-                pind  = labeler(icls)%particles(iptcl)
-                ! get 2d ori
-                ori2d = self%os_ptcl2D%get_ori(pind)
-                ! transfer original parameters in self%os_ptcl2D
-                ori_comp = self%os_ptcl2D%get_ori(pind)
-                ! compose ori3d and ori2d
-                call o%compose3d2d(ori2d, ori_comp)
-                ! set parameters in self%os_ptcl2D
-                call self%os_ptcl2D%set_ori(pind, ori_comp)
-                call self%os_ptcl2D%set(pind, 'corr',  corr)
-                call self%os_ptcl2D%set(pind, 'proj',  rproj)
-                call self%os_ptcl2D%set(pind, 'state', rstate)
-            end do
+            if( allocated(labeler(icls)%particles) )then
+                do iptcl=1,size(labeler(icls)%particles)
+                    ! get particle index
+                    pind  = labeler(icls)%particles(iptcl)
+                    ! get 2d ori
+                    ori2d = self%os_ptcl2D%get_ori(pind)
+                    ! transfer original parameters in self%os_ptcl2D
+                    ori_comp = self%os_ptcl2D%get_ori(pind)
+                    ! compose ori3d and ori2d
+                    call o%compose3d2d(ori2d, ori_comp)
+                    ! set parameters in self%os_ptcl2D
+                    call self%os_ptcl2D%set_ori(pind, ori_comp)
+                    call self%os_ptcl2D%set(pind, 'corr',  corr)
+                    call self%os_ptcl2D%set(pind, 'proj',  rproj)
+                    call self%os_ptcl2D%set(pind, 'state', rstate)
+                end do
+            endif
         end do
     end subroutine map2ptcls
 

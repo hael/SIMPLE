@@ -1,9 +1,9 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program simple_distr_exec
 include 'simple_lib.f08'
-use simple_gen_doc
 use simple_user_interface, only: make_user_interface
 use simple_cmdline,        only: cmdline, cmdline_err
+use simple_gen_doc
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
@@ -95,65 +95,19 @@ select case(prg)
         if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         call xmotion_correct_distr%execute(cline)
     case( 'motion_correct_tomo' )
-        !==Program motion_correct_tomo
-        !
-        ! <motion_correct_tomo/begin>is a distributed workflow for movie alignment or motion_correctring of tomographic movies.
-        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
-        ! of which deserve a comment. The exp_doc document should contain per line exp_time=X and dose_rate=Y.
-        ! It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary
-        ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier
-        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given
-        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). <motion_correct_tomo/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'tomoseries'
-        keys_required(2)  = 'exp_doc'
-        keys_required(3)  = 'smpd'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'lpstart'
-        keys_optional(3)  = 'lpstop'
-        keys_optional(4)  = 'trs'
-        keys_optional(5)  = 'kv'
-        keys_optional(6)  = 'pspecsz'
-        keys_optional(7)  = 'numlen'
-        keys_optional(8)  = 'startit'
-        keys_optional(9)  = 'scale'
-        keys_optional(10) = 'nframesgrp'
-        keys_optional(11) = 'nsig'
-        keys_optional(12) = 'dir'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:12))
-        ! set defaults
+        call cline%parse()
         if( .not. cline%defined('trs')     ) call cline%set('trs',       5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',   'yes')
         if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
-        ! execute
         call xmotion_correct_tomo_distr%execute(cline)
     case( 'powerspecs' )
-        !==Program powerspecs
-        !
-        ! <powerspecs/begin>is a program for generating powerspectra from a stack or filetable<powerspecs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'fbody'
-        keys_required(3) = 'filetab'
-        keys_required(4) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'pspecsz'
-        keys_optional(2) = 'speckind'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'clip'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
-        ! set defaults
+        call cline%parse()
         call cline%set('nthr', 1.0)
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
-        ! execute
+        if( .not. cline%defined('lp')      ) call cline%set('lp',        6.)
         call xpowerspecs_distr%execute(cline)
     case( 'ctf_estimate' )
         call cline%parse()

@@ -268,7 +268,7 @@ contains
         call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
     end subroutine exec_map2ptcls
 
-    subroutine exec_orisops(self,cline)
+    subroutine exec_orisops( self, cline )
         class(orisops_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(build)  :: b
@@ -277,21 +277,15 @@ contains
         integer      :: s, i
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
-        if( cline%defined('ctfreslim') .and. b%a%isthere('ctfres') )then
-            ! filter out oris with ctfres > ctfreslim
-            do i=1,b%a%get_noris()
-                s = nint(b%a%get(i, 'state'))
-                if( s > 0 .and. b%a%get(i, 'ctfres') > p%ctfreslim)then
-                    call b%a%set(i,'state',0.)
-                endif
-            end do
+        if( p%errify .eq. 'yes' )then
+            ! introduce error in input orientations
+            call b%a%introd_alig_err(p%angerr, p%sherr)
+            if( p%ctf .ne. 'no' ) call b%a%introd_ctf_err(p%dferr)
         endif
-        if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
-            if( cline%defined('angerr').or.&
-                cline%defined('sherr') ) call b%a%introd_alig_err(p%angerr, p%sherr)
-            if( p%ctf .eq. 'yes' )       call b%a%introd_ctf_err(p%dferr)
-        endif
-        if( cline%defined('e1') )then ! rotate input Eulers
+        if( cline%defined('e1') .or.&
+            cline%defined('e2') .or.&
+            cline%defined('e3') )then
+            ! rotate input Eulers
             call orientation%new
             call orientation%set_euler([p%e1,p%e2,p%e3])
             if( cline%defined('state') )then
@@ -305,35 +299,30 @@ contains
                 call b%a%rot(orientation)
             endif
         endif
-        if( cline%defined('mul') )then
-            call b%a%mul_shifts(p%mul)
-        endif
-        if( p%zero .eq. 'yes' ) call b%a%zero_shifts
-        if( p%discrete .eq. 'yes' )then
-            if( cline%defined('ndiscrete') )then
-                call b%a%discretize(p%ndiscrete)
-            else
-                stop 'need ndiscrete to be defined!'
-            endif
-        endif
-        if( p%symrnd .eq. 'yes' )then
-            call b%se%symrandomize(b%a)
-        endif
-        if( cline%defined('nstates') ) call b%a%rnd_states(p%nstates)
-        ! Mirroring
+        if( cline%defined('mul') )       call b%a%mul_shifts(p%mul)
+        if( p%zero .eq. 'yes' )          call b%a%zero_shifts
+        if( cline%defined('ndiscrete') ) call b%a%discretize(p%ndiscrete)
+        if( p%symrnd .eq. 'yes' )        call b%se%symrandomize(b%a)
+        if( cline%defined('nstates') )   call b%a%rnd_states(p%nstates)
         if( cline%defined('mirr') )then
-            if( p%mirr.eq.'2d' )then
-                call b%a%mirror2d()
-            else if( p%mirr.eq.'3d' )then
-                call b%a%mirror3d()
-            endif
+            select case(trim(p%mirr))
+                case('2d')
+                    call b%a%mirror2d()
+                case('3d')
+                    call b%a%mirror3d()
+                case('no')
+                    ! nothing to do
+                case DEFAULT
+                    write(*,*) 'mirr flag: ', trim(p%mirr)
+                    stop 'unsupported mirr flag; commander_oris :: exec_orisops'
+            end select
         endif
         call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
 
     !> for analyzing SIMPLE orientation/parameter files
-    subroutine exec_oristats(self, cline)
+    subroutine exec_oristats( self, cline )
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
@@ -530,7 +519,7 @@ contains
             &records per line defining a rotation matrix (11) (12) (13) (21) etc.'
         endif
         if( fname2format(trim(p%outfile)) .eq. '.simple' )then
-            stop '*.simple outfile not supported; commander_oris :: rotamts2oris'
+            stop '*.simple outfile not supported; commander_oris :: rotmats2oris'
         endif
         nrecs_per_line = rotmats%get_nrecs_per_line()
         if( nrecs_per_line /= 9 ) stop 'need 9 records (real nrs) per&

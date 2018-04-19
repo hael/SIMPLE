@@ -22,7 +22,6 @@ implicit none
 
 public :: preprocess_commander
 public :: select_frames_commander
-public :: boxconvs_commander
 public :: powerspecs_commander
 public :: motion_correct_commander
 public :: ctf_estimate_commander
@@ -41,10 +40,6 @@ type, extends(commander_base) :: select_frames_commander
   contains
     procedure :: execute      => exec_select_frames
 end type select_frames_commander
-type, extends(commander_base) :: boxconvs_commander
-  contains
-    procedure :: execute      => exec_boxconvs
-end type boxconvs_commander
 type, extends(commander_base) :: powerspecs_commander
  contains
    procedure :: execute       => exec_powerspecs
@@ -280,64 +275,6 @@ contains
         call simple_end('**** SIMPLE_SELECT_FRAMES NORMAL STOP ****')
     end subroutine exec_select_frames
 
-    subroutine exec_boxconvs( self, cline )
-        class(boxconvs_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        type(params)                       :: p
-        type(build)                        :: b
-        type(image)                        :: tmp
-        character(len=STDLEN), allocatable :: imgnames(:)
-        integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-        if( cline%defined('stk') .and. cline%defined('filetab') )then
-            stop 'stk and filetab cannot both be defined; input either or!'
-        endif
-        if( .not. cline%defined('stk') .and. .not. cline%defined('filetab') )then
-            stop 'either stk or filetab need to be defined!'
-        endif
-        p = params(cline) ! parameters generated
-        call b%build_general_tbox( p, cline, do3d=.false. ) ! general objects built
-        ! do the work
-        if( cline%defined('stk') )then
-            call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
-            tmp = 0.0
-            do iimg=1,p%nptcls
-                call b%img%read(p%stk, iimg)
-                tmp = b%img%boxconv(p%boxconvsz)
-                call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
-                call progress(iimg, p%nptcls)
-            end do
-        else
-            call read_filetable(p%filetab, imgnames)
-            nimgs = size(imgnames)
-            DebugPrint  'read the img filenames'
-            ! get logical dimension of micrographs
-            call find_ldim_nptcls(imgnames(1), ldim, ifoo)
-            ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
-            DebugPrint  'logical dimension: ', ldim
-            call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
-            ! determine loop range
-            iimg_start = 1
-            if( cline%defined('startit') ) iimg_start = p%startit
-            iimg_stop  = nimgs
-            DebugPrint  'fromto: ', iimg_start, iimg_stop
-            ! do it
-            tmp = 0.0
-            do iimg=iimg_start,iimg_stop
-                if( .not. file_exists(imgnames(iimg)) )then
-                    write(*,*) 'inputted img file does not exist: ', trim(adjustl(imgnames(iimg)))
-                endif
-                call b%img%read(imgnames(iimg), 1)
-                tmp = b%img%boxconv(p%boxconvsz)
-                call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
-                call progress(iimg, nimgs)
-            end do
-            call tmp%kill
-            deallocate(imgnames)
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_BOXCONVS NORMAL STOP ****')
-    end subroutine exec_boxconvs
-
     subroutine exec_powerspecs( self, cline )
         class(powerspecs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -355,7 +292,8 @@ contains
         p = params(cline, spproj_a_seg=STK_SEG)         ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general toolbox built
         ! create mask
-        call tmp%new([p%clip,p%clip,1], p%smpd)
+        call tmp%new([p%clip,p%clip,1],  p%smpd)
+        call mask%new([p%clip,p%clip,1], p%smpd)
         tmp = cmplx(1.,0.)
         call tmp%bp(0.,p%lp,0.)
         call tmp%ft2img('real', mask)
