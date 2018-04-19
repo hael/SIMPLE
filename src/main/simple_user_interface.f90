@@ -1670,7 +1670,7 @@ contains
         &'only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul. '&
         &'If zero=yes, then the shifts are zeroed',&
         &'simple_exec',&                       ! executable
-        &0, 18, 0, 0, 0, 0, 0, .false.)        ! # entries in each group, requires sp_project
+        &0, 19, 0, 0, 0, 0, 0, .false.)        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1692,7 +1692,7 @@ contains
         call orisops%set_input('parm_ios', 12, 'zero', 'binary', 'Zero shifts', 'Zero shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
         call orisops%set_input('parm_ios', 13, 'ndiscrete', 'num', 'Number of discrete projection directions',&
         &'Number of projection directions to use for discretization of input orientations', '# discrete projs', .false., 0.)
-        call orisops%set_input('parm_ios', 14,  'state', 'num', 'State to modify', 'Index of state to modify', 'give state index', .false., 1.)
+        call orisops%set_input('parm_ios', 14, 'state', 'num', 'State to modify', 'Index of state to modify', 'give state index', .false., 1.)
         call orisops%set_input('parm_ios', 15, 'errify', 'binary', 'Errify input orientations/CTF parameters',&
         &'Introduce uniform random errors in input orientations/CTF parameters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call orisops%set_input('parm_ios', 16, 'mul', 'num', 'Shift multiplication factor',&
