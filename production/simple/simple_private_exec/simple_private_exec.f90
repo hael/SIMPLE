@@ -676,9 +676,8 @@ select case(prg)
         keys_required(2) = 'smpd'
         keys_required(3) = 'msk'
         keys_required(4) = 'pgrp'
-        keys_required(5) = 'oritab'
-        keys_required(6) = 'outfile'
-        keys_required(7) = 'lp'
+        keys_required(5) = 'outfile'
+        keys_required(6) = 'lp'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'cenlp'
@@ -686,13 +685,10 @@ select case(prg)
         keys_optional(4) = 'nspace'
         keys_optional(5) = 'center'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:7), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('nspace') )then
-            call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
             call cline%set('nspace', 50.) ! 50 projections 4 symsrch
-        else
-            call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 30.)

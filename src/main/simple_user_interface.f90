@@ -610,7 +610,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 9, frac)
         call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function Angstroms^2', 'B-factor in Angstroms^2 (>0.0)', .false., 1000.)
         call cluster2D%set_input('srch_ctrls',11, 'objfun','binary', 'Objective function', 'Objective function(cc|ccres){ccres}', '(cc|ccres){ccres}', .false., 'ccres')
-                ! filter controls
+        ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
@@ -2774,7 +2774,7 @@ contains
             subroutine create_section( name, arr )
                 character(len=*),          intent(in) :: name
                 type(simple_input_param), allocatable, intent(in) :: arr(:)
-                type(json_value), pointer :: entry, section, options
+                type(json_value), pointer :: entry, section
                 character(len=STDLEN)     :: options_str, before
                 character(len=KEYLEN)     :: args(8)
                 integer                   :: i, j, sz, nargs

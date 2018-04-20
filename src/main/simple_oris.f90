@@ -235,6 +235,7 @@ contains
         do i=1,n
             call self%o(i)%new_ori_clean
         end do
+        DebugPrint ' simple_oris::new_clean initiated'
     end subroutine new_clean
 
     !>  \brief  is a constructor
@@ -1290,7 +1291,7 @@ contains
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
         integer   :: i
-        call self_out%new(self_in%n)
+        call self_out%new_clean(self_in%n)
         do i=1,self_in%n
             self_out%o(i) = self_in%o(i)
         end do
@@ -2325,7 +2326,7 @@ contains
                 integer :: i
                 if( allocated(avail) )deallocate(avail, stat=alloc_stat)
                 allocate(avail(n), source=.false., stat=alloc_stat)
-                call tmp%new(n)
+                call tmp%new_clean(n)
                 call tmp%spiral_1
                 do i = 1, n
                     if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )&

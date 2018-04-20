@@ -15,11 +15,11 @@ public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest,&
 comlin_coarsesrch_symaxis, comlin_singlesrch_symaxis, comlin_srch_pair
 private
 #include "simple_local_flags.inc"
-integer, parameter :: NPROJC1    = 400
-integer, parameter :: NPROJ      = 200
+integer, parameter :: NPROJC1    = 40
+integer, parameter :: NPROJ      = 20
 integer, parameter :: NBEST      = 30
 integer, parameter :: NBEST_PAIR = 10
-integer, parameter :: ANGSTEP     = 10
+integer, parameter :: ANGSTEP    = 10
 
 class(build),     pointer :: bp=>null()       !< pointer to builder
 class(params),    pointer :: pp=>null()       !< pointer to params
@@ -60,8 +60,8 @@ contains
         a_copy    =  bp%a
         nproj_sym = comlin_srch_get_nproj( pgrp=trim(p%pgrp) )
         write(*,'(A,I3)') '>>> NUMBER OF REFERENCE PROJECTIONS IN ASU: ', nproj_sym
-        call resoris%new(nproj_sym)
-        call espace%new(nproj_sym)
+        call resoris%new_clean(nproj_sym)
+        call espace%new_clean(nproj_sym)
         ! make optimizer spec
         if( opt_str.ne.'simplex' .and. opt_str.ne.'de' .and. opt_str.ne.'oasis' )then
             call simple_stop ('Unsupported minimizer in simple_comlin_srch; comlin_srch_init')
@@ -72,7 +72,7 @@ contains
         eullims        = 0.
         eullims(:,2)   = [360., 180., 360.]
         if( mode .eq. 'sym' )then
-            eullims(2,2)  = 90.
+            eullims(2,2) = 90.
             call espace%spiral(2, eullims)
         else
             call espace%spiral
@@ -116,16 +116,16 @@ contains
 
     !> common-line mode search symmetry axis
     subroutine comlin_coarsesrch_symaxis( fromto, resoris )
-        integer,     intent(in)  :: fromto(2)
-        class(oris), intent(out) :: resoris
+        integer,     intent(in)    :: fromto(2)
+        class(oris), intent(inout) :: resoris
         type(ori)            :: orientation, orientation_best
-        real                 :: corr, corr_best, cxy(4)
+        real                 :: corr, corr_best
         integer              :: iproj, inpl, cnt, ntot
         if( fromto(1) < 1 .or. fromto(2) > nproj_sym )then
             stop 'range out of bound; simple_comlin_srch :: comlin_coarsesrch_symaxis'
         endif
         ntot = fromto(2) - fromto(1) + 1
-        call resoris%new(nproj_sym)
+        call resoris%new_clean(nproj_sym)
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         write(*,'(A)') '>>> GLOBAL GRID SYMMETRY AXIS SEARCH'
         cnt = 0
@@ -140,6 +140,7 @@ contains
                 call bp%a%rot(orientation)
                 call bp%se%apply2all(bp%a)
                 corr = bp%clins%corr()
+                call orientation%print_ori
                 call orientation%set('corr',corr)
                 if( corr > corr_best )then
                     corr_best = corr
@@ -148,15 +149,14 @@ contains
             end do
             ! set local in-plane optimum for iproj
             call resoris%set_ori(iproj, orientation_best)
+            call resoris%print_(iproj)
         end do
     end subroutine comlin_coarsesrch_symaxis
 
     !> continuous single common-line search symmetry axis
     subroutine comlin_singlesrch_symaxis( orientation )
         class(ori), intent(inout) :: orientation
-        real                 :: corr, corr_best, cxy(4)
-        integer              :: iproj, inpl, iloc, ffromto(2), cnt, ntot
-        integer, allocatable :: order(:)
+        real :: cxy(4)
         cxy = comlin_srch_minimize(orientation)
         call orientation%set_euler(cxy(2:))
         call orientation%set('corr', cxy(1))
@@ -206,7 +206,7 @@ contains
         class(ori)        :: otarget  !< orientation target
         real              :: cxy(4)   !< output correlation and spec coordinates
         class(*), pointer :: fun_self => null()
-        oref    = otarget
+        oref = otarget
         call oref%swape1e3
         ospec%x = otarget%get_euler()
         ospec%nevals = 0
@@ -242,8 +242,8 @@ contains
         elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
             cost = 1.
         else
+            call o%new_ori_clean
             call o%set_euler(vec)
-            !
             oswap = o
             call oswap%swape1e3
             euldist = oswap.euldist.oref

@@ -164,10 +164,7 @@ select case(prg)
         call cline%parse()
         if( cline%defined('compare') ) stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         if( .not. cline%defined('nspace') )then
-            call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
             call cline%set('nspace', 50.) ! 50 projections 4 symsrch
-        else
-            call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')

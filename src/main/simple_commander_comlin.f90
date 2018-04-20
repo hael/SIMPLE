@@ -29,36 +29,37 @@ contains
     subroutine exec_symsrch( self, cline )
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params)                 :: p
-        type(build)                  :: b
-        type(ori)                    :: symaxis, orientation
-        class(oris), pointer         :: symaxes => null()
-        type(sp_project)             :: spproj
-        type(oris)                   :: oshift, orientation_best, tmp_os
-        real,            allocatable :: corrs(:)
-        integer,         allocatable :: order(:)
-        !integer                      :: fnr, file_stat, comlin_srch_nbest
-        integer                      :: bestloc(1), nbest_here, noris, cnt, i, j, nl
-        real                         :: shvec(3)
-        character(len=STDLEN)        :: fname_finished
-        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
-        character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
-        character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//trim(TXT_EXT)
-        integer,           parameter :: NBEST = 30
+        type(params)                   :: p
+        type(build)                    :: b
+        type(ori)                      :: symaxis, orientation
+        class(oris), pointer           :: psymaxes
+        type(sp_project)               :: spproj
+        type(oris)                     :: oshift, orientation_best, tmp_os, symaxes
+        real,              allocatable :: corrs(:)
+        integer,           allocatable :: order(:)
+        integer                        :: bestloc(1), nbest_here, noris, cnt, i, j
+        real                           :: shvec(3)
+        character(len=:),  allocatable :: symaxes_str
+        character(len=STDLEN)          :: fname_finished
+        character(len=32), parameter   :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
+        character(len=32), parameter   :: SYMPROJSTK = 'sym_projs.mrc'
+        character(len=32), parameter   :: SYMPROJTAB = 'sym_projs'//trim(TXT_EXT)
+        integer,           parameter   :: NBEST = 30
+        nullify(psymaxes)
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
-        p = params(cline)                                                 ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.true., nooritab=.true.) ! general objects built (no oritab reading)
-        call b%build_comlin_tbox(p) ! objects for common lines based alignment built
+        p = params(cline)                                ! parameters generated
         ! SETUP
-        if( (p%l_distr_exec .and. p%refine.eq.'no') .or. .not.p%l_distr_exec )then
+        call b%build_general_tbox(p, cline, do3d=.true.) ! general objects built (no oritab reading)
+        if( p%refine.eq.'no' )then
+            call b%build_comlin_tbox(p) ! objects for common lines based alignment built
             ! center volume
             call b%vol%read(p%vols(1))
             shvec = 0.
             if( p%center.eq.'yes' ) shvec = b%vol%center(p%cenlp,p%msk)
-            if( p%l_distr_exec .and. p%part.eq.1 )then
+            if( p%part.eq.1 )then
                 ! writes shifts for distributed execution
-                call oshift%new(1)
+                call oshift%new_clean(1)
                 call oshift%set(1,'x',shvec(1))
                 call oshift%set(1,'y',shvec(2))
                 call oshift%set(1,'z',shvec(3))
@@ -70,9 +71,7 @@ contains
             call b%vol%fft()
             call b%vol%expand_cmat(p%alpha)
             b%ref_imgs(1,:) = project(b%vol, b%e, p)
-            if( p%l_distr_exec .and. p%part > 1 )then
-                ! do nothing
-            else
+            if( p%part == 1 )then
                 ! writes projections images and orientations for subsequent reconstruction
                 ! only in local and distributed (part=1) modes
                 noris = b%e%get_noris()
@@ -92,91 +91,51 @@ contains
             end do
         endif
         ! COARSE SEARCH
-        if( (p%l_distr_exec .and. p%refine.eq.'no') .or. .not.p%l_distr_exec )then
+        if( p%refine.eq.'no' )then
             call comlin_srch_init( b, p, 'simplex', 'sym')
             call comlin_coarsesrch_symaxis( [p%fromp,p%top], symaxes)
-            if( p%l_distr_exec )then
-                call symaxes%write(trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(TXT_EXT), [p%fromp,p%top])
-            else
-                noris      = symaxes%get_noris()
-                nbest_here = min(NBEST, noris)
-                order      = symaxes%order_corr()
-                call tmp_os%new(nbest_here)
-                cnt = 0
-                do i = noris, noris-nbest_here+1, -1
-                    cnt = cnt + 1
-                    call tmp_os%set_ori(cnt, symaxes%get_ori(order(i)))
-                enddo
-                symaxes = tmp_os
-                call symaxes%write('sympeaks'//trim(TXT_EXT), [1,nbest_here])
-                deallocate(order)
-                call tmp_os%kill
-            endif
+            b%spproj%os_cls3D = symaxes
+            symaxes_str       = trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT)
+            call binwrite_oritab(symaxes_str, b%spproj, symaxes, [p%fromp,p%top], isegment=CLS3D_SEG)
         endif
         ! FINE SEARCH
-        if( p%refine.eq.'yes' .or. .not.p%l_distr_exec)then
-            call orientation_best%new(1)
-            if( p%l_distr_exec )then
-                ! fetch orientation to refine
-                nl = binread_nlines(p, p%oritab)
-                call spproj%new_seg_with_ptr(nl, p%oritype, symaxes)
-                call binread_oritab(p%oritab, spproj, symaxes, [1,nl])
-                orientation = symaxes%get_ori(p%part)
-                ! fetch refernce orientations
-                nl = nlines(SYMPROJTAB)
-                call b%e%new(nl)
-                call b%e%read(SYMPROJTAB, [1,nl])
-                do i=1,p%nptcls
-                    call b%ref_imgs(1,i)%new([p%box, p%box, 1], p%smpd)
-                    call b%ref_imgs(1,i)%read(SYMPROJSTK, i)
-                enddo
-                ! expand over symmetry group
-                cnt = 0
-                do i=1,p%nptcls
-                    do j=1,p%nsym
-                        cnt = cnt+1
-                        b%imgs_sym(cnt) = b%ref_imgs(1,i)
-                        call b%imgs_sym(cnt)%fft()
-                    end do
+        if( p%refine.eq.'yes' )then
+            ! fetch orientation to refine
+            orientation = b%spproj%os_cls3D%get_ori(p%part)
+            ! b%a contained the coarse solutions, needs to be rebuilt for common line toolbox
+            call b%a%new_clean(p%nptcls)
+            call b%a%spiral
+            call b%build_comlin_tbox(p) ! objects for common lines based alignment built
+            ! fetch reference orientations
+            call b%e%new_clean(p%nspace)
+            call b%e%read(SYMPROJTAB, [1,p%nspace])
+            do i=1,p%nptcls
+                call b%ref_imgs(1,i)%new([p%box, p%box, 1], p%smpd)
+                call b%ref_imgs(1,i)%read(SYMPROJSTK, i)
+            enddo
+            ! expand over symmetry group
+            cnt = 0
+            do i=1,p%nptcls
+                do j=1,p%nsym
+                    cnt = cnt+1
+                    b%imgs_sym(cnt) = b%ref_imgs(1,i)
+                    call b%imgs_sym(cnt)%fft()
                 end do
-                ! search
-                call comlin_srch_init( b, p, 'simplex', 'sym')
-                call comlin_singlesrch_symaxis(orientation)
-                call orientation_best%set_ori(1, orientation)
-                call orientation_best%write(trim(p%fbody)//int2str_pad(p%part, p%numlen)//trim(TXT_EXT), [1,1])
-            else
-                ! search selected peaks in non-distributed modes
-                write(*,'(A)') '>>> CONTINOUS SYMMETRY AXIS REFINEMENT'
-                do  i = 1, nbest_here
-                    call progress(i, nbest_here)
-                    orientation = symaxes%get_ori(i)
-                    call comlin_singlesrch_symaxis(orientation)
-                    call symaxes%set_ori(i, orientation)
-                enddo
-                corrs   = symaxes%get_all('corr')
-                bestloc = maxloc(corrs)
-                symaxis = symaxes%get_ori(bestloc(1))
-                write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-                call symaxis%print_ori()
-                if( cline%defined('oritab') )then
-                    ! rotate the orientations & transfer the 3d shifts to 2d
-                    shvec = -1.*shvec
-                    if( cline%defined('state') )then
-                        call b%se%apply_sym_with_shift(b%a, symaxis, shvec, p%state )
-                    else
-                        call b%se%apply_sym_with_shift(b%a, symaxis, shvec )
-                    endif
-                    call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
-                endif
-            endif
+            end do
+            ! search
+            call comlin_srch_init( b, p, 'simplex', 'sym')
+            call comlin_singlesrch_symaxis(orientation)
+            call orientation_best%new_clean(1)
+            call orientation_best%set_ori(1, orientation)
+            symaxes_str       = trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT)
+            b%spproj%os_cls3D = orientation_best
+            call binwrite_oritab(symaxes_str, b%spproj, orientation_best, [1,1], isegment=CLS3D_SEG)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
         ! indicate completion (when run in a qsys env)
-        if(p%l_distr_exec)then
-            fname_finished = 'JOB_FINISHED_'//int2str_pad(p%part,p%numlen)
-            call simple_touch(trim(fname_finished), errmsg='In: commander_comlin :: exec_symsrch finished' )
-         endif
+        fname_finished = 'JOB_FINISHED_'//int2str_pad(p%part,p%numlen)
+        call simple_touch(trim(fname_finished), errmsg='In: commander_comlin :: exec_symsrch finished' )
     end subroutine exec_symsrch
 
 end module simple_commander_comlin

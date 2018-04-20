@@ -410,8 +410,8 @@ contains
         class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
-        type(check_2Dconv_commander)         :: xcheck_2Dconv
-        type(make_cavgs_distr_commander)     :: xmake_cavgs
+        type(check_2Dconv_commander)     :: xcheck_2Dconv
+        type(make_cavgs_distr_commander) :: xmake_cavgs
         ! command lines
         type(cmdline)         :: cline_check_2Dconv
         type(cmdline)         :: cline_cavgassemble
@@ -1046,13 +1046,12 @@ contains
     subroutine exec_symsrch_distr( self, cline )
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
-        use simple_ori, only: ori
-        use simple_sym, only: sym
-        use simple_binoris_io, only: binread_nlines, binread_oritab, binwrite_oritab
+        use simple_ori,            only: ori
+        use simple_sym,            only: sym
+        use simple_sp_project,     only: sp_project
+        use simple_binoris_io,     only: binread_nlines, binread_oritab, binwrite_oritab
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(merge_algndocs_commander) :: xmerge_algndocs
-        type(cmdline)                  :: cline_merge_algndocs
         type(cmdline)                  :: cline_gridsrch
         type(cmdline)                  :: cline_srch
         type(cmdline)                  :: cline_aggregate
@@ -1060,15 +1059,17 @@ contains
         type(params)                   :: p_master
         type(build)                    :: b
         type(chash)                    :: job_descr
-        type(oris)                     :: tmp_os, sympeaks, o_shift, grid_symaxes
+        type(oris)                     :: sympeaks, o_shift, grid_symaxes
         type(ori)                      :: symaxis
         type(sym)                      :: syme
+        type(sp_project)               :: spproj, symsrch_proj
         integer,    allocatable        :: order(:)
         real,       allocatable        :: corrs(:)
         real                           :: shvec(3)
         integer                        :: i, comlin_srch_nproj, nl,  nbest_here
         integer                        :: bestloc(1), cnt, numlen
         character(len=STDLEN)          :: part_tab
+        character(len=:),  allocatable :: symsrch_projname
         character(len=*), parameter :: GRIDSYMFBODY = 'grid_symaxes_part'           !<
         character(len=*), parameter :: GRIDSYMTAB   = 'grid_symaxes'//trim(TXT_EXT) !<
         character(len=*), parameter :: SYMFBODY     = 'symaxes_part'                !< symmetry axes doc (distributed mode)
@@ -1078,6 +1079,9 @@ contains
         character(len=*), parameter :: SYMPROJSTK   = 'sym_projs.mrc'               !< volume reference projections
         character(len=*), parameter :: SYMPROJTAB   = 'sym_projs'//trim(TXT_EXT)    !< volume reference projections doc
         integer,          parameter :: NBEST = 30
+        ! constants
+        symsrch_projname = 'symsrch_proj'
+        call del_file(trim(symsrch_projname)//trim(METADATA_EXT))
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -1086,133 +1090,134 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         ! make master parameters
-        p_master          = params(cline)
+        p_master = params(cline)
         comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(p_master%pgrp) )
         p_master%nptcls   = comlin_srch_nproj
-        if( p_master%nparts > p_master%nptcls )then
+        if( p_master%nparts > comlin_srch_nproj )then
             stop 'number of partitions (npart) > nr of jobs, adjust!'
         endif
+        call cline%set('nptcls', real(p_master%nspace))
+        ! read in master project
+        call spproj%read(p_master%projfile)
 
         ! 1. GRID SEARCH
         cline_gridsrch = cline
-        call cline_gridsrch%set('prg', 'symsrch')
-        call cline_gridsrch%set('refine', 'no') !!
-        call cline_gridsrch%set('fbody', trim(GRIDSYMFBODY))
+        call cline_gridsrch%set('prg',      'symsrch')
+        call cline_gridsrch%set('refine',   'no') !!
+        call cline_gridsrch%set('fbody',    trim(GRIDSYMFBODY))
+        call cline_gridsrch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
+        call cline_gridsrch%set('oritype',  p_master%oritype)
+        call cline_gridsrch%delete('oritab') !!!!!!!!!!!!!!!!!!!!!!!!!! TO DELETE
+        ! local project update
+        ! reference orientations for common lines
+        call spproj%os_cls3D%new_clean(p_master%nspace)
+        call spproj%os_cls3D%spiral
+        ! name change
+        call spproj%projinfo%delete_entry('projname')
+        call spproj%projinfo%delete_entry('projfile')
+        call spproj%update_projinfo(cline_gridsrch)
+        call spproj%write
+        ! schedule & merge
         call qenv%new(p_master)
         call cline_gridsrch%gen_job_descr(job_descr)
-        ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        ! consolidate grid search
-        cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.                      )
-        call cline_merge_algndocs%set( 'fbody',    trim(GRIDSYMFBODY)      )
-        call cline_merge_algndocs%set( 'nptcls',   real(comlin_srch_nproj) )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)   )
-        call cline_merge_algndocs%set( 'outfile',  trim(GRIDSYMTAB)        )
-        call xmerge_algndocs%execute( cline_merge_algndocs )
+        call spproj%merge_algndocs(comlin_srch_nproj, p_master%nparts, p_master%oritype, trim(GRIDSYMFBODY))
 
         ! 2. SELECTION OF SYMMETRY PEAKS TO REFINE
-        nl = nlines(trim(GRIDSYMTAB))
-        nbest_here = min(NBEST, nl)
-        call grid_symaxes%new(nl)
-        call grid_symaxes%read(trim(GRIDSYMTAB), [1,nl])
-        call del_file(trim(GRIDSYMTAB))
-        order = grid_symaxes%order_corr()
-        call tmp_os%new(nbest_here)
+        nbest_here = min(NBEST, spproj%os_cls3D%get_noris())
+        call grid_symaxes%new_clean(nbest_here)
+        order = spproj%os_cls3D%order_corr()
         cnt = 0
-        do i = nl, nl-nbest_here+1, -1
+        do i = comlin_srch_nproj, comlin_srch_nproj-nbest_here+1, -1
             cnt = cnt + 1
-            call tmp_os%set_ori(cnt, grid_symaxes%get_ori(order(i)))
+            call grid_symaxes%set_ori(cnt, spproj%os_cls3D%get_ori(order(i)))
         enddo
-        grid_symaxes = tmp_os
-        call grid_symaxes%write(trim(GRIDSYMTAB), [1,nbest_here])
+        spproj%os_cls3D = grid_symaxes
+        call spproj%write
         deallocate(order)
-        call tmp_os%kill
+        call grid_symaxes%kill
 
         ! 3. REFINEMENT
-        cline_srch = cline
         call qsys_cleanup(p_master)
-        call cline_srch%set('prg', 'symsrch')
-        call cline_srch%set('refine', 'yes') !!
-        call cline_srch%set('nptcls', real(comlin_srch_nproj))
-        call cline_srch%set('oritab', trim(GRIDSYMTAB))
-        call cline_srch%set('fbody',  trim(SYMFBODY))
+        cline_srch = cline
+        call cline_srch%set('prg',      'symsrch')
+        call cline_srch%set('refine',   'yes') !!
+        call cline_srch%set('nthr',     1.) !!
+        call cline_srch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
+        call cline_srch%set('oritype',  p_master%oritype)
+        call cline_srch%set('fbody',    trim(SYMFBODY))
+        call cline_srch%delete('oritab') !!!!!!!!!!!!!!!!!!!!!!!!!! TO DELETE
         ! switch to collection of single threaded jobs
+        p_master%nptcls  = min(comlin_srch_nproj, nbest_here)
         p_master%ncunits = p_master%nparts * p_master%nthr
         p_master%nparts  = nbest_here
         p_master%nthr    = 1
+        ! schedule & merge
         call qenv%new(p_master)
         call cline_srch%gen_job_descr(job_descr)
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        ! merge_algndocs command line
-        cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1.                    )
-        call cline_merge_algndocs%set( 'fbody',    trim(SYMFBODY)        )
-        call cline_merge_algndocs%set( 'nptcls',   real(nbest_here)      )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile',  trim(SYMTAB)          )
-        call xmerge_algndocs%execute( cline_merge_algndocs )
+        call spproj%merge_algndocs(nbest_here, p_master%nparts, p_master%oritype, trim(SYMFBODY))
 
         ! 4. REAL-SPACE EVALUATION
         cline_aggregate = cline
         call cline_aggregate%set( 'prg' ,   'sym_aggregate' )
-        call cline_aggregate%set( 'nptcls',  real(p_master%nspace) )
-        call cline_aggregate%set( 'oritab' , trim(SYMPROJTAB) )
-        call cline_aggregate%set( 'oritab2', trim(SYMTAB) )
+        !call cline_aggregate%set( 'nptcls',  real(p_master%nspace) )
+        !call cline_aggregate%set( 'oritab' , trim(SYMPROJTAB) )
+        !call cline_aggregate%set( 'oritab2', trim(SYMTAB) )
         call cline_aggregate%set( 'stk' ,    trim(SYMPROJSTK) )
-        call cline_aggregate%set( 'outfile', trim(SYMPEAKSTAB) )
+        !call cline_aggregate%set( 'outfile', trim(SYMPEAKSTAB) )
+        call cline_aggregate%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
         call cline_aggregate%set( 'eo',      'no' )
-        call qenv%exec_simple_prg_in_queue(cline_aggregate,&
-        &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
-        ! read and pick best
-        nl = nlines(trim(SYMPEAKSTAB))
-        call sympeaks%new(nl)
-        call sympeaks%read(trim(SYMPEAKSTAB), [1,nl])
-        corrs   = sympeaks%get_all('corr')
-        bestloc = maxloc(corrs)
-        symaxis = sympeaks%get_ori(bestloc(1))
-        write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        call symaxis%print_ori()
-        ! output
-        if( cline%defined('oritab') )then
-            ! transfer shift and symmetry to input orientations
-            call syme%new(p_master%pgrp)
-            call o_shift%new(1)
-            ! retrieve shift
-            call o_shift%read(trim(SYMSHTAB), [1,1])
-            shvec(1) = o_shift%get(1,'x')
-            shvec(2) = o_shift%get(1,'y')
-            shvec(3) = o_shift%get(1,'z')
-            shvec    = -1. * shvec ! the sign is right
-            ! rotate the orientations & transfer the 3d shifts to 2d
-            ! begin with making a general builder to support *.simple oritab input
-            call b%build_spproj(p_master, cline)
-            ! oritab is now read in, whatever format it had (.txt or .simple)
-            nl = binread_nlines(p_master, p_master%oritab)
-            call binread_oritab(p_master%oritab, b%spproj, b%a, [1,nl])
-            if( cline%defined('state') )then
-                call syme%apply_sym_with_shift(b%a, symaxis, shvec, p_master%state )
-            else
-                call syme%apply_sym_with_shift(b%a, symaxis, shvec )
-            endif
-            call binwrite_oritab(p_master%outfile, b%spproj, b%a, [1,nl])
-        endif
-
-        ! THE END
-        call qsys_cleanup(p_master)
-        call del_file(trim(SYMSHTAB))
-        numlen =  len(int2str(nbest_here))
-        do i = 1, nbest_here
-            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
-            call del_file(trim(part_tab))
-        enddo
-        p_master%nparts = nint(cline%get_rarg('nparts'))
-        numlen =  len(int2str(p_master%nparts))
-        do i = 1, p_master%nparts
-            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
-            call del_file(trim(part_tab))
-        enddo
-        call del_file('SYM_AGGREGATE')
+        call qenv%exec_simple_prg_in_queue(cline_aggregate,'SYM_AGGREGATE','SYM_AGGREGATE_FINISHED')
+        ! ! read and pick best
+        ! nl = nlines(trim(SYMPEAKSTAB))
+        ! call sympeaks%new(nl)
+        ! call sympeaks%read(trim(SYMPEAKSTAB), [1,nl])
+        ! corrs   = sympeaks%get_all('corr')
+        ! bestloc = maxloc(corrs)
+        ! symaxis = sympeaks%get_ori(bestloc(1))
+        ! write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
+        ! call symaxis%print_ori()
+        ! ! output
+        ! if( cline%defined('oritab') )then
+        !     ! transfer shift and symmetry to input orientations
+        !     call syme%new(p_master%pgrp)
+        !     call o_shift%new(1)
+        !     ! retrieve shift
+        !     call o_shift%read(trim(SYMSHTAB), [1,1])
+        !     shvec(1) = o_shift%get(1,'x')
+        !     shvec(2) = o_shift%get(1,'y')
+        !     shvec(3) = o_shift%get(1,'z')
+        !     shvec    = -1. * shvec ! the sign is right
+        !     ! rotate the orientations & transfer the 3d shifts to 2d
+        !     ! begin with making a general builder to support *.simple oritab input
+        !     call b%build_spproj(p_master, cline)
+        !     ! oritab is now read in, whatever format it had (.txt or .simple)
+        !     nl = binread_nlines(p_master, p_master%oritab)
+        !     call binread_oritab(p_master%oritab, b%spproj, b%a, [1,nl])
+        !     if( cline%defined('state') )then
+        !         call syme%apply_sym_with_shift(b%a, symaxis, shvec, p_master%state )
+        !     else
+        !         call syme%apply_sym_with_shift(b%a, symaxis, shvec )
+        !     endif
+        !     call binwrite_oritab(p_master%outfile, b%spproj, b%a, [1,nl])
+        ! endif
+        !
+        ! ! THE END
+        ! call qsys_cleanup(p_master)
+        ! call del_file(trim(SYMSHTAB))
+        ! numlen =  len(int2str(nbest_here))
+        ! do i = 1, nbest_here
+        !     part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
+        !     call del_file(trim(part_tab))
+        ! enddo
+        ! p_master%nparts = nint(cline%get_rarg('nparts'))
+        ! numlen =  len(int2str(p_master%nparts))
+        ! do i = 1, p_master%nparts
+        !     part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
+        !     call del_file(trim(part_tab))
+        ! enddo
+        ! call del_file('SYM_AGGREGATE')
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_SYMSRCH NORMAL STOP ****')
     end subroutine exec_symsrch_distr

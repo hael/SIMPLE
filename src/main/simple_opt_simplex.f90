@@ -32,7 +32,7 @@ contains
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: new_opt_simplex",alloc_stat)
         ! initialize best cost to huge number
-        self%yb = huge(x)
+        self%yb     = huge(x)
         self%exists = .true. ! indicates existence
     end subroutine new_opt_simplex
 

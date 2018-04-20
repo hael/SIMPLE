@@ -11,10 +11,10 @@ implicit none
 contains
 
     subroutine binread_oritab( fname, spproj, a, fromto )
-        character(len=*),  intent(in)     :: fname
-        class(sp_project), intent(inout)  :: spproj
-        class(oris),       intent(in out) :: a
-        integer,           intent(in)     :: fromto(2)
+        character(len=*),  intent(in)    :: fname
+        class(sp_project), intent(inout) :: spproj
+        class(oris),       intent(inout) :: a
+        integer,           intent(in)    :: fromto(2)
         if( .not. file_exists(fname) )then
             write(*,*) 'file: ', trim(fname)
             stop 'does not exist in cwd; binoris_io :: binread_oritab_1'

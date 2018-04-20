@@ -197,12 +197,12 @@ contains
             nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
-                DebugPrint 'wrote: ', sizeof(str_dyn//spaces(nspaces)),&
-                    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
+                !DebugPrint 'wrote: ', sizeof(str_dyn//spaces(nspaces)),&
+                !    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
             else
                 write(unit=self%funit,pos=ibytes) str_dyn
-                DebugPrint 'wrote: ', sizeof(str_dyn),&
-                    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
+                !DebugPrint 'wrote: ', sizeof(str_dyn),&
+                !    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
