@@ -43,12 +43,27 @@ print *, '>>>'
 #else
     print *, '  NO COMPILER identified. '
 #endif
+
+     if(FORTRAN_COMPILER == FC_GNU_COMPILER)then
+         print *, '  Fortran Compiler: Gfortran '
+     else if(FORTRAN_COMPILER == FC_PGI_COMPILER) then
+         print *, '  Platform OS: PGI. '
+     else if(FORTRAN_COMPILER == FC_INTEL_COMPILER) then
+         print *, '  Platform OS: Intel. '
+     endif
+
 #if _OpenACC
     print *, '  OpenACC identified. '
 #endif
 #if _OpenMP
     print *, '  OpenMP identified. '
 #endif
+    if(OS_PLATFORM == OS_LINUX)then
+        print *, '  Platform OS: Linux. '
+    else if(OS_PLATFORM == OS_MACOSX) then
+        print *, '  Platform OS: MacOSX. '
+    endif
+
 
 print *, '>>>'
 print *, '>>> Syslib function print_compiler_info '
@@ -409,7 +424,7 @@ endif
 if(allocated(res))deallocate(res)
 
 print *, '>>>'
-print *, '>>> Syslib function Test 6: system calls '
+print *, '>>> Syslib function Test 6: Basic system calls '
 print *, '>>>'
 print *, '>>> Syslib function Test 6a: sleep '
 call simple_sleep(0)
@@ -424,8 +439,10 @@ print *, '>>> Syslib function Test 6c: simple_dump_mem_usage: memory dumped to f
 call simple_dump_mem_usage()
 
 
-
-print *, '>>> Syslib function Test 6c: exec_subprocess / subprocess'
+print *, '>>>'
+print *, '>>> Syslib function Test 7: Proccess Management '
+print *, '>>>'
+print *, '>>> Syslib function Test 7a: exec_subprocess / subprocess'
 call exec_subprocess('echo "" && echo "Beginning exec_subprocess call" && '//&
     &'echo "Hostname: $(hostname)" && '//&
     &'echo "Operating System: $(uname -a)" && '//&
@@ -434,7 +451,7 @@ call exec_subprocess('echo "" && echo "Beginning exec_subprocess call" && '//&
     &' ls -al && '//&
     &'echo "Ending exec_subprocess call"; sleep 5 ', pid)
 print *, '   subprocess returned PID ', pid
-print *, '>>>  Syslib function Test 6d: wait_pid'
+print *, '>>>  Syslib function Test 7b: wait_pid'
 io_stat = wait_pid(pid)
 print *, '      wait_pid status', io_stat
 
@@ -449,6 +466,11 @@ print *, '      wait_pid status', io_stat
 ! policy = fastmem_policy()
 
 #endif
+
+print *, '>>>'
+print *, '>>> Syslib tests completed successfully'
+print *, '>>>'
+
 
 ! contains
 !     function fftw3_lib_version() result(result_str)

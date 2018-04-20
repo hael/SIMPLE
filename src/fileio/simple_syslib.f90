@@ -611,15 +611,15 @@ module simple_syslib
             call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" does not exist",__FILENAME__,__LINE__)
         if( dir_exists(fname1) )&
             call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
-        call exec_cmdline("cp "//trim(fname1)//" "//trim(fname2))
-        ! if(global_debug) print *,"In simple_copy_file"
-        ! allocate(f1, source=trim(adjustl(fname1))//achar(0))
-        ! allocate(f2, source=trim(adjustl(fname2))//achar(0))
-        ! status = fcopy(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
-        ! if (status/=0)&
-        !     call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
-        !     trim(fname2),__FILENAME__,__LINE__)
-        ! deallocate(f1,f2)
+
+        if(global_debug) print *,"In simple_copy_file"
+        allocate(f1, source=trim(adjustl(fname1))//achar(0))
+        allocate(f2, source=trim(adjustl(fname2))//achar(0))
+        status = fcopy(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
+        if (status/=0)&
+            call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
+            trim(fname2),__FILENAME__,__LINE__)
+        deallocate(f1,f2)
     end subroutine syslib_copy_file
 
     subroutine syslib_copy_file_direct(fname1, fname2, status)
@@ -691,28 +691,36 @@ module simple_syslib
 
 
     !> \brief  Rename or move file
-    function simple_rename( filein, fileout , overwrite) result(file_status)
+    function simple_rename( filein, fileout , overwrite,errmsg) result(file_status)
         character(len=*), intent(in)  :: filein, fileout !< input filename
         logical, intent(in), optional :: overwrite      !< default true
+        character(len=*), intent(in), optional  :: errmsg !< message
         integer                       :: file_status
         logical                       :: force_overwrite
         character(kind=c_char, len=:), allocatable :: f1, f2
+        character(len=:), allocatable :: msg, errormsg
         force_overwrite=.true.
         if(present(overwrite)) force_overwrite=overwrite
         if( file_exists(trim(fileout)) .and. (force_overwrite) )&
             call del_file(trim(fileout))
+        if (present(errmsg))then
+            allocate(errormsg,source=". Message: "//trim(errmsg))
+        else
+            allocate(errormsg,source=". ")
+        end if
         if( file_exists(filein) )then
-
+            allocate(msg,source="simple_rename failed to rename file "//trim(filein)//trim(errormsg))
             allocate(f1, source=trim(adjustl(filein))//achar(0))
             allocate(f2, source=trim(adjustl(fileout))//achar(0))
             file_status = rename(trim(f1), trim(f2))
             if(file_status /= 0)&
-                call simple_error_check(file_status,"simple_rename failed to rename file "//trim(filein))
-            deallocate(f1,f2)
+                call simple_error_check(file_status,trim(msg))
+            deallocate(f1,f2,msg)
         else
-            call simple_stop( "simple_fileio::simple_rename, designated input filename doesn't exist "//&
-                trim(filein),__FILENAME__,__LINE__)
+            call simple_stop("simple_fileio::simple_rename, designated input filename doesn't exist "//&
+                trim(filein)//trim(errormsg),__FILENAME__,__LINE__)
         end if
+        deallocate(errormsg)
     end function simple_rename
 
 
@@ -1327,6 +1335,52 @@ module simple_syslib
         deallocate(list)
         deallocate(thisglob)
     end function simple_del_files
+
+    !> forced deletion of dirs and files using POSIX glob -- rm -rf glob
+    !! No return of number of deleted files or list
+    !! call syslib_rm("tmpdir*/tmp*.ext",  status=stat)
+    subroutine syslib_rm_rf(glob,  status)
+        character(len=*), intent(in), optional     :: glob
+        integer,          intent(out), optional    :: status
+        character(kind=c_char,len=STDLEN), pointer :: list(:)
+        character(len=STDLEN)                      :: cur
+        character(kind=c_char,len=:), allocatable  :: thisglob
+        type(c_ptr)                                :: listptr
+        integer                                    :: i, glob_elems,iostatus, luntmp
+
+        if(present(glob))then
+            allocate(thisglob, source=trim(glob)//c_null_char)
+        else
+            allocate(thisglob, source='./*'//c_null_char)
+        endif
+        call del_file('__simple_filelist__')
+        !! glob must be protected by c_null char
+        iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
+        if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force glob failed")
+
+        open(newunit = luntmp, file = '__simple_filelist__')
+        allocate( list(glob_elems) )
+        do i = 1,glob_elems
+            read( luntmp, '(a)' , iostat=iostatus) list(i)
+            if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force reading temp file failed")
+        enddo
+        close( luntmp, status = 'delete' )
+
+        if ( glob_elems > 0) then
+            do i=1, glob_elems
+                if(file_exists(list(i))) then
+                    print *, " failed to delete "//trim(list(i))
+                    call simple_stop(" simple_syslib::simple_rm_force ",__FILENAME__,__LINE__)
+                end if
+            enddo
+        else
+            print *,"simple_syslib::syslib_rm_rf no files matching ", trim(thisglob)
+        endif
+       ! call simple_chdir(cur)
+
+        if(present(status))status=iostatus
+        deallocate(thisglob)
+    end subroutine syslib_rm_rf
 
     !> forced deletion of dirs and files using POSIX glob -- rm -rf glob
     !! num_deleted = simple_rm_force("tmpdir*/tmp*.ext", dlist=list_of_deleted_elements, status=stat)

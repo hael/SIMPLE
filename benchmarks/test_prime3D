@@ -16,7 +16,8 @@ prime_cleanup.pl
 pkill simple_exec
 [ -d prime3D_bench ] && rm -rf prime3D_bench
 mkdir prime3D_bench && cd prime3D_bench
-
-nohup simple_distr_exec prg=prime3D stk=../scaledsel.mrc oritab=../prime3Ddoc_035.txt ctf=yes smpd=2.55 msk=40 pgrp=d2 deftab=../extract_params.txt eo=yes nparts=2 nthr=8 mul=0.5 > PRIME3D &
+simple_private_exec prg=import_cavgs   stk=../cavgs_final_ranked.mrc smpd=2.55 projfile=prime3Dtest.simple projname=prime3Dtest
+#simple_private_exec prg=import_particles ctf=yes pgrp=d2 deftab=../extract_params.txtoritab=../prime3Ddoc_035.txt  stk=../scaledsel.mrc smpd=2.55 projfile=prime3Dtest.simple nparts=2 mul=0.5 msk=40
+nohup simple_distr_exec prg=refine3D stk=../scaledsel.mrc oritab=../prime3Ddoc_035.txt ctf=yes smpd=2.55 msk=40 pgrp=d2 deftab=../extract_params.txt eo=yes nparts=2 nthr=8 mul=0.5 > PRIME3D &
 
 # simple_distr_exec prg=prime3D stk=scaledstack.mrc ctf=yes smpd=2.55 msk=40 pgrp=d2 deftab=../extract_params.txt eo=yes nparts=2 nthr=8 vol1=startvol_state01.mrc lp=15 PRIME3D
