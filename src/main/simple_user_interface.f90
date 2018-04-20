@@ -5,7 +5,7 @@ implicit none
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
 private
 
-logical, parameter :: DEBUG = .true.
+logical, parameter :: DEBUG = .false.
 
 type simple_input_param
     character(len=:), allocatable :: key
@@ -64,6 +64,7 @@ type(simple_program), target :: center
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
+type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
@@ -105,6 +106,8 @@ type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
+type(simple_program), target :: symsrch
+type(simple_program), target :: tseries_track
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
 
@@ -138,6 +141,7 @@ type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: mw
 type(simple_input_param) :: ncls
+type(simple_input_param) :: neigh
 type(simple_input_param) :: neg
 type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
@@ -189,6 +193,7 @@ contains
         call new_cluster2D
         call new_cluster2D_stream
         call new_cluster3D
+        call new_cluster3D_refine
         call new_cluster_cavgs
         call new_convert
         call new_ctf_estimate
@@ -230,6 +235,8 @@ contains
         call new_simulate_subtomogram
         call new_stack
         call new_stackops
+        call new_symsrch
+        call new_tseries_track
         call new_vizoris
         call new_volops
         ! ...
@@ -248,6 +255,8 @@ contains
                 ptr2prg => cluster2D_stream
             case('cluster3D')
                 ptr2prg => cluster3D
+            case('cluster3D_refine')
+                ptr2prg => cluster3D_refine
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
             case('convert')
@@ -330,6 +339,10 @@ contains
                 ptr2prg => stack
             case('stackops')
                 ptr2prg => stackops
+            case('symsrch')
+                ptr2prg => symsrch
+            case('tseries_track')
+                ptr2prg => tseries_track
             case('vizoris')
                 ptr2prg => vizoris
             case('volops')
@@ -343,6 +356,7 @@ contains
         write(*,'(A)') cluster2D%name
         write(*,'(A)') cluster2D_stream%name
         write(*,'(A)') cluster3D%name
+        write(*,'(A)') cluster3D_refine%name
         write(*,'(A)') ctf_estimate%name
         write(*,'(A)') initial_3Dmodel%name
         write(*,'(A)') make_cavgs%name
@@ -356,6 +370,8 @@ contains
         write(*,'(A)') refine3D%name
         write(*,'(A)') refine3D_init%name
         write(*,'(A)') scale_project%name
+        write(*,'(A)') symsrch%name
+        write(*,'(A)') tseries_track%name
         stop
     end subroutine list_distr_prgs_in_ui
 
@@ -481,6 +497,7 @@ contains
         call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
         call set_param(fromf,          'fromf',        'num',    'First frame to include in subsum', 'First frame index to include in subsum', 'give index', .false., 1.)
         call set_param(tof,            'tof',          'num',    'Last frame to include in subsum', 'Last frame index to include in subsum', 'give index', .false., 1.)
+        call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -711,6 +728,64 @@ contains
         call cluster3D%set_input('comp_ctrls', 1, nparts)
         call cluster3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cluster3D
+
+    subroutine new_cluster3D_refine
+        ! PROGRAM SPECIFICATION
+        call cluster3D_refine%new(&
+        &'cluster3D_refine',&                                                ! name
+        &'cluster 3D refinement',&                                           ! descr_short
+        &'is a distributed workflow based on probabilistic projection matching &
+        &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
+        &'simple_distr_exec',&                                               ! executable
+        &2, 2, 0, 13, 7, 3, 2, .true.)                                       ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .true., '')
+        call cluster3D_refine%set_input('img_ios', 2, 'vollist', 'file', 'List of reference volumes files', 'List (.txt file) of reference volumes for the different states', 'e.g. refvols.txt', .true., '')
+        ! parameter input/output
+        call cluster3D_refine%set_input('parm_ios', 1, projfile)
+        call cluster3D_refine%set_input('parm_ios', 2,  'state', 'num', 'State to refine', 'Index of state to refine', 'give state index', .false., 1.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster3D_refine%set_input('srch_ctrls', 1, nspace)
+        call cluster3D_refine%set_input('srch_ctrls', 2, startit)
+        call cluster3D_refine%set_input('srch_ctrls', 3, trs)
+        call cluster3D_refine%set_input('srch_ctrls', 4, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster3D_refine%set_input('srch_ctrls', 5, maxits)
+        call cluster3D_refine%set_input('srch_ctrls', 6, update_frac)
+        call cluster3D_refine%set_input('srch_ctrls', 7, frac)
+        call cluster3D_refine%set_input('srch_ctrls', 8, pgrp)
+        call cluster3D_refine%set_input('srch_ctrls', 9, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
+        &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false., 200.)
+        call cluster3D_refine%set_input('srch_ctrls', 10, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
+        '# states to reconstruct', .false., 1.0)
+        call cluster3D_refine%set_input('srch_ctrls', 11, objfun)
+        call cluster3D_refine%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
+        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
+        call cluster3D_refine%set_input('srch_ctrls', 13, neigh)
+        ! filter controls
+        call cluster3D_refine%set_input('filt_ctrls', 1, hp)
+        call cluster3D_refine%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call cluster3D_refine%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
+        call cluster3D_refine%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
+        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
+        call cluster3D_refine%set_input('filt_ctrls', 5, lplim_crit)
+        call cluster3D_refine%set_input('filt_ctrls', 6, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
+        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        call cluster3D_refine%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
+        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! mask controls
+        call cluster3D_refine%set_input('mask_ctrls', 1, msk)
+        call cluster3D_refine%set_input('mask_ctrls', 2, inner)
+        call cluster3D_refine%set_input('mask_ctrls', 3, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
+        ! computer controls
+        call cluster3D_refine%set_input('comp_ctrls', 1, nparts)
+        call cluster3D_refine%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_cluster3D_refine
 
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION
@@ -1789,7 +1864,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 1, 0, 12, 7, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 1, 0, 13, 7, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -1815,6 +1890,7 @@ contains
         call refine3D%set_input('srch_ctrls', 11, objfun)
         call refine3D%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
         &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
+        call refine3D%set_input('srch_ctrls', 13, neigh)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -2210,6 +2286,81 @@ contains
         ! computer controls
         call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
+
+    subroutine new_symsrch
+        ! PROGRAM SPECIFICATION
+        call symsrch%new(&
+        &'symsrch',&                                                                                               ! name
+        &'Search for symmetry axis',&                                                                              ! descr_short
+        &'is a distributed workflow for searching for the principal symmetry axis of a volume reconstructed in C1. &
+        &The 3D reconstruction is projected and common lines-based optimisation is used to identify the principal &
+        &symmetry axis. The rotational transformation is applied to the inputted orientations and a new document &
+        &is produced. If you are unsure about the point-group, use the compare=yes mode and input the highest &
+        &conceviable point-group. The program then calculates probabilities for all lower groups inclusive',&      ! descr_long
+        &'simple_exec',&                                                                                           ! executable
+        &1, 3, 0, 3, 3, 1, 2, .false.)                                                                             ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call symsrch%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
+        & 'input volume e.g. vol_C1.mrc', .true., '')
+        ! parameter input/output
+        call symsrch%set_input('parm_ios', 1, smpd)
+        call symsrch%set_input('parm_ios', 2, oritab)
+        call symsrch%set_input('parm_ios', 3, outfile)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call symsrch%set_input('srch_ctrls', 1, pgrp)
+        call symsrch%set_input('srch_ctrls', 2, nspace)
+        call symsrch%set_input('srch_ctrls', 3, 'center', 'binary', 'Center input volume', 'Center input volume by its &
+        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        ! filter controls
+        call symsrch%set_input('filt_ctrls', 1, lp)
+        call symsrch%set_input('filt_ctrls', 2, hp)
+        call symsrch%set_input('filt_ctrls', 3, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        ! mask controls
+        call symsrch%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call symsrch%set_input('comp_ctrls', 1, nparts)
+        call symsrch%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_symsrch
+
+    subroutine new_tseries_track
+        ! PROGRAM SPECIFICATION
+        call tseries_track%new(&
+        &'tseries_track',&                                                       ! name
+        &'Track particles in time-series',&                                      ! descr_short
+        &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &1, 3, 0, 1, 2, 0, 1, .false.)                                           ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_track%set_input('img_ios', 1, 'filetab', 'file', 'List of of movie frames',&
+        &'List of movie frames to track in', 'e.g. movie_frames.txt', .true., '')
+        ! parameter input/output
+        call tseries_track%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
+        &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
+        call tseries_track%set_input('parm_ios', 2, smpd)
+        call tseries_track%set_input('parm_ios', 3, 'boxfile', 'file', 'List of particle coordiantes',&
+        &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_track%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
+        'e.g. pixels window halfwidth', .false., 10.)
+        ! <empty>
+        ! filter controls
+        call tseries_track%set_input('filt_ctrls', 1, lp)
+        tseries_track%filt_ctrls(1)%required = .false.
+        call tseries_track%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_track%set_input('comp_ctrls', 1, nparts)
+    end subroutine new_tseries_track
 
     subroutine new_vizoris
         ! PROGRAM SPECIFICATION

@@ -151,8 +151,8 @@ select case(prg)
         call xrefine3D_init_distr%execute( cline )
     case( 'refine3D' )
         call cline%parse()
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('refine') ) call cline%set('refine',  'single')
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
+        if( .not. cline%defined('refine') ) call cline%set('refine', 'single')
         if( .not. cline%defined('eo')     ) call cline%set('eo', 'no')
         call xprime3D_distr%execute(cline)
     case( 'reconstruct3D' )
@@ -161,49 +161,16 @@ select case(prg)
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         call xreconstruct3D_distr%execute( cline )
     case( 'symsrch' )
-        !==Program symsrch
-        !
-        ! <symsrch/begin>is a distributed workflow for searching for the principal symmetry axis of a volume
-        ! reconstructed without assuming any point-group symmetry. The program takes as input an
-        ! asymmetrical 3D reconstruction. The alignment document for all the particle images
-        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to
-        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions,
-        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational
-        ! transformation is applied to the inputted orientations, and a new alignment document is produced.
-        ! Input this document to reconstruct3D together with the images and the point-group symmetry to generate a
-        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and
-        ! input the highest conceviable point-group. The program then calculates probabilities for all lower
-        ! groups inclusive.<symsrch/end>
-        !
-        ! set required keys
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'pgrp'
-        keys_required(5) = 'oritab'
-        keys_required(6) = 'outfile'
-        keys_required(7) = 'lp'
-        keys_required(8) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'cenlp'
-        keys_optional(3) = 'hp'
-        keys_optional(4) = 'nspace'
-        keys_optional(5) = 'center'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:8), keys_optional(:5))
-        ! sanity check
-        if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
-        ! set defaults
+        call cline%parse()
+        if( cline%defined('compare') ) stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         if( .not. cline%defined('nspace') )then
             call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
             call cline%set('nspace', 50.) ! 50 projections 4 symsrch
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if( .not.cline%defined('cenlp')   ) call cline%set('cenlp', 30.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
-        ! execute
         call xsymsrch_distr%execute( cline )
 
     ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
@@ -213,120 +180,24 @@ select case(prg)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call xinitial_3Dmodel%execute( cline )
     case( 'cluster3D' )
-        !==Program cluster3D
-        !
-        ! <cluster3D/begin>is a distributed workflow for heterogeneity analysis by 3D clustering
-        ! <cluster3D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'oritab'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'ctf'
-        keys_required(6)  = 'nstates'
-        keys_required(7)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'lp'
-        keys_optional(3)  = 'lpstop'
-        keys_optional(4)  = 'eo'
-        keys_optional(5)  = 'frac'
-        keys_optional(6)  = 'inner'
-        keys_optional(7)  = 'width'
-        keys_optional(8)  = 'nspace'
-        keys_optional(9)  = 'stk'
-        keys_optional(10) = 'stktab'
-        keys_optional(11) = 'phaseplate'
-        keys_optional(12) = 'oritab2'
-        keys_optional(13) = 'mskfile'
-        keys_optional(14) = 'startit'
-        keys_optional(15) = 'objfun'
-        keys_optional(16) = 'refine'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:7), keys_optional(:16))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
-        ! set defaults
+        call cline%parse()
         if( .not. cline%defined('refine') ) call cline%set('refine','cluster')
         if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo','yes')
         if( cline%defined('lp') ) call cline%set('eo','no')
-        ! execute
         call xcluster3D%execute( cline )
     case( 'cluster3D_refine' )
-        !==Program cluster3D_refine
-        !
-        ! <cluster3D_refine/begin>is a distributed workflow for refinement of heterogeneity analysis
-        ! by cluster3D<cluster3D_refine/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'oritab'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'ctf'
-        keys_required(6)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'lp'
-        keys_optional(3)  = 'lpstop'
-        keys_optional(4)  = 'eo'
-        keys_optional(5)  = 'frac'
-        keys_optional(6)  = 'inner'
-        keys_optional(7)  = 'width'
-        keys_optional(8)  = 'nspace'
-        keys_optional(9)  = 'stk'
-        keys_optional(10) = 'stktab'
-        keys_optional(11) = 'phaseplate'
-        keys_optional(12) = 'msklist'
-        keys_optional(13) = 'vollist'
-        keys_optional(14) = 'state'
-        keys_optional(15) = 'trs'
-        keys_optional(16) = 'objfun'
-        keys_optional(17) = 'update_frac'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:17))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
-        ! set defaults
+        call cline%parse()
         if( .not. cline%defined('eo') )call cline%set('eo', 'no')
-        ! execute
         call xcluster3D_refine%execute( cline )
 
     ! TIME-SERIES DISTRIBUTED WORKFLOWS
 
     case( 'tseries_track' )
-        !==Program tseries_track
-        !
-        ! <tseries_track/begin>is a distributed workflow for particle tracking
-        ! in time-series data <tseries_track/end>
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'fbody'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'boxfile'
-        keys_required(5) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'lp'
-        keys_optional(2) = 'offset'
-        keys_optional(3) = 'cenlp'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
-        ! set defaults
+        call cline%parse()
         call cline%set('nthr', 1.0)
-        if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
+        call cline%set('neg', 'yes')
         if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
-        ! execute
         call xtseries_track_distr%execute( cline )
 
     ! SUPPORTING DISTRIBUTED WORKFLOWS
