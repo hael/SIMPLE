@@ -75,6 +75,9 @@ type(simple_program), target :: fsc
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
+type(simple_program), target :: import_cavgs
+type(simple_program), target :: import_movies
+type(simple_program), target :: import_particles
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -92,6 +95,7 @@ type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
 type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
+type(simple_program), target :: print_project_info
 type(simple_program), target :: project
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
@@ -108,6 +112,7 @@ type(simple_program), target :: stack
 type(simple_program), target :: stackops
 type(simple_program), target :: symsrch
 type(simple_program), target :: tseries_track
+type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
 
@@ -172,9 +177,13 @@ type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
 type(simple_input_param) :: stk
 type(simple_input_param) :: stktab
+type(simple_input_param) :: time_per_image
 type(simple_input_param) :: tof
 type(simple_input_param) :: trs
 type(simple_input_param) :: update_frac
+type(simple_input_param) :: user_account
+type(simple_input_param) :: user_email
+type(simple_input_param) :: user_project
 type(simple_input_param) :: weights2D
 type(simple_input_param) :: weights3D
 
@@ -204,13 +213,16 @@ contains
         call new_info_image
         call new_info_stktab
         call new_initial_3Dmodel
+        call new_import_cavgs
+        call new_import_movies
+        call new_import_particles
         call new_make_cavgs
         call new_make_oris
         call new_make_pickrefs
         call new_mask
         call new_motion_correct
         call new_motion_correct_tomo
-        ! call new_new_project
+        call new_new_project
         call new_normalize
         call new_orisops
         call new_oristats
@@ -221,6 +233,7 @@ contains
         call new_preprocess_stream
         call new_print_fsc
         call new_print_magic_boxes
+        call new_print_project_info
         call new_project
         call new_reconstruct3D
         call new_refine3D
@@ -237,6 +250,7 @@ contains
         call new_stackops
         call new_symsrch
         call new_tseries_track
+        call new_update_project
         call new_vizoris
         call new_volops
         ! ...
@@ -277,6 +291,12 @@ contains
                 ptr2prg => info_stktab
             case('initial_3Dmodel')
                 ptr2prg => initial_3Dmodel
+            case('import_cavgs')
+                ptr2prg => import_cavgs
+            case('import_movies')
+                ptr2prg => import_movies
+            case('import_particles')
+                ptr2prg => import_particles
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -311,6 +331,8 @@ contains
                 ptr2prg => print_fsc
             case('print_magic_boxes')
                 ptr2prg => print_magic_boxes
+            case('print_project_info')
+                ptr2prg => print_project_info
             case('project')
                 ptr2prg => project
             case('reconstruct3D')
@@ -343,6 +365,8 @@ contains
                 ptr2prg => symsrch
             case('tseries_track')
                 ptr2prg => tseries_track
+            case('update_project')
+                ptr2prg => update_project
             case('vizoris')
                 ptr2prg => vizoris
             case('volops')
@@ -385,6 +409,9 @@ contains
         write(*,'(A)') fsc%name
         write(*,'(A)') info_image%name
         write(*,'(A)') info_stktab%name
+        write(*,'(A)') import_cavgs%name
+        write(*,'(A)') import_movies%name
+        write(*,'(A)') import_particles%name
         write(*,'(A)') make_oris%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
@@ -395,6 +422,7 @@ contains
         write(*,'(A)') postprocess%name
         write(*,'(A)') print_fsc%name
         write(*,'(A)') print_magic_boxes%name
+        write(*,'(A)') print_project_info%name
         write(*,'(A)') project%name
         write(*,'(A)') select_%name
         write(*,'(A)') shift%name
@@ -405,6 +433,7 @@ contains
         write(*,'(A)') scale%name
         write(*,'(A)') stack%name
         write(*,'(A)') stackops%name
+        write(*,'(A)') update_project%name
         write(*,'(A)') vizoris%name
         write(*,'(A)') volops%name
         stop
@@ -414,10 +443,9 @@ contains
 
     subroutine set_common_params
         call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., 'myproject.simple')
-        call set_param(projname,      'projname',      'str',    'Project name', 'SIMPLE project name', 'e.g. to create myproject.simple', .true., 'myproject')
         call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
-        call set_param(ctf,           'ctf',           'multi',  'CTF correction', 'Contrast Transfer Function correction; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
+        call set_param(ctf,           'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
         &'(yes|no|flip){no}', .true., 'no')
         call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
@@ -477,7 +505,7 @@ contains
         call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
         &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
         call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per part', 'Memory in MB per part in distributed execution{1600}', 'MB per part{1600}', .false., 1600.)
-        call set_param(qsys_partition,'qsys_partition','str',    'Name of partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'part name', .false., '')
+        call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
         call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give yourpart', .false., '')
         call set_param(box,            'box',          'num',    'Square image size','Square image size(in pixels)', '# pixels of box', .true., 0.)
@@ -498,6 +526,12 @@ contains
         call set_param(fromf,          'fromf',        'num',    'First frame to include in subsum', 'First frame index to include in subsum', 'give index', .false., 1.)
         call set_param(tof,            'tof',          'num',    'Last frame to include in subsum', 'Last frame index to include in subsum', 'give index', .false., 1.)
         call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
+        call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
+        &'e.g. to create ./myproject/myproject.simple', .true., '')
+        call set_param(user_email,     'user_email',   'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
+        call set_param(time_per_image, 'time_per_image', 'num', 'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
+        call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
+        call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -584,13 +618,13 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 11, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 11, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
         &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc')
         ! parameter input/output
-        call cluster2D%set_input('parm_ios', 1, projfile)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -641,13 +675,13 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
         &'simple_distr_exec',&                                                                                            ! executable
-        &1, 0, 0, 6, 5, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
+        &0, 1, 0, 6, 5, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cluster2D_stream%set_input('img_ios', 1, 'projfile_target', 'file', 'Target project',&
-        &'Project encapsulating new particles and parameters to be classified in 2D', 'e.g. mytargetprojfile.simple', .true., '')
-        ! parameter input/output
         ! <empty>
+        ! parameter input/output
+        call cluster2D_stream%set_input('parm_ios', 1, 'projfile_target', 'file', 'Target project',&
+        &'Project encapsulating new particles and parameters to be classified in 2D', 'e.g. mytargetprojfile.simple', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -737,14 +771,13 @@ contains
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
         &'simple_distr_exec',&                                               ! executable
-        &2, 2, 0, 13, 7, 3, 2, .true.)                                       ! # entries in each group
+        &2, 1, 0, 13, 7, 3, 2, .true.)                                       ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .true., '')
         call cluster3D_refine%set_input('img_ios', 2, 'vollist', 'file', 'List of reference volumes files', 'List (.txt file) of reference volumes for the different states', 'e.g. refvols.txt', .true., '')
         ! parameter input/output
-        call cluster3D_refine%set_input('parm_ios', 1, projfile)
-        call cluster3D_refine%set_input('parm_ios', 2,  'state', 'num', 'State to refine', 'Index of state to refine', 'give state index', .false., 1.)
+        call cluster3D_refine%set_input('parm_ios', 1,  'state', 'num', 'State to refine', 'Index of state to refine', 'give state index', .false., 1.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1041,7 +1074,6 @@ contains
         ! image input/output
         stktab%required = .true.
         call info_stktab%set_input('img_ios', 1, stktab)
-
         ! parameter input/output
         ! <empty>
         ! alternative inputs
@@ -1063,12 +1095,12 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                          ! descr_long
         &'simple_distr_exec',&                                                          ! executable
-        &0, 1, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 0, 0, 9, 3, 3, 2, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call initial_3Dmodel%set_input('parm_ios', 1, projfile)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1097,6 +1129,98 @@ contains
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
     end subroutine new_initial_3Dmodel
 
+    subroutine new_import_cavgs
+        ! PROGRAM SPECIFICATION
+        call import_cavgs%new(&
+        &'import_cavgs',&                                        ! name
+        &'Import class averages to SIMPLE project',&             ! descr_short
+        &'is a program for importing class averages movies to the project',&
+        &'simple_exec',&                                         ! executable
+        &1, 1, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
+        call import_cavgs%set_input('img_ios', 1, 'stk', 'file', 'Stack of class averages',&
+        &'Stack of class average images to import', 'e.g. cavgs.mrcs', .true., '')
+        ! parameter input/output
+        call import_cavgs%set_input('parm_ios', 1, smpd)
+    end subroutine new_import_cavgs
+
+    subroutine new_import_movies
+        ! PROGRAM SPECIFICATION
+        call import_movies%new(&
+        &'import_movies',&                                       ! name
+        &'Import movies to SIMPLE project',&                     ! descr_short
+        &'is a program for importing DDD movies to the project. The movies can be located in any read-only location '&
+        &'accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected '&
+        &'and integrated. Box files (in EMAN format) can be imported along with the movies',&
+        &'simple_exec',&                                         ! executable
+        &1, 7, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call import_movies%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
+        ! parameter input/output
+        call import_movies%set_input('parm_ios', 1, smpd)
+        call import_movies%set_input('parm_ios', 2, kv)
+        import_movies%parm_ios(2)%required = .true.
+        call import_movies%set_input('parm_ios', 3, cs)
+        import_movies%parm_ios(3)%required = .true.
+        call import_movies%set_input('parm_ios', 4, fraca)
+        import_movies%parm_ios(4)%required = .true.
+        call import_movies%set_input('parm_ios', 5, ctf)
+        import_movies%parm_ios(5)%required = .true.
+        call import_movies%set_input('parm_ios', 6, phaseplate)
+        call import_movies%set_input('parm_ios', 7, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_import_movies
+
+    subroutine new_import_particles
+        ! PROGRAM SPECIFICATION
+        call import_particles%new(&
+        &'import_particles',&                                       ! name
+        &'Import particles to SIMPLE project',&                     ! descr_short
+        &'is a program for importing extracted particle images to the project',&
+        &'simple_exec',&                                            ! executable
+        &0, 12, 2, 0, 0, 0, 0, .true.)                              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call import_particles%set_input('parm_ios', 1, smpd)
+        call import_particles%set_input('parm_ios', 2, kv)
+        call import_particles%set_input('parm_ios', 3, cs)
+        call import_particles%set_input('parm_ios', 4, fraca)
+        call import_particles%set_input('parm_ios', 5, ctf)
+        import_particles%parm_ios(5)%required = .true.
+        call import_particles%set_input('parm_ios', 6, phaseplate)
+        call import_particles%set_input('parm_ios', 7, oritab)
+        call import_particles%set_input('parm_ios', 8, deftab)
+        call import_particles%set_input('parm_ios', 9, 'plaintexttab', 'file', 'Plain text file of input parameters',&
+        'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', 'e.g. params.txt', .false., '')
+        call import_particles%set_input('parm_ios', 10, 'dfunit', 'binary', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
+        call import_particles%set_input('parm_ios', 11, 'angast', 'binary', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
+        call import_particles%set_input('parm_ios', 12, 'phshiftunit', 'binary', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
+        ! alternative inputs
+        call import_particles%set_input('alt_ios', 1, 'stktab', 'file', 'List of per-micrograph particle stacks',&
+        &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
+        call import_particles%set_input('alt_ios', 2, 'stk', 'file', 'Stack of particles',&
+        &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_import_particles
+
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION
         call make_cavgs%new(&
@@ -1105,18 +1229,17 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &1, 5, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
         &'Output 2D references', 'xxx.mrc file with references', .false., '')
         ! parameter input/output
-        call make_cavgs%set_input('parm_ios', 1, projfile)
-        call make_cavgs%set_input('parm_ios', 2, ncls)
-        call make_cavgs%set_input('parm_ios', 3, 'mul', 'num', 'Shift multiplication factor',&
+        call make_cavgs%set_input('parm_ios', 1, ncls)
+        call make_cavgs%set_input('parm_ios', 2, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
-        call make_cavgs%set_input('parm_ios', 4, weights2D)
-        call make_cavgs%set_input('parm_ios', 5, remap_cls)
+        call make_cavgs%set_input('parm_ios', 3, weights2D)
+        call make_cavgs%set_input('parm_ios', 4, remap_cls)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1345,25 +1468,23 @@ contains
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
-        ! call new_project_%new(&
-        ! &'new_project', & ! name
-        ! &'is a program for creating a new project',&                                                           ! descr_short
-        ! &'SIMPLE3.0 relies on a monolithic project file for controlling execution on distributed &
-        ! &systems and for unified meta-data management. This program creates that file which is mirrored &
-        ! & by an abstract data type in the backend, which is required for execution of any SIMPLE3.0 program',& ! descr_long
-        ! &'simple_exec',&                                                                                       ! executable
-        ! &0, 1, 0, 0, 0, 0, 0, .false.)                                                                         ! # entries in each group, requires sp_project
-        ! ! INPUT PARAMETER SPECIFICATIONS
-        ! ! image input/output
-        ! ! <empty>
-        ! ! parameter input/output
-        ! call new_project_%set_input('parm_ios', 1, 'projname', 'str', 'Project name', 'Name of project to create myproject.simple file for meta-data management',&
-        ! &'e.g. to create myproject.simple', .true., '')
-        ! call new_project_%set_input('parm_ios', 2, job_memory_per_task)
-        ! call new_project_%set_input('parm_ios', 3, qsys_partition)
-        ! call new_project_%set_input('parm_ios', 4, qsys_qos)
-        ! call new_project_%set_input('parm_ios', 5, qsys_reservation)
-
+        call new_project_%new(&
+        &'new_project',&                     ! name
+        &'Create a new project',&            ! descr_short
+        &'is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling &
+        &execution on distributed and shared-memory systems and for unified meta-data management. This program &
+        &creates a directory named projname and a file projname.simple inside that directory that contains all &
+        &information about the project as well as all meta data generated by the different SIMPLE programs. This &
+        &file is mirrored by an abstract data type in the back-end, which manages the parameters and &
+        &meta-data I/O required for execution of SIMPLE',& ! descr_longg
+        &'simple_exec',&                     ! executable
+        &0, 2, 0, 0, 0, 0, 7, .false.)       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call new_project_%set_input('parm_ios', 1, projname)
+        call new_project_%set_input('parm_ios', 2, user_email)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1373,7 +1494,13 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-
+        call new_project_%set_input('comp_ctrls', 1, time_per_image)
+        call new_project_%set_input('comp_ctrls', 2, user_account)
+        call new_project_%set_input('comp_ctrls', 3, user_project)
+        call new_project_%set_input('comp_ctrls', 4, qsys_partition)
+        call new_project_%set_input('comp_ctrls', 5, qsys_qos)
+        call new_project_%set_input('comp_ctrls', 6, qsys_reservation)
+        call new_project_%set_input('comp_ctrls', 7, job_memory_per_task)
     end subroutine new_new_project
 
     subroutine new_pick
@@ -1663,6 +1790,31 @@ contains
         ! <empty>
     end subroutine new_print_magic_boxes
 
+    subroutine new_print_project_info
+        ! PROGRAM SPECIFICATION
+        call print_project_info%new(&
+        &'print_project_info', &                                             ! name
+        &'Print project info',&                                              ! descr_short
+        &'is a program prints information abourt a *.simple project file',&  ! descr_long
+        &'simple_exec',&                                                     ! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                        ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_print_project_info
+
     subroutine new_project
         ! PROGRAM SPECIFICATION
         call project%new(&
@@ -1836,12 +1988,12 @@ contains
         &'given input orientations and state assignments. The algorithm is based on direct Fourier inversion '&
         &'with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 2, 1, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 0, 0, 2, 1, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call reconstruct3D%set_input('parm_ios', 1, projfile)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1864,13 +2016,13 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 1, 0, 13, 7, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 0, 0, 13, 7, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
         & sections for particle image matching', 'input volume e.g. vol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
-        call refine3D%set_input('parm_ios', 1, projfile)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1923,12 +2075,12 @@ contains
         &'Random initialisation of 3D refinement',&                                                            ! descr_short
         &'is a distributed workflow for generating a random initial 3D model for initialisation of refine3D',& ! descr_long
         &'simple_distr_exec',&                                                                                 ! executable
-        &0, 1, 0, 3, 0, 2, 2, .true.)                                                                          ! # entries in each group
+        &0, 0, 0, 3, 0, 2, 2, .true.)                                                                          ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call refine3D_init%set_input('parm_ios', 1, projfile)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1990,13 +2142,12 @@ contains
         &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
         &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 2, 0, 0, 0, 0, 2, .false.)                                                     ! # entries in each group
+        &0, 1, 0, 0, 0, 0, 2, .false.)                                                     ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call scale_project%set_input('parm_ios', 1, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
-        call scale_project%set_input('parm_ios', 2, projfile)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2046,11 +2197,11 @@ contains
     subroutine new_shift
         ! PROGRAM SPECIFICATION
         call shift%new(&
-        &'shift',&                                                                           ! name
-        &'Shift images to rotational origin',&                                               ! descr_short
-        &'is a program for shifting a stack according to origin shifts in oritab/projfile',& ! descr_long
-        &'simple_exec',&                                                                     ! executable
-        &3, 3, 0, 0, 0, 0, 1, .false.)                                                       ! # entries in each group
+        &'shift',&                                                                  ! name
+        &'Shift images to rotational origin',&                                      ! descr_short
+        &'is a program for shifting a stack according to origin shifts in oritab',& ! descr_long
+        &'simple_exec',&                                                            ! executable
+        &3, 3, 0, 0, 0, 0, 1, .false.)                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call shift%set_input('img_ios', 1, stk)
@@ -2361,6 +2512,38 @@ contains
         ! computer controls
         call tseries_track%set_input('comp_ctrls', 1, nparts)
     end subroutine new_tseries_track
+
+    subroutine new_update_project
+        ! PROGRAM SPECIFICATION
+        call update_project%new(&
+        &'new_project',&                     ! name
+        &'Update an existing project',&      ! descr_short
+        &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! descr_long
+        &'simple_exec',&                     ! executable
+        &0, 2, 0, 0, 0, 0, 7, .false.)       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call update_project%set_input('parm_ios', 1, projname)
+        call update_project%set_input('parm_ios', 2, user_email)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call update_project%set_input('comp_ctrls', 1, time_per_image)
+        call update_project%set_input('comp_ctrls', 2, user_account)
+        call update_project%set_input('comp_ctrls', 3, user_project)
+        call update_project%set_input('comp_ctrls', 4, qsys_partition)
+        call update_project%set_input('comp_ctrls', 5, qsys_qos)
+        call update_project%set_input('comp_ctrls', 6, qsys_reservation)
+        call update_project%set_input('comp_ctrls', 7, job_memory_per_task)
+    end subroutine new_update_project
 
     subroutine new_vizoris
         ! PROGRAM SPECIFICATION

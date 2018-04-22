@@ -3,6 +3,7 @@ program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline, only: cmdline, cmdline_err
 use simple_gen_doc
+use simple_commander_project
 use simple_commander_checks
 use simple_commander_comlin
 use simple_commander_distr
@@ -13,7 +14,6 @@ use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_cluster2D
 use simple_commander_refine3D
-use simple_commander_project
 use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops
@@ -35,7 +35,7 @@ type(cavgassemble_commander)         :: xcavgassemble
 type(check_2Dconv_commander)         :: xcheck_2Dconv
 type(rank_cavgs_commander)           :: xrank_cavgs
 
-! PRIME3D PROGRAMS
+! REFINE3D PROGRAMS
 type(npeaks_commander)               :: xnpeaks
 type(nspace_commander)               :: xnspace
 type(refine3D_init_commander)        :: xrefine3D_init
@@ -90,12 +90,6 @@ type(cluster_oris_commander)         :: xcluster_oris
 type(rotmats2oris_commander)         :: xrotmats2oris
 type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
-type(new_project_commander)          :: xnew_project
-type(update_project_commander)       :: xupdate_project
-type(import_movies_commander)        :: ximport_movies
-type(import_particles_commander)     :: ximport_particles
-type(import_cavgs_commander)         :: ximport_cavgs
-type(print_project_info_commander)   :: xprint_project_info
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)      :: xtseries_extract
@@ -108,7 +102,6 @@ type(merge_algndocs_commander)       :: xmerge_algndocs
 type(merge_nnmat_commander)          :: xmerge_nnmat
 type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
-! type(split_commander)                :: xsplit
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -1241,121 +1234,6 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
         ! execute
         call xproject2txt%execute(cline)
-    case( 'new_project' )
-        !==Program new_project
-        !
-        ! </begin></end>
-        !
-        ! set required keys
-        keys_required(1) = 'projname'
-        ! set optional keys
-        keys_optional(1) = 'user_email'
-        keys_optional(2) = 'time_per_image'
-        keys_optional(3) = 'user_account'
-        keys_optional(4) = 'user_project'
-        keys_optional(5) = 'qsys_partition'
-        keys_optional(6) = 'qsys_qos'
-        keys_optional(7) = 'qsys_reservation'
-        keys_optional(8) = 'job_memory_per_task'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
-        ! execute
-        call xnew_project%execute(cline)
-    case( 'update_project' )
-        !==Program update_project
-        !
-        ! </begin></end>
-        !
-        ! set required keys
-        keys_required(1) = 'projname'
-        ! set optional keys
-        keys_optional(1) = 'user_email'
-        keys_optional(2) = 'time_per_image'
-        keys_optional(3) = 'user_account'
-        keys_optional(4) = 'user_project'
-        keys_optional(5) = 'qsys_partition'
-        keys_optional(6) = 'qsys_qos'
-        keys_optional(7) = 'qsys_reservation'
-        keys_optional(8) = 'job_memory_per_task'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
-        ! execute
-        call xupdate_project%execute(cline)
-    case( 'import_movies' )
-        !==Program import_movies
-        !
-        ! </begin></end>
-        !
-        ! set required keys
-        keys_required(1) = 'projname'
-        keys_required(2) = 'filetab'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'kv'
-        keys_required(5) = 'cs'
-        keys_required(6) = 'fraca'
-        keys_required(6) = 'ctf'
-        ! set optional keys
-        keys_optional(1) = 'phaseplate'
-        keys_optional(2) = 'boxtab'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:2))
-        ! execute
-        call ximport_movies%execute(cline)
-    case( 'import_particles' )
-        !==Program import_particles
-        !
-        ! </begin></end>
-        !
-        ! set required keys
-        keys_required(1)  = 'ctf'
-        keys_required(2)  = 'projfile'
-        ! set optional keys
-        keys_optional(1)  = 'smpd'
-        keys_optional(2)  = 'cs'
-        keys_optional(3)  = 'kv'
-        keys_optional(4)  = 'fraca'
-        keys_optional(5)  = 'phaseplate'
-        keys_optional(6)  = 'stk'
-        keys_optional(7)  = 'stktab'
-        keys_optional(8)  = 'plaintexttab'
-        keys_optional(9)  = 'oritab'
-        keys_optional(10) = 'deftab'
-        keys_optional(11) = 'dfunit'
-        keys_optional(12) = 'angastunit'
-        keys_optional(13) = 'phshiftunit'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:13))
-        ! set defaults
-        call cline%set('oritype', 'stk')
-        ! execute
-        call ximport_particles%execute(cline)
-    case( 'import_cavgs' )
-        !==Program import_cavgs
-        !
-        ! </begin></end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'projfile'
-        keys_optional(2) = 'projname'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
-        ! set defaults
-        call cline%set('oritype', 'stk')
-        ! execute
-        call ximport_cavgs%execute(cline)
-    case( 'print_project_info' )
-        !==Program print_project_info
-        !
-        ! <print_project_info/begin>prints information abourt a *.simple project file<print_project_info/end>
-        !
-        ! Required keys
-        keys_required(1) = 'projfile'
-        call cline%parse_oldschool(keys_required(:1))
-        ! execute
-        call xprint_project_info%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 
@@ -1504,24 +1382,7 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:2))
         ! execute
         call xsplit_pairs%execute(cline)
-    ! case( 'split' )
-    !     !==Program split
-    !     !
-    !     ! <split/begin>is a program for splitting of image stacks into partitions for parallel execution.
-    !     ! This is done to reduce I/O latency<split/end>
-    !     !
-    !     ! set required keys
-    !     keys_required(1) = 'smpd'
-    !     keys_required(2) = 'stk'
-    !     ! set optional keys
-    !     keys_optional(1) = 'nparts'
-    !     keys_optional(2) = 'neg'
-    !     ! parse command line
-    !     call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
-    !
-    !     ! execute
-    !     call xsplit%execute(cline)
-    ! case DEFAULT
+    case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'
     end select
