@@ -14,11 +14,11 @@ fi
 cd ${SIMPLE_TESTBENCH_DATA}/bgal
 prime_cleanup.pl
 pkill simple_exec
-[ -d prime3Dini_bench ] && rm -rf prime3Dini_bench
-mkdir prime3Dini_bench && cd prime3Dini_bench
+[ -d prime3Dinit_bench ] && rm -rf prime3Dinit_bench
+mkdir prime3Dinit_bench && cd prime3Dinit_bench
 
-time simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
-
-
+#time simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
+simple_private_exec prg=import_cavgs   stk=../cavgs_final.mrc smpd=2.55 projfile=init3Dtest.simple projname=init3Dtest
+nohup simple_distr_exec prg=initial_3Dmodel  projfile=init3Dtest.simple smpd=1.5 msk=50 ctf=no pgrp=c1 stk=../cavgs_final.mrc
 ## valgrind --tool=cachegrind  simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
 ## valgrind --tool=memgrind  simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1

@@ -18,6 +18,7 @@ prime_cleanup.pl
 pkill simple_exec
 [ -d prime2D_bench ] && rm -rf prime2D_bench
 mkdir prime2D_bench && cd prime2D_bench
+
 simple_private_exec prg=import_particles ctf=yes cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc smpd=1.275 projfile=betagal.simple
 nohup simple_distr_exec prg=cluster2D projfile=betagal.simple nparts=2 nthr=4 ncls=100 msk=88
 
