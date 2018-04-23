@@ -74,8 +74,8 @@ contains
         ! read even/odd pair
         call even%new([p%box,p%box,p%box], p%smpd)
         call odd%new([p%box,p%box,p%box], p%smpd)
-        call odd%read(p%vols(1))
-        call even%read(p%vols(2))
+        call odd%read(p%vols(1)%str)
+        call even%read(p%vols(2)%str)
         ! always normalise before masking
         call even%norm()
         call odd%norm()
@@ -136,7 +136,7 @@ contains
         ! center volume(s)
         allocate(shvec(p%nstates,3))
         do istate=1,p%nstates
-            call b%vol%read(p%vols(istate))
+            call b%vol%read(p%vols(istate)%str)
             shvec(istate,:) = b%vol%center(p%cenlp, p%msk)
             call b%vol%shift([shvec(istate,1),shvec(istate,2),shvec(istate,3)])
             call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)
@@ -163,7 +163,7 @@ contains
         ! pre-proc
         p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline) ! general objects built
-        call b%vol%read(p%vols(state))
+        call b%vol%read(p%vols(state)%str)
         call b%vol%fft()
         if( cline%defined('fsc') )then
             ! optimal low-pass filter from FSC
@@ -238,7 +238,7 @@ contains
             endif
         endif
         ! output
-        p%outvol = add2fbody(trim(p%vols(state)), p%ext, '_pproc')
+        p%outvol = add2fbody(trim(p%vols(state)%str), p%ext, '_pproc')
         call b%vol%write(p%outvol)
         ! also output mirrored by default (unless otherwise stated on command line)
         if( .not. cline%defined('mirr') .or. p%mirr .ne. 'no' )then
@@ -278,7 +278,7 @@ contains
             call b%a%spiral(p%nsym, p%eullims)
         endif
         ! fix volumes and stacks
-        call b%vol%read(p%vols(1))
+        call b%vol%read(p%vols(1)%str)
         DebugPrint 'read volume'
         ! masking
         if(cline%defined('msk')) call b%vol%mask(p%msk, 'soft')
@@ -381,9 +381,9 @@ contains
         call b%build_general_tbox(p, cline)  ! general objects built
         ! reallocate vol (boxmatch issue)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        inquire(FILE=p%vols(1), EXIST=here)
+        inquire(FILE=p%vols(1)%str, EXIST=here)
         if( here )then
-            call b%vol%read(p%vols(1))
+            call b%vol%read(p%vols(1)%str)
         else
             stop 'vol1 does not exists in cwd'
         endif
@@ -550,8 +550,8 @@ contains
         type(image)     :: vol_out
         type(ori)       :: orientation
         p = params(cline, .false.) ! constants & derived constants produced
-        call read_and_prep_vol( p, p%vols(1), vol1 )
-        call read_and_prep_vol( p, p%vols(2), vol2 )
+        call read_and_prep_vol( p, p%vols(1)%str, vol1 )
+        call read_and_prep_vol( p, p%vols(2)%str, vol2 )
         call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
         select case(p%dockmode)
             case('eul')

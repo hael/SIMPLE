@@ -876,7 +876,7 @@ contains
             call binwrite_oritab(init_docs(state), spproj_state, os_state, [1,p_master%nptcls])
             final_docs(state) = trim(FINAL_FBODY)//str_state//trim(METADATA_EXT)
             ! check & move volumes
-            l_hasvols(state) = trim(p_master%vols(state)) .ne. ''
+            l_hasvols(state) = trim(p_master%vols(state)%str) .ne. ''
             if( l_hasvols(state) )then
                 if( p_master%eo .ne. 'no' )then
                     ! fsc
@@ -902,13 +902,13 @@ contains
                         rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                     ! e/o
-                    fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_even')
+                    fname = add2fbody(trim(p_master%vols(state)%str), p_master%ext, '_even')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
                         rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
-                    fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_odd')
+                    fname = add2fbody(trim(p_master%vols(state)%str), p_master%ext, '_odd')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
@@ -916,25 +916,25 @@ contains
                     endif
                 endif
                 ! volume
-                if( .not.file_exists(p_master%vols(state)) )then
-                    print *, 'File missing: ', p_master%vols(state)
+                if( .not.file_exists(p_master%vols(state)%str) )then
+                    print *, 'File missing: ', p_master%vols(state)%str
                     error = .true.
                 else
-                    fname = trim(p_master%vols(state))
-                    p_master%vols(state) = dir//trim(fname) ! name change
-                    rename_stat = simple_rename(fname, p_master%vols(state))
+                    fname = trim(p_master%vols(state)%str)
+                    p_master%vols(state)%str = dir//trim(fname) ! name change
+                    rename_stat = simple_rename(fname, p_master%vols(state)%str)
                 endif
             endif
             ! mask volume
-            l_hasmskvols(state) = trim(p_master%mskvols(state)) .ne. ''
+            l_hasmskvols(state) = trim(p_master%mskvols(state)%str) .ne. ''
             if( l_hasmskvols(state) )then
-                if( .not.file_exists(p_master%mskvols(state)) )then
+                if( .not.file_exists(p_master%mskvols(state)%str) )then
                     print *, 'File missing: ', trim(fname)
                     error = .true.
                 else
-                    fname = trim(p_master%mskvols(state))
-                    p_master%mskvols(state) = dir//trim(fname)  ! name change
-                    call simple_copy_file(trim(fname), trim(p_master%mskvols(state)))
+                    fname = trim(p_master%mskvols(state)%str)
+                    p_master%mskvols(state)%str = dir//trim(fname)  ! name change
+                    call simple_copy_file(trim(fname), trim(p_master%mskvols(state)%str))
                 endif
             endif
         enddo
@@ -975,7 +975,7 @@ contains
             cline_refine3D = cline_refine3D_master
             call cline_refine3D%set('oritab', trim(init_docs(state)))
             if( l_hasvols(state) )then
-                call cline_refine3D%set('vol1', trim(p_master%vols(state)))
+                call cline_refine3D%set('vol1', trim(p_master%vols(state)%str))
                 if( p_master%eo.ne.'no' )then
                     fname = dir//trim(FSC_FBODY)//str_state//BIN_EXT
                     call simple_copy_file(trim(fname),'fsc_state01.bin')
@@ -985,7 +985,7 @@ contains
                     if(file_exists(fname))call simple_copy_file(trim(fname),'aniso_optlp_state01.mrc')
                 endif
             endif
-            if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(p_master%mskvols(state)))
+            if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(p_master%mskvols(state)%str))
             ! run prime3D
             call xprime3D_distr%execute(cline_refine3D)
             ! harvest outcome
@@ -1012,7 +1012,7 @@ contains
                 if( state_pops(state) == 0 )cycle
                 if( l_singlestate .and. state.ne.p_master%state )cycle
                 str_state = int2str_pad(state, 2)
-                if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p_master%mskvols(state)))
+                if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p_master%mskvols(state)%str))
                 vol = 'recvol_state'//trim(str_state)//p_master%ext
                 call cline_postprocess%set('vol1', trim(vol))
                 call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)

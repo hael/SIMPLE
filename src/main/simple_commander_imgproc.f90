@@ -99,7 +99,7 @@ contains
             end do
         else if( cline%defined('vol1') )then
             call b%build_general_tbox(p, cline)               ! general objects built
-            call b%vol%read(p%vols(1))
+            call b%vol%read(p%vols(1)%str)
             call doit(b%vol)
             call b%vol%write(p%outvol)
         endif
@@ -147,7 +147,7 @@ contains
             end do
         else if( cline%defined('vol1') )then
             call b%build_general_tbox(p, cline)               ! general objects built
-            call b%vol%read(p%vols(1))
+            call b%vol%read(p%vols(1)%str)
             call b%img%write(p%outvol)
         else
             stop 'either vol1 or stk argument required to execute simple_convert'
@@ -327,8 +327,8 @@ contains
         else
             ! 3D
             call b%build_general_tbox(p, cline) ! general objects built
-            if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume (vol1)'
-            call b%vol%read(p%vols(1))
+            if( .not.file_exists(p%vols(1)%str) )stop 'Cannot find input volume (vol1)'
+            call b%vol%read(p%vols(1)%str)
             if( p%phrand.eq.'no')then
                 if( cline%defined('bfac') )then
                 ! bfactor
@@ -450,8 +450,8 @@ contains
             ! 3D
             call b%build_general_tbox(p, cline)         ! general objects built
             call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
-            if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume'
-            call b%vol%read(p%vols(1))
+            if( .not.file_exists(p%vols(1)%str) )stop 'Cannot find input volume'
+            call b%vol%read(p%vols(1)%str)
             if( p%norm.eq.'yes' )then
                 call b%vol%norm()
                 call b%vol%write(p%outvol, del_if_exists=.true.)
@@ -532,8 +532,8 @@ contains
             call b%build_general_tbox(p, cline) ! general objects built
             ! reallocate vol (boxmatch issue)
             call b%vol%new([p%box,p%box,p%box], p%smpd)
-            if( .not.file_exists(p%vols(1)) ) stop 'Cannot find input volume'
-            call b%vol%read(p%vols(1))
+            if( .not.file_exists(p%vols(1)%str) ) stop 'Cannot find input volume'
+            call b%vol%read(p%vols(1)%str)
             if( cline%defined('scale') .or. cline%defined('newbox') )then
                 ! Rescaling
                 call vol2%new([p%newbox,p%newbox,p%newbox],p%smpd)

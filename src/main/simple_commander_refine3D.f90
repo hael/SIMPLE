@@ -129,7 +129,7 @@ contains
                     call b%a%rnd_oris
                     call b%a%zero_shifts
                 endif
-                p%vols(1) = 'startvol'//p%ext
+                p%vols(1)%str = 'startvol'//p%ext
                 nsamp = p%top - p%fromp + 1
                 if( present(nsamp_in) ) nsamp = nsamp_in
                 allocate( sample(nsamp) )

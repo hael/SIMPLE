@@ -15,167 +15,166 @@ private
 !> global parameters
 type :: params
     ! global objects
-    type(ori)             :: ori_glob
-    type(ctfplan)         :: tfplan
+    type(ori)     :: ori_glob
+    type(ctfplan) :: tfplan
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
-    character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
-    character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
-    character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
-    character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
-    character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
-    character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
-    character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
-    character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
-    character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
-    character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
-    character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
-    character(len=3)      :: cure='no'
-    character(len=3)      :: dev='no'             !< development flag for experimental code(yes|no){no}
-    character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
-    character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
-    character(len=3)      :: doalign='yes'
-    character(len=3)      :: dopca='yes'
-    character(len=3)      :: doprint='no'
-    character(len=3)      :: dryrun='no'          !< no 3D search and reconstruction, for profiling only
-    character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
-    character(len=3)      :: dyncls='yes'         !< dynamic class update(yes|no){yes}
-    character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
-    character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
-    character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
-    character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
-    character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
-    character(len=3)      :: kmeans='yes'
-    character(len=3)      :: local='no'
-    character(len=3)      :: masscen='no'         !< center using binarisation and mass centering(yes|no){no}
-    character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
-    character(len=3)      :: merge='no'
-    character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
-    character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
-    character(len=3)      :: neigh='no'             !<
-    character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
-    character(len=3)      :: norm='no'            !< do statistical normalisation avg
-    character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
-    character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
-    character(len=3)      :: pad='no'
-    character(len=3)      :: pgrp_known='no'      !< point-group known a priori(yes|no){no}
-    character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
-    character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
-    character(len=3)      :: plot='no'            !< make plot(yes|no){no}
-    character(len=3)      :: projstats='no'
-    character(len=3)      :: readwrite='no'
-    character(len=3)      :: remap_cls='no'
-    character(len=3)      :: restart='no'
-    character(len=3)      :: rnd='no'             !< random(yes|no){no}
-    character(len=3)      :: rm_outliers='yes'    !< remove outliers{yes}
-    character(len=3)      :: roalgn='no'
-    character(len=3)      :: round='no'
-    character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
-    character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
-    character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
-    character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
-    character(len=3)      :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
-    character(len=3)      :: swap='no'
-    character(len=3)      :: taper_edges='no'     !< self-explanatory
-    character(len=3)      :: test='no'
-    character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
-    character(len=3)      :: time='no'
-    character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
-    character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
-    character(len=3)      :: vis='no'             !< visualise(yes|no)
-    character(len=3)      :: weights2D='no'       !< to use 2d spectral weights(yes|no){no}
-    character(len=3)      :: weights3D='no'       !< to use 3d spectral weights(yes|no){yes}
-    character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
-    ! other fixed length character variables in ascending alphabetical order
-    character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
-    character(len=4)      :: automsk='no'
-    character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
-    character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
-    character(len=STDLEN) :: boxtype='eman'
-    character(len=STDLEN) :: classdoc=''          !< doc with per-class stats(.txt)
-    character(len=STDLEN) :: comlindoc=''         !< clustering_shc_nclsX.txt
-    character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: cwd=''
-    character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
-    character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
-    character(len=STDLEN) :: dir=''               !< directory
-    character(len=STDLEN) :: dir_movies=''        !< grab mrc mrcs files from here
-    character(len=STDLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
-    character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
-    character(len=STDLEN) :: dir_target=''        !< put output here
-    character(len=STDLEN) :: dir_ptcls=''
-    character(len=STDLEN) :: dir_mics=''          !< grab micrographs from here
-    character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
-    character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
-    character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
-    character(len=STDLEN) :: exec_abspath=''
-    character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
-    character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
-    character(len=STDLEN) :: extrmode='all'
-    character(len=STDLEN) :: fbody=''             !< file body
-    character(len=STDLEN) :: featstk='expecstk.bin'
-    character(len=STDLEN) :: filetab=''           !< list of files(.txt)
-    character(len=STDLEN) :: fname=''             !< file name
-    character(len=STDLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin)
-    character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
-    character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
-    character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
-    character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
-    character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.simple)
-    character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
-    character(len=STDLEN) :: mskfile=''           !< maskfile.ext
-    character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
-    character(len=STDLEN) :: mskvols(MAXS)=''
-    character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
-    character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
-    character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
-    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
-    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
-    character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN) :: outfile=''           !< output document
-    character(len=STDLEN) :: outstk=''            !< output image stack
-    character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
-    character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
-    character(len=STDLEN) :: ctf_estimate_doc=''       !< per-micrograph CTF parameters to transfer
-    character(len=STDLEN) :: pcastk='pcavecinstk.bin'
-    character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
-    character(len=STDLEN) :: pdbfile=''           !< PDB file
-    character(len=STDLEN) :: pdfile='pdfile.bin'
-    character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
-    character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
-    character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
-    character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
-    character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
-    character(len=STDLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
-    character(len=STDLEN) :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
-    character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
-    character(len=STDLEN) :: refs_even=''
-    character(len=STDLEN) :: refs_odd=''
-    character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
-    character(len=STDLEN) :: split_mode='even'
-    character(len=STDLEN) :: stk_part=''
-    character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
-    character(len=STDLEN) :: stktab=''            !< list of per-micrograph stacks
-    character(len=STDLEN) :: stk2=''              !< 2nd stack(in map2ptcls/select: selected(cavgs).ext)
-    character(len=STDLEN) :: stk3=''              !< 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
-    character(len=STDLEN) :: stk_backgr=''        !< stack with image for background subtraction
-    character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
-    character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
-    character(len=STDLEN) :: vol=''
-    character(len=STDLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
-    character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt)
-    character(len=STDLEN) :: vols(MAXS)=''
-    character(len=STDLEN) :: vols_even(MAXS)=''
-    character(len=STDLEN) :: vols_odd(MAXS)=''
-    character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
-    character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
-    character(len=STDLEN) :: wfun='kb'
+    character(len=:), allocatable :: acf             !< calculate autocorrelation function(yes|no){no}
+    character(len=:), allocatable :: append          !< append in context of files(yes|no){no}
+    character(len=:), allocatable :: async           !< asynchronous (yes|no){no}
+    character(len=:), allocatable :: autoscale       !< automatic down-scaling(yes|no){yes}
+    character(len=:), allocatable :: avg             !< calculate average (yes|no){no}
+    character(len=:), allocatable :: bin             !< binarise image(yes|no){no}
+    character(len=:), allocatable :: center          !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=:), allocatable :: classtats       !< calculate class population statistics(yes|no){no}
+    character(len=:), allocatable :: clustvalid      !< validate clustering(yes|homo|no){no}
+    character(len=:), allocatable :: compare         !< do comparison(yes|no){no}
+    character(len=:), allocatable :: countvox        !< count # voxels(yes|no){no}
+    character(len=:), allocatable :: ctfstats        !< calculate ctf statistics(yes|no){no}
+    character(len=:), allocatable :: cure
+    character(len=:), allocatable :: dev             !< development flag for experimental code(yes|no){no}
+    character(len=:), allocatable :: discrete        !< be discrete(yes|no){no}
+    character(len=:), allocatable :: diverse         !< diverse or not flag (yes|no){no}
+    character(len=:), allocatable :: doalign
+    character(len=:), allocatable :: dopca
+    character(len=:), allocatable :: doprint
+    character(len=:), allocatable :: dryrun          !< no 3D search and reconstruction, for profiling only
+    character(len=:), allocatable :: dynlp           !< automatic resolution limit update(yes|no){yes}
+    character(len=:), allocatable :: dyncls          !< dynamic class update(yes|no){yes}
+    character(len=:), allocatable :: errify          !< introduce error(yes|no){no}
+    character(len=:), allocatable :: even            !< even orientation distribution(yes|no){no}
+    character(len=:), allocatable :: ft2img          !< convert Fourier transform to real image of power(yes|no){no}
+    character(len=:), allocatable :: for3D           !< for 3D analysis(yes|no){yes}
+    character(len=:), allocatable :: guinier         !< calculate Guinier plot(yes|no){no}
+    character(len=:), allocatable :: kmeans
+    character(len=:), allocatable :: local
+    character(len=:), allocatable :: masscen         !< center using binarisation and mass centering(yes|no){no}
+    character(len=:), allocatable :: match_filt      !< matched filter on (yes|no){yes}
+    character(len=:), allocatable :: merge
+    character(len=:), allocatable :: mirr            !< mirror(no|x|y){no}
+    character(len=:), allocatable :: neg             !< invert contrast of images(yes|no)
+    character(len=:), allocatable :: neigh           !< neighbourhood refinement(yes|no){no}
+    character(len=:), allocatable :: noise_norm
+    character(len=:), allocatable :: norec           !< do not reconstruct volume(s)(yes|no){no}
+    character(len=:), allocatable :: norm            !< do statistical normalisation avg
+    character(len=:), allocatable :: order           !< order ptcls according to correlation(yes|no){no}
+    character(len=:), allocatable :: outside         !< extract boxes outside the micrograph boundaries(yes|no){no}
+    character(len=:), allocatable :: pad
+    character(len=:), allocatable :: pgrp_known      !< point-group known a priori(yes|no){no}
+    character(len=:), allocatable :: phaseplate      !< images obtained with Volta phaseplate(yes|no){no}
+    character(len=:), allocatable :: phrand          !< phase randomize(yes|no){no}
+    character(len=:), allocatable :: plot            !< make plot(yes|no){no}
+    character(len=:), allocatable :: projstats
+    character(len=:), allocatable :: readwrite
+    character(len=:), allocatable :: remap_cls
+    character(len=:), allocatable :: restart
+    character(len=:), allocatable :: rnd             !< random(yes|no){no}
+    character(len=:), allocatable :: rm_outliers     !< remove outliers{yes}
+    character(len=:), allocatable :: roalgn
+    character(len=:), allocatable :: round
+    character(len=:), allocatable :: shalgn          !< do 2D shift alignment(yes|no){no}
+    character(len=:), allocatable :: shellnorm
+    character(len=:), allocatable :: shbarrier       !< use shift search barrier constraint(yes|no){yes}
+    character(len=:), allocatable :: soften          !< soften envelope with cosine edge(yes|no){no}
+    character(len=:), allocatable :: stats           !< provide statistics(yes|no){yes}
+    character(len=:), allocatable :: stream          !< sream (real time) execution mode(yes|no){no}
+    character(len=:), allocatable :: symrnd          !< randomize over symmetry operations(yes|no){no}
+    character(len=:), allocatable :: swap
+    character(len=:), allocatable :: taper_edges     !< self-explanatory
+    character(len=:), allocatable :: test
+    character(len=:), allocatable :: tomo            !< tomography mode(yes|no){no}
+    character(len=:), allocatable :: time
+    character(len=:), allocatable :: trsstats        !< provide origin shift statistics(yes|no){no}
+    character(len=:), allocatable :: tseries         !< images represent a time-series(yes|no){no}
+    character(len=:), allocatable :: vis             !< visualise(yes|no)
+    character(len=:), allocatable :: weights2D       !< to use 2d spectral weights(yes|no){no}
+    character(len=:), allocatable :: weights3D       !< to use 3d spectral weights(yes|no){yes}
+    character(len=:), allocatable :: zero            !< zeroing(yes|no){no}
+    ! other character variables in ascending alphabetical order
+    character(len=:), allocatable :: angastunit      !< angle of astigmatism unit (radians|degrees){degrees}
+    character(len=:), allocatable :: automsk
+    character(len=:), allocatable :: boxfile         !< file with EMAN particle coordinates(.txt)
+    character(len=:), allocatable :: boxtab          !< table (text file) of files with EMAN particle coordinates(.txt)
+    character(len=:), allocatable :: boxtype
+    character(len=:), allocatable :: classdoc        !< doc with per-class stats(.txt)
+    character(len=:), allocatable :: comlindoc       !< clustering_shc_nclsX.txt
+    character(len=:), allocatable :: ctf             !< ctf flag(yes|no|flip)
+    character(len=:), allocatable :: cwd
+    character(len=:), allocatable :: deftab          !< file with CTF info(.txt|.simple)
+    character(len=:), allocatable :: dfunit          !< defocus unit (A|microns){microns}
+    character(len=:), allocatable :: dir             !< directory
+    character(len=:), allocatable :: dir_movies      !< grab mrc mrcs files from here
+    character(len=:), allocatable :: dir_reject      !< move rejected files to here{rejected}
+    character(len=:), allocatable :: dir_select      !< move selected files to here{selected}
+    character(len=:), allocatable :: dir_target      !< put output here
+    character(len=:), allocatable :: dir_ptcls
+    character(len=:), allocatable :: dir_mics        !< grab micrographs from here
+    character(len=:), allocatable :: dockmode        !< volume docking mode(eul|shift|eulshift|all){eul}
+    character(len=:), allocatable :: doclist         !< list of oritabs for different states
+    character(len=:), allocatable :: eo              !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
+    character(len=:), allocatable :: exec_abspath
+    character(len=:), allocatable :: exp_doc         !< specifying exp_time and dose_rate per tomogram
+    character(len=:), allocatable :: ext             !< file extension{.mrc}
+    character(len=:), allocatable :: extrmode
+    character(len=:), allocatable :: fbody           !< file body
+    character(len=:), allocatable :: featstk
+    character(len=:), allocatable :: filetab         !< list of files(.txt)
+    character(len=:), allocatable :: fname           !< file name
+    character(len=:), allocatable :: frcs            !< binary file with per-class/proj Fourier Ring Correlations(.bin)
+    character(len=:), allocatable :: fsc             !< binary file with FSC info{fsc_state01.bin}
+    character(len=:), allocatable :: hfun            !< function used for normalization(sigm|tanh|lin){sigm}
+    character(len=:), allocatable :: hist            !< give variable for histogram plot
+    character(len=:), allocatable :: imgkind         !< type of image(ptcl|cavg|mic|movie){ptcl}
+    character(len=:), allocatable :: infile          !< file with inputs(.txt|.simple)
+    character(len=:), allocatable :: label           !< discrete label(class|state){class}
+    character(len=:), allocatable :: mskfile         !< maskfile.ext
+    character(len=:), allocatable :: msklist         !< table (text file) of mask volume files(.txt)
+    character(len=:), allocatable :: msktype         !< type of mask(hard|soft){soft}
+    character(len=:), allocatable :: objfun          !< objective function(cc|ccres){cc}
+    character(len=:), allocatable :: opt             !< optimiser (bfgs|simplex){bfgs}
+    character(len=:), allocatable :: oritab          !< table  of orientations(.txt|.simple)
+    character(len=:), allocatable :: oritab2         !< 2nd table of orientations(.txt|.simple)
+    character(len=:), allocatable :: oritab3D        !< table of 3D orientations(.txt|.simple)
+    character(len=:), allocatable :: oritype         !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
+    character(len=:), allocatable :: outfile         !< output document
+    character(len=:), allocatable :: outstk          !< output image stack
+    character(len=:), allocatable :: outstk2         !< output image stack 2nd
+    character(len=:), allocatable :: outvol          !< output volume{outvol.ext}
+    character(len=:), allocatable :: ctf_estimate_doc!< per-micrograph CTF parameters to transfer
+    character(len=:), allocatable :: pcastk
+    character(len=:), allocatable :: pcontrast       !< particle contrast(black|white){black}
+    character(len=:), allocatable :: pdbfile         !< PDB file
+    character(len=:), allocatable :: pdfile
+    character(len=:), allocatable :: pgrp            !< point-group symmetry(cn|dn|t|o|i)
+    character(len=:), allocatable :: phshiftunit     !< additional phase-shift unit (radians|degrees){radians}
+    character(len=:), allocatable :: plaintexttab    !< plain text file of input parameters
+    character(len=:), allocatable :: prg             !< SIMPLE program being executed
+    character(len=:), allocatable :: projfile        !< SIMPLE *.simple project file
+    character(len=:), allocatable :: projfile_target !< another SIMPLE *.simple project file
+    character(len=:), allocatable :: projname        !< SIMPLE  project name
+    character(len=:), allocatable :: real_filter
+    character(len=:), allocatable :: refine          !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
+    character(len=:), allocatable :: refs            !< initial2Dreferences.ext
+    character(len=:), allocatable :: refs_even
+    character(len=:), allocatable :: refs_odd
+    character(len=:), allocatable :: speckind        !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
+    character(len=:), allocatable :: split_mode
+    character(len=:), allocatable :: stk_part
+    character(len=:), allocatable :: stk             !< particle stack with all images(ptcls.ext)
+    character(len=:), allocatable :: stktab          !< list of per-micrograph stacks
+    character(len=:), allocatable :: stk2            !< 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+    character(len=:), allocatable :: stk3            !< 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+    character(len=:), allocatable :: stk_backgr      !< stack with image for background subtraction
+    character(len=:), allocatable :: tomoseries      !< filetable of filetables of tomograms
+    character(len=:), allocatable :: unidoc          !< unified resources and orientations doc
+    character(len=:), allocatable :: vol_filt        !< input filter volume(vol_filt.ext)
+    character(len=:), allocatable :: vollist         !< table (text file) of volume files(.txt)
+    character(len=:), allocatable :: voltab          !< table (text file) of volume files(.txt)
+    character(len=:), allocatable :: voltab2         !< 2nd table (text file) of volume files(.txt)
+    character(len=:), allocatable :: wfun
+    type(str4arr),    allocatable :: vols(:)
+    type(str4arr),    allocatable :: vols_even(:)
+    type(str4arr),    allocatable :: vols_odd(:)
+    type(str4arr),    allocatable :: mskvols(:)
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
@@ -382,7 +381,8 @@ type :: params
     logical :: l_cc_bfac      = .true.
     logical :: l_dev          = .false.
   contains
-    procedure :: new
+    procedure, private :: set_char_defaults
+    procedure          :: new
 end type params
 
 interface params
@@ -390,6 +390,105 @@ interface params
 end interface
 
 contains
+
+    subroutine set_char_defaults( self )
+        class(params), intent(inout) :: self
+        allocate(self%acf,           source='no')
+        allocate(self%append,        source='no')
+        allocate(self%async,         source='no')
+        allocate(self%autoscale,     source='no')
+        allocate(self%avg,           source='no')
+        allocate(self%bin,           source='no')
+        allocate(self%center,        source='yes')
+        allocate(self%classtats,     source='no')
+        allocate(self%clustvalid,    source='no')
+        allocate(self%compare,       source='no')
+        allocate(self%countvox,      source='no')
+        allocate(self%ctfstats,      source='no')
+        allocate(self%cure,          source='no')
+        allocate(self%dev,           source='no')
+        allocate(self%discrete,      source='no')
+        allocate(self%diverse,       source='no')
+        allocate(self%doalign,       source='yes')
+        allocate(self%dopca,         source='yes')
+        allocate(self%doprint,       source='no')
+        allocate(self%dryrun,        source='no')
+        allocate(self%dynlp,         source='yes')
+        allocate(self%dyncls,        source='yes')
+        allocate(self%errify,        source='no')
+        allocate(self%even,          source='no')
+        allocate(self%ft2img,        source='no')
+        allocate(self%for3D,         source='yes')
+        allocate(self%guinier,       source='no')
+        allocate(self%kmeans,        source='yes')
+        allocate(self%local,         source='no')
+        allocate(self%masscen,       source='no')
+        allocate(self%match_filt,    source='yes')
+        allocate(self%merge,         source='no')
+        allocate(self%mirr,          source='no')
+        allocate(self%neg,           source='no')
+        allocate(self%neigh,         source='no')
+        allocate(self%noise_norm,    source='no')
+        allocate(self%norec,         source='no')
+        allocate(self%norm,          source='no')
+        allocate(self%order,         source='no')
+        allocate(self%outside,       source='no')
+        allocate(self%pad,           source='no')
+        allocate(self%pgrp_known,    source='no')
+        allocate(self%phaseplate,    source='no')
+        allocate(self%phrand,        source='no')
+        allocate(self%plot,          source='no')
+        allocate(self%projstats,     source='no')
+        allocate(self%readwrite,     source='no')
+        allocate(self%remap_cls,     source='no')
+        allocate(self%restart,       source='no')
+        allocate(self%rnd,           source='no')
+        allocate(self%rm_outliers,   source='yes')
+        allocate(self%roalgn,        source='no')
+        allocate(self%round,         source='no')
+        allocate(self%shalgn,        source='no')
+        allocate(self%shellnorm,     source='no')
+        allocate(self%shbarrier,     source='yes')
+        allocate(self%soften,        source='no')
+        allocate(self%stats,         source='no')
+        allocate(self%stream,        source='no')
+        allocate(self%symrnd,        source='no')
+        allocate(self%swap,          source='no')
+        allocate(self%taper_edges,   source='no')
+        allocate(self%test,          source='no')
+        allocate(self%tomo,          source='no')
+        allocate(self%time,          source='no')
+        allocate(self%trsstats,      source='no')
+        allocate(self%tseries,       source='no')
+        allocate(self%vis,           source='no')
+        allocate(self%weights2D,     source='no')
+        allocate(self%weights3D,     source='no')
+        allocate(self%zero,          source='no')
+        allocate(self%angastunit,    source='degrees')
+        allocate(self%automsk,       source='no')
+        allocate(self%boxtype,       source='eman')
+        allocate(self%ctf,           source='no')
+        allocate(self%dfunit,        source='microns')
+        allocate(self%dir_reject,    source='rejected')
+        allocate(self%dir_select,    source='selected')
+        allocate(self%dockmode,      source='eul')
+        allocate(self%eo,            source='yes')
+        allocate(self%extrmode,      source='all')
+        allocate(self%hfun,          source='sigm')
+        allocate(self%hist,          source='corr')
+        allocate(self%imgkind,       source='ptcl')
+        allocate(self%label,         source='class')
+        allocate(self%msktype,       source='soft')
+        allocate(self%objfun,        source='cc')
+        allocate(self%opt,           source='bfgs')
+        allocate(self%pcontrast,     source='black')
+        allocate(self%pgrp,          source='c1')
+        allocate(self%phshiftunit,   source='radians')
+        allocate(self%refine,        source='single')
+        allocate(self%speckind,      source='sqrt')
+        allocate(self%split_mode,    source='even')
+        allocate(self%wfun,          source='kb')
+    end subroutine set_char_defaults
 
     !> \brief  is a constructor
     function constructor( cline, allow_mix, del_scaled, spproj_a_seg ) result( self )
@@ -411,10 +510,12 @@ contains
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: stk_part_fname_sc, pid_file, phaseplate, ctfflag
+        logical,          allocatable    :: vol_defined(:)
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, spproj_a_seg_inputted
-        logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled
+        logical                          :: nparts_set, aamix, ddel_scaled
+        ! set character defaults
+        call self%set_char_defaults
         nparts_set        = .false.
-        vol_defined(MAXS) = .false.
         debug_local       = 'no'
         verbose_local     = 'no'
         aamix = .false.
@@ -554,7 +655,6 @@ contains
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
         call check_carg('vis',            self%vis)
-        call check_carg('vol',            self%vol)
         call check_carg('wfun',           self%wfun)
         call check_carg('weights2D',      self%weights2D)
         call check_carg('weights3D',      self%weights3D)
@@ -752,6 +852,8 @@ contains
         call check_rarg('ysh',            self%ysh)
         call check_rarg('zsh',            self%zsh)
 
+
+
 !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
         ! put ctf_estimate_doc (if defined) as oritab
         if( cline%defined('ctf_estimate_doc') )then
@@ -762,15 +864,9 @@ contains
                 write(*,*) 'WARNING! Could not set ctf_estimate_doc to oritab because oritab is defined'
             endif
         endif
-        ! check nr of states
-        if( cline%defined('nstates') )then
-            self%nstates = nint(cline%get_rarg('nstates'))
-            if( self%nstates > MAXS )then
-                write(*,'(a)') 'ERROR, the number of states is limited to 20!'
-                write(*,'(a)') 'In: constructor, module: simple_params.f90'
-                stop
-            endif
-        endif
+        ! array allocation
+        allocate(vol_defined(self%nstates), source=.false.)
+        allocate(self%vols(self%nstates), self%vols_even(self%nstates), self%vols_odd(self%nstates), self%mskvols(self%nstates))
         ! determines whether at least one volume is on the cmdline
         do i=1,self%nstates
             if( cline%defined( trim('vol')//int2str(i) )) vol_defined(i) = .true.
@@ -781,11 +877,8 @@ contains
                 call read_vols
             endif
         else
-            if( cline%defined('vol') )then
-                self%vols(1) = self%vol
-            endif
-            if( cline%defined('vol') .or. any(vol_defined) )then
-                do i=1,MAXS
+            if( any(vol_defined) )then
+                do i=1,self%nstates
                     call check_vol( i )
                 end do
             endif
@@ -795,13 +888,13 @@ contains
             if( nlines(self%msklist)< MAXS ) call read_masks
         endif
         ! no stack given, get ldim from volume if present
-        if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
-            call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
+        if( self%stk .eq. '' .and. allocated(self%vols(1)%str) )then
+            call find_ldim_nptcls(self%vols(1)%str, self%ldim, ifoo)
             self%box  = self%ldim(1)
             DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
         ! no stack given,not vol given, get ldim from mskfile if present
-        if( self%stk .eq. '' .and. self%vols(1) .eq. '' .and. self%mskfile .ne. '' )then
+        if( self%stk .eq. '' .and. .not. allocated(self%vols(1)%str) .and. self%mskfile .ne. '' )then
             call find_ldim_nptcls(self%mskfile, self%ldim, ifoo)
             self%box  = self%ldim(1)
             DebugPrint 'found logical dimension of volume: ', self%ldim
@@ -965,8 +1058,8 @@ contains
         ! set vols_even and vols_odd
         if( cline%defined('vol1') )then
             do istate=1,self%nstates
-                self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
-                self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
+                self%vols_even(istate)%str = add2fbody(self%vols(istate)%str, self%ext, '_even')
+                self%vols_odd(istate)%str  = add2fbody(self%vols(istate)%str, self%ext, '_odd' )
             end do
         endif
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
@@ -1261,12 +1354,12 @@ contains
                 character(len=STDLEN) :: nam
                 nam = 'vol'//int2str(i)
                 if( cline%defined(nam) )then
-                    call check_file(nam, self%vols(i), notAllowed='T')
-                    if( .not. file_exists(self%vols(i)) )then
-                        write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
+                    call check_file(nam, self%vols(i)%str, notAllowed='T')
+                    if( .not. file_exists(self%vols(i)%str) )then
+                        write(*,*) 'Input volume:', self%vols(i)%str, 'does not exist!'
                         stop
                     endif
-                    DebugPrint nam, '=', self%vols(i)
+                    DebugPrint nam, '=', self%vols(i)%str
                 endif
             end subroutine check_vol
 
@@ -1280,9 +1373,7 @@ contains
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) nam
                     if(io_stat /= 0) call fileiochk("params ; read_vols error reading "//trim(filenam), io_stat)
-                    if( nam .ne. '' )then
-                        self%vols(i) = nam
-                    endif
+                    if( nam .ne. '' ) self%vols(i)%str = trim(nam)
                 end do
                 call fclose(fnr,errmsg="params ; read_vols error closing "//trim(filenam))
             end subroutine read_vols
@@ -1297,9 +1388,7 @@ contains
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) nam
                     if(io_stat /= 0) call fileiochk("params ; read_masks error reading "//trim(filenam), io_stat)
-                    if( nam .ne. '' )then
-                        self%mskvols(i) = nam
-                    endif
+                    if( nam .ne. '' ) self%mskvols(i)%str = trim(nam)
                 end do
                 call fclose(fnr,errmsg="params ; read_masks error closing "//trim(filenam))
             end subroutine read_masks

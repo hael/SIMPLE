@@ -619,7 +619,7 @@ contains
         call cline%gen_job_descr(job_descr)
         ! init
         if( cline%defined('vol1') )then
-            vol = trim(p_master%vols(1))
+            vol = trim(p_master%vols(1)%str)
         else
             vol = 'startvol_state01'//p_master%ext
         endif

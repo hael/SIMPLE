@@ -446,10 +446,10 @@ contains
                     cycle
                 endif
             endif
-            call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s), do_center, xyz)
+            call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s)%str, do_center, xyz)
             if( p%eo .ne. 'no' )then
                 if( p%nstates.eq.1 )then
-                    call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
+                    call preprefvol(b, p, cline, s, p%vols_even(s)%str, do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
                         call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
@@ -459,7 +459,7 @@ contains
                     b%vol_even = b%vol
                     ! expand for fast interpolation
                     call b%vol_even%expand_cmat(p%alpha)
-                    call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
+                    call preprefvol(b, p, cline, s, p%vols_odd(s)%str, do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
                         call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.false.)
@@ -467,7 +467,7 @@ contains
                     !$omp end parallel do
                     ! odd volume in b%vol
                 else
-                    call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
+                    call preprefvol(b, p, cline, s, p%vols(s)%str, do_center, xyz)
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
                         ind = (s - 1) * p%nspace + iref
@@ -478,7 +478,7 @@ contains
                 endif
             else
                 ! low-pass set or multiple states
-                call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
+                call preprefvol(b, p, cline, s, p%vols(s)%str, do_center, xyz)
                 !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,p%nspace
                     call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
