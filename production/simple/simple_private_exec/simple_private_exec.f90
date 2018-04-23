@@ -98,7 +98,6 @@ type(tseries_backgr_subtr_commander) :: xtseries_backgr_subtr
 type(tseries_split_commander)        :: xtseries_split
 
 ! PARALLEL PROCESSING PROGRAMS
-type(merge_algndocs_commander)       :: xmerge_algndocs
 type(merge_nnmat_commander)          :: xmerge_nnmat
 type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
@@ -1319,23 +1318,6 @@ select case(prg)
 
     ! PARALLEL PROCESSING PROGRAMS
 
-    case( 'merge_algndocs' )
-        !==Program merge_algndocs
-        !
-        ! <merge_algndocs/begin>is a program for merging alignment documents from SIMPLE
-        ! runs in distributed mode<merge_algndocs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'fbody'
-        keys_required(2) = 'projfile'
-        keys_required(3) = 'ndocs'
-        ! set optional keys
-        keys_optional(1) = 'numlen'
-        keys_optional(2) = 'oritype' ! needs to be required when we move to *.simple format
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:2))
-        ! execute
-        call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )
         !==Program merge_nnmat
         !
