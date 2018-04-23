@@ -312,7 +312,7 @@ contains
         type(cmdline)        :: cline_c1
         type(params)         :: p, p_c1
         type(build)          :: b
-        type(oris)           :: e, sym_peaks, sym_axes
+        type(oris)           :: sym_peaks, sym_axes
         type(ori)            :: symaxis, o
         type(image)          :: symvol, asym_vol, mskvol
         type(sym)            :: se_c1
@@ -321,10 +321,10 @@ contains
         integer              :: i
         integer, parameter   :: MAXLABELS = 9    !< maximum numbers symmetry peaks
         real,    parameter   :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
-        p = params(cline, spproj_a_seg=CLS3D_SEG) ! parameters generated
-        call b%build_general_tbox(p, cline)       ! general objects built
+        p = params(cline, spproj_a_seg=PTCL3D_SEG) ! parameters generated
+        call b%build_general_tbox(p, cline)        ! general objects built
         ! init
-        sym_axes = b%spproj%os_cls3D
+        sym_axes = b%spproj%os_cls3D ! that is where they are stored
         cline_c1 = cline
         call cline_c1%set('pgrp', 'c1')
         p_c1 = params(cline_c1)
@@ -340,10 +340,9 @@ contains
         ! identify top ranking symmetry peaks
         call find_sym_peaks(sym_axes, sym_peaks)
         ! reconstruct & correlate volumes
-        e = b%e
         do i = 1, sym_peaks%get_noris()
             symaxis = sym_peaks%get_ori(i)
-            b%e = e
+            b%e = b%a ! here b%a are the reference orientations
             call b%e%rot(symaxis)
             ! symmetry
             call rec_vol(p, b%se)
@@ -360,7 +359,9 @@ contains
             cc = symvol%real_corr(b%vol, l_msk)
             call sym_peaks%set(i, 'corr', cc)
         enddo
-        call sym_peaks%write(p%outfile, [1,sym_peaks%get_noris()])
+        ! output
+        b%spproj%os_cls3D = sym_peaks
+        call b%spproj%write
         ! the end
         call simple_touch('SYM_AGGREGATE_FINISHED', errmsg='commander_misc; sym_aggregate ')
         call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')

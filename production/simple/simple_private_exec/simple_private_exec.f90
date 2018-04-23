@@ -98,7 +98,6 @@ type(tseries_backgr_subtr_commander) :: xtseries_backgr_subtr
 type(tseries_split_commander)        :: xtseries_split
 
 ! PARALLEL PROCESSING PROGRAMS
-type(merge_algndocs_commander)       :: xmerge_algndocs
 type(merge_nnmat_commander)          :: xmerge_nnmat
 type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
@@ -669,8 +668,7 @@ select case(prg)
         keys_required(2) = 'smpd'
         keys_required(3) = 'msk'
         keys_required(4) = 'pgrp'
-        keys_required(5) = 'outfile'
-        keys_required(6) = 'lp'
+        keys_required(5) = 'lp'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'cenlp'
@@ -678,14 +676,13 @@ select case(prg)
         keys_optional(4) = 'nspace'
         keys_optional(5) = 'center'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('nspace') )then
             call cline%set('nspace', 50.) ! 50 projections 4 symsrch
         endif
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 30.)
-        call cline%set('compare', 'no')
         ! execute
         call xsymsrch%execute(cline)
 
@@ -694,7 +691,7 @@ select case(prg)
     case( 'sym_aggregate' )
         !==Program symsrch
         !
-        ! <sym_aggregate/begin>is a program for robust identifiaction of the symmetry axis
+        ! <sym_aggregate/begin>is a program for robust identification of the symmetry axis
         ! of a map using image-to-volume simiarity validation of the axis<sym_aggregate/end>
         !
         ! set required keys
@@ -702,17 +699,14 @@ select case(prg)
         keys_required(2) = 'smpd'
         keys_required(3) = 'msk'
         keys_required(4) = 'pgrp'
-        keys_required(5) = 'oritab'
-        keys_required(6) = 'oritab2'
-        keys_required(7) = 'outfile'
-        keys_required(8) = 'lp'
-        keys_required(9) = 'stk'
+        keys_required(5) = 'lp'
+        keys_required(6) = 'oritype'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:9), keys_optional(:3))
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:3))
         ! set defaults
         call cline%set('eo','no')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
@@ -1324,23 +1318,6 @@ select case(prg)
 
     ! PARALLEL PROCESSING PROGRAMS
 
-    case( 'merge_algndocs' )
-        !==Program merge_algndocs
-        !
-        ! <merge_algndocs/begin>is a program for merging alignment documents from SIMPLE
-        ! runs in distributed mode<merge_algndocs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'fbody'
-        keys_required(2) = 'projfile'
-        keys_required(3) = 'ndocs'
-        ! set optional keys
-        keys_optional(1) = 'numlen'
-        keys_optional(2) = 'oritype' ! needs to be required when we move to *.simple format
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:2))
-        ! execute
-        call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )
         !==Program merge_nnmat
         !
