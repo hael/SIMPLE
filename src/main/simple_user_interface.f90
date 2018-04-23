@@ -2449,15 +2449,15 @@ contains
         &is produced. If you are unsure about the point-group, use the compare=yes mode and input the highest &
         &conceviable point-group. The program then calculates probabilities for all lower groups inclusive',&      ! descr_long
         &'simple_exec',&                                                                                           ! executable
-        &1, 3, 0, 3, 3, 1, 2, .false.)                                                                             ! # entries in each group
+        &1, 2, 0, 3, 3, 1, 2, .false.)                                                                             ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symsrch%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
         call symsrch%set_input('parm_ios', 1, smpd)
-        call symsrch%set_input('parm_ios', 2, oritab)
-        call symsrch%set_input('parm_ios', 3, outfile)
+        call symsrch%set_input('parm_ios', 2, projfile)
+        symsrch%parm_ios(2)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls

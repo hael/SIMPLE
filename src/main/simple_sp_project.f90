@@ -1086,6 +1086,16 @@ contains
         character(len=:), allocatable :: phaseplate
         integer              :: stkind, ind_in_stk
         nullify(ptcl_field)
+        select case(trim(oritype))
+            case('ptcl2D', 'ptcl3D')
+                ! all good
+            case('cls3D')
+                has_phaseplate = .false.
+                return
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
+                stop 'sp_project :: has_phaseplate'
+        end select
         ! do the index mapping
         call self%map_ptcl_ind2stk_ind(oritype, 1, stkind, ind_in_stk)
         ! set field pointer
@@ -1094,9 +1104,6 @@ contains
                 ptcl_field => self%os_ptcl2D
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: has_phaseplate'
         end select
         ! get info
         if( self%os_stk%isthere(stkind, 'phaseplate') )then

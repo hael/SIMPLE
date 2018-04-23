@@ -1057,12 +1057,12 @@ contains
         type(cmdline)                  :: cline_aggregate
         type(qsys_env)                 :: qenv
         type(params)                   :: p_master
-        type(build)                    :: b
         type(chash)                    :: job_descr
-        type(oris)                     :: sympeaks, o_shift, grid_symaxes
+        type(oris)                     :: sympeaks, o_shift, grid_symaxes,e
         type(ori)                      :: symaxis
         type(sym)                      :: syme
-        type(sp_project)               :: spproj, symsrch_proj
+        type(sp_project)               :: spproj
+        type(ctfparams)                :: ctfvars
         integer,    allocatable        :: order(:)
         real,       allocatable        :: corrs(:)
         real                           :: shvec(3)
@@ -1107,7 +1107,6 @@ contains
         call cline_gridsrch%set('fbody',    trim(GRIDSYMFBODY))
         call cline_gridsrch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
         call cline_gridsrch%set('oritype',  p_master%oritype)
-        call cline_gridsrch%delete('oritab') !!!!!!!!!!!!!!!!!!!!!!!!!! TO DELETE
         ! local project update
         ! reference orientations for common lines
         call spproj%os_cls3D%new_clean(p_master%nspace)
@@ -1146,7 +1145,6 @@ contains
         call cline_srch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
         call cline_srch%set('oritype',  p_master%oritype)
         call cline_srch%set('fbody',    trim(SYMFBODY))
-        call cline_srch%delete('oritab') !!!!!!!!!!!!!!!!!!!!!!!!!! TO DELETE
         ! switch to collection of single threaded jobs
         p_master%nptcls  = min(comlin_srch_nproj, nbest_here)
         p_master%ncunits = p_master%nparts * p_master%nthr
@@ -1159,65 +1157,68 @@ contains
         call spproj%merge_algndocs(nbest_here, p_master%nparts, p_master%oritype, trim(SYMFBODY))
 
         ! 4. REAL-SPACE EVALUATION
+        ! adding reference orientations to ptcl3D segment to allow for reconstruction
+        call e%new_clean(p_master%nspace)
+        call e%spiral
+        ctfvars%smpd = p_master%smpd
+        call spproj%add_stk(trim(SYMPROJSTK), ctfvars, e)
+        call spproj%write
+        ! execution
         cline_aggregate = cline
-        call cline_aggregate%set( 'prg' ,   'sym_aggregate' )
-        !call cline_aggregate%set( 'nptcls',  real(p_master%nspace) )
-        !call cline_aggregate%set( 'oritab' , trim(SYMPROJTAB) )
-        !call cline_aggregate%set( 'oritab2', trim(SYMTAB) )
-        call cline_aggregate%set( 'stk' ,    trim(SYMPROJSTK) )
-        !call cline_aggregate%set( 'outfile', trim(SYMPEAKSTAB) )
+        call cline_aggregate%set('prg' ,     'sym_aggregate' )
         call cline_aggregate%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
-        call cline_aggregate%set( 'eo',      'no' )
+        call cline_aggregate%set('oritype',  'ptcl3D')
+        call cline_aggregate%set('eo',       'no' )
         call qenv%exec_simple_prg_in_queue(cline_aggregate,'SYM_AGGREGATE','SYM_AGGREGATE_FINISHED')
-        ! ! read and pick best
-        ! nl = nlines(trim(SYMPEAKSTAB))
-        ! call sympeaks%new(nl)
-        ! call sympeaks%read(trim(SYMPEAKSTAB), [1,nl])
-        ! corrs   = sympeaks%get_all('corr')
-        ! bestloc = maxloc(corrs)
-        ! symaxis = sympeaks%get_ori(bestloc(1))
-        ! write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        ! call symaxis%print_ori()
-        ! ! output
-        ! if( cline%defined('oritab') )then
-        !     ! transfer shift and symmetry to input orientations
-        !     call syme%new(p_master%pgrp)
-        !     call o_shift%new(1)
-        !     ! retrieve shift
-        !     call o_shift%read(trim(SYMSHTAB), [1,1])
-        !     shvec(1) = o_shift%get(1,'x')
-        !     shvec(2) = o_shift%get(1,'y')
-        !     shvec(3) = o_shift%get(1,'z')
-        !     shvec    = -1. * shvec ! the sign is right
-        !     ! rotate the orientations & transfer the 3d shifts to 2d
-        !     ! begin with making a general builder to support *.simple oritab input
-        !     call b%build_spproj(p_master, cline)
-        !     ! oritab is now read in, whatever format it had (.txt or .simple)
-        !     nl = binread_nlines(p_master, p_master%oritab)
-        !     call binread_oritab(p_master%oritab, b%spproj, b%a, [1,nl])
-        !     if( cline%defined('state') )then
-        !         call syme%apply_sym_with_shift(b%a, symaxis, shvec, p_master%state )
-        !     else
-        !         call syme%apply_sym_with_shift(b%a, symaxis, shvec )
-        !     endif
-        !     call binwrite_oritab(p_master%outfile, b%spproj, b%a, [1,nl])
-        ! endif
-        !
-        ! ! THE END
-        ! call qsys_cleanup(p_master)
-        ! call del_file(trim(SYMSHTAB))
-        ! numlen =  len(int2str(nbest_here))
-        ! do i = 1, nbest_here
-        !     part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
-        !     call del_file(trim(part_tab))
-        ! enddo
-        ! p_master%nparts = nint(cline%get_rarg('nparts'))
-        ! numlen =  len(int2str(p_master%nparts))
-        ! do i = 1, p_master%nparts
-        !     part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(TXT_EXT)
-        !     call del_file(trim(part_tab))
-        ! enddo
-        ! call del_file('SYM_AGGREGATE')
+
+        ! read and pick best
+        call spproj%read_segment('cls3D', symsrch_projname)
+        corrs = spproj%os_cls3D%get_all('corr')
+        bestloc = maxloc(corrs)
+        symaxis = spproj%os_cls3D%get_ori(bestloc(1))
+        write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
+        call symaxis%print_ori()
+        call spproj%kill
+        ! output
+        if( cline%defined('projfile') )then
+            call spproj%read(p_master%projfile)
+            if( spproj%os_ptcl3D%get_noris() == 0 )then
+                print *,'No orientations found in this project:',p_master%projfile
+                stop
+            endif
+            ! transfer shift and symmetry to input orientations
+            call syme%new(p_master%pgrp)
+            call o_shift%new(1)
+            ! retrieve shift
+            call o_shift%read(trim(SYMSHTAB), [1,1])
+            shvec(1) = o_shift%get(1,'x')
+            shvec(2) = o_shift%get(1,'y')
+            shvec(3) = o_shift%get(1,'z')
+            shvec    = -1. * shvec ! the sign is right
+            ! rotate the orientations & transfer the 3d shifts to 2d
+            if( cline%defined('state') )then
+                call syme%apply_sym_with_shift(spproj%os_ptcl3D, symaxis, shvec, p_master%state )
+            else
+                call syme%apply_sym_with_shift(spproj%os_ptcl3D, symaxis, shvec )
+            endif
+            call spproj%write
+        endif
+
+        ! Cleanup
+        call qsys_cleanup(p_master)
+        call del_file(trim(SYMSHTAB))
+        numlen =  len(int2str(nbest_here))
+        do i = 1, nbest_here
+            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
+            call del_file(trim(part_tab))
+        enddo
+        p_master%nparts = nint(cline%get_rarg('nparts'))
+        numlen =  len(int2str(p_master%nparts))
+        do i = 1, p_master%nparts
+            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
+            call del_file(trim(part_tab))
+        enddo
+        call del_file('SYM_AGGREGATE')
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_SYMSRCH NORMAL STOP ****')
     end subroutine exec_symsrch_distr
