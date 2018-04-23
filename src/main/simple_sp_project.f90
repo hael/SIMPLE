@@ -165,8 +165,8 @@ contains
         use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        character(len=:), allocatable :: projname_old
-        character(len=STDLEN)         :: projname_new, projfile, projname, cwd
+        character(len=:), allocatable :: projname
+        character(len=STDLEN)         :: projfile, cwd
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -175,11 +175,9 @@ contains
         ! projname & profile
         if( self%projinfo%isthere('projname') )then
             if( cline%defined('projname') )then
-                projname_new = cline%get_carg('projname')
-                call self%projinfo%getter(1, 'projname', projname_old)
-                write(*,'(a,a,a,a)') 'Creating new project ', trim(projname_new), ' from ', trim(projname_old)
-                call self%projinfo%set(1, 'projname', trim(projname_new))
-                call self%projinfo%set(1, 'projfile', trim(projname_new)//'.simple')
+                projname = cline%get_carg('projname')
+                call self%projinfo%set(1, 'projname', trim(projname))
+                call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
             endif
         else
             if( .not. cline%defined('projname') .and. .not. cline%defined('projfile') )then

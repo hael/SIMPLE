@@ -48,7 +48,7 @@ contains
         ! check if first symbol after . is a character
         str_is_file = .false.
         if( i /= 0 .and. i < len_trim(str)  )then
-            if( is_a_letter(str(i+1:i+1)) )str_is_file = .true.
+            if( char_is_a_letter(str(i+1:i+1)) )str_is_file = .true.
         endif
         ! file name
         if( str_is_file )then
@@ -75,18 +75,20 @@ contains
         endif
         ! char is last resort
         allocate( format, source='char' )
-
-        contains
-
-            logical function is_a_letter( c )
-                character(len=1), intent(in) :: c
-                integer :: itst1, itst2
-                itst1 = scan(LOWER_CASE_LETTERS,c)
-                itst2 = scan(UPPER_CASE_LETTERS,c)
-                is_a_letter = itst1 > 0 .or. itst2 > 0
-            end function is_a_letter
-
     end function str2format
+
+    logical function char_is_a_letter( c )
+        character(len=1), intent(in) :: c
+        integer :: itst1, itst2
+        itst1 = scan(LOWER_CASE_LETTERS,c)
+        itst2 = scan(UPPER_CASE_LETTERS,c)
+        char_is_a_letter = itst1 > 0 .or. itst2 > 0
+    end function char_is_a_letter
+
+    logical function char_is_a_number( c )
+        character(len=1), intent(in) :: c
+        char_is_a_number = scan(INTEGERS,c) > 0
+    end function char_is_a_number
 
     !> \brief  parses the string 'str' into arguments args(1), ..., args(nargs) based on
     !!         the delimiters contained in the string 'delim'. The integer output variable

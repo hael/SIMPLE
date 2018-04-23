@@ -18,7 +18,6 @@ public :: import_movies_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
 private
-! #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: project2txt_commander
   contains
@@ -112,38 +111,52 @@ contains
         type(sp_project) :: spproj
         type(params)     :: p
         p = params(cline)
-        if( file_exists(p%projfile) )then
-            write(*,*) 'projfile: ', trim(p%projfile), ' already exists in cwd: ', trim(p%cwd)
+        if( file_exists('./'//trim(p%projname)) )then
+            write(*,*) 'project directory: ', trim(p%projname), ' already exists in cwd: ', trim(p%cwd)
             write(*,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
             stop 'ABORTING... commander_project :: new_project'
         endif
+        ! make project directory
+        call simple_mkdir('./'//trim(p%projname))
+        ! change to project directory
+        call simple_chdir('./'//trim(p%projname))
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
         call spproj%update_compenv( cline )
         ! write project file
         call spproj%write
+        ! change back to original directory
+        call simple_chdir('../')
+        ! end gracefully
         call simple_end('**** NEW_PROJECT NORMAL STOP ****')
     end subroutine exec_new_project
 
-    !> for updating an existsing project
+    !> for updating an existing project
     subroutine exec_update_project( self, cline )
         class(update_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(sp_project) :: spproj
         type(params)     :: p
         p = params(cline)
-        if( .not. file_exists(p%projfile) )then
-            write(*,*) 'projfile: ', trim(p%projfile), ' to update does not exist in cwd: ', trim(p%cwd)
+        if( .not. file_exists('./'//trim(p%projname)) )then
+            write(*,*) 'project directory: ', trim(p%projname), ' does not exist in cwd: ', trim(p%cwd)
             write(*,*) 'Use program new_project to create a new project from scratch'
             stop 'ABORTING... commander_project :: update_project'
         endif
+        ! change to project directory
+        call simple_chdir('./'//trim(p%projname))
+        ! read project
+        call spproj%read(trim(p%projfile))
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
         call spproj%update_compenv( cline )
         ! write project file
         call spproj%write
+        ! change back to original directory
+        call simple_chdir('../')
+        ! end gracefully
         call simple_end('**** UPDATE_PROJECT NORMAL STOP ****')
     end subroutine exec_update_project
 

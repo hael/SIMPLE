@@ -883,7 +883,7 @@ module simple_syslib
 
     !> \brief  Change working directory
     !! return optional status 0=success
-    subroutine simple_chdir( newd , oldd, status )
+    subroutine simple_chdir( newd, oldd, status )
         character(len=*), intent(in)            :: newd   !< output pathname
         character(len=*), intent(out), optional :: oldd
         integer, intent(out), optional          :: status
@@ -921,7 +921,7 @@ module simple_syslib
 
     !> \brief  Make directory -- fail when ignore is false
     !! return optional status 0=success
-    subroutine simple_mkdir( dir , ignore, status)
+    subroutine simple_mkdir( dir, ignore, status)
         character(len=*), intent(in)            :: dir
         logical,          intent(in), optional  :: ignore
         integer,          intent(out), optional :: status
@@ -1048,31 +1048,65 @@ module simple_syslib
     end subroutine simple_filetmp_list
 
     function simple_list_dirs(path, outfile, status) result(list)
-        character(len=*), intent(in)            :: path
-        character(len=*), intent(in), optional  :: outfile
-        integer,          intent(out), optional :: status
-        character(len=STDLEN),pointer           :: list(:)
+        character(len=*),           intent(in)  :: path
+        character(len=*), optional, intent(in)  :: outfile
+        integer,          optional, intent(out) :: status
+        character(len=STDLEN), allocatable      :: list(:)
         character(len=STDLEN)                   :: cur
-        character(kind=c_char,len=:), allocatable           :: pathhere
-        integer                                 :: stat, i,num_dirs, luntmp
-
+        character(kind=c_char,len=:), allocatable :: pathhere
+        integer :: stat, i,num_dirs, luntmp
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
         stat = list_dirs(trim(pathhere), num_dirs)
         if(stat/=0)call simple_stop("simple_syslib::simple_list_dirs failed to process list_dirs "//trim(pathhere),&
             __FILENAME__,__LINE__)
-        if(present(outfile))then
-            call syslib_copy_file('__simple_filelist__', trim(outfile))
-        endif
+        if(present(outfile)) call syslib_copy_file('__simple_filelist__', trim(outfile))
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(num_dirs) )
         do i = 1,num_dirs
             read( luntmp, '(a)' ) list(i)
         enddo
         close( luntmp, status = 'delete' )
-
         deallocate(pathhere)
         if(present(status)) status= stat
     end function simple_list_dirs
+
+    function find_next_int_dir_prefix( dir2list ) result( next_int_dir_prefix )
+        use simple_strings, only: char_is_a_number, map_str_nrs, str2int
+        character(len=*), intent(in)       :: dir2list
+        character(len=STDLEN)              :: str
+        character(len=STDLEN), allocatable :: dirs(:)
+        logical,               allocatable :: nrmap(:)
+        integer,               allocatable :: dirinds(:)
+        integer :: i, j, last_nr_ind, io_stat, ivar
+        integer :: next_int_dir_prefix, ndirs
+        dirs  = simple_list_dirs(dir2list)
+        if( allocated(dirs) )then
+            ndirs = size(dirs)
+        else
+            next_int_dir_prefix = 1
+            return
+        endif
+        allocate(dirinds(ndirs), source=0)
+        do i=1,ndirs
+            str = trim(dirs(i))
+            if( char_is_a_number(str(1:1)) )then
+                nrmap = map_str_nrs(trim(str))
+                do j=1,size(nrmap)
+                    if( nrmap(j) )then
+                        last_nr_ind = j
+                    else
+                        exit
+                    endif
+                enddo
+                call str2int(str(1:last_nr_ind), io_stat, dirinds(i))
+            endif
+        end do
+        if( any(dirinds > 0) )then
+            next_int_dir_prefix =  maxval(dirinds) + 1
+        else
+            next_int_dir_prefix = 1
+        endif
+    end function find_next_int_dir_prefix
 
     !> File list -- wrapper for C functions get_file_list and glob_file_list
     !!  Path method
@@ -1605,7 +1639,7 @@ module simple_syslib
         character(len=LINE_MAX_LEN), target :: fstr
         character(kind=c_char,len=STDLEN)   :: infilename_c
         character(kind=c_char,len=PATH_MAX) :: outfilename_c
-    
+
         lengthin = len_trim(infile)
         cstring = c_loc(fstr)
         infilename_c = trim(infile)//achar(0)
