@@ -152,6 +152,29 @@ ELSE()
   SET(GNUNATIVE "-march=native")
 ENDIF(APPLE)
 
+# include(CheckCXXCompilerFlag)
+
+# check_cxx_compiler_flag(-std=gnu++11  HAS_FLAG_STD_GNUCXX11)
+
+# if(NOT HAS_FLAG_STD_GNUCXX11)
+#     check_cxx_compiler_flag(-std=c++11    HAS_FLAG_STD_CXX11)
+# endif()
+
+# if(HAS_FLAG_STD_GNUCXX11)
+#     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
+# endif()
+
+# if(HAS_FLAG_STD_CXX11)
+#     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+# endif()
+
+
+option(USE_GNU_EXTENSIONS "Enable GNU extensions in C " OFF)
+if(USE_GNU_EXTENSIONS)
+  set(C_DIALECT gnu)
+else()
+  set(C_DIALECT c)
+endif()
 
 ###########  SETTING UP PROCESSING FLAGS ################
 #include(PlatformDefines)
@@ -176,8 +199,8 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
   #
-  set(cstd "-std=gnu1x" )
-  set(cppstd "-std=gnu++14" )
+  set(cstd   "-std=${C_DIALECT}11" )
+  set(cppstd "-std=${C_DIALECT}++14" )
 
   option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
@@ -237,7 +260,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     message( "MKLROOT must be set using INTEL compilervars or mklvars ")
   endif()
   set(cstd "-std=c11" )
-  set(cppstd "-std=gnu++14" )
+  set(cppstd "-std=c++14" )
 endif ()
 
 string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)

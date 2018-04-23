@@ -36,6 +36,12 @@ Make sure you prepend  /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or
 In LD_LIBRARY_PATH prepend the appropriate lib path.
     ")
 
+option(USE_GNU_EXTENSIONS "Enable GNU extensions in C " )
+if(USE_GNU_EXTENSIONS)
+  set(C_DIALECT gnu)
+else()
+  set(C_DIALECT c)
+endif()
 
 message(STATUS "Making sure your Fortran compiler points to the correct binary")
 if(Fortran_COMPILER_NAME MATCHES "gfortran*")
