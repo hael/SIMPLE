@@ -40,6 +40,7 @@ LINESLOOP:{
 # remove unwanted stuff
 foreach my$i (0..$#vars){
     $vars[$i] =~ s/\=.+//;
+    $vars[$i] =~ s/\!.+//;
     if( $vars[$i] =~ /\(/ or ( $vars[$i] =~ /\)/ or $vars[$i] =~ /^\s+$/ ) ){
         delete $vars[$i];
     }

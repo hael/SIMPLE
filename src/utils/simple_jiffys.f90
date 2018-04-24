@@ -83,6 +83,7 @@ contains
             write(stdout,'(A)') ""
         endif
         write(stdout,'(A)') str
+        ! if( L_MKDIR_EXEC ) 
     end subroutine simple_end
 
     !> \brief  for pretty haloween ending

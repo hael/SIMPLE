@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_ori,     only: ori
 use simple_cmdline, only: cmdline
 use simple_binoris, only: binoris
+use simple_user_interface
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none
@@ -15,8 +16,9 @@ private
 !> global parameters
 type :: params
     ! global objects
-    type(ori)     :: ori_glob
-    type(ctfplan) :: tfplan
+    type(ori)                      :: ori_glob
+    type(ctfplan)                  :: tfplan
+    class(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
     character(len=:), allocatable :: acf             !< calculate autocorrelation function(yes|no){no}
     character(len=:), allocatable :: append          !< append in context of files(yes|no){no}
@@ -51,6 +53,7 @@ type :: params
     character(len=:), allocatable :: match_filt      !< matched filter on (yes|no){yes}
     character(len=:), allocatable :: merge
     character(len=:), allocatable :: mirr            !< mirror(no|x|y){no}
+    character(len=:), allocatable :: mkdir           !< make auto-named directory for execution and gathering output(yes|no){no}
     character(len=:), allocatable :: neg             !< invert contrast of images(yes|no)
     character(len=:), allocatable :: neigh           !< neighbourhood refinement(yes|no){no}
     character(len=:), allocatable :: noise_norm
@@ -111,7 +114,8 @@ type :: params
     character(len=:), allocatable :: dockmode        !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=:), allocatable :: doclist         !< list of oritabs for different states
     character(len=:), allocatable :: eo              !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
-    character(len=:), allocatable :: exec_abspath
+    character(len=:), allocatable :: exec_dir
+    character(len=:), allocatable :: executable
     character(len=:), allocatable :: exp_doc         !< specifying exp_time and dose_rate per tomogram
     character(len=:), allocatable :: ext             !< file extension{.mrc}
     character(len=:), allocatable :: extrmode
@@ -250,6 +254,7 @@ type :: params
     integer :: offset=10           !< pixels offset{10}
     integer :: part=1
     integer :: pcasz=0
+    integer :: pid=0               !< process ID
     integer :: ppca=0
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
@@ -426,6 +431,7 @@ contains
         allocate(self%match_filt,    source='yes')
         allocate(self%merge,         source='no')
         allocate(self%mirr,          source='no')
+        allocate(self%mkdir,         source='no')
         allocate(self%neg,           source='no')
         allocate(self%neigh,         source='no')
         allocate(self%noise_norm,    source='no')
@@ -501,18 +507,21 @@ contains
 
     !> \brief  is a constructor
     subroutine new( self, cline, allow_mix, del_scaled, spproj_a_seg )
-        class(params),     intent(inout) :: self
-        class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: allow_mix, del_scaled
-        integer, optional, intent(in)    :: spproj_a_seg
-        type(binoris)                    :: bos
-        type(ori)                        :: o
-        character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
-        character(len=1)                 :: checkupfile(50)
-        character(len=:), allocatable    :: stk_part_fname_sc, pid_file, phaseplate, ctfflag
-        logical,          allocatable    :: vol_defined(:)
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid, spproj_a_seg_inputted
-        logical                          :: nparts_set, aamix, ddel_scaled
+        class(params),     intent(inout)   :: self
+        class(cmdline),    intent(inout)   :: cline
+        logical, optional, intent(in)      :: allow_mix, del_scaled
+        integer, optional, intent(in)      :: spproj_a_seg
+        character(len=STDLEN), allocatable :: sp_files(:)
+        character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag
+        logical,               allocatable :: vol_defined(:)
+        character(len=:), allocatable :: debug_local, verbose_local
+        character(len=STDLEN) :: stk_part_fname, cwd_tmp
+        character(len=1)      :: checkupfile(50)
+        type(binoris)         :: bos
+        type(ori)             :: o
+        integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
+        integer               :: spproj_a_seg_inputted, idir, nsp_files
+        logical               :: nparts_set, aamix, ddel_scaled
         ! set character defaults
         call self%set_char_defaults
         nparts_set        = .false.
@@ -529,15 +538,6 @@ contains
         cntfile = 0
         ! make global ori
         call self%ori_glob%new
-        ! get cwd
-        call simple_getcwd(self%cwd)
-        cwd_local = self%cwd
-        ! report process ID to disk
-        pid = get_process_id()
-        allocate(pid_file, source='.'//int2str(pid)//'.simple.pid')
-        call simple_touch(pid_file, errmsg="pid_file; simple_params :: new")
-        ! get absolute path of executable
-        call getarg(0,self%exec_abspath)
         ! take care of debug/verbose flags
         call check_carg('debug', debug_local)
         if( debug_local == 'yes' )then
@@ -606,6 +606,7 @@ contains
         call check_carg('match_filt',     self%match_filt)
         call check_carg('merge',          self%merge)
         call check_carg('mirr',           self%mirr)
+        call check_carg('mkdir',          self%mkdir)
         call check_carg('msktype',        self%msktype)
         call check_carg('neg',            self%neg)
         call check_carg('neigh',          self%neigh)
@@ -852,7 +853,67 @@ contains
         call check_rarg('ysh',            self%ysh)
         call check_rarg('zsh',            self%zsh)
 
-
+!>>> START, EXECUTION RELATED
+        ! get cwd
+        call simple_getcwd(cwd_tmp)
+        self%cwd = trim(cwd_tmp)
+        ! get process ID
+        self%pid = get_process_id()
+        ! get name of of executable
+        call getarg(0,self%executable)
+        ! get pointer to program user interface
+        call get_prg_ptr(self%prg, self%ptr2prg)
+        if( self%ptr2prg%requires_sp_project() )then
+            ! sp_project file required, go look for it
+            sp_files  = simple_list_files(glob='*.simple')
+            if( allocated(sp_files) )then
+                nsp_files = size(sp_files)
+            else
+                nsp_files = 0
+            endif
+            select case(nsp_files)
+                case(0)
+                    write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
+                    write(*,*) 'cwd:     ', trim(self%cwd)
+                    stop 'ERROR! no *.simple project file identified; simple_params :: new'
+                case(1)
+                    ! good, we found a single monolithic project file
+                    ! set projfile and projname fields
+                    self%projfile = trim(sp_files(1))
+                    self%projname = basename(self%projfile)
+                case DEFAULT
+                    write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
+                    do i=1,nsp_files
+                        write(*,*) trim(sp_files(i))
+                    end do
+                    stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
+            end select
+        endif
+        L_MKDIR_EXEC = .false.
+        if( self%mkdir .eq. 'yes' )then
+            if( .not. str_has_substr(self%executable,'private') )then
+                ! get next directory number
+                idir          = find_next_int_dir_prefix(self%cwd)
+                self%exec_dir = int2str(idir)//'_'//trim(self%prg)
+                ! make execution directory
+                call simple_mkdir('./'//trim(self%exec_dir))
+                ! change to execution directory directory
+                call simple_chdir('./'//trim(self%projname))
+                if( self%ptr2prg%requires_sp_project() )then
+                    ! copy the project file from upstairs
+                    call syslib_copy_file('../'//trim(self%projfile), './'//trim(self%projfile))
+                    ! cwd of SP-project will be update in the builder
+                endif
+                ! update cwd and set CWD_ORIGINAL
+                CWD_ORIGINAL = self%cwd
+                ! get new cwd
+                call simple_getcwd(cwd_tmp)
+                self%cwd = trim(cwd_tmp)
+                ! flag what we are up to
+                L_MKDIR_EXEC = .true.
+            endif
+        endif
+!>>> END, EXECUTION RELATED
 
 !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
         ! put ctf_estimate_doc (if defined) as oritab
@@ -1124,7 +1185,6 @@ contains
 !$          call omp_set_num_threads(self%nthr)
         endif
         nthr_glob = self%nthr
-
 !<<< END, PARALLELISATION-RELATED
 
 !>>> START, IMAGE-PROCESSING-RELATED
@@ -1342,7 +1402,6 @@ contains
                 write(*,*) 'imgkind: ', trim(self%imgkind)
                 stop 'unsupported imgkind; params :: new'
         end select
-
 !>>> END, IMAGE-PROCESSING-RELATED
 
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
@@ -1510,8 +1569,8 @@ contains
             end subroutine mkfnames
 
             subroutine check_carg( carg, var )
-                character(len=*), intent(in)  :: carg
-                character(len=*), intent(out) :: var
+                character(len=*),              intent(in)    :: carg
+                character(len=:), allocatable, intent(inout) :: var
                 if( cline%defined(carg) )then
                     var = cline%get_carg(carg)
                     DebugPrint carg, '=', var

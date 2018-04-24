@@ -493,7 +493,7 @@ module simple_syslib
 
 
     !>  Wrapper for simple_posix's subprocess : this uses system fork & execp
-    subroutine exec_subprocess( cmdline, pid)
+    subroutine exec_subprocess( cmdline, pid )
         character(len=*),  intent(in)      :: cmdline
         integer, intent(out)               :: pid
         character(len=STDLEN)              :: tmp

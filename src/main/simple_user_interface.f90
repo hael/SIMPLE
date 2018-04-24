@@ -5,7 +5,7 @@ implicit none
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
 private
 
-logical, parameter :: DEBUG = .false.
+logical, parameter :: DEBUG = .true.
 
 type simple_input_param
     character(len=:), allocatable :: key
@@ -260,7 +260,7 @@ contains
 
     subroutine get_prg_ptr( which_program, ptr2prg )
         character(len=*), intent(in)  :: which_program
-        type(simple_program), pointer :: ptr2prg
+        class(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
             case('center')
                 ptr2prg => center
@@ -835,14 +835,13 @@ contains
         &to apply a balancing restraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
-        &1, 3, 0, 2, 2, 1, 1, .false.)                                             ! # entries in each group, requires sp_project
+        &1, 2, 0, 2, 2, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster_cavgs%set_input('img_ios', 1, 'stk', 'file', 'Stack of class averages', 'Stack of class averages', 'e.g. cavgs.mrc', .true., '')
         ! parameter input/output
         call cluster_cavgs%set_input('parm_ios', 1, smpd)
-        call cluster_cavgs%set_input('parm_ios', 2, 'classdoc', 'file', 'Class document', 'Class document associated with the stack of class averages', 'e.g. classdoc_iterX.txt', .true., '')
-        call cluster_cavgs%set_input('parm_ios', 3, mkdir_)
+        call cluster_cavgs%set_input('parm_ios', 2, mkdir_)
         ! alternative inputs
         ! <empty>
         ! search controls

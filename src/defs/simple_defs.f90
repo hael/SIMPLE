@@ -38,6 +38,10 @@ real(dp), parameter :: DSMALL       = 1e-6
 real(dp), parameter :: PISQR        = PI*PI
 real(sp), parameter :: ATHRES_LIM   = 5.
 
+! directory-based execution model
+logical                       :: L_MKDIR_EXEC = .false.
+character(len=:), allocatable :: CWD_ORIGINAL
+
 ! newline character
 character(len=*), parameter :: NEWLINE = new_line('a')
 
@@ -102,7 +106,7 @@ real, parameter    :: TAU_DEFAULT             = 0.005     !< controls the sharpe
                                                           !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D           = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH         = 0.01      !< threshold for orientations softmax weights
-real,    parameter :: BSC                     = 200.      !< for Frealign b-factor calculation 
+real,    parameter :: BSC                     = 200.      !< for Frealign b-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -139,8 +143,6 @@ character(len=LONGSTRLEN) :: cmdline_glob              !< global command line st
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
 integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100
-
-
 
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION
