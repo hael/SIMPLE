@@ -3022,9 +3022,7 @@ contains
         get_nrequired_keys = nreq_counter(self%img_ios) + nreq_counter(self%parm_ios) +&
         &nreq_counter(self%alt_ios) + nreq_counter(self%srch_ctrls) + nreq_counter(self%filt_ctrls) +&
         &nreq_counter(self%mask_ctrls) + nreq_counter(self%comp_ctrls)
-        if( allocated(self%alt_ios) ) get_nrequired_keys = get_nrequired_keys + 1
-
-
+        
         contains
 
             function nreq_counter( arr ) result( nreq )

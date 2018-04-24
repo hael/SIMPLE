@@ -865,7 +865,10 @@ contains
         call get_prg_ptr(self%prg, self%ptr2prg)
         if( self%ptr2prg%requires_sp_project() )then
             ! sp_project file required, go look for it
-            sp_files  = simple_list_files(glob='*.simple')
+
+            ! BUGS OUT HERE
+
+            sp_files = simple_list_files(glob='*.simple')
             if( allocated(sp_files) )then
                 nsp_files = size(sp_files)
             else
@@ -1453,9 +1456,9 @@ contains
             end subroutine read_masks
 
             subroutine check_file( file, var, allowed1, allowed2, notAllowed )
-                character(len=*),           intent(in)  :: file
-                character(len=*),           intent(out) :: var
-                character(len=1), optional, intent(in)  :: allowed1, allowed2, notAllowed
+                character(len=*),              intent(in)  :: file
+                character(len=:), allocatable, intent(inout) :: var
+                character(len=1), optional,    intent(in)  :: allowed1, allowed2, notAllowed
                 character(len=1) :: file_descr
                 logical          :: raise_exception
                 if( cline%defined(file) )then
@@ -1572,7 +1575,14 @@ contains
                 character(len=*),              intent(in)    :: carg
                 character(len=:), allocatable, intent(inout) :: var
                 if( cline%defined(carg) )then
+
+                    print *, 'carg                : ', carg
+                    print *, 'cline%get_carg(carg): ', cline%get_carg(carg)
+
                     var = cline%get_carg(carg)
+
+                    print *, 'var                 : ', var
+
                     DebugPrint carg, '=', var
                 endif
             end subroutine check_carg

@@ -83,16 +83,18 @@ contains
             call ptr2prg%print_prg_descr_long()
             stop
         endif
-        if( ptr2prg%requires_sp_project() )then
-            ! if( .not. file_exists(PROJFILE_GLOB) )then
-             !write(*,*) 'project file not in cwd: ', PROJFILE_GLOB
-            !     stop 'ERROR! cmdline :: parse'
-            ! endif
-        endif
         ! get required keys
         sz_keys_req = ptr2prg%get_nrequired_keys()
+
+        ! print *, 'sz_keys_req: ', sz_keys_req
+
         if( sz_keys_req > 0 )then
             keys_required  = ptr2prg%get_required_keys()
+
+            ! do i=1,size(keys_required)
+            !     print *, i, keys_required(i)%str
+            ! end do
+
             nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
         else
             nargs_required = 1
