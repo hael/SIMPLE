@@ -1167,53 +1167,53 @@ int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram,
 
 #ifdef __APPLE__
 //Total RAM used
-    int mib[2];
-    int64_t physical_memory;
-    mib[0] = CTL_HW;
-    mib[1] = HW_MEMSIZE;
-    length = sizeof(int64_t);
-    sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+/*     int mib[2]; */
+/*     int64_t physical_memory; */
+/*     mib[0] = CTL_HW; */
+/*     mib[1] = HW_MEMSIZE; */
+/*     length = sizeof(int64_t); */
+/*     sysctl(mib, 2, &physical_memory, &length, NULL, 0); */
 
 
-    //Virtual Memory Currently Used by my Process
-    struct task_basic_info t_info;
-    mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
+/*     //Virtual Memory Currently Used by my Process */
+/*     struct task_basic_info t_info; */
+/*     mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT; */
 
-    if(KERN_SUCCESS != task_info(mach_task_self(),
-                                 TASK_BASIC_INFO, (task_info_t)&t_info,
-                                 &t_info_count)) {
-        perror("unable to get virtual memswap usage by calling taskinfo");
-        return -1;
-    }
-// resident size is in t_info.resident_size;
-// virtual size is in t_info.virtual_size;
-
-
-    // RAM currently used
-    vm_size_t page_size;
-    mach_port_t mach_port;
-    mach_msg_type_number_t count;
-    vm_statistics64_data_t vm_stats;
-
-    mach_port = mach_host_self();
-    count = sizeof(vm_stats) / sizeof(natural_t);
-    if(KERN_SUCCESS == host_page_size(mach_port, &page_size) &&
-       KERN_SUCCESS == host_statistics64(mach_port, HOST_VM_INFO,
-                                         (host_info64_t)&vm_stats, &count)) {
-        long long free_memory = (int64_t)vm_stats.free_count * (int64_t)page_size;
-
-        long long used_memory = ((int64_t)vm_stats.active_count +
-                                 (int64_t)vm_stats.inactive_count +
-                                 (int64_t)vm_stats.wire_count) * (int64_t)page_size;
-        printf("free memory: %lld\nused memory: %lld\n", free_memory, used_memory);
-    }
+/*     if(KERN_SUCCESS != task_info(mach_task_self(), */
+/*                                  TASK_BASIC_INFO, (task_info_t)&t_info, */
+/*                                  &t_info_count)) { */
+/*         perror("unable to get virtual memswap usage by calling taskinfo"); */
+/*         return -1; */
+/*     } */
+/* // resident size is in t_info.resident_size; */
+/* // virtual size is in t_info.virtual_size; */
 
 
-    *totalram =  physical_memory;          /* Total usable main memory size (bytes)*/
-    *sharedram = t_info.virtual_size;     /* Amount of shared memory */
-    *bufferram = t_info.resident_size;    /* Memory used by buffers */
-    *totalhigh = free_memory + used_memory; /* Total high water mark memory size */
-    *HWMusage =  used_memory;             /* high memory size used */
+/*     // RAM currently used */
+/*     vm_size_t page_size; */
+/*     mach_port_t mach_port; */
+/*     mach_msg_type_number_t count; */
+/*     vm_statistics64_data_t vm_stats; */
+
+/*     mach_port = mach_host_self(); */
+/*     count = sizeof(vm_stats) / sizeof(natural_t); */
+/*     if(KERN_SUCCESS == host_page_size(mach_port, &page_size) && */
+/*        KERN_SUCCESS == host_statistics64(mach_port, HOST_VM_INFO, */
+/*                                          (host_info64_t)&vm_stats, &count)) { */
+/*         long long free_memory = (int64_t)vm_stats.free_count * (int64_t)page_size; */
+
+/*         long long used_memory = ((int64_t)vm_stats.active_count + */
+/*                                  (int64_t)vm_stats.inactive_count + */
+/*                                  (int64_t)vm_stats.wire_count) * (int64_t)page_size; */
+/*         printf("free memory: %lld\nused memory: %lld\n", free_memory, used_memory); */
+/*     } */
+
+
+/*     *totalram =  physical_memory;          /\* Total usable main memory size (bytes)*\/ */
+/*     *sharedram = t_info.virtual_size;     /\* Amount of shared memory *\/ */
+/*     *bufferram = t_info.resident_size;    /\* Memory used by buffers *\/ */
+/*     *totalhigh = free_memory + used_memory; /\* Total high water mark memory size *\/ */
+/*     *HWMusage =  used_memory;             /\* high memory size used *\/ */
 
 #else
     struct sysinfo s;
