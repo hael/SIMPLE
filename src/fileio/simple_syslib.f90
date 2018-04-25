@@ -1153,7 +1153,7 @@ contains
        ! type(c_ptr)                                         :: file_list_ptr
        ! character(kind=c_char,len=1), pointer, dimension(:) :: tmp
         character(len=STDLEN), allocatable :: list(:)
-        character(len=STDLEN), pointer :: plist(:)
+        character(len=STDLEN), pointer     :: plist(:)
         character(len=STDLEN)              :: cur
         character(len=1)                   :: sep='/'
         character(kind=c_char,len=:),allocatable  :: pathhere, thisglob, thisext !> pass these to C routines
@@ -1231,19 +1231,21 @@ contains
         if(stat/=0)call simple_stop("simple_syslib::simple_list_files failed to process file list "//trim(pathhere),&
             __FILENAME__,__LINE__)
         if(global_debug) print *, ' In simple_syslib::simple_list_files  num_files : ',  num_files
-
+        if(.not.file_exists('__simple_filelist__'))&
+            call simple_stop('simple_syslib::simple_list_files tmp file not created.')
         if(present(outfile))then
             if(global_debug) print *, ' In simple_syslib::simple_list_files  outfile : ', outfile
             if(file_exists(trim(outfile))) call del_file(trim(outfile))
             call syslib_copy_file('__simple_filelist__', trim(outfile))
         endif
-
-        open(newunit = luntmp, file = '__simple_filelist__')
-        allocate( list(num_files) )
-        do i = 1,num_files
-            read( luntmp, '(a)' ) list(i)
-        enddo
-        close( luntmp, status = 'delete' )
+        if (num_files > 0)then
+            open(newunit = luntmp, file = '__simple_filelist__')
+            allocate( list(num_files) )
+            do i = 1,num_files
+                read( luntmp, '(a)' ) list(i)
+            enddo
+            close( luntmp, status = 'delete' )
+        endif
         if(present(status)) status = stat
         if(allocated(pathhere)) deallocate(pathhere)
         if(allocated(thisglob)) deallocate(thisglob)

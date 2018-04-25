@@ -511,7 +511,7 @@ contains
         class(cmdline),    intent(inout)   :: cline
         logical, optional, intent(in)      :: allow_mix, del_scaled
         integer, optional, intent(in)      :: spproj_a_seg
-        character(len=STDLEN), allocatable :: sp_files(:)
+        character(len=:), allocatable :: sp_files(:)
         character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag
         logical,               allocatable :: vol_defined(:)
         character(len=:), allocatable :: debug_local, verbose_local
@@ -520,7 +520,7 @@ contains
         type(binoris)         :: bos
         type(ori)             :: o
         integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        integer               :: spproj_a_seg_inputted, idir, nsp_files
+        integer               :: spproj_a_seg_inputted, idir, nsp_files, stat
         logical               :: nparts_set, aamix, ddel_scaled
         ! set character defaults
         call self%set_char_defaults
@@ -868,7 +868,8 @@ contains
 
             ! BUGS OUT HERE
 
-            sp_files = simple_list_files(glob='*.simple')
+            sp_files = simple_list_files(glob="*.simple", status=stat)
+            if(stat /= 0) call simple_stop("simple_params simple_list_files failed to find project files")
             if( allocated(sp_files) )then
                 nsp_files = size(sp_files)
             else

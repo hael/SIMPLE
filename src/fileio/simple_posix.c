@@ -467,8 +467,9 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
 {
     /*equivalent to 'ls -tr path' */
     struct dirent **namelist;
-    int   n, reverse = 0, mtime_alpha = 0;
+    int n, nscandir, reverse = 0, mtime_alpha = 0;
     *count = 0;
+    n=0;
     mtime_alpha = (flag >> 1) & 1;
     reverse = (flag) & 1;
     ssize_t ri = strlen(path);
@@ -499,12 +500,12 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
     }
     if(mtime_alpha) { /* modified time sort */
 #if defined(versionsort)
-        n = scandir(cpath, &namelist, NULL, versionsort);
+        nscandir = scandir(cpath, &namelist, NULL, versionsort);
 #else
-        n = scandir(cpath, &namelist, NULL, alphasort);
+        nscandir = scandir(cpath, &namelist, NULL, alphasort);
 #endif
     } else { /* alphanumeric sort */
-        n = scandir(cpath, &namelist, NULL, alphasort);
+        nscandir = scandir(cpath, &namelist, NULL, alphasort);
     }
 
     free(cpath);
@@ -514,11 +515,11 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
         perror("Failed : simple_posix.c::get_file_list_modified ");
         return -1;
     }
-    if(n < 0)
+    if(nscandir < 0)
         perror("scandir failed to find files ; get_file_list_modified");
     else {
-        *count = n; // count is a temp here since not all elements in scandir are directories
-        int i = n; // for reverse cases
+
+        int i = nscandir; // for reverse cases
         n = 0; // start count
         if(strcmp(ext, "") == 0) { /* Ignoring extension */
             if(reverse) {
@@ -530,7 +531,7 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
                     free(namelist[i]);
                 }
             } else {
-                for(i = 0; i < *count; i++) {
+                for(i = 0; i < nscandir; i++) {
                     if(namelist[i]->d_type != DT_DIR) {
                         fprintf(f, "%s\n", namelist[i]->d_name);
                         n++;
@@ -550,7 +551,7 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
                     free(namelist[i]);
                 }
             } else {
-                for(i = 0; i < *count; i++) {
+                for(i = 0; i < nscandir; i++) {
                     if((namelist[i]->d_type != DT_DIR) && (strstr(namelist[i]->d_name, cext) != NULL)) {
                         fprintf(f, "%s\n", namelist[i]->d_name);
                         n++;
@@ -560,9 +561,10 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
             }
             free(cext);
         }
-        *count = n;
+
         free(namelist);
     }
+    *count = n;
     fclose(f);
     return 0;
 }
@@ -713,7 +715,7 @@ int qs_glob(glob_t*globlist, int left, int right)
 }
 
 /* A Quicksort for structures of type glob. */
-void quick_glob(glob_t*globlist, int start, int count)
+void quicksort_glob(glob_t*globlist, int start, int count)
 {
     qs_glob(globlist, start, count);
 }
@@ -728,11 +730,11 @@ void quick_glob(glob_t*globlist, int start, int count)
  */
 int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
 {
-
+    *count=0;
     /* Check input char pointer */
     if(match == NULL || strlen(match) <= 0) {
         fprintf(stderr, "simple_posix.c::glob_file_list match string null .. Failing\n");
-        return -1;;
+        return -1;
     }
     extern int errno;
     char *cmatch = F90toCstring(match, strlen(match));
@@ -742,8 +744,8 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
         return -1;
     }
     glob_t        globlist;
-    int err;
-    err = 0;
+    int err,n;
+    err = 0;n=0;
 
     dprintf(stderr, "DEBUG: In glob_file_list size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
     dprintf(stderr, "DEBUG: In glob_file_list cmatch:%s\n", cmatch);
@@ -778,18 +780,18 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
         fprintf(stderr, "simple_posix.c::glob_file_list GLOB_ABORTED\n");
         err = -1;
     } else {
-        *count = (int) globlist.gl_pathc; //account for __simple_filelist__
+        n = (int) globlist.gl_pathc; //account for __simple_filelist__
         printf(" glob_file_list size before trimming %d \n", *count);
-        if(*count > 2) {
-            if(*sort_by_time) quick_glob(&globlist, 2, *count);
-            *count = 0;
-            int i = 2;
+        if(n > 0) {
+            if(*sort_by_time) quicksort_glob(&globlist, 0, n);
+            n = 0;
+            int i = 0;
             while(globlist.gl_pathv[i]) {
                 //          fprintf(stderr, "GLOB>> %s\n", globlist.gl_pathv[i]);
                 if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
 
                     fprintf(f, "%s\n", globlist.gl_pathv[i]);
-                    *count = *count + 1;
+                    n = n + 1;
                 }
                 i++;
             }
@@ -816,7 +818,7 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
     }
     globfree(&globlist);
     fclose(f);
-
+    *count=n;
     return err;
 }
 
