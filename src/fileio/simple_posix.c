@@ -6,10 +6,13 @@
  *
  *   Michael Eager   2018
  */
-
+#define  _POSIX_C_SOURCE 200809L
+#define _THREAD_SAFE
+//#define _FORTIFY_SOURCE
 #define _SVID_SOURCE
-#define _GNU_SOURCE             /* See feature_test_macros(7) */
+//#define _GNU_SOURCE             /* See feature_test_macros(7) */
 #include <sys/types.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <fts.h>               /* file traversal */
 #include <fcntl.h>           /* Definition of AT_* constants */
@@ -29,15 +32,27 @@
 #include<linux/limits.h>
 #include <ftw.h>
 #endif
-
-#if !defined(__APPLE__)
-#include <sys/sysinfo.h>
+/* By default, print all messages of severity info and above.  */
+#ifdef _DEBUG
+static int global_debug = 3;
+#else
+static int global_debug = 2;
 #endif
+/* Name of this program */
+static char *global_progname = "simple_posix";
+
+#define dprintf if (global_debug >= 3) \
+        fprintf (stdout, "%s: debug: (%d) ", global_progname, __LINE__), \
+        fprintf
+
+#define eprintf if (global_debug >= 0) \
+        fprintf (stderr, "%s: error: (%d) ", global_progname, __LINE__), \
+        fprintf
+
 
 // testing for non-GNU systems #undef versionsort
 
 #define MAX_CHAR_FILENAME 256
-#define LINE_MAX_LEN 8192
 #define MAKEDIR makedir_
 #define REMOVEDIR removedir_
 #define GET_FILE_LIST get_file_list_
@@ -47,6 +62,7 @@
 #define GLOB_RM_ALL glob_rm_all_
 #define GET_ABSOLUTE_PATHNAME get_absolute_pathname_
 #define FCOPY fcopy_
+#define FCOPY2 fcopy2_
 #define FREE_FILE_LIST free_file_list_
 #define SUBPROCESS subprocess_
 #define WAIT_PID wait_pid_
@@ -95,7 +111,7 @@ static char *c2fstr(char* cstr, char *fstr, int elem_len, int sizeofcstr)
     return fstr - sizeofcstr + sizeofcstr / elem_len;
 }
 
-void f2cstr( char* f_str, char* c_str, unsigned length)
+void f2cstr(char* f_str, char* c_str, unsigned length)
 {
     /* fprintf (stderr, "f2cstr in '%.*s'\n", length, f_str); */
 
@@ -124,24 +140,21 @@ int isdir(char* pathname, int* len, size_t ivf_pathname)
         perror("Failed : simple_posix.c::isdir ");
         return 0;
     }
-#ifdef _DEBUG
-    printf("DEBUG: In simple_posix.c::isdir pathname :%s:\n",  cpathname);
-#endif
+    dprintf(stderr, "DEBUG: In simple_posix.c::isdir pathname :%s:\n",  cpathname);
+
     struct stat ibuf;
     int i = stat(cpathname, &ibuf);
     free(cpathname);
     if(i != 0) {
-#ifdef _DEBUG
-        printf("DEBUG: In simple_posix.c::isdir pathname :%s: does not exist\n",  cpathname);
-#endif
+
+        dprintf(stderr, "DEBUG: In simple_posix.c::isdir pathname :%s: does not exist\n",  cpathname);
         //printf("%d %s\nisdir failed to create stat struct %s\n", errno, strerror(errno), cpathname);
         //perror("Failed : simple_posix.c::isdir ");
         return 0;
     }
-#ifdef _DEBUG
-    printf("DEBUG: In isdir stat mode %ld\t isdir %d\n", ibuf.st_mode, S_ISDIR(ibuf.st_mode));
-    printf("DEBUG: In isdir stat mode s_ifdir %d\n" , (ibuf.st_mode & S_IFMT) == S_IFDIR);
-#endif
+    dprintf(stderr, "DEBUG: In isdir stat mode %ud\t isdir %d\n", ibuf.st_mode, S_ISDIR(ibuf.st_mode));
+    dprintf(stderr, "DEBUG: In isdir stat mode s_ifdir %d\n" , (ibuf.st_mode & S_IFMT) == S_IFDIR);
+
     return S_ISDIR(ibuf.st_mode) ? 1 : 0;
 }
 
@@ -295,7 +308,7 @@ int removedir(char *path, int* len, int* count, size_t ivf_path)
     errno = 0;
 
     /* Copy string so its mutable */
-    if(*len > sizeof(_path) - 1) {
+    if(*len > (int)sizeof(_path) - 1) {
         errno = ENAMETOOLONG;
         free(cpath);
         return -1;
@@ -330,7 +343,7 @@ int removedir(char *path, int* len, int* count, size_t ivf_path)
             return -1;
         }
     }
-    *count=1;
+    *count = 1;
     printf("DEBUG:in removedir  completed rmdir %s\n", _path);
     return 0;
 }
@@ -367,10 +380,9 @@ void show_dir_content_recursive(char * path, size_t ivf_path)
 /**
  *  \brief get_file_list emulates terminal command 'ls '
  *
- *  Detailed description
  *
- *  \param param
- *  \return return type
+ *  \param path Directory string
+ *  \return success status
  */
 int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
 {
@@ -380,10 +392,10 @@ int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
         perror("Failed : simple_posix.c::get_file_list ");
         return -1;
     }
-#if _DEBUG
-    printf("DEBUG: In get_file_list, %15s:%s\n", "path", cpath);
-    printf("DEBUG: In get_file_list, %15s:%s\n", "ext", ext);
-#endif
+
+    dprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "path", cpath);
+    dprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "ext", ext);
+
 
     DIR           *d;
 
@@ -401,7 +413,7 @@ int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
         rewinddir(d);
         /*option 1*/
         //results = malloc ( sizeof(char*) * fcount );
-        printf(" get_file_list size %d\n", fcount);
+        dprintf(stderr, " get_file_list size %d\n", fcount);
         /*option 2*/
         FILE* f = fopen("__simple_filelist__", "w");
         fcount = 0;
@@ -446,7 +458,7 @@ int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
  *  \brief list files in directory 'path' , emulates 'ls -tr' if flags are set
  *
  *  \param path Fortran string input path
- *  \param ext [optional] filename extension
+ *  \param ext filename extension
  *  \param count return ptr for number of files found
  *  \param flag dictates [reverse order] | [last modified time or alphanumeric sort]
  *  \return return status success=0
@@ -460,7 +472,7 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
     mtime_alpha = (flag >> 1) & 1;
     reverse = (flag) & 1;
     ssize_t ri = strlen(path);
-    printf("DEBUG:In get_file_list_modified %15s:%zd\n", "strlen(path)", ri);
+    dprintf(stderr, "DEBUG:In get_file_list_modified %15s:%zd\n", "strlen(path)", ri);
     if(ri > 256) {
         ri = index(path, ' ') - path;
     }
@@ -470,13 +482,13 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
         perror("Failed : simple_posix.c::get_file_list_reverse_modified ");
         return -1;
     }
-#if _DEBUG
-    printf("DEBUG: In get_file_list_modified %15s:%s\n", "path", path);
-    printf("DEBUG: In get_file_list_modified %15s:%zd\n", " strlen(path)", strlen(path));
-    printf("DEBUG: In get_file_list_modified %15s:%d  %15s:%3s\n", "flag", flag, "ext", ext);
-    printf("DEBUG: In get_file_list_modified %15s:%zd\n", "strlen ext", strlen(ext));
-    printf("DEBUG: In get_file_list_modified %15s:%12lu\n", "ivf_pathLen", (unsigned long) ivf_path);
-#endif
+
+    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%s\n", "path", path);
+    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%zd\n", " strlen(path)", strlen(path));
+    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%d  %15s:%3s\n", "flag", flag, "ext", ext);
+    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%zd\n", "strlen ext", strlen(ext));
+    // dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%12lu\n", "ivf_pathLen", (unsigned long) ivf_path);
+
     // Remove temp file if it exists
     if(access("./__simple_filelist__", F_OK) != -1) {
         if(remove("./__simple_filelist__") != 0) {
@@ -716,6 +728,7 @@ void quick_glob(glob_t*globlist, int start, int count)
  */
 int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
 {
+
     /* Check input char pointer */
     if(match == NULL || strlen(match) <= 0) {
         fprintf(stderr, "simple_posix.c::glob_file_list match string null .. Failing\n");
@@ -731,21 +744,21 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
     glob_t        globlist;
     int err;
     err = 0;
-#if _DEBUG
-    printf("DEBUG: In glob_file_list size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
-    printf("DEBUG: In glob_file_list cmatch:%s\n", cmatch);
-    printf("DEBUG: In glob_file_list flag:%d \n", *sort_by_time);
-#endif
+
+    dprintf(stderr, "DEBUG: In glob_file_list size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
+    dprintf(stderr, "DEBUG: In glob_file_list cmatch:%s\n", cmatch);
+    dprintf(stderr, "DEBUG: In glob_file_list flag:%d \n", *sort_by_time);
+
 
     int glob_val = glob(cmatch, 0, NULL, &globlist);
     free(cmatch);
     // Remove temp file if it exists
     if(access("./__simple_filelist__", F_OK) != -1) {
-      if(remove("./__simple_filelist__") != 0) {
-        printf("%d %s\nglob_file_list failed to remove __simple_filelist__ in glob %s\n", errno, strerror(errno), cmatch);
-        perror("Failed : simple_posix.c::glob_file_list ");
-        return -1;
-      }
+        if(remove("./__simple_filelist__") != 0) {
+            printf("%d %s\nglob_file_list failed to remove __simple_filelist__ in glob %s\n", errno, strerror(errno), cmatch);
+            perror("Failed : simple_posix.c::glob_file_list ");
+            return -1;
+        }
     }
 
     FILE* f = fopen("__simple_filelist__", "w");
@@ -781,7 +794,7 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
                 i++;
             }
             /*
-#if 0
+            #if 0
             (*results)[*count] = malloc(sizeof(char) * (*count));
             for(i = 0; i < *count; i++) {
                 int lenstr = strlen(globlist.gl_pathv[i]) + 1;
@@ -796,10 +809,10 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
                 i++;
             }
             printf(" glob_file_list freeing globlist struct \n");
-#endif
+            #endif
             */
         }
-        fprintf(stderr, " glob_file_list size after trimming %d \n", *count);
+        dprintf(stderr, " glob_file_list size after trimming %d \n", *count);
     }
     globfree(&globlist);
     fclose(f);
@@ -818,10 +831,10 @@ int subprocess(char* args, int* arglen, size_t ivf_cmd)
     char * cargs = F90toCstring(args, *arglen);
 
     char * const argsC[] = { "-l", "-c", cargs, "\r", NULL };
-#if _DEBUG
-    printf("DEBUG:In subprocess %30s:%s:\n", " args ", argsC[2]);
-    printf("DEBUG:In subprocess %30s:%zd  %d\n", "strlen args", strlen(args), *arglen);
-#endif
+
+    dprintf(stderr, "DEBUG:In subprocess %30s:%s:\n", " args ", argsC[2]);
+    dprintf(stderr, "DEBUG:In subprocess %30s:%zd  %d\n", "strlen args", strlen(args), *arglen);
+
     int pid = fork();
     if(pid == 0) {
         execvp("/bin/bash", argsC);
@@ -830,63 +843,115 @@ int subprocess(char* args, int* arglen, size_t ivf_cmd)
     return pid;
 }
 
-int wait_pid(int* cpid )
+int wait_pid(int* cpid)
 {
     int status;
     pid_t w;
-    if (*cpid > 0) {
-      do {
-        w = waitpid((pid_t) *cpid, &status, WNOHANG | WUNTRACED | WCONTINUED);
-        if (w == -1) {
-          perror("waitpid");
-          exit(EXIT_FAILURE);
-        }
+    if(*cpid > 0) {
+        do {
+          pid_t c = (pid_t) * cpid;
+            w = waitpid(c , &status, WNOHANG | WUNTRACED | WCONTINUED);
+            if(w == -1) {
+                perror("waitpid");
+                exit(EXIT_FAILURE);
+            }
 
-        if (WIFEXITED(status)) {
-          printf("exited, status=%d\n", WEXITSTATUS(status));
-        } else if (WIFSIGNALED(status)) {
-          printf("killed by signal %d\n", WTERMSIG(status));
-        } else if (WIFSTOPPED(status)) {
-          printf("stopped by signal %d\n", WSTOPSIG(status));
-        } else if (WIFCONTINUED(status)) {
-          printf("continued\n");
-        }
-      } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-    }else return -1;
+            if(WIFEXITED(status)) {
+                printf("exited, status=%d\n", WEXITSTATUS(status));
+            } else if(WIFSIGNALED(status)) {
+                printf("killed by signal %d\n", WTERMSIG(status));
+            } else if(WIFSTOPPED(status)) {
+                printf("stopped by signal %d\n", WSTOPSIG(status));
+            } else if(WIFCONTINUED(status)) {
+                printf("continued\n");
+            }
+        } while(!WIFEXITED(status) && !WIFSIGNALED(status));
+    } else return -1;
 
     return (int) w;
 }
 
 
-#if defined(__POSIX_PURE__)
-#include <assert.h>
-int fcopy(char*file1, int*len1,char*file2,int*len2)
+
+
+#ifdef _POSIX_MAPPED_FILES
+int fcopy(char* file1,  int*len1, char* file2, int*len2)
 {
-  char* cfile1 = F90toCstring(file1,*len1);
-  int infile = open(cfile1, O_RDONLY);free(cfile1);
-  assert(infile >= 0);
-  char*cfile2 = F90toCstring(file2,*len2);
-  int outfile = open(cfile2, O_CREAT|O_WRONLY);
-  free(cfile2);
 
-  assert(outfile >= 0);
+    int sfd, dfd;
+    dprintf(stderr, "MMAP FCOPY In fcopy mmap/memcpy\n");
+    dprintf(stderr, "DEBUG: In fcopy mmap file1:%s \n size :%zu\t%d\n", file1, strlen(file1), *len1);
+    dprintf(stderr, "DEBUG: In fcopy mmap file2:%s \n size :%zu\t%d\n", file2, strlen(file2), *len2);
+    size_t filesize;
+    extern int errno;
+    char *buffer1, *buffer2;
+    char *src, *dest;
+    int flag = 0;
+    if(!(buffer1 = F90toCstring(file1, *len1))) {
+        printf("%d %s\nfcopy failed to interpret file str %30s\n", errno, strerror(errno), file1);
+        perror("Failed : F90toCstring (buf) in simple_posix.c:fcopy");
+        free(buffer1);
+        flag = 1;
+    } else if(!(buffer2 = F90toCstring(file2, *len2))) {
+        printf("%d %s\nfcopy failed to interpret file str %30s\n", errno, strerror(errno), file2);
+        perror("Failed : F90toCstring (buf) in simple_posix::fcopy");
+        free(buffer2);
+        flag = 1;
+    } else {
+        dprintf(stderr, "In fcopy opening files\n");
+        /* SOURCE */
+        sfd = open(buffer1, O_RDONLY);
+        if(sfd) {
+            filesize = lseek(sfd, 0, SEEK_END);
 
-  char buf[4096];
-  while (1) {
-    ssize_t result = read(infile, &buf[0], sizeof(buf));
-    if (!result) break;
-    assert(result > 0);
-    assert(write(outfile, &buf[0], result) == result);
-  }
+            src = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE, sfd, 0);
+
+            /* DESTINATION */
+            dfd = open(buffer2, O_RDWR | O_CREAT, 0666);
+            if(dfd) {
+                if(ftruncate(dfd, filesize) != 0) {
+                    printf("%d %s\nfcopy failed to truncate  file %s\n", errno, strerror(errno), buffer2);
+                    perror("Failed : simple_posix.c::fcopy ftruncate\n");
+                    return -1;
+
+                }
+
+                dest = mmap(NULL, filesize, PROT_READ | PROT_WRITE, MAP_SHARED, dfd, 0);
+
+                /* COPY */
+
+                memcpy(dest, src, filesize);
+
+                munmap(src, filesize);
+                munmap(dest, filesize);
+
+                close(dfd);
+                close(sfd);
+            } else {
+                printf("%d %s\nfcopy failed to open  file %s\n", errno, strerror(errno), buffer2);
+                perror("Failed : simple_posix.c::fcopy opening output file\n");
+                flag = 1;
+                close(dfd);
+            }
+        } else {
+            printf("%d %s\nfcopy failed to open file %s\n", errno, strerror(errno), buffer1);
+            perror("Failed : simple_posix.c::fcopy ");
+            flag = 1;
+            close(sfd);
+        }
+        free(buffer1);
+        free(buffer2);
+    }
+    return flag;
 }
 #else
 
-// Copy file in chunks of MAX_CHAR_FILENAME bytes
-int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
+// Copy file in chunks of 1k bytes
+int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
 {
-    printf("In fcopy\n");
     extern int errno;
-
+    fprintf(stderr, "DEBUG: In fcopy file1:%s \n size :%zu\t%d\t%zu\n", file1, strlen(file1), *len1, ivf_file1);
+    fprintf(stderr, "DEBUG: In fcopy file2:%s \n size :%zu\t%d\t%zu\n", file2, strlen(file2), *len2, ivf_file2);
     char *buffer1, *buffer2;
     int flag = 0;
     if(!(buffer1 = F90toCstring(file1, *len1))) {
@@ -900,13 +965,13 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
         free(buffer2);
         flag = 1;
     } else {
-        printf("In fcopy opening files\n");
+        dprintf(stderr, "In fcopy opening files\n");
         FILE *f1, *f2;
         f1 = fopen(buffer1, "r");
         if(f1) {
             f2 = fopen(buffer2, "w");
             if(f2) {
-                char            buffer[MAX_CHAR_FILENAME];
+                char            buffer[1024];
                 size_t          n;
                 while((n = fread(buffer, sizeof(char), sizeof(buffer), f1)) > 0) {
                     if(fwrite(buffer, sizeof(char), n, f2) != n) {
@@ -930,18 +995,23 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
     }
     return flag;
 }
+#endif
+
 
 #ifdef __APPLE__
-    #include <sys/socket.h>
-    #include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
 #else
-    #include <sys/sendfile.h>
+#include <sys/sendfile.h>
 #endif
-int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
-{
-    printf("In fcopy2\n");
-    extern int errno;
 
+int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
+{
+    dprintf(stderr, "In fcopy2\n");
+    dprintf(stderr, "DEBUG: In fcopy2 file1:%s \n size :%zu\t%d\t%zu\n", file1, strlen(file1), *len1, ivf_file1);
+    dprintf(stderr, "DEBUG: In fcopy2 file2:%s \n size :%zu\t%d\t%zu\n", file2, strlen(file2), *len2, ivf_file2);
+    extern int errno;
+    ssize_t sent = 0;
     char *buffer1, *buffer2;
     int flag = 0;
     if(!(buffer1 = F90toCstring(file1, *len1))) {
@@ -959,25 +1029,27 @@ int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
         if(0 == stat(buffer1, &st)) {
             int INPUTsize = st.st_size;
             off_t OSX_INPUTsize = (off_t) INPUTsize;
-            printf("In fcopy2 opening files\n");
+            dprintf(stderr, "In fcopy2 opening files\n");
             FILE *fin = fopen(buffer1, "r");
             if(fin) {
                 FILE *fout = fopen(buffer2, "w");
                 if(fout) {
-                  fflush(fout);
+                    fflush(fout);
+                    off_t offset;
+
                     //        fseek(fin, 0L, SEEK_END);
                     //size_t toCopy = ftell(fin);
                     //rewind(fin); //fseek(fin, 0L, SEEK_SET);
-                    #ifdef __APPLE__
-                        off_t offset = ftello(fin);
-                        ssize_t sent;
-                        //ssize_t sent = sendfile(fileno(fout), fileno(fin), offset, OSX_INPUTsize);
-                        fseeko(fin, offset, SEEK_SET);
-                    #else
-                        off_t offset = ftello64(fin);
-                        ssize_t sent = sendfile(fileno(fout), fileno(fin), &offset, INPUTsize);
-                        fseeko64(fin, offset, SEEK_SET);
-                    #endif
+#ifdef __APPLE__
+                    offset = ftello(fin);
+                    //ssize_t sent = sendfile(fileno(fout), fileno(fin), offset, OSX_INPUTsize);
+                    fseeko(fin, offset, SEEK_SET);
+#else
+
+                    offset = ftello(fin);
+                    sent = sendfile(fileno(fout), fileno(fin), &offset, INPUTsize);
+                    fseeko(fin, offset, SEEK_SET);
+#endif
                     if(sent != INPUTsize) {
                         printf("%d %s\nfcopy2 failed to copy file %s to %s\n", errno, strerror(errno), buffer1, buffer2);
                         perror("Failed : simple_posix.c::fcopy2 copying file\n");
@@ -1005,8 +1077,9 @@ int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1)
     }
     return flag;
 }
-#endif
-char * lrealpath (const char *filename)
+
+
+char * lrealpath(const char *filename)
 {
     /* Method 3: Now we're getting desperate!  The system doesn't have a
        compile time buffer size and no alternative function.  Query the
@@ -1015,21 +1088,20 @@ char * lrealpath (const char *filename)
        pathconf()) making it impossible to pass a correctly sized buffer
        to realpath() (it could always overflow).  On those systems, we
        skip this.  */
-      /* Find out the max path size.  */
-      long path_max = pathconf ("/", _PC_PATH_MAX);
-      if (path_max > 0)
-        {
-  	/* PATH_MAX is bounded.  */
-          char *buf, *rp, *ret;
-  	buf = (char *) malloc (path_max);
-  	if (buf == NULL)
-  	  return NULL;
-  	rp = realpath (filename, buf);
-  	ret = strdup (rp ? rp : filename);
-  	free (buf);
-  	return ret;
-        }
-      return filename;
+    /* Find out the max path size.  */
+    long path_max = pathconf("/", _PC_PATH_MAX);
+    if(path_max > 0) {
+        /* PATH_MAX is bounded.  */
+        char *buf, *rp, *ret;
+        buf = (char *) malloc(path_max);
+        if(buf == NULL)
+            return NULL;
+        rp = realpath(filename, buf);
+        ret = strdup(rp ? rp : filename);
+        free(buf);
+        return ret;
+    }
+    return NULL;
 }
 
 
@@ -1047,11 +1119,10 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 #else
     char *resolved = lrealpath(filein);
 #endif
-#if _DEBUG
-    printf("DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
-    printf("DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
-    printf("DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
-#endif
+    dprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
+    dprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
+    dprintf(stderr, "DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
+
 
     if(resolved == NULL) {
         printf("%d %s\nget_absolute_path failed to canonicalize  file %s\n", errno, strerror(errno), filein);
@@ -1060,51 +1131,104 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
     }
     *outlen = strlen(resolved) ;
     strncpy(out, resolved, *outlen); //for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
-    out[*outlen]='\0';
-#if _DEBUG
-    printf("DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
-    printf("DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
-#endif
+    out[*outlen] = '\0';
+    dprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
+    dprintf(stderr, "DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
+
     c2fstr(resolved, out, *outlen, sizeof(resolved));
     out[0] = '/';
 
-#if _DEBUG
-    printf("DEBUG: In get_absolute_pathname c2fstr: %s\n", out);
-    printf("DEBUG: In get_absolute_pathname %30s:%ld\n", " out path addr", *out);
-    printf("DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
-#endif
+    dprintf(stderr, "DEBUG: In get_absolute_pathname c2fstr: %s\n", out);
+    dprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%d\n", " out path addr", *out);
+    dprintf(stderr, "DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
 
     free(filein);
     free(resolved);
     //out = resolved;
     return 0;
 }
-
- int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram, long* totalhigh)
- {
-// #if _DEBUG
-//     printf("DEBUG: In  get_sysinfo\n");
-// #endif
 #ifdef __APPLE__
-     *totalram = 0;           /* Total usable main memory size */
-
-     *sharedram = 0;       /* Amount of shared memory */
-     *bufferram = 0;              /* Memory used by buffers */
-     *totalhigh = 0;              /* Total high memory size */
-     *HWMusage = 0; /* high memory size used */
-     return 0;
+#include <mach/mach.h>
+#include <mach/vm_statistics.h>
+#include <mach/mach_types.h>
+#include <mach/mach_init.h>
+#include <mach/mach_host.h>
 #else
-     struct sysinfo s;
-     int i = sysinfo(&s);
-     *totalram = s.totalram;           /* Total usable main memory size */
-     //*freeram=s.freeram;               /* Available memory size */
-     *sharedram = s.sharedram;       /* Amount of shared memory */
-     *bufferram = s.bufferram;              /* Memory used by buffers */
-     *totalhigh = s.totalhigh;              /* Total high memory size */
-     *HWMusage = s.totalhigh - s.freehigh; /* high memory size used */
-     return i;
+#include <sys/sysinfo.h>
 #endif
- }
+int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram, long* totalhigh)
+{
+    *sharedram = 0L;       /* Amount of shared memory */
+    *bufferram = 0L;       /* Memory used by buffers */
+    *totalhigh = 0L;       /* Total high memory size */
+    *HWMusage = 0L;        /* high water mark -- last peak memory used */
+
+#ifdef __APPLE__
+//Total RAM used
+    int mib[2];
+    int64_t physical_memory;
+    mib[0] = CTL_HW;
+    mib[1] = HW_MEMSIZE;
+    length = sizeof(int64_t);
+    sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+
+
+    //Virtual Memory Currently Used by my Process
+    struct task_basic_info t_info;
+    mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
+
+    if(KERN_SUCCESS != task_info(mach_task_self(),
+                                 TASK_BASIC_INFO, (task_info_t)&t_info,
+                                 &t_info_count)) {
+        perror("unable to get virtual memswap usage by calling taskinfo");
+        return -1;
+    }
+// resident size is in t_info.resident_size;
+// virtual size is in t_info.virtual_size;
+
+
+    // RAM currently used
+    vm_size_t page_size;
+    mach_port_t mach_port;
+    mach_msg_type_number_t count;
+    vm_statistics64_data_t vm_stats;
+
+    mach_port = mach_host_self();
+    count = sizeof(vm_stats) / sizeof(natural_t);
+    if(KERN_SUCCESS == host_page_size(mach_port, &page_size) &&
+       KERN_SUCCESS == host_statistics64(mach_port, HOST_VM_INFO,
+                                         (host_info64_t)&vm_stats, &count)) {
+        long long free_memory = (int64_t)vm_stats.free_count * (int64_t)page_size;
+
+        long long used_memory = ((int64_t)vm_stats.active_count +
+                                 (int64_t)vm_stats.inactive_count +
+                                 (int64_t)vm_stats.wire_count) * (int64_t)page_size;
+        printf("free memory: %lld\nused memory: %lld\n", free_memory, used_memory);
+    }
+
+
+    *totalram =  physical_memory;          /* Total usable main memory size (bytes)*/
+    *sharedram = t_info.virtual_size;     /* Amount of shared memory */
+    *bufferram = t_info.resident_size;    /* Memory used by buffers */
+    *totalhigh = free_memory + used_memory; /* Total high water mark memory size */
+    *HWMusage =  used_memory;             /* high memory size used */
+
+#else
+    struct sysinfo s;
+    if( sysinfo(&s) ) {
+      perror("simple_posix.c::get_sysinfo unable to get mem usage by calling sysinfo");
+      return -1;
+    } else {
+      *totalram = s.totalram;           /* Total usable main memory size */
+      //*freeram=s.freeram;               /* Available memory size */
+      *sharedram = s.sharedram;       /* Amount of shared memory */
+      *bufferram = s.bufferram;              /* Memory used by buffers */
+      *totalhigh = s.totalhigh;              /* Total high memory size */
+      *HWMusage = s.totalhigh - s.freehigh; /* high memory size used */
+    }
+#endif
+    return 0;
+}
 
 int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
@@ -1319,10 +1443,9 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
     FILE* f;
     int err;
     err = 0;
-#if _DEBUG
-    printf("DEBUG: In glob_rm_all size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
-    printf("DEBUG: In glob_rm_all cmatch:%s\n", cmatch);
-#endif
+    dprintf(stderr, "DEBUG: In glob_rm_all size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
+    dprintf(stderr, "DEBUG: In glob_rm_all cmatch:%s\n", cmatch);
+
     int glob_val = glob(cmatch, 0, NULL, &globlist);
     free(cmatch);
     f = fopen("__simple_filelist__", "w");
@@ -1345,37 +1468,32 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
         err = -1;
     } else {
         *count = (int) globlist.gl_pathc; //account for __simple_filelist__
-#if _DEBUG
-        printf(" glob_rm_all size before trimming %d \n", *count);
-#endif
+        dprintf(stderr, " glob_rm_all size before trimming %d \n", *count);
+
         *count = 0;
         int i = 0;
         while(globlist.gl_pathv[i]) {
-#if _DEBUG
-            fprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
-#endif
+
+            dprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
             if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
                 if(strcmp(globlist.gl_pathv[i], ".") != 0 || strcmp(globlist.gl_pathv[i], "..") != 0) {
-#if _DEBUG
-                    fprintf(stderr, " for deletion\n");
-#endif
+                    dprintf(stderr, " for deletion\n");
+
                     //fprintf(f, "%s\n", globlist.gl_pathv[i]);
                     *count = *count + 1;
                 } else {
-#if _DEBUG
-                  fprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
-#endif
+                    dprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
+
                 }
             } else {
-#if _DEBUG
-              fprintf(stderr, "temp file found, stepping over\n");
-#endif
+
+                dprintf(stderr, "temp file found, stepping over\n");
+
             }
             i++;
         }
-#if _DEBUG
-        fprintf(stderr, "Total glob items for deletion:  %d\n", *count);
-#endif
+
+        dprintf(stderr, "Total glob items for deletion:  %d\n", *count);
         *count = 0;
         i = 0;
         while(globlist.gl_pathv[i]) {
@@ -1384,51 +1502,51 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
                     fprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
                     struct stat s;
                     int staterr = stat(globlist.gl_pathv[i], &s);
-                    if(staterr==0){
+                    if(staterr == 0) {
 #if _DEBUG
-                    if(S_ISDIR(s.st_mode)) {
-                        fprintf(stderr, " dir ");
-                    } else if(S_ISREG(s.st_mode)) {
-                        fprintf(stderr, " file ");
-                    } else if(S_ISLNK(s.st_mode)) {
-                        fprintf(stderr, " link ");
-                    } else {
-                        fprintf(stderr, " unsupported mode ");
-                    }
-#endif
-                    // remove is a stdlib function that uses unlink for files and rmdir for directories
-                    if(remove(globlist.gl_pathv[i]) == 0) {
-#if _DEBUG
-                        fprintf(stderr, " deleted\n");
-#endif
-                        *count = *count + 1;
-                        FILE* f = fopen("__simple_filelist__", "a");
-                        fprintf(f, "%s\n", globlist.gl_pathv[i]);
-                        fclose(f);
-                    } else {
-                        if(errno == ENOTEMPTY) {
-                            fprintf(stderr, " calling recursive delete\n");
-                            int len2 = (int)strlen(globlist.gl_pathv[i]);
-                            err = remove_directory_recursive(globlist.gl_pathv[i], &len2, count);
+                        if(S_ISDIR(s.st_mode)) {
+                            fprintf(stderr, " dir ");
+                        } else if(S_ISREG(s.st_mode)) {
+                            fprintf(stderr, " file ");
+                        } else if(S_ISLNK(s.st_mode)) {
+                            fprintf(stderr, " link ");
+                        } else {
+                            fprintf(stderr, " unsupported mode ");
                         }
-                        if(err != 0) {
-                            fprintf(stderr, "\n%d %s\nglob_rm_all failed to remove %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
-                            perror("Failed : simple_posix.c::glob_rm_all ");
-                        }
+#endif
+                        // remove is a stdlib function that uses unlink for files and rmdir for directories
+                        if(remove(globlist.gl_pathv[i]) == 0) {
 
-                    }
-                    }else{
-                       fprintf(stderr, "\n%d %s\nglob_rm_all failed to stat %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
-                            perror("Failed : simple_posix.c::glob_rm_all ");
+                            dprintf(stderr, " deleted\n");
+
+                            *count = *count + 1;
+                            FILE* f = fopen("__simple_filelist__", "a");
+                            fprintf(f, "%s\n", globlist.gl_pathv[i]);
+                            fclose(f);
+                        } else {
+                            if(errno == ENOTEMPTY) {
+                                fprintf(stderr, " calling recursive delete\n");
+                                int len2 = (int)strlen(globlist.gl_pathv[i]);
+                                err = remove_directory_recursive(globlist.gl_pathv[i], &len2, count);
+                            }
+                            if(err != 0) {
+                                fprintf(stderr, "\n%d %s\nglob_rm_all failed to remove %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
+                                perror("Failed : simple_posix.c::glob_rm_all ");
+                            }
+
+                        }
+                    } else {
+                        fprintf(stderr, "\n%d %s\nglob_rm_all failed to stat %s\n", errno, strerror(errno), globlist.gl_pathv[i]);
+                        perror("Failed : simple_posix.c::glob_rm_all ");
                     }
 
                 }
             }
             i++;
         }
-#if _DEBUG
-        fprintf(stderr, " glob_rm_all size after trimming %d \n", *count);
-#endif
+
+        dprintf(stderr, " glob_rm_all size after trimming %d \n", *count);
+
     }
     globfree(&globlist);
 
