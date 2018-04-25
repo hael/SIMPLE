@@ -11,6 +11,10 @@
 //#define _FORTIFY_SOURCE
 #define _SVID_SOURCE
 #define _GNU_SOURCE             /* See feature_test_macros(7) */
+#ifdef __APPLE__
+#define _BSD_SOURCE
+#define __DARWIN_C_SOURCE
+#endif
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
