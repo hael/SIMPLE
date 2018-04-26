@@ -14,7 +14,6 @@ character(len=4)   :: NULL = 'null'
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
     ! segments 1-10 reserved for simple program outputs, orientations and files
-
     ! In segment 7 we stash class averages, ranked class averages, final volumes etc.
     type(oris)        :: os_mic    ! micrographs,              segment 1
     type(oris)        :: os_stk    ! per-micrograph stack os,  segment 2
@@ -63,7 +62,6 @@ contains
     procedure          :: get_smpd
     procedure          :: get_nmics
     procedure          :: get_nmovies
-    procedure, private :: oritype2segment
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
     procedure          :: get_ctfmode
@@ -388,7 +386,10 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: moviename
         type(ctfparams),           intent(in)    :: ctfvars
-        class(oris), pointer :: os_ptr
+        class(oris),      pointer     :: os_ptr
+        character(len=:), allocatable :: fname, prev_imgfmt
+        character(len=STDLEN)         :: str
+        character(len=3)              :: imgfmt
         integer :: n_os_mic, ldim(3), nframes
         ! oris object pointer
         os_ptr => self%os_mic
@@ -400,17 +401,28 @@ contains
         endif
         ! update ori
         call os_ptr%new_clean(1)
-        call find_ldim_nptcls(trim(moviename), ldim, nframes)
+        call simple_full_path(moviename, fname, 'simple_sp_project::add_single_movie')
+        call find_ldim_nptcls(trim(fname), ldim, nframes)
         if( nframes <= 0 )then
-            write(*,*) 'WARNING! # frames in movie ', trim(moviename), ' <= zero, ommitting'
+            write(*,*) 'WARNING! # frames in movie ', trim(fname), ' <= zero, ommitting'
         else if( nframes > 1 )then
-            call os_ptr%set(1, 'movie', trim(moviename))
+            call os_ptr%set(1, 'movie', trim(fname))
             call os_ptr%set(1, 'imgkind', 'movie')
             call os_ptr%set(1, 'nframes',    real(nframes))
         else
-            call os_ptr%set(1, 'intg',  trim(moviename))
+            call os_ptr%set(1, 'intg',  trim(fname))
             call os_ptr%set(1, 'imgkind', 'mic')
         endif
+        ! image format
+        str    = fname2ext(fname)
+        imgfmt = str(1:3)
+        if( self%projinfo%isthere('imgfmt') )then
+            call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
+            if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
+        else
+            call self%projinfo%set(1,'imgfmt', trim(imgfmt))
+        endif
+        ! updates segment
         call os_ptr%set(1, 'xdim',       real(ldim(1)))
         call os_ptr%set(1, 'ydim',       real(ldim(2)))
         call os_ptr%set(1, 'smpd',       ctfvars%smpd)
@@ -442,9 +454,11 @@ contains
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),           pointer     :: os_ptr
         character(len=STDLEN), allocatable :: movienames(:)
-        character(len=:),      allocatable :: name
-        integer :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
-        logical :: is_movie
+        character(len=:),      allocatable :: name, moviename, prev_imgfmt
+        character(len=STDLEN) :: str
+        character(len=3)      :: imgfmt
+        integer               :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
+        logical               :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
             write(*,*) 'Inputted movie list (filetab): ', trim(filetab)
@@ -466,19 +480,31 @@ contains
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call find_ldim_nptcls(trim(movienames(cnt)), ldim, nframes)
+            call simple_full_path(movienames(cnt), moviename, 'simple_sp_project::add_movies')
+            call find_ldim_nptcls(trim(moviename), ldim, nframes)
             if( nframes <= 0 )then
-                write(*,*) 'WARNING! # frames in movie ', trim(movienames(imic)), ' <= zero, ommitting'
+                write(*,*) 'WARNING! # frames in movie ', trim(moviename), ' <= zero, ommitting'
                 cycle
             else if( nframes > 1 )then
-                call os_ptr%set(imic, 'movie', trim(movienames(cnt)))
+                call os_ptr%set(imic, 'movie', trim(moviename))
                 call os_ptr%set(imic, 'imgkind', 'movie')
                 is_movie = .false.
             else
-                call os_ptr%set(imic, 'intg',  trim(movienames(cnt)))
+                call os_ptr%set(imic, 'intg',  trim(moviename))
                 call os_ptr%set(imic, 'imgkind', 'mic')
                 is_movie = .true.
             endif
+            ! image format
+            str    = fname2ext(moviename)
+            imgfmt = str(1:3)
+            if( self%projinfo%isthere('imgfmt') )then
+                call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
+                if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
+                deallocate(prev_imgfmt)
+            else
+                call self%projinfo%set(1,'imgfmt', trim(imgfmt))
+            endif
+            ! updates segment
             call os_ptr%set(imic, 'xdim',       real(ldim(1)))
             call os_ptr%set(imic, 'ydim',       real(ldim(2)))
             call os_ptr%set(imic, 'nframes',    real(nframes))
@@ -502,6 +528,7 @@ contains
                     write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
                     stop 'ERROR, unsupported ctfflag; sp_project :: add_movies'
             end select
+            deallocate(moviename)
         enddo
         if( is_movie )then
             name = 'MOVIE(S)'
@@ -519,16 +546,16 @@ contains
         character(len=*),      intent(in)    :: stk
         type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
         class(oris),           intent(inout) :: os      ! parameters associated with stk
-        type(ori)  :: o
-        integer    :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
-        integer    :: i, fromp, top
-        ! file exists?
-        if( .not. file_exists(stk) )then
-            write(*,*) 'Inputted stack (stk): ', trim(stk)
-            stop 'does not exist in cwd; sp_project :: add_stk'
-        endif
+        type(ori)                     :: o
+        character(len=:), allocatable :: stk_abspath, prev_imgfmt
+        character(len=STDLEN)         :: str
+        character(len=3)              :: imgfmt
+        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        integer :: i, fromp, top
+        ! fuul path and existence check
+        call simple_full_path(stk, stk_abspath, 'sp_project :: add_stk')
         ! find dimension of inputted stack
-        call find_ldim_nptcls(stk, ldim, nptcls)
+        call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
@@ -572,8 +599,17 @@ contains
             fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
             top   = fromp + n_os - 1
         endif
+        ! image format
+        str    = fname2ext(stk_abspath)
+        imgfmt = str(1:3)
+        if( self%projinfo%isthere('imgfmt') )then
+            call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
+            if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
+        else
+            call self%projinfo%set(1,'imgfmt', trim(imgfmt))
+        endif
         ! updates oris_objects
-        call self%os_stk%set(n_os_stk, 'stk',     trim(stk))
+        call self%os_stk%set(n_os_stk, 'stk',     trim(stk_abspath))
         call self%os_stk%set(n_os_stk, 'box',     real(ldim(1)))
         call self%os_stk%set(n_os_stk, 'nptcls',  real(nptcls))
         call self%os_stk%set(n_os_stk, 'fromp',   real(fromp))
@@ -803,12 +839,14 @@ contains
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
             allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//'.'//trim(ext))
             status = simple_rename(trim(stkpart), trim(dest_stkpart))
+            deallocate(stkpart)
+            call simple_full_path(dest_stkpart, stkpart, 'sp_project :: split_stk')
             nptcls_part = parts(istk,2)-parts(istk,1)+1
             call self%os_stk%set(istk, 'ctf',   ctfstr)
             call self%os_stk%set(istk, 'cs',    cs)
             call self%os_stk%set(istk, 'kv',    kv)
             call self%os_stk%set(istk, 'fraca', fraca)
-            call self%os_stk%set(istk, 'stk',     trim(dest_stkpart))
+            call self%os_stk%set(istk, 'stk',     trim(stkpart))
             call self%os_stk%set(istk, 'box',     real(box))
             call self%os_stk%set(istk, 'smpd',    smpd)
             call self%os_stk%set(istk, 'nptcls',  real(nptcls_part))
@@ -872,14 +910,12 @@ contains
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
+        character(len=:), allocatable :: cavg_stk
         integer :: ldim(3), nptcls, n_os_out
-        ! file exists?
-        if( .not. file_exists(stk) )then
-            write(*,*) 'Inputted stack (stk): ', trim(stk)
-            stop 'does not exist in cwd; sp_project :: add_os_out'
-        endif
+        ! fuul path and existence check
+        call simple_full_path(stk, cavg_stk, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
-        call find_ldim_nptcls(stk, ldim, nptcls)
+        call find_ldim_nptcls(cavg_stk, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
@@ -895,7 +931,7 @@ contains
             call self%os_out%reallocate(n_os_out)
         endif
         ! fill-in field
-        call self%os_out%set(n_os_out , 'stk',     trim(stk))
+        call self%os_out%set(n_os_out , 'stk',     trim(cavg_stk))
         call self%os_out%set(n_os_out , 'box',     real(ldim(1)))
         call self%os_out%set(n_os_out , 'nptcls',  real(nptcls))
         call self%os_out%set(n_os_out , 'fromp',   1.0)
@@ -969,29 +1005,6 @@ contains
             if( trim(imgkind).eq.'movie' ) get_nmovies = get_nmovies + 1
         enddo
     end function get_nmovies
-
-    integer function oritype2segment(self, oritype)
-        class(sp_project), intent(in) :: self
-        character(len=*),  intent(in) :: oritype
-        select case(trim(oritype))
-            case('mic')
-                oritype2segment = MIC_SEG
-            case('stk')
-                oritype2segment = STK_SEG
-            case('ptcl2D')
-                oritype2segment = PTCL2D_SEG
-            case('cls2D')
-                oritype2segment = CLS2D_SEG
-            case('cls3D')
-                oritype2segment = CLS3D_SEG
-            case('ptcl3D')
-                oritype2segment = PTCL3D_SEG
-            case('out')
-                oritype2segment = OUT_SEG
-            case DEFAULT
-                oritype2segment = GENERIC_SEG
-        end select
-    end function oritype2segment
 
     character(len=STDLEN) function get_ctfmode( self, oritype )
         class(sp_project), target, intent(inout) :: self
@@ -1374,7 +1387,7 @@ contains
         if( present(numlen_in) ) numlen = numlen_in
         parts  = split_nobjs_even(nptcls, ndocs)
         ! convert from flag to enumerator to integer
-        isegment = self%oritype2segment(oritype)
+        isegment = which_flag2segment(oritype)
         ! allocate merged oris
         call self%new_seg_with_ptr( nptcls, oritype, os_ptr )
         ! read & transfer
@@ -1555,7 +1568,7 @@ contains
         select case(fname2format(fname))
             case('O')
                 ! *.simple project file
-                isegment = which_flag2isgement(which)
+                isegment = which_flag2segment(which)
                 call self%bos%open(fname)
                 call self%segreader(isegment)
                 call self%bos%close
@@ -1808,37 +1821,37 @@ contains
 
     ! private supporting subroutines / functions
 
-    function which_flag2isgement( which ) result( isegment )
+    integer function which_flag2segment( which )
         character(len=*),  intent(in) :: which
         integer :: isegment
         select case(trim(which))
             case('mic')
-                isegment = MIC_SEG
+                which_flag2segment = MIC_SEG
             case('stk')
-                isegment = STK_SEG
+                which_flag2segment = STK_SEG
             case('ptcl2D')
-                isegment = PTCL2D_SEG
+                which_flag2segment = PTCL2D_SEG
             case('cls2D')
-                isegment = CLS2D_SEG
+                which_flag2segment = CLS2D_SEG
             case('cls3D')
-                isegment = CLS3D_SEG
+                which_flag2segment = CLS3D_SEG
             case('ptcl3D')
-                isegment = PTCL3D_SEG
+                which_flag2segment = PTCL3D_SEG
             case('out')
-                isegment = OUT_SEG
+                which_flag2segment = OUT_SEG
             case('frcs')
-                isegment = FRCS_SEG
+                which_flag2segment = FRCS_SEG
             case('fscs')
-                isegment = FSCS_SEG
+                which_flag2segment = FSCS_SEG
             case('projinfo')
-                isegment = PROJINFO_SEG
+                which_flag2segment = PROJINFO_SEG
             case('jobproc')
-                isegment = JOBPROC_SEG
+                which_flag2segment = JOBPROC_SEG
             case('compenv')
-                isegment = COMPENV_SEG
+                which_flag2segment = COMPENV_SEG
             case DEFAULT
                 stop 'unsupported which flag; sp_project :: which_flag2isgement'
         end select
-    end function which_flag2isgement
+    end function which_flag2segment
 
 end module simple_sp_project

@@ -152,11 +152,11 @@ contains
         class(resmask_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)  :: p
-        type(build)   :: b
+        !type(build)   :: b
         type(masker)  :: mskvol
         p = params(cline)
         p%boxmatch = p%box                  ! turns off boxmatch logics
-        call b%build_general_tbox(p, cline) ! general objects built
+        !call b%build_general_tbox(p, cline) ! general objects built
         call mskvol%new([p%box,p%box,p%box], p%smpd)
         if( file_exists(p%mskfile) )then
             call mskvol%read(p%mskfile)

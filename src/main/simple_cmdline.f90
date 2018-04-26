@@ -56,7 +56,7 @@ contains
         type(args)                     :: allowed_args
         class(simple_program), pointer :: ptr2prg => null()
         character(len=STDLEN)          :: arg
-        integer :: i, cmdstat, cmdlen, ikey, pos, nreq, nargs_required, sz_keys_req
+        integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt  = command_argument_count()
         call get_command(self%entire_line)
@@ -85,9 +85,7 @@ contains
         endif
         ! get required keys
         sz_keys_req = ptr2prg%get_nrequired_keys()
-
-        ! print *, 'sz_keys_req: ', sz_keys_req
-
+        !if( ptr2prg%requires_sp_project() )sz_keys_req = sz_keys_req - 1 ! to take care of implicit projfile arg
         if( sz_keys_req > 0 )then
             keys_required  = ptr2prg%get_required_keys()
 

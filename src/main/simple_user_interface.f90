@@ -910,7 +910,9 @@ contains
         call ctf_estimate%set_input('srch_ctrls', 4, astigtol)
         ! filter controls
         call ctf_estimate%set_input('filt_ctrls', 1, lp)
+        ctf_estimate%filt_ctrls(1)%required     = .false.
         call ctf_estimate%set_input('filt_ctrls', 2, hp)
+        ctf_estimate%filt_ctrls(2)%required     = .false.
         ! mask controls
         ! <empty>
         ! computer controls

@@ -498,7 +498,7 @@ contains
         endif
     end function fname2ext
 
-    !> strip directory and suffix from filenames
+    !> strip directory from filenames
     pure function basename( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname

@@ -60,6 +60,7 @@ contains
     procedure          :: open
     procedure          :: read
     procedure          :: write
+    procedure          :: write_jpg
     ! GETTERS/SETTERS
     procedure          :: get_array_shape
     procedure          :: get_ldim
@@ -1117,6 +1118,38 @@ contains
             call simple_stop('ERROR, nonexisting image cannot be written to disk; write; simple_image')
         endif
     end subroutine write
+
+    subroutine write_jpg( self, fname, quality, colorspec, norm )
+        use simple_jpg, only: jpg_img
+        class(image),               intent(inout) :: self
+        character(len=*),           intent(in)    :: fname
+        integer,          optional, intent(in)    :: quality, colorspec
+        logical,          optional, intent(in)    :: norm
+        type(jpg_img)     :: jpg
+        real, allocatable :: pixels(:)
+        real              :: ave, sdev, var
+        integer           :: status
+        logical           :: norm_here, err
+        if(present(norm))norm_here = norm
+        if( norm )then
+            pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+            call moment(pixels, ave, sdev, var, err)
+            deallocate(pixels)
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 128. + (self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave) * (10. / sdev)
+            where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 255. )
+                self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 255.
+            else where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0. )
+                self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 0.
+            end where
+        endif
+        if( self%is_2d() )then
+            status = jpg%writejpg(trim(fname), self%rmat(:self%ldim(1),:self%ldim(2),1),&
+                &quality=quality, colorspec=colorspec)
+        else
+            status = jpg%writejpg(trim(fname), self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &quality=quality, colorspec=colorspec)
+        endif
+    end subroutine write_jpg
 
     ! GETTERS/SETTERS
 

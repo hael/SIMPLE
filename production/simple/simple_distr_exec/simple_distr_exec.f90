@@ -162,7 +162,6 @@ select case(prg)
         call xreconstruct3D_distr%execute( cline )
     case( 'symsrch' )
         call cline%parse()
-        if( cline%defined('compare') ) stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         if( .not. cline%defined('nspace') )then
             call cline%set('nspace', 50.) ! 50 projections 4 symsrch
         endif

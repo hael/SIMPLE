@@ -48,7 +48,7 @@ contains
 
     subroutine exec_make_cavgs( self, cline )
         class(make_cavgs_commander), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
         type(params)  :: p
         type(build)   :: b
         integer :: ncls_here
@@ -246,7 +246,7 @@ contains
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call cluster_cavgs_exec( b, p )
-         ! end gracefully
+        !  ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_cluster_cavgs
 

@@ -176,7 +176,7 @@ contains
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
         if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
-        ! add movies
+        ! CTF
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
         else
@@ -199,6 +199,11 @@ contains
         end select
         ctfvars%l_phaseplate = .false.
         if( trim(p%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
+        ! update project info
+        call spproj%update_projinfo( cline )
+        ! update computer environment
+        call spproj%update_compenv( cline )
+        ! updates segment
         call spproj%add_movies(p%filetab, ctfvars)
         ! add boxtab
         if( inputted_boxtab )then
@@ -214,10 +219,6 @@ contains
                 call spproj%os_mic%set(i, 'boxfile', trim(boxfnames(i)))
             end do
         endif
-        ! update project info
-        call spproj%update_projinfo( cline )
-        ! update computer environment
-        call spproj%update_compenv( cline )
         ! write project file
         call spproj%write
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')

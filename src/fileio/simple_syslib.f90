@@ -465,10 +465,10 @@ contains
         character(len=*),  intent(in) :: cmdline
         logical, optional, intent(in) :: waitflag, suppress_errors
         character(len=LONGSTRLEN) :: cmsg
-        character(len=STDLEN) :: cmdmsg
+        character(len=STDLEN)     :: cmdmsg
         character(13) :: suppress_msg="2>/dev/null"
-        integer ::  cstat, exec_stat
-        logical :: l_doprint, wwait
+        integer       ::  cstat, exec_stat
+        logical       :: l_doprint, wwait
         l_doprint = .false.
         wwait     = .true.
         if( present(waitflag) ) wwait = waitflag
@@ -544,9 +544,9 @@ contains
 
     !> simple_getenv gets the environment variable string and status
     function simple_getenv( name , retval, allowfail)  result( status )
-        character(len=*), intent(in)       :: name
+        character(len=*),      intent(in)  :: name
         character(len=STDLEN), intent(out) :: retval
-        logical, intent(in),optional       :: allowfail
+        logical,     optional, intent(in)  :: allowfail
         integer                            :: length, status
 ! #if defined(PGI)
 !         call getenv( trim(adjustl(name)), retval)
@@ -561,7 +561,7 @@ contains
         endif
         if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
         if( length ==  0 .or. status /= 0 )then
-            retval=""
+            retval = ""
             return
         end if
 !#endif
@@ -1723,31 +1723,35 @@ contains
     end subroutine simple_dump_mem_usage
 
 
-    function simple_full_path (infile) result(absolute_name)
-        character(len=*), intent(in)  :: infile
-        character(len=PATH_MAX) :: absolute_name
-        integer(1), dimension(:), pointer          :: iptr
+    subroutine simple_full_path (infile, absolute_name, errmsg)
+        character(len=*),              intent(in)  :: infile, errmsg
+        character(len=:), allocatable, intent(out) :: absolute_name
         type(c_ptr)                                :: cstring
-        character(kind=c_char), pointer            :: fstring(:)
+        integer(1),          dimension(:), pointer :: iptr
+        character(kind=c_char),            pointer :: fstring(:)
+        character(len=LINE_MAX_LEN),       target  :: fstr
+        character(kind=c_char,len=STDLEN)          :: infilename_c
+        character(kind=c_char,len=LONGSTRLEN)      :: outfilename_c
         integer :: slen, i
         integer :: lengthin, status, lengthout
-        character(len=LINE_MAX_LEN), target :: fstr
-        character(kind=c_char,len=STDLEN)   :: infilename_c
-        character(kind=c_char,len=PATH_MAX) :: outfilename_c
-
-        lengthin = len_trim(infile)
-        cstring = c_loc(fstr)
+        if( .not.file_exists(trim(infile)) )then
+            write(*,*)'File does not exists: ', trim(infile)
+            write(*,*)trim(errmsg)
+            stop
+        endif
+        lengthin     = len_trim(infile)
+        cstring      = c_loc(fstr)
         infilename_c = trim(infile)//achar(0)
-        status = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
+        status       = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
         if(global_debug) print *, " out string ", trim(outfilename_c(1:lengthout))
         if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
-        !   print *," fstr ", trim(adjustl(fstr))
+        if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
-           absolute_name= trim(outfilename_c(1:lengthout))
+           allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))
         else
-            absolute_name =infile
+            allocate(absolute_name, source=trim(infile))
         end if
-    end function simple_full_path
+    end subroutine simple_full_path
 
 
 end module simple_syslib

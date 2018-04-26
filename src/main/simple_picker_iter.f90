@@ -17,13 +17,13 @@ contains
     subroutine iterate( self, cline, p, moviename_intg, boxfile, nptcls_out, dir_out )
         use simple_params,  only: params
         use simple_cmdline, only: cmdline
-        class(picker_iter),    intent(inout) :: self
-        class(cmdline),        intent(in)    :: cline
-        class(params),         intent(inout) :: p
-        character(len=*),      intent(in)    :: moviename_intg
-        character(len=LONGSTRLEN), intent(out)   :: boxfile
-        integer,               intent(out)   :: nptcls_out
-        character(len=*),      intent(in)    :: dir_out
+        class(picker_iter),    intent(inout)   :: self
+        class(cmdline),        intent(in)      :: cline
+        class(params),         intent(inout)   :: p
+        character(len=*),      intent(in)      :: moviename_intg
+        character(len=LONGSTRLEN), intent(out) :: boxfile
+        integer,               intent(out)     :: nptcls_out
+        character(len=*),      intent(in)      :: dir_out
         if( .not. file_exists(moviename_intg) )then
             write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
         endif

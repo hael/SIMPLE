@@ -49,7 +49,6 @@ real                            :: nsig_here      = 6.0       !< nr of sigmas (f
 logical                         :: do_dose_weight = .false.   !< dose weight or not
 logical                         :: doscale        = .false.   !< scale or not
 logical                         :: doprint        = .true.    !< print out correlations
-logical                         :: profile        = .true.    !< profiling mode or not
 logical                         :: existence      = .false.   !< to indicate existence
 
 integer, parameter :: MITSREF    = 30 !< max nr iterations of refinement optimisation
@@ -69,7 +68,7 @@ contains
         real, optional,    intent(in)    :: nsig              !< # sigmas (for outlier removal)
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
-        integer :: iframe, iter, nimproved, ires, updateres, i
+        integer :: iframe, iter, nimproved, updateres, i
         logical :: didsave, didupdateres, err_stat
         ! initialise
         nsig_here = 6.0
@@ -219,7 +218,7 @@ contains
         class(params),    intent(inout) :: p                  !< params object
         type(image)          :: tmpmovsum
         real                 :: moldiam, dimo4
-        integer              :: iframe, ncured, wisz, deadhot(2), i, j, winsz
+        integer              :: iframe, ncured, deadhot(2), i, j, winsz
         real                 :: time_per_frame, current_time
         integer, parameter   :: HWINSZ = 6
         real,    allocatable :: rmat(:,:,:), rmat_pad(:,:), win(:,:)
@@ -338,7 +337,6 @@ contains
     !! \param movie_sum_ctf CTF sum
     subroutine motion_correct_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
         type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        integer :: iframe
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
@@ -359,7 +357,6 @@ contains
     subroutine motion_correct_calc_sums_2( movie_sum_corrected, fromto )
         type(image), intent(out) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
-        integer :: iframe
         logical :: l_tmp
         ! re-calculate the weighted sum with dose_weighting turned off
         l_tmp = do_dose_weight
@@ -378,7 +375,6 @@ contains
         integer,     intent(inout) :: frame_counter  !< frame counter
         real,        intent(in)    :: time_per_frame !< time resolution
         type(image), intent(out)   :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        integer :: iframe
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
@@ -440,7 +436,6 @@ contains
 
     subroutine calc_corrs()
         integer :: iframe
-        real    :: old_corr
         do iframe=1,nframes
             ! subtract the movie frame being correlated to reduce bias
             call subtract_movie_frame(iframe)

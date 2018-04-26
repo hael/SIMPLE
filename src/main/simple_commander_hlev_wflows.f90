@@ -68,20 +68,22 @@ contains
         logical               :: scaling
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        ! default goal function is b-factor weighted standard cross-correlation
-        if( .not.cline%defined('objfun') )call cline%set('objfun', 'ccres')
         ! parameters
         p_master = params(cline, del_scaled=.true.)
         nparts   = p_master%nparts
         if( p_master%l_autoscale )then
+            call cline%delete('objfun') ! stage dependent objective function
             ! SPLITTING
             call spproj%read(p_master%projfile )
+            print *,'before splitting'
+            call flush(6)
             call spproj%split_stk(p_master%nparts)
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
+            call cline_cluster2D_stage1%set('objfun', 'cc')
             call cline_cluster2D_stage1%delete('automsk')
             if( p_master%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
@@ -90,8 +92,12 @@ contains
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
             ! Scaling
+            print *,'before scaling'
+            call flush(6)
             call spproj%scale_projfile(p_master%smpd_targets2D(1), projfile_sc,&
                 &cline_cluster2D_stage1, cline_scale1)
+            print *,'after scaling'
+            call flush(6)
             call spproj%kill
             scale_stage1 = cline_scale1%get_rarg('scale')
             scaling      = trim(projfile_sc) /= trim(p_master%projfile)
@@ -133,6 +139,7 @@ contains
             !          learning for acceleration, objective function is resolution weighted
             !          cross-correlation with automtic fitting of B-factors
             cline_cluster2D_stage2 = cline
+            call cline_cluster2D_stage2%set('objfun', 'ccres')
             if( p_master%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then

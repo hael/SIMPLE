@@ -47,4 +47,3 @@ character(len = 20), parameter :: tempdir       = "/tmp/"
 character(len = 20), parameter :: temp_filelist = "__simple_filelist__"
 character(len = 20), parameter :: ls_command    = "/bin/ls "
 character(len = 36), parameter :: list_subdirs  = "find . -maxdepth 1 -type d -print0"
-integer, parameter :: PATH_MAX = 4096

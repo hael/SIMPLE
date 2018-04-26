@@ -69,7 +69,7 @@ type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 
 ! OTHER DECLARATIONS
-character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
+!character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos

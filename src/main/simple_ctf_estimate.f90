@@ -180,7 +180,7 @@ contains
         call ppspec_ref%norm()
         call pspec_ctf%mul(imgmsk)
         pspec_half_n_half = ppspec_ref%before_after(pspec_ctf, cc_msk)
-        call pspec_half_n_half%write(trim(diagfname), 1)
+        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
         call pspec_half_n_half%kill
         ! calculate CTF score diagnostic
         df_avg = dfx + dfy / 2.0

@@ -99,26 +99,26 @@ contains
         ! b%a is now a pointer to a field in b%spproj
         select case(p%spproj_a_seg)
             case(MIC_SEG)
-                call self%spproj%os_mic%new(p%nptcls)
+                call self%spproj%os_mic%new_clean(p%nptcls)
                 self%a => self%spproj%os_mic
             case(STK_SEG)
-                call self%spproj%os_stk%new(p%nptcls)
+                call self%spproj%os_stk%new_clean(p%nptcls)
                 self%a => self%spproj%os_stk
             case(PTCL2D_SEG)
-                call self%spproj%os_ptcl2D%new(p%nptcls)
+                call self%spproj%os_ptcl2D%new_clean(p%nptcls)
                 self%a => self%spproj%os_ptcl2D
             case(CLS2D_SEG)
-                call self%spproj%os_cls2D%new(p%nptcls)
+                call self%spproj%os_cls2D%new_clean(p%nptcls)
                 self%a => self%spproj%os_cls2D
             case(CLS3D_SEG)
                 call self%spproj%os_cls3D%new_clean(p%nptcls)
                 self%a => self%spproj%os_cls3D
             case(PTCL3D_SEG)
-                call self%spproj%os_ptcl3D%new(p%nptcls)
+                call self%spproj%os_ptcl3D%new_clean(p%nptcls)
                 self%a => self%spproj%os_ptcl3D
             case DEFAULT
                 ! using ptcl3D as the generic segment
-                call self%spproj%os_ptcl3D%new(p%nptcls)
+                call self%spproj%os_ptcl3D%new_clean(p%nptcls)
                 self%a => self%spproj%os_ptcl3D
         end select
         ! meta data input

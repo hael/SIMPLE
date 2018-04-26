@@ -15,8 +15,8 @@ public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest,&
 comlin_coarsesrch_symaxis, comlin_singlesrch_symaxis, comlin_srch_pair
 private
 #include "simple_local_flags.inc"
-integer, parameter :: NPROJC1    = 40
-integer, parameter :: NPROJ      = 20
+integer, parameter :: NPROJC1    = 400
+integer, parameter :: NPROJ      = 200
 integer, parameter :: NBEST      = 30
 integer, parameter :: NBEST_PAIR = 10
 integer, parameter :: ANGSTEP    = 10

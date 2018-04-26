@@ -387,6 +387,7 @@ type :: params
     logical :: l_dev          = .false.
   contains
     procedure, private :: set_char_defaults
+    procedure, private :: set_img_format
     procedure          :: new
 end type params
 
@@ -496,6 +497,20 @@ contains
         allocate(self%wfun,          source='kb')
     end subroutine set_char_defaults
 
+    subroutine set_img_format( self, ext )
+        class(params),    intent(inout) :: self
+        character(len=*), intent(in)    :: ext
+        select case(trim(ext))
+            case('M','D','B')
+                self%ext = '.mrc'
+            case('S')
+                self%ext = '.spi'
+            case DEFAULT
+                write(*,*)'format: ', trim(ext)
+                call simple_stop('This file format is not supported by SIMPLE; set_img_format; simple_params')
+        end select
+    end subroutine set_img_format
+
     !> \brief  is a constructor
     function constructor( cline, allow_mix, del_scaled, spproj_a_seg ) result( self )
         class(cmdline),    intent(inout) :: cline
@@ -511,10 +526,10 @@ contains
         class(cmdline),    intent(inout)   :: cline
         logical, optional, intent(in)      :: allow_mix, del_scaled
         integer, optional, intent(in)      :: spproj_a_seg
-        character(len=:), allocatable :: sp_files(:)
-        character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag
+        character(len=:),      allocatable :: sp_files(:)
+        character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt
+        character(len=:), allocatable      :: debug_local, verbose_local
         logical,               allocatable :: vol_defined(:)
-        character(len=:), allocatable :: debug_local, verbose_local
         character(len=STDLEN) :: stk_part_fname, cwd_tmp
         character(len=1)      :: checkupfile(50)
         type(binoris)         :: bos
@@ -1050,6 +1065,15 @@ contains
             else
                 ! nothing to do for streaming, values set at runtime
             endif
+            ! image format
+            if( trim(self%ext).eq.'' )then
+                call bos%read_first_segment_record(PROJINFO_SEG, o)
+                if( o%isthere('imgfmt') )then
+                    call o%getter('imgfmt', imgfmt)
+                    call self%set_img_format(fname2format('dummy.'//trim(imgfmt)))
+                endif
+                call o%kill
+            endif
             ! CTF plan
             select case(trim(self%oritype))
                 case('ptcl2D', 'ptcl3D')
@@ -1530,14 +1554,7 @@ contains
                             endif
                         end do
                     end do
-                    select case(checkupfile(1))
-                        case('M','D','B')
-                            self%ext = '.mrc'
-                        case('S')
-                            self%ext = '.spi'
-                        case DEFAULT
-                            call simple_stop('This file format is not supported by SIMPLE; check_file_formats; simple_params')
-                    end select
+                    call self%set_img_format(checkupfile(1))
                 endif
             end subroutine check_file_formats
 
@@ -1553,15 +1570,7 @@ contains
                         form = fname2format(fname)
                         call fclose(funit, &
                             errmsg="In params:: double_check_file_formats fclose failed "//trim(self%filetab) )
-                        select case(form)
-                        case('M','D','B')
-                                self%ext = '.mrc'
-                            case('S')
-                                self%ext = '.spi'
-                            case DEFAULT
-                                write(*,*) 'format string is ', form
-                                call simple_stop('File format is not supported by SIMPLE; double_check_file_formats; simple_params')
-                        end select
+                        call self%set_img_format(form)
                     endif
                 endif
             end subroutine double_check_file_formats

@@ -202,7 +202,7 @@ contains
     end subroutine setNormalised
 
     function montage (self, fname, in_buffer, quality, colorspec) result(status)
-        class(jpg_img), intent(inout)    :: self
+        class(jpg_img),   intent(inout)  :: self
         character(len=*), intent(inout)  :: fname
         real,    intent(in)              :: in_buffer(:,:,:)
         integer, intent(in), optional    :: quality
@@ -213,12 +213,11 @@ contains
         real, allocatable                :: new_buffer(:,:)
         character(len=STDLEN)            :: fstr
         status = 1
-        VerbosePrint ' In save_jpeg_r4_3D '
-        fname = trim(adjustl(fname))
-        c=4
+        fname  = trim(adjustl(fname))
+        c      = 4
         !if(fname(len_trim(fname)) == c_null_char) c=5
         w = size(in_buffer,1)
-        h= size(in_buffer,2)
+        h = size(in_buffer,2)
         d = size(in_buffer,3)
         if(w == 0 .or. h == 0) return
         if (d == 1) then
@@ -231,33 +230,31 @@ contains
             allocate(new_buffer(w*dx, h*dy), source=0.0)
             new_buffer = reshape(in_buffer, newshape)
         end if
-
         write(fstr, '(a)') fname//c_null_char
-        status = self%save_jpeg_r4 (fstr, new_buffer, quality, colorspec)
+        status = self%save_jpeg_r4(fstr, new_buffer, quality, colorspec)
         deallocate(new_buffer)
     end function montage
 
-
     function save_jpeg_r4_3D (self, fname, in_buffer, quality, colorspec) result(status)
         class(jpg_img),   intent(inout)        :: self
-        character(len=*), intent(inout)        :: fname
+        character(len=*), intent(in)           :: fname
         real,             intent(in)           :: in_buffer(:,:,:)
         integer,          intent(in), optional :: quality
         integer,          intent(in), optional :: colorspec
+        character(len=:), allocatable :: fname_here
         type(c_ptr)           ::  img
         integer               ::  w,h,c,slice
         integer               ::  status
         character(len=STDLEN) ::  fstr
          status = 1
         VerbosePrint ' In save_jpeg_r4_3D '
-        fname = trim(adjustl(fname))
+        fname_here = trim(adjustl(fname))
         c=4
-        !if(fname(len_trim(fname)) == c_null_char) c=5
         w = size(in_buffer,1)
         h= size(in_buffer,2)
         if(w == 0 .or. h == 0) return
         do slice=1, size(in_buffer,3)
-            write(fstr, '(a,i4.4,a)') fname(1:(len_trim(fname)-c))//'_',slice,'.jpg'//c_null_char
+            write(fstr, '(a,i4.4,a)') fname_here(1:(len_trim(fname_here)-c))//'_',slice,'.jpg'//c_null_char
             !            fstr = trim(adjustl(fstr))
             status = self%save_jpeg_r4 (fstr, in_buffer(:,:,slice), quality, colorspec)
             !    if(status /= 0 ) call simple_stop('save_jpeg_r4_3D call to save_jpeg_r4  failed' )
@@ -269,23 +266,22 @@ contains
         !        deallocate(fstr)
     end function save_jpeg_r4_3D
 
-    function save_jpeg_r4 (self, fname, in_buffer, quality, colorspec) result(status)
-        class(jpg_img), intent(inout)   :: self
-        character(len=*), intent(inout) :: fname
-        real, intent(in)                :: in_buffer(:,:)
-        integer, intent(in), optional   :: quality
-        integer, intent(in), optional   :: colorspec
-        type(c_ptr)                     :: img
-        integer                         :: w, h,c, i, j
+    function save_jpeg_r4(self, fname, in_buffer, quality, colorspec) result(status)
+        class(jpg_img),    intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        real,              intent(in)    :: in_buffer(:,:)
+        integer, optional, intent(in)    :: quality, colorspec
+        type(c_ptr)                      :: img
+        integer                          :: w, h,c, i, j
         real lo, hi
         integer                         :: status
         integer(c_int)                  :: pixel
         character(len=:), allocatable   :: fstr
         status = 1
-        c=1
+        c      = 1
         ! verbose=.true.
         VerbosePrint '>>> In save_jpeg_r4 '
-        self%width =0
+        self%width  = 0
         self%height = 0
         w = size(in_buffer,1)
         h = size(in_buffer,2)
@@ -298,7 +294,6 @@ contains
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
         VerbosePrint '>>> In save_jpeg_r4 input lo hi ', lo, hi
-        print *, in_buffer
         allocate(self%img_buffer(w*h*3))!, source=0_c_char)
         !  self%img_buffer = reshape(in_buffer, (/ w*h /) )
         do j=0,h-1
@@ -310,25 +305,17 @@ contains
                     self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , z'000000ff') ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
-                    DebugPrint (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i)*c + (j) * w * c+ 1)
+                    !DebugPrint (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i)*c + (j) * w * c+ 1)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*REAL( (in_buffer(i+1,j+1)-lo)/REAL(hi - lo) ) ,kind=c_int)
                     pixel =  IAND( pixel , z'00ffffff')
                     self%img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
-                    print *, (i*c)+(j*w*c) + 1, in_buffer(i+1,j+1), pixel, self%img_buffer(i*c + j*w*c + 1)
                 end if
 
             end do
         end do
-        do i=1,w
-            do j=1,h
-                print *,i + j*w,  self%img_buffer(i + (j-1)*w)
-            end do
-        end do
-
         img = c_loc(self%img_buffer)
-
         !   if(c_associated(img, c_loc(self%img_buffer))) &
         !       call simple_stop( 'save_jpeg img buffer and C pointer do not point to same target')
         !   print *, "shape img ", shape(img)
@@ -351,7 +338,7 @@ contains
 
     function save_jpeg_i4 (self, fname, in_buffer, quality, colorspec) result(status)
         class(jpg_img), intent(inout)   :: self
-        character(len=*), intent(inout) :: fname
+        character(len=*), intent(in)    :: fname
         integer, intent(in)             :: in_buffer(:,:)
         integer, intent(in), optional   :: quality, colorspec
         type(c_ptr)                     :: img
@@ -383,13 +370,11 @@ contains
                     self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , z'000000ff') ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
-                    print *, (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i-1)*c + (j-1) * w * c+ 1)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*( REAL(in_buffer(i+1,j+1)-lo) / REAL(hi - lo) ) ,kind=c_int)
                     pixel =  IAND( pixel , z'00ffffff')
                     self%img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
-                    print *, (i*c)+(j*w*c) + 1, in_buffer(i+1,j+1), pixel, self%img_buffer(i*c + j*w*c + 1)
                 end if
             end do
         end do
@@ -421,10 +406,7 @@ contains
         status = stbi_read_jpg(fstr, img, w, h, c )
         if(status ==0) call simple_stop ("simple_jpg::load_jpeg_r4 stbi_read_jpeg failed ")
         status=0
-        print *, " read_jpeg returned img width x height ", w, h
-        print *, "shape img ", shape(img)
         if(associated(imgbuffer)) nullify(imgbuffer)
-
         bshape = (/ w * h /)
         call c_f_pointer(img,imgbuffer, bshape)
         VerbosePrint 'load_jpeg_r4 img size / shape', size(imgbuffer), shape(imgbuffer)
@@ -485,7 +467,6 @@ contains
         VerbosePrint 'load_jpeg_i4 img_buffer l/u bounds ', lbound(imgbuffer), ubound(imgbuffer)
         VerbosePrint 'load_jpeg_i4 img_buffer ', associated(imgbuffer)
         VerbosePrint 'load_jpeg_i4 img_buffer '
-        print *, imgbuffer
         allocate(out_buffer(w,h))
         do j=0,h-1
             do i=0,w-1

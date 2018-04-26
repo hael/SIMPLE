@@ -620,10 +620,9 @@ contains
         class(cmdline),         intent(inout) :: cline
         type(params)                          :: p
         type(build)                           :: b
-        integer                               :: nfiles, ldim(3), ifile, ifoo, nmovies, cnt
-        integer                               :: imovie, iframe, lfoo(3), nimgs, iimg
+        integer                               :: nfiles, ldim(3), ifile, ifoo, cnt
+        integer                               :: lfoo(3), nimgs, iimg
         character(len=STDLEN), allocatable    :: filenames(:)
-        character(len=:), allocatable         :: moviename
         type(image)                           :: tmp, frameimg
         real                                  :: mm(2)
         if( cline%defined('lp') )then

@@ -14,7 +14,7 @@ logical :: passed, dir_e
 character(len=8)      :: datestr
 character(len=STDLEN) :: folder,  oldCWDfolder, curDir
 character(len=30)     :: fname
-integer(kind=8) :: valueRSS,valuePeak,valueSize,valueHWM
+integer(kind=8)       :: valueRSS,valuePeak,valueSize,valueHWM
 global_verbose=.true.
 call seed_rnd
 call date_and_time(date=datestr)
@@ -113,7 +113,7 @@ call simple_getcwd (cur_working_dir)
 print *, '      CWD:', cur_working_dir
 
 print *, '>>> Syslib function Test 1d: simple_full_path / canonicalize_file_name'
-aname = simple_full_path("./")
+call simple_full_path("./", aname,'simple_test_syslib')
 print *,'      absolute path "./": ', trim(aname)
 if(allocated(aname)) deallocate(aname)
 
