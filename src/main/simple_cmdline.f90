@@ -85,14 +85,8 @@ contains
         endif
         ! get required keys
         sz_keys_req = ptr2prg%get_nrequired_keys()
-        !if( ptr2prg%requires_sp_project() )sz_keys_req = sz_keys_req - 1 ! to take care of implicit projfile arg
         if( sz_keys_req > 0 )then
             keys_required  = ptr2prg%get_required_keys()
-
-            ! do i=1,size(keys_required)
-            !     print *, i, keys_required(i)%str
-            ! end do
-
             nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
         else
             nargs_required = 1

@@ -198,7 +198,7 @@ contains
     subroutine exec_motion_correct_tomo_distr( self, cline )
         use simple_oris, only: oris
         class(motion_correct_tomo_distr_commander), intent(inout) :: self
-        class(cmdline),                            intent(inout) :: cline
+        class(cmdline),                             intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
         type(oris)               :: exp_doc
         integer                  :: nseries, ipart
@@ -375,8 +375,7 @@ contains
 
     subroutine exec_make_cavgs_distr( self, cline )
         class(make_cavgs_distr_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        ! type(split_commander) :: xsplit
+        class(cmdline),                    intent(inout) :: cline
         type(cmdline)         :: cline_cavgassemble
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -397,6 +396,7 @@ contains
         ! prepare command lines from prototype master
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg', 'cavgassemble')
+        call cline_cavgassemble%set('projfile', trim(p_master%projfile))
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble class averages
@@ -595,7 +595,6 @@ contains
         use simple_commander_rec
         class(refine3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        ! type(split_commander) :: xsplit
         type(cmdline)         :: cline_volassemble
         type(qsys_env)        :: qenv
         type(build)           :: b

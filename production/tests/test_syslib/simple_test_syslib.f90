@@ -265,86 +265,86 @@ print *, '>>>'
 print *, '>>> Syslib function Test 4: FILE LISTING FUNCITONS '
 print *, '>>>'
 print *, '>>> Syslib function Test 4a: simple_list_files / get_file_list -- Root directory'
-res = simple_list_files ("/", status=io_stat)
-if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-    print *, '      simple_list_files or get_file_list failed '
-    call simple_stop("simple_list_files '/' failed ",__FILENAME__,__LINE__)
-    passed=.false.
-else
-    print *, '      simple_list_files: args("/")                  :success'
-    if(debug)then
-        print *,"    file list num files:  size ", size(res)
-        print *,"    files: "
-        do i=1, size(res)
-            write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
-        enddo
-    endif
-endif
-if(allocated(res))deallocate(res)
+! res = simple_list_files ("/", status=io_stat)
+! if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
+!     print *, '      simple_list_files or get_file_list failed '
+!     call simple_stop("simple_list_files '/' failed ",__FILENAME__,__LINE__)
+!     passed=.false.
+! else
+!     print *, '      simple_list_files: args("/")                  :success'
+!     if(debug)then
+!         print *,"    file list num files:  size ", size(res)
+!         print *,"    files: "
+!         do i=1, size(res)
+!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!             !       print *, res(i)
+!         enddo
+!     endif
+! endif
+! if(allocated(res))deallocate(res)
 
 
-print *, '>>> Syslib function Test 4b: simple_list_files / get_file_list -- Current directory Empty '
-res = simple_list_files ("", status=io_stat)
-if  (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-    print *, '<<<  simple_list_files or get_file_list failed '
-    call simple_stop("simple_list_files '' failed ",__FILENAME__,__LINE__)
-    passed=.false.
-else
-    print *, '      simple_list_files: args("")                   :success'
-    if(debug)then
-        print *,"    file list num files: ", n, " size ", size(res)
-        print *,"    files: "
-        do i=1, size(res)
-            write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
-        enddo
-    endif
-endif
-if(allocated(res))deallocate(res)
+! print *, '>>> Syslib function Test 4b: simple_list_files / get_file_list -- Current directory Empty '
+! res = simple_list_files ("", status=io_stat)
+! if  (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
+!     print *, '<<<  simple_list_files or get_file_list failed '
+!     call simple_stop("simple_list_files '' failed ",__FILENAME__,__LINE__)
+!     passed=.false.
+! else
+!     print *, '      simple_list_files: args("")                   :success'
+!     if(debug)then
+!         print *,"    file list num files: ", n, " size ", size(res)
+!         print *,"    files: "
+!         do i=1, size(res)
+!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!             !       print *, res(i)
+!         enddo
+!     endif
+! endif
+! if(allocated(res))deallocate(res)
 
 
-print *, '>>> Syslib function Test 4c: simple_list_files / get_file_list -- Current directory with slash '
-call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null ")
-res = simple_list_files ("./", status=io_stat)
-if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-    print *, '<<<  simple_list_files or get_file_list failed '
-    call simple_stop("simple_list_files './' failed ",__FILENAME__,__LINE__)
-    passed=.false.
-else
-    print *, '      simple_list_files: args("./")                 :success'
+! print *, '>>> Syslib function Test 4c: simple_list_files / get_file_list -- Current directory with slash '
+! call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null ")
+! res = simple_list_files ("./", status=io_stat)
+! if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
+!     print *, '<<<  simple_list_files or get_file_list failed '
+!     call simple_stop("simple_list_files './' failed ",__FILENAME__,__LINE__)
+!     passed=.false.
+! else
+!     print *, '      simple_list_files: args("./")                 :success'
+!
+!     if(debug)then
+!         print *,"    num files: ", n, " size ", size(res)
+!         print *,"    files: "
+!         do i=1, size(res)
+!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!             !       print *, res(i)
+!         enddo
+!     endif
+! endif
+! if(allocated(res))deallocate(res)
 
-    if(debug)then
-        print *,"    num files: ", n, " size ", size(res)
-        print *,"    files: "
-        do i=1, size(res)
-            write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
-        enddo
-    endif
-endif
-if(allocated(res))deallocate(res)
-
-print *, '>>> Syslib function Test 4d: simple_list_files / glob_file_list -- single glob (this will emulate "ls *" ) '
-call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null")
-res = simple_list_files (glob="SIMPLE_TEST_FILEIO*/*.txt", status=io_stat)
-if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-    print *, '<<<  simple_list_files or glob_file_list failed '
-    call simple_stop("simple_list_files glob='*' failed ",__FILENAME__,__LINE__)
-    passed=.false.
-else
-    print *, '      simple_list_files: args(glob="*")             :success'
-
-    if(debug)then
-        print *,"    num files: ", size(res)
-        print *,"    files: "
-        do i=1, size(res)
-            write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
-        enddo
-    endif
-endif
-if(allocated(res))deallocate(res)
+! print *, '>>> Syslib function Test 4d: simple_list_files / glob_file_list -- single glob (this will emulate "ls *" ) '
+! call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null")
+! res = simple_list_files (glob="SIMPLE_TEST_FILEIO*/*.txt", status=io_stat)
+! if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
+!     print *, '<<<  simple_list_files or glob_file_list failed '
+!     call simple_stop("simple_list_files glob='*' failed ",__FILENAME__,__LINE__)
+!     passed=.false.
+! else
+!     print *, '      simple_list_files: args(glob="*")             :success'
+!
+!     if(debug)then
+!         print *,"    num files: ", size(res)
+!         print *,"    files: "
+!         do i=1, size(res)
+!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
+!             !       print *, res(i)
+!         enddo
+!     endif
+! endif
+! if(allocated(res))deallocate(res)
 
 
 print *, '>>> Syslib function Test 4e: simple_glob_list_tofile / glob_file_list -- advanced glob  '

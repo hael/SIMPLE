@@ -526,22 +526,21 @@ contains
         class(cmdline),    intent(inout)   :: cline
         logical, optional, intent(in)      :: allow_mix, del_scaled
         integer, optional, intent(in)      :: spproj_a_seg
-        character(len=:),      allocatable :: sp_files(:)
-        character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt
-        character(len=:), allocatable      :: debug_local, verbose_local
+        character(len=STDLEN), allocatable :: sp_files(:)
+        character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt, debug_local, verbose_local
         logical,               allocatable :: vol_defined(:)
-        character(len=STDLEN) :: stk_part_fname, cwd_tmp
+        character(len=STDLEN) :: stk_part_fname, cwd_tmp, executable_tmp
         character(len=1)      :: checkupfile(50)
         type(binoris)         :: bos
         type(ori)             :: o
         integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        integer               :: spproj_a_seg_inputted, idir, nsp_files, stat
-        logical               :: nparts_set, aamix, ddel_scaled
+        integer               :: spproj_a_seg_inputted, idir, nsp_files
+        logical               :: nparts_set, aamix, ddel_scaled, sp_required
         ! set character defaults
         call self%set_char_defaults
-        nparts_set        = .false.
-        debug_local       = 'no'
-        verbose_local     = 'no'
+        nparts_set    = .false.
+        debug_local   = 'no'
+        verbose_local = 'no'
         aamix = .false.
         if( present(allow_mix) ) aamix = allow_mix
         ddel_scaled = .false.
@@ -875,38 +874,49 @@ contains
         ! get process ID
         self%pid = get_process_id()
         ! get name of of executable
-        call getarg(0,self%executable)
-        ! get pointer to program user interface
-        call get_prg_ptr(self%prg, self%ptr2prg)
-        if( self%ptr2prg%requires_sp_project() )then
-            ! sp_project file required, go look for it
+        call getarg(0,executable_tmp)
+        self%executable = trim(executable_tmp)
+        ! look for a project file
+        call simple_list_files('*.simple', sp_files)
+        if( allocated(sp_files) )then
+            nsp_files = size(sp_files)
+        else
+            nsp_files = 0
+        endif
 
-            ! BUGS OUT HERE
+        print *, '1'
+        print *, trim(self%executable)
 
-            sp_files = simple_list_files(glob="*.simple", status=stat)
-            if(stat /= 0) call simple_stop("simple_params simple_list_files failed to find project files")
-            if( allocated(sp_files) )then
-                nsp_files = size(sp_files)
-            else
-                nsp_files = 0
+        if( .not. str_has_substr(self%executable,'private') )then
+            if( nsp_files > 1 )then
+                write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
+                do i=1,nsp_files
+                    write(*,*) trim(sp_files(i))
+                end do
+                stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
             endif
-            select case(nsp_files)
-                case(0)
-                    write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
-                    write(*,*) 'cwd:     ', trim(self%cwd)
-                    stop 'ERROR! no *.simple project file identified; simple_params :: new'
-                case(1)
-                    ! good, we found a single monolithic project file
-                    ! set projfile and projname fields
-                    self%projfile = trim(sp_files(1))
-                    self%projname = basename(self%projfile)
-                case DEFAULT
-                    write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
-                    do i=1,nsp_files
-                        write(*,*) trim(sp_files(i))
-                    end do
-                    stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
-            end select
+
+
+
+            ! get pointer to program user interface
+            call get_prg_ptr(self%prg, self%ptr2prg)
+            sp_required = self%ptr2prg%requires_sp_project()
+        else
+            sp_required = .false.
+        endif
+        if( nsp_files == 0 .and. sp_required )then
+            write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
+            write(*,*) 'cwd:     ', trim(self%cwd)
+            stop 'ERROR! no *.simple project file identified; simple_params :: new'
+        endif
+        if(  nsp_files == 1 )then
+            ! good, we found a single monolithic project file
+            ! set projfile and projname fields
+            self%projfile = trim(sp_files(1))
+            self%projname = get_fbody(self%projfile, 'simple')
+            ! update command line so that prototype copy in distr commanders trasfers the info
+            if( .not. cline%defined('projfile') ) call cline%set('projfile', trim(self%projfile))
+            if( .not. cline%defined('projname') ) call cline%set('projname', trim(self%projname))
         endif
         L_MKDIR_EXEC = .false.
         if( self%mkdir .eq. 'yes' )then
@@ -918,7 +928,7 @@ contains
                 call simple_mkdir('./'//trim(self%exec_dir))
                 ! change to execution directory directory
                 call simple_chdir('./'//trim(self%projname))
-                if( self%ptr2prg%requires_sp_project() )then
+                if( sp_required )then
                     ! copy the project file from upstairs
                     call syslib_copy_file('../'//trim(self%projfile), './'//trim(self%projfile))
                     ! cwd of SP-project will be update in the builder
@@ -1585,14 +1595,7 @@ contains
                 character(len=*),              intent(in)    :: carg
                 character(len=:), allocatable, intent(inout) :: var
                 if( cline%defined(carg) )then
-
-                    print *, 'carg                : ', carg
-                    print *, 'cline%get_carg(carg): ', cline%get_carg(carg)
-
                     var = cline%get_carg(carg)
-
-                    print *, 'var                 : ', var
-
                     DebugPrint carg, '=', var
                 endif
             end subroutine check_carg

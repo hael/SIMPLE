@@ -27,7 +27,6 @@ private
 type :: build
     ! GENERAL TOOLBOX
     type(sp_project)                    :: spproj             !< centralised single-particle project meta-data handler
-    class(simple_program), pointer      :: ptr2prg => null()  !< pointer to user interface of program being executed
     class(oris), pointer                :: a => null()        !< pointer to field in spproj
     type(oris)                          :: e, e_bal           !< discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
@@ -121,9 +120,6 @@ contains
                 call self%spproj%os_ptcl3D%new_clean(p%nptcls)
                 self%a => self%spproj%os_ptcl3D
         end select
-        ! meta data input
-        ! obtain pointer to the program in the simple_user_interface specification
-        call get_prg_ptr(trim(p%prg), self%ptr2prg)
         ! read from project file
         metadata_read = .false.
         if( cline%defined('projfile') )then
@@ -132,8 +128,8 @@ contains
                 stop 'ERROR! build :: build_spproj'
             endif
             metadata_read = .true.
-        else if( associated(self%ptr2prg) )then
-            if( self%ptr2prg%requires_sp_project() ) metadata_read = .true.
+        else if( associated(p%ptr2prg) )then
+            if( p%ptr2prg%requires_sp_project() ) metadata_read = .true.
         endif
         if( metadata_read )then
             call self%spproj%read(p%projfile)
@@ -167,6 +163,8 @@ contains
                 write(*,'(a)') 'but your input orientation table lacks defocus values'
             endif
         endif
+        ! update cwd of project (in case the params class changed exec dir)
+        call self%spproj%projinfo%set(1, 'cwd', trim(p%cwd))
         write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
     end subroutine build_spproj
 

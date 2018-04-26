@@ -1145,7 +1145,7 @@ contains
         &'Import class averages to SIMPLE project',&             ! descr_short
         &'is a program for importing class averages movies to the project',&
         &'simple_exec',&                                         ! executable
-        &1, 1, 0, 0, 0, 0, 0, .false.)                            ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
         call import_cavgs%set_input('img_ios', 1, 'stk', 'file', 'Stack of class averages',&
         &'Stack of class average images to import', 'e.g. cavgs.mrcs', .true., '')
         ! parameter input/output
@@ -1161,7 +1161,7 @@ contains
         &'accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected '&
         &'and integrated. Box files (in EMAN format) can be imported along with the movies',&
         &'simple_exec',&                                         ! executable
-        &1, 7, 0, 0, 0, 0, 0, .false.)                            ! # entries in each group, requires sp_project
+        &1, 7, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call import_movies%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
@@ -1196,7 +1196,7 @@ contains
         &'Import particles to SIMPLE project',&                     ! descr_short
         &'is a program for importing extracted particle images to the project',&
         &'simple_exec',&                                            ! executable
-        &0, 12, 2, 0, 0, 0, 0, .false.)                              ! # entries in each group, requires sp_project
+        &0, 12, 2, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
