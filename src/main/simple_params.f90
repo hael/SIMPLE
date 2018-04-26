@@ -876,6 +876,8 @@ contains
         ! get name of of executable
         call getarg(0,executable_tmp)
         self%executable = trim(executable_tmp)
+        ! get pointer to program user interface
+        call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for a project file
         call simple_list_files('*.simple', sp_files)
         if( allocated(sp_files) )then
@@ -883,11 +885,10 @@ contains
         else
             nsp_files = 0
         endif
-        print *, '1:',nsp_files
-        print *, trim(self%executable)
-
-        if( .not. str_has_substr(self%executable,'private') )then
-            if( .not. cline%defined('projfile') )then ! such that distributed execution can deal with mulpile project files (eg scaling)
+        if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
+            ! the associated(self%ptr2prg) condition required for commanders executed within
+            ! distributed workflows without invoking simple_private_exec
+            if( .not. cline%defined('projfile') )then ! so that distributed execution can deal with mulpile project files (eg scaling)
                 if( nsp_files > 1 )then
                     write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
                     do i=1,nsp_files
@@ -896,15 +897,11 @@ contains
                     stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
                 endif
             endif
-
-
-            ! get pointer to program user interface
-            call get_prg_ptr(self%prg, self%ptr2prg)
             sp_required = self%ptr2prg%requires_sp_project()
         else
             sp_required = .false.
         endif
-        if( nsp_files == 0 .and. sp_required )then
+        if( nsp_files == 0 .and. sp_required .and. .not. cline%defined('projfile') )then
             write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
             write(*,*) 'cwd:     ', trim(self%cwd)
             stop 'ERROR! no *.simple project file identified; simple_params :: new'
@@ -920,7 +917,9 @@ contains
         endif
         L_MKDIR_EXEC = .false.
         if( self%mkdir .eq. 'yes' )then
-            if( .not. str_has_substr(self%executable,'private') )then
+            if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
+                ! the associated(self%ptr2prg) condition required for commanders executed within
+                ! distributed workflows without invoking simple_private_exec
                 ! get next directory number
                 idir          = find_next_int_dir_prefix(self%cwd)
                 self%exec_dir = int2str(idir)//'_'//trim(self%prg)

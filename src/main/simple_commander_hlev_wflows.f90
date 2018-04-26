@@ -71,6 +71,7 @@ contains
         ! parameters
         p_master = params(cline, del_scaled=.true.)
         nparts   = p_master%nparts
+        ! goto 666
         if( p_master%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function
             ! SPLITTING
@@ -192,10 +193,13 @@ contains
         call spproj%write()
         call spproj%kill()
         ! ranking
+    ! 666 finalcavgs = 'cavgs_iter015.mrc'
+    !     last_iter_stage2 = 15
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
         call cline_rank_cavgs%set('projfile', trim(p_master%projfile))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
+        call cline_rank_cavgs%printline
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
         call del_file('start2Drefs'//p_master%ext)

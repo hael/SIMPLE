@@ -5,7 +5,7 @@ implicit none
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
 private
 
-logical, parameter :: DEBUG = .true.
+logical, parameter :: DEBUG = .false.
 
 type simple_input_param
     character(len=:), allocatable :: key
@@ -644,7 +644,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 7, maxits)
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
         call cluster2D%set_input('srch_ctrls', 9, frac)
-        call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function Angstroms^2', 'B-factor in Angstroms^2 (>0.0)', .false., 1000.)
+        call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function in Angstroms^2', 'B-factor in Angstroms^2(>0.0){200}', .false., 200.)
         call cluster2D%set_input('srch_ctrls',11, 'objfun','binary', 'Objective function', 'Objective function(cc|ccres){ccres}', '(cc|ccres){ccres}', .false., 'ccres')
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
@@ -944,7 +944,7 @@ contains
         ! <empty>
         ! filter controls
         call ctfops%set_input('filt_ctrls', 1, ctf)
-        call ctfops%set_input('filt_ctrls', 2, bfac)
+        call ctfops%set_input('filt_ctrls', 2, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1005,7 +1005,7 @@ contains
         filter%filt_ctrls(1)%required = .false.
         call filter%set_input('filt_ctrls', 2, hp)
         call filter%set_input('filt_ctrls', 3, 'phrand', 'binary', 'Phase randomization', 'Fouirer phase randomization by white noise substitution(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call filter%set_input('filt_ctrls', 4, bfac)
+        call filter%set_input('filt_ctrls', 4, 'bfac', 'num', 'B-factor of Gaussian low-/high-pass filter','B-factor of Gaussian low-/high-pass filter in Angstroms^2', 'B-factor in Angstroms^2{0}', .false., 0.)
         call filter%set_input('filt_ctrls', 5, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'winsz in pixels', .false., 1.0)
         call filter%set_input('filt_ctrls', 6, 'width', 'num', 'Cosine low-pass filter falloff',&
         &'Number of cosine edge pixels of Fourier low-pass filter in pixels', '# pixels cosine edge', .false., 10.)
@@ -2270,7 +2270,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call simulate_movie%set_input('filt_ctrls', 1, bfac)
+        call simulate_movie%set_input('filt_ctrls', 1, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2341,7 +2341,7 @@ contains
         ! search controls
         call simulate_particles%set_input('srch_ctrls', 1, pgrp)
         ! filter controls
-        call simulate_particles%set_input('filt_ctrls', 1, bfac)
+        call simulate_particles%set_input('filt_ctrls', 1, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
         call simulate_particles%set_input('filt_ctrls', 2, 'bfacerr', 'num', 'B-factor error', 'Uniform B-factor error(in Angstroms^2)', 'error(in Angstroms^2)', .false., 50.)
         ! mask controls
         call simulate_particles%set_input('mask_ctrls', 1, msk)

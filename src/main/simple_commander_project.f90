@@ -98,7 +98,9 @@ contains
         class(print_project_info_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(sp_project) :: spproj
-        call spproj%read(cline%get_carg('projfile'))
+        type(params)     :: p
+        p = params(cline)
+        call spproj%read(p%projfile)
         call spproj%print_info
         call spproj%kill
         call simple_end('**** PRINT_PROJECT_INFO NORMAL STOP ****')
