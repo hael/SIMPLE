@@ -14,6 +14,7 @@
 #ifdef __APPLE__
 #define _BSD_SOURCE
 #define __DARWIN_C_SOURCE
+#define DT_DIR 4
 #endif
 #include <sys/types.h>
 #include <sys/mman.h>
