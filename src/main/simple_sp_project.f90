@@ -1330,6 +1330,9 @@ contains
         endif
         call self%projinfo%getter(1, 'projfile', projfile)
         call self%projinfo%getter(1, 'projname', projname)
+        if( trim(projname).eq.'' )then
+            projname = get_fbody(projfile, METADATA_EXT, separator=.false.)
+        endif
         ! dimensions
         smpd = self%get_smpd()
         box  = self%get_box()
