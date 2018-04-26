@@ -75,8 +75,6 @@ contains
             call cline%delete('objfun') ! stage dependent objective function
             ! SPLITTING
             call spproj%read(p_master%projfile )
-            print *,'before splitting'
-            call flush(6)
             call spproj%split_stk(p_master%nparts)
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
@@ -92,12 +90,8 @@ contains
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
             ! Scaling
-            print *,'before scaling'
-            call flush(6)
             call spproj%scale_projfile(p_master%smpd_targets2D(1), projfile_sc,&
                 &cline_cluster2D_stage1, cline_scale1)
-            print *,'after scaling'
-            call flush(6)
             call spproj%kill
             scale_stage1 = cline_scale1%get_rarg('scale')
             scaling      = trim(projfile_sc) /= trim(p_master%projfile)
@@ -115,6 +109,7 @@ contains
                 endif
             endif
             ! execution
+            call cline_cluster2D_stage1%set('projfile', trim(projfile_sc))
             call xcluster2D_distr%execute(cline_cluster2D_stage1)
             last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
             ! update original project
@@ -154,6 +149,7 @@ contains
             scaling      = trim(projfile_sc) /= p_master%projfile
             if( scaling ) call xscale_distr%execute( cline_scale2 )
             ! execution
+            call cline_cluster2D_stage2%set('projfile', trim(projfile_sc))
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
             last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext

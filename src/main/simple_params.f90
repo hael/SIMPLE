@@ -883,19 +883,19 @@ contains
         else
             nsp_files = 0
         endif
-
-        print *, '1'
+        print *, '1:',nsp_files
         print *, trim(self%executable)
 
         if( .not. str_has_substr(self%executable,'private') )then
-            if( nsp_files > 1 )then
-                write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
-                do i=1,nsp_files
-                    write(*,*) trim(sp_files(i))
-                end do
-                stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
+            if( .not. cline%defined('projfile') )then ! such that distributed execution can deal with mulpile project files (eg scaling)
+                if( nsp_files > 1 )then
+                    write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
+                    do i=1,nsp_files
+                        write(*,*) trim(sp_files(i))
+                    end do
+                    stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
+                endif
             endif
-
 
 
             ! get pointer to program user interface
