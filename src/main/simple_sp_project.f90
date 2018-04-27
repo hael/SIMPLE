@@ -5,7 +5,7 @@ use simple_oris,    only: oris
 use simple_binoris, only: binoris
 implicit none
 
-public :: sp_project, transfer_sp_project_segment
+public :: sp_project
 private
 
 integer, parameter :: MAXN_OS_SEG = 13
@@ -41,12 +41,13 @@ contains
     ! field updaters
     procedure          :: update_projinfo
     procedure          :: update_compenv
+    procedure          :: append_project
     ! index management
     procedure, private :: map_ptcl_ind2stk_ind
+    procedure          :: map_cavgs_selection
+    ! os_mic related methods
     procedure          :: add_single_movie
     procedure          :: add_movies
-    ! project editing
-    procedure          :: append_project
     ! os_stk related methods
     procedure          :: add_stk
     procedure          :: add_stktab
@@ -92,35 +93,6 @@ contains
 end type sp_project
 
 contains
-
-    ! file-handling
-
-    subroutine transfer_sp_project_segment( fname_provider, fname_reciever, oritype )
-        character(len=*), intent(in) :: fname_provider, fname_reciever, oritype
-        type(sp_project) :: sp_provider, sp_reciever
-        call sp_reciever%read(fname_reciever)
-        call sp_provider%read_segment(oritype, fname_provider)
-        select case(trim(oritype))
-            case('mic')
-                sp_reciever%os_mic    = sp_provider%os_mic
-            case('stk')
-                sp_reciever%os_stk    = sp_provider%os_stk
-            case('ptcl2D')
-                sp_reciever%os_ptcl2D = sp_provider%os_ptcl2D
-            case('cls2D')
-                sp_reciever%os_cls2D  = sp_provider%os_cls2D
-            case('cls3D')
-                sp_reciever%os_cls3D  = sp_provider%os_cls3D
-            case('ptcl3D')
-                sp_reciever%os_ptcl3D = sp_provider%os_ptcl3D
-            case('out')
-                sp_reciever%os_out    = sp_provider%os_out
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: transfer_sp_project_segment'
-        end select
-        call sp_reciever%write(fname_reciever)
-    end subroutine transfer_sp_project_segment
 
     ! field constructor
 
@@ -272,55 +244,6 @@ contains
         endif
     end subroutine update_compenv
 
-    ! index management
-
-    subroutine map_ptcl_ind2stk_ind( self, oritype, iptcl, stkind, ind_in_stk )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: iptcl
-        integer,                   intent(out)   :: stkind
-        integer,                   intent(out)   :: ind_in_stk
-        class(oris), pointer                     :: ptcl_field
-        integer :: nptcls, fromp, top
-        nullify(ptcl_field)
-        ! set field pointer
-        select case(trim(oritype))
-            case('ptcl2D')
-                ptcl_field => self%os_ptcl2D
-            case('ptcl3D')
-                ptcl_field => self%os_ptcl3D
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: map_ptcl_ind2stk_ind'
-        end select
-        nptcls = ptcl_field%get_noris()
-        ! first sanity check, range
-        if( iptcl < 1 .or. iptcl > nptcls )then
-            print *, 'iptcl : ', iptcl
-            print *, 'nptcls: ', nptcls
-            stop 'iptcl index out of range; sp_project :: map_ptcl_ind2stk_ind'
-        endif
-        ! second sanity check, stack index present in ptcl_field
-        if( .not. ptcl_field%isthere(iptcl, 'stkind') )then
-            print *, 'iptcl: ', iptcl
-            print *, 'ERROR, stkind not present in field: ', trim(oritype)
-            stop 'sp_project :: map_ptcl_ind2stk_ind'
-        endif
-        stkind = nint(ptcl_field%get(iptcl, 'stkind'))
-        ! third sanity check, particle index in range
-        fromp = nint(self%os_stk%get(stkind, 'fromp'))
-        top   = nint(self%os_stk%get(stkind, 'top'))
-        if( iptcl < fromp .or. iptcl > top )then
-            print *, 'iptcl            : ', iptcl
-            print *, 'prange for micstk: ', fromp, top
-            stop 'iptcl index out of micstk range; sp_project :: map_ptcl_ind2stk_ind'
-        endif
-        ! output index in stack
-        ind_in_stk = iptcl - fromp + 1
-    end subroutine map_ptcl_ind2stk_ind
-
-    ! project editing
-
     !> append segment to current project. BOTH projects must be read in first!
     subroutine append_project( self, proj, oritype )
         class(sp_project), target, intent(inout) :: self, proj
@@ -379,6 +302,97 @@ contains
                 call self%add_stk(stk, ctfvar, proj%os_ptcl2D)
         end select
     end subroutine append_project
+
+    ! index management
+
+    subroutine map_ptcl_ind2stk_ind( self, oritype, iptcl, stkind, ind_in_stk )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        integer,                   intent(in)    :: iptcl
+        integer,                   intent(out)   :: stkind
+        integer,                   intent(out)   :: ind_in_stk
+        class(oris), pointer                     :: ptcl_field
+        integer :: nptcls, fromp, top
+        nullify(ptcl_field)
+        ! set field pointer
+        select case(trim(oritype))
+            case('ptcl2D')
+                ptcl_field => self%os_ptcl2D
+            case('ptcl3D')
+                ptcl_field => self%os_ptcl3D
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
+                stop 'sp_project :: map_ptcl_ind2stk_ind'
+        end select
+        nptcls = ptcl_field%get_noris()
+        ! first sanity check, range
+        if( iptcl < 1 .or. iptcl > nptcls )then
+            print *, 'iptcl : ', iptcl
+            print *, 'nptcls: ', nptcls
+            stop 'iptcl index out of range; sp_project :: map_ptcl_ind2stk_ind'
+        endif
+        ! second sanity check, stack index present in ptcl_field
+        if( .not. ptcl_field%isthere(iptcl, 'stkind') )then
+            print *, 'iptcl: ', iptcl
+            print *, 'ERROR, stkind not present in field: ', trim(oritype)
+            stop 'sp_project :: map_ptcl_ind2stk_ind'
+        endif
+        stkind = nint(ptcl_field%get(iptcl, 'stkind'))
+        ! third sanity check, particle index in range
+        fromp = nint(self%os_stk%get(stkind, 'fromp'))
+        top   = nint(self%os_stk%get(stkind, 'top'))
+        if( iptcl < fromp .or. iptcl > top )then
+            print *, 'iptcl            : ', iptcl
+            print *, 'prange for micstk: ', fromp, top
+            stop 'iptcl index out of micstk range; sp_project :: map_ptcl_ind2stk_ind'
+        endif
+        ! output index in stack
+        ind_in_stk = iptcl - fromp + 1
+    end subroutine map_ptcl_ind2stk_ind
+
+    subroutine map_cavgs_selection( self, states )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: states(:)
+        integer, allocatable :: pinds(:)
+        integer :: icls, iptcl, sz_cls2D, sz_states, sz_cls3D, ncls
+        real    :: rstate
+        if( self%is_virgin_field('cls2D') )then
+            write(*,*) 'ERROR! cls2D cannot be virgin field if mapping cavgs selection, aborting...'
+            stop 'simple_sp_project :: map_cavgs_selection'
+        endif
+        sz_cls2D  = self%os_cls2D%get_noris()
+        sz_states = size(states)
+        if( sz_cls2D /= sz_states )then
+            write(*,*) 'size(cls2D): ', sz_cls2D
+            write(*,*) 'sz_states  : ', sz_states
+            write(*,*) 'ERROR! size(cls2D) not consistent with size(states), aborting...'
+            stop 'simple_sp_project :: map_cavgs_selection'
+        endif
+        ! map selection to self%os_cls2D
+        do icls=1,sz_cls2D
+            call self%os_cls2D%set(icls, 'state', real(states(icls)))
+        end do
+        ! map selection to self%os_cls3D
+        sz_cls3D = self%os_cls3D%get_noris()
+        if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new_clean(sz_cls2D)
+        do icls=1,sz_cls3D
+            call self%os_cls3D%set(icls, 'state', real(states(icls)))
+        end do
+        ! map selection to self%os_ptcl2D
+        ncls = sz_states
+        if( self%os_ptcl2D%get_noris() > 0 )then
+            do icls=1,ncls
+                call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
+                if( allocated(pinds) )then
+                    rstate = real(states(icls))
+                    do iptcl=1,size(pinds)
+                        call self%os_ptcl2D%set(iptcl, 'state', rstate)
+                    end do
+                    deallocate(pinds)
+                endif
+            end do
+        endif
+    end subroutine map_cavgs_selection
 
     ! os_mic related methods
 
@@ -906,12 +920,12 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd)
+    subroutine add_cavgs2os_out( self, stk, smpd )
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=:), allocatable :: cavg_stk
-        integer :: ldim(3), nptcls, n_os_out
+        character(len=:), allocatable :: cavg_stk, imgkind
+        integer :: ldim(3), nptcls, n_os_out, ind, i
         ! fuul path and existence check
         call simple_full_path(stk, cavg_stk, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
@@ -925,21 +939,35 @@ contains
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then
             n_os_out = 1
+            ind      = 1
             call self%os_out%new_clean(n_os_out)
         else
-            n_os_out = n_os_out + 1
-            call self%os_out%reallocate(n_os_out)
+            ind = 0
+            do i=1,n_os_out
+                if( self%os_out%isthere(i,'imgkind') )then
+                    call self%os_out%getter(i,'imgkind',imgkind)
+                    if(trim(imgkind).eq.'cavg')then
+                        ind = i
+                        exit
+                    endif
+                endif
+            end do
+            if( ind == 0 )then
+                n_os_out = n_os_out + 1
+                call self%os_out%reallocate(n_os_out)
+                ind = n_os_out
+            endif
         endif
         ! fill-in field
-        call self%os_out%set(n_os_out , 'stk',     trim(cavg_stk))
-        call self%os_out%set(n_os_out , 'box',     real(ldim(1)))
-        call self%os_out%set(n_os_out , 'nptcls',  real(nptcls))
-        call self%os_out%set(n_os_out , 'fromp',   1.0)
-        call self%os_out%set(n_os_out , 'top',     real(nptcls))
-        call self%os_out%set(n_os_out , 'smpd',    real(smpd))
-        call self%os_out%set(n_os_out , 'stkkind', 'single')
-        call self%os_out%set(n_os_out , 'imgkind', 'cavg')
-        call self%os_out%set(n_os_out , 'ctf',     'no')
+        call self%os_out%set(ind, 'stk',     trim(cavg_stk))
+        call self%os_out%set(ind, 'box',     real(ldim(1)))
+        call self%os_out%set(ind, 'nptcls',  real(nptcls))
+        call self%os_out%set(ind, 'fromp',   1.0)
+        call self%os_out%set(ind, 'top',     real(nptcls))
+        call self%os_out%set(ind, 'smpd',    real(smpd))
+        call self%os_out%set(ind, 'stkkind', 'single')
+        call self%os_out%set(ind, 'imgkind', 'cavg')
+        call self%os_out%set(ind, 'ctf',     'no')
     end subroutine add_cavgs2os_out
 
     ! getters
@@ -1272,6 +1300,10 @@ contains
                 write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
                 stop 'sp_project :: is_virgin_field'
         end select
+        if( os%get_noris() == 0 )then
+            write(*,*) 'ERROR! cannot check virginity of non-existent field (touched for the very first time???)'
+            stop 'sp_project :: is_virgin_field'
+        endif
         if( any( abs(os%get_all('e3')  )>TINY) )return
         if( any( abs(os%get_all('e1')  )>TINY) )return
         if( any( abs(os%get_all('e2')  )>TINY) )return

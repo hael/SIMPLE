@@ -35,7 +35,6 @@ type(cluster_cavgs_commander)        :: xcluster_cavgs
 type(postprocess_commander)          :: xpostprocess
 
 ! IMAGE PROCESSING
-type(select_commander)               :: xselect
 type(mask_commander)                 :: xmask
 type(fsc_commander)                  :: xfsc
 type(center_commander)               :: xcenter
@@ -127,10 +126,6 @@ select case(prg)
 
     ! IMAGE PROCESSING
 
-    case( 'select' )
-        call cline%parse()
-        if( .not. cline%defined('outfile') )  call cline%set('outfile', 'selected_lines.txt')
-        call xselect%execute(cline)
     case( 'mask' )
         call cline%parse()
         call xmask%execute(cline)

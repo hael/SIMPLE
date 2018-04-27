@@ -26,6 +26,7 @@ type(select_frames_commander)        :: xselect_frames
 type(powerspecs_commander)           :: xpowerspecs
 type(motion_correct_commander)       :: xmotion_correct
 type(ctf_estimate_commander)         :: xctf_estimate
+type(map_cavgs_selection_commander)  :: xmap_cavgs_selection
 type(pick_commander)                 :: xpick
 
 ! CLUSTER2D PROGRAMS
@@ -275,6 +276,19 @@ select case(prg)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         ! execute
         call xctf_estimate%execute(cline)
+    case( 'map_cavgs_selection' )
+        !==Program map_cavgs_selection
+        !
+        ! <map_cavgs_selection/begin>is for mapping class average selection to project<map_cavgs_selection/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'stk2'
+        keys_required(3)  = 'projfile'
+        ! parse command line
+        call cline%parse_oldschool(keys_required(:3))
+        ! execute
+        call xmap_cavgs_selection%execute(cline)
     case( 'motion_correct_ctf_estimate' )
         !==Program motion_correct_ctf_estimate
         !

@@ -25,7 +25,7 @@ public :: select_frames_commander
 public :: powerspecs_commander
 public :: motion_correct_commander
 public :: ctf_estimate_commander
-public :: select_commander
+public :: map_cavgs_selection_commander
 public :: make_pickrefs_commander
 public :: pick_commander
 public :: extract_commander
@@ -52,10 +52,10 @@ type, extends(commander_base) :: ctf_estimate_commander
   contains
     procedure :: execute      => exec_ctf_estimate
 end type ctf_estimate_commander
-type, extends(commander_base) :: select_commander
+type, extends(commander_base) :: map_cavgs_selection_commander
   contains
-    procedure :: execute      => exec_select
-end type select_commander
+    procedure :: execute      => exec_map_cavgs_selection
+end type map_cavgs_selection_commander
 type, extends(commander_base) :: make_pickrefs_commander
   contains
     procedure :: execute      => exec_make_pickrefs
@@ -495,26 +495,17 @@ contains
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate
 
-    subroutine exec_select( self, cline )
-        class(select_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline !< command line input
-        type(params)                       :: p
-        type(image)                        :: stk3_img
-        type(image),           allocatable :: imgs_sel(:), imgs_all(:)
-        character(len=STDLEN), allocatable :: imgnames(:)
-        integer,               allocatable :: selected(:)
-        real,                  allocatable :: correlations(:,:)
-        logical,               allocatable :: lselected(:)
-        character(len=STDLEN)              :: cmd_str
-        integer                            :: iimg, isel, nall, nsel, idx(1)
-        integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
-        ! error check
-        if( cline%defined('stk3') .or. cline%defined('filetab') )then
-            ! all good
-        else
-            stop 'Need either stk3 or filetab are part of the command line!'
-        endif
-        p = params(cline) ! parameters generated
+    subroutine exec_map_cavgs_selection( self, cline )
+        class(map_cavgs_selection_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline !< command line input
+        type(params)             :: p
+        type(build)              :: b
+        type(image), allocatable :: imgs_sel(:), imgs_all(:)
+        integer,     allocatable :: states(:)
+        real,        allocatable :: correlations(:,:)
+        integer :: iimg, isel, nall, nsel, loc(1), lfoo(3)
+        p = params(cline)             ! parameters generated
+        call b%build_spproj(p,cline)
         ! find number of selected cavgs
         call find_ldim_nptcls(p%stk2, lfoo, nsel)
         ! find number of original cavgs
@@ -529,77 +520,21 @@ contains
             call imgs_all(iimg)%new([p%box,p%box,1], p%smpd)
             call imgs_all(iimg)%read(p%stk, iimg)
         end do
-        if( file_exists('corrmat_select.bin') )then
-            allocate(correlations(nsel,nall), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: exec_select; simple_commander_preprocess',alloc_stat)
-            ! read matrix
-            call fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
-            call fileiochk('simple_commander_preprocess ; fopen error when opening corrmat_select.bin  ', io_stat)
-            read(unit=funit,pos=1,iostat=io_stat) correlations
-            ! Check if the read was successful
-            if(io_stat/=0) then
-                call fileiochk('**ERROR(simple_commander_preprocess): I/O error reading corrmat_select.bin. '//&
-                    &'Remove the file to override the memoization.', io_stat)
-            endif
-            call fclose(funit,errmsg='simple_commander_preprocess ; error when closing corrmat_select.bin  ')
-        else
-            write(*,'(a)') '>>> CALCULATING CORRELATIONS'
-            call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
-            ! write matrix
-            call fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
-            call fileiochk('simple_commander_preprocess ; error when opening corrmat_select.bin  ', io_stat)
-            write(unit=funit,pos=1,iostat=io_stat) correlations
-            ! Check if the write was successful
-            if(io_stat/=0) then
-                call fileiochk('**ERROR(simple_commander_preproc): I/O error writing corrmat_select.bin.'//&
-                    &'Remove the file to override the memoization.', io_stat)
-            endif
-            call fclose(funit,errmsg='simple_commander_preprocess ; error when closing corrmat_select.bin  ')
-        endif
-        ! find selected
-        ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
-        allocate(selected(nsel), lselected(nall),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In commander_preproc::select selected lselected ",alloc_stat)
-        lselected = .false.
+        write(*,'(a)') '>>> CALCULATING CORRELATIONS'
+        call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
+        ! create the states array for mapping the selection
+        allocate(states(nall))
+        states = 0
         do isel=1,nsel
-            idx = maxloc(correlations(isel,:))
-            selected(isel) = idx(1)
-            lselected(selected(isel)) = .true.
-            DebugPrint 'selected: ', idx(1), ' with corr: ', correlations(isel,idx(1))
+            loc = maxloc(correlations(isel,:))
+            states(loc(1)) = 1
         end do
-        if( cline%defined('filetab') )then
-            ! read filetable
-            call read_filetable(p%filetab, imgnames)
-            if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
-            call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
-            call fileiochk('simple_commander_preprocess ; fopen error when opening '//trim(p%outfile), io_stat)
-            call simple_mkdir(p%dir_select)
-            call simple_mkdir(p%dir_reject)
-             ! write outoput & move files
-            do iimg=1,nall
-                if( lselected(iimg) )then
-                    write(funit,'(a)') trim(adjustl(imgnames(iimg)))
-                    io_stat = simple_rename(trim(adjustl(imgnames(iimg))), trim(adjustl(p%dir_select)))
-                else
-                    io_stat = simple_rename(trim(adjustl(imgnames(iimg))),trim(adjustl(p%dir_reject)))
-                endif
-                if(io_stat/=0) call fileiochk('simple_commander_preprocess ; failed mv '//trim(adjustl(imgnames(iimg))))
-            end do
-            call fclose(funit,errmsg='simple_commander_preprocess ; fopen error when closing '//trim(p%outfile))
-            deallocate(imgnames)
-        endif
-        if( cline%defined('stk3') )then
-            call find_ldim_nptcls(p%stk3, ldim, ifoo)
-            ldim(3) = 1
-            call stk3_img%new(ldim,1.)
-            do isel=1,nsel
-                call stk3_img%read(p%stk3, selected(isel))
-                call stk3_img%write(p%outstk, isel)
-            end do
-        endif
+        ! communicate selection to project
+        call b%spproj%map_cavgs_selection(states)
+        call b%spproj%write()
         ! end gracefully
-        call simple_end('**** SIMPLE_SELECT NORMAL STOP ****')
-    end subroutine exec_select
+        call simple_end('**** SIMPLE_MAP_SELECTION NORMAL STOP ****')
+    end subroutine exec_map_cavgs_selection
 
     !> for making picker references
     subroutine exec_make_pickrefs( self, cline )
