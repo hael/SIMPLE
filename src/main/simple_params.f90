@@ -1506,16 +1506,16 @@ contains
                 endif
             end subroutine check_iarg
 
-            subroutine check_larg( larg, var )
-                character(len=*), intent(in)  :: larg
-                logical, intent(out) :: var
-                integer :: tmp
-                if( cline%defined(larg) )then
-                    tmp =  NINT( cline%get_rarg(larg) )
-                    var = tmp /= 0
-                    DebugPrint larg, '=', var
-                endif
-            end subroutine check_larg
+            ! subroutine check_larg( larg, var )
+            !     character(len=*), intent(in)  :: larg
+            !     logical, intent(out) :: var
+            !     integer :: tmp
+            !     if( cline%defined(larg) )then
+            !         tmp =  NINT( cline%get_rarg(larg) )
+            !         var = tmp /= 0
+            !         DebugPrint larg, '=', var
+            !     endif
+            ! end subroutine check_larg
 
             subroutine check_rarg( rarg, var )
                 character(len=*), intent(in)  :: rarg

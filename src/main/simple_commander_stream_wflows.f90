@@ -138,11 +138,13 @@ contains
                 type(cmdline)                 :: cline_here
                 type(ctfparams)               :: ctfvars
                 character(len=STDLEN)         :: ext, movie_here
-                character(len=LONGSTRLEN)     :: projname
+                character(len=LONGSTRLEN)     :: projname, projfile
                 movie_here = basename(trim(movie))
                 ext        = fname2ext(trim(movie_here))
                 projname   = 'preprocess_'//trim(get_fbody(trim(movie_here), trim(ext)))
-                call cline_here%set('projname', trim(projname)) ! necessary?
+                projfile   = trim(projname)//trim(METADATA_EXT)
+                call cline_here%set('projname', trim(projname))
+                call cline_here%set('projfile', trim(projfile))
                 call spproj_here%update_projinfo(cline_here)
                 spproj_here%compenv  = spproj%compenv
                 spproj_here%jobproc  = spproj%jobproc
@@ -155,7 +157,8 @@ contains
                 call spproj_here%add_single_movie(trim(movie), ctfvars)
                 call spproj_here%write()
                 call spproj_here%kill()
-                call cline%set('projfile', trim(projname)//'.simple')
+                call cline%set('projname', trim(projname))
+                call cline%set('projfile', trim(projfile))
             end subroutine create_individual_project
 
     end subroutine exec_preprocess_stream
@@ -355,7 +358,7 @@ contains
                 type(ctfparams)                    :: ctfvars
                 type(qsys_env)                     :: qenv
                 character(len=STDLEN), allocatable :: new_stks(:)
-                character(len=:),      allocatable :: stkname, val, ctfstr, phaseplate
+                character(len=:),      allocatable :: stkname, ctfstr, phaseplate
                 integer :: istk, nptcls, iptcl
                 allocate(new_stks(n_newstks))
                 do istk=1,n_newstks

@@ -175,8 +175,7 @@ contains
         class(cmdline),       intent(inout) :: cline
         logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
         integer :: lfny,  lfny_match, cyc_lims(3,2)
-        logical :: ddo3d, fforce_ctf, metadata_read
-        print *,'in gtbox'
+        logical :: ddo3d, fforce_ctf
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -391,7 +390,6 @@ contains
     subroutine build_strategy2D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
-        type(oris) :: os
         call self%kill_strategy2D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%neigh.eq.'yes' )then
@@ -493,7 +491,6 @@ contains
     subroutine raise_hard_ctf_exception( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        logical :: params_present(4)
         if( p%tfplan%flag.ne.'no' )then
             select case(p%spproj_a_seg)
                 case(MIC_SEG)
