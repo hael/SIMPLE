@@ -691,10 +691,8 @@ contains
         character(len=*), intent(in)           :: fname1, fname2 !< input filenames
         integer, intent(out), optional :: status
         character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=256) c
+        character(len=1) c
         integer:: in, out, ioerr
-
-        !! STREAM Method
         if(present(status))status = 0
         open(newunit=out, file=trim(fname2), status="new", action="write", access="stream", iostat=ioerr)
         if (ioerr == 0) then
@@ -921,19 +919,17 @@ contains
     !> \brief  Change working directory
     !! return optional status 0=success
     subroutine simple_chdir( newd, oldd, status )
-        character(len=*), intent(in)            :: newd   !< output pathname
-        character(len=*), intent(out), optional :: oldd
-        integer, intent(out), optional          :: status
+        character(len=*),           intent(in)  :: newd   !< output pathname
+        character(len=*), optional, intent(out) :: oldd
+        integer,          optional, intent(out) :: status
         character(len=STDLEN)                   :: olddir
         integer :: io_status
         logical :: dir_e, qq
-!        logical(4) qq
         if(present(status)) status = 1
         if(present(oldd))then
             call simple_getcwd(olddir)
             oldd = trim(olddir)
         endif
-
         inquire(file=newd, exist=dir_e)
         if(dir_e) then
             io_status = chdir(newd)

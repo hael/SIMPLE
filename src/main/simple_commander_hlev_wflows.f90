@@ -70,8 +70,9 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! parameters
         p_master = params(cline, del_scaled=.true.)
+        ! delete mkdir flag from cline if present (to avoid nested directory structure)
+        call cline%delete('mkdir')
         nparts   = p_master%nparts
-        ! goto 666
         if( p_master%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function
             ! SPLITTING
@@ -193,8 +194,6 @@ contains
         call spproj%write()
         call spproj%kill()
         ! ranking
-    ! 666 finalcavgs = 'cavgs_iter015.mrc'
-    !     last_iter_stage2 = 15
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
         call cline_rank_cavgs%set('projfile', trim(p_master%projfile))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))

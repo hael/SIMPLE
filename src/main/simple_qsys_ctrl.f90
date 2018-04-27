@@ -1,8 +1,8 @@
 ! batch-processing manager - control module
 module simple_qsys_ctrl
 include 'simple_lib.f08'
-use simple_qsys_base,    only: qsys_base
-use simple_cmdline,      only: cmdline
+use simple_qsys_base, only: qsys_base
+use simple_cmdline,   only: cmdline
 implicit none
 
 public :: qsys_ctrl
@@ -17,7 +17,6 @@ type qsys_ctrl
                                                                  !< trim(simplepath)//'/bin/simple_exec'
     character(len=32), allocatable :: script_names(:)            !< file names of generated scripts
     character(len=32), allocatable :: jobs_done_fnames(:)        !< touch files indicating completion
-    character(len=STDLEN)          :: pwd        = ''            !< working directory
     class(qsys_base), pointer      :: myqsys     => null()       !< pointer to polymorphic qsys object
     integer, pointer               :: parts(:,:) => null()       !< defines the fromp/top ranges for all partitions
     class(cmdline), allocatable    :: stream_cline_stack(:)      !< stack of command lines, for streaming only
@@ -99,7 +98,6 @@ contains
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
         integer, optional,        intent(in)    :: numlen           !< length of number string
-        character(len=STDLEN) :: pwd
         integer :: ipart,iostat
         call self%kill
         self%stream                 =  stream
@@ -140,9 +138,6 @@ contains
         do ipart=self%fromto_part(1),self%fromto_part(2)
             self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
         end do
-        ! get pwd
-        iostat =  simple_getenv('PWD',pwd)
-        self%pwd = trim(adjustl( pwd ) )
         self%existence = .true.
     end subroutine new
 
@@ -256,8 +251,7 @@ contains
         class(chash),     intent(in)    :: q_descr
         character(len=512) :: io_msg
         integer :: ios, funit
-        call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', &
-            action='WRITE', iomsg=io_msg)
+        call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
              //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
         ! need to specify shell
@@ -269,7 +263,7 @@ contains
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         write(funit,'(a)',advance='yes') 'echo $$ >> .pid'
         endif
-        write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
+        write(funit,'(a)',advance='yes') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)',advance='yes') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
@@ -313,7 +307,7 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
+        write(funit,'(a)',advance='yes') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)',advance='yes') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str()
@@ -392,17 +386,15 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
         character(len=STDLEN) :: cmd
-        !!!!!!!!!!!
         if( .not.file_exists('./'//trim(script_name)))then
             write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
         endif
-        !!!!!!!!!!!!
         select type( pmyqsys => self%myqsys )
             type is (qsys_local)
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(self%pwd))&
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(CWD_GLOB))&
                 &//'/'//trim(adjustl(script_name))//' &'
             class DEFAULT
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(self%pwd))&
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(CWD_GLOB))&
                 &//'/'//trim(adjustl(script_name))
         end select
         ! execute the command
@@ -591,7 +583,6 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         if( self%existence )then
             self%exec_binary            =  ''
-            self%pwd                    =  ''
             self%myqsys                 => null()
             self%parts                  => null()
             self%fromto_part(2)         =  0

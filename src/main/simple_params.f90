@@ -926,17 +926,18 @@ contains
                 ! make execution directory
                 call simple_mkdir('./'//trim(self%exec_dir))
                 ! change to execution directory directory
-                call simple_chdir('./'//trim(self%projname))
+                call simple_chdir('./'//trim(self%exec_dir))
                 if( sp_required )then
                     ! copy the project file from upstairs
-                    call syslib_copy_file('../'//trim(self%projfile), './'//trim(self%projfile))
+                    call syslib_copy_file_stream('../'//trim(self%projfile), './'//trim(self%projfile))
                     ! cwd of SP-project will be update in the builder
                 endif
-                ! update cwd and set CWD_ORIGINAL
-                CWD_ORIGINAL = self%cwd
+                ! update cwd and set CWD globals in defs
+                CWD_GLOB_ORIGINAL = self%cwd
                 ! get new cwd
                 call simple_getcwd(cwd_tmp)
                 self%cwd = trim(cwd_tmp)
+                CWD_GLOB = self%cwd
                 ! flag what we are up to
                 L_MKDIR_EXEC = .true.
             endif

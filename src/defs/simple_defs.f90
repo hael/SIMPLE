@@ -40,7 +40,7 @@ real(sp), parameter :: ATHRES_LIM   = 5.
 
 ! directory-based execution model
 logical                       :: L_MKDIR_EXEC = .false.
-character(len=:), allocatable :: CWD_ORIGINAL
+character(len=:), allocatable :: CWD_GLOB_ORIGINAL, CWD_GLOB
 
 ! newline character
 character(len=*), parameter :: NEWLINE = new_line('a')
