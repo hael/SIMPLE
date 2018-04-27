@@ -871,6 +871,9 @@ contains
         ! get cwd
         call simple_getcwd(cwd_tmp)
         self%cwd = trim(cwd_tmp)
+        ! update CWD globals in defs
+        CWD_GLOB_ORIGINAL = self%cwd
+        CWD_GLOB          = self%cwd
         ! get process ID
         self%pid = get_process_id()
         ! get name of of executable
@@ -911,7 +914,7 @@ contains
             ! set projfile and projname fields
             self%projfile = trim(sp_files(1))
             self%projname = get_fbody(self%projfile, 'simple')
-            ! update command line so that prototype copy in distr commanders trasfers the info
+            ! update command line so that prototype copy in distr commanders transfers the info
             if( .not. cline%defined('projfile') ) call cline%set('projfile', trim(self%projfile))
             if( .not. cline%defined('projname') ) call cline%set('projname', trim(self%projname))
         endif
