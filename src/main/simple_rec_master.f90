@@ -51,11 +51,11 @@ contains
                     allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
                     &'_part'//int2str_pad(p%part,p%numlen))
                 endif
-                p%vols(s)%str = fbody//p%ext
+                p%vols(s) = fbody//p%ext
                 rho_name      = 'rho_'//fbody//p%ext
                 call b%recvol%rec(p, b%spproj, b%a, b%se, s, part=p%part)
                 call b%recvol%compress_exp
-                call b%recvol%write(p%vols(s)%str, del_if_exists=.true.)
+                call b%recvol%write(p%vols(s), del_if_exists=.true.)
                 call b%recvol%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
                 if( present(fbody_in) )then
@@ -63,10 +63,10 @@ contains
                 else
                     allocate(fbody, source='recvol_state')
                 endif
-                p%vols(s)%str = fbody//int2str_pad(s,2)//p%ext
+                p%vols(s) = fbody//int2str_pad(s,2)//p%ext
                 call b%recvol%rec(p, b%spproj, b%a, b%se, s)
                 call b%recvol%clip(b%vol)
-                call b%vol%write(p%vols(s)%str, del_if_exists=.true.)
+                call b%vol%write(p%vols(s), del_if_exists=.true.)
             endif
             deallocate(fbody)
         end do

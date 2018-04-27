@@ -167,7 +167,7 @@ contains
         integer           :: i, natoms, file_stat, fnr
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        call b%vol%read(p%vols(1)%str)
+        call b%vol%read(p%vols(1))
         if(cline%defined('msk').and.cline%defined('inner'))then
             ! peak finding
             call set_intgvol(b%vol, p%msk)
@@ -330,7 +330,7 @@ contains
         p_c1 = params(cline_c1)
         call se_c1%new('c1')
         call asym_vol%new([p%box,p%box,p%box], p%smpd)
-        call asym_vol%read(p%vols(1)%str)
+        call asym_vol%read(p%vols(1))
         ! spherical mask
         call mskvol%new([p%box,p%box,p%box], p%smpd)
         mskvol = 1.

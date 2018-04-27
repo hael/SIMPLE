@@ -77,8 +77,8 @@ contains
             call b%build_general_tbox(p, cline) ! general objects built
             ! reallocate vol (boxmatch issue)
             call b%vol%new([p%box, p%box, p%box], p%smpd)
-            if( .not. file_exists(p%vols(1)%str) ) stop 'Cannot find input volume'
-            call b%vol%read(p%vols(1)%str)
+            if( .not. file_exists(p%vols(1)) ) stop 'Cannot find input volume'
+            call b%vol%read(p%vols(1))
             if( cline%defined('mskfile') )then
                 ! from file
                 if( .not. file_exists(p%mskfile) ) stop 'Cannot find input mskfile'

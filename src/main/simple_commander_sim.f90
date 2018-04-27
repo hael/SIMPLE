@@ -112,7 +112,7 @@ contains
         snr_detector = p%snr/0.8
         DebugPrint  '>>> DONE CALCULATING SNR:S'
         ! prepare for image generation
-        call b%vol%read(p%vols(1)%str)
+        call b%vol%read(p%vols(1))
         call b%vol%mask(p%msk, 'soft')
         call vol_pad%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
         DebugPrint  '>>> DID READ VOL'
@@ -358,7 +358,7 @@ contains
         call b%build_general_tbox(p, cline)   ! general objects built
         call vol_rot%new([p%box,p%box,p%box], p%smpd)
         call b%vol%new([p%box,p%box,p%box],   p%smpd)
-        call b%vol%read(p%vols(1)%str)
+        call b%vol%read(p%vols(1))
         call b%vol%add_gauran(p%snr)
         call o%new
         numlen = len(int2str(p%nptcls))

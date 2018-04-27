@@ -1368,7 +1368,7 @@ contains
         ! save
         call self%write()
         ! command line for scaling
-        call cline_scale%set('newbox',  real(box_sc))
+        call cline_scale%set('newbox', real(box_sc))
         if( cline%defined('nthr') )   call cline_scale%set('nthr', cline%get_rarg('nthr'))
         if( cline%defined('nparts') ) call cline_scale%set('nparts', cline%get_rarg('nparts'))
     end subroutine scale_projfile

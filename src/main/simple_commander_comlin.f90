@@ -54,7 +54,7 @@ contains
         if( p%refine.eq.'no' )then
             call b%build_comlin_tbox(p) ! objects for common lines based alignment built
             ! center volume
-            call b%vol%read(p%vols(1)%str)
+            call b%vol%read(p%vols(1))
             shvec = 0.
             if( p%center.eq.'yes' ) shvec = b%vol%center(p%cenlp,p%msk)
             if( p%part.eq.1 )then

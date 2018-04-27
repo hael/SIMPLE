@@ -54,14 +54,14 @@ contains
         ! generate images
         ! deal with reference
         call vol_ref%new([p%box,p%box,p%box], p%smpd)
-        call vol_ref%read(p%vols(1)%str)
+        call vol_ref%read(p%vols(1))
         call vol_ref%add_gauran(SNR)
         call vol_ref%mask(p%msk,'soft')
         call vol_ref%write('vol_ref.mrc')
         call vol_ref%fft()
         ! deal with target (randomly rotated version of vols(1))
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
-        call vol_tmp%read(p%vols(1)%str)
+        call vol_tmp%read(p%vols(1))
         call ranori%rnd_ori
         call b%vol%copy( rotvol(vol_tmp, ranori, p))
         call b%vol%write('vol_target_1.mrc')

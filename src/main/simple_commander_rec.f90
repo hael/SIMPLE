@@ -243,9 +243,9 @@ contains
             call b%recvol%reset
             do part=1,p%nparts
                 allocate(fbody, source=trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
-                p%vols(s)%str = fbody//p%ext
+                p%vols(s) = fbody//p%ext
                 rho_name      = 'rho_'//fbody//p%ext
-                call assemble(p%vols(s)%str, trim(rho_name))
+                call assemble(p%vols(s), trim(rho_name))
                 deallocate(fbody)
             end do
             if( p%nstates == 1 .and. cline%defined('outvol') )then

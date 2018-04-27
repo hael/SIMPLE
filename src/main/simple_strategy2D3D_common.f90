@@ -758,29 +758,29 @@ contains
             endif
             if( p%l_distr_exec )then
                 allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
-                p%vols(s)%str = trim(adjustl(fbody))//p%ext
+                p%vols(s) = trim(adjustl(fbody))//p%ext
                 call b%recvols(s)%compress_exp
-                call b%recvols(s)%write(p%vols(s)%str, del_if_exists=.true.)
+                call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
                 call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
                 deallocate(fbody)
             else
                 if( p%refine .eq. 'snhc' )then
-                     p%vols(s)%str = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
+                     p%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
                 else
                     if( present(which_iter) )then
-                        p%vols(s)%str = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                     else
-                        p%vols(s)%str = 'startvol_state'//int2str_pad(s,2)//p%ext
+                        p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                     endif
                 endif
                 call b%recvols(s)%compress_exp
                 call b%recvols(s)%sampl_dens_correct
                 call b%recvols(s)%ifft()
                 call b%recvols(s)%clip(b%vol)
-                call b%vol%write(p%vols(s)%str, del_if_exists=.true.)
+                call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol = add2fbody(trim(p%vols(s)%str), p%ext, '_pproc')
+                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, '_pproc')
                     call b%vol%fft()
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
@@ -819,39 +819,39 @@ contains
                 call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
                 if( present(which_iter) )then
-                    p%vols(s)%str = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                 else
-                    p%vols(s)%str = 'startvol_state'//int2str_pad(s,2)//p%ext
+                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
-                p%vols_even(s)%str = add2fbody(p%vols(s)%str, p%ext, '_even')
-                p%vols_odd(s)%str  = add2fbody(p%vols(s)%str, p%ext, '_odd')
+                p%vols_even(s) = add2fbody(p%vols(s), p%ext, '_even')
+                p%vols_odd(s)  = add2fbody(p%vols(s), p%ext, '_odd')
                 resmskname         = 'resmask'//p%ext
                 call b%eorecvols(s)%sum_eos
-                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s)%str, p%vols_odd(s)%str, resmskname, find4eoavg)
-                call gen_projection_frcs( b, p, cline, p%vols_even(s)%str, p%vols_odd(s)%str, resmskname, s, b%projfrcs)
+                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
+                call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                 call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%tfplan%l_phaseplate)
                 call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
                 call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
-                call b%vol%write(p%vols(s)%str, del_if_exists=.true.)
+                call b%vol%write(p%vols(s), del_if_exists=.true.)
                  ! need to put the sum back at lowres for the eo pairs
                 call b%vol%fft()
                 call b%vol2%zero_and_unflag_ft
-                call b%vol2%read(p%vols_even(s)%str)
+                call b%vol2%read(p%vols_even(s))
                 call b%vol2%fft()
                 call b%vol2%insert_lowres(b%vol, find4eoavg)
                 call b%vol2%ifft()
-                call b%vol2%write(p%vols_even(s)%str, del_if_exists=.true.)
+                call b%vol2%write(p%vols_even(s), del_if_exists=.true.)
                 call b%vol2%zero_and_unflag_ft
-                call b%vol2%read(p%vols_odd(s)%str)
+                call b%vol2%read(p%vols_odd(s))
                 call b%vol2%fft()
                 call b%vol2%insert_lowres(b%vol, find4eoavg)
                 call b%vol2%ifft()
-                call b%vol2%write(p%vols_odd(s)%str, del_if_exists=.true.)
+                call b%vol2%write(p%vols_odd(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol   = add2fbody(trim(p%vols(s)%str), p%ext, '_pproc')
+                    pprocvol   = add2fbody(trim(p%vols(s)), p%ext, '_pproc')
                     b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
