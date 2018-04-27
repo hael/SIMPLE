@@ -140,6 +140,8 @@ contains
                 case DEFAULT
                     p%tfplan%mode = self%spproj%get_ctfmode(p%oritype)
             end select
+            ! update cwd of project (in case the params class changed exec dir)
+            call self%spproj%projinfo%set(1, 'cwd', trim(p%cwd))
         else
             ! revert to oldschool logic
             if( present(nooritab) )then
@@ -163,8 +165,6 @@ contains
                 write(*,'(a)') 'but your input orientation table lacks defocus values'
             endif
         endif
-        ! update cwd of project (in case the params class changed exec dir)
-        call self%spproj%projinfo%set(1, 'cwd', trim(p%cwd))
         write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
     end subroutine build_spproj
 
@@ -176,6 +176,7 @@ contains
         logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
         integer :: lfny,  lfny_match, cyc_lims(3,2)
         logical :: ddo3d, fforce_ctf, metadata_read
+        print *,'in gtbox'
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -198,6 +199,7 @@ contains
             endif
         endif
         DebugPrint 'created & filled object for orientations'
+        print *,'created & filled object for orientations'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction spaces
         call self%e%new_clean( p%nspace )

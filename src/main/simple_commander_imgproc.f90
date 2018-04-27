@@ -623,7 +623,7 @@ contains
         integer                               :: nfiles, ldim(3), ifile, ifoo, cnt
         integer                               :: lfoo(3), nimgs, iimg
         character(len=STDLEN), allocatable    :: filenames(:)
-        type(image)                           :: tmp, frameimg
+        type(image)                           :: tmp
         real                                  :: mm(2)
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
@@ -676,8 +676,7 @@ contains
         type(oris)                               :: o_here, os_ran
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
-        integer :: i, s, ipst, cnt, cnt2, cnt3, nincl
-        real    :: p_ctf, p_dfx
+        integer :: i, s, cnt, nincl
         p = params(cline)                                ! parameters generated
         p%boxmatch = p%box
         call b%build_general_tbox(p, cline,do3d=.false.) ! general objects built
