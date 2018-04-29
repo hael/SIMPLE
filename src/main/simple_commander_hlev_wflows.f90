@@ -213,11 +213,10 @@ contains
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
-        real,             parameter :: CENLP=30.           !< consistency with prime3D
-        integer,          parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer,          parameter :: STATE=1, NPROJS_SYMSRCH=50
-        integer,          parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
-        !character(len=*), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
+        real,    parameter :: CENLP=30. !< consistency with refine3D
+        integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
+        integer, parameter :: STATE=1, NPROJS_SYMSRCH=50
+        integer, parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         ! distributed commanders
         type(prime3D_distr_commander)       :: xprime3D_distr
         type(symsrch_distr_commander)       :: xsymsrch_distr
@@ -234,6 +233,7 @@ contains
         type(cmdline)         :: cline_project
         type(cmdline)         :: cline_scale
         ! other variables
+        character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(params)          :: p_master
         type(sp_project)      :: spproj, work_proj
@@ -241,7 +241,6 @@ contains
         real                  :: iter, smpd_target, lplims(2), orig_msk, msk, scale_factor
         integer               :: ncavgs, orig_box, box, istk
         character(len=2)      :: str_state
-        character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
         character(len=STDLEN) :: vol_iter
         integer               :: status
         logical               :: srch4symaxis, doautoscale
@@ -255,11 +254,9 @@ contains
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         ! make master parameters
-        call cline%set('oritype', 'out')
         p_master = params(cline)
-        allocate(WORK_PROJFILE, source='initial_3Dmodel_tmproj.simple')
-        call del_file(WORK_PROJFILE)
-        call cline%set('oritype', 'ptcl3D')
+        ! delete mkdir flag from cline if present (to avoid nested directory structure)
+        call cline%delete('mkdir')
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
@@ -280,29 +277,21 @@ contains
         ! passed
         if( cline%defined('lpstart') ) lplims(1) = p_master%lpstart
         if( cline%defined('lpstop')  ) lplims(2) = p_master%lpstop
-        ! First wee need a dummy project for refine3D
-        ! fetch cavgs
+        ! read project
         call spproj%read(p_master%projfile)
-        ncavgs       = nint(spproj%os_out%get(1,'nptcls'))
-        ctfvars%smpd = p_master%smpd
-        if( spproj%os_out%isthere('imgkind') )then
-            call spproj%os_out%getter(1, 'imgkind', imgkind)
-            if( trim(imgkind).ne.'cavg' )then
-                stop 'IMGKIND should be CAVG; simple_commander_hlev_wflows :: initial_3Dmodel'
-            endif
-        else
-            stop 'IMGKIND should be informed; simple_commander_hlev_wflows :: initial_3Dmodel'
-        endif
-        if( spproj%os_out%isthere('stk') )then
-            call spproj%os_out%getter(1, 'stk', stk)
-        else
-            stop 'No class-average stack found; simple_commander_hlev_wflows :: initial_3Dmodel'
-        endif
-        ! fetch general project info
+        ! retrieve cavgs stack info
+        call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
+        ! prepare a temporary project file for the class average processing
+        allocate(WORK_PROJFILE, source='initial_3Dmodel_tmpproj.simple')
+        call del_file(WORK_PROJFILE)
         work_proj%projinfo = spproj%projinfo
         work_proj%compenv  = spproj%compenv
-        if( spproj%jobproc%get_noris()>0 ) work_proj%jobproc = spproj%jobproc
-        call os%new_clean( ncavgs )
+        if( spproj%jobproc%get_noris()  > 0 ) work_proj%jobproc = spproj%jobproc
+        if( spproj%os_cls3D%get_noris() > 0 )then
+            os = spproj%os_cls3D
+        else
+            call os%new_clean( ncavgs )
+        endif
         call work_proj%add_single_stk(trim(stk), ctfvars, os)
         call spproj%kill
         call os%kill
@@ -314,7 +303,7 @@ contains
         call work_proj%update_projinfo(cline)
         ! split
         call work_proj%split_stk(p_master%nparts)
-        ! Scaling
+        ! down-scale
         orig_box    = work_proj%get_box()
         orig_msk    = p_master%msk
         smpd_target = max(p_master%smpd, lplims(2)*LP2SMPDFAC)
@@ -360,15 +349,13 @@ contains
         call cline_refine3D_snhc%set('prg',    'refine3D')
         call cline_refine3D_snhc%set('maxits', real(MAXITS_SNHC))
         call cline_refine3D_snhc%set('refine', 'snhc')
-        call cline_refine3D_snhc%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_refine3D_snhc%set('lp',     lplims(1))
         call cline_refine3D_snhc%set('nspace', real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('objfun', 'cc')
-        ! (2) refine3D_init
+        ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('prg',    'refine3D')
         call cline_refine3D_init%set('maxits', real(MAXITS_INIT))
         call cline_refine3D_init%set('vol1',   trim(SNHCVOL)//trim(str_state)//p_master%ext)
-        call cline_refine3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_refine3D_init%set('lp',     lplims(1))
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_DEFAULT))
@@ -402,7 +389,6 @@ contains
         call cline_refine3D_refine%set('prg', 'refine3D')
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
         call cline_refine3D_refine%set('refine', 'single')
-        call cline_refine3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_refine3D_refine%set('lp', lplims(2))
         if( .not. cline_refine3D_refine%defined('nspace') )then
             call cline_refine3D_refine%set('nspace', real(NSPACE_DEFAULT))
@@ -503,7 +489,6 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                !oritab   = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
@@ -576,11 +561,9 @@ contains
                 endif
         end select
         call cline_refine3D2%set('refine', 'multi')
-        call cline_refine3D1%set('dynlp', 'no')
         call cline_refine3D1%delete('oritab2')
         call cline_refine3D1%delete('update_frac')
         call cline_refine3D1%set('frcs', 'cluster3D_frcs.bin') !! mixed model FRCs
-        call cline_refine3D2%set('dynlp', 'no')
         call cline_refine3D2%delete('oritab2')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
@@ -960,7 +943,6 @@ contains
         cline_reconstruct3D_distr = cline
         cline_postprocess         = cline
         call cline_refine3D_master%set('prg', 'refine3D')
-        call cline_refine3D_master%set('dynlp', 'no')
         if( .not.cline%defined('maxits') ) call cline_refine3D_master%set('maxits', real(MAXITS))
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_distr%set('oritab', trim(FINAL_DOC))

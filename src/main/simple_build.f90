@@ -198,7 +198,6 @@ contains
             endif
         endif
         DebugPrint 'created & filled object for orientations'
-        print *,'created & filled object for orientations'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction spaces
         call self%e%new_clean( p%nspace )

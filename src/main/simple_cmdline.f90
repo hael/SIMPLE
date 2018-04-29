@@ -98,7 +98,7 @@ contains
             ! indicate which variables are required
             if( sz_keys_req > 0 )then
                 do ikey=1,sz_keys_req
-                    call self%checkvar(keys_required(ikey)%str, ikey)
+                    if( allocated(keys_required(ikey)%str) ) call self%checkvar(keys_required(ikey)%str, ikey)
                 end do
             endif
         endif

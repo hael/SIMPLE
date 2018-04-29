@@ -65,7 +65,7 @@ contains
     subroutine exec_info_image( self, cline)
         use simple_image,   only: image
         class(info_image_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
         type(params)      :: p
         type(image)       :: img
         integer           :: ldim(3), maxim, i, n_nans
@@ -90,7 +90,10 @@ contains
                         write(*,*) 'n_nans = ', n_nans
                     endif
                 endif
-                if( p%vis .eq. 'yes' ) call img%vis()
+                if( p%vis .eq. 'yes' )then
+                    print *, 'calling img%vis'
+                    call img%vis()
+                endif
             end do
         endif
         call simple_end('**** SIMPLE_INFO_IMAGE NORMAL STOP ****')

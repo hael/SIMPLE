@@ -20,7 +20,6 @@ type :: params
     type(ctfplan)                  :: tfplan
     class(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
-    ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
@@ -41,7 +40,6 @@ type :: params
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dryrun='no'          !< no 3D search and reconstruction, for profiling only
-    character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
     character(len=3)      :: dyncls='yes'         !< dynamic class update(yes|no){yes}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
@@ -498,7 +496,6 @@ contains
         call check_carg('dopca',          self%dopca)
         call check_carg('doprint',        self%doprint)
         call check_carg('dryrun',         self%dryrun)
-        call check_carg('dynlp',          self%dynlp)
         call check_carg('dyncls',         self%dyncls)
         call check_carg('eo',             self%eo)
         call check_carg('errify',         self%errify)
@@ -806,7 +803,7 @@ contains
             write(*,*) 'cwd:     ', trim(self%cwd)
             stop 'ERROR! no *.simple project file identified; simple_params :: new'
         endif
-        if(  nsp_files == 1 )then
+        if( nsp_files == 1 .and. sp_required )then
             ! good, we found a single monolithic project file
             ! set projfile and projname fields
             self%projfile = trim(sp_files(1))
@@ -1137,7 +1134,6 @@ contains
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
         self%hpind_fsc = 0                                         ! high-pass Fouirer index FSC
         if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
-        if( cline%defined('lp') ) self%dynlp = 'no'                ! override dynlp=yes and lpstop
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = max(self%fny, self%lpstart)
         self%lplims2D(2)       = max(self%fny, self%lplims2D(1) - (self%lpstart - self%lpstop)/2.)

@@ -57,6 +57,7 @@ contains
     procedure, private :: add_scale_tag
     ! os_out related methods
     procedure          :: add_cavgs2os_out
+    procedure          :: get_cavgs_stk
     ! getters
     procedure          :: get_nptcls
     procedure          :: get_box
@@ -356,10 +357,6 @@ contains
         integer, allocatable :: pinds(:)
         integer :: icls, iptcl, sz_cls2D, sz_states, sz_cls3D, ncls
         real    :: rstate
-        if( self%is_virgin_field('cls2D') )then
-            write(*,*) 'ERROR! cls2D cannot be virgin field if mapping cavgs selection, aborting...'
-            stop 'simple_sp_project :: map_cavgs_selection'
-        endif
         sz_cls2D  = self%os_cls2D%get_noris()
         sz_states = size(states)
         if( sz_cls2D /= sz_states )then
@@ -375,6 +372,7 @@ contains
         ! map selection to self%os_cls3D
         sz_cls3D = self%os_cls3D%get_noris()
         if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new_clean(sz_cls2D)
+        sz_cls3D = sz_cls2D
         do icls=1,sz_cls3D
             call self%os_cls3D%set(icls, 'state', real(states(icls)))
         end do
@@ -969,6 +967,37 @@ contains
         call self%os_out%set(ind, 'imgkind', 'cavg')
         call self%os_out%set(ind, 'ctf',     'no')
     end subroutine add_cavgs2os_out
+
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd )
+        class(sp_project),             intent(inout) :: self
+        character(len=:), allocatable, intent(inout) :: stkname
+        integer,                       intent(out)   :: ncls
+        real,                          intent(out)   :: smpd
+        character(len=:), allocatable :: imgkind
+        integer :: n_os_out, ind, i, cnt
+        ! check if field is empty
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 ) stop 'ERROR! trying to fetch from empty os_out field; sp_project :: get_cavgs_stk'
+        ! look for cavgs
+        ind = 0
+        cnt = 0
+        do i=1,n_os_out
+            if( self%os_out%isthere(i,'imgkind') )then
+                call self%os_out%getter(i,'imgkind',imgkind)
+                if(trim(imgkind).eq.'cavg')then
+                    ind = i
+                    cnt = cnt + 1
+                endif
+            endif
+        end do
+        if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=cavg, aborting...; sp_project :: get_cavgs_stk'
+        if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=cavg identified, aborting...; sp_project :: get_cavgs_stk'
+        ! set return values
+        if( allocated(stkname) ) deallocate(stkname)
+        call self%os_out%getter(ind,'stk',stkname)
+        ncls = nint(self%os_out%get(ind, 'nptcls'))
+        smpd = nint(self%os_out%get(ind, 'smpd'))
+    end subroutine get_cavgs_stk
 
     ! getters
 

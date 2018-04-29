@@ -197,12 +197,8 @@ contains
             nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
-                !DebugPrint 'wrote: ', sizeof(str_dyn//spaces(nspaces)),&
-                !    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
             else
                 write(unit=self%funit,pos=ibytes) str_dyn
-                !DebugPrint 'wrote: ', sizeof(str_dyn),&
-                !    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
@@ -265,7 +261,10 @@ contains
         integer, optional, intent(in)    :: fromto(2)
         integer :: strlen_max
         ! sanity check isegment
-        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS ) stop 'ERROR, isegment out of range; binoris :: add_segment_1'
+        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
+            write(*,*) 'isegment: ', isegment
+            stop 'ERROR, isegment out of range; binoris :: add_segment_1'
+        endif
         if( isegment > self%n_segments ) self%n_segments = isegment
         ! set range in segment
         if( present(fromto) )then
@@ -288,7 +287,10 @@ contains
         integer,        intent(in)    :: fromto(2)
         integer,        intent(in)    :: strlen_max
         ! sanity check isegment
-        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS ) stop 'ERROR, isegment out of range; binoris :: add_segment_2'
+        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
+            write(*,*) 'isegment: ', isegment
+            stop 'ERROR, isegment out of range; binoris :: add_segment_2'
+        endif
         if( isegment > self%n_segments ) self%n_segments = isegment
         ! set range in segment
         self%header(isegment)%fromto = fromto
@@ -304,7 +306,10 @@ contains
         real, allocatable, intent(in)    :: arr(:,:)
         if( .not. allocated(arr) ) return
         ! sanity check isegment
-        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS ) stop 'ERROR, isegment out of range; binoris :: add_segment_3'
+        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
+            write(*,*) 'isegment: ', isegment
+            stop 'ERROR, isegment out of range; binoris :: add_segment_3'
+        endif
         if( isegment > self%n_segments ) self%n_segments = isegment
         ! set range in segment
         self%header(isegment)%fromto(1) = 1
@@ -336,7 +341,10 @@ contains
         class(ori),     intent(inout) :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_first_segment_record'
-        if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_first_segment_record'
+        if( isegment < 1 .or. isegment > self%n_segments )then
+            write(*,*) 'isegment: ', isegment
+            stop 'isegment out of bound; binoris :: read_first_segment_record'
+        endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             read(unit=self%funit,pos=self%header(isegment)%first_data_byte) str_os_line
             call o%str2ori(str_os_line)
@@ -356,7 +364,10 @@ contains
         integer :: i, ibytes, irec
         logical :: present_fromto, oonly_ctfparams_state_eo
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_1'
-        if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_1'
+        if( isegment < 1 .or. isegment > self%n_segments )then
+            write(*,*) 'isegment: ', isegment
+            stop 'isegment out of bound; binoris :: read_segment_1'
+        endif
         present_fromto = present(fromto)
         if( present_fromto )then
             if( .not. all(fromto .eq. self%header(isegment)%fromto) )&
@@ -397,7 +408,10 @@ contains
         type(str4arr),  intent(inout) :: sarr(:)
         integer :: i, ibytes
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_2'
-        if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_2'
+        if( isegment < 1 .or. isegment > self%n_segments )then
+            write(*,*) 'isegment: ', isegment
+            stop 'isegment out of bound; binoris :: read_segment_2'
+        endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             ! read orientation data into array of allocatable strings
             ibytes = self%header(isegment)%first_data_byte
@@ -417,7 +431,10 @@ contains
         real,           intent(inout) :: arr(:,:)
         integer :: i, ibytes
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_3'
-        if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_3'
+        if( isegment < 1 .or. isegment > self%n_segments )then
+            write(*,*) 'isegment: ', isegment
+            stop 'isegment out of bound; binoris :: read_segment_3'
+        endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             if( size(arr, 1) /= self%header(isegment)%n_records )then
                 stop 'First dimension of array not congruent with # records in file; binoris :: read_segment_3'
@@ -448,7 +465,10 @@ contains
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
         integer :: i, j, ibytes
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_ctfparams_state_eo'
-        if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_ctfparams_state_eo'
+        if( isegment < 1 .or. isegment > self%n_segments )then
+            write(*,*) 'isegment: ', isegment
+            stop 'isegment out of bound; binoris :: read_segment_ctfparams_state_eo'
+        endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             ! set flags for ctfparams, state & eo
             flags(1)  = 'smpd'

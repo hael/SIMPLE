@@ -1979,11 +1979,8 @@ contains
         if( present(sect) ) sect_here = sect
         geomorsphr_here=.true.
         if (present(geomorsphr))geomorsphr_here=geomorsphr
-        if( simple_isenv('DISPLAY')) return
         if( self%ft )then
             if( self%ldim(3) == 1 ) sect_here = 0
-            !$ allocate(fplane(self%ldim(1)+1,self%ldim(2)+1), stat=alloc_stat)
-            !$ if(alloc_stat.ne.0)call allocchk("In simple_image::vis PGI prealloc fplane",alloc_stat)
             fplane = self%expand_ft()
             if(geomorsphr)then
                 call gnufor_image(real(fplane), palette='gray')

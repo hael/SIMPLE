@@ -3022,8 +3022,9 @@ contains
     integer function get_nrequired_keys( self )
         class(simple_program), intent(in) :: self
         get_nrequired_keys = nreq_counter(self%img_ios) + nreq_counter(self%parm_ios) +&
-        &nreq_counter(self%alt_ios) + nreq_counter(self%srch_ctrls) + nreq_counter(self%filt_ctrls) +&
+        &nreq_counter(self%srch_ctrls) + nreq_counter(self%filt_ctrls) +&
         &nreq_counter(self%mask_ctrls) + nreq_counter(self%comp_ctrls)
+        if( get_nrequired_keys == 0 .and. allocated(self%alt_ios) ) get_nrequired_keys = 1
 
         contains
 

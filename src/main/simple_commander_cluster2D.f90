@@ -246,7 +246,7 @@ contains
         p = params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call cluster_cavgs_exec( b, p )
-        !  ! end gracefully
+        ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_cluster_cavgs
 
