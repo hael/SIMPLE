@@ -12,6 +12,7 @@ type :: ori
     real        :: euls(3)=0.        !< Euler angle
     real        :: normal(3)=0.      !< Fourier plane normal
     real        :: rmat(3,3)=0.      !< rotation matrix
+    real        :: drmat(3,3,3)=0.   !< derivative of rotation matrices (w.r.t. last index)
     type(hash)  :: htab              !< hash table for the parameters
     type(chash) :: chtab             !< hash table for the filenames etc.
     logical     :: existence=.false. !< to indicate existence
@@ -29,6 +30,7 @@ type :: ori
     procedure          :: copy => copy_ori
     procedure          :: delete_entry
     procedure          :: set_euler
+    procedure          :: calc_dmat
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
@@ -55,6 +57,7 @@ type :: ori
     procedure          :: e3get
     procedure          :: get_normal
     procedure          :: get_mat
+    procedure          :: get_dmat
     procedure          :: get
     procedure, private :: getter_1
     procedure, private :: getter_2
@@ -215,6 +218,12 @@ contains
         self%normal = matmul(zvec, self%rmat)
     end subroutine set_euler
 
+    !>  \brief  set the rotation matrix derivatives
+    subroutine calc_dmat( self )
+        class(ori), intent(inout) :: self
+        call euler2dm( self%euls(1), self%euls(2), self%euls(3), self%drmat )
+    end subroutine calc_dmat
+    
     !>  \brief  is a setter
     subroutine e1set( self, e1 )
         class(ori), intent(inout) :: self
@@ -494,6 +503,13 @@ contains
         mat = self%rmat
     end function get_mat
 
+    !>  \brief  is a getter
+    pure function get_dmat( self ) result( dmat )
+        class(ori), intent(in) :: self
+        real, dimension(3,3,3) :: dmat
+        dmat = self%drmat
+    end function get_dmat
+    
     !>  \brief  is a getter
     function get( self, key ) result( val )
         class(ori), intent(inout)    :: self
@@ -948,6 +964,23 @@ contains
         r = matmul(tmp,r1)
     end function euler2m
 
+    !> \brief  calculates the derivatives of the rotation matrices w.r.t. one Euler angle
+    !! \param e1,e2,e3 Euler triplet
+    subroutine euler2dm( e1, e2, e3, drmat )
+        real, intent(in)     :: e1, e2, e3
+        real, intent(out)    :: drmat(3,3,3)
+        real, dimension(3,3) :: r1, r2, r3, dr1, dr2, dr3
+        r1  =  rotmat(e1,3) ! rotation around z
+        r2  =  rotmat(e2,2) ! tilt
+        r3  =  rotmat(e3,3) ! rotation around z
+        dr1 = drotmat(e1,3) ! derivative of r1 w.r.t. e1
+        dr2 = drotmat(e2,2) ! derivative of r2 w.r.t. e2
+        dr3 = drotmat(e3,3) ! derivative of r3 w.r.t. e3
+        drmat(:,:,1) = matmul(matmul(r3,r2),dr1)
+        drmat(:,:,2) = matmul(matmul(r3,dr2),r1)
+        drmat(:,:,3) = matmul(matmul(dr3,r2),r1)
+    end subroutine euler2dm
+
     !>  \brief  calculates the normal of a Fourier plane
     pure function euler2vec( phi, theta, psi ) result( normal )
         real, intent(in) :: phi, theta, psi
@@ -1043,6 +1076,48 @@ contains
             ! beware of the signs:z-rot is really negative
         endif
     end function rotmat
+
+    !>  \brief  returns the derivative of the rotation matrix for _ang_ degrees of rotation
+    !! around x,y or z for _choice_ = _1_,_2_ or _3_
+    pure function drotmat( ang, choice ) result( r )
+        real, intent(in)           :: ang
+        integer, intent(in)        :: choice
+        real :: r(3,3)
+        real :: ang_in_rad
+        ang_in_rad = ang*pi/180.
+        if ( choice == 1 ) then
+            r( 1,1 ) = 1.
+            r( 1,2 ) = 0.
+            r( 1,3 ) = 0.
+            r( 2,1 ) = 0.
+            r( 2,2 ) = -sin( ang_in_rad )
+            r( 2,3 ) = -cos( ang_in_rad )
+            r( 3,1 ) = 0.
+            r( 3,2 ) =  cos( ang_in_rad )
+            r( 3,3 ) = -sin( ang_in_rad )
+        elseif ( choice == 2 ) then
+            r( 1,1 ) = -sin( ang_in_rad )
+            r( 1,2 ) = 0.
+            r( 1,3 ) = -cos( ang_in_rad )
+            r( 2,1 ) = 0.
+            r( 2,2 ) = 1.
+            r( 2,3 ) = 0.
+            r( 3,1 ) =  cos( ang_in_rad )
+            r( 3,2 ) = 0.
+            r( 3,3 ) = -sin( ang_in_rad )
+        elseif ( choice == 3 ) then
+            r( 1,1 ) = -sin( ang_in_rad )
+            r( 1,2 ) =  cos( ang_in_rad )
+            r( 1,3 ) = 0.
+            r( 2,1 ) = -cos( ang_in_rad )
+            r( 2,2 ) = -sin( ang_in_rad )
+            r( 2,3 ) = 0.
+            r( 3,1 ) = 0.
+            r( 3,2 ) = 0.
+            r( 3,3 ) = 1.
+            ! beware of the signs:z-rot is really negative
+        endif
+    end function drotmat
 
     ! UNIT TEST
 

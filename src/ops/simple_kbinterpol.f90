@@ -15,6 +15,7 @@ type :: kbinterpol
     procedure :: get_alpha
     procedure :: get_wdim
     procedure :: apod
+    procedure :: dapod
     procedure :: instr
 end type kbinterpol
 
@@ -81,6 +82,22 @@ contains
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
+    !>  \brief  is the derivative of the Kaiser-Bessel apodization function, abs(x) <= Whalf
+    pure function dapod( self, x ) result(r)
+        class(kbinterpol), intent(in) :: self
+        real,              intent(in) :: x
+        real :: r, arg, sqrtarg
+        if( abs(x) > self%Whalf )then
+            r = 0.
+            return
+        endif
+        arg  = self%twooW * x
+        arg  = 1. - arg * arg
+        sqrtarg = sqrt(arg)
+        r    = - 4. * self%beta * x * bessi1(self%beta * sqrtarg) / &
+                sqrtarg / self%W**3
+    end function dapod
+
     !>  \brief  is the Kaiser-Bessel instrument function
     elemental function instr( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
@@ -138,6 +155,35 @@ contains
                 y*  0.00392377d0)))))))) * exp( ax ) / sqrt( ax )
         end if
     end function bessi0
+
+    elemental pure real(dp) function bessi1( x )
+        real(sp), intent(in) :: x
+        real(dp) :: y, ax, bx
+        ax = x
+        if ( ax < 3.75d0) then
+            y = x / 3.75d0
+            y = y*y
+#ifdef USE_FMA
+            bessi1 = x*( &
+                fma(y,fma(y,fma(y,fma(y,fma(y,fma(y,0.32411d-3, &
+                0.301532d-2),0.2658733d-1),0.15084934d0), &
+                0.51498869d0),0.87890594d0),0.5d0) )
+#else            
+            bessi1 = x*(                                             &
+                0.5d0 + y*(0.87890594d0 + y*(0.51498869d0 +          &
+                y*(0.15084934d0 + y*(0.2658733d-1 + y*(0.301532d-2 + &
+                y* 0.32411d-3))))))
+#endif            
+        else
+            y   = 3.75d0 / ax
+            bx  = exp(ax) / sqrt(ax)
+            ax  = 0.39894228d0   + y*(-0.3988024d-1 + y*(-0.362018d-2 + &
+                y*(0.163801d-2   + y*(-0.1031555d-1 + y*(0.2282967d-1 + &
+                y*(-0.2895312d-1 + y*( 0.1787654d-1 + y*-0.420059d-2)))))))
+            bessi1 = ax*bx
+        end if
+    end function bessi1
+
 
     elemental pure real(dp) function bessi0f( x )
         real(sp), intent(in) :: x
