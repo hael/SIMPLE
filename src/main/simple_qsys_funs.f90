@@ -59,40 +59,40 @@ contains
         ! call sys_del_files('VOLASSEMBLE_STATE', '')
     end subroutine qsys_cleanup
 
-    subroutine terminate_if_prg_in_cwd( prg )
-        character(len=*), intent(in) :: prg
-        integer                      :: file_stat, funit, status, file_rec, i, pos
-        character(len=STDLEN)        :: pid, pid_dir, pwd, cmd
-        cmd = 'pgrep '//trim(prg)//' > pid_from_fortran.txt'
-        call exec_cmdline(cmd)
-        ! read in the pid
-        call fopen(funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat)
-        call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
-        read(funit,'(a)') pid
-        call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
-        ! get a string that contains the directory it is running in with lsof -p
-        cmd = 'lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt'
-        call exec_cmdline(cmd)
-        call fopen(funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat)
-        call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
-        read(funit,'(a)', iostat=file_stat) pid_dir
-        if(file_stat/=0)call fileiochk("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
-        call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
-        ! get pwd
-        status = simple_getenv('PWD',pwd)
-        pwd = trim(adjustl( pwd ))
-        if (status /= 0 ) call simple_stop("In simple_qsys_funs::terminate_if_prg_in_cwd PWD not found")
-        ! assert
-        pos = index(pid_dir, '/') ! start of directory
-        if( trim(pid_dir(pos:)) .eq. trim(pwd) )then
-            write(*,*) 'Another process of your program: ', trim(prg)
-            write(*,*) 'is already running in the cwd: ', trim(pid_dir(pos:)), ' ABORTING...'
-            stop
-        endif
-        ! remove temporary files
-        call del_file('pid_from_fortran.txt')
-        call del_file('pid_dir_from_fortran.txt')
-    end subroutine terminate_if_prg_in_cwd
+    ! subroutine terminate_if_prg_in_cwd( prg )
+    !     character(len=*), intent(in) :: prg
+    !     integer                      :: file_stat, funit, status, file_rec, i, pos
+    !     character(len=STDLEN)        :: pid, pid_dir, pwd, cmd
+    !     cmd = 'pgrep '//trim(prg)//' > pid_from_fortran.txt'
+    !     call exec_cmdline(cmd)
+    !     ! read in the pid
+    !     call fopen(funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat)
+    !     call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
+    !     read(funit,'(a)') pid
+    !     call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
+    !     ! get a string that contains the directory it is running in with lsof -p
+    !     cmd = 'lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt'
+    !     call exec_cmdline(cmd)
+    !     call fopen(funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat)
+    !     call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
+    !     read(funit,'(a)', iostat=file_stat) pid_dir
+    !     if(file_stat/=0)call fileiochk("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
+    !     call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
+    !     ! get pwd
+    !     status = simple_getenv('PWD',pwd)
+    !     pwd = trim(adjustl( pwd ))
+    !     if (status /= 0 ) call simple_stop("In simple_qsys_funs::terminate_if_prg_in_cwd PWD not found")
+    !     ! assert
+    !     pos = index(pid_dir, '/') ! start of directory
+    !     if( trim(pid_dir(pos:)) .eq. trim(pwd) )then
+    !         write(*,*) 'Another process of your program: ', trim(prg)
+    !         write(*,*) 'is already running in the cwd: ', trim(pid_dir(pos:)), ' ABORTING...'
+    !         stop
+    !     endif
+    !     ! remove temporary files
+    !     call del_file('pid_from_fortran.txt')
+    !     call del_file('pid_dir_from_fortran.txt')
+    ! end subroutine terminate_if_prg_in_cwd
 
     subroutine parse_env_file( env )
         type(chash), intent(inout)    :: env
@@ -234,12 +234,14 @@ contains
         class(cmdline),    intent(in) :: cline
         type(chash) :: job_descr
         character(len=1024) :: exec_str
+        character(len=11)   :: suppress_msg='2>/dev/null'
+        integer :: pid
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        exec_str = trim(exec_bin)//' '//job_descr%chash2str()
+        exec_str = trim(exec_bin)//' '//job_descr%chash2str()//' '//suppress_msg
         write(*,'(a)') '>>> EXECUTING COMMAND:'
         write(*,'(a)') trim(exec_str)
-        call exec_cmdline(exec_str)  !!TODO change to exec_subprocess
+        call exec_subprocess(exec_str, pid)
     end subroutine exec_simple_prg
 
 end module simple_qsys_funs

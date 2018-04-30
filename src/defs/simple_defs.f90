@@ -39,14 +39,11 @@ real(dp), parameter :: PISQR        = PI*PI
 real(sp), parameter :: ATHRES_LIM   = 5.
 
 ! directory-based execution model
-logical                       :: L_MKDIR_EXEC = .false.
 character(len=:), allocatable :: CWD_GLOB_ORIGINAL, CWD_GLOB
 
-! newline character
+! character constants
 character(len=*), parameter :: NEWLINE = new_line('a')
-
-! project file 4 now
-character(len=*), parameter :: PROJFILE_GLOB = 'myproject.simple'
+character(len=*), parameter :: SUPPRESS_MSG='2>/dev/null'
 
 ! plan for the CTF
 type :: ctfplan
@@ -64,9 +61,6 @@ end type str4arr
 enum, bind(c)
     enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2
 end enum
-! type :: CTFFLAGTYPE
-!     integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
-! end type CTFFLAGTYPE
 
 ! type for CTF parameters
 type :: ctfparams

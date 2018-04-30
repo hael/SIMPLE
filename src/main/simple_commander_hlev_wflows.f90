@@ -215,8 +215,10 @@ contains
         ! constants
         real,    parameter :: CENLP=30. !< consistency with refine3D
         integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer, parameter :: STATE=1, NPROJS_SYMSRCH=50
+        ! integer, parameter :: MAXITS_SNHC=5, MAXITS_INIT=2, MAXITS_REFINE=5 ! 4 testing
+        integer, parameter :: STATE=1, NPROJS_SYMSRCH=50, MAXITS_SNHC_RESTART=3
         integer, parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
+        integer, parameter :: NRESTARTS=5
         ! distributed commanders
         type(prime3D_distr_commander)       :: xprime3D_distr
         type(symsrch_distr_commander)       :: xsymsrch_distr
@@ -225,6 +227,7 @@ contains
         type(reconstruct3D_commander) :: xreconstruct3D
         type(project_commander)       :: xproject
         ! command lines
+        type(cmdline)         :: cline_refine3D_snhc_restart
         type(cmdline)         :: cline_refine3D_snhc
         type(cmdline)         :: cline_refine3D_init
         type(cmdline)         :: cline_refine3D_refine
@@ -331,10 +334,10 @@ contains
         call cline%set('msk',      msk)
         call cline%set('box',      real(box))
         ! prepare command lines from prototype
-        cline_refine3D_snhc   = cline
-        cline_refine3D_init   = cline
-        cline_refine3D_refine = cline
-        cline_symsrch         = cline
+        cline_refine3D_snhc_restart = cline
+        cline_refine3D_init         = cline
+        cline_refine3D_refine       = cline
+        cline_symsrch               = cline
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
         call cline_project%delete('nparts')
@@ -345,13 +348,15 @@ contains
         call cline_project%delete('projfile')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
-        call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
-        call cline_refine3D_snhc%set('prg',    'refine3D')
+        call cline_refine3D_snhc_restart%delete('update_frac') ! no fractional update in first phase
+        call cline_refine3D_snhc_restart%set('prg',    'refine3D')
+        call cline_refine3D_snhc_restart%set('maxits', real(MAXITS_SNHC_RESTART))
+        call cline_refine3D_snhc_restart%set('refine', 'snhc')
+        call cline_refine3D_snhc_restart%set('lp',     lplims(1))
+        call cline_refine3D_snhc_restart%set('nspace', real(NSPACE_SNHC))
+        call cline_refine3D_snhc_restart%set('objfun', 'cc')
+        cline_refine3D_snhc = cline_refine3D_snhc_restart
         call cline_refine3D_snhc%set('maxits', real(MAXITS_SNHC))
-        call cline_refine3D_snhc%set('refine', 'snhc')
-        call cline_refine3D_snhc%set('lp',     lplims(1))
-        call cline_refine3D_snhc%set('nspace', real(NSPACE_SNHC))
-        call cline_refine3D_snhc%set('objfun', 'cc')
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('prg',    'refine3D')
         call cline_refine3D_init%set('maxits', real(MAXITS_INIT))

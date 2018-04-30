@@ -1,12 +1,13 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program simple_distr_exec
 include 'simple_lib.f08'
-use simple_user_interface, only: make_user_interface
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_gen_doc
+use simple_commander_base, only: execute_commander
+use simple_user_interface
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
+
 implicit none
 
 ! PRE-PROCESSING
@@ -49,7 +50,7 @@ integer               :: cmdstat, cmdlen, pos
 ! parse command line
 call get_command_argument(1, args, cmdlen, cmdstat)
 call get_command(entire_line)
-if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_distr_programs
+if( str_has_substr(entire_line, 'prg=list') ) call list_distr_prgs_in_ui
 pos = index(args, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, args, pos )
 prg = args(pos+1:) ! this is the program name
@@ -174,7 +175,7 @@ select case(prg)
     case( 'initial_3Dmodel' )
         call cline%parse()
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        call xinitial_3Dmodel%execute( cline )
+        call execute_commander(xinitial_3Dmodel, cline)
     case( 'cluster3D' )
         call cline%parse()
         if( .not. cline%defined('refine') ) call cline%set('refine','cluster')

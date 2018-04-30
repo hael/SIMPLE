@@ -479,7 +479,6 @@ contains
         character(len=*),  intent(in) :: cmdline
         logical, optional, intent(in) :: waitflag, suppress_errors
         character(len=:), allocatable :: cmdmsg, tmp,  cmsg
-        character(11) :: suppress_msg='2>/dev/null'
         integer ::  cstat, exec_stat
         logical :: l_doprint, wwait, l_suppress_errors
         l_doprint = .false.
@@ -488,7 +487,7 @@ contains
         if( present(suppress_errors) ) l_suppress_errors = suppress_errors
         allocate(cmsg, source=trim(adjustl(cmdline)))
         if( l_suppress_errors )then
-            allocate(tmp, source=cmsg//' '//suppress_msg)
+            allocate(tmp, source=cmsg//' '//SUPPRESS_MSG)
             cmsg = tmp
         endif
 #if defined(PGI)
@@ -512,7 +511,6 @@ contains
         integer                            :: pos, cmdlen
         allocate(cmd, source=trim(adjustl(cmdline))//c_null_char)
         cmdlen = len(trim(adjustl(cmd)))
-        print *,' In syslib::exec_subprocess ', cmd
         pid = subprocess( cmd, cmdlen  )
         deallocate(cmd)
     end subroutine exec_subprocess

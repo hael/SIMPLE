@@ -7,9 +7,8 @@ implicit none
 
 public :: qsys_ctrl
 private
-!#include "simple_local_flags.inc"
 
-integer, parameter :: SHORTTIME = 3
+integer, parameter          :: SHORTTIME = 3
 
 type qsys_ctrl
     private
@@ -343,7 +342,7 @@ contains
         class(qsys_ctrl),  intent(inout) :: self
         character(len=LONGSTRLEN)        :: qsys_cmd
         character(len=STDLEN)            ::  script_name
-        integer               :: ipart
+        integer               :: ipart, pid
         logical               :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         ! make a submission mask
         submit_or_not = .false.
@@ -372,11 +371,11 @@ contains
                 !!!!!!!!!!!!
                 select type( pmyqsys => self%myqsys )
                     class is(qsys_local)
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//' &'
+                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
                     class DEFAULT
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))
                 end select
-                call exec_cmdline(trim(adjustl(qsys_cmd)))  !!TODO change to exec_subprocess
+                call exec_subprocess(trim(adjustl(qsys_cmd)), pid)
             endif
         end do
     end subroutine submit_scripts
@@ -386,19 +385,20 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
         character(len=STDLEN) :: cmd
+        integer :: pid
         if( .not.file_exists('./'//trim(script_name)))then
             write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
         endif
         select type( pmyqsys => self%myqsys )
             type is (qsys_local)
                 cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(CWD_GLOB))&
-                &//'/'//trim(adjustl(script_name))//' &'
+                &//'/'//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
             class DEFAULT
                 cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(CWD_GLOB))&
                 &//'/'//trim(adjustl(script_name))
         end select
         ! execute the command
-        call exec_cmdline(trim(cmd))  !!TODO change to exec_subprocess
+        call exec_subprocess(trim(cmd), pid)
     end subroutine submit_script
 
     ! QUERIES

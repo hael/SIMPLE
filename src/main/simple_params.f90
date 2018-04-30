@@ -767,8 +767,8 @@ contains
         ! get cwd
         call simple_getcwd(self%cwd)
         ! update CWD globals in defs
-        CWD_GLOB_ORIGINAL = self%cwd
-        CWD_GLOB          = self%cwd
+        if( .not. allocated(CWD_GLOB_ORIGINAL) ) allocate(CWD_GLOB_ORIGINAL, source=trim(self%cwd))
+        CWD_GLOB = trim(self%cwd)
         ! get process ID
         self%pid = get_process_id()
         ! get name of of executable
@@ -812,7 +812,6 @@ contains
             if( .not. cline%defined('projfile') ) call cline%set('projfile', trim(self%projfile))
             if( .not. cline%defined('projname') ) call cline%set('projname', trim(self%projname))
         endif
-        L_MKDIR_EXEC = .false.
         if( self%mkdir .eq. 'yes' )then
             if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
                 ! the associated(self%ptr2prg) condition required for commanders executed within
@@ -829,13 +828,9 @@ contains
                     call syslib_copy_file_stream('../'//trim(self%projfile), './'//trim(self%projfile))
                     ! cwd of SP-project will be update in the builder
                 endif
-                ! update cwd and set CWD globals in defs
-                CWD_GLOB_ORIGINAL = self%cwd
                 ! get new cwd
                 call simple_getcwd(self%cwd)
-                CWD_GLOB = self%cwd
-                ! flag what we are up to
-                L_MKDIR_EXEC = .true.
+                CWD_GLOB = trim(self%cwd)
             endif
         endif
 !>>> END, EXECUTION RELATED
