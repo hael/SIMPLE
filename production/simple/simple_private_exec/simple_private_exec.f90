@@ -225,7 +225,6 @@ select case(prg)
         ! a contiguous subset of frames will be averaged without any dose-weighting applied.
         ! <motion_correct/end>
         !
-
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'fbody'
@@ -351,9 +350,8 @@ select case(prg)
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
         keys_optional(4) = 'ndev'
-        keys_optional(5) = 'dir'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
         ! execute
         call xpick%execute(cline)
 

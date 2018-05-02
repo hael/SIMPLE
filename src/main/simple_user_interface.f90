@@ -893,14 +893,12 @@ contains
         &'CTF parameter fitting',&                                      ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
         &'simple_distr_exec',&                                          ! executable
-        &0, 3, 0, 4, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 1, 0, 4, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call ctf_estimate%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. ctf_estimate/', .false., 'ctf_estimate')
-        call ctf_estimate%set_input('parm_ios', 2, pspecsz)
-        call ctf_estimate%set_input('parm_ios', 3, mkdir_)
+        call ctf_estimate%set_input('parm_ios', 1, pspecsz)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -958,17 +956,14 @@ contains
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                        ! executable
-        &0, 5, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call extract%set_input('parm_ios', 1, 'dir', 'dir', 'Ouput directory',&
-        &'Ouput directory for single-particle images & CTF parameters', 'e.g. extract/', .false., 'extract')
-        call extract%set_input('parm_ios', 2, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
-        call extract%set_input('parm_ios', 3, pcontrast)
-        call extract%set_input('parm_ios', 4, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call extract%set_input('parm_ios', 5, mkdir_)
+        call extract%set_input('parm_ios', 1, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call extract%set_input('parm_ios', 2, pcontrast)
+        call extract%set_input('parm_ios', 3, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1396,19 +1391,17 @@ contains
         & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
         & contiguous subset of frames will be averaged without any dose-weighting applied',&   ! descr_long
         &'simple_distr_exec',&                                                                 ! executable
-        &0, 7, 0, 6, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
+        &0, 5, 0, 6, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call motion_correct%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
-        call motion_correct%set_input('parm_ios', 2, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
-        call motion_correct%set_input('parm_ios', 3, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-        call motion_correct%set_input('parm_ios', 4, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.)
-        call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
+        call motion_correct%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
+        call motion_correct%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call motion_correct%set_input('parm_ios', 3, 'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.)
+        call motion_correct%set_input('parm_ios', 4, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., '')
-        call motion_correct%set_input('parm_ios', 6, pspecsz)
-        call motion_correct%set_input('parm_ios', 7, mkdir_)
+        call motion_correct%set_input('parm_ios', 5, pspecsz)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1524,7 +1517,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
-        &0, 3, 0, 2, 1, 0, 1, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 2, 0, 2, 1, 0, 1, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1532,7 +1525,6 @@ contains
         call pick%set_input('parm_ios', 1, 'refs', 'file', 'Picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
         call pick%set_input('parm_ios', 2, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
-        call pick%set_input('parm_ios', 3, mkdir_)
         ! alternative inputs
         ! <empty>
         ! search controls

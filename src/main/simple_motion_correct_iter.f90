@@ -17,7 +17,7 @@ type :: motion_correct_iter
     private
     character(len=4)      :: speckind = 'sqrt'
     character(len=STDLEN) :: moviename, moviename_intg, moviename_intg_frames
-    character(len=STDLEN) :: moviename_forctf, moviename_pspec
+    character(len=STDLEN) :: moviename_forctf
     character(len=STDLEN) :: moviename_thumb
     type(image)           :: moviesum, moviesum_corrected, moviesum_corrected_frames
     type(image)           :: moviesum_ctf, pspec_sum, pspec_ctf
@@ -58,7 +58,6 @@ contains
         endif
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//'_intg'//trim(p%ext)
         self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//'_forctf'//trim(p%ext)
-        self%moviename_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//'_pspec'//trim(JPG_EXT)
         self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//'_thumb'//trim(JPG_EXT)
         if( cline%defined('tof') )then
             self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(p%fromf)//'-'&
@@ -113,7 +112,7 @@ contains
         call self%thumbnail%ifft()
         ! jpeg output
         call self%pspec_half_n_half%collage(self%thumbnail, img_jpg)
-        call img_jpg%write_jpg(self%moviename_thumb, quality=90, norm=.true.)
+        call img_jpg%write_jpg(self%moviename_thumb, quality=90)
         ! report to ori object
         call orientation%set('smpd',   smpd_out)
         call simple_full_path(moviename, fname, 'simple_motion_correct_iter::iterate')
@@ -122,8 +121,6 @@ contains
         call orientation%set('intg',   trim(fname))
         call simple_full_path(self%moviename_forctf, fname, 'simple_motion_correct_iter::iterate')
         call orientation%set('forctf', trim(fname))
-        call simple_full_path(self%moviename_pspec, fname,'simple_motion_correct_iter::iterate')
-        call orientation%set('pspec',  trim(fname))
         call simple_full_path(self%moviename_thumb, fname, 'simple_motion_correct_iter::iterate')
         call orientation%set('thumb',  trim(fname))
         call orientation%set('imgkind', 'mic')
@@ -151,8 +148,6 @@ contains
                 allocate(moviename, source=trim(self%moviename_intg_frames))
             case('forctf')
                 allocate(moviename, source=trim(self%moviename_forctf))
-            case('pspec')
-                allocate(moviename, source=trim(self%moviename_pspec))
             case('thumb')
                 allocate(moviename, source=trim(self%moviename_thumb))
             case DEFAULT

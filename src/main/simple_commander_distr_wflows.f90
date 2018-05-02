@@ -172,13 +172,7 @@ contains
         p_master%numlen = len(int2str(p_master%nptcls))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
-        if( cline%defined('dir') )then
-            output_dir = trim(p_master%dir)
-        else
-            output_dir = trim(DIR_MOTION_CORRECT)
-            call cline%set('dir', trim(output_dir))
-        endif
-        call simple_mkdir(output_dir)
+        output_dir = './'
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
@@ -308,13 +302,7 @@ contains
         p_master%numlen = len(int2str(p_master%nptcls))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
-        if( cline%defined('dir') )then
-            output_dir = trim(p_master%dir)
-        else
-            output_dir = trim(DIR_CTF_ESTIMATE)
-            call cline%set('dir', trim(output_dir))
-        endif
-        call simple_mkdir(output_dir)
+        output_dir = './'
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -351,13 +339,7 @@ contains
         p_master%numlen = len(int2str(p_master%nptcls))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
-        if( cline%defined('dir') )then
-            output_dir = trim(p_master%dir)
-        else
-            output_dir = trim(DIR_PICKER)
-            call cline%set('dir', trim(output_dir))
-        endif
-        call simple_mkdir(output_dir)
+        output_dir = './'
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description

@@ -384,12 +384,7 @@ contains
             endif
         endif
         ! output directory & names
-        if( cline%defined('dir') )then
-            output_dir = trim(p%dir)//'/'
-        else
-            output_dir = trim(DIR_MOTION_CORRECT)
-        endif
-        call simple_mkdir(output_dir)
+        output_dir = './'
         if( cline%defined('fbody') )then
             fbody = trim(p%fbody)
         else
@@ -452,12 +447,7 @@ contains
         integer                       :: fromto(2), imic, ntot, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         ! output directory
-        if( cline%defined('dir') )then
-            output_dir = trim(p%dir)//'/'
-        else
-            output_dir = trim(DIR_CTF_ESTIMATE)
-        endif
-        call simple_mkdir(output_dir)
+        output_dir = './'
         ! parameters & loop range
         if( p%stream .eq. 'yes' )then
             ! determine loop range
@@ -610,16 +600,11 @@ contains
         integer :: fromto(2), imic, ntot, nptcls_out, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         ! output directory
-        if( cline%defined('dir') )then
-            output_dir = trim(p%dir)//'/'
-        else
-            output_dir = trim(DIR_PICKER)
-        endif
-        call simple_mkdir(output_dir)
+        output_dir = './'
         ! parameters & loop range
         if( p%stream .eq. 'yes' )then
             ! determine loop range
-            fromto(:)   = 1 !!!!!!!!!!!!!!!!!!!!!!! NOW SHOULD POINT TO MICROGRAPH OF ORIGIN ????
+            fromto(:) = 1
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -675,12 +660,7 @@ contains
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
         call cline%printline
         ! output directory
-        if( cline%defined('dir') )then
-            output_dir = trim(p%dir)//'/'
-        else
-            output_dir = trim(DIR_EXTRACT)
-        endif
-        call simple_mkdir(output_dir)
+        output_dir = './'
         ! read in integrated movies
         call spproj%read_segment('mic', p%projfile)
         ntot  = spproj%os_mic%get_noris()
@@ -721,7 +701,6 @@ contains
         enddo
         call spproj%kill
         if( nmics == 0 ) stop 'No particles to extract! commander_preproc :: exec_extract'
-        ! p%box = nint(cline%get_rarg('box'))
         if( p%box == 0 )stop 'ERROR! box cannot be zero; commander_preproc :: exec_extract'
         ! init
         call b%build_general_tbox(p, cline, do3d=.false.)

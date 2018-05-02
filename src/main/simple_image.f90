@@ -319,6 +319,7 @@ contains
     procedure          :: clip_inplace
     procedure          :: mirror
     procedure          :: norm
+    procedure, private :: norm4viz
     procedure          :: norm_ext
     procedure          :: radius_norm
     procedure          :: noise_norm
@@ -1126,23 +1127,11 @@ contains
         integer,          optional, intent(in)    :: quality, colorspec
         logical,          optional, intent(in)    :: norm
         type(jpg_img)     :: jpg
-        real, allocatable :: pixels(:)
-        real              :: ave, sdev, var
         integer           :: status
-        logical           :: norm_here, err
-        norm_here = .true.
+        logical           :: norm_here
+        norm_here = .false.
         if(present(norm))norm_here = norm
-        if( norm_here )then
-            pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
-            call moment(pixels, ave, sdev, var, err)
-            deallocate(pixels)
-            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 128. + (self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ave) * (10. / sdev)
-            where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 255. )
-                self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 255.
-            else where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0. )
-                self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 0.
-            end where
-        endif
+        if( norm_here )call self%norm4viz
         if( self%is_2d() )then
             status = jpg%writejpg(trim(fname), self%rmat(:self%ldim(1),:self%ldim(2),1),&
                 &quality=quality, colorspec=colorspec)
@@ -3656,7 +3645,7 @@ contains
         end where
     end function bin2logical
 
-    ! performs left/right collage of input images
+    ! performs left/right collage of input images, image are modified on output
     subroutine collage( self1, self2, img_out )
         class(image), intent(inout) :: self1, self2, img_out
         type(image) :: img_pad
@@ -3665,7 +3654,7 @@ contains
         if( self1%is_ft() )stop 'Real space only; simple_mage::collage'
         if( .not.self2%is_2d() )stop '2D only; simple_mage::collage'
         if( self2%is_ft() )stop 'Real space only; simple_mage::collage'
-        border   = 2
+        border   = 1
         ldim(1)  = max(self1%ldim(1),self2%ldim(1))
         ldim(2)  = max(self1%ldim(2),self2%ldim(2))
         ldim(1)  = max(ldim(1), ldim(2))
@@ -3673,16 +3662,16 @@ contains
         ldim(3)  = 1
         ldim_col = [2*ldim(1)+border, ldim(2), 1]
         call img_out%new(ldim_col,1.)
-        ! pad & copy left image
+        call self1%norm4viz
+        call self2%norm4viz
         call img_pad%new(ldim,self1%get_smpd())
+        ! pad & copy left image
         call self1%pad(img_pad)
-        call img_pad%norm
         img_out%rmat(:ldim(1),:ldim(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         ! pad & copy right image
         img_pad%rmat = 0.
         call img_pad%set_smpd(self2%get_smpd())
         call self2%pad(img_pad)
-        call img_pad%norm
         img_out%rmat(ldim(1)+border+1:ldim_col(1),:ldim_col(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         call img_pad%kill
     end subroutine collage
@@ -7073,6 +7062,21 @@ contains
             if( var > 0. ) self%rmat = self%rmat / sqrt(var)
         endif
     end subroutine norm
+
+    subroutine norm4viz( self  )
+        class(image), intent(inout) :: self
+        if(self%is_ft())stop 'Real space only; simple_image::norm4viz'
+        call self%norm
+        ! magic numbers from Joe
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 128. + 32. *&
+            &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
+        ! thresholding
+        where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 255. )
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 255.
+        else where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0. )
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 0.
+        end where
+    end subroutine norm4viz
 
     !> \brief norm_ext  is for normalization of an image using inputted average and standard deviation
     !! \param avg Average
