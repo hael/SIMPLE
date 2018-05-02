@@ -103,28 +103,31 @@ contains
             l_pick = .false.
         endif
         ! output directories & name
-        if( cline%defined('dir') )then
-            output_dir = trim(p%dir)//'/'
+        if( p%stream.eq.'yes' )then
+            output_dir = trim(DIR_PREPROC_STREAM)
+            call simple_mkdir(output_dir)
         else
-            if( p%stream.eq.'yes' )then
-                output_dir = trim(DIR_PREPROC_STREAM)
-            else
-                output_dir = trim(DIR_PREPROC)
-            endif
+            output_dir = './'
         endif
-        output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
-        output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
-        call simple_mkdir(output_dir)
-        call simple_mkdir(output_dir_ctf_estimate)
-        call simple_mkdir(output_dir_motion_correct)
+        output_dir_ctf_estimate   = trim(output_dir)
+        output_dir_motion_correct = trim(output_dir)
         if( l_pick )then
-            output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-            call simple_mkdir(output_dir_picker)
-            if( p%stream.eq.'yes' )then
-                output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
-                call simple_mkdir(output_dir_extract)
-            endif
+            output_dir_picker  = trim(output_dir)
+            if( p%stream.eq.'yes' )output_dir_extract = trim(output_dir)
         endif
+        ! output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
+        ! output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
+        ! call simple_mkdir(output_dir)
+        ! call simple_mkdir(output_dir_ctf_estimate)
+        ! call simple_mkdir(output_dir_motion_correct)
+        ! if( l_pick )then
+        !     output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
+        !     call simple_mkdir(output_dir_picker)
+        !     if( p%stream.eq.'yes' )then
+        !         output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
+        !         call simple_mkdir(output_dir_extract)
+        !     endif
+        ! endif
         if( cline%defined('fbody') )then
             fbody = trim(p%fbody)
         else

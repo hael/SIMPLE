@@ -113,20 +113,21 @@ contains
             l_pick = .false.
         endif
         ! output directories
-        if( cline%defined('dir') )then
-            output_dir = trim(p_master%dir)//'/'
-        else
-            output_dir = trim(DIR_PREPROC)
-        endif
-        output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
-        output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
-        call simple_mkdir(output_dir)
-        call simple_mkdir(output_dir_ctf_estimate)
-        call simple_mkdir(output_dir_motion_correct)
-        if( l_pick )then
-            output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-            call simple_mkdir(output_dir_picker)
-        endif
+        output_dir = './'
+        ! if( cline%defined('dir') )then
+        !     output_dir = trim(p_master%dir)//'/'
+        ! else
+        !     output_dir = trim(DIR_PREPROC)
+        ! endif
+        ! output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
+        ! output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
+        ! call simple_mkdir(output_dir)
+        ! call simple_mkdir(output_dir_ctf_estimate)
+        ! call simple_mkdir(output_dir_motion_correct)
+        ! if( l_pick )then
+        !     output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
+        !     call simple_mkdir(output_dir_picker)
+        ! endif
         ! read in movies
         call spproj%read( p_master%projfile )
         ! DISTRIBUTED EXECUTION

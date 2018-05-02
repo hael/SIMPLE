@@ -1628,10 +1628,10 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 10, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &0, 9, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess%set_input('img_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
+        ! <empty>
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess%set_input('parm_ios', 2,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -1644,7 +1644,6 @@ contains
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess%set_input('parm_ios', 8,  pspecsz)
         call preprocess%set_input('parm_ios', 9,  numlen)
-        call preprocess%set_input('parm_ios', 10, mkdir_)
         ! alternative inputs
         ! <empty>
         ! search controls
