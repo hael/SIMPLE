@@ -39,10 +39,11 @@ contains
         real,                       intent(out)   :: smpd_out
         character(len=*),           intent(in)    :: dir_out
         character(len=:), allocatable :: fbody_here, ext, fname
-        real, allocatable     :: shifts(:,:)
-        integer               :: ldim(3), ldim_thumb(3), status
-        real                  :: corr, scale
-        logical               :: err
+        real,             allocatable :: shifts(:,:)
+        type(image) :: img_jpg
+        integer     :: ldim(3), ldim_thumb(3), status
+        real        :: corr, scale
+        logical     :: err
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(*,*) 'inputted movie stack does not exist: ', moviename
@@ -72,7 +73,7 @@ contains
         else
             self%moviename = trim(moviename)
         endif
-        ! execute the motion_correctring
+        ! execute the motion_correction
         call motion_correct_movie(self%moviename, p, corr, smpd_out, shifts, err)
         if( err ) return
         ! generate sums
@@ -90,18 +91,16 @@ contains
             DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
             DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
         endif
-        ! generate power-spectra
+        ! generate power-spectra and cleanup
         self%pspec_sum         = self%moviesum%mic2spec(p%pspecsz, self%speckind)
         self%pspec_ctf         = self%moviesum_ctf%mic2spec(p%pspecsz, self%speckind)
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
+        call self%pspec_sum%kill
+        call self%pspec_ctf%kill
         ! write output
         if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_intg_frames)
-        print *, trim(self%moviename_intg)
-        print *, trim(self%moviename_forctf)
         call self%moviesum_corrected%write(self%moviename_intg)
         call self%moviesum_ctf%write(self%moviename_forctf)
-        ! power spectrum
-        call self%pspec_half_n_half%write_jpg(self%moviename_pspec, quality=90, norm=.true.)
         ! generate thumbnail
         ldim          = self%moviesum_corrected%get_ldim()
         scale         = real(p%pspecsz)/real(ldim(1))
@@ -112,7 +111,9 @@ contains
         call self%moviesum_corrected%fft()
         call self%moviesum_corrected%clip(self%thumbnail)
         call self%thumbnail%ifft()
-        call self%thumbnail%write_jpg(self%moviename_thumb, quality=90, norm=.true.)
+        ! jpeg output
+        call self%pspec_half_n_half%collage(self%thumbnail, img_jpg)
+        call img_jpg%write_jpg(self%moviename_thumb, quality=90, norm=.true.)
         ! report to ori object
         call orientation%set('smpd',   smpd_out)
         call simple_full_path(moviename, fname, 'simple_motion_correct_iter::iterate')
@@ -135,9 +136,8 @@ contains
         call self%moviesum_corrected%kill
         call self%moviesum_corrected_frames%kill
         call self%moviesum_ctf%kill
-        call self%pspec_sum%kill
-        call self%pspec_ctf%kill
         call self%pspec_half_n_half%kill
+        call img_jpg%kill
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )

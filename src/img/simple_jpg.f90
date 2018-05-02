@@ -15,10 +15,7 @@ private
     !*** It doesn't matter whether it is an integer or a real
 integer, parameter                                   :: cptr          = kind(5)
 integer, parameter                                   :: numComponents = 3
-!  integer, parameter                                   :: pixelsize     = selected_int_kind(3)
-!   integer, parameter                                   :: longint       = selected_int_kind(9)
 integer, public, parameter                           :: max_colors =  256
-!buf_range(1)buf_range(1)im2 = gdImageScale(im, 1, 65535);
 integer, parameter                                   :: GREYSCALE  =  1
 
 
@@ -57,11 +54,6 @@ contains
 
 end type jpg_img
 
-! interface jpg_img
-!     ! Constructor declaration
-!     module procedure constructor
-! end interface jpg_img
-
 interface
 #ifdef HAVE_LIBJPEG
     subroutine setup_jpeg ( width, height, in, out ) bind ( c, name="setup_jpeg" )
@@ -93,16 +85,6 @@ interface
     end subroutine write_jpeg
 #endif
 
-    ! function fgltLoadTGA(FileName,width,height,components,eform,image)
-    !     use, intrinsic :: iso_c_binding
-    !     type(c_ptr), target :: fgltloadTGA
-    !     character(len=*), intent(in) :: FileName
-    !     integer(c_int), intent(out) :: width, height
-    !     integer(c_int), intent(out) :: components, eform
-    !     integer(c_char), dimension(:), allocatable, &
-    !         intent(out), target :: image
-    ! end function fgltLoadTGA
-    !        STBIWDEF int stbi_write_jpg(char const *filename, int x, int y, int comp, const void  *data, int quality)
     integer function stbi_write_jpg (file_name, w, h, comp, data, quality ) bind ( c, name="stbi_write_jpg" )
         import
         character(c_char),dimension(*),intent(in)    :: file_name
@@ -290,12 +272,10 @@ contains
         if(present(colorspec)) self%colorspace = colorspec
         allocate(fstr, source=trim(fname)//c_null_char)
         VerbosePrint '>>> In save_jpeg_r4 input w x h ', w, h
-        !        self%img_buffer = transfer(in_buffer,1_c_int8_t)
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
         VerbosePrint '>>> In save_jpeg_r4 input lo hi ', lo, hi
         allocate(self%img_buffer(w*h*3))!, source=0_c_char)
-        !  self%img_buffer = reshape(in_buffer, (/ w*h /) )
         do j=0,h-1
             do i=0,w-1
                 if  (self%colorspace == 3) then
@@ -305,7 +285,6 @@ contains
                     self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , z'000000ff') ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
-                    !DebugPrint (i-1)*c + (j-1) * w * c+ 1, self%img_buffer((i)*c + (j) * w * c+ 1)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*REAL( (in_buffer(i+1,j+1)-lo)/REAL(hi - lo) ) ,kind=c_int)
@@ -316,9 +295,6 @@ contains
             end do
         end do
         img = c_loc(self%img_buffer)
-        !   if(c_associated(img, c_loc(self%img_buffer))) &
-        !       call simple_stop( 'save_jpeg img buffer and C pointer do not point to same target')
-        !   print *, "shape img ", shape(img)
         self%width = w
         self%height = h
         VerbosePrint '>>> Calling stbi_write_jpg fname ', fname
@@ -327,9 +303,7 @@ contains
         VerbosePrint '>>> Calling stbi_write_jpg comp ', self%colorspace
         VerbosePrint '>>> Calling stbi_write_jpg quality ', self%quality
         status = stbi_write_jpg (fstr, self%width, self%height, self%colorspace, img, self%quality )
-        !call write_jpeg(img, fname, w, h, self%quality, self%colorspace, status)
         VerbosePrint '>>> stbi_write_jpg returned status ', status
-        !STBI returns 0 on failure and non-0 on success.
         if(status == 0 ) call simple_stop('save_jpeg_r4 call to write_jpeg failed' )
         status = 0
         deallocate(fstr)
@@ -358,8 +332,6 @@ contains
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
         VerbosePrint '>>> In save_jpeg_i4 input lo hi ', lo, hi
-        !        self%img_buffer = transfer(in_buffer,1_c_int8_t)
-        !self%img_buffer = reshape(in_buffer, (/ w * h /))
         allocate(self%img_buffer(w*h*3))
         do j=0,h-1
             do i=0,w-1
