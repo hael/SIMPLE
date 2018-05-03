@@ -270,11 +270,11 @@ contains
         real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
-        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
+        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3),iloc(3)
         complex   :: comp, oshift
         real      :: vec(3), loc(3), dists(3), shconst_here(2)
         real      :: w(self%wdim,self%wdim,self%wdim)
-        real      :: arg, tval, tvalsq, rsh_sq, rnyq_sq, shweight, bfac_sc, freq_sq
+        real      :: arg, tval, tvalsq, rsh_sq, rnyq_sq, bfac_sc, freq_sq
         logical   :: do_bfac_rec
         if( pwght < TINY )return
         ! window size
@@ -307,7 +307,7 @@ contains
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint. The speeduop
         ! (on 5000 images of betagal) is modest (10%) but significant
-        !$omp parallel default(shared) private(i,h,k,sh,freq_sq,shweight,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys,rsh_sq)&
+        !$omp parallel default(shared) private(i,h,k,sh,freq_sq,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys,rsh_sq)&
         !$omp proc_bind(close)
         do isym=1,nsym
             !$omp do collapse(2) schedule(static)

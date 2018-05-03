@@ -389,21 +389,29 @@ contains
 
     !>  \brief  is for applying CTF to an image and shifting it (used in classaverager)
     !!          KEEP THIS ROUTINE SERIAL
-    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift )
-        class(ctf),   intent(inout) :: self        !< instance
-        class(image), intent(inout) :: img         !< modified image (output)
-        integer,      intent(in)    :: imode       !< 1=abs 2=ctf 3=no
-        integer,      intent(in)    :: lims(3,2)   !< loop limits
-        real,         intent(out)   :: rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,         intent(in)    :: x, y        !< rotational origin shift
-        real,         intent(in)    :: dfx         !< defocus x-axis
-        real,         intent(in)    :: dfy         !< defocus y-axis
-        real,         intent(in)    :: angast      !< angle of astigmatism
-        real,         intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift, bfac )
+        class(ctf),     intent(inout) :: self        !< instance
+        class(image),   intent(inout) :: img         !< modified image (output)
+        integer,        intent(in)    :: imode       !< 1=abs 2=ctf 3=no
+        integer,        intent(in)    :: lims(3,2)   !< loop limits
+        real,           intent(out)   :: rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,           intent(in)    :: x, y        !< rotational origin shift
+        real,           intent(in)    :: dfx         !< defocus x-axis
+        real,           intent(in)    :: dfy         !< defocus y-axis
+        real,           intent(in)    :: angast      !< angle of astigmatism
+        real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        real, optional, intent(in)    :: bfac        !< b-factor for weighted class averages
         integer :: ldim(3),logi(3),h,k,phys(3)
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),bfac_sc,w,rnyq_sq
         complex :: comp
+        logical :: do_bfac
+        do_bfac = present(bfac)
         ! initialize
+        if( do_bfac )then
+            bfac_sc = bfac / 4.
+            rnyq_sq = real(img%get_nyq()**2.)
+            print *,bfac_sc
+        endif
         call self%init(dfx, dfy, angast)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
@@ -416,12 +424,25 @@ contains
                 ang       = atan2(real(k),real(h))
                 tval      = 1.0
                 if( imode <  3 ) tval = self%eval(spaFreqSq, ang, add_phshift)
-                rho(h,k)  = tval * tval
+                ! b-factor
+                if( do_bfac )then
+                    if( spaFreqSq < TINY )then
+                        w = 1.
+                    else if( spaFreqSq >= rnyq_sq )then
+                        w = exp(-bfac_sc)
+                    else
+                        w = exp(-bfac_sc*spaFreqSq/rnyq_sq)
+                    endif
+                else
+                    w  = 1.
+                endif
+                ! rho
+                rho(h,k)  = w * tval * tval
                 if( imode == 1 ) tval = abs(tval)
-                ! multiply image with tval
+                ! multiply image with tval & weight
                 logi = [h,k,0]
                 phys = img%comp_addr_phys(logi)
-                call img%mul_cmat_at(phys,tval)
+                call img%mul_cmat_at(phys, w*tval)
                 ! shift image
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), img%oshift(logi,[x,y,0.]))
             end do

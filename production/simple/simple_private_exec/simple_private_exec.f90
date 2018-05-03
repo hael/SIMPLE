@@ -373,8 +373,9 @@ select case(prg)
         keys_optional(7)  = 'refs'
         keys_optional(8)  = 'remap_cls'
         keys_optional(9)  = 'weights2D'
+        keys_optional(10) = 'shellweights'
         ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:9))
+        call cline%parse_oldschool(keys_optional=keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
@@ -409,8 +410,9 @@ select case(prg)
         keys_optional(17) = 'refine'
         keys_optional(18) = 'match_filt'
         keys_optional(19) = 'dyncls'
+        keys_optional(20) = 'shellweights'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:19))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:20))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)

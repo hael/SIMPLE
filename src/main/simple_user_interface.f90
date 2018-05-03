@@ -622,7 +622,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 11, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 11, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -664,6 +664,7 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, weights2D)
+        call cluster2D%set_input('filt_ctrls', 8, shellweights)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -1236,7 +1237,7 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &1, 5, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 6, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
@@ -1248,6 +1249,7 @@ contains
         call make_cavgs%set_input('parm_ios', 3, weights2D)
         call make_cavgs%set_input('parm_ios', 4, remap_cls)
         call make_cavgs%set_input('parm_ios', 5, mkdir_)
+        call make_cavgs%set_input('parm_ios', 6, shellweights)
         ! alternative inputs
         ! <empty>
         ! search controls

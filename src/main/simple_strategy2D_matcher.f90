@@ -167,6 +167,9 @@ contains
             ! defaults to frac, done by class
             if( which_iter > 3 )then
                 call b%a%calc_hard_weights2D( p%frac, p%ncls )
+                !!!!!!!!!!1
+                call b%a%calc_bfac_rec
+                !!!!!!!!!!!!!!!!!!!!!!!!!
             else
                 call b%a%set_all2single('w', 1.0)
             endif
