@@ -3,21 +3,20 @@ module simple_build
 include 'simple_lib.f08'
 !!import classes
 use simple_cmdline,          only: cmdline
+use simple_params,           only: params
 use simple_comlin,           only: comlin
 use simple_image,            only: image
 use simple_sp_project,       only: sp_project
 use simple_oris,             only: oris
 use simple_reconstructor,    only: reconstructor
 use simple_reconstructor_eo, only: reconstructor_eo
-use simple_params,           only: params
 use simple_sym,              only: sym
 use simple_convergence,      only: convergence
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
-use simple_binoris_io        ! use all in there
-use simple_user_interface    ! use all in there
+use simple_user_interface,   only: simple_program ! use all in there
 implicit none
 
 public :: build
@@ -89,6 +88,8 @@ contains
 
     !> \brief  constructs the sp project (part of general builder)
     subroutine build_spproj( self, p, cline, nooritab )
+        use simple_binoris_io, only: binread_ctfparams_state_eo, binread_oritab
+        use simple_user_interface,   only: get_prg_ptr
         class(build), target, intent(inout) :: self
         class(params),        intent(inout) :: p
         class(cmdline),       intent(inout) :: cline
@@ -229,7 +230,7 @@ contains
             DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
             lfny       = self%img%get_lfny(1)
-            lfny_match = self%img_match%get_lfny(1)
+!            lfny_match = self%img_match%get_lfny(1)
             cyc_lims   = self%img_pad%loop_lims(3)
             allocate( self%fsc(p%nstates,lfny), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk("In: build_general_tbox; simple_build, 1", alloc_stat)

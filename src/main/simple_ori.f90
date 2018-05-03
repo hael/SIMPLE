@@ -1,6 +1,13 @@
 ! an orientation
 module simple_ori
-include 'simple_lib.f08'
+!include 'simple_lib.f08'
+use simple_defs
+use simple_error, only: simple_stop
+use simple_hash,  only: hash
+use simple_chash, only: chash
+use simple_math,  only: myacos, deg2rad, rad2deg, make_transfmat, rotmat2d
+use simple_rnd,   only: ran3
+use simple_stat,  only: pearsn
 implicit none
 
 public :: ori, test_ori
@@ -30,7 +37,7 @@ type :: ori
     procedure          :: copy => copy_ori
     procedure          :: delete_entry
     procedure          :: set_euler
-    procedure          :: calc_dmat
+    !procedure          :: calc_dmat
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
@@ -46,18 +53,18 @@ type :: ori
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift
-    procedure          :: revshsgn
+    !procedure          :: revshsgn
     procedure          :: str2ori
     ! GETTERS
     procedure          :: exists
-    procedure          :: get_chtab
+    !procedure          :: get_chtab
     procedure          :: get_euler
     procedure          :: e1get
     procedure          :: e2get
     procedure          :: e3get
     procedure          :: get_normal
     procedure          :: get_mat
-    procedure          :: get_dmat
+    !procedure          :: get_dmat
     procedure          :: get
     procedure, private :: getter_1
     procedure, private :: getter_2
@@ -66,14 +73,14 @@ type :: ori
     procedure          :: get_3Dshift
     procedure          :: get_state
     procedure          :: hash_size
-    procedure          :: hash_vals
-    procedure          :: chash_size
+   ! procedure          :: hash_vals
+   ! procedure          :: chash_size
     procedure          :: isthere
     procedure          :: isstatezero
-    procedure          :: isevenodd
-    procedure          :: iseven
-    procedure          :: isodd
-    procedure          :: key_is_real
+   ! procedure          :: isevenodd
+   ! procedure          :: iseven
+   ! procedure          :: isodd
+   ! procedure          :: key_is_real
     procedure          :: ori2str
     procedure          :: ori2strlen_trim
     procedure          :: ori2chash
@@ -84,7 +91,7 @@ type :: ori
     procedure          :: read
     ! CALCULATORS
     procedure          :: round_shifts
-    procedure          :: mul_shifts
+   ! procedure          :: mul_shifts
     procedure, private :: shift
     procedure, private :: compeuler
     procedure          :: compose3d2d
@@ -219,11 +226,11 @@ contains
     end subroutine set_euler
 
     !>  \brief  set the rotation matrix derivatives
-    subroutine calc_dmat( self )
-        class(ori), intent(inout) :: self
-        call euler2dm( self%euls(1), self%euls(2), self%euls(3), self%drmat )
-    end subroutine calc_dmat
-    
+    ! subroutine calc_dmat( self )
+    !     class(ori), intent(inout) :: self
+    !     call euler2dm( self%euls(1), self%euls(2), self%euls(3), self%drmat )
+    ! end subroutine calc_dmat
+
     !>  \brief  is a setter
     subroutine e1set( self, e1 )
         class(ori), intent(inout) :: self
@@ -421,14 +428,14 @@ contains
     end subroutine rnd_shift
 
     !>  \brief  for reversing the shift signs (to fit convention)
-    subroutine revshsgn( self )
-        class(ori), intent(inout) :: self
-        real                      :: x, y
-        x = self%get('x')
-        y = self%get('y')
-        call self%set('x', -x)
-        call self%set('y', -y)
-    end subroutine revshsgn
+    ! subroutine revshsgn( self )
+    !     class(ori), intent(inout) :: self
+    !     real                      :: x, y
+    !     x = self%get('x')
+    !     y = self%get('y')
+    !     call self%set('x', -x)
+    !     call self%set('y', -y)
+    ! end subroutine revshsgn
 
     !>  \brief  reads all orientation info (by line) into the hash-tables
     subroutine str2ori( self, line )
@@ -455,11 +462,11 @@ contains
     end function exists
 
     !>  \brief  is a getter
-    function get_chtab( self )result( chtab )
-        class(ori), intent(in) :: self
-        type(chash) :: chtab
-        chtab = self%chtab
-    end function get_chtab
+    ! function get_chtab( self )result( chtab )
+    !     class(ori), intent(in) :: self
+    !     type(chash) :: chtab
+    !     chtab = self%chtab
+    ! end function get_chtab
 
     !>  \brief  is a getter
     pure function get_euler( self ) result( euls )
@@ -504,12 +511,12 @@ contains
     end function get_mat
 
     !>  \brief  is a getter
-    pure function get_dmat( self ) result( dmat )
-        class(ori), intent(in) :: self
-        real, dimension(3,3,3) :: dmat
-        dmat = self%drmat
-    end function get_dmat
-    
+    ! pure function get_dmat( self ) result( dmat )
+    !     class(ori), intent(in) :: self
+    !     real, dimension(3,3,3) :: dmat
+    !     dmat = self%drmat
+    ! end function get_dmat
+
     !>  \brief  is a getter
     function get( self, key ) result( val )
         class(ori), intent(inout)    :: self
@@ -566,18 +573,18 @@ contains
     end function hash_size
 
     !>  \brief  returns the keys of the hash
-    function hash_vals( self ) result( vals )
-        class(ori), intent(inout) :: self
-        real(kind=4), allocatable :: vals(:)
-        vals = self%htab%get_values()
-    end function hash_vals
+    ! function hash_vals( self ) result( vals )
+    !     class(ori), intent(inout) :: self
+    !     real(kind=4), allocatable :: vals(:)
+    !     vals = self%htab%get_values()
+    ! end function hash_vals
 
     !>  \brief  returns size of chash
-    function chash_size( self ) result( sz )
-        class(ori), intent(in) :: self
-        integer :: sz
-        sz = self%chtab%size_of()
-    end function chash_size
+    ! function chash_size( self ) result( sz )
+    !     class(ori), intent(in) :: self
+    !     integer :: sz
+    !     sz = self%chtab%size_of()
+    ! end function chash_size
 
     !>  \brief  check for presence of key in the ori hash
     function isthere( self, key ) result( found )
@@ -597,42 +604,42 @@ contains
     end function isstatezero
 
     !>  \brief  whether orientation has been atributed an even/odd partition
-    logical function isevenodd( self )
-        class(ori),       intent(inout) :: self
-        if( self%isthere('eo') )then
-            isevenodd = self%htab%get('eo') > -.5
-        else
-            isevenodd = .false.
-        endif
-    end function isevenodd
+    ! logical function isevenodd( self )
+    !     class(ori),       intent(inout) :: self
+    !     if( self%isthere('eo') )then
+    !         isevenodd = self%htab%get('eo') > -.5
+    !     else
+    !         isevenodd = .false.
+    !     endif
+    ! end function isevenodd
 
     !>  \brief  whether orientation is part of the even partition
-    logical function iseven( self )
-        class(ori), intent(inout) :: self
-        real :: val
-        val = self%htab%get('eo')
-        iseven = (val > -0.5) .and. (val < 0.5)
-    end function iseven
+    ! logical function iseven( self )
+    !     class(ori), intent(inout) :: self
+    !     real :: val
+    !     val = self%htab%get('eo')
+    !     iseven = (val > -0.5) .and. (val < 0.5)
+    ! end function iseven
 
     !>  \brief  whether orientation is part of the odd partition
-    logical function isodd( self )
-        class(ori),       intent(inout) :: self
-        isodd = self%htab%get('eo') > 0.5
-    end function isodd
+    ! logical function isodd( self )
+    !     class(ori),       intent(inout) :: self
+    !     isodd = self%htab%get('eo') > 0.5
+    ! end function isodd
 
     !>  \brief  is for checking whether key maps to a real value or not
-    function key_is_real( self, key ) result( is )
-        class(ori),       intent(inout) :: self
-        character(len=*), intent(in)    :: key
-        logical :: hash_found, chash_found, is
-        hash_found  = self%htab%isthere(key)
-        chash_found = self%chtab%isthere(key)
-        is = .false.
-        if( hash_found )then
-            is = .true.
-            if( chash_found ) call simple_stop('ERROR, ambigous keys; simple_ori :: key_is_real')
-        endif
-    end function key_is_real
+    ! function key_is_real( self, key ) result( is )
+    !     class(ori),       intent(inout) :: self
+    !     character(len=*), intent(in)    :: key
+    !     logical :: hash_found, chash_found, is
+    !     hash_found  = self%htab%isthere(key)
+    !     chash_found = self%chtab%isthere(key)
+    !     is = .false.
+    !     if( hash_found )then
+    !         is = .true.
+    !         if( chash_found ) call simple_stop('ERROR, ambigous keys; simple_ori :: key_is_real')
+    !     endif
+    ! end function key_is_real
 
     !>  \brief  joins the hashes into a string that represent the ori
     function ori2str( self ) result( str )
@@ -718,12 +725,12 @@ contains
     end subroutine round_shifts
 
     !>  \brief  rounds the origin shifts
-    subroutine mul_shifts( self, mul )
-        class(ori), intent(inout) :: self
-        real,       intent(in)    :: mul
-        call self%set('x', mul * self%get('x'))
-        call self%set('y', mul * self%get('y'))
-    end subroutine mul_shifts
+    ! subroutine mul_shifts( self, mul )
+    !     class(ori), intent(inout) :: self
+    !     real,       intent(in)    :: mul
+    !     call self%set('x', mul * self%get('x'))
+    !     call self%set('y', mul * self%get('y'))
+    ! end subroutine mul_shifts
 
     !>  \brief  corrects the Euler angle bounds
     subroutine shift( self )
@@ -789,6 +796,16 @@ contains
         call o_out%set('y',y)
         euls(3) = e3
         call o_out%set_euler(euls)
+    contains
+            !>  extracts in-plane parameters from transformation matrix
+        subroutine transfmat2inpls( R, psi, tx, ty )
+            real,intent(inout) :: psi,tx,ty
+            real,intent(in)    :: R(3,3)
+            psi = rad2deg( myacos( R(1,1) ))
+            if( R(1,2)<0. )psi=360.-psi
+            tx  = R(1,3)
+            ty  = R(2,3)
+        end subroutine transfmat2inpls
     end subroutine compose3d2d
 
     subroutine map3dshift22d( self, sh3d )

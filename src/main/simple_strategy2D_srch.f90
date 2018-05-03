@@ -5,8 +5,7 @@ use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_oris,              only: oris
 use simple_params,            only: params
-use simple_strategy2D_alloc   ! use all in there
-use simple_timer              ! use all in there
+use simple_strategy2D_alloc,  only: cls_pops ! use all in there
 implicit none
 
 public :: strategy2D_srch, strategy2D_spec

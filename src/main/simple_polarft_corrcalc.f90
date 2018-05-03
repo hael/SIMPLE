@@ -3,7 +3,6 @@ module simple_polarft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-
 use simple_fftw3
 implicit none
 
@@ -921,8 +920,8 @@ contains
 
     function calc_corr_for_rot_8( self, pft_ref, i, kstop, irot ) result( corr )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, irot
+        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer     :: rot
         real(dp)    :: corr
         complex(sp) :: tmp
@@ -948,8 +947,8 @@ contains
 
     function calc_euclid_for_rot( self, pft_ref, i, kstop, irot ) result( euclid )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, irot
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer     :: rot
         real(sp)    :: euclid
         complex(sp) :: tmp
@@ -974,8 +973,8 @@ contains
 
     function calc_euclid_for_rot_8( self, pft_ref, i, kstop, irot ) result( euclid )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, irot
+        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer     :: rot
         real(dp)    :: euclid
         complex(dp) :: tmp
@@ -1001,8 +1000,8 @@ contains
 
     function calc_corrk_for_rot( self, pft_ref, i, kstop, k, irot ) result( corr )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, k, irot
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer :: rot
         real    :: corr
         complex :: tmp
@@ -1029,8 +1028,8 @@ contains
 
     function calc_corrk_for_rot_8( self, pft_ref, i, kstop, k, irot ) result( corr )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, k, irot
+        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer     :: rot
         real(dp)    :: corr
         complex(dp) :: tmp
@@ -1057,8 +1056,8 @@ contains
 
     function calc_euclidk_for_rot( self, pft_ref, i, kstop, k, irot ) result( euclid )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, k, irot
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer :: rot
         real    :: euclid
         complex :: tmp
@@ -1084,8 +1083,8 @@ contains
 
     function calc_euclidk_for_rot_8( self, pft_ref, i, kstop, k, irot ) result( euclid )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer,                 intent(in)    :: i, kstop, k, irot
+        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
         integer     :: rot
         real(dp)    :: euclid
         complex(dp) :: tmp

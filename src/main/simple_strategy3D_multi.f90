@@ -1,5 +1,6 @@
 ! concrete strategy3D: probabilistic multi-state refinement
 module simple_strategy3D_multi
+include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! use all in there
 use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D,       only: strategy3D
@@ -99,7 +100,7 @@ contains
         class(strategy3D_multi), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks), state_ws(self%s%nstates)
-        real      :: wcorr, frac, ang_sdev, dist, dist_inpl, euldist
+        real      :: wcorr, frac, ang_sdev, dist_inpl, euldist
         integer   :: best_loc(1), neff_states, state
         logical   :: included(self%s%npeaks)
         ! extract peak info

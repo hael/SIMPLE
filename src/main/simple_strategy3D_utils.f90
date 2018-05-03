@@ -3,7 +3,9 @@ use simple_defs              ! use all in there
 use simple_strategy3D_alloc  ! use all in there
 use simple_strategy3D_srch,  only: strategy3D_srch
 implicit none
-
+private
+public :: extract_peaks, corrs2softmax_weights, states_reweight, fit_bfactors
+public :: convergence_stats_single,convergence_stats_multi, estimate_ang_sdev
 contains
 
     subroutine extract_peaks( s, corrs, state )

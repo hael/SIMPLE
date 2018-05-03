@@ -2,7 +2,6 @@
 module simple_masker
 include 'simple_lib.f08'
 use simple_image,  only: image
-use simple_ori,    only: ori
 use simple_params, only: params
 implicit none
 
@@ -206,6 +205,7 @@ contains
     subroutine env_rproject(self, e, img)
         !$ use omp_lib
         !$ use omp_lib_kinds
+        use simple_ori,    only: ori
         class(masker), intent(inout) :: self   !< projector instance
         class(ori),    intent(inout) :: e      !< Euler angle
         type(image),   intent(inout) :: img    !< resulting projection image

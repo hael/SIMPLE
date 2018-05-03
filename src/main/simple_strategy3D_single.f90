@@ -1,7 +1,8 @@
 ! concrete strategy3D: probabilistic single-state refinement
 module simple_strategy3D_single
+include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! use all in there
-use simple_strategy3D_utils  ! use all in there
+!use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D_multi, only: strategy3D_multi
 implicit none
 
@@ -19,11 +20,13 @@ contains
 
     subroutine oris_assign_single( self )
         use simple_ori,  only: ori
-        use simple_oris, only: oris
+        ! use simple_oris, only: oris
+        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_sdev,&
+            &fit_bfactors, convergence_stats_single
         class(strategy3D_single), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
-        real      :: wcorr, frac,  ang_sdev, dist, dist_inpl, euldist
+        real      :: wcorr, frac,  ang_sdev, dist_inpl, euldist
         integer   :: best_loc(1)
         logical   :: included(self%s%npeaks)
         ! extract peak info

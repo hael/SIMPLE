@@ -7,11 +7,8 @@ use simple_oris,           only: oris
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_projector_hlev, only: project
-use simple_sp_project,     only: sp_project
-use simple_comlin_srch     ! use all in there
 use simple_binoris_io,     only: binwrite_oritab, binread_oritab, binread_nlines
-!use simple_binoris_io      ! use all in there
+
 implicit none
 
 public :: symsrch_commander
@@ -27,24 +24,26 @@ contains
 
     !> for identification of the principal symmetry axis
     subroutine exec_symsrch( self, cline )
+        use simple_comlin_srch     ! use all in there
+        use simple_projector_hlev, only: reproject
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                   :: p
         type(build)                    :: b
-        type(ori)                      :: symaxis, orientation
+        type(ori)                      :: orientation
         class(oris), pointer           :: psymaxes
-        type(sp_project)               :: spproj
-        type(oris)                     :: oshift, orientation_best, tmp_os, symaxes
-        real,              allocatable :: corrs(:)
-        integer,           allocatable :: order(:)
-        integer                        :: bestloc(1), nbest_here, noris, cnt, i, j
+        !type(sp_project)               :: spproj
+        type(oris)                     :: oshift, orientation_best,symaxes
+        !real,              allocatable :: corrs(:)
+        !integer,           allocatable :: order(:)
+        integer                        :: noris, cnt, i, j
         real                           :: shvec(3)
         character(len=:),  allocatable :: symaxes_str
         character(len=STDLEN)          :: fname_finished
         character(len=32), parameter   :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
         character(len=32), parameter   :: SYMPROJSTK = 'sym_projs.mrc'
         character(len=32), parameter   :: SYMPROJTAB = 'sym_projs'//trim(TXT_EXT)
-        integer,           parameter   :: NBEST = 30
+        !integer,           parameter   :: NBEST = 30
         nullify(psymaxes)
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
@@ -70,7 +69,7 @@ contains
             call b%vol%mask(p%msk, 'soft')
             call b%vol%fft()
             call b%vol%expand_cmat(p%alpha)
-            b%ref_imgs(1,:) = project(b%vol, b%e, p)
+            b%ref_imgs(1,:) = reproject(b%vol, b%e, p)
             if( p%part == 1 )then
                 ! writes projections images and orientations for subsequent reconstruction
                 ! only in local and distributed (part=1) modes

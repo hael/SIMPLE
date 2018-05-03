@@ -1,4 +1,5 @@
 module simple_strategy2D_neigh
+use simple_defs
 use simple_strategy2D_alloc  ! use all in there
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec

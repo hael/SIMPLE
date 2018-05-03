@@ -64,7 +64,7 @@ contains
     subroutine exec_simulate_particles( self, cline )
         use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
-        use simple_gridding,   only: prep4cgrid
+        use simple_gridding,   only: prep4_cgrid
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)       :: p
@@ -116,7 +116,7 @@ contains
         call b%vol%mask(p%msk, 'soft')
         call vol_pad%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
         DebugPrint  '>>> DID READ VOL'
-        call prep4cgrid(b%vol, vol_pad, kbwin)
+        call prep4_cgrid(b%vol, vol_pad, kbwin)
         call vol_pad%expand_cmat(p%alpha)
         DebugPrint  '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'

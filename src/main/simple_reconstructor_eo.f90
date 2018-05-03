@@ -488,7 +488,6 @@ contains
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 use simple_ori, only: ori
-                use simple_gridding,        only: prep4cgrid
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk, eo

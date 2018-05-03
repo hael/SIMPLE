@@ -9,7 +9,7 @@ include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_oris,       only: oris
 use simple_params,     only: params
-use simple_gridding,   only: prep4cgrid
+use simple_gridding,   only: prep4_cgrid
 use simple_ori,        only: ori
 use simple_projector,  only: projector
 use simple_kbinterpol, only: kbinterpol
@@ -18,7 +18,7 @@ implicit none
 contains
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
-    function project( vol, o, p, top ) result( imgs )
+    function reproject( vol, o, p, top ) result( imgs )
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
         class(params),     intent(inout) :: p       !< parameters
@@ -30,7 +30,7 @@ contains
         integer          :: n, i, ithr
         kbwin = kbinterpol(KBWINSZ, p%alpha)
         call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call prep4cgrid(vol, vol_pad, kbwin)
+        call prep4_cgrid(vol, vol_pad, kbwin)
         if( present(top) )then
             n = top
         else
@@ -70,7 +70,7 @@ contains
         deallocate(imgs_pad)
         call vol_pad%kill_expanded
         call vol_pad%kill
-    end function project
+    end function reproject
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o, p, shvec ) result( rovol )
@@ -92,7 +92,7 @@ contains
         call rovol_pad%new(ldim_pd, p%smpd)
         call rovol_pad%set_ft(.true.)
         call rovol%new(ldim, p%smpd)
-        call prep4cgrid(vol, vol_pad, kbwin)
+        call prep4_cgrid(vol, vol_pad, kbwin)
         call vol_pad%expand_cmat(p%alpha)
         lims = vol_pad%loop_lims(2)
         nyq  = vol_pad%get_lfny(1)

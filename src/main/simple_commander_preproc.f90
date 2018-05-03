@@ -4,20 +4,10 @@ include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline
 use simple_params,              only: params
 use simple_build,               only: build
-use simple_commander_base,      only: commander_base
-use simple_image,               only: image
-use simple_procimgfile,         only: neg_imgfile
-use simple_nrtxtfile,           only: nrtxtfile
-use simple_imgfile,             only: imgfile
-use simple_oris,                only: oris
-use simple_ori,                 only: ori
-use simple_corrmat,             only: calc_cartesian_corrmat
-use simple_motion_correct_iter, only: motion_correct_iter
-use simple_ctf_estimate_iter,   only: ctf_estimate_iter
-use simple_picker_iter,         only: picker_iter
 use simple_qsys_funs,           only: qsys_job_finished
 use simple_sp_project,          only: sp_project
-use simple_binoris_io           ! use all in there
+use simple_commander_base,      only: commander_base
+
 implicit none
 
 public :: preprocess_commander
@@ -26,7 +16,6 @@ public :: powerspecs_commander
 public :: motion_correct_commander
 public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
-public :: make_pickrefs_commander
 public :: pick_commander
 public :: extract_commander
 private
@@ -56,10 +45,6 @@ type, extends(commander_base) :: map_cavgs_selection_commander
   contains
     procedure :: execute      => exec_map_cavgs_selection
 end type map_cavgs_selection_commander
-type, extends(commander_base) :: make_pickrefs_commander
-  contains
-    procedure :: execute      => exec_make_pickrefs
-end type make_pickrefs_commander
 type, extends(commander_base) :: pick_commander
   contains
     procedure :: execute      => exec_pick
@@ -72,6 +57,11 @@ end type extract_commander
 contains
 
     subroutine exec_preprocess( self, cline )
+        use simple_ori,                 only: ori
+        use simple_motion_correct_iter, only: motion_correct_iter
+        use simple_ctf_estimate_iter,   only: ctf_estimate_iter
+        use simple_picker_iter,         only: picker_iter
+        use simple_binoris_io,  only: binwrite_oritab
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)                  :: p
@@ -202,6 +192,7 @@ contains
     end subroutine exec_preprocess
 
     subroutine exec_select_frames( self, cline )
+        use simple_image,               only: image
         class(select_frames_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)                       :: p
@@ -266,6 +257,7 @@ contains
     end subroutine exec_select_frames
 
     subroutine exec_powerspecs( self, cline )
+        use simple_image,               only: image
         class(powerspecs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)                       :: p
@@ -354,6 +346,9 @@ contains
     end subroutine exec_powerspecs
 
     subroutine exec_motion_correct( self, cline )
+        use simple_binoris_io,  only: binwrite_oritab
+        use simple_ori,                 only: ori
+        use simple_motion_correct_iter, only: motion_correct_iter
         class(motion_correct_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
         type(params)                  :: p
@@ -427,6 +422,9 @@ contains
     end subroutine exec_motion_correct
 
     subroutine exec_ctf_estimate( self, cline )
+        use simple_binoris_io,  only: binwrite_oritab
+        use simple_ori,                 only: ori
+        use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
         type(params)                  :: p
@@ -476,6 +474,8 @@ contains
     end subroutine exec_ctf_estimate
 
     subroutine exec_map_cavgs_selection( self, cline )
+        use simple_image,               only: image
+        use simple_corrmat,             only: calc_cartesian_corrmat
         class(map_cavgs_selection_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
         type(params)             :: p
@@ -516,69 +516,10 @@ contains
         call simple_end('**** SIMPLE_MAP_SELECTION NORMAL STOP ****')
     end subroutine exec_map_cavgs_selection
 
-    !> for making picker references
-    subroutine exec_make_pickrefs( self, cline )
-        use simple_commander_volops,  only: project_commander
-        class(make_pickrefs_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline !< command line input
-        integer,          parameter :: NREFS=100, NPROJS=20
-        character(len=*), parameter :: ORIFILE='pickrefs_oris'//trim(TXT_EXT)
-        type(params)                :: p
-        type(build)                 :: b
-        type(cmdline)               :: cline_project
-        type(project_commander)     :: xproject
-        integer                     :: nrots, cnt, iref, irot, status
-        real                        :: ang, rot
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        if( cline%defined('stk') .or. cline%defined('vol1') )then
-            p = params(cline) ! constants & derived constants produced
-            if( cline%defined('vol1') )then
-                p%nptcls = NPROJS
-                call b%a%new(NPROJS)
-                call b%a%spiral( p%nsym, p%eullims )
-                call b%a%write(trim(ORIFILE), [1,NPROJS])
-                cline_project = cline
-                call cline_project%set('nspace', real(NPROJS))
-                p%stk = 'even_projs'//p%ext
-                call cline_project%set('outstk', trim(p%stk)  )
-                call cline_project%set('oritab', trim(ORIFILE))
-                call cline_project%set('smpd',   PICKER_SHRINK)
-                call cline_project%set('neg',    'no'         )
-                call cline_project%set('msk',    real(p%box/2-5))
-                call xproject%execute(cline_project)
-            endif
-            ! expand in in-plane rotation
-            nrots = NREFS/p%nptcls
-            if( nrots > 1 )then
-                ang = 360./real(nrots)
-                rot = 0.
-                cnt  = 0
-                do iref=1,p%nptcls
-                    call b%img%read(p%stk, iref)
-                    do irot=1,nrots
-                        cnt = cnt + 1
-                        call b%img%rtsq(rot, 0., 0., b%img_copy)
-                        call b%img_copy%write('rotated_from_make_pickrefs'//p%ext, cnt)
-                        rot = rot + ang
-                    end do
-                end do
-                call cline%set('stk', 'rotated_from_make_pickrefs'//p%ext)
-            endif
-            if( p%pcontrast .eq. 'black' )then
-                call neg_imgfile('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
-            else
-                status= simple_rename('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext)
-            endif
-        else
-            stop 'need input volume (vol1) or class averages (stk) to generate picking references'
-        endif
-        call del_file('rotated_from_make_pickrefs'//p%ext)
-        ! end gracefully
-        call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
-    end subroutine exec_make_pickrefs
-
     subroutine exec_pick( self, cline)
+        use simple_binoris_io,  only: binwrite_oritab
+        use simple_ori,                 only: ori
+        use simple_picker_iter,         only: picker_iter
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(params)                         :: p
@@ -630,6 +571,16 @@ contains
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )
+        use simple_image,               only: image
+        use simple_oris,                only: oris
+        use simple_ori,                 only: ori
+        ! use simple_corrmat,             only: calc_cartesian_corrmat
+        ! use simple_motion_correct_iter, only: motion_correct_iter
+        ! use simple_ctf_estimate_iter,   only: ctf_estimate_iter
+        ! use simple_picker_iter,         only: picker_iter
+        ! use simple_procimgfile,         only: neg_imgfile
+        ! use simple_nrtxtfile,           only: nrtxtfile
+
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(params)                  :: p

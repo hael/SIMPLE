@@ -3,28 +3,11 @@ module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-
-use simple_ori,                      only: ori
-use simple_oris,                     only: oris
-use simple_build,                    only: build
-use simple_params,                   only: params
-use simple_cmdline,                  only: cmdline
-use simple_binoris_io,               only: binwrite_oritab
-use simple_qsys_funs,                only: qsys_job_finished
-use simple_kbinterpol,               only: kbinterpol
-use simple_prep4cgrid,               only: prep4cgrid
 use simple_polarft_corrcalc,         only: polarft_corrcalc
-use simple_strategy3D,               only: strategy3D
-use simple_strategy3D_srch,          only: strategy3D_spec
+
 use simple_strategy3D_alloc,         only: o_peaks, clean_strategy3D, prep_strategy3D
-use simple_strategy3D_cluster,       only: strategy3D_cluster
-use simple_strategy3D_single,        only: strategy3D_single
-use simple_strategy3D_multi,         only: strategy3D_multi
-use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
-use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
-use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
-use simple_strategy3D_cont_single,   only: strategy3D_cont_single
-use simple_strategy2D3D_common       ! use all in there
+
+use simple_timer
 implicit none
 
 public :: refine3D_exec
@@ -45,9 +28,27 @@ character(len=STDLEN)          :: benchfname
 contains
 
     subroutine refine3D_exec( b, p, cline, which_iter, converged )
-        use simple_qsys_funs, only: qsys_job_finished
-        use simple_sym,       only: sym
-        use simple_image,     only: image
+        use simple_qsys_funs,  only: qsys_job_finished
+        use simple_binoris_io, only: binwrite_oritab
+        use simple_kbinterpol, only: kbinterpol
+        use simple_ori,        only: ori
+        use simple_sym,        only: sym
+        use simple_prep4cgrid, only: prep4cgrid
+        use simple_image,      only: image
+        use simple_build,      only: build
+        use simple_params,     only: params
+        use simple_cmdline,    only: cmdline
+        use simple_strategy2D3D_common,   only: killrecvols, set_bp_range, preprecvols,&
+            prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts ! use all in there
+        use simple_strategy3D_cluster,       only: strategy3D_cluster
+        use simple_strategy3D_single,        only: strategy3D_single
+        use simple_strategy3D_multi,         only: strategy3D_multi
+        use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
+        use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
+        use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
+        use simple_strategy3D_cont_single,   only: strategy3D_cont_single
+        use simple_strategy3D,               only: strategy3D
+        use simple_strategy3D_srch,          only: strategy3D_spec
         class(build),  target, intent(inout) :: b
         class(params), target, intent(inout) :: p
         class(cmdline),        intent(inout) :: cline
@@ -408,6 +409,11 @@ contains
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline )
         use simple_polarizer, only: polarizer
+        use simple_build,     only: build
+        use simple_params,    only: params
+        use simple_cmdline,   only: cmdline
+        use simple_jiffys,    only: progress
+        use simple_strategy2D3D_common,   only: cenrefvol_and_mapshifts2ptcls, preprefvol, build_pftcc_particles
         class(build),               intent(inout) :: b     !< build object
         class(params),              intent(inout) :: p     !< param object
         class(cmdline),             intent(inout) :: cline !< command line

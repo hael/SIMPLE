@@ -1,6 +1,6 @@
 module simple_strategy2D_stochastic
-use simple_strategy2D_alloc  ! use all in there
-use simple_timer             ! use all in there
+include 'simple_lib.f08'
+use simple_strategy2D_alloc, only: cls_pops, srch_order
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 implicit none

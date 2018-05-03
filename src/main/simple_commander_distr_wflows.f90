@@ -3,16 +3,11 @@ module simple_commander_distr_wflows
 include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline
 use simple_qsys_env,            only: qsys_env
-use simple_oris,                only: oris
+use simple_qsys_funs,           only: qsys_cleanup, qsys_watcher
 use simple_build,               only: build
 use simple_params,              only: params
 use simple_commander_base,      only: commander_base
-use simple_commander_cluster2D  ! use all in there
-use simple_commander_distr      ! use all in there
-use simple_commander_mask       ! use all in there
-use simple_commander_distr      ! use all in there
-use simple_commander_preprocess ! use all in there
-use simple_qsys_funs            ! use all in there
+use simple_sp_project,          only: sp_project
 implicit none
 
 public :: preprocess_distr_commander
@@ -92,7 +87,6 @@ contains
 
     subroutine exec_preprocess_distr( self, cline )
         use simple_commander_preprocess, only: preprocess_commander
-        use simple_sp_project,           only: sp_project
         class(preprocess_distr_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(qsys_env)                     :: qenv
@@ -139,7 +133,6 @@ contains
     end subroutine exec_preprocess_distr
 
     subroutine exec_motion_correct_distr( self, cline )
-        use simple_sp_project, only: sp_project
         class(motion_correct_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(sp_project)              :: spproj
@@ -269,7 +262,6 @@ contains
     end subroutine exec_powerspecs_distr
 
     subroutine exec_ctf_estimate_distr( self, cline )
-        use simple_sp_project, only: sp_project
         class(ctf_estimate_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(sp_project)               :: spproj
@@ -306,7 +298,6 @@ contains
     end subroutine exec_ctf_estimate_distr
 
     subroutine exec_pick_distr( self, cline )
-        use simple_sp_project, only: sp_project
         class(pick_distr_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(sp_project)              :: spproj
@@ -376,6 +367,7 @@ contains
 
     subroutine exec_cluster2D_distr( self, cline )
         use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
+        use simple_commander_cluster2D, only:   check_2Dconv_commander
         class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
@@ -560,8 +552,6 @@ contains
     end subroutine exec_cluster2D_distr
 
     subroutine exec_refine3D_init_distr( self, cline )
-        use simple_commander_refine3D
-        use simple_commander_rec
         class(refine3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(cmdline)         :: cline_volassemble
@@ -605,10 +595,8 @@ contains
     end subroutine exec_refine3D_init_distr
 
     subroutine exec_refine3D_distr( self, cline )
-        use simple_commander_refine3D
-        use simple_commander_mask
-        use simple_commander_rec
-        use simple_commander_volops
+        use simple_commander_refine3D, only: check_3Dconv_commander
+        use simple_commander_volops,   only: postprocess_commander
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
@@ -877,7 +865,6 @@ contains
     end subroutine exec_refine3D_distr
 
     subroutine exec_reconstruct3D_distr( self, cline )
-        use simple_commander_rec
         class(reconstruct3D_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! type(split_commander)              :: xsplit
@@ -1015,8 +1002,8 @@ contains
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
         use simple_ori,            only: ori
+         use simple_oris,          only: oris
         use simple_sym,            only: sym
-        use simple_sp_project,     only: sp_project
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)                  :: cline_gridsrch

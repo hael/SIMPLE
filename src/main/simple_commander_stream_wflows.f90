@@ -4,15 +4,10 @@ include 'simple_lib.f08'
 use simple_cmdline,              only: cmdline
 use simple_params,               only: params
 use simple_commander_base,       only: commander_base
-use simple_oris,                 only: oris
-use simple_image,                only: image
 use simple_sp_project,           only: sp_project
-use simple_binoris_io              ! use all in there
 use simple_qsys_env,             only: qsys_env
 use simple_qsys_funs,            only: qsys_cleanup
-use simple_binoris_io              ! use all in there
 
-!use simple_commander_distr,      only: merge_algndocs_commander! use all in there
 implicit none
 
 public :: preprocess_stream_commander
@@ -31,8 +26,9 @@ end type cluster2D_stream_distr_commander
 contains
 
     subroutine exec_preprocess_stream( self, cline )
-        use simple_commander_preprocess, only: preprocess_commander
         use simple_moviewatcher,         only: moviewatcher
+        use simple_qsys_funs,            only: qsys_cleanup
+        use simple_commander_preprocess, only: preprocess_commander
         class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
@@ -165,9 +161,9 @@ contains
 
     subroutine exec_cluster2D_stream_distr( self, cline )
         use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander,scale_project_distr_commander
+        use simple_ori,                    only: ori
         use simple_oris,                   only: oris
         use simple_image,                  only: image
-        use simple_commander_distr         ! use all in there
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         character(len=*), parameter   :: STK_FILETAB        = 'stkstreamtab.txt'

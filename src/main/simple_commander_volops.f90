@@ -6,7 +6,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
-use simple_projector_hlev, only: project, rotvol
+use simple_projector_hlev, only: reproject, rotvol
 use simple_ori,            only: ori
 use simple_masker,         only: masker
 use simple_projector,      only: projector
@@ -15,13 +15,14 @@ use simple_volpft_srch
 implicit none
 
 public :: fsc_commander
-public :: center_commander
+public :: centervol_commander
 public :: postprocess_commander
-public :: project_commander
+public :: reproject_commander
 public :: volaverager_commander
 public :: volops_commander
 public :: volume_smat_commander
 public :: dock_volpair_commander
+public :: make_pickrefs_commander
 private
 #include "simple_local_flags.inc"
 
@@ -29,18 +30,18 @@ type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
 end type fsc_commander
-type, extends(commander_base) :: center_commander
+type, extends(commander_base) :: centervol_commander
   contains
-    procedure :: execute      => exec_center
-end type center_commander
+    procedure :: execute      => exec_centervol
+end type centervol_commander
 type, extends(commander_base) :: postprocess_commander
  contains
    procedure :: execute      => exec_postprocess
 end type postprocess_commander
-type, extends(commander_base) :: project_commander
+type, extends(commander_base) :: reproject_commander
  contains
-   procedure :: execute      => exec_project
-end type project_commander
+   procedure :: execute      => exec_reproject
+end type reproject_commander
 type, extends(commander_base) :: volaverager_commander
   contains
     procedure :: execute      => exec_volaverager
@@ -57,7 +58,10 @@ type, extends(commander_base) :: dock_volpair_commander
   contains
     procedure :: execute      => exec_dock_volpair
 end type dock_volpair_commander
-
+type, extends(commander_base) :: make_pickrefs_commander
+contains
+    procedure :: execute      => exec_make_pickrefs
+end type make_pickrefs_commander
 contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
@@ -124,8 +128,8 @@ contains
     end subroutine exec_fsc
 
     !> centers a 3D volume and associated particle document
-    subroutine exec_center( self, cline )
-        class(center_commander), intent(inout) :: self
+    subroutine exec_centervol( self, cline )
+        class(centervol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
@@ -146,7 +150,7 @@ contains
         if( cline%defined('oritab') ) call b%a%write(p%outfile, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
-    end subroutine exec_center
+    end subroutine exec_centervol
 
     subroutine exec_postprocess(self, cline)
         use simple_estimate_ssnr, only: fsc2optlp
@@ -255,9 +259,9 @@ contains
     !> exec_project generate projections from volume
     !! \param cline command line
     !!
-    subroutine exec_project( self, cline )
+    subroutine exec_reproject( self, cline )
         use simple_binoris_io, only: binread_nlines
-        class(project_commander), intent(inout) :: self
+        class(reproject_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
         type(build)              :: b
@@ -283,7 +287,7 @@ contains
         ! masking
         if(cline%defined('msk')) call b%vol%mask(p%msk, 'soft')
         ! generate projections
-        imgs = project(b%vol, b%a, p)
+        imgs = reproject(b%vol, b%a, p)
         loop_end = p%nspace
         if( file_exists(p%outstk) ) call del_file(p%outstk)
         do i=1,loop_end
@@ -292,7 +296,7 @@ contains
         end do
         call b%a%write('project_oris'//trim(TXT_EXT), [1,p%nptcls])
         call simple_end('**** SIMPLE_PROJECT NORMAL STOP ****')
-    end subroutine exec_project
+    end subroutine exec_reproject
 
     !> exec_volaverager create volume average
     !! \param cline
@@ -575,5 +579,69 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
     end subroutine exec_dock_volpair
+
+
+    !> for making picker references
+    subroutine exec_make_pickrefs( self, cline )
+        use simple_procimgfile, only: neg_imgfile
+        class(make_pickrefs_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline !< command line input
+        integer,          parameter :: NREFS=100, NPROJS=20
+        character(len=*), parameter :: ORIFILE='pickrefs_oris'//trim(TXT_EXT)
+        type(params)                :: p
+        type(build)                 :: b
+        type(cmdline)               :: cline_project
+        type(reproject_commander)   :: xproject
+        integer                     :: nrots, cnt, iref, irot, status
+        real                        :: ang, rot
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        if( cline%defined('stk') .or. cline%defined('vol1') )then
+            p = params(cline) ! constants & derived constants produced
+            if( cline%defined('vol1') )then
+                p%nptcls = NPROJS
+                call b%a%new(NPROJS)
+                call b%a%spiral( p%nsym, p%eullims )
+                call b%a%write(trim(ORIFILE), [1,NPROJS])
+                cline_project = cline
+                call cline_project%set('nspace', real(NPROJS))
+                p%stk = 'even_projs'//p%ext
+                call cline_project%set('outstk', trim(p%stk)  )
+                call cline_project%set('oritab', trim(ORIFILE))
+                call cline_project%set('smpd',   PICKER_SHRINK)
+                call cline_project%set('neg',    'no'         )
+                call cline_project%set('msk',    real(p%box/2-5))
+                call xproject%execute(cline_project)
+            endif
+            ! expand in in-plane rotation
+            nrots = NREFS/p%nptcls
+            if( nrots > 1 )then
+                ang = 360./real(nrots)
+                rot = 0.
+                cnt  = 0
+                do iref=1,p%nptcls
+                    call b%img%read(p%stk, iref)
+                    do irot=1,nrots
+                        cnt = cnt + 1
+                        call b%img%rtsq(rot, 0., 0., b%img_copy)
+                        call b%img_copy%write('rotated_from_make_pickrefs'//p%ext, cnt)
+                        rot = rot + ang
+                    end do
+                end do
+                call cline%set('stk', 'rotated_from_make_pickrefs'//p%ext)
+            endif
+            if( p%pcontrast .eq. 'black' )then
+                call neg_imgfile('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
+            else
+                status= simple_rename('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext)
+            endif
+        else
+            stop 'need input volume (vol1) or class averages (stk) to generate picking references'
+        endif
+        call del_file('rotated_from_make_pickrefs'//p%ext)
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
+    end subroutine exec_make_pickrefs
+
 
 end module simple_commander_volops

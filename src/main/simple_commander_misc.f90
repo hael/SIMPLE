@@ -1,7 +1,6 @@
 ! concrete commander: miscallenaous routines
 module simple_commander_misc
 include 'simple_lib.f08'
-use simple_binoris_io      ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -12,7 +11,7 @@ use simple_sym,            only: sym
 use simple_projector_hlev, only: rotvol
 use simple_sp_project,     only: sp_project
 use simple_image,          only: image
-
+use simple_binoris_io,     only: binwrite_oritab
 implicit none
 
 public :: cluster_smat_commander
@@ -155,7 +154,7 @@ contains
     !>
     subroutine exec_intgpeaks( self, cline )
         use simple_intg_atompeak
-        use simple_atoms
+        use simple_atoms,  only: atoms
         class(intgpeaks_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(build)       :: b

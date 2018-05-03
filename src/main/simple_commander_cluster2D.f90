@@ -5,10 +5,8 @@ use simple_cmdline,             only: cmdline
 use simple_params,              only: params
 use simple_build,               only: build
 use simple_commander_base,      only: commander_base
-use simple_strategy2D3D_common, only: gen2Dclassdoc
 use simple_qsys_funs,           only: qsys_job_finished
-use simple_projection_frcs,     only: projection_frcs
-use simple_classaverager
+
 implicit none
 
 public :: make_cavgs_commander
@@ -47,6 +45,8 @@ end type cluster_cavgs_commander
 contains
 
     subroutine exec_make_cavgs( self, cline )
+        use simple_classaverager, only: cavger_new, cavger_transf_oridat, cavger_assemble_sums, &
+            cavger_readwrite_partial_sums,cavger_kill
         class(make_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)  :: p
@@ -135,6 +135,9 @@ contains
     end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )
+        use simple_classaverager, only: cavger_new, cavger_write, cavger_assemble_sums_from_parts, &
+            cavger_calc_and_write_frcs_and_eoavg, cavger_kill
+        use simple_strategy2D3D_common, only: gen2Dclassdoc
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params) :: p

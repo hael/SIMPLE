@@ -1,7 +1,7 @@
 ! concrete strategy3D: continuous single-state refinement
 module simple_strategy3D_cont_single
 use simple_strategy3D_alloc  ! use all in there
-use simple_strategy3D_utils  ! use all in there
+use simple_strategy3D_utils, only: fit_bfactors ! use all in there
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_pftcc_orisrch,    only: pftcc_orisrch

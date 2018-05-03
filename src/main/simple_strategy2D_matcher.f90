@@ -13,9 +13,9 @@ use simple_strategy2D_srch,       only: strategy2D_spec
 use simple_strategy2D_greedy,     only: strategy2D_greedy
 use simple_strategy2D_neigh,      only: strategy2D_neigh
 use simple_strategy2D_stochastic, only: strategy2D_stochastic
-use simple_strategy2D_alloc       ! use all in there
-use simple_strategy2D3D_common    ! use all in there
-use simple_filterer               ! use all in there
+use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
+use simple_strategy2D3D_common,   only: set_bp_range2d,prep2dref,build_pftcc_particles
+!use simple_filterer               ! use all in there
 use simple_classaverager          ! use all in there
 implicit none
 

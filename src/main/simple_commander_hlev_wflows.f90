@@ -1,15 +1,10 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
 include 'simple_lib.f08'
-use simple_binoris_io
+use simple_commander_base,        only: commander_base
 use simple_cmdline,               only: cmdline
 use simple_params,                only: params
-use simple_commander_base,        only: commander_base
-use simple_qsys_env,              only: qsys_env
-use simple_oris,                  only: oris
 use simple_sp_project,            only: sp_project
-use simple_commander_distr_wflows ! use all in there
-use simple_commander_distr        ! use all in there
 implicit none
 
 public :: cluster2D_autoscale_commander
@@ -39,6 +34,7 @@ contains
 
     !> for distributed CLUSTER2D with two-stage autoscaling
     subroutine exec_cluster2D_autoscale( self, cline )
+        use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander,scale_project_distr_commander
         use simple_commander_cluster2D, only: rank_cavgs_commander
         use simple_commander_imgproc,   only: scale_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
@@ -208,7 +204,10 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-        use simple_commander_volops,  only: project_commander
+         use simple_commander_distr_wflows, only: prime3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
+         !use simple_commander_distr
+        use simple_oris,                  only: oris
+        use simple_commander_volops,  only: reproject_commander
         use simple_commander_rec,     only: reconstruct3D_commander
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -225,7 +224,7 @@ contains
         type(scale_project_distr_commander) :: xscale_distr
         ! shared-mem commanders
         type(reconstruct3D_commander) :: xreconstruct3D
-        type(project_commander)       :: xproject
+        type(reproject_commander)       :: xreproject
         ! command lines
         type(cmdline)         :: cline_refine3D_snhc_restart
         type(cmdline)         :: cline_refine3D_snhc
@@ -233,7 +232,7 @@ contains
         type(cmdline)         :: cline_refine3D_refine
         type(cmdline)         :: cline_symsrch
         type(cmdline)         :: cline_reconstruct3D
-        type(cmdline)         :: cline_project
+        type(cmdline)         :: cline_reproject
         type(cmdline)         :: cline_scale
         ! other variables
         character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
@@ -328,7 +327,7 @@ contains
         endif
         ! prepare command lines from prototype for original scaling
         cline_reconstruct3D   = cline
-        cline_project         = cline
+        cline_reproject         = cline
         ! updates scaling parameters
         call cline%set('projfile', trim(WORK_PROJFILE))
         call cline%set('msk',      msk)
@@ -340,12 +339,12 @@ contains
         cline_symsrch               = cline
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
-        call cline_project%delete('nparts')
+        call cline_reproject%delete('nparts')
         ! projects names are subject to change depending on scaling
         call cline_reconstruct3D%delete('projname')
         call cline_reconstruct3D%delete('projfile')
-        call cline_project%delete('projname')
-        call cline_project%delete('projfile')
+        call cline_reproject%delete('projname')
+        call cline_reproject%delete('projfile')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
         call cline_refine3D_snhc_restart%delete('update_frac') ! no fractional update in first phase
@@ -402,11 +401,11 @@ contains
             call cline_refine3D_refine%set('objfun', 'ccres')
         endif
         ! (5) RE-PROJECT VOLUME
-        call cline_project%set('prg',    'project')
-        call cline_project%set('outstk', 'reprojs'//p_master%ext)
-        call cline_project%set('smpd',    p_master%smpd)
-        call cline_project%set('msk',     orig_msk)
-        call cline_project%set('box',     real(orig_box))
+        call cline_reproject%set('prg',    'project')
+        call cline_reproject%set('outstk', 'reprojs'//p_master%ext)
+        call cline_reproject%set('smpd',    p_master%smpd)
+        call cline_reproject%set('msk',     orig_msk)
+        call cline_reproject%set('box',     real(orig_box))
         ! execute commanders
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
@@ -481,10 +480,10 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
-        call cline_project%set('projfile', trim(WORK_PROJFILE))
-        call cline_project%set('vol1',     'rec_final'//p_master%ext)
-        call cline_project%set('oritab',   'final_oris.txt')
-        call xproject%execute(cline_project)
+        call cline_reproject%set('projfile', trim(WORK_PROJFILE))
+        call cline_reproject%set('vol1',     'rec_final'//p_master%ext)
+        call cline_reproject%set('oritab',   'final_oris.txt')
+        call xreproject%execute(cline_reproject)
         ! end gracefully
         call del_file(WORK_PROJFILE)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
@@ -501,10 +500,13 @@ contains
 
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )
-        use simple_defs_conv
-        use simple_commander_rec,    only: reconstruct3D_commander
-        use simple_commander_volops, only: postprocess_commander
+        use simple_binoris_io,       only: binread_oritab, binwrite_oritab
+        use simple_qsys_env,         only: qsys_env
+        use simple_oris,             only: oris
         use simple_sym,              only: sym
+        !use simple_commander_rec,    only: reconstruct3D_commander
+        use simple_commander_volops, only: postprocess_commander
+        use simple_commander_distr_wflows, only: prime3D_distr_commander, reconstruct3D_distr_commander
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         ! constants
@@ -531,7 +533,7 @@ contains
         character(len=:), allocatable :: recname, rhoname, part_str
         real                          :: trs
         integer                       :: state, iter, n_incl, startit
-        integer                       :: rename_stat, ipart
+        integer                       :: rename_stat
         call seed_rnd
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
@@ -780,9 +782,10 @@ contains
 
     !> multi-particle refinement after cluster3D
     subroutine exec_cluster3D_refine( self, cline )
-        use simple_defs_conv
-        use simple_commander_rec,    only: reconstruct3D_commander
+        use simple_binoris_io,       only: binread_nlines, binread_oritab, binwrite_oritab
+        use simple_oris,             only: oris
         use simple_commander_volops, only: postprocess_commander
+        use simple_commander_distr_wflows, only: prime3D_distr_commander, reconstruct3D_distr_commander
         class(cluster3D_refine_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants

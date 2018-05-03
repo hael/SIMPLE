@@ -1,9 +1,6 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
 include 'simple_lib.f08'
-!use simple_binoris_io      ! use all in there
-use simple_procimgfile     ! use all in there
-use simple_image,          only: image
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -74,6 +71,7 @@ contains
 
     !> for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
+        use simple_image,          only: image
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params) :: p
@@ -238,6 +236,7 @@ contains
     !> for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
         use simple_ctf,         only: ctf
+        use simple_procimgfile, only: apply_ctf_imgfile
         class(ctfops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
@@ -291,6 +290,7 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_filter( self, cline )
+        use simple_procimgfile, only:bp_imgfile, real_filter_imgfile, phase_rand_imgfile
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
@@ -398,6 +398,7 @@ contains
     !> volume/image_diff is a program for creating a volume based on volume difference
     !! this is purely for direct comparison of images in debugging
     subroutine exec_image_diff(self, cline)
+        use simple_procimgfile, only: diff_imgfiles
         class(image_diff_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)         :: p
@@ -417,6 +418,7 @@ contains
     !! radius msk (pixels). If you want to normalize your images or volume
     !! (vol1) with respect to their power spectrum set shell_norm=yes
     subroutine exec_normalize( self, cline )
+        use simple_procimgfile, only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(normalize_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(build)       :: b
@@ -475,6 +477,8 @@ contains
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
+        use simple_procimgfile, only: resize_imgfile_double, resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
+        use simple_image,  only: image
         use simple_qsys_funs,      only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
@@ -616,6 +620,7 @@ contains
 
     !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
+        use simple_image,  only: image
         class(stack_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params)                          :: p
@@ -668,6 +673,7 @@ contains
     subroutine exec_stackops( self, cline )
         use simple_oris, only: oris
         use simple_stackops
+        use simple_procimgfile, only: copy_imgfile, add_noise_imgfile, neg_imgfile, shellnorm_imgfile, add_noise_imgfile
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)                             :: p

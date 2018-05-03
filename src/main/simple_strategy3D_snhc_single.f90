@@ -1,6 +1,8 @@
 ! concrete strategy3D: stochastic neighbourhood hill-climbing
 module simple_strategy3D_snhc_single
-use simple_strategy3D_alloc ! use all in there
+include 'simple_lib.f08'
+use simple_strategy3D_alloc  ! use all in there
+use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
 implicit none
@@ -73,7 +75,7 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_snhc_single), intent(inout) :: self
         type(ori)  :: osym
-        real       :: dist_inpl, corr, frac, dist, inpl_dist, euldist, bfac
+        real       :: dist_inpl, corr, frac, euldist, bfac
         integer    :: ref, roind
         ! orientation parameters
         ref = proj_space_inds(self%s%iptcl_map, self%s%nrefs)
