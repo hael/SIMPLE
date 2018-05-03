@@ -520,8 +520,9 @@ select case(prg)
         keys_optional(2) = 'inner'
         keys_optional(3) = 'nspace'
         keys_optional(4) = 'nran'
+        keys_optional(5)  = 'shellweights'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
@@ -600,10 +601,11 @@ select case(prg)
         keys_optional(23) = 'nnn'
         keys_optional(24) = 'rrate'
         keys_optional(25) = 'update_frac'
+        keys_optional(26)  = 'shellweights'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:25))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:26))
         ! set defaults
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('refine') )then
             call cline%set('refine',  'single')
         else
@@ -775,8 +777,9 @@ select case(prg)
         keys_optional(2)  = 'eo'
         keys_optional(3)  = 'frac'
         keys_optional(4)  = 'mskfile'
+        keys_optional(5)  = 'shellweights'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')

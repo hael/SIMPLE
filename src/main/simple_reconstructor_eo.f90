@@ -260,7 +260,7 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane_1( self, se, o, ctfvars, fpl, eo, pwght )
+    subroutine grid_fplane_1( self, se, o, ctfvars, fpl, eo, pwght, bfac )
         use simple_ori, only: ori
         use simple_sym, only: sym
         class(reconstructor_eo), intent(inout) :: self    !< instance
@@ -270,17 +270,18 @@ contains
         class(image),            intent(inout) :: fpl     !< Fourier plane
         integer,                 intent(in)    :: eo      !< eo flag
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
+        real,          optional, intent(in)    :: bfac
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, o, ctfvars, fpl, pwght)
+                call self%even%insert_fplane(se, o, ctfvars, fpl, pwght, bfac=bfac)
             case(1)
-                call self%odd%insert_fplane(se, o, ctfvars, fpl, pwght)
+                call self%odd%insert_fplane(se, o, ctfvars, fpl, pwght, bfac=bfac)
             case DEFAULT
                 stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
         end select
     end subroutine grid_fplane_1
 
-    subroutine grid_fplane_2( self, se, os, ctfvars, fpl, eo, pwght, state )
+    subroutine grid_fplane_2( self, se, os, ctfvars, fpl, eo, pwght, bfac, state )
         use simple_oris, only: oris
         use simple_sym,  only: sym
         class(reconstructor_eo), intent(inout) :: self    !< instance
@@ -290,12 +291,13 @@ contains
         class(image),            intent(inout) :: fpl     !< Fourier plane
         integer,                 intent(in)    :: eo      !< eo flag
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        integer, optional,       intent(in)    :: state   !< state flag
+        real,          optional, intent(in)    :: bfac
+        integer,       optional, intent(in)    :: state   !< state flag
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, os, ctfvars, fpl, pwght, state)
+                call self%even%insert_fplane(se, os, ctfvars, fpl, pwght, bfac=bfac, state=state)
             case(1)
-                call self%odd%insert_fplane(se, os, ctfvars, fpl, pwght, state)
+                call self%odd%insert_fplane(se, os, ctfvars, fpl, pwght, bfac=bfac, state=state)
             case DEFAULT
                 stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
         end select
@@ -438,7 +440,6 @@ contains
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
         type(ctfparams)  :: ctfvars
-        real             :: skewness
         integer          :: statecnt(p%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
@@ -491,21 +492,34 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk, eo
-                real      :: pw
+                real      :: pw, bfac
                 state = nint(o%get(i, 'state'))
                 if( state == 0 ) return
-                pw = 1.
-                if( p%frac < 0.99 ) pw = o%get(i, 'w')
-                if( pw > 0. )then
+                if( p%shellweights.eq.'yes' )then
                     orientation = o%get_ori(i)
-                    eo          = nint(orientation%get('eo'))
+                    bfac = 0.
+                    if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
+                    eo = nint(orientation%get('eo'))
                     call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
                     call gridprep%prep(img, img_pad)
                     ctfvars = spproj%get_ctfparams(p%oritype, i)
-                    call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
+                    call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, 1., bfac=bfac)
                     deallocate(stkname)
-                 endif
+                else
+                    pw = 1.
+                    if( p%frac < 0.99 ) pw = o%get(i, 'w')
+                    if( pw > 0. )then
+                        orientation = o%get_ori(i)
+                        eo          = nint(orientation%get('eo'))
+                        call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                        call img%read(stkname, ind_in_stk)
+                        call gridprep%prep(img, img_pad)
+                        ctfvars = spproj%get_ctfparams(p%oritype, i)
+                        call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
+                        deallocate(stkname)
+                     endif
+                endif
             end subroutine rec_dens
 
     end subroutine eorec_distr

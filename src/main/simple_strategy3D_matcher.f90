@@ -32,7 +32,7 @@ public :: preppftcc4align, pftcc
 private
 ! #include "simple_local_flags.inc"
 
-logical, parameter             :: L_BENCH = .false., DEBUG = .true.
+logical, parameter             :: L_BENCH = .false., DEBUG = .false.
 type(polarft_corrcalc), target :: pftcc
 integer, allocatable           :: pinds(:)
 logical, allocatable           :: ptcl_mask(:)
@@ -148,18 +148,8 @@ contains
             ptcl_mask = .true.
         endif
 
-        ! SPECSCORE & B-FACTOR RECONSTRUCTION
-        if( b%a%isthere('specscore') )then
-            specscore_avg = b%a%get_avg('specscore')
-            do iptcl = p%fromp,p%top
-                if( .not.ptcl_mask(iptcl) ) cycle
-                bfac_rec  = BSC * (b%a%get(iptcl,'specscore') - specscore_avg)
-                call b%a%set(iptcl, 'bfac_rec', bfac_rec)
-            enddo
-        else
-            specscore_avg = 0.
-            call b%a%set_all2single('bfac_rec', 0.)
-        endif
+        ! B-factor weighted reconstruction
+        if( p%shellweights.eq.'yes' ) call b%a%calc_bfac_rec
 
         ! EXTREMAL LOGICS
         do_extr  = .false.

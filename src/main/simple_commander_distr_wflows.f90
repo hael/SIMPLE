@@ -114,20 +114,6 @@ contains
         endif
         ! output directories
         output_dir = './'
-        ! if( cline%defined('dir') )then
-        !     output_dir = trim(p_master%dir)//'/'
-        ! else
-        !     output_dir = trim(DIR_PREPROC)
-        ! endif
-        ! output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
-        ! output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
-        ! call simple_mkdir(output_dir)
-        ! call simple_mkdir(output_dir_ctf_estimate)
-        ! call simple_mkdir(output_dir_motion_correct)
-        ! if( l_pick )then
-        !     output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-        !     call simple_mkdir(output_dir_picker)
-        ! endif
         ! read in movies
         call spproj%read( p_master%projfile )
         ! DISTRIBUTED EXECUTION
@@ -170,7 +156,7 @@ contains
         call cline%set('oritype', 'mic')
         ! make master parameters
         p_master        = params(cline)
-        p_master%numlen = len(int2str(p_master%nptcls))
+        p_master%numlen = len(int2str(p_master%nparts))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
         output_dir = './'
@@ -300,7 +286,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
         p_master = params(cline)
-        p_master%numlen = len(int2str(p_master%nptcls))
+        p_master%numlen = len(int2str(p_master%nparts))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
         output_dir = './'
@@ -337,7 +323,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
         p_master = params(cline)
-        p_master%numlen = len(int2str(p_master%nptcls))
+        p_master%numlen = len(int2str(p_master%nparts))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
         output_dir = './'

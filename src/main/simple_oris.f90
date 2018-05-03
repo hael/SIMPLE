@@ -155,6 +155,8 @@ type :: oris
     procedure          :: calc_hard_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_spectral_weights
+    procedure          :: adjust_specscore_for_ctf
+    procedure          :: calc_bfac_rec
     procedure          :: reject_above
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
@@ -2611,6 +2613,81 @@ contains
             endif
         endif
     end subroutine calc_spectral_weights
+
+    subroutine adjust_specscore_for_ctf( self )
+        class(oris), intent(inout) :: self
+        real    :: df, specscore, sum_df, sum_df_sq, adj_df
+        real    :: sum_score, sum_score_sq, dot_df_score, var_df, avg_df
+        integer :: i, n
+        if( .not.self%isthere('dfx') .or. .not.self%isthere('specscore') )return
+        n            = 0
+        sum_df       = 0.
+        sum_df_sq    = 0.
+        dot_df_score = 0.
+        sum_score    = 0.
+        sum_score_sq = 0.
+        do i = 1, self%n
+            if( self%get_state(i) == 0) cycle
+            n            = n + 1
+            df           = calc_df()
+            specscore    = self%get(i,'specscore')
+            sum_df       = sum_df + df
+            sum_df_sq    = sum_df_sq + df*df
+            dot_df_score = dot_df_score + df*specscore
+            sum_score    = sum_score + specscore
+            sum_score_sq = sum_score + specscore*specscore
+        enddo
+        avg_df = sum_df / real(n)
+        var_df = real(n) * sum_df_sq - sum_df**2.
+        if( var_df < 1.e-6 )return
+        adj_df = (real(n) * dot_df_score - sum_df * sum_score) / var_df
+        do i = 1, self%n
+            if( self%get_state(i) == 0) cycle
+            specscore = self%get(i,'specscore')
+            specscore = specscore - (calc_df()-avg_df) * adj_df
+            call self%o(i)%set('specscore', specscore)
+        enddo
+
+        contains
+
+            real function calc_df()
+                real :: dfx
+                dfx = self%o(i)%get('dfx')
+                if( self%o(i)%isthere('dfy') )then
+                    calc_df = (dfx + self%o(i)%get('dfy')) / 2.
+                else
+                    calc_df = self%o(i)%get('dfy')
+                endif
+            end function calc_df
+
+    end subroutine adjust_specscore_for_ctf
+
+    subroutine calc_bfac_rec( self )
+        class(oris),      intent(inout) :: self
+        real, allocatable :: states(:), scores(:)
+        logical, allocatable :: mask(:)
+        real    :: avg, sdev
+        integer :: i
+        logical :: err
+        if( self%isthere('specscore') )then
+            states = self%get_all('state')
+            mask   = states > 0.5
+            deallocate(states)
+            scores = self%get_all('specscore')
+            avg    = sum(scores, mask=mask) / real(count(mask))
+            scores = scores - avg
+            sdev   = sqrt( sum(scores*scores, mask=mask) / real(count(mask)) )
+            if( sdev < 1.e-6 )then
+                call self%delete_entry('bfac_rec')
+            else
+                scores = -scores / sdev
+                scores = BSC * (1. / (1.+exp(-scores)))
+                call self%set_all('bfac_rec', scores )
+            endif
+        else
+            call self%delete_entry('bfac_rec')
+        endif
+    end subroutine calc_bfac_rec
 
     subroutine reject_above( self, which, thres )
         class(oris),      intent(inout) :: self

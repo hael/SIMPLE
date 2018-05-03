@@ -3645,11 +3645,12 @@ contains
         end where
     end function bin2logical
 
-    ! performs left/right collage of input images, image are modified on output
+    ! performs left/right collage of input images, un-modified on output
     subroutine collage( self1, self2, img_out )
         class(image), intent(inout) :: self1, self2, img_out
-        type(image) :: img_pad
-        integer     :: ldim(3), ldim_col(3), border
+        real, parameter :: background = 128. ! taken as centre of [0.255] for jpegs
+        type(image)     :: img_pad
+        integer         :: ldim(3), ldim_col(3), border
         if( .not.self1%is_2d() )stop '2D only; simple_mage::collage'
         if( self1%is_ft() )stop 'Real space only; simple_mage::collage'
         if( .not.self2%is_2d() )stop '2D only; simple_mage::collage'
@@ -3662,16 +3663,17 @@ contains
         ldim(3)  = 1
         ldim_col = [2*ldim(1)+border, ldim(2), 1]
         call img_out%new(ldim_col,1.)
-        call self1%norm4viz
-        call self2%norm4viz
-        call img_pad%new(ldim,self1%get_smpd())
+        img_out = background
         ! pad & copy left image
-        call self1%pad(img_pad)
+        call img_pad%new(ldim,self1%get_smpd())
+        call self1%norm4viz
+        call self1%pad(img_pad, backgr=background)
         img_out%rmat(:ldim(1),:ldim(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         ! pad & copy right image
-        img_pad%rmat = 0.
+        img_pad%rmat = 128.
+        call self2%norm4viz
         call img_pad%set_smpd(self2%get_smpd())
-        call self2%pad(img_pad)
+        call self2%pad(img_pad, backgr=background)
         img_out%rmat(ldim(1)+border+1:ldim_col(1),:ldim_col(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         call img_pad%kill
     end subroutine collage
@@ -6847,8 +6849,8 @@ contains
     !! \param backgr
     !!
     subroutine pad( self_in, self_out, backgr )
-        class(image),  intent(inout) :: self_in, self_out
-        real, optional, intent(in)   :: backgr
+        class(image),   intent(inout) :: self_in, self_out
+        real, optional, intent(in)    :: backgr
         real              :: w, ratio
         integer           :: starts(3), stops(3), lims(3,2)
         integer           :: h, k, l, phys_in(3), phys_out(3)
@@ -7067,8 +7069,7 @@ contains
         class(image), intent(inout) :: self
         if(self%is_ft())stop 'Real space only; simple_image::norm4viz'
         call self%norm
-        ! magic numbers from Joe
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 128. + 32. *&
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 128. + 10.5 *& ! magic numbers from Joe
             &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
         ! thresholding
         where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 255. )

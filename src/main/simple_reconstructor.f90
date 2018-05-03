@@ -259,21 +259,24 @@ contains
     ! CONVOLUTION INTERPOLATION
 
     !> insert Fourier plane, single orientation
-    subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght )
+    subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght, bfac )
         class(reconstructor), intent(inout) :: self    !< instance
         class(sym),           intent(inout) :: se      !< symmetry elements
         class(ori),           intent(inout) :: o       !< orientation
         type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
         class(image),         intent(inout) :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
+        real,       optional, intent(in)    :: bfac   !<
         real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
         complex   :: comp, oshift
-        real      :: w(self%wdim,self%wdim,self%wdim), vec(3), loc(3), dists(3), shconst_here(2)
-        real      :: bfac_rec, arg, tval, tvalsq, rsh_sq
+        real      :: vec(3), loc(3), dists(3), shconst_here(2)
+        real      :: w(self%wdim,self%wdim,self%wdim)
+        real      :: arg, tval, tvalsq, rsh_sq, rnyq_sq, shweight, bfac_sc, freq_sq
         logical   :: do_bfac_rec
+        if( pwght < TINY )return
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
@@ -282,13 +285,15 @@ contains
             tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
         endif
-        ! b-factor weighted recontruction inactive for now
-        do_bfac_rec = .false.
-        ! do_bfac_rec = o%isthere('bfac_rec')
-        if( do_bfac_rec )bfac_rec = o%get('bfac_rec')
+        ! b-factor weighted reconstruction
+        do_bfac_rec = present(bfac)
+        if( do_bfac_rec )then
+            rnyq_sq = real(self%nyq*self%nyq)
+            bfac_sc = bfac / 4.
+        endif
         ! setup rotation matrices
         nsym = se%get_nsym()
-        allocate(rotmats(nsym,3,3), source=0.0)
+        allocate(rotmats(nsym,3,3), source=0.)
         rotmats(1,:,:) = o%get_mat()
         if( nsym > 1 )then
             do isym=2,nsym
@@ -302,7 +307,8 @@ contains
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint. The speeduop
         ! (on 5000 images of betagal) is modest (10%) but significant
-        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys,rsh_sq) proc_bind(close)
+        !$omp parallel default(shared) private(i,h,k,sh,freq_sq,shweight,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys,rsh_sq)&
+        !$omp proc_bind(close)
         do isym=1,nsym
             !$omp do collapse(2) schedule(static)
             do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
@@ -343,7 +349,13 @@ contains
                     endif
                     ! (weighted) kernel values
                     if( do_bfac_rec )then
-                        w = pwght * exp(-bfac_rec/4. * rsh_sq/real(self%nyq*self%nyq))
+                        if( rsh_sq < TINY )then
+                            w = 1.
+                        else if( rsh_sq >= rnyq_sq )then
+                            w = exp(-bfac_sc)
+                        else
+                            w = exp(-bfac_sc*rsh_sq/rnyq_sq)
+                        endif
                     else
                         w = pwght
                     endif
@@ -367,20 +379,22 @@ contains
     end subroutine insert_fplane_1
 
     !> insert Fourier plane, distribution of orientations (with weights)
-    subroutine insert_fplane_2( self, se, os, ctfvars, fpl, pwght, state )
+    subroutine insert_fplane_2( self, se, os, ctfvars, fpl, pwght, bfac, state )
         class(reconstructor), intent(inout) :: self  !< instance
         class(sym),           intent(inout) :: se    !< symmetry elements
         class(oris),          intent(inout) :: os    !< orientations
         type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
         class(image),         intent(inout) :: fpl   !< Fourier plane
         real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        real,    optional,    intent(in)    :: bfac  !<
         integer, optional,    intent(in)    :: state !< state to reconstruct
         type(ori) :: o_sym, o
         type(ctf) :: tfun
         complex   :: comp, oshift
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
-        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris())
+        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, freq_sq, bfac_sc
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rotmats(os%get_noris(),se%get_nsym(),3,3)
+        logical   :: do_bfac_rec
         ! take care of optional state flag
         sstate = 1
         if( present(state) ) sstate = state
@@ -391,6 +405,12 @@ contains
             ! make CTF object
             tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
+        endif
+        ! b-factor weighted reconstruction
+        do_bfac_rec = present(bfac)
+        if( do_bfac_rec )then
+            rnyq_sq = real(self%nyq*self%nyq)
+            bfac_sc = bfac / 4.
         endif
         ! setup orientation weights/states/rotation matrices/shifts
         nsym  = se%get_nsym()
@@ -412,14 +432,15 @@ contains
         ! the parallellisation must run over one plane @ the time to avoid race conditions
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint
-        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+        !$omp parallel default(shared) private(i,h,k,sh,rsh_sq,freq_sq,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
         do isym=1,nsym
             do iori=1,noris
                 if( ows(iori) < TINY .or. states(iori) /= sstate ) cycle
                 !$omp do collapse(2) schedule(static)
                 do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
                     do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                        sh = nint(hyp(real(h),real(k)))
+                        rsh_sq = real(h*h + k*k)
+                        sh     = nint(sqrt(rsh_sq))
                         if( sh > self%nyq + 1 ) cycle
                         logi = [h,k,0]
                         vec  = real(logi)
@@ -452,7 +473,17 @@ contains
                             tvalsq = tval
                         endif
                         ! (weighted) kernel values
-                        w = ows(iori)
+                        if( do_bfac_rec )then
+                            if( rsh_sq < TINY )then
+                                w = ows(iori)
+                            else if( rsh_sq >= rnyq_sq )then
+                                w = ows(iori) * exp(-bfac_sc)
+                            else
+                                w = ows(iori) * exp(-bfac_sc*rsh_sq/rnyq_sq)
+                            endif
+                        else
+                            w = ows(iori)
+                        endif
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))
@@ -483,8 +514,8 @@ contains
         real                 :: val_prev, val, invrho
         integer              :: h, k, m, phys(3), iter
         integer              :: maxits_here
-        complex, parameter   :: one = cmplx(1.,0.)
-        real,    parameter   :: winsz  = 2.
+        complex, parameter   :: one   = cmplx(1.,0.)
+        real,    parameter   :: winsz = 2.
         maxits_here = GRIDCORR_MAXITS
         if( present(maxits) )maxits_here = maxits
         ! kernel
@@ -601,7 +632,7 @@ contains
                         phys(1) = h + 1
                         phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
                         phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
-                        call self%set_cmat_at( phys(1),phys(2),phys(3), self%cmat_exp(h,k,m) )
+                        call self%set_cmat_at(phys(1),phys(2),phys(3), self%cmat_exp(h,k,m))
                     else
                         phys(1) = -h + 1
                         phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
@@ -710,19 +741,31 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk
-                real      :: pw
+                real      :: pw, bfac
                 state = o%get_state(i)
                 if( state == 0 ) return
-                pw = 1.
-                if( p%frac < 0.99 ) pw = o%get(i, 'w')
-                if( pw > 0. )then
+                if( p%shellweights.eq.'yes' )then
                     orientation = o%get_ori(i)
+                    bfac = 0.
+                    if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
                     call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
                     call gridprep%prep(img, img_pad)
                     ctfvars = spproj%get_ctfparams(p%oritype, i)
-                    call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
+                    call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=1., bfac=o%get(i,'bfac'))
                     deallocate(stkname)
+                else
+                    pw = 1.
+                    if( p%frac < 0.99 ) pw = o%get(i, 'w')
+                    if( pw > 0. )then
+                        orientation = o%get_ori(i)
+                        call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                        call img%read(stkname, ind_in_stk)
+                        call gridprep%prep(img, img_pad)
+                        ctfvars = spproj%get_ctfparams(p%oritype, i)
+                        call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
+                        deallocate(stkname)
+                    endif
                 endif
             end subroutine rec_dens
 

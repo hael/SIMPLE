@@ -56,7 +56,6 @@ contains
     subroutine exec_volassemble_eo( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_filterer,         only: gen_anisotropic_optlp
-
         class(volassemble_eo_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)                  :: p
