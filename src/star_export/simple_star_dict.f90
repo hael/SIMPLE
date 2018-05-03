@@ -7,11 +7,15 @@ type star_dict
     type(chash),              public :: keywords_filename
     type(chash),              public :: keywords_general
     type(chash),              public :: keywords_class3D
-
     type(hash),               public :: dict
+    logical                          :: existence = .false.
 contains
     procedure :: new
     procedure :: exists
+    procedure :: star_dict2str
+    procedure :: print_star_dict
+    procedure :: write
+    procedure :: read
     procedure :: kill
 end type star_dict
 
@@ -24,15 +28,15 @@ contains
 
     !>  \brief  is a constructor
     function constructor( ) result( self )
-        type(ori) :: self
-        call self%new_star_dict
+        type(star_dict) :: self
+        call self%new
     end function constructor
 
     !>  \brief  is a constructor
-    subroutine new_star_dict( self )
+    subroutine new( self )
         class(star_dict), intent(inout) :: self
         call self%kill
-        self%htab = hash()
+
 
         !! File name keywords and their formats
         self%keywords_filename = chash()
@@ -52,11 +56,11 @@ contains
         call self%keywords_general%push('AnglePsi',                          'e3')   !! imghead: gamma or psi2
         call self%keywords_general%push('AngleRot',                          'e1')   !! imghead: theta
         call self%keywords_general%push('AngleTilt',                         'e2')     !! imghead phi
-        call self%keywords_general%push('AutopickFigureOfMerit',             '?')   !!
-        call self%keywords_general%push('AverageNrOfFrames',                 '?')   !!
-        call self%keywords_general%push('ClassNumber',                       '?')   !!
-        call self%keywords_general%push('CoordinateX',                       'x')   !!  imghead
-        call self%keywords_general%push('CoordinateY',                       'y')   !!  imghead
+        call self%keywords_general%push('AutopickFigureOfMerit',             '?')    !!
+        call self%keywords_general%push('AverageNrOfFrames',                 '?')    !!
+        call self%keywords_general%push('ClassNumber',                       '?')    !!
+        call self%keywords_general%push('CoordinateX',                       'x')    !!  imghead
+        call self%keywords_general%push('CoordinateY',                       'y')    !!  imghead
         call self%keywords_general%push('CtfBfactor',                        '?')     !! cmd_dict
         call self%keywords_general%push('CtfFigureOfMerit',                  '?')     !!
         call self%keywords_general%push('CtfScalefactor',                    'scale') !!cmd_dict/
@@ -81,7 +85,8 @@ contains
         call self%keywords_general%push('Voltage',                           'kv') !! cmd_dict
 
 
-!! Class3D data_model general
+        !! Class3D data_model general
+        call self%keywords_general%new(43)
         call self%keywords_class3D%push('ReferenceDimensionality ',          '')
         call self%keywords_class3D%push('DataDimensionality ',               '')
         call self%keywords_class3D%push('OriginalImageSize',                 '')
@@ -129,62 +134,60 @@ contains
         !! data_model_pdf_orient_class_1
         call self%keywords_class3D%push('OrientationDistribution',           '')
 
-
-   self%existence = .true.
-    end subroutine new_star_dict
+        self%existence = .true.
+    end subroutine new
 
      !>  \brief  is a getter
-    pure function exists( self ) result( t )
+    pure logical function exists( self )
         class(star_dict), intent(in) :: self
-        logical :: t
-        t = self%existence
+        exists = self%existence
     end function exists
-        !>  \brief  is a getter
-    function get( self, key ) result( val )
-        class(star_dict), intent(inout)    :: self
-        character(len=*), intent(in) :: key
-        real :: val
-        val = self%htab%get(key)
-    end function get
-    !>  \brief  is a getter
-    subroutine getter_1( self, key, val )
-        class(star_dict),                    intent(inout) :: self
-        character(len=*),              intent(in)    :: key
-        character(len=:), allocatable, intent(inout) :: val
-        if( allocated(val) ) deallocate(val)
-        val = self%chtab%get(key)
-    end subroutine getter_1
+   !      !>  \brief  is a getter
+   !  function get( self, key ) result( val )
+   !      class(star_dict), intent(inout)    :: self
+   !      character(len=*), intent(in) :: key
+   !      real :: val
+   !      val = self%htab%get(key)
+   !  end function get
+   !  !>  \brief  is a getter
+   !  subroutine getter_1( self, key, val )
+   !      class(star_dict),                    intent(inout) :: self
+   !      character(len=*),              intent(in)    :: key
+   !      character(len=:), allocatable, intent(inout) :: val
+   !      if( allocated(val) ) deallocate(val)
+   !      val = self%chtab%get(key)
+   !  end subroutine getter_1
 
-    !>  \brief  is a getter
-    subroutine getter_2( self, key, val )
-        class(star_dict),       intent(inout) :: self
-        character(len=*), intent(in)    :: key
-        real,             intent(inout) :: val
-        val = self%htab%get(key)
-    end subroutine getter_2
-   !>  \brief  returns size of hash
-    function hash_size( self ) result( sz )
-        class(star_dict), intent(in) :: self
-        integer :: sz
-        sz = self%htab%size_of()
-    end function hash_size
+   !  !>  \brief  is a getter
+   !  subroutine getter_2( self, key, val )
+   !      class(star_dict),       intent(inout) :: self
+   !      character(len=*), intent(in)    :: key
+   !      real,             intent(inout) :: val
+   !      val = self%htab%get(key)
+   !  end subroutine getter_2
+   ! !>  \brief  returns size of hash
+   !  function hash_size( self ) result( sz )
+   !      class(star_dict), intent(in) :: self
+   !      integer :: sz
+   !      sz = self%htab%size_of()
+   !  end function hash_size
 
-    !>  \brief  returns the keys of the hash
-    function hash_vals( self ) result( vals )
-        class(star_dict), intent(inout) :: self
-        real(kind=4), allocatable :: vals(:)
-        vals = self%htab%get_values()
-    end function hash_vals
-   !>  \brief  check for presence of key in the star_dict hash
-    function isthere( self, key ) result( found )
-        class(star_dict),       intent(inout) :: self
-        character(len=*), intent(in)    :: key
-        logical :: hash_found, chash_found, found
-        hash_found  = self%htab%isthere(key)
-        chash_found = self%chtab%isthere(key)
-        found = .false.
-        if( hash_found .or. chash_found ) found = .true.
-    end function isthere
+   !  !>  \brief  returns the keys of the hash
+   !  function hash_vals( self ) result( vals )
+   !      class(star_dict), intent(inout) :: self
+   !      real(kind=4), allocatable :: vals(:)
+   !      vals = self%htab%get_values()
+   !  end function hash_vals
+   ! !>  \brief  check for presence of key in the star_dict hash
+   !  function isthere( self, key ) result( found )
+   !      class(star_dict),       intent(inout) :: self
+   !      character(len=*), intent(in)    :: key
+   !      logical :: hash_found, chash_found, found
+   !      hash_found  = self%htab%isthere(key)
+   !      chash_found = self%chtab%isthere(key)
+   !      found = .false.
+   !      if( hash_found .or. chash_found ) found = .true.
+   !  end function isthere
 
     !>  \brief  writes orientation info
     subroutine write( self, fhandle )
@@ -203,29 +206,55 @@ contains
         character(len=2048) :: line
         logical :: isthere(3)
         read(fhandle,fmt='(A)') line
-        call sauron_line_parser( line, self%htab, self%chtab )
-        isthere(1) = self%htab%isthere('e1')
-        isthere(2) = self%htab%isthere('e2')
-        isthere(3) = self%htab%isthere('e3')
-        if( any(isthere) )&
-          &call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
+        ! call sauron_line_parser( line, self%htab, self%chtab )
+        ! isthere(1) = self%htab%isthere('e1')
+        ! isthere(2) = self%htab%isthere('e2')
+        ! isthere(3) = self%htab%isthere('e3')
+
     end subroutine read
 
+    function star_dict2str (self ) result (str)
+        class(star_dict), intent(inout) :: self
+        character(len=:), allocatable :: str, str_tab1, str_tab2, str_tab3
+        integer :: sz_filenamehash, sz_generalhash, sz_class3Dhash
+        sz_filenamehash = self%keywords_filename%size_of()
+        sz_generalhash  = self%keywords_general%size_of()
+        sz_class3Dhash = self%keywords_class3D%size_of()
+        if( sz_filenamehash > 0 ) str_tab1 = self%keywords_filename%chash2str()
+        if( sz_generalhash  > 0 ) str_tab2  = self%keywords_general%chash2str()
+        if( sz_class3Dhash  > 0 ) str_tab3  = self%keywords_class3D%chash2str()
+        if( sz_class3Dhash > 0 .and. sz_generalhash > 0 .and. sz_filenamehash > 0 )then
+        else if(  sz_generalhash > 0 .and. sz_filenamehash > 0 )then
+            allocate( str, source=str_tab2//' '//str_tab1)
+        else if( sz_filenamehash > 0 )then
+            allocate( str, source=str_tab1)
+        else if( sz_generalhash > 0 )then
+            allocate( str, source=str_tab2)
+        endif
+        if(allocated(str_tab1))deallocate(str_tab1)
+        if(allocated(str_tab2))deallocate(str_tab2)
+        if(allocated(str_tab3))deallocate(str_tab3)
+    end function star_dict2str
 
     subroutine print_star_dict( self )
         class(star_dict), intent(inout) :: self
-        call self%htab%print()
-        call self%chtab%print_key_val_pairs
+        !call self%htab%print()
+        call self%keywords_filename%print_key_val_pairs
+        call self%keywords_general%print_key_val_pairs
+        call self%keywords_class3D%print_key_val_pairs
     end subroutine print_star_dict
-        !>  \brief  is a destructor
+
+
+    !>  \brief  is a destructor
     subroutine kill( self )
         class(star_dict), intent(inout) :: self
         if( self%existence )then
-            call self%htab%kill
-            call self%keyword%kill
+            call self%keywords_filename%kill
+            call self%keywords_general%kill
+            call self%keywords_class3D%kill
             self%existence = .false.
         endif
     end subroutine kill
 
 
-end module simple_star_map
+end module simple_star_dict

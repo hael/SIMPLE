@@ -7,7 +7,7 @@ use simple_build,          only: build
 use simple_sp_project,     only: sp_project
 implicit none
 
-type star
+type starfile
 contains
     procedure :: export_motion_correct
     procedure :: import_motion_correct
@@ -25,13 +25,13 @@ contains
     procedure :: import_class3D
     procedure :: export_shiny3D
     procedure :: import_shiny3D
-end type star
+end type starfile
 
 
 contains
 
 !! Motion Correct: Simple/Unblur/MotionCorr2
-!! Format of Motion Correct Star File:
+!! Format of Motion Correct Starfile File:
 !! data_
 !! loop_
 !! _rlnMicrographNameNoDW #1
@@ -39,11 +39,11 @@ contains
 !! [#1 MotionCorr/job026/Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729_noDW.mrc] [#2 MotionCorr/job026/ Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729.mrc]
 !! ...
 subroutine export_motion_correct (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_motion_correct
 subroutine import_motion_correct (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_motion_correct
 
@@ -65,11 +65,11 @@ end subroutine import_motion_correct
 !! _rlnCtfFigureOfMerit #12
 !! [noDW filename #1] [ctf filename #2] ... [#12]
 subroutine export_ctf_estimation (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_ctf_estimation
 subroutine import_ctf_estimation (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_ctf_estimation
 
@@ -85,11 +85,11 @@ end subroutine import_ctf_estimation
 !! _rlnAnglePsi #5
 !!  1219.364633   233.878135            1     1.523455     0.000000
 subroutine export_autopick (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_autopick
 subroutine import_autopick (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_autopick
 
@@ -129,11 +129,11 @@ end subroutine import_autopick
 !! _rlnGroupName #29
 !!  [#1] ... [#6 filename] [#7 filename] ... [#29]
 subroutine export_extract_doseweightedptcls (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_extract_doseweightedptcls
 subroutine import_extract_doseweightedptcls (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_extract_doseweightedptcls
 
@@ -176,11 +176,11 @@ end subroutine import_extract_doseweightedptcls
 !! _rlnMovieFramesRunningAverage #32
 !! [#1 MC filename] ... [#15 Polish filename] .. [#29 Extract filename] ..
 subroutine export_class2D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_class2D
 subroutine import_class2D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_class2D
 
@@ -217,11 +217,11 @@ end subroutine import_class2D
 !! _rlnGroupName #28                                    <-- Possible index error
 !! [#1 MC filename] ... [#15 Polish filename] .. [#27]
 subroutine export_class2D_select (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_class2D_select
 subroutine import_class2D_select (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_class2D_select
 
@@ -309,11 +309,11 @@ end subroutine import_class2D_select
 !!
 !!
 subroutine export_class3D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_class3D
 subroutine import_class3D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_class3D
 
@@ -355,11 +355,11 @@ end subroutine import_class3D
 !! _rlnRandomSubset #28
 !! [#1 MC filename] ... [#15 Extract filename] .. [#28]
 subroutine export_refine3D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_refine3D
 subroutine import_refine3D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_refine3D
 
@@ -404,11 +404,11 @@ end subroutine import_refine3D
 !! _rlnMovieFramesRunningAverage #32
 !! [#1 MC filename] ... [#15 Polish filename] ..[#29 Extract filename] [#32]
 subroutine export_shiny3D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine export_shiny3D
 subroutine import_shiny3D (self, arg)
-    class(star), intent(inout) :: self
+    class(starfile), intent(inout) :: self
     real, intent(in) :: arg
 end subroutine import_shiny3D
 
