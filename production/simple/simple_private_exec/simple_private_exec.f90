@@ -7,9 +7,9 @@ use simple_commander_project
 use simple_commander_checks
 use simple_commander_comlin
 use simple_commander_distr
+use simple_commander_misc
 use simple_commander_imgproc
 use simple_commander_mask
-use simple_commander_misc
 use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_cluster2D
@@ -18,6 +18,8 @@ use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_tseries
+
+
 implicit none
 
 ! PRE-PROCESSING PROGRAMS
@@ -66,7 +68,7 @@ type(check_nptcls_commander)         :: xcheck_nptcls
 
 ! VOLOPS PROGRAMS
 type(postprocess_commander)          :: xpostprocess ! DUPLICATED
-type(project_commander)              :: xproject     ! DUPLICATED
+type(reproject_commander)            :: xreproject     ! DUPLICATED
 type(volaverager_commander)          :: xvolaverager
 type(volume_smat_commander)          :: xvolume_smat
 type(dock_volpair_commander)         :: xdock_volpair
@@ -922,7 +924,7 @@ select case(prg)
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
         if( .not. cline%defined('alpha') ) call cline%set('alpha', 2.)
         ! execute
-        call xproject%execute(cline)
+        call xreproject%execute(cline)
     case( 'volaverager' )
         !==Program volaverager
         !

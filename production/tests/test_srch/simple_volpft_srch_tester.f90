@@ -7,7 +7,7 @@ use simple_image,      only: image
 use simple_cmdline,    only: cmdline
 use simple_projector,  only: projector
 use simple_volpft_srch ! singleton
-use simple_gridding    ! singleton
+!use simple_gridding    ! singleton
 implicit none
 
 public :: exec_volpft_srch_test

@@ -1,7 +1,7 @@
 module simple_speedtester
 use simple_image,                  only: image
 use simple_commander_distr_wflows, only: prime3D_distr_commander
-use simple_commander_volops,       only: project_commander
+use simple_commander_volops,       only: reproject_commander
 use simple_cmdline,                only: cmdline
 implicit none
 
@@ -9,7 +9,7 @@ implicit none
 integer, parameter            :: BOX=200, SQRAD=40, NSPACE=50
 real,    parameter            :: SMPD=1.1, MSK=50., TRS=5.0
 type(image)                   :: cube, square
-type(project_commander)       :: xproject
+type(reproject_commander)     :: xproject
 type(prime3D_distr_commander) :: xprime3D
 type(cmdline)                 :: cline_project, cline_refine3D
 
@@ -20,7 +20,7 @@ contains
         logical, optional, intent(in)    :: be_verbose
         call setup_testenv( cline )
     end subroutine exec_speedtest
-        
+
     subroutine setup_testenv( cline )
         class(cmdline), intent(inout) :: cline
         real    :: nthr

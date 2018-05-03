@@ -1,14 +1,14 @@
 module simple_prime3D_srch_tester
 include 'simple_lib.f08'
-use simple_strategy2D3D_common    ! singleton
-use simple_strategy3D_matcher ! singleton
-use simple_cmdline            ! singleton
-use simple_strategy3D_srch,       only: strategy3D_srch
-use simple_oris,               only: oris
-use simple_ori,                only: ori
-use simple_build,              only: build
-use simple_params,             only: params
-use simple_image,              only: image
+!use simple_strategy2D3D_common    ! singleton
+!use simple_strategy3D_matcher ! singleton
+use simple_cmdline,             only: cmdline            ! singleton
+!use simple_strategy3D_srch,       only: strategy3D_srch
+!use simple_oris,               only: oris
+!use simple_ori,                only: ori
+!use simple_build,              only: build
+!use simple_params,             only: params
+!use simple_image,              only: image
 implicit none
 
 public :: exec_prime3D_srch_test
@@ -37,10 +37,10 @@ contains
     subroutine exec_prime3D_srch_test( cline, be_verbose )
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
-    !     type(cmdline) :: cline_local
-    !     ! refine = no; nstates=1;
-    !     write(*,*)'>>> REFINE=NO; NSTATES=1'
-    !     cline_local = cline
+         type(cmdline) :: cline_local
+         ! refine = no; nstates=1;
+         write(*,*)'>>> REFINE=NO; NSTATES=1'
+         cline_local = cline
     !     call cline_local%set('refine', 'no')
     !     call cline_local%set('nstates',1.)
     !     call setup_testenv( cline_local, be_verbose )
@@ -63,11 +63,11 @@ contains
     !     cline_local = cline
     !     call cline_local%set('refine', 'no')
     !     call cline_local%set('nstates',real(NSTATES))
-    !     call setup_testenv( cline_local, be_verbose )
+         call setup_testenv( cline_local, be_verbose )
     !     call test_prep4srch
     !     call test_prepcorr4srch
     !     call test_prep_reforis( cline_local )
-    !     call shutdown_testenv
+         call shutdown_testenv
     !     ! ! refine = neigh; nstates=1;
     !     ! write(*,*)'>>> REFINE=NEIGH; NSTATES=1'
     !     ! cline_local = cline
@@ -83,18 +83,17 @@ contains
     !     ! call cline_local%set('nstates',1.)
     !     ! call setup_testenv( cline_local, be_verbose )
     !     ! call test_prep_reforis( cline_local )
-    !     ! call shutdown_testenv
+         call shutdown_testenv
     end subroutine exec_prime3D_srch_test
 
-    ! subroutine setup_testenv( cline, be_verbose )
-    !     use simple_strings,        only: str_has_substr
-    !     use simple_projector_hlev, only: projvol
-    !     class(cmdline),    intent(inout) :: cline
-    !     logical, optional, intent(in)    :: be_verbose
+     subroutine setup_testenv( cline, be_verbose )
+     !    use simple_projector_hlev, only: projvol
+        class(cmdline),    intent(inout) :: cline
+         logical, optional, intent(in)    :: be_verbose
     !     !type(ori)          :: o
     !     integer            :: i   !, state ,noris
 
-    !     if( present(be_verbose) ) verbose = be_verbose
+         if( present(be_verbose) ) verbose = be_verbose
     !     verbose=.true.
     !     ! it is assumed that vol1, smpd, msk are part of the inputted command line
     !     ! setting the remainder of the command line up in here
@@ -175,9 +174,9 @@ contains
     !     ! now instantiatable, so create it
     !     ! call primesrch3D%new(pftcc, b%a, b%e, p)
     !     VerbosePrint 'end setup_testenv'
-    ! end subroutine setup_testenv
+     end subroutine setup_testenv
 
-    ! subroutine test_prep4srch
+     subroutine test_prep4srch
     !     type(ori) :: o, o_saved
     !     real      :: e3, shvec(2), x, y
     !     integer   :: nrefs, nrots, ind,i, state, proj
@@ -208,9 +207,9 @@ contains
     !     ! enddo
     !     ! other cases
     !     VerbosePrint 'end setup_prep4srch'
-    ! end subroutine test_prep4srch
+    end subroutine test_prep4srch
 
-    ! subroutine test_prepcorr4srch
+    subroutine test_prepcorr4srch
     !     use simple_rnd,        only: ran3
     !     type(ori) :: o
     !     real      :: prev_corr, corr
@@ -253,10 +252,10 @@ contains
     !     !     enddo
     !     ! endif
     !     VerbosePrint 'end setup_prepcorr4srch'
-    ! end subroutine test_prepcorr4srch
+    end subroutine test_prepcorr4srch
 
-    ! subroutine test_prep_reforis( cline)
-    !     class(cmdline),    intent(inout) :: cline
+    subroutine test_prep_reforis( cline)
+         class(cmdline),    intent(inout) :: cline
     !     type(oris) :: test_os
     !     type(ori)  :: o, oref, orefs
     !     integer    :: iptcl,i, ref,s, ind
@@ -320,16 +319,16 @@ contains
     !             stop 'not implemented yet'
     !     end select
     !     VerbosePrint 'end prep_reforis'
-    ! end subroutine test_prep_reforis
+     end subroutine test_prep_reforis
 
-    ! subroutine shutdown_testenv
-    !     integer :: i
+     subroutine shutdown_testenv
+         integer :: i
     !     call b%kill_general_tbox
     !     call b%kill_hadamard_prime3D_tbox
     !     do i=1,NPROJS
     !         call imgs_ptcls(i)%kill
     !     end do
     !     deallocate(imgs_ptcls)
-    ! end subroutine shutdown_testenv
+     end subroutine shutdown_testenv
 
 end module simple_prime3D_srch_tester

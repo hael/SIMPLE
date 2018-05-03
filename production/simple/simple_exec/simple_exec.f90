@@ -1,7 +1,7 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
 include 'simple_lib.f08'
-use simple_user_interface
+use simple_user_interface, only:  make_user_interface ,list_shmem_prgs_in_ui
 use simple_cmdline, only: cmdline, cmdline_err
 use simple_commander_project
 use simple_commander_checks
@@ -37,8 +37,8 @@ type(postprocess_commander)          :: xpostprocess
 ! IMAGE PROCESSING
 type(mask_commander)                 :: xmask
 type(fsc_commander)                  :: xfsc
-type(center_commander)               :: xcenter
-type(project_commander)              :: xproject
+type(centervol_commander)            :: xcenter
+type(reproject_commander)            :: xreproject
 type(volops_commander)               :: xvolops
 type(convert_commander)              :: xconvert
 type(ctfops_commander)               :: xctfops
@@ -137,12 +137,12 @@ select case(prg)
         call cline%parse()
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         call xcenter%execute(cline)
-    case( 'project' )
+    case( 'project' ) !! posible renaming to reproject
         call cline%parse()
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
         if( .not. cline%defined('alpha') ) call cline%set('alpha', 2.)
-        call xproject%execute(cline)
+        call xreproject%execute(cline)
     case( 'volops' )
         call cline%parse()
         call xvolops%execute(cline)

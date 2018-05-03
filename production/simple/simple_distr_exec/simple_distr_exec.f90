@@ -1,13 +1,12 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program simple_distr_exec
 include 'simple_lib.f08'
+use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commander_base, only: execute_commander
-use simple_user_interface
-use simple_commander_stream_wflows
 use simple_commander_distr_wflows
+use simple_commander_stream_wflows
 use simple_commander_hlev_wflows
-
 implicit none
 
 ! PRE-PROCESSING
