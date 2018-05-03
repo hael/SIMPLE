@@ -1,5 +1,5 @@
 module simple_error
- use simple_defs
+use simple_defs
 
 #if defined(GNU)
     use, intrinsic :: iso_fortran_env, only: &

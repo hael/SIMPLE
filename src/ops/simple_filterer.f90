@@ -2,8 +2,8 @@
 module simple_filterer
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
-
+!include 'simple_lib.f08'
+use simple_math
 use simple_image,     only: image
 use simple_oris,      only: oris
 use simple_ori,       only: ori

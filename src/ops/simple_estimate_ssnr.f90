@@ -1,6 +1,8 @@
 ! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
-include 'simple_lib.f08'
+use simple_defs
+use simple_error, only: allocchk
+use simple_math,  only: find
 !use simple_image,   only: image
 implicit none
 

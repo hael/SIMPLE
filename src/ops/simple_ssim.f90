@@ -1,10 +1,11 @@
 module simple_ssim
-    include 'simple_lib.f08'
-    use simple_image, only: image
-    implicit none
-    private
+!    include 'simple_lib.f08'
+use simple_defs
+use simple_image, only: image
+implicit none
+private
 #include "simple_local_flags.inc"
-    public :: ssim, dssim
+public :: ssim, dssim
 contains
     function ssim (img1, img2, ssim_map, weighting)
         real :: ssim

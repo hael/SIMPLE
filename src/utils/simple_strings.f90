@@ -164,30 +164,30 @@ contains
       str    = adjustl(str(index+1:))
   end subroutine split_str
 
-      !> \brief  finds the first instance of a character 'delim' in the
+    !> \brief  finds the first instance of a character 'delim' in the
     !!         the string 'str'. The characters before the found delimiter are
     !!         output in 'before'. The characters after the found delimiter are
     !!         output in 'str'.
-    subroutine nsplit_str(str, delim, before, n)
-      character(len=*), intent(inout) :: str
-      character(len=1), intent(in)    :: delim
-      character(len=*), intent(out)   :: before
-      integer, intent(in)    :: n
-      integer :: start, index, i
-      str    = trim(str)
-      index=1
-      start=1
-      before=''
-      do i=1,n
-          if (start >= len(str)) exit
-          index  = scan(str(start:), delim)
-          start=index
-      end do
-      if (index>1)then
-          before = trim(adjustl(str(1:index-1)))
-          str    = adjustl(str(index:))
-      endif
-    end subroutine nsplit_str
+    ! subroutine nsplit_str(str, delim, before, n)
+    !   character(len=*), intent(inout) :: str
+    !   character(len=1), intent(in)    :: delim
+    !   character(len=*), intent(out)   :: before
+    !   integer, intent(in)    :: n
+    !   integer :: start, index, i
+    !   str    = trim(str)
+    !   index=1
+    !   start=1
+    !   before=''
+    !   do i=1,n
+    !       if (start >= len(str)) exit
+    !       index  = scan(str(start:), delim)
+    !       start=index
+    !   end do
+    !   if (index>1)then
+    !       before = trim(adjustl(str(1:index-1)))
+    !       str    = adjustl(str(index:))
+    !   endif
+    ! end subroutine nsplit_str
 
     !> \brief  finds the first instance of a character 'delim' in the
     !!         the string 'str'. The characters before the found delimiter are
@@ -233,42 +233,42 @@ contains
     end subroutine split
 
     !> \brief  replace any tokens in string (str) with char rch
-    subroutine replace(str, tokens, rch)
-        character(len=*), intent(inout) :: str        !< input string
-        character(len=*), intent(inout) :: tokens     !< array of searchable chars
-        character(len=1), intent(in) :: rch           !< replace any element in tokens with char
-        character(len=1)             :: ch,tok
-        character(len=len_trim(str)) :: outstr
-        integer :: lenstr,lensstr, k, i,j, ich, itoken
-        str = adjustl(str)
-        tokens = adjustl(tokens)
-        lensstr = len_trim(tokens)
-        outstr = adjustl(str)      ! initialise outstr
-        do j=1,lensstr
-            str = adjustl(outstr)  ! update str for each element in sstr in case rch == ''
-            lenstr = len_trim(str) ! re-adjust length
-            outstr = ''            ! reset outstr
-            k = 0
-            tok = tokens(j:j)
-            itoken = iachar(tok)
-            do i=1,lenstr
-                ch = str(i:i)
-                ich = iachar(ch)
-                if(ich == itoken) then  ! character in schs
-                    if ( len_trim(rch) == 0 ) then
-                        cycle
-                    else
-                        k = k + 1
-                        outstr(k:k) = rch
-                    end if
-                else
-                    k = k+1
-                    outstr(k:k) = ch
-                end if
-            end do
-        end do
-        str = adjustl(outstr)
-    end subroutine replace
+    ! subroutine replace(str, tokens, rch)
+    !     character(len=*), intent(inout) :: str        !< input string
+    !     character(len=*), intent(inout) :: tokens     !< array of searchable chars
+    !     character(len=1), intent(in) :: rch           !< replace any element in tokens with char
+    !     character(len=1)             :: ch,tok
+    !     character(len=len_trim(str)) :: outstr
+    !     integer :: lenstr,lensstr, k, i,j, ich, itoken
+    !     str = adjustl(str)
+    !     tokens = adjustl(tokens)
+    !     lensstr = len_trim(tokens)
+    !     outstr = adjustl(str)      ! initialise outstr
+    !     do j=1,lensstr
+    !         str = adjustl(outstr)  ! update str for each element in sstr in case rch == ''
+    !         lenstr = len_trim(str) ! re-adjust length
+    !         outstr = ''            ! reset outstr
+    !         k = 0
+    !         tok = tokens(j:j)
+    !         itoken = iachar(tok)
+    !         do i=1,lenstr
+    !             ch = str(i:i)
+    !             ich = iachar(ch)
+    !             if(ich == itoken) then  ! character in schs
+    !                 if ( len_trim(rch) == 0 ) then
+    !                     cycle
+    !                 else
+    !                     k = k + 1
+    !                     outstr(k:k) = rch
+    !                 end if
+    !             else
+    !                 k = k+1
+    !                 outstr(k:k) = ch
+    !             end if
+    !         end do
+    !     end do
+    !     str = adjustl(outstr)
+    ! end subroutine replace
 
     !> \brief  removes punctuation (except comma) characters in string str
     subroutine removepunct(str)

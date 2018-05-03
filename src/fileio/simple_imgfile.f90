@@ -10,7 +10,12 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
-include 'simple_lib.f08'
+!include 'simple_lib.f08'
+use simple_defs
+use simple_error,  only: allocchk, simple_stop
+use simple_math,   only: is_odd, is_even
+use simple_syslib, only: is_open, file_exists, del_file
+use simple_fileio, only: fname2format, fopen, fileiochk, fclose
 use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead ! dataRbytes, dataRinteger, dataRfloat
 use gnufor2
 implicit none
@@ -369,7 +374,6 @@ contains
         integer,                intent(in)    :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
         logical,                intent(in)    :: is_ft        !< to indicate FT status of image
         real,                   intent(in)    :: smpd         !< sampling distance
-        character(len=100)          :: io_message
         integer                     :: io_stat,itmp,dims(3)!,dims_stored(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         logical                     :: arr_is_ready

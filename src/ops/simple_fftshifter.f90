@@ -15,7 +15,9 @@
 !! Michael Eager (michael dot eager at monash dot edu)
 !!------------------------------------------------------------
 module simple_fftshifter
-    include 'simple_lib.f08'
+    use simple_defs
+    use simple_error, only: allocchk
+!    include 'simple_lib.f08'
     implicit none
     !> Generic interface to 1D, 2D real, complex, and C-complex fftshift routines
     interface fftshift

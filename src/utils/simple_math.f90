@@ -2110,15 +2110,7 @@ contains
         mat(2,2) = mat(1,1)
     end function rotmat2d
 
-    !>  extracts in-plane parameters from transformation matrix
-    subroutine transfmat2inpls( R, psi, tx, ty )
-        real,intent(inout) :: psi,tx,ty
-        real,intent(in)    :: R(3,3)
-        psi = rad2deg( myacos( R(1,1) ))
-        if( R(1,2)<0. )psi=360.-psi
-        tx  = R(1,3)
-        ty  = R(2,3)
-    end subroutine transfmat2inpls
+
 
     !>  in-plane parameters to 3x3 transformation matrix
     function make_transfmat( psi, tx, ty )result( R )
