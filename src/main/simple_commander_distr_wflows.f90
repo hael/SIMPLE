@@ -120,7 +120,7 @@ contains
         p_master%nptcls = spproj%os_mic%get_noris()
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! deal with numlen so that length matches JOB_FINISHED indicator files
-        p_master%numlen = len(int2str(p_master%nptcls))
+        p_master%numlen = len(int2str(p_master%nparts))
         call cline%set('numlen', real(p_master%numlen))
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
