@@ -10,8 +10,8 @@
 if(NOT $ENV{FC} STREQUAL "")
   set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
 else()
-  set(CMAKE_Fortran_COMPILER_NAMES gfortran)
-  set(ENV{FC} "gfortran")
+  set(CMAKE_Fortran_COMPILER_NAMES gfortran mpif90 mpifort)
+  # set(ENV{FC} "gfortran")
 endif()
 # Override preprocessor in CMakeDetermineCompiler default cpp
 
@@ -279,12 +279,22 @@ if(POLICY CMP0004)
   cmake_policy(SET CMP0004 OLD)
 endif()
 
-
+message(STATUS Executing: ENV{PATH} $ENV{PATH})
 ## Remove EMAN bin and possible library paths from PATH
+# message(STATUS  "ENV{PATH} -- $ENV{PATH}")
 file(TO_CMAKE_PATH "$ENV{PATH}" TMPPATH)
-string(REGEX REPLACE  "[^:]\+(EMAN|eman)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
-file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
-set(ENV{PATH} ${TMPPATH})
+# message(STATUS " FortranOverride Before REGEX: TMPPATH ${TMPPATH} ")
+string(REGEX REPLACE  "[^;]\+(EMAN|eman)[2]*;" "" TMPPATH "${TMPPATH}")
+# cmake > 3.6   list(FILTER  TMPPATH EXCLUDE  REGEX "[^;]\+(EMAN|eman)[2]*[^;]\+")
+#message(STATUS " FortranOverride After REGEX: TMPPATH ${TMPPATH} ")
+string (REPLACE ";" ":" TMPPATH "${TMPPATH}")
+#file(TO_NATIVE_PATH "${TMPPATH}" TMPPATH)
+#message(STATUS " FortranOverride After TO_CMAKE_PATH: TMPPATH ${TMPPATH} ")
+set(ENV{PATH} "${TMPPATH}")
+message(STATUS " FortranOverride After TO_CMAKE_PATH: $ENV{PATH} ")
+
+
+
 if (NOT "$ENV{LD_LIBRARY_PATH}" STREQUAL "")
   file(TO_CMAKE_PATH   "$ENV{LD_LIBRARY_PATH}" TMPPATH)
   string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
@@ -312,6 +322,15 @@ elseif (NOT "$ENV{FFTW_ROOT}" STREQUAL "")
   file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
   set(ENV{FFTWDIR} ${TMPPATH})
 endif()
+
+# message(STATUS  "XXXXX ENV{PATH} -- $ENV{PATH}")
+
+# execute_process( COMMAND cmake -E env which ${CMAKE_Fortran_COMPILER}
+#   OUTPUT_VARIABLE GFC_VERSION
+#   ERROR_VARIABLE GFC_VERSION_ERROR
+#   RESULT_VARIABLE GFC_VERSION_RESULT)
+# message(STATUS " whichFO ${CMAKE_Fortran_COMPILER}  :res ${GFC_VERSION_RESULT} :err ${GFC_VERSION_ERROR} :out ${GFC_VERSION}")
+
 
 # Make sure the build type is uppercase
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)

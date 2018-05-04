@@ -6,7 +6,7 @@
 # Make sure that the default build type is RELEASE if not specified.
 ####################################################################
 include(SetCompileFlag)
-
+include(ZSetParallelLibrary)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineFortranCompiler.cmake)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
 ## Double check cpp is not Clang
@@ -231,8 +231,17 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   ## GNU fortran
   #
   #############################################
+
+  message(STATUS "Executing: ${CMAKE_Fortran_COMPILER} -dumpversion")
   execute_process(
-    COMMAND ${CMAKE_Fortran_COMPILER} -dumpversion OUTPUT_VARIABLE GFC_VERSION)
+    COMMAND ${CMAKE_Fortran_COMPILER} -dumpversion
+    OUTPUT_VARIABLE GFC_VERSION
+    ERROR_VARIABLE GFC_VERSION_STDERR
+    RESULT_VARIABLE GFC_VERSION_RESULT)
+  message(STATUS " ${CMAKE_Fortran_COMPILER} -dumpversion :  ${GFC_VERSION} : ${GFC_VERSION_RESULT} : ${GFC_VERSION_STDERR}")
+  if( RESULT_VARIABLE EQUAL 1 )
+    message(FATAL_ERROR "${PROJECT_NAME} requires ${CMAKE_Fortran_COMPILER} to compile")
+  endif()
   if (NOT (GFC_VERSION VERSION_GREATER 4.9 OR GFC_VERSION VERSION_EQUAL 4.9))
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran version 4.9 or above")
   endif ()
@@ -300,7 +309,6 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   #   set(CMAKE_SHARED_LINKER_FLAGS        "${CMAKE_SHARED_LINKER_FLAGS} -ip -ipo-separate -ipo-jobs=${NUM_JOBS}")
   #   set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS} -ip -ipo")
   # endif(LINK_TIME_OPTIMISATION)
-  add_definitions("-DOPENMP")
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATCHES "pgfortran.*")
   #############################################
@@ -562,14 +570,77 @@ endif()
 # SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 # SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
 
-if (APPLE AND USE_CUDA)
-  message(STATUS "Applied CUDA OpenMP macOS workaround")
-  set(CUDA_PROPAGATE_HOST_FLAGS OFF)
-  set(CMAKE_SHARED_LIBRARY_CXX_FLAGS_BACKUP "${CMAKE_SHARED_LIBRARY_CXX_FLAGS}")
-  set(CMAKE_SHARED_LIBRARY_CXX_FLAGS "${CMAKE_SHARED_LIBRARY_CXX_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-unused-function")
-  string(REGEX REPLACE "-fopenmp[^ ]*" "" CMAKE_SHARED_LIBRARY_CXX_FLAGS "${CMAKE_SHARED_LIBRARY_CXX_FLAGS}")
+  add_definitions("-DOPENMP")
+
+if(USE_OPENMPI)
+  find_package(MPI REQUIRED)
+  if(MPI_Fortran_FOUND)
+    # message(STATUS " MPI found -- ${MPI_COMPILE_FLAGS}")
+    # message(STATUS " MPI_Fortran_COMPILER ${MPI_Fortran_COMPILER}")
+    # message(STATUS " MPI_Fortran_COMPILE_FLAGS ${MPI_Fortran_COMPILE_FLAGS}")
+    # message(STATUS " MPI_Fortran_LIBRARIES ${MPI_Fortran_LIBRARIES}")
+    # message(STATUS " MPI_Fortran_INCLUDE_PATH ${MPI_Fortran_INCLUDE_PATH}")
+    # message(STATUS " MPI_Fortran_LINK_FLAGS ${MPI_Fortran_LINK_FLAGS}")
+
+    # message(STATUS " MPI_C_COMPILER ${MPI_C_COMPILER}")
+    # message(STATUS " MPI_C_COMPILE_FLAGS ${MPI_C_COMPILE_FLAGS}")
+    # message(STATUS " MPI_C_LIBRARIES ${MPI_C_LIBRARIES}")
+    # message(STATUS " MPI_C_INCLUDE_PATH ${MPI_C_INCLUDE_PATH}")
+    # message(STATUS " MPI_C_LINK_FLAGS ${MPI_C_LINK_FLAGS}")
+
+    # message(STATUS " MPI_CXX_COMPILER ${MPI_CXX_COMPILER}")
+    # message(STATUS " MPI_CXX_COMPILE_FLAGS ${MPI_CXX_COMPILE_FLAGS}")
+    # message(STATUS " MPI_CXX_LIBRARIES ${MPI_CXX_LIBRARIES}")
+    # message(STATUS " MPI_CXX_INCLUDE_PATH ${MPI_CXX_INCLUDE_PATH}")
+    # message(STATUS " MPI_CXX_LINK_FLAGS ${MPI_CXX_LINK_FLAGS}")
+
+    # For backward compatibility with older versions of FindMPI, these
+    # variables are set, but deprecated:
+    message(STATUS " MPI_LIBRARY ${MPI_LIBRARY}")
+    message(STATUS " MPI_COMPILE_FLAGS ${MPI_COMPILE_FLAGS}")
+    message(STATUS " MPI_EXTRA_LIBRARY ${MPI_EXTRA_LIBRARY}")
+    message(STATUS " MPI_INCLUDE_PATH ${MPI_INCLUDE_PATH}")
+    message(STATUS " MPI_CXX_LINK_FLAGS ${MPI_LINK_FLAGS}")
+
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${MPI_Fortran_COMPILE_FLAGS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${MPI_C_COMPILE_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_COMPILE_FLAGS}")
+    #-I${libdir} -I${includedir} -I${includedir}/openmpi/opal/mca/event/libevent2021/libevent -I${includedir}/openmpi/opal/mca/event/libevent2021/libevent/include   -pthread
+    include_directories(${MPI_INCLUDE_PATH})
+    include_directories(${MPI_INCLUDE_PATH}/openmpi/opal/mca/event/libevent2021/libevent)
+    include_directories(${MPI_INCLUDE_PATH}/openmpi/opal/mca/event/libevent2021/libevent/include)
+    link_directories(/usr/lib/openmpi/lib)
+    set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS}  ${MPI_COMPILE_FLAGS}  ${MPI_LINK_FLAGS} ${MPI_LIBRARIES})
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}  ${MPI_LINK_FLAGS}")
+    set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${MPI_LINK_FLAGS}")
+    add_definitions("-DUSING_MPI")
+else()
+    message(FATAL_ERROR "Unable to find MPI -- mpif90 and libraries were not found in system paths")
+  endif()
 endif()
 
+
+
+
+if(USE_CUDA)
+  find_package(Threads)
+  find_package(CUDA REQUIRED)
+
+   if(CUDA_FOUND)
+     message(STATUS " CUDA Found ")
+     #   set(EXTRA_LIBS ${EXTRA_LIBS}  ${CUDA_LIBRARIES})
+  #   include_directories( ${CUDA_INCLUDE_DIRS} )
+  #   if (APPLE)
+  #     message(STATUS "Applied CUDA OpenMP macOS workaround")
+  #     set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+  #     set(CMAKE_SHARED_LIBRARY_CXX_FLAGS_BACKUP "${CMAKE_SHARED_LIBRARY_CXX_FLAGS}")
+  #     set(CMAKE_SHARED_LIBRARY_CXX_FLAGS "${CMAKE_SHARED_LIBRARY_CXX_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-unused-function")
+  #     string(REGEX REPLACE "-fopenmp[^ ]*" "" CMAKE_SHARED_LIBRARY_CXX_FLAGS "${CMAKE_SHARED_LIBRARY_CXX_FLAGS}")
+  #   endif()
+   else()
+     message(FATAL_ERROR "Unable to find CUDA -- set CUDA_TOOLKIT_ROOT_DIR in shell environment")
+  endif()
+endif()
 
 ################################################################
 # FFTW  -- MKL core already inlcuded in Intel config
@@ -652,13 +723,13 @@ endif()
 
  set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
  else()
-# #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
- set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+   # #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+#    set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> ")
+  set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||(TIME='PTIME %C %E' time <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> 2>&1 | awk '/PTIME/ {cmd=\"basename -- \" \$\$\(NF-1\)\;cmd|getline out\;print \$\$\(NF-1\),\$\$NF\;close(cmd)\;}')")
  endif()
 
 
 if(USE_PROFILING)
-
   SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg -fno-omit-frame-pointer")
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -fno-omit-frame-pointer")
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -fno-omit-frame-pointer")

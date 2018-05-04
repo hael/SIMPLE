@@ -22,9 +22,10 @@ set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}.${SIMPLE_VER
 # OPTIONS
 #
 #################################################################
-option(USE_OPENMP "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
+option(USE_OPENMP  "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
+option(USE_MPI     "Use OpenMPI for parallelization - in developement" ON )
 option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpenMP" OFF)
-#option(USE_CUDA "GPU NVIDIA - in development" OFF)
+option(USE_CUDA    "GPU NVIDIA - in development" ON)
 
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
@@ -34,6 +35,8 @@ option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)
 option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
 option(USE_SYSTEM_JPEG_SQLite "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
 option(BUILD_WITH_LIBGD "Build the simple library with LibGD imaging support" OFF)
+
+
 #################################################################
 #
 # SET default flags
