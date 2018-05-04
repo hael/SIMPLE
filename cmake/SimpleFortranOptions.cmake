@@ -607,6 +607,7 @@ if(USE_OPENMPI)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_COMPILE_FLAGS}")
     #-I${libdir} -I${includedir} -I${includedir}/openmpi/opal/mca/event/libevent2021/libevent -I${includedir}/openmpi/opal/mca/event/libevent2021/libevent/include   -pthread
     include_directories(${MPI_INCLUDE_PATH})
+    include_directories(${MPI_INCLUDE_PATH}/../lib) # mpi_f08.mod is here
     include_directories(${MPI_INCLUDE_PATH}/openmpi/opal/mca/event/libevent2021/libevent)
     include_directories(${MPI_INCLUDE_PATH}/openmpi/opal/mca/event/libevent2021/libevent/include)
     link_directories(/usr/lib/openmpi/lib)
