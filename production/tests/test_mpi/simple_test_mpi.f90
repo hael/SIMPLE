@@ -1,3 +1,9 @@
+!! build with:
+!! FC=mpifort cmake -DUSE_MPI=ON <simple_src>
+!! make -j install
+!! source add2.bashrc
+!! mpiexec -np 4 simple_test_mpi
+
 program simple_test_mpi
 include 'simple_lib.f08'
 use mpi_f08
