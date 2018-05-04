@@ -2,14 +2,8 @@
 module simple_reconstructor_eo
 include 'simple_lib.f08'
 use simple_reconstructor, only: reconstructor
-use simple_params,        only: params
-use simple_ori,           only: ori
-use simple_oris,          only: oris
-use simple_sym,           only: sym
-use simple_cmdline,       only: cmdline
-use simple_imgfile,       only: imgfile
-use simple_kbinterpol,    only: kbinterpol
 use simple_masker,        only: masker
+use simple_params,        only: params
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 implicit none
@@ -172,6 +166,7 @@ contains
 
     !>  \brief  return the window functions used by reconstructor_eo
     function get_kbwin( self ) result( wf )
+        use simple_kbinterpol,    only: kbinterpol
         class(reconstructor_eo), intent(inout) :: self
         type(kbinterpol) :: wf
         wf = self%even%get_kbwin()
@@ -335,7 +330,6 @@ contains
 
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, resmskname, find4eoavg )
-        use simple_masker,  only: masker
         class(reconstructor_eo), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
@@ -429,6 +423,7 @@ contains
         use simple_sym,        only: sym
         use simple_params,     only: params
         use simple_prep4cgrid, only: prep4cgrid
+        use simple_kbinterpol,    only: kbinterpol
         class(reconstructor_eo),    intent(inout) :: self   !< object
         class(params),              intent(in)    :: p      !< parameters
         class(sp_project),          intent(inout) :: spproj !< project description

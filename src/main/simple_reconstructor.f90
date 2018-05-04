@@ -5,14 +5,9 @@ module simple_reconstructor
 use, intrinsic :: iso_c_binding
 include 'simple_lib.f08'
 !! import classes
-use simple_ctf,        only: ctf
-use simple_ori,        only: ori
-use simple_oris,       only: oris
 use simple_params,     only: params
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
-use simple_sym,        only: sym
-use simple_sp_project, only: sp_project
 use simple_fftw3
 implicit none
 
@@ -79,6 +74,7 @@ contains
     ! CONSTRUCTORS
 
     subroutine alloc_rho( self, p, spproj, expand )
+        use simple_sp_project, only: sp_project
         class(reconstructor), intent(inout) :: self   !< this instance
         class(params),        intent(in)    :: p      !< parameters object
         class(sp_project),    intent(inout) :: spproj !< project description
@@ -260,6 +256,10 @@ contains
 
     !> insert Fourier plane, single orientation
     subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght, bfac )
+        use simple_ctf,        only: ctf
+        use simple_ori,        only: ori
+        use simple_oris,       only: oris
+        use simple_sym,        only: sym
         class(reconstructor), intent(inout) :: self    !< instance
         class(sym),           intent(inout) :: se      !< symmetry elements
         class(ori),           intent(inout) :: o       !< orientation
@@ -380,6 +380,10 @@ contains
 
     !> insert Fourier plane, distribution of orientations (with weights)
     subroutine insert_fplane_2( self, se, os, ctfvars, fpl, pwght, bfac, state )
+        use simple_ctf,        only: ctf
+        use simple_ori,        only: ori
+        use simple_oris,       only: oris
+        use simple_sym,        only: sym
         class(reconstructor), intent(inout) :: self  !< instance
         class(sym),           intent(inout) :: se    !< symmetry elements
         class(oris),          intent(inout) :: os    !< orientations
@@ -682,7 +686,11 @@ contains
 
     !> reconstruction routine
     subroutine rec( self, p, spproj, o, se, state, part )
+        use simple_ori,        only: ori
+        use simple_oris,       only: oris
+        use simple_sym,        only: sym
         use simple_prep4cgrid, only: prep4cgrid
+        use simple_sp_project, only: sp_project
         class(reconstructor), intent(inout) :: self   !< this object
         class(params),        intent(in)    :: p      !< parameters
         class(sp_project),    intent(inout) :: spproj !< project description

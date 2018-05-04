@@ -1,7 +1,11 @@
 ! defines protein point-group symmetries
 
 module simple_sym
-include 'simple_lib.f08'
+!include 'simple_lib.f08'
+use simple_defs
+use simple_error, only: allocchk, simple_stop
+use simple_math,  only: rad2deg, hpsort, is_even
+use simple_rnd,  only: irnd_uni
 use simple_oris,   only: oris
 use simple_ori,   only: ori
 implicit none

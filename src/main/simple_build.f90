@@ -16,7 +16,7 @@ use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
-use simple_user_interface,   only: simple_program ! use all in there
+!use simple_user_interface,   only: simple_program ! use all in there
 implicit none
 
 public :: build

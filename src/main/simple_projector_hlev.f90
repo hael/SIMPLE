@@ -5,12 +5,9 @@ module simple_projector_hlev
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-
 use simple_image,      only: image
-use simple_oris,       only: oris
 use simple_params,     only: params
 use simple_gridding,   only: prep4_cgrid
-use simple_ori,        only: ori
 use simple_projector,  only: projector
 use simple_kbinterpol, only: kbinterpol
 implicit none
@@ -19,6 +16,7 @@ contains
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
     function reproject( vol, o, p, top ) result( imgs )
+        use simple_oris,       only: oris
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
         class(params),     intent(inout) :: p       !< parameters
@@ -74,6 +72,7 @@ contains
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o, p, shvec ) result( rovol )
+        use simple_ori,        only: ori
         class(image),   intent(inout) :: vol      !< volume to project
         class(ori),     intent(inout) :: o        !< orientation
         class(params),  intent(in)    :: p        !< parameters

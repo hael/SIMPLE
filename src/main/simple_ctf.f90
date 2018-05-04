@@ -10,7 +10,6 @@ module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image, only: image
 implicit none
 
 public :: ctf, ctf_test
@@ -186,6 +185,7 @@ contains
     !>  \brief  is for making a CTF image
     !!          modes: abs, ctf, flip, flipneg, neg, square
     subroutine ctf2img( self, img, dfx, mode, dfy, angast, bfac, add_phshift )
+        use simple_image, only: image
         class(ctf),       intent(inout) :: self        !< instance
         class(image),     intent(inout) :: img         !< image (output)
         real,             intent(in)    :: dfx         !< defocus x-axis
@@ -254,6 +254,7 @@ contains
 
     !>  \brief  is for applying CTF to an image
     subroutine apply( self, img, dfx, mode, dfy, angast, bfac, add_phshift )
+        use simple_image, only: image
         class(ctf),       intent(inout) :: self        !< instance
         class(image),     intent(inout) :: img         !< image (output)
         real,             intent(in)    :: dfx         !< defocus x-axis
@@ -293,6 +294,7 @@ contains
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square
     subroutine apply_serial( self, img, dfx, mode, dfy, angast, add_phshift )
+        use simple_image, only: image
         class(ctf),       intent(inout) :: self        !< instance
         class(image),     intent(inout) :: img         !< image (output)
         real,             intent(in)    :: dfx         !< defocus x-axis
@@ -389,17 +391,18 @@ contains
 
     !>  \brief  is for applying CTF to an image and shifting it (used in classaverager)
     !!          KEEP THIS ROUTINE SERIAL
-    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift)
-        class(ctf),     intent(inout) :: self        !< instance
-        class(image),   intent(inout) :: img         !< modified image (output)
-        integer,        intent(in)    :: imode       !< 1=abs 2=ctf 3=no
-        integer,        intent(in)    :: lims(3,2)   !< loop limits
-        real,           intent(out)   :: rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,           intent(in)    :: x, y        !< rotational origin shift
-        real,           intent(in)    :: dfx         !< defocus x-axis
-        real,           intent(in)    :: dfy         !< defocus y-axis
-        real,           intent(in)    :: angast      !< angle of astigmatism
-        real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift )
+        use simple_image, only: image
+        class(ctf),   intent(inout) :: self        !< instance
+        class(image), intent(inout) :: img         !< modified image (output)
+        integer,      intent(in)    :: imode       !< 1=abs 2=ctf 3=no
+        integer,      intent(in)    :: lims(3,2)   !< loop limits
+        real,         intent(out)   :: rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,         intent(in)    :: x, y        !< rotational origin shift
+        real,         intent(in)    :: dfx         !< defocus x-axis
+        real,         intent(in)    :: dfy         !< defocus y-axis
+        real,         intent(in)    :: angast      !< angle of astigmatism
+        real,         intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         integer :: ldim(3),logi(3),h,k,phys(3)
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         complex :: comp
@@ -436,7 +439,7 @@ contains
 
     !>  \brief This test compare ctf2img implementations
     subroutine ctf_test
-
+        use simple_image, only: image
         type(ctf)               :: tfun
         type(image)             :: img1, img2
         real                    :: dfx_ran, dfy_ran, angast_ran, phshift_ran, err, minmax(2)

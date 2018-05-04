@@ -45,7 +45,8 @@ file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCO
     )
 file(GLOB OPERATORS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
-if ( USE_CUDA )
+file(GLOB STAR_src "${CMAKE_CURRENT_SOURCE_DIR}/star_export/*.f90" PARENT_SCOPE)
+if ( USE_CUDA_PGI )
   file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.f[90][08]" PARENT_SCOPE)
   list(APPEND UTILS_src ${UTILS_src} ${CUDA_src})
 ##  list(REMOVE_ITEM UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_timer_cuda.f90")
@@ -53,6 +54,11 @@ if ( USE_CUDA )
 ##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 endif()
 file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
+file(GLOB COMMANER_DISTR_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_distr/*.f[90][08]" PARENT_SCOPE)
+file(GLOB COMMANER_HLEV_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_hlev/*.f[90][08]" PARENT_SCOPE)
+file(GLOB COMMANER_STREAM_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_stream/*.f[90][08]" PARENT_SCOPE)
+file(GLOB COMMANER_STD_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_std/*.f[90][08]" PARENT_SCOPE)
+
 #
   file(GLOB IMG_src "${CMAKE_CURRENT_SOURCE_DIR}/img/*.f[90][08]" PARENT_SCOPE)
   list(APPEND IMG_src
@@ -74,22 +80,42 @@ file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOP
 # add the simple_args module to SIMPLE_src
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
-   "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
+  "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
+  # ${COMMANER_STD_src}
+  # ${COMMANER_HLEV_src}
+  # ${COMMANER_STREAM_src}
+  # ${COMMANER_DISTR_src}
+
 )
 
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${IMG_src} ${OPERATORS_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STAR_src} ${IMG_src} ${OPERATORS_src} ${SIMPLE_src})
 # message(STATUS "SIMPLE LIBRARY SOURCES: ${SIMPLECORELIB}")
 
 ##########################################################################
 # Remove unused files here
 ##########################################################################
 #list(REMOVE_ITEM SIMPLECORELIB
-#    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_png.f90"
-#)
+ # "${CMAKE_CURRENT_SOURCE_DIR}/img/simple_png.f90"
+  #"${CMAKE_CURRENT_SOURCE_DIR}/img/simple_img.f90"
+  # "${CMAKE_CURRENT_SOURCE_DIR}/img/simple_pnm.f90"
+    # "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_distr_wflows.f90"
+    # "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_hlev_wflows.f90"
+    # "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_stream_wflows.f90"
+    # "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_imgproc.f90"
+    #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_preproc.f90"
+    #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_oris.f90"
+    #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_refine3D.f90"
+    #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_misc.f90"
+    #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_cluster2D.f90"
+    #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_volops.f90"
+    #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_rec.f90"
+    #   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_pftcc_shsrch.f90"
+    #   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_vol_shsrch.f90"
+# )
 
 add_custom_target(simple_modules
-  COMMAND  rm -f ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90\;  (echo module simple_modules \; for file in  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${IMG_src} ${OPERATORS_src} ${MAIN_src}\; do    if  \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;    fi\;  done \;  echo contains\;  echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90
+  COMMAND  rm -f ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90\;  (echo module simple_modules \; for file in  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STAR_src} ${IMG_src} ${OPERATORS_src} ${MAIN_src} ${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_base.f90 \; do    if  \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;    fi\;  done \;  echo contains\;  echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90
   BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   USES_TERMINAL

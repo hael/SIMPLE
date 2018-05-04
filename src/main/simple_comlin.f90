@@ -1,7 +1,6 @@
 ! for calculation of common-line correlations
 module simple_comlin
 include 'simple_lib.f08'
-
 use simple_image,  only: image
 use simple_oris,   only: oris
 implicit none
