@@ -115,11 +115,13 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   list(REMOVE_ITEM TESTDIRS "tests/test_openacc"
    "tests/test_laplace_solver"
    "tests/test_accuracy")
-
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_intel")
 endif()
 
+if(NOT USE_MPI)
+ list(REMOVE_ITEM TESTDIRS "tests/test_mpi")
+endif()
 # if(USE_OPENACC)
 #   message(STATUS "Searching for BLAS to test OpenACC")
 #   set(BLA_F95 ON)
