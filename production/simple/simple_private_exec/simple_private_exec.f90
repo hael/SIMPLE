@@ -373,7 +373,6 @@ select case(prg)
         keys_optional(7)  = 'refs'
         keys_optional(8)  = 'remap_cls'
         keys_optional(9)  = 'weights2D'
-        keys_optional(10) = 'shellweights'
         ! parse command line
         call cline%parse_oldschool(keys_optional=keys_optional(:10))
         ! set defaults
@@ -410,7 +409,7 @@ select case(prg)
         keys_optional(17) = 'refine'
         keys_optional(18) = 'match_filt'
         keys_optional(19) = 'dyncls'
-        keys_optional(20) = 'shellweights'
+        keys_optional(20) = 'adjspecscore'
         ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:20))
         ! set defaults
@@ -522,7 +521,7 @@ select case(prg)
         keys_optional(2) = 'inner'
         keys_optional(3) = 'nspace'
         keys_optional(4) = 'nran'
-        keys_optional(5)  = 'shellweights'
+        keys_optional(5) = 'shellweights'
         ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! set defaults

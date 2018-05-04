@@ -155,7 +155,7 @@ type :: oris
     procedure          :: calc_hard_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_spectral_weights
-    procedure          :: adjust_specscore_for_ctf
+    procedure          :: adjust_specscore_for_defocus
     procedure          :: calc_bfac_rec
     procedure          :: reject_above
     procedure          :: find_closest_proj
@@ -2614,7 +2614,59 @@ contains
         endif
     end subroutine calc_spectral_weights
 
-    subroutine adjust_specscore_for_ctf( self )
+    ! !>  \brief  calculates normalized & bounded spectral particle weights
+    ! subroutine calc_spectral_weights( self, frac )
+    !     class(oris), intent(inout) :: self
+    !     real,        intent(in)    :: frac
+    !     integer           :: i, nstates, istate, cnt, mystate
+    !     real, allocatable :: weights(:), specscores(:), specscores_sel(:)
+    !     real    :: ave, sdev, var
+    !     logical :: err
+    !     call self%calc_hard_weights( frac )
+    !     if( self%isthere('specscore') )then
+    !         nstates = self%get_n('state')
+    !         if( nstates > 1 )then
+    !             do istate=1,nstates
+    !                 specscores = self%get_arr('specscore', state=istate)
+    !                 weights    = self%get_arr('w',         state=istate)
+    !                 where( weights < 0.5 )
+    !                     specscores = 0.
+    !                 end where
+    !                 weights = corrs2weights(specscores)
+    !                 cnt = 0
+    !                 do i=1,self%n
+    !                     mystate = nint(self%o(i)%get('state'))
+    !                     if( mystate == istate )then
+    !                         cnt = cnt + 1
+    !                         call self%o(i)%set('w', weights(cnt))
+    !                     else if( mystate == 0 )then
+    !                         call self%o(i)%set('w', 0.0)
+    !                     endif
+    !                 enddo
+    !                 deallocate(specscores,weights)
+    !             enddo
+    !         else
+    !             specscores = self%get_all('specscore')
+    !             weights    = self%get_all('w')
+    !             specscores_sel = pack(specscores, mask=weights > 0.5)
+    !             call moment(specscores_sel, ave, sdev, var, err)
+    !             specscores = (specscores-ave) * 4. / sdev ! normalization to std dev *4.
+    !             specscores = 1. / (1. + exp(-specscores)) ! logistic
+    !             where(weights < 0.5)specscores = 0.       ! take frac into account
+    !             where(specscores < TINY)                  ! numerical stability
+    !                 specscores = 0.
+    !             else where(specscores > 0.999)
+    !                 specscores = 1.
+    !             end where
+    !             do i=1,self%n
+    !                 call self%o(i)%set('w', specscores(i))
+    !             end do
+    !             deallocate(specscores,weights,specscores_sel)
+    !         endif
+    !     endif
+    ! end subroutine calc_spectral_weights
+
+    subroutine adjust_specscore_for_defocus( self )
         class(oris), intent(inout) :: self
         real    :: df, specscore, sum_df, sum_df_sq, adj_df
         real    :: sum_score, sum_score_sq, dot_df_score, var_df, avg_df
@@ -2645,6 +2697,8 @@ contains
             if( self%get_state(i) == 0) cycle
             specscore = self%get(i,'specscore')
             specscore = specscore - (calc_df()-avg_df) * adj_df
+            specscore = max(0., specscore)
+            specscore = min(1., specscore)
             call self%o(i)%set('specscore', specscore)
         enddo
 
@@ -2660,7 +2714,7 @@ contains
                 endif
             end function calc_df
 
-    end subroutine adjust_specscore_for_ctf
+    end subroutine adjust_specscore_for_defocus
 
     subroutine calc_bfac_rec( self )
         class(oris),      intent(inout) :: self

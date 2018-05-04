@@ -119,6 +119,7 @@ type(simple_program), target :: volops
 ! declare common params here, with name same as flag
 type(simple_input_param) :: angerr
 type(simple_input_param) :: astigtol
+type(simple_input_param) :: adjspecscore
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: clip
@@ -535,7 +536,8 @@ contains
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
         call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
         call set_param(mkdir_,         'mkdir',        'binary', 'Make auto-named dir for output', 'Make auto-named consequtively numbered dir for output(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(shellweights,   'shellweights', 'binary', 'B-factor weighted reconstruction', 'Wheteher to perform B-factor weighted reconstruction(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(shellweights,   'shellweights', 'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(adjspecscore,   'adjspecscore', 'binary', 'Adjust spectral score with respect to defocus', 'Adjust spectral score with respect to defocus(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -664,7 +666,7 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, weights2D)
-        call cluster2D%set_input('filt_ctrls', 8, shellweights)
+        call cluster2D%set_input('filt_ctrls', 8, adjspecscore)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -1237,7 +1239,7 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &1, 6, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 5, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
@@ -1249,7 +1251,6 @@ contains
         call make_cavgs%set_input('parm_ios', 3, weights2D)
         call make_cavgs%set_input('parm_ios', 4, remap_cls)
         call make_cavgs%set_input('parm_ios', 5, mkdir_)
-        call make_cavgs%set_input('parm_ios', 6, shellweights)
         ! alternative inputs
         ! <empty>
         ! search controls

@@ -109,6 +109,7 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! SETUP WEIGHTS
+        if( p%adjspecscore.eq.'yes' ) call b%a%adjust_specscore_for_defocus
         if( p%weights3D.eq.'yes' )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%calc_hard_weights(p%frac)

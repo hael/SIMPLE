@@ -2070,6 +2070,7 @@ contains
         fit_bfac = sumfrc * sum(self%inv_resarrsq * frc * logfrc, mask=peakmsk)
         fit_bfac = fit_bfac - sumxfrc * sum(frc*logfrc, mask=peakmsk)
         fit_bfac = fit_bfac / denom
+        fit_bfac = max(0., fit_bfac)
     end function fit_bfac
 
     ! DESTRUCTOR

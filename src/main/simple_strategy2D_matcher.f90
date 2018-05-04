@@ -132,10 +132,10 @@ contains
         else
             call cavger_read(p%refs, 'odd')
         endif
-
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
+        if( p%adjspecscore .eq. 'yes' )call b%a%adjust_specscore_for_defocus
         if( p%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
@@ -167,9 +167,6 @@ contains
             ! defaults to frac, done by class
             if( which_iter > 3 )then
                 call b%a%calc_hard_weights2D( p%frac, p%ncls )
-                !!!!!!!!!!1
-                call b%a%calc_bfac_rec
-                !!!!!!!!!!!!!!!!!!!!!!!!!
             else
                 call b%a%set_all2single('w', 1.0)
             endif

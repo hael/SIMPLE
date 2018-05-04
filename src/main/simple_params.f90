@@ -21,6 +21,7 @@ type :: params
     class(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
+    character(len=3)      :: adjspecscore='no'    !< append in context of files(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
