@@ -185,7 +185,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_resnorm_grad_for_rot_8
     procedure          :: gencorr_resnorm_grad_only_for_rot_8
     procedure, private :: genfrc
-    procedure          :: calc_frc
+    procedure, private :: calc_frc
     procedure          :: specscore
     procedure          :: fit_bfac
     ! DESTRUCTOR
@@ -1137,7 +1137,7 @@ contains
         real(sp),                 intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: kcorrs(:), argmat(:,:)
-        real(sp) :: sumsqref, sumsqptcl, sqsum_ref
+        real(sp) :: sumsqref, sumsqptcl
         integer  :: k, ithr, i
         i       = self%pinds(iptcl)
         ithr    =  omp_get_thread_num() + 1
@@ -1160,7 +1160,6 @@ contains
                 pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
-        call self%prep_ref4corr(iref, i, pft_ref, sqsum_ref, self%kfromto(2))
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
             sumsqptcl = sum(csq(self%pfts_ptcls(i,:,k)))

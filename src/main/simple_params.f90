@@ -779,7 +779,7 @@ contains
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for a project file
-        call simple_list_files('*.simple', sp_files)
+        call simple_list_files('*.simple', sp_files, self%part)
         if( allocated(sp_files) )then
             nsp_files = size(sp_files)
         else

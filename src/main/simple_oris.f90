@@ -163,7 +163,7 @@ type :: oris
     procedure          :: calc_hard_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_spectral_weights
-    procedure          :: adjust_specscore_for_defocus
+    procedure          :: adjust_score_for_defocus
     procedure          :: calc_bfac_rec
     procedure          :: reject_above
     procedure          :: find_closest_proj
@@ -2674,12 +2674,14 @@ contains
     !     endif
     ! end subroutine calc_spectral_weights
 
-    subroutine adjust_specscore_for_defocus( self )
-        class(oris), intent(inout) :: self
-        real    :: df, specscore, sum_df, sum_df_sq, adj_df
+    subroutine adjust_score_for_defocus( self, which, minmax )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real,             intent(in)    :: minmax(2)
+        real    :: df, score, sum_df, sum_df_sq, adj_df
         real    :: sum_score, sum_score_sq, dot_df_score, var_df, avg_df
         integer :: i, n
-        if( .not.self%isthere('dfx') .or. .not.self%isthere('specscore') )return
+        if( .not.self%isthere('dfx') .or. .not.self%isthere(which) )return
         n            = 0
         sum_df       = 0.
         sum_df_sq    = 0.
@@ -2690,12 +2692,12 @@ contains
             if( self%get_state(i) == 0) cycle
             n            = n + 1
             df           = calc_df()
-            specscore    = self%get(i,'specscore')
+            score        = self%get(i,which)
             sum_df       = sum_df + df
             sum_df_sq    = sum_df_sq + df*df
-            dot_df_score = dot_df_score + df*specscore
-            sum_score    = sum_score + specscore
-            sum_score_sq = sum_score + specscore*specscore
+            dot_df_score = dot_df_score + df*score
+            sum_score    = sum_score + score
+            sum_score_sq = sum_score + score*score
         enddo
         avg_df = sum_df / real(n)
         var_df = real(n) * sum_df_sq - sum_df**2.
@@ -2703,11 +2705,11 @@ contains
         adj_df = (real(n) * dot_df_score - sum_df * sum_score) / var_df
         do i = 1, self%n
             if( self%get_state(i) == 0) cycle
-            specscore = self%get(i,'specscore')
-            specscore = specscore - (calc_df()-avg_df) * adj_df
-            specscore = max(0., specscore)
-            specscore = min(1., specscore)
-            call self%o(i)%set('specscore', specscore)
+            score = self%get(i,which)
+            score = score - (calc_df()-avg_df) * adj_df
+            score = max(minmax(1), score)
+            score = min(minmax(2), score)
+            call self%o(i)%set(which, score)
         enddo
 
         contains
@@ -2721,8 +2723,7 @@ contains
                     calc_df = self%o(i)%get('dfy')
                 endif
             end function calc_df
-
-    end subroutine adjust_specscore_for_defocus
+    end subroutine adjust_score_for_defocus
 
     subroutine calc_bfac_rec( self )
         class(oris),      intent(inout) :: self

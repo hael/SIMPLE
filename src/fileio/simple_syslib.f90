@@ -1260,13 +1260,19 @@ contains
     !     if(allocated(thisext)) deallocate(thisext)
     ! end function simple_list_files
 
-    subroutine simple_list_files( pattern, list )
-        character(len=*), intent(in) :: pattern
+    subroutine simple_list_files( pattern, list, id )
+        use simple_strings, only: int2str
+        character(len=*),  intent(in) :: pattern
+        integer, optional, intent(in) :: id
         character(len=STDLEN) :: cmd, tmpfile
         character(len=STDLEN), allocatable, intent(inout) :: list(:)
         character(len=1) :: junk
         integer :: sz, funit, ios, i, nlines
-        tmpfile = '__simple_filelist__'
+        if( present(id) )then
+            tmpfile = '__simple_filelist_'//int2str(id)//'__'
+        else
+            tmpfile = '__simple_filelist__'
+        endif
         cmd     = 'ls '//trim(pattern)//' > '//trim(tmpfile)
         call exec_cmdline( cmd, suppress_errors=.true.)
         inquire(file=trim(tmpfile), size=sz)
