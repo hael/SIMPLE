@@ -174,7 +174,7 @@ type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: remap_cls
-type(simple_input_param) :: shellweights
+type(simple_input_param) :: shellw
 type(simple_input_param) :: sherr
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
@@ -536,7 +536,7 @@ contains
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
         call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
         call set_param(mkdir_,         'mkdir',        'binary', 'Make auto-named dir for output', 'Make auto-named consequtively numbered dir for output(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(shellweights,   'shellweights', 'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(adjspecscore,   'adjspecscore', 'binary', 'Adjust spectral score with respect to defocus', 'Adjust spectral score with respect to defocus(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
@@ -2016,7 +2016,7 @@ contains
         call reconstruct3D%set_input('srch_ctrls', 2, frac)
         ! filter controls
         call reconstruct3D%set_input('filt_ctrls', 1, eo)
-        call reconstruct3D%set_input('filt_ctrls', 2, shellweights)
+        call reconstruct3D%set_input('filt_ctrls', 2, shellw)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -2072,7 +2072,7 @@ contains
         &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
         call refine3D%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call refine3D%set_input('filt_ctrls', 8, shellweights)
+        call refine3D%set_input('filt_ctrls', 8, shellw)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)
@@ -2106,7 +2106,7 @@ contains
         call refine3D_init%set_input('srch_ctrls', 3, 'nran', 'num', 'Number of random samples', 'Number of images to randomly sample for 3D reconstruction',&
         &'# random samples', .false., 0.)
         ! filter controls
-        call refine3D_init%set_input('filt_ctrls', 1, shellweights)
+        call refine3D_init%set_input('filt_ctrls', 1, shellw)
         ! <empty>
         ! mask controls
         call refine3D_init%set_input('mask_ctrls', 1, msk)

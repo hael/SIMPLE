@@ -151,10 +151,10 @@ contains
         endif
 
         ! B-factor weighted reconstruction
-        if( p%shellweights.eq.'yes' ) call b%a%calc_bfac_rec
+        if( p%shellw.eq.'yes' ) call b%a%calc_bfac_rec
 
         ! EXTREMAL LOGICS
-        do_extr  = .false.
+        do_extr = .false.
         select case(trim(p%refine))
             case('cluster','clusterdev','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)

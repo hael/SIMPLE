@@ -242,7 +242,7 @@ contains
         integer   :: s, eo
         eo = 0
         if( p%eo .ne. 'no' ) eo = nint(o%get('eo'))
-        if( p%shellweights.eq.'yes' )then
+        if( p%shellw.eq.'yes' )then
             ! shell-weighted reconstruction
             bfac_rec = 0.
             if( o%isthere('bfac_rec') ) bfac_rec = max(0., o%get('bfac_rec'))
@@ -292,7 +292,7 @@ contains
         integer :: s, eo
         eo = 0
         if( p%eo .ne. 'no' ) eo = nint(o%get('eo'))
-        if( p%shellweights.eq.'yes' )then
+        if( p%shellw.eq.'yes' )then
             ! shell-weighted reconstruction
             bfac_rec = 0.
             if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')

@@ -76,7 +76,7 @@ type :: params
     character(len=3)      :: round='no'
     character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shellweights='no'    !< to use shell weighted reconstruction (yes|no){yes}
+    character(len=3)      :: shellw='no'          !< to use shell weighted reconstruction (yes|no){yes}
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
@@ -554,7 +554,7 @@ contains
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
-        call check_carg('shellweights',   self%shellweights)
+        call check_carg('shellw',         self%shellw)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)
