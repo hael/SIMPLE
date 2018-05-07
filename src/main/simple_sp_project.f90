@@ -1487,56 +1487,54 @@ contains
     ! exclusively by state=0 flagging without any physical deletion
     subroutine map2ptcls( self )
         class(sp_project), intent(inout) :: self
-        type state_organiser
-            integer, allocatable :: particles(:)
-            type(ori)            :: ori3d
-        end type state_organiser
-        type(state_organiser), allocatable :: labeler(:)
+        integer, allocatable :: particles(:)
         type(ori) :: ori2d, ori_comp, o
-        integer   :: ncls, icls, iptcl, pind, ncls_cls3D
+        integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
         real      :: corr, rproj, rstate
         if( self%is_virgin_field('cls3D') )then
             write(*,*) 'ERROR! os_cls3D is virgin field; nothing to map back'
             stop 'sp_project :: map2ptcls'
         endif
         if( self%is_virgin_field('ptcl2D') )then
-            write(*,*) 'ERROR! os_ptcl2D is virgin field; nothing to map back to'
-            stop 'sp_project :: map2ptcls'
+            ! 2D was not done with SIMPLE but class averages imported from elsewhere
+            return
         endif
-        ncls       = self%os_ptcl2D%get_n('class')
-        ncls_cls3D = self%os_cls3D%get_noris()
-        if( ncls /= ncls_cls3D )then
-            write(*,*) 'ncls from ptcl2D field:      ', ncls
-            write(*,*) 'ncls as sizeof(cls3D field): ', ncls_cls3D
-            stop 'ERROR! inconsistent ncls in ptcl2D/cls3D fields; sp_project :: map2ptcls'
-        endif
-        allocate(labeler(ncls))
+        ! ensure ptcl3D field congruent with ptcl2D field
+        noris_ptcl3D = self%os_ptcl3D%get_noris()
+        noris_ptcl2D = self%os_ptcl2D%get_noris()
+        if( noris_ptcl3D /= noris_ptcl2D ) call self%os_ptcl3D%new_clean(noris_ptcl2D)
+        ! do the mapping
+        ncls = self%os_cls3D%get_noris()
         do icls=1,ncls
-            call self%os_ptcl2D%get_pinds(icls, 'class', labeler(icls)%particles)
-        end do
-        do icls=1,ncls
+            ! get particle indices
+            call self%os_ptcl2D%get_pinds(icls, 'class', particles)
             ! get 3d ori info
             o      = self%os_cls3D%get_ori(icls)
             rproj  = o%get('proj')
             rstate = o%get('state')
             corr   = o%get('corr')
-            if( allocated(labeler(icls)%particles) )then
-                do iptcl=1,size(labeler(icls)%particles)
+            if( allocated(particles) )then
+                do iptcl=1,size(particles)
                     ! get particle index
-                    pind  = labeler(icls)%particles(iptcl)
+                    pind  = particles(iptcl)
                     ! get 2d ori
                     ori2d = self%os_ptcl2D%get_ori(pind)
                     ! transfer original parameters in self%os_ptcl2D
                     ori_comp = self%os_ptcl2D%get_ori(pind)
                     ! compose ori3d and ori2d
                     call o%compose3d2d(ori2d, ori_comp)
-                    ! set parameters in self%os_ptcl2D
-                    call self%os_ptcl2D%set_ori(pind, ori_comp)
-                    call self%os_ptcl2D%set(pind, 'corr',  corr)
-                    call self%os_ptcl2D%set(pind, 'proj',  rproj)
+                    ! update state in self%os_ptcl2D
                     call self%os_ptcl2D%set(pind, 'state', rstate)
+                    ! set 3D orientation in self%os_ptcl3D
+                    call self%os_ptcl3D%set_ori(pind, ori_comp)
                 end do
+                deallocate(particles)
             endif
+        end do
+        ! state = 0 all entries that don't have a state label
+        do iptcl=1,noris_ptcl2D
+            if( .not. self%os_ptcl2D%isthere(iptcl, 'state') ) call self%os_ptcl2D%set(iptcl, 'state', 0.)
+            if( .not. self%os_ptcl3D%isthere(iptcl, 'state') ) call self%os_ptcl3D%set(iptcl, 'state', 0.)
         end do
     end subroutine map2ptcls
 

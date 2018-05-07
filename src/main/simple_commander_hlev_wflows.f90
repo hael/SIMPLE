@@ -474,6 +474,9 @@ contains
         call spproj%read(p_master%projfile)
         call os%delete_entry('stkind')
         spproj%os_cls3D = os
+        ! map the orientation parameters obtained for the clusters back to the particles
+        call spproj%map2ptcls
+        ! write results
         call spproj%write()
         ! reprojections
         call os%write('final_oris.txt')
