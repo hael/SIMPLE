@@ -18,8 +18,6 @@ use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_tseries
-
-
 implicit none
 
 ! PRE-PROCESSING PROGRAMS

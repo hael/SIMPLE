@@ -36,7 +36,7 @@ type :: build
     type(image)                         :: img_tmp            !< -"-
     type(image)                         :: img_msk            !< -"-
     type(image)                         :: img_copy           !< -"-
-    type(projector)                     :: vol, vol_even
+    type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2               !< -"-
     type(masker)                        :: mskimg             !< mask image
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter

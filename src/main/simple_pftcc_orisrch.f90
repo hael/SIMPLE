@@ -1,10 +1,13 @@
 module simple_pftcc_orisrch
 #include "simple_lib.f08"
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_opt_spec,          only: opt_spec
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_opt_factory,       only: opt_factory
 use simple_optimizer,         only: optimizer
 use simple_build,             only: build
+use simple_ori,               only: ori
 implicit none
 
 public :: pftcc_orisrch
@@ -16,6 +19,7 @@ type :: pftcc_orisrch
     class(optimizer),        pointer :: nlopt                  !< optimizer object
     class(build),            pointer :: bp          => null()  !< pointer to build
     class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< pointer to pftcc object
+    type(ori), allocatable           :: e_trials(:)            !< trial orientations (one per thread)
     integer                          :: particle    =  0       !< particle pft
     integer                          :: nrots       =  0       !< # rotations
     integer                          :: irot        =  0       !< index of rotation
@@ -43,6 +47,14 @@ contains
         integer,          optional,      intent(in)    :: nrestarts      !< simplex restarts (randomized bounds)
         integer,          optional,      intent(in)    :: maxits         !< maximum iterations
         type(opt_factory) :: opt_fact
+        integer           :: ithr, i
+        ! kill allocatables
+        if( allocated(self%e_trials) )then
+            do i=1,size(self%e_trials)
+                call self%e_trials(i)%kill
+            end do
+            deallocate(self%e_trials)
+        endif
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
@@ -68,6 +80,11 @@ contains
         self%bp => b
         ! get # rotations
         self%nrots = pftcc%get_nrots()
+        ! make trial orientations (one per thread)
+        allocate(self%e_trials(nthr_glob))
+        do ithr=1,nthr_glob
+            call self%e_trials(ithr)%new_ori_clean
+        end do
         ! associate costfun
         self%ospec%costfun => costfun_wrapper
     end subroutine new
@@ -96,12 +113,11 @@ contains
 
     !> cost function
     function costfun( self, vec, D ) result( cost )
-        use simple_ori, only: ori
         class(pftcc_orisrch), intent(inout) :: self
         integer,              intent(in)    :: D
         real,                 intent(in)    :: vec(D)
         real      :: cost, corrs(self%nrots)
-        integer   :: loc(1)
+        integer   :: loc(1), ithr
         type(ori) :: e
         ! enforce barrier constraint
         if( self%shbarr )then
@@ -111,16 +127,16 @@ contains
                 return
             endif
         endif
-        ! extract projection
-        call e%new_ori_clean
-        call e%set_euler([vec(1),vec(2),0.])
+        ! thread-safe extraction of projection
+        ithr = omp_get_thread_num() + 1
+        call self%e_trials(ithr)%set_euler([vec(1),vec(2),0.])
         if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-            call self%bp%vol_even%fproject_polar(1, e, self%pftcc_ptr, iseven=.true.)
+            call self%bp%vol%fproject_polar(ithr, self%e_trials(ithr), self%pftcc_ptr, iseven=.true.)
         else
-            call self%bp%vol%fproject_polar(1, e, self%pftcc_ptr, iseven=.false.)
+            call self%bp%vol_odd%fproject_polar(ithr, self%e_trials(ithr), self%pftcc_ptr, iseven=.false.)
         endif
         ! correlate
-        call self%pftcc_ptr%gencorrs(1, self%particle, vec(3:4), corrs)
+        call self%pftcc_ptr%gencorrs(ithr, self%particle, vec(3:4), corrs)
         loc       = maxloc(corrs)
         self%irot = loc(1)
         cost      = -corrs(self%irot)
@@ -132,14 +148,19 @@ contains
         class(pftcc_orisrch), intent(inout) :: self
         class(ori),           intent(inout) :: o_inout
         integer,              intent(out)   :: irot
-        complex, allocatable :: pft_ref1_even(:,:), pft_ref1_odd(:,:)
-        real,    allocatable :: cxy(:)
+        type pftcc_ref
+            complex, allocatable :: pft_ref_even(:,:), pft_ref_odd(:,:)
+        end type pftcc_ref
+        type(pftcc_ref), allocatable :: pftcc_refs(:)
+        real,            allocatable :: cxy(:)
         real    :: cost, cost_init, corrs(self%nrots)
-        integer :: loc(1)
-        ! copy reference 1 position so we can put it back after minimization is done
-        pft_ref1_even = self%pftcc_ptr%get_ref_pft(1, iseven=.true.)
-        pft_ref1_odd  = self%pftcc_ptr%get_ref_pft(1, iseven=.false.)
-        allocate(cxy(3))
+        integer :: loc(1), ithr
+        ! copy nthr_glob pftcc references so we can put them back after minimization is done
+        allocate(pftcc_refs(nthr_glob), cxy(3))
+        do ithr=1,nthr_glob
+            pftcc_refs(ithr)%pft_ref_even = self%pftcc_ptr%get_ref_pft(ithr, iseven=.true.)
+            pftcc_refs(ithr)%pft_ref_odd  = self%pftcc_ptr%get_ref_pft(ithr, iseven=.false.)
+        end do
         ! minimisation
         self%ospec%x(1)   = o_inout%e1get()
         self%ospec%x(2)   = o_inout%e2get()
@@ -151,9 +172,6 @@ contains
         if( cost <= cost_init )then
             ! call the costfun to get the rotation index
             cost = self%costfun(self%ospec%x, self%ospec%ndim)
-
-            print *, 'cost_init/cost: ', cost_init, cost
-
             irot = self%irot
             ! set output
             cxy(1)  = -cost ! correlation
@@ -168,9 +186,13 @@ contains
             cxy(1)  = -cost_init ! correlation
             cxy(2:) = 0.
         endif
-        ! put back reference
-        call self%pftcc_ptr%set_ref_pft(1, pft_ref1_even, iseven=.true.)
-        call self%pftcc_ptr%set_ref_pft(1, pft_ref1_odd,  iseven=.false.)
+        ! put back references & deallocate
+        do ithr=1,nthr_glob
+            call self%pftcc_ptr%set_ref_pft(ithr, pftcc_refs(ithr)%pft_ref_even, iseven=.true.)
+            call self%pftcc_ptr%set_ref_pft(ithr, pftcc_refs(ithr)%pft_ref_odd,  iseven=.false.)
+            deallocate(pftcc_refs(ithr)%pft_ref_even, pftcc_refs(ithr)%pft_ref_odd)
+        end do
+        deallocate(pftcc_refs)
     end function minimize
 
     function get_nevals( self ) result( nevals )

@@ -793,6 +793,7 @@ contains
         integer :: s
         character(len=:), allocatable :: fbody
         character(len=STDLEN) :: pprocvol
+        call b%vol%new([p%box,p%box,p%box],p%smpd)
         do s=1,p%nstates
             if( b%a%get_pop(s, 'state') == 0 )then
                 ! empty space
@@ -833,6 +834,7 @@ contains
                 endif
             endif
         end do
+        call b%vol%kill
     end subroutine norm_struct_facts
 
     subroutine eonorm_struct_facts( b, p, cline, res, which_iter )
@@ -846,6 +848,8 @@ contains
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
         character(len=32)     :: resmskname
+        call b%vol%new([p%box,p%box,p%box],p%smpd)
+        call b%vol2%new([p%box,p%box,p%box],p%smpd)
         ! init
         res0143s = 0.
         res05s   = 0.
@@ -911,6 +915,8 @@ contains
             res  = maxval(res0143s)
             p%lp = min(p%lp,max(p%lpstop,res))
         endif
+        call b%vol%kill
+        call b%vol2%kill
     end subroutine eonorm_struct_facts
 
     !>  \brief generate projection FRCs from even/odd pairs

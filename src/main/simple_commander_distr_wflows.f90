@@ -109,7 +109,7 @@ contains
         ! output directories
         output_dir = './'
         ! read in movies
-        call spproj%read( p_master%projfile )
+        call spproj%read(p_master%projfile)
         ! DISTRIBUTED EXECUTION
         p_master%nptcls = spproj%os_mic%get_noris()
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'

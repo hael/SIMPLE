@@ -39,7 +39,7 @@ contains
         use simple_params,     only: params
         use simple_cmdline,    only: cmdline
         use simple_strategy2D3D_common,   only: killrecvols, set_bp_range, preprecvols,&
-            prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts ! use all in there
+            prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
         use simple_strategy3D_cluster,       only: strategy3D_cluster
         use simple_strategy3D_single,        only: strategy3D_single
         use simple_strategy3D_multi,         only: strategy3D_multi
@@ -290,7 +290,7 @@ contains
         call clean_strategy3D()
         call pftcc%kill
         call b%vol%kill
-        call b%vol_even%kill
+        call b%vol_odd%kill
         do iptcl = p%fromp,p%top
             if( ptcl_mask(iptcl) ) call strategy3Dsrch(iptcl)%kill
         end do
@@ -445,23 +445,24 @@ contains
             call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s), do_center, xyz)
             if( p%eo .ne. 'no' )then
                 if( p%nstates.eq.1 )then
-                    call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
-                    !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-                    do iref=1,p%nspace
-                        call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
-                    end do
-                    !$omp end parallel do
-                    ! copy even volume
-                    b%vol_even = b%vol
-                    ! expand for fast interpolation
-                    call b%vol_even%expand_cmat(p%alpha)
+                    ! PREPARE ODD REFERENCES
                     call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,p%nspace
                         call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.false.)
                     end do
                     !$omp end parallel do
-                    ! odd volume in b%vol
+                    ! copy odd volume
+                    b%vol_odd = b%vol
+                    ! expand for fast interpolation
+                    call b%vol_odd%expand_cmat(p%alpha)
+                    ! PREPARE EVEN REFERENCES
+                    call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
+                    !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
+                    do iref=1,p%nspace
+                        call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
+                    end do
+                    !$omp end parallel do
                 else
                     call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
