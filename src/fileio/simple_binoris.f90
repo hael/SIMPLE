@@ -342,6 +342,7 @@ contains
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_first_segment_record'
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
+            write(*,*) 'n_segments: ', self%n_segments
             stop 'isegment out of bound; binoris :: read_first_segment_record'
         endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then

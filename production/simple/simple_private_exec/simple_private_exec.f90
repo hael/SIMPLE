@@ -362,20 +362,19 @@ select case(prg)
         !
         ! <make_cavgs/begin>is used  to produce class averages or initial random references
         ! for cluster2D execution. <make_cavgs/end>
-        !
+        keys_required(1)  = 'projfile'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncls'
-        keys_optional(3)  = 'filwidth'
+        keys_optional(3)  = 'shellw'
         keys_optional(4)  = 'mul'
         keys_optional(5)  = 'tseries'
         keys_optional(6)  = 'outfile'
         keys_optional(7)  = 'refs'
         keys_optional(8)  = 'remap_cls'
         keys_optional(9)  = 'weights2D'
-        keys_optional(10) = 'shellw'
         ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:10))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute

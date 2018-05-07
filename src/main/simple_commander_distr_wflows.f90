@@ -508,7 +508,6 @@ contains
                 type(image)           :: img_cavg
                 type(projection_frcs) :: frcs
                 integer, allocatable  :: fromtocls(:,:)
-                character(len=STDLEN) :: frcs_iter
                 integer               :: icls, state
                 if( p_master%dyncls.eq.'yes' )then
                     call b%spproj%read_segment('ptcl2D', p_master%projfile )
@@ -536,15 +535,14 @@ contains
                         call img_cavg%write(trim(refs_odd), p_master%ncls)  ! to preserve size
                         ! updates FRCs
                         state     = 1
-                        frcs_iter = trim(FRCS_ITER_FBODY)//int2str_pad(iter,3)//BIN_EXT
                         call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
-                        call frcs%read(frcs_iter)
+                        call frcs%read(trim(FRCS_FILE))
                         do icls = 1, size(fromtocls, dim=1)
                             call frcs%set_frc( fromtocls(icls,2),&
                             &frcs%get_frc(fromtocls(icls,1), p_master%box, state), state)
                         enddo
                         ! need to be re-written for distributed apps!
-                        call frcs%write(frcs_iter)
+                        call frcs%write(trim(FRCS_FILE))
                         call b%spproj%write()
                     endif
                 endif

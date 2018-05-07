@@ -89,6 +89,7 @@ contains
             endif
         else
             call b%a%set_all2single('w', 1.0)
+            if( p%shellw.eq.'yes' )call b%a%calc_bfac_rec
         endif
         ! even/odd partitioning
         if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo

@@ -158,6 +158,7 @@ contains
                 precs(cnt)%bfac = spproj%os_ptcl2D%get(iptcl,'bfac_rec')
             else
                 precs(cnt)%pw   = spproj%os_ptcl2D%get(iptcl,'w')
+                precs(cnt)%bfac = 0.
             endif
             ctfvars          = spproj%get_ctfparams('ptcl2D',iptcl)
             precs(cnt)%tfun  = ctf(pp%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)

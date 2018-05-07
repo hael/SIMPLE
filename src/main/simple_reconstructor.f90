@@ -414,7 +414,6 @@ contains
         if( do_bfac_rec )then
             rnyq_sq = real(self%nyq*self%nyq)
             bfac_sc = bfac / 4.
-            print *,bfac_sc
         endif
         ! setup orientation weights/states/rotation matrices/shifts
         nsym  = se%get_nsym()
