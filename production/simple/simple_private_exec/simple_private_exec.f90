@@ -523,7 +523,7 @@ select case(prg)
         keys_optional(2) = 'inner'
         keys_optional(3) = 'nspace'
         keys_optional(4) = 'nran'
-        keys_optional(5) = 'shellweights'
+        keys_optional(5) = 'shellw'
         ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! set defaults
@@ -604,7 +604,7 @@ select case(prg)
         keys_optional(23) = 'nnn'
         keys_optional(24) = 'rrate'
         keys_optional(25) = 'update_frac'
-        keys_optional(26)  = 'shellweights'
+        keys_optional(26)  = 'shellw'
         ! parse command line
         call cline%parse_oldschool(keys_required(:4), keys_optional(:26))
         ! set defaults
@@ -780,7 +780,7 @@ select case(prg)
         keys_optional(2)  = 'eo'
         keys_optional(3)  = 'frac'
         keys_optional(4)  = 'mskfile'
-        keys_optional(5)  = 'shellweights'
+        keys_optional(5)  = 'shellw'
         ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! set defaults
