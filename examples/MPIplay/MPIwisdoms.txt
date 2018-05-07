@@ -1,0 +1,13 @@
+MPI wisdoms
+
+* avoid MPI_Send / MPI_Recv
+    
+    Behaviour is implementation dependent - code may work, but
+    then stop working when message size changes or move to another
+    platform
+
+* use MPI_Sendrecv (hopefully more efficient)
+
+* use asynchronous sends/recieves (recommended)
+    
+    - MPI_Isend / MPI_Irecv

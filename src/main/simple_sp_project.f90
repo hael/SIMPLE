@@ -500,11 +500,11 @@ contains
             else if( nframes > 1 )then
                 call os_ptr%set(imic, 'movie', trim(moviename))
                 call os_ptr%set(imic, 'imgkind', 'movie')
-                is_movie = .false.
+                is_movie = .true.
             else
                 call os_ptr%set(imic, 'intg',  trim(moviename))
                 call os_ptr%set(imic, 'imgkind', 'mic')
-                is_movie = .true.
+                is_movie = .false.
             endif
             ! image format
             str    = fname2ext(moviename)
