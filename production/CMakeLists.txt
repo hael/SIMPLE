@@ -122,6 +122,7 @@ endif()
 if(NOT USE_MPI)
  list(REMOVE_ITEM TESTDIRS "tests/test_mpi")
 endif()
+
 # if(USE_OPENACC)
 #   message(STATUS "Searching for BLAS to test OpenACC")
 #   set(BLA_F95 ON)
