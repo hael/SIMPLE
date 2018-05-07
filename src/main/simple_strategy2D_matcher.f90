@@ -136,7 +136,6 @@ contains
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
-        if( p%adjspecscore .eq. 'yes' )call b%a%adjust_score_for_defocus('specscore',[0.,1.])
         if( p%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
@@ -171,6 +170,13 @@ contains
             else
                 call b%a%set_all2single('w', 1.0)
             endif
+        endif
+
+        ! B-factor
+        if( p%shellw.eq.'yes' .and. which_iter > 3 )then
+            call b%a%calc_bfac_rec
+        else
+            call b%a%set_all2single('bfac_rec', 0.)
         endif
 
         ! READ FOURIER RING CORRELATIONS

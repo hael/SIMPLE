@@ -21,7 +21,6 @@ type :: params
     class(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
-    character(len=3)      :: adjspecscore='no'    !< append in context of files(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
@@ -369,7 +368,7 @@ type :: params
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
     real    :: width=10.           !< falloff of inner mask(in pixels){10}
-    real    :: winsz=1.
+    real    :: winsz=1.5
     real    :: xsh=0.              !< x shift(in pixels){0}
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}

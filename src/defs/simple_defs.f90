@@ -86,7 +86,7 @@ integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid
 real, parameter :: COSMSKHALFWIDTH         = 6.0       !< spherical soft masking
 real, parameter :: KBWINSZ                 = 1.5       !< interpolation window size for 2D
 real, parameter :: KBALPHA                 = sqrt(2.0) !< interpolation alpha (oversampling constant)
-real, parameter :: RECWINSZ                = 1.0       !< half-window size for 3D reconstruction
+real, parameter :: RECWINSZ                = 1.5       !< half-window size for 3D reconstruction
 
 ! real constants that control search and convergence
 real, parameter    :: FRAC_SH_LIM             = 80.0      !< at what frac to turn on the shift search
@@ -100,7 +100,7 @@ real, parameter    :: TAU_DEFAULT             = 0.005     !< controls the sharpe
                                                           !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D           = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH         = 0.01      !< threshold for orientations softmax weights
-real,    parameter :: BSC                     = 10.      !< for shell reconstruction b-factor calculation
+real,    parameter :: BSC                     = 50.      !< for shell reconstruction b-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

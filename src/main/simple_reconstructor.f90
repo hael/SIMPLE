@@ -216,7 +216,7 @@ contains
 
     ! GETTERS
 
-    !> get the kbintpol window
+    !> get the kbinterpol window
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self !< this instance
         type(kbinterpol) :: wf                      !< return kbintpol window
@@ -347,15 +347,14 @@ contains
                         tval   = 1.
                         tvalsq = tval
                     endif
-                    ! (weighted) kernel values
+                    ! (weighted) kernel & CTF values
                     if( do_bfac_rec )then
-                        if( rsh_sq < TINY )then
-                            w = 1.
-                        else if( rsh_sq >= rnyq_sq )then
-                            w = exp(-bfac_sc)
+                        if( rsh_sq >= rnyq_sq )then
+                            tval = tval * exp(-bfac_sc)
                         else
-                            w = exp(-bfac_sc*rsh_sq/rnyq_sq)
+                            tval = tval * exp(-bfac_sc*rsh_sq/rnyq_sq)
                         endif
+                        w = 1.
                     else
                         w = pwght
                     endif
@@ -415,6 +414,7 @@ contains
         if( do_bfac_rec )then
             rnyq_sq = real(self%nyq*self%nyq)
             bfac_sc = bfac / 4.
+            print *,bfac_sc
         endif
         ! setup orientation weights/states/rotation matrices/shifts
         nsym  = se%get_nsym()
@@ -476,18 +476,15 @@ contains
                             tval   = 1.
                             tvalsq = tval
                         endif
-                        ! (weighted) kernel values
+                        ! (weighted) kernel & CTF values
                         if( do_bfac_rec )then
-                            if( rsh_sq < TINY )then
-                                w = ows(iori)
-                            else if( rsh_sq >= rnyq_sq )then
-                                w = ows(iori) * exp(-bfac_sc)
+                            if( rsh_sq >= rnyq_sq )then
+                                tval = tval * exp(-bfac_sc)
                             else
-                                w = ows(iori) * exp(-bfac_sc*rsh_sq/rnyq_sq)
+                                tval = tval * exp(-bfac_sc*rsh_sq/rnyq_sq)
                             endif
-                        else
-                            w = ows(iori)
                         endif
+                        w = ows(iori)
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))

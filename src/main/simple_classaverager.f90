@@ -16,6 +16,7 @@ type ptcl_record
     integer              :: pind    = 0                         !< particle index in stack
     integer              :: eo      = -1                        !< even is 0, odd is 1, default is -1
     real                 :: pw      = 0.0                       !< particle weight
+    real                 :: bfac    = 0.0                       !< b-factor for CTF-weighted reconstruction
     real                 :: dfx     = 0.0                       !< defocus in x (microns)
     real                 :: dfy     = 0.0                       !< defocus in y (microns)
     real                 :: angast  = 0.0                       !< angle of astigmatism (in degrees)
@@ -152,7 +153,12 @@ contains
             ! parameter transfer
             precs(cnt)%pind  = iptcl
             precs(cnt)%eo    = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
-            precs(cnt)%pw    = spproj%os_ptcl2D%get(iptcl,'w')
+            if( pp%shellw.eq.'yes' )then
+                precs(cnt)%pw   = 1.
+                precs(cnt)%bfac = spproj%os_ptcl2D%get(iptcl,'bfac_rec')
+            else
+                precs(cnt)%pw   = spproj%os_ptcl2D%get(iptcl,'w')
+            endif
             ctfvars          = spproj%get_ctfparams('ptcl2D',iptcl)
             precs(cnt)%tfun  = ctf(pp%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             select case(trim(pp%tfplan%mode))
@@ -314,9 +320,8 @@ contains
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !!          using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
-        use simple_kbinterpol,      only: kbinterpol
-        use simple_prep4cgrid,      only: prep4cgrid
-        !use simple_map_reduce,      only: split_nobjs_even
+        use simple_kbinterpol,          only: kbinterpol
+        use simple_prep4cgrid,          only: prep4cgrid
         use simple_strategy2D3D_common, only: read_img
         logical,           intent(in) :: do_frac_update
         type(kbinterpol)              :: kbwin
@@ -436,16 +441,16 @@ contains
                         if( ctfflag == CTFFLAG_FLIP )then
                             call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 1, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                                &precs(iprec)%angast, add_phshift)
+                                &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
                         else
                             call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 2, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                                &precs(iprec)%angast, add_phshift)
+                                &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
                         endif
                     else
                         call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 3, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                             &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                            &precs(iprec)%angast, add_phshift)
+                            &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
                     endif
                     ! prep weight
                     if( l_hard_assign )then
