@@ -108,15 +108,20 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_pgi"
-   "tests/test_cuda"
-   "tests/test_cufft")
+    "tests/test_cufft")
 endif()
+
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   list(REMOVE_ITEM TESTDIRS "tests/test_openacc"
    "tests/test_laplace_solver"
    "tests/test_accuracy")
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_intel")
+endif()
+
+
+if(NOT USE_CUDA)
+ list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
 endif()
 
 if(NOT USE_MPI)
@@ -171,6 +176,22 @@ foreach(TESTNAME ${TESTDIRS})
           LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
           LANGUAGE Fortran)
       endif()
+    endif()
+    if(USE_CUDA)
+      file(GLOB_RECURSE TESTCUDASOURCES LIST_DIRECTORIES true
+          "tests/${TESTNAME}/*.cu")
+       if("" STREQUAL "${TESTCUDASOURCES}")
+         # message(STATUS " skipping ${TESTNAME} -- no files in dir")
+       else()
+         CUDA_COMPILE( ${TESTEXE}_cuda-kernels ${TESTCUDASOURCES}
+           OPTIONS  OPTIONS -DFLAG=2 "-DFLAG_OTHER=space in flag"
+         DEBUG -g
+         RELEASE --use_fast_math
+         RELWITHDEBINFO --use_fast_math;-g
+         MINSIZEREL --use_fast_math)
+        target_link_libraries(${TESTEXE} ${TESTEXE}_generated_files)
+        endif()
+      target_link_libraries(${TESTEXE} cuda_kernels)
     endif()
     # if(BLAS_FOUND AND USE_OPENACC)
     #   message(STATUS "Adding  ${BLAS_blas_LIBRARY} library to ${TESTEXE}")
