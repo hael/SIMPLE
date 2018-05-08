@@ -100,6 +100,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! picking
         if( cline%defined('refs') )then
             l_pick = .true.
@@ -191,6 +193,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         if( cline%defined('tomoseries') )then
             call read_filetable(p_master%tomoseries, tomonames)
         else
@@ -247,6 +251,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! setup the environment for distributed execution
@@ -278,6 +284,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         p_master%numlen = len(int2str(p_master%nparts))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
@@ -314,6 +322,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         p_master%numlen = len(int2str(p_master%nparts))
         call cline%set('numlen', real(p_master%numlen))
         ! output directory
@@ -336,10 +346,10 @@ contains
     subroutine exec_make_cavgs_distr( self, cline )
         class(make_cavgs_distr_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(cmdline)         :: cline_cavgassemble
-        type(qsys_env)        :: qenv
-        type(params)          :: p_master
-        type(chash)           :: job_descr
+        type(cmdline)  :: cline_cavgassemble
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -349,6 +359,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -392,6 +404,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! make builder
         call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
@@ -567,6 +581,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! make builder
         call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
@@ -629,6 +645,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! make builder
         call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
@@ -884,6 +902,8 @@ contains
         ! make master parameters
         call cline%delete('refine')
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! make lightweight builder
         call b%build_spproj(p_master, cline)
         ! setup the environment for distributed execution
@@ -952,6 +972,8 @@ contains
         write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         if( .not. file_exists(p_master%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
         if( nlines(p_master%boxfile) > 0 )then
             call boxfile%new(p_master%boxfile, 1)
@@ -1039,6 +1061,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(p_master%pgrp) )
         p_master%nptcls   = comlin_srch_nproj
         if( p_master%nparts > comlin_srch_nproj )then
@@ -1190,6 +1214,8 @@ contains
         write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! make builder
         call b%build_spproj(p_master, cline)
         ! copy command line

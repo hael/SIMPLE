@@ -66,8 +66,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! parameters
         p_master = params(cline, del_scaled=.true.)
-        ! delete mkdir flag from cline if present (to avoid nested directory structure)
-        call cline%delete('mkdir')
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         nparts   = p_master%nparts
         if( p_master%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function
@@ -256,8 +256,8 @@ contains
         call cline%delete('autoscale')
         ! make master parameters
         p_master = params(cline)
-        ! delete mkdir flag from cline if present (to avoid nested directory structure)
-        call cline%delete('mkdir')
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
@@ -548,6 +548,8 @@ contains
         p_master = params(cline)
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; cluster3D'
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
 
         ! prepare command lines from prototype
         call cline%delete('refine')
@@ -827,6 +829,8 @@ contains
         p_master      = params(cline)
         l_singlestate = cline%defined('state')
         error         = .false.
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
 
         ! filenaming strings allocation
         allocate(INIT_FBODY, source='cluster3Dinit_refine_state')

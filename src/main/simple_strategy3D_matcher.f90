@@ -377,6 +377,7 @@ contains
 
         ! REPORT CONVERGENCE
         call qsys_job_finished( p, 'simple_strategy3D_matcher :: refine3D_exec')
+        if( .not. p%l_distr_exec ) converged = b%conv%check_conv3D()
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.

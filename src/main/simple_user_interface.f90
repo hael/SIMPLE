@@ -2055,7 +2055,7 @@ contains
         '# states to reconstruct', .false., 1.0)
         call refine3D%set_input('srch_ctrls', 11, objfun)
         call refine3D%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
-        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
+        &clustersym){no}', '(snhc|single|multi|greedy_single|cont_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
         call refine3D%set_input('srch_ctrls', 13, neigh)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
