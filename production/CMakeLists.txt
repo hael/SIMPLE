@@ -122,6 +122,7 @@ endif()
 
 if(NOT USE_CUDA)
  list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
+ list(REMOVE_ITEM TESTDIRS "tests/test_cublas")
 endif()
 if(NOT USE_OPENMP)
  list(REMOVE_ITEM TESTDIRS "tests/test_omp")
@@ -185,15 +186,16 @@ foreach(TESTNAME ${TESTDIRS})
        if("" STREQUAL "${TESTCUDASOURCES}")
          # message(STATUS " skipping ${TESTNAME} -- no files in dir")
        else()
-         CUDA_COMPILE( ${TESTEXE}_cuda-kernels ${TESTCUDASOURCES}
-           OPTIONS  OPTIONS -DFLAG=2 "-DFLAG_OTHER=space in flag"
+         CUDA_COMPILE( ${TESTEXE}_cuda_kernels ${TESTCUDASOURCES}
+           OPTIONS
          DEBUG -g
          RELEASE --use_fast_math
          RELWITHDEBINFO --use_fast_math;-g
          MINSIZEREL --use_fast_math)
-        target_link_libraries(${TESTEXE} ${TESTEXE}_generated_files)
-        endif()
-      target_link_libraries(${TESTEXE} cuda_kernels)
+       target_link_libraries(${TESTEXE} ${TESTEXE}_cuda_kernels)
+     endif()
+     CUDA_ADD_CUBLAS_TO_TARGET(${TESTEXE})
+     target_link_libraries(${TESTEXE} cuda_kernels)
     endif()
     # if(BLAS_FOUND AND USE_OPENACC)
     #   message(STATUS "Adding  ${BLAS_blas_LIBRARY} library to ${TESTEXE}")
@@ -249,6 +251,3 @@ add_test(NAME test_units
 add_test(NAME test_timer
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
   COMMAND source add2.bashrc && ${CMAKE_COMMAND} -E simple_test_timer verbose=yes debug=yes)
-
-
-add_test(NAME YeahhhTest COMMAND ${CMAKE_COMMAND} -E echo 'Yeahh')

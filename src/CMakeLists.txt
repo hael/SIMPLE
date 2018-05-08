@@ -144,13 +144,12 @@ set_target_properties(${SIMPLELIB}
   )
 
 if(USE_CUDA)
-  CUDA_ADD_LIBRARY( cuda_kernels ${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/c_kernels.cu
+  CUDA_ADD_LIBRARY( cuda_kernels ${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/c_kernels.cu  ${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/cublas_fortran.cu
     STATIC
     OPTIONS DEBUG -g
     RELEASE --use_fast_math
     RELWITHDEBINFO --use_fast_math;-g
     MINSIZEREL --use_fast_math
-
     )
 endif()
 
