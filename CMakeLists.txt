@@ -23,7 +23,7 @@ set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}.${SIMPLE_VER
 #
 #################################################################
 option(USE_OPENMP  "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
-option(USE_MPI     "Use OpenMPI for parallelization - in developement" ON )
+option(USE_MPI     "Use OpenMPI for parallelization - in developement" OFF )
 option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpenMP" OFF)
 option(USE_CUDA    "GPU NVIDIA - in development" OFF)
 
