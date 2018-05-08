@@ -11,7 +11,8 @@ private ! :: raise_exception_imgfile
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile
 public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
 !! Normalisation
-public:: norm_bin_imgfile, norm_imgfile, norm_ext_imgfile, noise_norm_imgfile, shellnorm_imgfile
+public :: norm_bin_imgfile, norm_imgfile, norm_ext_imgfile, noise_norm_imgfile
+public :: shellnorm_imgfile, matchfilt_imgfile
 !! Morphological
 public :: neg_imgfile, bin_imgfile
 public :: mask_imgfile, taper_edges_imgfile
@@ -431,6 +432,50 @@ contains
         call img%kill
     end subroutine shellnorm_imgfile
 
+    !>  \brief  is for noise normalization
+    !! \param fname2norm  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    subroutine matchfilt_imgfile( fname2filt, fname, frcs_fname, smpd )
+        use simple_projection_frcs, only: projection_frcs
+        use simple_estimate_ssnr, only: fsc2optlp_sub
+        character(len=*), intent(in) :: fname2filt, fname, frcs_fname
+        real,             intent(in) :: smpd
+        type(projection_frcs) :: frcs
+        type(image)           :: img
+        real,     allocatable :: frc(:), filter(:)
+        integer               :: i, n, ldim(3)
+        call frcs%read(frcs_fname)
+        call find_ldim_nptcls(fname2filt, ldim, n)
+        ldim(3) = 1
+        if( frcs%get_nprojs().ne.n )then
+            write(*,*) '# imgs: ',n
+            write(*,*) '# projection_frcs: ',frcs%get_nprojs()
+            stop 'Inconsistent dimensions in simple_procimgfile :: matchfilt_imgfile'
+        endif
+        call raise_exception_imgfile( n, ldim, 'matchfilt_imgfile' )
+        call img%new(ldim,smpd)
+        if( frcs%get_filtsz().ne.img%get_filtsz() )then
+            write(*,*) 'img filtsz: ',img%get_filtsz()
+            write(*,*) 'frcs filtsz: ',frcs%get_filtsz()
+            stop 'Inconsistent filter dimensions in simple_procimgfile :: matchfilt_imgfile'
+        endif
+        write(*,'(a)') '>>> SHELL NORMALIZING AND FILTERING IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2filt, i)
+            frc = frcs%get_frc(i, ldim(1))
+            allocate(filter(size(frc)), source=1.)
+            call fsc2optlp_sub(frcs%get_filtsz(), frc, filter)
+            where( filter < TINY )filter = 0.
+            call img%fft()
+            call img%shellnorm_and_apply_filter(frc)
+            call img%ifft()
+            call img%write(fname, i)
+            deallocate(frc,filter)
+        end do
+        call img%kill
+    end subroutine matchfilt_imgfile
 
 
     !>  \brief  is for contrast inversion

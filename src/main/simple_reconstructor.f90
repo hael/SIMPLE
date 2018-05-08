@@ -270,7 +270,7 @@ contains
         real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
-        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3),iloc(3)
+        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
         complex   :: comp, oshift
         real      :: vec(3), loc(3), dists(3), shconst_here(2)
         real      :: w(self%wdim,self%wdim,self%wdim)

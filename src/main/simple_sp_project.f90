@@ -9,7 +9,6 @@ public :: sp_project
 private
 
 integer, parameter :: MAXN_OS_SEG = 13
-character(len=4)   :: NULL = 'null'
 
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
@@ -57,7 +56,9 @@ contains
     procedure, private :: add_scale_tag
     ! os_out related methods
     procedure          :: add_cavgs2os_out
+    procedure          :: add_frcs2os_out
     procedure          :: get_cavgs_stk
+    procedure          :: get_frcs
     ! getters
     procedure          :: get_nptcls
     procedure          :: get_box
@@ -918,12 +919,19 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd )
+    subroutine add_cavgs2os_out( self, stk, smpd, which )
         class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: stk
+        character(len=*),      intent(in)    :: stk, which
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
         character(len=:), allocatable :: cavg_stk, imgkind
         integer :: ldim(3), nptcls, n_os_out, ind, i
+        select case(trim(which))
+            case('cavg','cavg_even','cavg_odd')
+                ! all good
+            case DEFAULT
+                write(*,*)'Invalid CAVG kind: ', trim(which)
+                stop 'sp_project :: add_cavgs2os_out'
+        end select
         ! fuul path and existence check
         call simple_full_path(stk, cavg_stk, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
@@ -944,7 +952,7 @@ contains
             do i=1,n_os_out
                 if( self%os_out%isthere(i,'imgkind') )then
                     call self%os_out%getter(i,'imgkind',imgkind)
-                    if(trim(imgkind).eq.'cavg')then
+                    if(trim(imgkind).eq.trim(which))then
                         ind = i
                         exit
                     endif
@@ -964,17 +972,71 @@ contains
         call self%os_out%set(ind, 'top',     real(nptcls))
         call self%os_out%set(ind, 'smpd',    real(smpd))
         call self%os_out%set(ind, 'stkkind', 'single')
-        call self%os_out%set(ind, 'imgkind', 'cavg')
+        call self%os_out%set(ind, 'imgkind', trim(which))
         call self%os_out%set(ind, 'ctf',     'no')
     end subroutine add_cavgs2os_out
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd )
+    subroutine add_frcs2os_out( self, frc, which )
+        class(sp_project),     intent(inout) :: self
+        character(len=*),      intent(in)    :: frc, which
+        character(len=:), allocatable :: frc_abspath, imgkind
+        integer :: n_os_out, ind, i
+        select case(trim(which))
+            case('frc2D','frc3D')
+                ! all good
+            case DEFAULT
+                write(*,*)'Invalid FRC kind: ', trim(which)
+                stop 'sp_project :: add_frcs2os_out'
+        end select
+        ! fuul path and existence check
+        call simple_full_path(frc, frc_abspath, 'sp_project :: add_frcs2os_out')
+        ! check if field is empty
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 )then
+            n_os_out = 1
+            ind      = 1
+            call self%os_out%new_clean(n_os_out)
+        else
+            ind = 0
+            do i=1,n_os_out
+                if( self%os_out%isthere(i,'imgkind') )then
+                    call self%os_out%getter(i,'imgkind',imgkind)
+                    if(trim(imgkind).eq.trim(which))then
+                        ind = i
+                        exit
+                    endif
+                endif
+            end do
+            if( ind == 0 )then
+                n_os_out = n_os_out + 1
+                call self%os_out%reallocate(n_os_out)
+                ind = n_os_out
+            endif
+        endif
+        ! fill-in field
+        call self%os_out%set(ind, 'frcs', trim(frc_abspath))
+        call self%os_out%set(ind, 'imgkind', trim(which))
+    end subroutine add_frcs2os_out
+
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, which, fail )
         class(sp_project),             intent(inout) :: self
         character(len=:), allocatable, intent(inout) :: stkname
         integer,                       intent(out)   :: ncls
         real,                          intent(out)   :: smpd
+        character(len=*),              intent(in)    :: which
+        logical,          optional,    intent(in)    :: fail
         character(len=:), allocatable :: imgkind
         integer :: n_os_out, ind, i, cnt
+        logical :: fail_here
+        select case(trim(which))
+            case('cavg','cavg_even','cavg_odd')
+                ! all good
+            case DEFAULT
+                write(*,*)'Invalid CAVG kind: ', trim(which)
+                stop 'sp_project :: get_cavgs_stk'
+        end select
+        fail_here = .true.
+        if( present(fail) )fail_here = fail
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 ) stop 'ERROR! trying to fetch from empty os_out field; sp_project :: get_cavgs_stk'
@@ -984,20 +1046,69 @@ contains
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
                 call self%os_out%getter(i,'imgkind',imgkind)
-                if(trim(imgkind).eq.'cavg')then
+                if(trim(imgkind).eq.trim(which))then
                     ind = i
                     cnt = cnt + 1
                 endif
             endif
         end do
-        if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=cavg, aborting...; sp_project :: get_cavgs_stk'
-        if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=cavg identified, aborting...; sp_project :: get_cavgs_stk'
-        ! set return values
-        if( allocated(stkname) ) deallocate(stkname)
-        call self%os_out%getter(ind,'stk',stkname)
-        ncls = nint(self%os_out%get(ind, 'nptcls'))
-        smpd = nint(self%os_out%get(ind, 'smpd'))
+        if( fail_here )then
+            if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=cavg, aborting...; sp_project :: get_cavgs_stk'
+            if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=cavg identified, aborting...; sp_project :: get_cavgs_stk'
+            ! set return values
+            if( allocated(stkname) ) deallocate(stkname)
+            call self%os_out%getter(ind,'stk',stkname)
+            ncls = nint(self%os_out%get(ind, 'nptcls'))
+            smpd = nint(self%os_out%get(ind, 'smpd'))
+        else
+            stkname = NIL
+            ncls    = 0
+            smpd    = 0.
+        endif
     end subroutine get_cavgs_stk
+
+    subroutine get_frcs( self, frcs, which, fail )
+        class(sp_project),             intent(inout) :: self
+        character(len=:), allocatable, intent(inout) :: frcs
+        character(len=*),              intent(in)    :: which
+        logical,          optional,    intent(in)    :: fail
+        character(len=:), allocatable :: imgkind
+        integer :: n_os_out, ind, i, cnt
+        logical :: fail_here
+        select case(trim(which))
+            case('frc2D','frc3D')
+                ! all good
+            case DEFAULT
+                write(*,*)'Invalid FRC kind: ', trim(which)
+                stop 'sp_project :: get_frcs'
+        end select
+        fail_here = .true.
+        if( present(fail) )fail_here = fail
+        ! check if field is empty
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 ) stop 'ERROR! trying to fetch from empty os_out field; sp_project :: get_frcs'
+        ! look for cavgs
+        ind = 0
+        cnt = 0
+        do i=1,n_os_out
+            if( self%os_out%isthere(i,'imgkind') )then
+                call self%os_out%getter(i,'imgkind',imgkind)
+                if(trim(imgkind).eq.trim(which))then
+                    ind = i
+                    cnt = cnt + 1
+                endif
+            endif
+        end do
+        if( allocated(frcs) ) deallocate(frcs)
+        if( fail_here )then
+            if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=frcXD, aborting...; sp_project :: get_frcs'
+            if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=frcsXD identified, aborting...; sp_project :: get_frcs'
+            ! set return values
+            call self%os_out%getter(ind,'frcs',frcs)
+        else
+            frcs = NIL
+        endif
+    end subroutine get_frcs
 
     ! getters
 
@@ -1213,9 +1324,9 @@ contains
         else if( ptcl_field%isthere(iptcl, 'ctf') )then
             call ptcl_field%getter(iptcl, 'ctf', ctfflag)
         else
-            ctfflag = NULL
+            ctfflag = NIL
         endif
-        if( trim(ctfflag).eq.NULL )then
+        if( trim(ctfflag).eq.NIL )then
             write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
             stop 'sp_project :: get_ctfparams'
         else
@@ -1330,8 +1441,9 @@ contains
                 stop 'sp_project :: is_virgin_field'
         end select
         if( os%get_noris() == 0 )then
-            write(*,*) 'ERROR! cannot check virginity of non-existent field (touched for the very first time???)'
-            stop 'sp_project :: is_virgin_field'
+            write(*,*) 'WARNING! cannot check virginity of non-existent field (touched for the very first time???)'
+            print *,'WARNING! cannot check virginity of non-existent field (touched for the very first time???)'
+            return
         endif
         if( any( abs(os%get_all('e3')  )>TINY) )return
         if( any( abs(os%get_all('e1')  )>TINY) )return

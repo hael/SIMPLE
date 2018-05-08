@@ -35,8 +35,8 @@ contains
     !> for distributed CLUSTER2D with two-stage autoscaling
     subroutine exec_cluster2D_autoscale( self, cline )
         use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander,scale_project_distr_commander
-        use simple_commander_cluster2D, only: rank_cavgs_commander
-        use simple_commander_imgproc,   only: scale_commander
+        use simple_commander_cluster2D,    only: rank_cavgs_commander
+        use simple_commander_imgproc,      only: scale_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! constants
@@ -57,8 +57,8 @@ contains
         ! other variables
         type(sp_project)      :: spproj, spproj_sc
         type(params)          :: p_master
-        character(len=:), allocatable :: projfile_sc, stk
-        character(len=STDLEN) :: finalcavgs, finalcavgs_ranked, refs_sc
+        character(len=:), allocatable :: projfile_sc, stk, stk_filt
+        character(len=LONGSTRLEN) :: finalcavgs, finalcavgs_ranked, refs_sc
         real                  :: scale_stage1, scale_stage2
         integer               :: istk, nparts, last_iter_stage1, last_iter_stage2
         logical               :: scaling
@@ -133,6 +133,7 @@ contains
             !          cross-correlation with automtic fitting of B-factors
             cline_cluster2D_stage2 = cline
             call cline_cluster2D_stage2%set('objfun', 'ccres')
+            call cline_cluster2D_stage2%delete('refs')
             if( p_master%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then
@@ -184,9 +185,14 @@ contains
             last_iter_stage2 = nint(cline%get_rarg('endit'))
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
         endif
-        ! adding cavgs to project
+        ! adding cavgs & FRCs to project & perform match filtering
         call spproj%read( p_master%projfile )
-        call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd())
+        call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+        call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd(), 'cavg')
+        stk = add2fbody(trim(finalcavgs),p_master%ext,'_even')
+        call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_even')
+        stk = add2fbody(trim(finalcavgs),p_master%ext,'_odd')
+        call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_odd')
         call spproj%write()
         call spproj%kill()
         ! ranking
@@ -203,10 +209,10 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-        use simple_commander_distr_wflows, only: prime3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
-        use simple_oris,                   only: oris
-        use simple_commander_volops,       only: reproject_commander
-        use simple_commander_rec,     only: reconstruct3D_commander
+         use simple_commander_distr_wflows, only: prime3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
+        use simple_oris,                    only: oris
+        use simple_commander_volops,        only: reproject_commander
+        use simple_commander_rec,           only: reconstruct3D_commander
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
@@ -222,7 +228,7 @@ contains
         type(scale_project_distr_commander) :: xscale_distr
         ! shared-mem commanders
         type(reconstruct3D_commander) :: xreconstruct3D
-        type(reproject_commander)       :: xreproject
+        type(reproject_commander)     :: xreproject
         ! command lines
         type(cmdline)         :: cline_refine3D_snhc_restart
         type(cmdline)         :: cline_refine3D_snhc
@@ -233,7 +239,8 @@ contains
         type(cmdline)         :: cline_reproject
         type(cmdline)         :: cline_scale
         ! other variables
-        character(len=:), allocatable :: projfile, stk, imgkind, WORK_PROJFILE
+        character(len=:), allocatable :: projfile, stk, stk_even, stk_odd, stk_filt
+        character(len=:), allocatable :: imgkind, frcs_fname, WORK_PROJFILE
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(params)          :: p_master
         type(sp_project)      :: spproj, work_proj
@@ -243,9 +250,7 @@ contains
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter
         integer               :: status
-        logical               :: srch4symaxis, doautoscale
-        ! set cline defaults
-        call cline%set('eo', 'no')
+        logical               :: srch4symaxis, doautoscale, eo
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! auto-scaling prep
@@ -254,6 +259,8 @@ contains
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         ! make master parameters
+        eo = trim(cline%get_carg('eo')) .eq. 'yes'
+        call cline%set('eo','no')
         p_master = params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -279,8 +286,9 @@ contains
         if( cline%defined('lpstop')  ) lplims(2) = p_master%lpstop
         ! read project
         call spproj%read(p_master%projfile)
-        ! retrieve cavgs stack info
-        call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
+        ! retrieve cavgs stack & FRCS info
+        call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd, 'cavg')
+        if( eo )call gen_eo_stks
         ! prepare a temporary project file for the class average processing
         allocate(WORK_PROJFILE, source='initial_3Dmodel_tmpproj.simple')
         call del_file(WORK_PROJFILE)
@@ -324,8 +332,8 @@ contains
             projfile    = p_master%projfile
         endif
         ! prepare command lines from prototype for original scaling
-        cline_reconstruct3D   = cline
-        cline_reproject         = cline
+        cline_reconstruct3D = cline
+        cline_reproject     = cline
         ! updates scaling parameters
         call cline%set('projfile', trim(WORK_PROJFILE))
         call cline%set('msk',      msk)
@@ -496,6 +504,39 @@ contains
                 str_iter = int2str_pad(nint(iter),3)
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
+
+            subroutine gen_eo_stks
+                use simple_commander_imgproc, only: filter_commander
+                type(filter_commander) :: xfilter
+                type(cmdline)          :: cline_filter
+                character(len=:), allocatable :: frcs_fname, stk_filt_even, stk_filt_odd
+                character(len=:), allocatable :: stk_even, stk_odd, ext
+                real    :: smpd
+                integer :: n
+                ext = '.'//fname2ext( stk )
+                call spproj%get_frcs(frcs_fname, 'frc2D')
+                call spproj%get_cavgs_stk(stk_odd, n, smpd, 'cavg_odd')
+                call spproj%get_cavgs_stk(stk_even, n, smpd, 'cavg_even')
+                stk_filt      = add2fbody(trim(stk), trim(ext), '_filt')
+                stk_filt_even = add2fbody(trim(stk_even), trim(ext), '_filt')
+                stk_filt_odd  = add2fbody(trim(stk_odd),  trim(ext), '_filt')
+                call cline_filter%set('prg',  'filter')
+                call cline_filter%set('nthr', real(p_master%nthr))
+                call cline_filter%set('smpd', p_master%smpd)
+                call cline_filter%set('frcs', trim(frcs_fname))
+                call cline_filter%set('stk',   trim(stk))
+                call cline_filter%set('outstk',trim(stk_filt))
+                call xfilter%execute(cline_filter)
+                call cline_filter%set('stk',   trim(stk_even))
+                call cline_filter%set('outstk',trim(stk_filt_even))
+                call xfilter%execute(cline_filter)
+                call cline_filter%set('stk',   trim(stk_odd))
+                call cline_filter%set('outstk',trim(stk_filt_odd))
+                call xfilter%execute(cline_filter)
+                ! set low pass for testing !!!!!!!!!!!!!!!!!!!!
+                deallocate(stk)
+                stk = trim(stk_filt)
+            end subroutine gen_eo_stks
 
     end subroutine exec_initial_3Dmodel
 

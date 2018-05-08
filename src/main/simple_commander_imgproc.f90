@@ -290,7 +290,7 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_filter( self, cline )
-        use simple_procimgfile, only:bp_imgfile, real_filter_imgfile, phase_rand_imgfile
+        use simple_procimgfile, only:bp_imgfile, real_filter_imgfile, phase_rand_imgfile, matchfilt_imgfile
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
@@ -304,8 +304,11 @@ contains
             call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
             if( .not.file_exists(p%stk) )stop 'Cannot find input stack (stk)'
             if( p%phrand .eq. 'no')then
+                ! projection_frcs filtering
+                if( cline%defined('frcs') )then
+                    call matchfilt_imgfile(p%stk, p%outstk, p%frcs, p%smpd)
                 ! Band pass
-                if( cline%defined('lp') .and. cline%defined('hp') )then
+                else if( cline%defined('lp') .and. cline%defined('hp') )then
                     call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, p%lp, width=width)
                 else if( cline%defined('lp') )then
                     call bp_imgfile(p%stk, p%outstk, p%smpd, 0., p%lp, width=width)

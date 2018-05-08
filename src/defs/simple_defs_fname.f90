@@ -35,7 +35,6 @@ character(len=*), parameter :: SNHCVOL              = 'snhc_recvol_state'
 character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
 character(len=*), parameter :: FRCS_FBODY           = 'frcs_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
-character(len=*), parameter :: FRCS_ITER_FBODY      = 'frcs_iter'
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 ! EXTRACT
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
@@ -61,6 +60,8 @@ character(len=*), parameter :: DIR_PREPROC          = './'
 character(len=*), parameter :: DIR_PREPROC_STREAM   = './'
 ! STREAMING
 character(len=*), parameter :: TERM_STREAM          = './SIMPLE_TERM_STREAM'
+! MISCELLANEOUS
+character(len=3), parameter :: NIL                  = 'nil'
 ! oritype enumeration
 enum, bind(c)
     enumerator :: MIC_SEG=1, STK_SEG=2, PTCL2D_SEG=3, CLS2D_SEG=4, CLS3D_SEG=5,&

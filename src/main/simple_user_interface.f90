@@ -128,6 +128,7 @@ type(simple_input_param) :: dferr
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eo
 type(simple_input_param) :: fraca
+type(simple_input_param) :: frcs
 type(simple_input_param) :: fromf
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
@@ -534,6 +535,7 @@ contains
         call set_param(time_per_image, 'time_per_image', 'num', 'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
         call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
+        call set_param(frcs,           'frcs',         'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
         call set_param(mkdir_,         'mkdir',        'binary', 'Make auto-named dir for output', 'Make auto-named consequtively numbered dir for output(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -986,7 +988,7 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for filtering stack/volume',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &2, 1, 2, 0, 7, 0, 1, .false.)                ! # entries in each group, requires sp_project
+        &2, 1, 2, 0, 8, 0, 1, .false.)                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%set_input('img_ios', 1, outstk)
@@ -1009,6 +1011,7 @@ contains
         &'Number of cosine edge pixels of Fourier low-pass filter in pixels', '# pixels cosine edge', .false., 10.)
         call filter%set_input('filt_ctrls', 7, 'real_filter', 'binary', 'Real-space filter',&
         &'Real-space filter(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call filter%set_input('filt_ctrls', 8, frcs)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1102,7 +1105,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                          ! descr_long
         &'simple_distr_exec',&                                                          ! executable
-        &0, 1, 0, 10, 3, 3, 2, .true.)                                                  ! # entries in each group, requires sp_project
+        &0, 1, 0, 10, 4, 3, 2, .true.)                                                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1128,6 +1131,8 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
+        call initial_3Dmodel%set_input('filt_ctrls', 4, eo)
+        initial_3Dmodel%filt_ctrls(4)%cval_default = 'no' 
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
