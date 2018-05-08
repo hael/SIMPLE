@@ -7,11 +7,11 @@ use simple_defs
 use simple_error,    only: allocchk, simple_stop
 use simple_ran_tabu, only: ran_tabu
 use simple_math
-use simple_fileio
-use simple_strings, only: str_has_substr
-use simple_rnd,     only:gasdev, ran3, irnd_uni
-use simple_stat,    only: moment, corrs2weights, pearsn
-use simple_ori,     only: ori
+use simple_fileio,   only: file_exists, fopen, fclose, fileiochk
+use simple_strings,  only: str_has_substr
+use simple_rnd,      only: gasdev, ran3, irnd_uni
+use simple_stat,     only: moment, corrs2weights, pearsn
+use simple_ori,      only: ori
 implicit none
 
 public :: oris, test_oris
@@ -595,6 +595,7 @@ contains
 
     !>  \brief  for balanced split of a state group
     subroutine split_state( self, which )
+        use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: which
         integer, allocatable :: ptcls_in_which(:)

@@ -574,13 +574,6 @@ contains
         use simple_image,               only: image
         use simple_oris,                only: oris
         use simple_ori,                 only: ori
-        ! use simple_corrmat,             only: calc_cartesian_corrmat
-        ! use simple_motion_correct_iter, only: motion_correct_iter
-        ! use simple_ctf_estimate_iter,   only: ctf_estimate_iter
-        ! use simple_picker_iter,         only: picker_iter
-        ! use simple_procimgfile,         only: neg_imgfile
-        ! use simple_nrtxtfile,           only: nrtxtfile
-
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(params)                  :: p

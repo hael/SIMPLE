@@ -337,10 +337,10 @@ contains
     ! FFTs and signal processing operations
     procedure          :: fwd_ft    ! FFTW forward transform
     procedure          :: bwd_ft    ! FFTW inverse transform
+#ifdef PGI
     procedure          :: fft_pgi_cuda  ! CUFFT forward transform
     !        procedure         :: fft_pgi_stream
     procedure          :: ifft_pgi_cuda ! CUFFT inverse transform
-#ifdef PGI
     generic            :: fft => fft_pgi_cuda
     generic            :: ifft => ifft_pgi_cuda
 #else
@@ -808,7 +808,7 @@ contains
         if( self.eqdims.mskimg )then
             ! pixels = self%packer(mskimg) ! Intel hickup
             !$ allocate(pixels(self%ldim(1)*self%ldim(2)*self%ldim(3)), stat=alloc_stat)
-            !$ if(alloc_stat.ne.0)call allocchk("In simple_image::extr_pixels PGI prealloc ",alloc_stat)
+            !$ if(alloc_stat.ne.0)call allocchk("In simple_image::extr_pixels possible prealloc ",alloc_stat)
             pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>0.5 )
         else
@@ -2945,7 +2945,7 @@ contains
         npixtot = product(self%ldim)
         ! forsort = self%packer() ! Intel hickup
         !$ allocate(forsort(self%ldim(1)*self%ldim(2)*self%ldim(3)),stat=alloc_stat)
-        !$ if(alloc_stat.ne.0)call allocchk("simple_image::bin_2 packing rmat for sorting - PGI prealloc", alloc_stat)
+        !$ if(alloc_stat.ne.0)call allocchk("simple_image::bin_2 packing rmat for sorting - possible prealloc", alloc_stat)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
         thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
@@ -3061,7 +3061,7 @@ contains
         mask2d = 1.
         call mask2d%mask(rad, 'hard')
         !$ allocate(plane(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat)
-        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::bin_cylinder PGI prealloc plane",alloc_stat)
+        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::bin_cylinder posible prealloc plane",alloc_stat)
         plane = mask2d%get_rmat()
         self%rmat = 0.
         do k = 1,self%ldim(3)
@@ -6200,239 +6200,6 @@ contains
     end subroutine img2ft
 
 
-    subroutine fft_pgi_cuda( self )
-#ifndef PGI
-        class(image), intent(inout)      :: self
-        print *,"simple_image::fft_pgi_cuda cannot be called from this compiler"
-#else
-        !! IN-PLACE 3D FFT using CUDA's cufft library
-        use simple_cufft
-#ifdef _OPENACC
-        use openacc
-#endif
-        use cudafor
-        class(image), intent(inout)      :: self
-        complex, allocatable, device     :: coutput_d(:,:,:)
-        complex, allocatable             :: coutput(:,:,:)
-        real,    allocatable             :: rinput(:,:,:)
-        integer      :: plan, planType
-        integer      :: i,j,k,h,l,n,istat
-        integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
-        real         :: nscale
-        integer(timer_int_kind) :: t1
-        if( self%ft ) return
-        ldim = self%ldim
-        verbose=.true.
-        if(debug)t1=tic()
-        ! synchronise
-        !        istat=cudaDeviceSynchronize()
-        !        if(istat.ne.0)then
-        !            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
-        !        endif
-
-        ! Allocate arrays on the host
-        allocate(coutput(ldim(1),ldim(2),ldim(3)),stat=istat)
-        if(alloc_stat.ne.0)call allocchk("In simple_image::fft coutput",istat)
-        !$ allocate( rinput(ldim(1), ldim(2), ldim(3)),source=0.,stat=alloc_stat)
-        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pgi_fft rinput",alloc_stat)
-        rinput = self%get_rmat()
-
-        ! Allocate arrays on the device
-        allocate(coutput_d(ldim(1),ldim(2),ldim(3)))
-        ! Set planType to either single or double precision
-        planType = CUFFT_C2C    !! (fp_kind == singlePrecision)
-
-        ! Copy arrays to device
-        coutput=cmplx(rinput,0.)
-        coutput_d = coutput
-
-        ! Initialize the plan for real to complex transform
-        call cufftPlan3d(plan,ldim(1),ldim(2),ldim(3),planType)
-        DebugPrint "In Image::fft  PGI ", toc()
-
-        ! Execute  Forward transform in place
-        call cufftExec(plan,planType,coutput_d,coutput_d,CUFFT_FORWARD )
-
-        ! Scale
-        !$acc kernels
-        coutput_d = coutput_d / nscale
-        !$acc end kernels
-
-        ! Copy results back to host
-        coutput = coutput_d
-
-
-        self%ft =.true.
-        self%cmat(:cdim(1),:cdim(2),:cdim(3))=coutput(:cdim(1),:cdim(2),:cdim(3))
-
-
-        ! Release memory on the host and on the device
-        deallocate(coutput_d,coutput,rinput,stat=istat)
-        if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",istat)
-        ! Destroy the plans
-        call cufftDestroy(plan)
-        DebugPrint "In simple_cufft::fft_pgi  PGI destroyed ", toc()
-
-        ! DebugPrint "In simple_cufft::fft_pgi  deallocating host arrays", toc()
-        ! ! Remove host storage
-        ! if(allocated(coutput))then
-        !     deallocate(coutput,stat=alloc_stat)
-        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",alloc_stat)
-        ! end if
-        ! if(allocated(rinput))then
-        !     deallocate(rinput,stat=alloc_stat)
-        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host rinput",alloc_stat)
-        ! end if
-        ! DebugPrint "In simple_cufft::fft_pgi deallocating done "
-        ! istat=cudaThreadSynchronize()
-        !   VerbosePrint "In simple_cufft::fft_pgi  PGI scaling ", size(coutput), LBOUND(coutput), UBOUND(coutput)
-
-        !istat=istat+cudaDeviceSynchronize()
-        !if(istat.ne.0)then
-        !    call simple_cuda_stop("In simple_image::fft post fft sync ",__FILENAME__,__LINE__)
-        !endif
-        DebugPrint "In simple_cufft::fft_pgi finished ", toc(t1)
-#endif
-    end subroutine fft_pgi_cuda
-
-    subroutine ifft_pgi_cuda( self )
-#ifndef PGI
-        class(image), intent(inout)      :: self
-        print *,"ERROR>>> simple_image::ifft_pgi_cuda cannot be called with compiler ", FC_COMPILER
-#else
-        !! IN-PLACE 3D FFT using CUDA's cufft
-#ifdef _OPENACC
-        use openacc
-#endif
-        use simple_cufft
-        use gnufor2
-        !        complex,intent(in) ::cin(:,:,:)
-        !        integer, intent(in) :: ldim(3)
-        class(image), intent(inout)       :: self
-        complex, device, allocatable :: inplace_d(:,:,:)
-        complex, allocatable         :: cinout(:,:,:)
-        ! real, allocatable         :: routput(:,:,:)
-
-        integer      :: i,j,k,f,g,h, xdim(2),ydim(2),zdim(2),ii,jj,kk
-        integer      :: nerrors,  ldim(3), cdim(3),lims(3,2),phys(3), cmat_shape(3)
-        real         :: nscale, rswap
-        complex      :: comp, cswap
-        integer      :: planType, plan,istat
-
-
-        ldim = self%ldim
-
-        cmat_shape = self%array_shape
-        cmat_shape(1) = size(self%cmat,1)
-        self%ft = .false.
-
-        ! allocate arrays on the host
-        !  if (allocated(routput))deallocate(routput)
-        if (allocated(cinout))deallocate(cinout)
-        !allocate(cin(cmat_shape(1),cmat_shape(2),cmat_shape(3)))
-        !cin = self%get_cmatfull()
-        !  allocate(routput(ldim(2),ldim(1),1))
-        allocate(cinout(ldim(1),ldim(2),ldim(3)),stat=istat)
-        if(alloc_stat.ne.0)call allocchk("In simple_image::ifft coutput",istat)
-        ! allocate arrays on the device
-        allocate(inplace_d(ldim(1),ldim(2),ldim(3)))
-
-        ! if(is_even(n))then
-        ! lowerbounds(1) = lbound(cin,1);lowerbounds(2) = lbound(cin,2);
-        ! upperbounds(1) = ubound(cin,1); upperbounds(2) = ubound(cin,2)
-        !     xbounds = (\ lbound(cin,1), ubound(cin,1) \) ! n/2
-        !     ybounds = (\ lbound(cin,2), ubound(cin,2) \) !  m/2
-        ! else
-        xdim = [ -(ldim(1)-1)/2 , ((ldim(1)-1)/2) - 1  ]
-        ydim = [ -(ldim(2)/2)   , (ldim(2)/2) - 1      ]
-        zdim = [ -(ldim(3)/2)   , (ldim(3)/2) - 1      ]
-        ! endif
-
-        DebugPrint "simple_image::ifft_pgi_cuda CIN    ", xdim, ydim, zdim, cmat_shape
-        DebugPrint "simple_image::ifft_pgi_cuda CINPUT ", shape(self%cmat)
-        cinout = cmplx(0.,0.)
-        lims = self%fit%loop_lims(2)
-        DebugPrint "simple_image::ifft_pgi_cuda CMAT LIMS ", lims
-        phys=1
-
-        !$omp parallel do collapse(2) default(shared) private(i,j,k,f,g,h,phys,comp)
-        do j=1,ldim(2)
-            do k=1,ldim(3)
-                g=ydim(1)+(j-1)
-                f=zdim(1)+(k-1)
-                phys=1
-                i=1
-                do h= xdim(1),-1
-                    phys(1) = -h + 1
-                    phys(2) = -g + 1 + MERGE(ldim(2),0, -g < 0)
-                    phys(3) = -f + 1 + MERGE(ldim(3),0, -f < 0)
-#ifdef _DEBUG
-                    if (phys(1) < 1 .or. phys(1) > cmat_shape(1) ) print *," CIN ind 1 err ", i, h, phys(1)
-                    if (phys(2)< 1 .or. phys(2) > cmat_shape(2)) print *," CIN ind 2 err ", j, g, phys(2)
-                    if (phys(3)< 1 .or. phys(3) > cmat_shape(3)) print *," CIN ind 3 err ", k,f, phys(3)
-
-                    if (i < 1 .or. i > ldim(1)) print *," CINOUT ind 1 err ", i, h
-                    if (j < 1 .or. j > ldim(2)) print *," CINOUT ind 2 err ", j, g
-                    if (k < 1 .or. k > ldim(3)) print *," CINOUT ind 3 err ", k, f
-#endif
-
-                    cinout(i,j,k) = conjg(self%cmat(phys(1),phys(2),phys(3)))
-                    i=i+1
-                end do
-                do h=0,xdim(2)
-                    phys(1) = h + 1
-                    phys(2) = g + 1 + MERGE(ldim(2),0, g < 0)
-                    phys(3) = f + 1 + MERGE(ldim(3),0, f < 0)
-#ifdef _DEBUG
-                    if (phys(1) < 1 .or. phys(1) > cmat_shape(1) ) print *," CIN ind 1 err ", i, h, phys(1)
-                    if (phys(2)< 1 .or. phys(2) > cmat_shape(2)) print *," CIN ind 2 err ", j, g, phys(2)
-                    if (phys(3)< 1 .or. phys(3) > cmat_shape(3)) print *," CIN ind 3 err ", k,f, phys(3)
-                    if (i < 1 .or. i > ldim(1)) print *," CINOUT ind 1 err ", i, h
-                    if (j < 1 .or. j > ldim(2)) print *," CINOUT ind 2 err ", j, g
-                    if (k < 1 .or. k > ldim(3)) print *," CINOUT ind 3 err ", k, f
-#endif
-                    cinout(i,j,k) = self%cmat(phys(1),phys(2),phys(3))
-                    i=i+1
-                enddo
-            end do
-        end do
-        !$omp end parallel do
-
-        ! copy input to device
-        inplace_d = cinout
-        ! Initialize the plan for complex to complex transform
-        call cufftPlan3D(plan,ldim(1),ldim(2),ldim(3),CUFFT_C2C)
-        ! Execute  Backward transform in place
-        call cufftExec(plan,CUFFT_C2C,inplace_d,inplace_d,CUFFT_INVERSE)
-        ! Copy results back to host
-        cinout = inplace_d
-
-        ! Save to image obj
-        !$omp parallel do collapse(3) default(shared) private(i,j,k,ii,jj,kk)
-        do k=1,ldim(3)
-            do j=1, ldim(2)
-                do i=1, ldim(1)
-                    jj = mod(j+(ldim(2)+1)/2,ldim(2))
-                    if(jj==0) jj = ldim(2)
-                    kk = mod(k+(ldim(3)+1)/2,ldim(3))
-                    if(kk==0) kk = ldim(3)
-                    ii = mod(i+(ldim(1)+1)/2,ldim(1))
-                    if(ii==0) ii = ldim(1)
-                    self%rmat(ii,jj,kk) = cabs(cinout(i,j,k))
-                end do
-            end do
-        end do
-        !$omp end parallel do
-
-        ! Release memory on the host and on the device
-        deallocate( cinout, inplace_d ,stat=alloc_stat)
-
-        ! Destroy the plans
-        call cufftDestroy(plan)
-        DebugPrint "In simple_image::ifft_pgi done "
-#endif
-    end subroutine ifft_pgi_cuda
-
     !> \brief dampens the central cross of a powerspectrum by median filtering
     subroutine dampen_central_cross( self )
         class(image), intent(inout) :: self
@@ -6864,7 +6631,7 @@ contains
             if( self_in%ft )then
                 self_out = cmplx(0.,0.)
                 !$ allocate(antialw(1), stat=alloc_stat)
-                !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pad PGI prealloc antialw",alloc_stat)
+                !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pad possible prealloc antialw",alloc_stat)
                 antialw = self_in%hannw()
                 lims = self_in%fit%loop_lims(2)
                 !$omp parallel do collapse(3) schedule(static) default(shared)&
@@ -7984,212 +7751,6 @@ contains
 
     end subroutine test_image
 
-    subroutine test_image_pgi_cuda( doplot )
-        logical, intent(in)  :: doplot
-        write(*,'(a)') '**info(simple_image PGI unit_test): testing square dimensions'
-        call test_image_pgi( 100, 100, 100, doplot )
-        write(*,'(a)') '**info(simple_image PGI unit_test): testing non-square dimensions'
-        ! call test_image_pgi( 120, 90, 80, doplot )
-        write(*,'(a)') 'SIMPLE_IMAGE_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-
-
-
-    contains
-
-
-
-        subroutine test_image_pgi( ld1, ld2, ld3, doplot )
-#ifdef PGI
-            use cudafor
-#endif
-            integer, intent(in)  :: ld1, ld2, ld3
-            logical, intent(in)  :: doplot
-            type(image)          :: img, img_2, img_3, img_4, img3d
-            integer              :: i, j, k, h, ldim(3), phys(3),lims(3,2)
-            real                 :: msk, ave
-            real, allocatable    :: pcavec1(:), pcavec2(:)
-            real                 :: smpd=2.
-            logical              :: passed
-
-
-            verbose=.true.
-            debug=.true.
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 1): testing basal constructors'
-
-            call img%new([ld1,ld2,1], 1.)
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 1):'
-            call img_3%new([ld1,ld2,1], 1.)
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 1):'
-            call img3d%new([ld1,ld2,1], 1.)
-            call img_4%new([ld1,ld2,1], 1.)
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 1):'
-            if( .not. img%exists() ) call simple_stop('ERROR, in constructor or in exists function, 1')
-            if( .not. img3d%exists() ) call simple_stop('ERROR, in constructor or in exists function, 2')
-
-            write(*,'(a)') '**info(simple_image_PGI unit_test, PGI CUFFT 2): testing CUFFT and FFTW3'
-            passed = .false.
-            ldim = [ld1,ld2,1]
-            call img%new(ldim, smpd)
-            call img_2%new(ldim, smpd)
-            call img_3%new(ldim, smpd)
-            call img_4%new(ldim, smpd)
-            img%cmat=cmplx(0.,0.)
-            img%rmat=1.0
-            call img%gauimg(10)
-            call gnufor_image(log10(img%rmat(:ldim(1),:ldim(2),1)), palette='gray')
-            call gnufor_image(log10(img%rmat(:,:,1)), palette='gray')
-            i=1;j=1
-            lims = img%fit%loop_lims(2)
-            print *, "Rmat ", img%ldim, img%array_shape
-            print *, "Rmat size", size(img%rmat,1),  size(img%rmat,2),  size(img%rmat,3)
-            print *, "Loop lims ", lims
-            do h = lims(1,1),lims(1,2)
-                j=1
-                do k = lims(2,1),lims(2,2)
-                    phys = img%comp_addr_phys([h,k,0])
-                    img%cmat(phys(1),phys(2),phys(3)) = cmplx(img%rmat(i,j,1), real(i*j)/100.)
-                    j=j+1
-                end do
-                i=i+1
-            end do
-            call gnufor_image(log10(real(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')                               ! Show img
-            call gnufor_image(log10(aimag(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')
-            call gnufor_image(real(img%cmat(:,:,1)), palette='gray')                               ! Show img
-            call gnufor_image(aimag(img%cmat(:,:,1)), palette='gray')
-            write(*,'(a)') '**info(simple_image PGI test): testing fftw3 '
-            read *
-            call img%fft()
-
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): PGI FFT completed '
-            call gnufor_image(log10(real(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')                               ! Show img
-            call gnufor_image(log10(aimag(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')
-            call gnufor_image(log10(cabs(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1))), palette='gray')                               ! Show img
-            call gnufor_image(log10(atan2(real(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1)),&
-                &aimag(img%cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),1)))), palette='gray')
-
-            call gnufor_image(real(img%cmat(:,:,1)), palette='gray')                               ! Show img
-            call gnufor_image(aimag(img%cmat(:,:,1)), palette='gray')                               ! Show img
-
-            call img%gauimg(10)
-            call img%add_gauran(1.)
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): Noisy image'
-            !                call img_2%gauimg(10)
-            !                call img_2%add_gauimg(15)
-            !                if(doplot)call img_2%vis                               ! Show img_2
-            img_2 = img
-            ave = (img.lonesum.img_2)
-            print *," L1 norm sum of img copy [must be zero]", ave
-
-            !  call img_2%ifftshift3r()
-            !                if(doplot)call img_2%vis()                             ! Show img_2
-            !                if(doplot)call img%vis                                 ! Show img
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): ifftshift3r prior to fft [PGI]'
-            print *,'Press enter to run PGI R=>C FFT'
-            read(*,*)
-            call img_2%fft_pgi_cuda()
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 2): PGI FFT completed '
-            !img_4 = img_2
-            call gnufor_image(real(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
-            call gnufor_image(aimag(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
-            print *,'Press enter to run FFTW3 FFT'
-            read(*,*)
-
-
-            print *,'Press enter to show PGI amplitude of cmat'
-            read *
-            call img_2%ft2img('amp',img_4)
-            if(doplot)call img_4%vis(geomorsphr=.false.)
-
-
-            !  call img_2%fftshift3c()
-            print *,'Press enter to show 2nd FFTSHIFT complex images'
-            read *
-
-            call gnufor_image(real(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
-            call gnufor_image(aimag(img_2%cmat(:,:,1)), palette='gray')                               ! Show img_2
-
-            ! call img_2%ft2img('amp',img_4)
-            ! if(doplot)call img_4%vis(geomorsphr=.false.)
-
-
-            !    call img%ft2img('amp',img_3)
-            !   if(doplot)call img_3%vis(geomorsphr=.false.)
-            print *," L1 norm FFTW and CUFFT ", img.lonesum.img_2
-
-
-            print *," PGI ", real(img_2%cmat(:,1,1))
-            print *," FFTW ", real(img%cmat(:,1,1))
-
-            ! write(*,'(a)') '**info(simple_image PGI test): testing subtracting CUFFT and FFTW3 '
-            ! read *
-            ! call img%subtr(img_2)
-            ! call img%ft2img('amp',img_3)
-            ! if(doplot)call img_3%vis(geomorsphr=.false.)
-            ! write(*,'(a)') '**info(simple_image PGI test): testing difference '
-
-            ! call img%add(img_2)
-            ! read(*,*)
-            ! VerbosePrint "In Image::fft_pgi testing "
-            ! do i=1,ldim(1)
-            !     do j=1,ldim(2)
-            !         do k=1,ldim(3)
-            !             if (abs(cabs(img%cmat(ldim(1)-i+1,j,k)) - cabs(img_2%cmat(i,j,k))) >= TINY )then
-            !                 print *,'wrong FFT i/j/k fftw cufft', i,j,k,real(img%cmat(i,j,k)) ,&
-            !                     &aimag(img%cmat(i,j,k)) , real( img_2%cmat(i,j,k)), aimag( img_2%cmat(i,j,k))
-            !                 call simple_stop("image FFT inverse PGI test  stopped")
-            !             end if
-            !         end do
-            !     end do
-            ! end do
-            print *,'Press enter to execute FFTW inverse FFT'
-            read *
-            call img%bwd_ft()
-            print *,'Press enter to execute CUFFT inverse FFT'
-            read *
-            call img_2%ifft_pgi_cuda()
-
-            call gnufor_image(img%rmat(:,:,1), palette='gray')                               ! Show img_2
-            call gnufor_image(img_2%rmat(:,:,1), palette='gray')
-            print *," L1 norm FFTW and CUFFT ", img.lonesum.img_2
-            print *,'Press enter to compare FFTW vs FFT'
-            read *
-
-            do i=1,ldim(1)
-                VerbosePrint "In Image::ifft testing ",i
-                do j=1,ldim(2),2
-                    do k=1,ldim(3)
-                        if (abs( img%rmat(i,j,k) - img_2%rmat(i,j,k)) >= 1.e-06 )then
-                            print *,'wrong FFT i/j/k fftw /cufft', i,j,k,img%rmat(i,j,k) , img_2%rmat(i,j,k)
-                            call simple_stop("image FFT PGI test stopped")
-                        end if
-                    end do
-
-                end do
-            end do
-            VerbosePrint "In Image::ifft testing done"
-
-
-            write(*,'(a)') '**info(simple_image_unit_test, part 7): testing fftshift'
-            if( allocated(pcavec1) ) deallocate(pcavec1)
-            if( allocated(pcavec2) ) deallocate(pcavec2)
-            passed = .false.
-            msk=50
-            call img%gauimg(10)
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 2):'
-            if( doplot ) call img%vis
-            write(*,'(a)') '**info(simple_image PGI unit_test, part 2):'
-            call img%serialize(pcavec1, msk)
-            call img%shift([-9.345,-5.786,0.])
-            if( doplot ) call img%vis
-            call img%shift([9.345,5.786,0.])
-            call img%serialize(pcavec2, msk)
-            if( doplot ) call img%vis
-            if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-            if( .not. passed )  call simple_stop('origin shift test failed')
-
-        end subroutine test_image_pgi
-
-    end subroutine test_image_pgi_cuda
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -8203,5 +7764,9 @@ contains
             self%existence = .false.
         endif
     end subroutine kill
+
+#ifdef PGI
+    include 'pgi_image_fft.finc'
+#endif
 
 end module simple_image

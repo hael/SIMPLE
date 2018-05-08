@@ -8,7 +8,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base
-use simple_binoris_io,     only: binwrite_oritab,binread_nlines, binread_oritab
+use simple_binoris_io,     only: binwrite_oritab, binread_nlines, binread_oritab
 implicit none
 
 public :: cluster_oris_commander

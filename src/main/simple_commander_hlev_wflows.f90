@@ -203,10 +203,9 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-         use simple_commander_distr_wflows, only: prime3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
-         !use simple_commander_distr
-        use simple_oris,                  only: oris
-        use simple_commander_volops,  only: reproject_commander
+        use simple_commander_distr_wflows, only: prime3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
+        use simple_oris,                   only: oris
+        use simple_commander_volops,       only: reproject_commander
         use simple_commander_rec,     only: reconstruct3D_commander
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -532,7 +531,6 @@ contains
         type(sp_project)              :: spproj, spproj_states
         class(oris), pointer          :: os => null(), os_states => null()
         character(len=STDLEN)         :: oritab, str_state
-        character(len=:), allocatable :: recname, rhoname, part_str
         real                          :: trs
         integer                       :: state, iter, n_incl, startit
         integer                       :: rename_stat

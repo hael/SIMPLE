@@ -2,7 +2,11 @@
 module simple_polarft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+!include 'simple_lib.f08'
+use simple_defs
+use simple_error, only: simple_stop, allocchk
+use simple_math
+use simple_strings, only: int2str_pad
 use simple_fftw3
 implicit none
 
@@ -174,7 +178,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_resnorm_grad_for_rot_8
     procedure          :: gencorr_resnorm_grad_only_for_rot_8
     procedure, private :: genfrc
-    procedure, private :: calc_frc
+    procedure          :: calc_frc
     procedure          :: specscore
     procedure          :: fit_bfac
     ! DESTRUCTOR
