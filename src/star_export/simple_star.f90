@@ -9,12 +9,15 @@ implicit none
 
 type starfile
 contains
-    procedure :: export_motion_correct
-    procedure :: import_motion_correct
+    procedure :: export_micrographs
+    procedure :: import_micrographs
+    procedure :: export_motion_corrected_micrographs
+    procedure :: import_motion_corrected_micrographs
     procedure :: export_ctf_estimation
     procedure :: import_ctf_estimation
     procedure :: export_autopick
     procedure :: import_autopick
+
     procedure :: export_extract_doseweightedptcls
     procedure :: import_extract_doseweightedptcls
     procedure :: export_class2D
@@ -25,10 +28,23 @@ contains
     procedure :: import_class3D
     procedure :: export_shiny3D
     procedure :: import_shiny3D
+
+
 end type starfile
 
-
 contains
+
+    !
+    subroutine export_micrographs (self, p, filename)
+        class(starfile), intent(inout) :: self
+        type(params), intent(inout) :: p
+        character(len=*), intent(in) :: filename
+    end subroutine export_micrographs
+    subroutine import_micrographs (self, p, filename)
+        class(starfile), intent(inout) :: self
+        type(params), intent(inout) :: p
+        character(len=*), intent(in) :: filename
+    end subroutine import_micrographs
 
 !! Motion Correct: Simple/Unblur/MotionCorr2
 !! Format of Motion Correct Starfile File:
@@ -37,15 +53,18 @@ contains
 !! _rlnMicrographNameNoDW #1
 !! _rlnMicrographName #2
 !! [#1 MotionCorr/job026/Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729_noDW.mrc] [#2 MotionCorr/job026/ Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729.mrc]
-!! ...
-subroutine export_motion_correct (self, arg)
+    !! ...
+
+subroutine export_motion_corrected_micrographs (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
-end subroutine export_motion_correct
-subroutine import_motion_correct (self, arg)
+    type(params), intent(inout) :: p
+    character(len=*), intent(in) :: filename
+end subroutine export_motion_corrected_micrographs
+subroutine import_motion_corrected_micrographs (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
-end subroutine import_motion_correct
+    type(params), intent(inout) :: p
+    character(len=*), intent(in) :: filename
+end subroutine import_motion_corrected_micrographs
 
 !! CTF Estimation: Simple/GCTF/CTFFIND4
 !! Format of CTF estimation Star file:
@@ -64,13 +83,15 @@ end subroutine import_motion_correct
 !! _rlnDetectorPixelSize #11
 !! _rlnCtfFigureOfMerit #12
 !! [noDW filename #1] [ctf filename #2] ... [#12]
-subroutine export_ctf_estimation (self, arg)
+subroutine export_ctf_estimation (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_ctf_estimation
-subroutine import_ctf_estimation (self, arg)
+subroutine import_ctf_estimation (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_ctf_estimation
 
 
@@ -84,13 +105,15 @@ end subroutine import_ctf_estimation
 !! _rlnAutopickFigureOfMerit #4
 !! _rlnAnglePsi #5
 !!  1219.364633   233.878135            1     1.523455     0.000000
-subroutine export_autopick (self, arg)
+subroutine export_autopick (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_autopick
-subroutine import_autopick (self, arg)
+subroutine import_autopick (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_autopick
 
 
@@ -128,13 +151,15 @@ end subroutine import_autopick
 !! _rlnNrOfSignificantSamples #28
 !! _rlnGroupName #29
 !!  [#1] ... [#6 filename] [#7 filename] ... [#29]
-subroutine export_extract_doseweightedptcls (self, arg)
+subroutine export_extract_doseweightedptcls (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_extract_doseweightedptcls
-subroutine import_extract_doseweightedptcls (self, arg)
+subroutine import_extract_doseweightedptcls (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_extract_doseweightedptcls
 
 
@@ -175,13 +200,15 @@ end subroutine import_extract_doseweightedptcls
 !! _rlnAverageNrOfFrames #31
 !! _rlnMovieFramesRunningAverage #32
 !! [#1 MC filename] ... [#15 Polish filename] .. [#29 Extract filename] ..
-subroutine export_class2D (self, arg)
+subroutine export_class2D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_class2D
-subroutine import_class2D (self, arg)
+subroutine import_class2D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_class2D
 
 !! Class 2D select
@@ -216,13 +243,15 @@ end subroutine import_class2D
 !! _rlnNrOfSignificantSamples #26
 !! _rlnGroupName #28                                    <-- Possible index error
 !! [#1 MC filename] ... [#15 Polish filename] .. [#27]
-subroutine export_class2D_select (self, arg)
+subroutine export_class2D_select (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_class2D_select
-subroutine import_class2D_select (self, arg)
+subroutine import_class2D_select (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_class2D_select
 
 !! Class3D
@@ -308,13 +337,15 @@ end subroutine import_class2D_select
 !!                                                                                                            /x4
 !!
 !!
-subroutine export_class3D (self, arg)
+subroutine export_class3D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_class3D
-subroutine import_class3D (self, arg)
+subroutine import_class3D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_class3D
 
 
@@ -354,13 +385,15 @@ end subroutine import_class3D
 !! _rlnGroupName #27
 !! _rlnRandomSubset #28
 !! [#1 MC filename] ... [#15 Extract filename] .. [#28]
-subroutine export_refine3D (self, arg)
+subroutine export_refine3D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_refine3D
-subroutine import_refine3D (self, arg)
+subroutine import_refine3D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_refine3D
 
 
@@ -403,13 +436,15 @@ end subroutine import_refine3D
 !! _rlnAverageNrOfFrames #31
 !! _rlnMovieFramesRunningAverage #32
 !! [#1 MC filename] ... [#15 Polish filename] ..[#29 Extract filename] [#32]
-subroutine export_shiny3D (self, arg)
+subroutine export_shiny3D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine export_shiny3D
-subroutine import_shiny3D (self, arg)
+subroutine import_shiny3D (self, p, filename)
     class(starfile), intent(inout) :: self
-    real, intent(in) :: arg
+    type(params), intent(inout) :: p
+    character(len=*), intent(inout) :: filename
 end subroutine import_shiny3D
 
 

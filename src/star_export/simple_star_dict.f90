@@ -53,12 +53,47 @@ contains
         self%keywords_general = chash()
         call self%keywords_general%new(33)
         call self%keywords_general%push('AmplitudeContrast',                 'fraca')   !!cmd_dict/params::fraca
+        !Euler angle definitions are according to the Heymann, Chagoyen and Belnap (2005) standard:
+        ! The first rotation is denoted by phi or rot and is around the Z-axis.
+        ! The second rotation is called theta or tilt and is around the new Y-axis.
+        ! The third rotation is denoted by psi and is around the new Z axis
         call self%keywords_general%push('AnglePsi',                          'e3')   !! imghead: gamma or psi2
         call self%keywords_general%push('AngleRot',                          'e1')   !! imghead: theta
         call self%keywords_general%push('AngleTilt',                         'e2')     !! imghead phi
+
         call self%keywords_general%push('AutopickFigureOfMerit',             '?')    !!
         call self%keywords_general%push('AverageNrOfFrames',                 '?')    !!
         call self%keywords_general%push('ClassNumber',                       '?')    !!
+
+        !  Symmetry libraries have been copied from XMIPP. As such, with the exception of tetrahedral symmetry, they
+        !  comply with the Heymann, Chagoyen and Belnap (2005) standard:
+
+        ! Symmetry Group     Notation    Origin                       Orientation
+        ! Asymmetric          C1         User-defined                  User-defined
+        ! Cyclic              C<n>       On symm axis, Z user-defined  Symm axis on Z
+        ! Dihedral            D<n>       Intersection of symm axes     principle symm axis on Z, 2-fold on X
+        ! Tetrahedral         T          Intersection of symm axes     3-fold axis on Z (deviating from Heymann et al!)
+        ! Octahedral          O          Intersection of symm axes     4-fold axes on X, Y, Z
+        ! Icosahedral         I<n>       Intersection of symm axes     ++
+        ! ++ Multiple settings of the icosahedral symmetry group have been implemented:
+
+        ! I1: No-crowther 222 setting (=standard in Heymann et al): 2-fold axes on X,Y,Z. With the positive Z pointing
+        ! at the viewer, the front-most 5-fold vertices are in YZ plane, and the front-most 3-fold axes are in the XZ
+        ! plane.
+
+        ! I2: Crowther 222 setting: 2-fold axes on X,Y,Z. With the positive Z pointing at the viewer, the front-most
+        ! 5-fold vertices are in XZ plane, and the front-most 3-fold axes are in the YZ plane.
+
+        ! I3: 52-setting (as in SPIDER?): 5-fold axis on Z and 2-fold on Y. With the positive Z pointing at the viewer
+        ! and without taken into account the 5-fold vertex in Z, there is one of the front-most 5-fold vertices in -XZ
+        ! plane
+
+        ! I4: Alternative 52 setting: with the positive Z pointing at the viewer and without taken into account the
+        ! 5-fold vertices in Z, there is one of the front-most 5-fold vertices in +XZ plane.
+
+        ! In case of doubt, a list of all employed symmetry operators may be printed to screen using the command (for
+        ! example for the D7 group): reline_refine --sym D7 --print_symmetry_ops.
+
         call self%keywords_general%push('CoordinateX',                       'x')    !!  imghead
         call self%keywords_general%push('CoordinateY',                       'y')    !!  imghead
         call self%keywords_general%push('CtfBfactor',                        '?')     !! cmd_dict
