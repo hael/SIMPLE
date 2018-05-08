@@ -1527,6 +1527,10 @@ contains
                     call self%os_ptcl2D%set(pind, 'state', rstate)
                     ! set 3D orientation in self%os_ptcl3D
                     call self%os_ptcl3D%set_ori(pind, ori_comp)
+                    ! set proj/state/corr
+                    call self%os_ptcl3D%set(pind, 'proj',  rproj)
+                    call self%os_ptcl3D%set(pind, 'state', rstate)
+                    call self%os_ptcl3D%set(pind, 'corr',  corr)
                 end do
                 deallocate(particles)
             endif

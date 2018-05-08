@@ -796,16 +796,19 @@ contains
         call o_out%set('y',y)
         euls(3) = e3
         call o_out%set_euler(euls)
-    contains
+
+        contains
+
             !>  extracts in-plane parameters from transformation matrix
-        subroutine transfmat2inpls( R, psi, tx, ty )
-            real,intent(inout) :: psi,tx,ty
-            real,intent(in)    :: R(3,3)
-            psi = rad2deg( myacos( R(1,1) ))
-            if( R(1,2)<0. )psi=360.-psi
-            tx  = R(1,3)
-            ty  = R(2,3)
-        end subroutine transfmat2inpls
+            subroutine transfmat2inpls( R, psi, tx, ty )
+                real,intent(inout) :: psi,tx,ty
+                real,intent(in)    :: R(3,3)
+                psi = rad2deg( myacos( R(1,1) ))
+                if( R(1,2)<0. )psi=360.-psi
+                tx  = R(1,3)
+                ty  = R(2,3)
+            end subroutine transfmat2inpls
+
     end subroutine compose3d2d
 
     subroutine map3dshift22d( self, sh3d )

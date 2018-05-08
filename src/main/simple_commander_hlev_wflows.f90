@@ -194,7 +194,6 @@ contains
         call cline_rank_cavgs%set('projfile', trim(p_master%projfile))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
-        call cline_rank_cavgs%printline
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
         call del_file('start2Drefs'//p_master%ext)
