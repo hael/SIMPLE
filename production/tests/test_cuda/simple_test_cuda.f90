@@ -11,22 +11,30 @@
 
 !
 ! REVISION HISTORY:
-! 06 Oct 2017 - Initial Version
-
+! 06 Oct 2017 - Initial Version -- PGI
+! 07 May 2018 - FortCUDA implementaiton
 !------------------------------------------------------------------------------
 program simple_test_cuda
     include 'simple_lib.f08'
     use simple_image,            only: image
     use gnufor2
-    use simple_cuda_tests
+
+    use simple_cuda
+
+    call check_cuda_device
+    call test_FortCUDA_kernels(0.)
+
+
 #if defined(PGI)
+    use simple_cuda_tests
+
     use simple_timer_cuda
     use cudafor
     implicit none
     type (cudaDeviceProp) :: prop
     type (timer_cuda) :: ctimer
     type (cudaEvent)  :: ev1,ev2
-#endif
+
     integer :: i, ierr,istat, cuVer, cuMem, cuFree,n
     real, allocatable :: x(:),y(:),y1(:)
     logical :: errflag
@@ -36,7 +44,7 @@ program simple_test_cuda
     n=10
     allocate(x(n),y(n),y1(n))
 
-#if defined(PGI)
+
     write (*,'(A)') 'TESTING CUDAFOR INTERFACE'
     call cuda_query_version
     call cuda_query_devices
@@ -51,7 +59,7 @@ program simple_test_cuda
     call test_cuda_precision(errflag)
     call test_acc(errflag)
 
-#endif
+
 
 
 
@@ -66,6 +74,9 @@ program simple_test_cuda
     write (*,'(A)') 'SIMPLE_CUDA timer CPU/CUDA', toc(t1), ctimer%tocU(ev1), ctimer%tocU(ev2)
     call simple_cuda_stop("In simple_image::fft post fft sync ",__FILENAME__,__LINE__)
 #endif
+#endif
+
+
 
 
 end program simple_test_cuda
