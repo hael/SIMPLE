@@ -75,7 +75,7 @@ file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOP
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
   "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
- #  ${COMMANER_STD_src}
+  # ${COMMANER_STD_src}
   # ${COMMANER_HLEV_src}
   # ${COMMANER_STREAM_src}
   # ${COMMANER_DISTR_src}
@@ -109,7 +109,7 @@ endif()
     #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_rec.f90"
     #   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_pftcc_shsrch.f90"
     #   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_vol_shsrch.f90"
-# )
+   # )
 
 add_custom_target(simple_modules
   COMMAND  rm -f ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90\;  (echo module simple_modules \; for file in  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STAR_src} ${IMG_src} ${OPERATORS_src} ${MAIN_src} ${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_base.f90 \; do    if  \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;    fi\;  done \;  echo contains\;  echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90

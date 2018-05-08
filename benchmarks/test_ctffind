@@ -8,10 +8,12 @@ if [ ! -d "${SIMPLE_TESTBENCH_DATA}" ]; then
     echo "SIMPLE_TESTBENCH_DATA variable is not a directory."; exit 1
 fi
 
-if [ ! -d "${SIMPLE_TESTBENCH_DATA}/bgal" ]; then
+if [ ! -d "${SIMPLE_TESTBENCH_DATA}/ctffit" ]; then
     echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
 fi
-cd ${SIMPLE_TESTBENCH_DATA}/bgal
-[ -d ctffind_bench ] && rm -rf ctffind_bench
-mkdir ctffind_bench && cd ctffind_bench
-nohup simple_distr_exec prg=ctffind filetab=../filetab.txt smpd=1.275 cs=2.7 kv=300 fraca=0.1 nthr=1 nparts=96 > CTFFIND &
+cd ${SIMPLE_TESTBENCH_DATA}/ctffit
+[ -d ctf_bench ] && rm -rf ctf_bench
+mkdir ctf_bench && cd ctf_bench
+# nohup simple_distr_exec prg=ctffind filetab=../filetab.txt smpd=1.275 cs=2.7 kv=300 fraca=0.1 nthr=1 nparts=96 > CTFFIND &
+simple_private_exec prg=import_particles ctf=yes cs=2.7 kv=300 fraca=0.1 plaintexttab=../filetab.txt smpd=1.275 nparts=96 projfile=ctf.simple
+nohup simple_distr_exec prg=ctf_estimate  projfile=ctf.simple pspecsz=512  phaseplate=yes dfmin=0.0005 dfmax=0.05 nthr=8

@@ -48,8 +48,8 @@ contains
     procedure, private                               :: save_jpeg_r4
     procedure, private                               :: save_jpeg_i4
     generic                                          :: writeJpg  => save_jpeg_r4_3D, save_jpeg_r4, save_jpeg_i4
-    procedure, private                                        :: load_jpeg_r4
-    procedure, private                                        :: load_jpeg_i4
+    procedure, private                               :: load_jpeg_r4
+    procedure, private                               :: load_jpeg_i4
     generic                                          :: loadJpg  => load_jpeg_r4, load_jpeg_i4
 
 end type jpg_img
@@ -281,7 +281,6 @@ contains
                 if  (self%colorspace == 3) then
                     c=3
                     pixel = NINT( (2**24) * (in_buffer(i+1,j+1)-lo)/(hi-lo),kind=4)
-
                     self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , z'000000ff') ,kind=c_char)
                     self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
