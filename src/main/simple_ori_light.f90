@@ -4,15 +4,18 @@ module simple_ori_light
     use simple_defs
     implicit none
 
-    interface euler2m
-        module procedure euler2m_sp
-        module procedure euler2m_dp
-    end interface euler2m
+    private
+    public :: ori_light
     
-    interface euler2dm
-        module procedure euler2dm_sp
-        module procedure euler2dm_dp
-    end interface euler2dm
+    type :: ori_light
+    contains
+        procedure, nopass, private :: euler2dm_sp
+        procedure, nopass, private :: euler2dm_dp
+        generic :: euler2dm => euler2dm_sp, euler2dm_dp
+        procedure, nopass, private :: euler2m_sp
+        procedure, nopass, private :: euler2m_dp
+        generic :: euler2m => euler2m_sp, euler2m_dp        
+    end type ori_light
     
 contains
      
