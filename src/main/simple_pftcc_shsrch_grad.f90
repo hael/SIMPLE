@@ -182,7 +182,6 @@ contains
             lowest_rot          = self%cur_inpl_idx
             lowest_shift        = self%ospec%x
         endif
-
         if( found_better )then
             irot    =   lowest_rot           ! in-plane index
             cxy(1)  = - lowest_cost_overall  ! correlation

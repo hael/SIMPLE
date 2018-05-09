@@ -64,7 +64,7 @@ contains
         type(sym)             :: c1_symop
         type(prep4cgrid)      :: gridprep
         type(ctfparams)       :: ctfvars
-        real    :: frac_srch_space, reslim, extr_thresh, corr_thresh
+        real    :: frac_srch_space, extr_thresh, corr_thresh
         real    :: bfac_rec, specscore_avg
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
         integer :: batchlims(2)
@@ -88,10 +88,6 @@ contains
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )
-
-        ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
-        reslim   = p%lp
-        if( DEBUG ) print *, '*** strategy3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(p%refine)
@@ -360,7 +356,7 @@ contains
         end do
         ! normalise structure factors
         if( p%eo .ne. 'no' )then
-            call eonorm_struct_facts(b, p, cline, reslim, which_iter)
+            call eonorm_struct_facts(b, p, cline, which_iter)
         else
             call norm_struct_facts(b, p, which_iter)
         endif

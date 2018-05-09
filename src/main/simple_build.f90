@@ -1,7 +1,6 @@
 ! centralised builder (the main object constructor in SIMPLE)
 module simple_build
 include 'simple_lib.f08'
-!!import classes
 use simple_cmdline,          only: cmdline
 use simple_params,           only: params
 use simple_comlin,           only: comlin
@@ -16,7 +15,6 @@ use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
-!use simple_user_interface,   only: simple_program ! use all in there
 implicit none
 
 public :: build
@@ -205,7 +203,10 @@ contains
         call self%e%spiral( p%nsym, p%eullims )
         call self%e_bal%new_clean(NSPACE_BALANCE)
         call self%e_bal%spiral( p%nsym, p%eullims )
-        self%grid_projs = self%e%create_proj_subspace(NPDIRS_SUBSPACE, p%nsym, p%eullims )
+        ! create angular subspace
+        self%grid_projs = self%e%create_proj_subspace(NPDIRS_SUBSPACE, p%nsym, p%eullims)
+        ! store angular resolution of search space (ares)
+        p%ares = self%e%find_angres()
         DebugPrint 'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects
@@ -230,7 +231,6 @@ contains
             DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
             lfny       = self%img%get_lfny(1)
-!            lfny_match = self%img_match%get_lfny(1)
             cyc_lims   = self%img_pad%loop_lims(3)
             allocate( self%fsc(p%nstates,lfny), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk("In: build_general_tbox; simple_build, 1", alloc_stat)

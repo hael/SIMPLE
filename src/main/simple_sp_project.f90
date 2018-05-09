@@ -676,7 +676,7 @@ contains
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
-        class(oris), optional, intent(inout) :: os   ! parameters associated with stk
+        class(oris), optional, intent(inout) :: os      ! parameters associated with stk
         integer :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()

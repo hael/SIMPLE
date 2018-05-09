@@ -31,7 +31,6 @@ contains
         type(prep4cgrid) :: gridprep
         type(ctfparams)  :: ctfvars
         integer          :: iptcl
-        real             :: reslim
         t_init = tic()
         t_tot  = t_init
         ! make the gridding prepper
@@ -52,7 +51,7 @@ contains
         rt_rec = toc(t_rec)
         ! normalise structure factors
         t_norm = tic()
-        call eonorm_struct_facts(b, p, cline, reslim)
+        call eonorm_struct_facts(b, p, cline)
         rt_norm = toc(t_norm)
         ! recvols % gridprep not needed anymore
         call killrecvols(b, p)
@@ -84,7 +83,6 @@ contains
         type(prep4cgrid)         :: gridprep
         type(ctfparams)          :: ctfvars
         integer                  :: iptcl, i, iptcl_batch, batchlims(2), ibatch
-        real                     :: reslim
         type(image), allocatable :: rec_imgs(:)
         t_init = tic()
         t_tot  = t_init
@@ -132,7 +130,7 @@ contains
         rt_rec = toc(t_rec)
         ! normalise structure factors
         t_norm = tic()
-        call eonorm_struct_facts(b, p, cline, reslim)
+        call eonorm_struct_facts(b, p, cline)
         rt_norm = toc(t_norm)
         ! destruct
         call killrecvols(b, p)

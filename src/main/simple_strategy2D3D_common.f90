@@ -837,12 +837,11 @@ contains
         call b%vol%kill
     end subroutine norm_struct_facts
 
-    subroutine eonorm_struct_facts( b, p, cline, res, which_iter )
+    subroutine eonorm_struct_facts( b, p, cline, which_iter )
         use simple_filterer, only: gen_anisotropic_optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
-        real,              intent(inout) :: res
         integer, optional, intent(in)    :: which_iter
         integer               :: s, find4eoavg
         real                  :: res05s(p%nstates), res0143s(p%nstates)
@@ -912,8 +911,7 @@ contains
         end do
         if( .not. p%l_distr_exec )then
             ! set the resolution limit according to the worst resolved model
-            res  = maxval(res0143s)
-            p%lp = min(p%lp,max(p%lpstop,res))
+            p%lp = min(p%lp,max(p%lpstop,maxval(res0143s)))
         endif
         call b%vol%kill
         call b%vol2%kill

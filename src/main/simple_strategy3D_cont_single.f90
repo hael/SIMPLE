@@ -33,18 +33,9 @@ contains
         class(strategy3D_cont_single), intent(inout) :: self
         class(strategy3D_spec),        intent(inout) :: spec
         integer,                       intent(in)    :: npeaks
-        integer, parameter :: MAXITS = 60
-        real :: lims(4,2), lims_init(4,2)
-        call self%s%new( spec, npeaks )
-        self%spec        = spec
-        lims(1:2,:)      = spec%pp%eullims(1:2,:)
-        lims(3:4,1)      = -spec%pp%trs
-        lims(3:4,2)      =  spec%pp%trs
-        lims_init        = lims
-        lims_init(3:4,1) = -SHC_INPL_TRSHWDTH
-        lims_init(3:4,2) =  SHC_INPL_TRSHWDTH
-        call self%cont_srch%new(spec%ppftcc, spec%pb, lims,&
-        &lims_init=lims_init, shbarrier=spec%pp%shbarrier, maxits=MAXITS)
+        call self%s%new(spec, npeaks)
+        self%spec = spec
+        call self%cont_srch%new(spec%ppftcc, spec%pb, spec%pp)
     end subroutine new_cont_single
 
     subroutine srch_cont_single( self )
@@ -56,7 +47,7 @@ contains
             call self%s%prep4srch()
             call self%cont_srch%set_particle(self%s%iptcl)
             self%o    = self%s%a_ptr%get_ori(self%s%iptcl)
-            cxy       = self%cont_srch%minimize(self%o, self%irot)
+            cxy       = self%cont_srch%minimize(self%o, self%spec%pp%ares, self%irot)
             self%corr = cxy(1)
             ! prepare weights and orientations
             call self%oris_assign

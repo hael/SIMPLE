@@ -3049,8 +3049,8 @@ contains
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
         class(oris), intent(in) :: self
-        real                    :: dists(self%n), res, x
-        integer                 :: i, j
+        real    :: dists(self%n), res, x
+        integer :: i, j
         res = 0.
         do j=1,self%n
             do i=1,self%n
@@ -3061,7 +3061,7 @@ contains
                 endif
             end do
             call hpsort(dists)
-            res = res+sum(dists(:3))/3. ! average of three nearest neighbors
+            res = res + sum(dists(:3))/3. ! average of three nearest neighbors
         end do
         res = rad2deg(res/real(self%n))
     end function find_angres

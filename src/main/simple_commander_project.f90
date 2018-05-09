@@ -31,27 +31,22 @@ type, extends(commander_base) :: print_project_info_commander
   contains
     procedure :: execute      => exec_print_project_info
 end type print_project_info_commander
-
 type, extends(commander_base) :: new_project_commander
   contains
     procedure :: execute      => exec_new_project
 end type new_project_commander
-
 type, extends(commander_base) :: update_project_commander
   contains
     procedure :: execute      => exec_update_project
 end type update_project_commander
-
 type, extends(commander_base) :: import_movies_commander
   contains
     procedure :: execute      => exec_import_movies
 end type import_movies_commander
-
 type, extends(commander_base) :: import_particles_commander
   contains
     procedure :: execute      => exec_import_particles
 end type import_particles_commander
-
 type, extends(commander_base) :: import_cavgs_commander
   contains
     procedure :: execute      => exec_import_cavgs
@@ -458,7 +453,14 @@ contains
         endif
         ! UPDATE FIELDS
         ! add stack if present
-        if( cline%defined('stk') ) call spproj%add_single_stk(p%stk, ctfvars, os)
+        if( cline%defined('stk') )then
+            if( n_ori_inputs == 0 .and. trim(p%ctf) .eq. 'no' )then
+                call os%new_clean(p%nptcls)
+                call os%set_all2single('state', 1.0)
+                call spproj%add_single_stk(p%stk, ctfvars, os)
+            endif
+            call spproj%add_single_stk(p%stk, ctfvars, os)
+        endif
         ! add list of stacks (stktab) if present
         if( cline%defined('stktab') ) call spproj%add_stktab(p%stktab, os)
         ! WRITE PROJECT FILE
