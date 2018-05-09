@@ -8,6 +8,7 @@ include 'simple_lib.f08'
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_ori,        only: ori
+use simple_ori_light,  only: ori_light
 use simple_oris,       only: oris
 implicit none
 
@@ -36,7 +37,11 @@ type, extends(image) :: projector
     procedure :: fproject
     procedure :: fproject_serial
     procedure :: fproject_polar
+    procedure :: dfproject_polar
+    procedure :: fdf_project_polar
     procedure :: interp_fcomp
+    procedure :: dinterp_fcomp
+    procedure :: fdf_interp_fcomp
     ! DESTRUCTOR
     procedure :: kill_expanded
 end type projector
@@ -201,6 +206,49 @@ contains
         end do
     end subroutine fproject_polar
 
+    !> \brief  extracts a polar FT from a volume's expanded FT (self)
+    subroutine dfproject_polar( self, euls, pftcc, dplane )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(projector),        intent(inout) :: self          !< projector object
+        real(dp),                intent(inout) :: euls(3)       !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc         !< object that holds the polar image
+        complex, allocatable,    intent(inout) :: dplane(:,:,:) !< derivative(s) of projected plane, has to be of dim(nrot,nk,3)
+        integer         :: irot, k, pdim(3)
+        real(dp)        :: vec(3), loc(3)
+        type(ori_light) :: or
+        pdim = pftcc%get_pdim()        
+        do irot=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                vec(:2)            = real(pftcc%get_coord(irot,k),kind=dp)
+                vec(3)             = 0._dp
+                loc                = matmul(vec,or%euler2m(euls))
+                dplane(irot, k, :) = self%dinterp_fcomp(euls, loc, vec )
+            end do
+        end do
+    end subroutine dfproject_polar
+
+    !> \brief  extracts a polar FT from a volume's expanded FT (self)
+    subroutine fdf_project_polar( self, euls, pftcc, plane, dplane )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(projector),        intent(inout) :: self          !< projector object
+        real(dp),                intent(inout) :: euls(3)       !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc         !< object that holds the polar ima
+        complex, allocatable,    intent(inout) :: plane(:,:)    !< projected plane
+        complex, allocatable,    intent(inout) :: dplane(:,:,:) !< derivative(s) of projected plane, has to be of dim(nrot,nk,3)
+        integer         :: irot, k, pdim(3)
+        real(dp)        :: vec(3), loc(3)
+        type(ori_light) :: or
+        pdim = pftcc%get_pdim()
+        do irot=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                vec(:2) = real(pftcc%get_coord(irot,k),kind=dp)
+                vec(3)  = 0._dp
+                loc     = matmul(vec,or%euler2m(euls))
+                dplane(irot, k, :) = self%fdf_interp_fcomp(euls, loc, vec, plane(irot, k))
+            end do
+        end do
+    end subroutine fdf_project_polar
+
     ! INTERPOLATORS
     !>  \brief is to interpolate from the expanded complex matrix
     ! function interp_fcomp( self, loc )result( comp )
@@ -244,6 +292,145 @@ contains
         comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
     end function interp_fcomp
 
+    !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
+    !! \param loc 3-dimensional location in the volume
+    !! \param q 2-dimensional location on the plane (h,k,0)
+    !! \param e orientation class
+    function dinterp_fcomp( self, euls, loc, q ) result(res)
+        class(projector), intent(inout)                          :: self
+        real(dp),         intent(in)                             :: euls(3)
+        real(dp),         intent(in)                             :: loc(3)
+        real(dp),         intent(in)                             :: q(3)
+        complex(dp)                                              :: res(3)
+        real(dp)                                                 :: drotmat(3,3,3)
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1, w2, w3
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_t, dw2_t, dw3_t    !theta
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_p, dw2_p, dw3_p    !psi
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_ph, dw2_ph, dw3_ph !phi
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph
+        real(dp)                                                 :: dRdangle(3,3) 
+        real(dp)                                                 :: dapod_tmp(3)
+        integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
+        type(ori_light)                                          :: or
+        ! interpolation kernel window
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + iwinsz
+        win(1,:) = win(1,:) - iwinsz               
+        call or%euler2dm(euls, drotmat)
+        dRdangle(:,1) = matmul(q, drotmat(:,:,1))
+        dRdangle(:,2) = matmul(q, drotmat(:,:,2))
+        dRdangle(:,3) = matmul(q, drotmat(:,:,3))
+        w1  = 1.0_dp
+        w2  = 1.0_dp
+        w3  = 1.0_dp
+        ! theta
+        dw1_t = 1.0_dp
+        dw2_t = 1.0_dp
+        dw3_t = 1.0_dp
+        ! psi
+        dw1_p = 1.0_dp
+        dw2_p = 1.0_dp
+        dw3_p = 1.0_dp
+        ! phi
+        dw1_ph = 1.0_dp
+        dw2_ph = 1.0_dp
+        dw3_ph = 1.0_dp            
+        do i=1,self%wdim
+            w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
+            w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
+            w3(:,:,i) = self%kbwin%apod_dp( real( win(1,3)+i-1,kind=dp) - loc(3) )
+            dapod_tmp(1) = self%kbwin%dapod( real( win(1,1)+i-1,kind=dp) - loc(1) )
+            dapod_tmp(2) = self%kbwin%dapod( real( win(1,2)+i-1,kind=dp) - loc(2) )
+            dapod_tmp(3) = self%kbwin%dapod( real( win(1,3)+i-1,kind=dp) - loc(3) )
+            dw1_t (i,:,:) = - dapod_tmp(1) * dRdangle(1,1)
+            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1) 
+            dw3_t (:,:,i) = - dapod_tmp(3) * dRdangle(3,1)
+            dw1_p (i,:,:) = - dapod_tmp(1) * dRdangle(1,2)
+            dw2_p (:,i,:) = - dapod_tmp(2) * dRdangle(2,2)
+            dw3_p (:,:,i) = - dapod_tmp(3) * dRdangle(3,2)
+            dw1_ph(i,:,:) = - dapod_tmp(1) * dRdangle(1,3)
+            dw2_ph(:,i,:) = - dapod_tmp(2) * dRdangle(2,3)
+            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)            
+        end do        
+        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t 
+        wp  = dw1_p  * w2 * w3  + w1 * dw2_p  * w3  + w1 * w2 * dw3_p
+        wph = dw1_ph * w2 * w3  + w1 * dw2_ph * w3  + w1 * w2 * dw3_ph
+        res(1) = sum( wt  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
+        res(2) = sum( wp  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
+        res(3) = sum( wph * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )                
+    end function dinterp_fcomp
+
+    !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
+    !! \param loc 3-dimensional location in the volume
+    !! \param q 2-dimensional location on the plane (h,k,0)
+    !! \param e orientation class
+    function fdf_interp_fcomp( self, euls, loc, q, fcomp ) result(res)
+        class(projector), intent(inout)                          :: self
+        real(dp),         intent(in)                             :: euls(3)
+        real(dp),         intent(in)                             :: loc(3)
+        real(dp),         intent(in)                             :: q(3)
+        complex,          intent(out)                            :: fcomp        
+        complex                                                  :: res(3)
+        real(dp)                                                 :: drotmat(3,3,3)
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1, w2, w3
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_t, dw2_t, dw3_t    !theta
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_p, dw2_p, dw3_p    !psi
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_ph, dw2_ph, dw3_ph !phi
+        real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph, w
+        real(dp)                                                 :: dRdangle(3,3) 
+        real(dp)                                                 :: dapod_tmp(3)
+        integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
+        type(ori_light)                                          :: or
+        ! interpolation kernel window
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + iwinsz
+        win(1,:) = win(1,:) - iwinsz               
+        call or%euler2dm(euls, drotmat)
+        dRdangle(:,1) = matmul(q, drotmat(:,:,1))
+        dRdangle(:,2) = matmul(q, drotmat(:,:,2))
+        dRdangle(:,3) = matmul(q, drotmat(:,:,3))
+        w1  = 1.0_dp
+        w2  = 1.0_dp
+        w3  = 1.0_dp
+        ! theta
+        dw1_t = 1.0_dp
+        dw2_t = 1.0_dp
+        dw3_t = 1.0_dp
+        ! psi
+        dw1_p = 1.0_dp
+        dw2_p = 1.0_dp
+        dw3_p = 1.0_dp
+        ! phi
+        dw1_ph = 1.0_dp
+        dw2_ph = 1.0_dp
+        dw3_ph = 1.0_dp            
+        do i=1,self%wdim
+            w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
+            w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
+            w3(:,:,i) = self%kbwin%apod_dp( real( win(1,3)+i-1,kind=dp) - loc(3) )
+            dapod_tmp(1) = self%kbwin%dapod( real( win(1,1)+i-1,kind=dp) - loc(1) )
+            dapod_tmp(2) = self%kbwin%dapod( real( win(1,2)+i-1,kind=dp) - loc(2) )
+            dapod_tmp(3) = self%kbwin%dapod( real( win(1,3)+i-1,kind=dp) - loc(3) )
+            dw1_t (i,:,:) = - dapod_tmp(1) * dRdangle(1,1)
+            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1) 
+            dw3_t (:,:,i) = - dapod_tmp(3) * dRdangle(3,1)
+            dw1_p (i,:,:) = - dapod_tmp(1) * dRdangle(1,2)
+            dw2_p (:,i,:) = - dapod_tmp(2) * dRdangle(2,2)
+            dw3_p (:,:,i) = - dapod_tmp(3) * dRdangle(3,2)
+            dw1_ph(i,:,:) = - dapod_tmp(1) * dRdangle(1,3)
+            dw2_ph(:,i,:) = - dapod_tmp(2) * dRdangle(2,3)
+            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)            
+        end do        
+        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t 
+        wp  = dw1_p  * w2 * w3  + w1 * dw2_p  * w3  + w1 * w2 * dw3_p
+        wph = dw1_ph * w2 * w3  + w1 * dw2_ph * w3  + w1 * w2 * dw3_ph
+        w   = w1 * w2 * w3
+        res(1) = sum( wt  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
+        res(2) = sum( wp  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
+        res(3) = sum( wph * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
+        fcomp  = sum( w  *  self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )        
+    end function fdf_interp_fcomp
+    
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
     subroutine kill_expanded( self )
         class(projector), intent(inout) :: self !< projector instance

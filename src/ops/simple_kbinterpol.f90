@@ -86,30 +86,30 @@ contains
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
     pure function apod_dp( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
-        real(kind=8),              intent(in) :: x
-        real(kind=8) :: r, arg
+        real(dp),          intent(in) :: x
+        real(dp) :: r, arg
         if( abs(x) > self%Whalf )then
-            r = 0.
+            r = 0._dp
             return
         endif
         arg = self%twooW * x
-        arg = 1. - arg * arg
+        arg = 1._dp - arg * arg
         r = self%oneoW * bessi0_dp(self%beta * sqrt(arg))
     end function apod_dp
 
     !>  \brief  is the derivative of the Kaiser-Bessel apodization function, abs(x) <= Whalf
     pure function dapod( self, x ) result(r)
         class(kbinterpol), intent(in) :: self
-        real,              intent(in) :: x
-        real :: r, arg, sqrtarg
+        real(dp),          intent(in) :: x
+        real(dp) :: r, arg, sqrtarg
         if( abs(x) > self%Whalf )then
-            r = 0.
+            r = 0._dp
             return
         endif
         arg  = self%twooW * x
-        arg  = 1. - arg * arg
+        arg  = 1._dp - arg * arg
         sqrtarg = sqrt(arg)
-        r    = - 4. * self%beta * x * bessi1(self%beta * sqrtarg) / &
+        r    = - 4._dp * self%beta * x * bessi1(self%beta * sqrtarg) / &
                 sqrtarg / self%W**3
     end function dapod
 
@@ -200,7 +200,7 @@ contains
 
 
     elemental pure real(dp) function bessi1( x )
-        real(sp), intent(in) :: x
+        real(dp), intent(in) :: x
         real(dp) :: y, ax, bx
         ax = x
         if ( ax < 3.75d0) then
@@ -229,7 +229,7 @@ contains
 
 
     elemental pure real(dp) function bessi0f( x )
-        real(sp), intent(in) :: x
+        real(dp), intent(in) :: x
         real(dp) :: y, ax
         ax = abs(x)
         if (ax < 3.75) then
