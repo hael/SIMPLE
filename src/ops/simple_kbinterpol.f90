@@ -15,6 +15,7 @@ type :: kbinterpol
     procedure :: get_alpha
     procedure :: get_wdim
     procedure :: apod
+    procedure :: apod_dp    
     procedure :: dapod
     procedure :: instr
 end type kbinterpol
@@ -82,6 +83,20 @@ contains
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
+    !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
+    pure function apod_dp( self, x ) result( r )
+        class(kbinterpol), intent(in) :: self
+        real(kind=8),              intent(in) :: x
+        real(kind=8) :: r, arg
+        if( abs(x) > self%Whalf )then
+            r = 0.
+            return
+        endif
+        arg = self%twooW * x
+        arg = 1. - arg * arg
+        r = self%oneoW * bessi0_dp(self%beta * sqrt(arg))
+    end function apod_dp
+
     !>  \brief  is the derivative of the Kaiser-Bessel apodization function, abs(x) <= Whalf
     pure function dapod( self, x ) result(r)
         class(kbinterpol), intent(in) :: self
@@ -147,7 +162,7 @@ contains
                 y*(3.5156229d0 + y*(3.0899424d0 + y*(1.2067492d0 +&
                 y*(0.2659732d0 + y*(0.0360768d0 + y* 0.0045813d0)))))
 #endif
-        else
+                   else
             y=3.75d0/ax
             bessi0=( 0.39894228d0 + y*(  0.01328592d0 +&
                 y*( 0.00225319d0 + y*( -0.00157565d0 + y*( 0.00916281d0 +&
@@ -155,6 +170,34 @@ contains
                 y*  0.00392377d0)))))))) * exp( ax ) / sqrt( ax )
         end if
     end function bessi0
+
+    !>  \brief returns the modified Bessel function I0(x) for any real x
+    !! p.378 Handbook of Mathematical Functions, Abramowitz and Stegun
+    elemental pure real(dp) function bessi0_dp( x )
+        real(dp), intent(in) :: x
+        real(dp) :: y, ax
+        ax = x ! abs(x)  !! Assumption 1:  beta * sqrt(arg) is always positive
+        if ( ax < 3.75d0 ) then
+            y= x / 3.75d0
+            y=y*y
+#ifdef USE_FMA
+            bessi0_dp= fma(y,fma(y,fma(y,fma(y,fma(y,fma(y,0.0045813d0,&
+                 0.0360768d0),0.2659732d0),1.2067492d0),3.0899424d0),&
+                 3.5156229d0),1.0d0)
+#else
+            bessi0_dp=1.0d0+&
+                y*(3.5156229d0 + y*(3.0899424d0 + y*(1.2067492d0 +&
+                y*(0.2659732d0 + y*(0.0360768d0 + y* 0.0045813d0)))))
+#endif
+                   else
+            y=3.75d0/ax
+            bessi0_dp=( 0.39894228d0 + y*(  0.01328592d0 +&
+                y*( 0.00225319d0 + y*( -0.00157565d0 + y*( 0.00916281d0 +&
+                y*(-0.02057706d0 + y*(  0.02635537d0 + y*(-0.01647633d0 +&
+                y*  0.00392377d0)))))))) * exp( ax ) / sqrt( ax )
+        end if
+    end function bessi0_dp
+
 
     elemental pure real(dp) function bessi1( x )
         real(sp), intent(in) :: x
@@ -168,12 +211,12 @@ contains
                 fma(y,fma(y,fma(y,fma(y,fma(y,fma(y,0.32411d-3, &
                 0.301532d-2),0.2658733d-1),0.15084934d0), &
                 0.51498869d0),0.87890594d0),0.5d0) )
-#else
+#else            
             bessi1 = x*(                                             &
                 0.5d0 + y*(0.87890594d0 + y*(0.51498869d0 +          &
                 y*(0.15084934d0 + y*(0.2658733d-1 + y*(0.301532d-2 + &
                 y* 0.32411d-3))))))
-#endif
+#endif            
         else
             y   = 3.75d0 / ax
             bx  = exp(ax) / sqrt(ax)

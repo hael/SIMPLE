@@ -37,6 +37,7 @@ type :: ori
     procedure          :: copy => copy_ori
     procedure          :: delete_entry
     procedure          :: set_euler
+    procedure          :: calc_dmat
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
@@ -61,6 +62,7 @@ type :: ori
     procedure          :: e3get
     procedure          :: get_normal
     procedure          :: get_mat
+    procedure          :: get_dmat
     procedure          :: get
     procedure, private :: getter_1
     procedure, private :: getter_2
@@ -214,6 +216,12 @@ contains
         self%normal = matmul(zvec, self%rmat)
     end subroutine set_euler
 
+    !>  \brief  set the rotation matrix derivatives
+    subroutine calc_dmat( self )
+        class(ori), intent(inout) :: self
+        call euler2dm( self%euls(1), self%euls(2), self%euls(3), self%drmat )
+    end subroutine calc_dmat
+    
     !>  \brief  is a setter
     subroutine e1set( self, e1 )
         class(ori), intent(inout) :: self
@@ -476,6 +484,13 @@ contains
         mat = self%rmat
     end function get_mat
 
+    !>  \brief  is a getter
+    pure function get_dmat( self ) result( dmat )
+        class(ori), intent(in) :: self
+        real, dimension(3,3,3) :: dmat
+        dmat = self%drmat
+    end function get_dmat
+    
     !>  \brief  is a getter
     function get( self, key ) result( val )
         class(ori), intent(inout)    :: self
@@ -1005,7 +1020,7 @@ contains
         real :: ang_in_rad
         ang_in_rad = ang*pi/180.
         if ( choice == 1 ) then
-            r( 1,1 ) = 1.
+            r( 1,1 ) = 0.
             r( 1,2 ) = 0.
             r( 1,3 ) = 0.
             r( 2,1 ) = 0.
@@ -1019,7 +1034,7 @@ contains
             r( 1,2 ) = 0.
             r( 1,3 ) = -cos( ang_in_rad )
             r( 2,1 ) = 0.
-            r( 2,2 ) = 1.
+            r( 2,2 ) = 0.
             r( 2,3 ) = 0.
             r( 3,1 ) =  cos( ang_in_rad )
             r( 3,2 ) = 0.
@@ -1033,7 +1048,7 @@ contains
             r( 2,3 ) = 0.
             r( 3,1 ) = 0.
             r( 3,2 ) = 0.
-            r( 3,3 ) = 1.
+            r( 3,3 ) = 0.
             ! beware of the signs:z-rot is really negative
         endif
     end function drotmat
