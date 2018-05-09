@@ -143,6 +143,26 @@ interface norm_2
     module procedure norm_2_dp
 end interface norm_2
 
+interface deg2rad
+    module procedure deg2rad_sp
+    module procedure deg2rad_dp
+end interface deg2rad
+
+interface myacos
+    module procedure myacos_sp
+    module procedure myacos_dp
+end interface myacos
+
+interface rotmat2d
+    module procedure rotmat2d_sp
+    module procedure rotmat2d_dp
+end interface rotmat2d
+
+interface make_transfmat
+    module procedure make_transfmat_sp
+    module procedure make_transfmat_dp
+end interface make_transfmat
+
 contains
 
     ! JIFFYS
@@ -189,11 +209,18 @@ contains
     end function nvoxfind_2
 
     !>   converts between radians and degrees
-    elemental function deg2rad( deg ) result( rad )
+    elemental function deg2rad_sp( deg ) result( rad )
         real, intent(in) :: deg  !< angle (degrees)
         real             :: rad  !< angle (radians)
         rad = (deg/180.)*pi
-    end function deg2rad
+    end function deg2rad_sp
+
+    !>   converts between radians and degrees
+    elemental function deg2rad_dp( deg ) result( rad )
+        real(dp), intent(in) :: deg  !< angle (degrees)
+        real(dp)             :: rad  !< angle (radians)
+        rad = (deg/180._dp)*dpi
+    end function deg2rad_dp
 
     !>   converts from radians to degrees
     elemental function rad2deg_1( rad ) result( deg )
@@ -663,13 +690,23 @@ contains
 
     !>   returns acos with the argument's absolute value limited to 1.
     !!         this seems to be necessary due to small numerical inaccuracies.
-    pure function myacos( arg ) result( r )
+    pure function myacos_sp( arg ) result( r )
         real, intent(in) :: arg     !< input (radians)
         real             :: r, x, y
         x = min(1.,abs(arg))
         y = sign(x,arg)
         r = acos(y)
-    end function myacos
+    end function myacos_sp
+
+    !>   returns acos with the argument's absolute value limited to 1.
+    !!         this seems to be necessary due to small numerical inaccuracies.
+    pure function myacos_dp( arg ) result( r )
+        real(dp), intent(in) :: arg     !< input (radians)
+        real(dp)             :: r, x, y
+        x = min(1._dp,abs(arg))
+        y = sign(x,arg)
+        r = acos(y)
+    end function myacos_dp
 
     !>   sinc function
     function sinc( x ) result( r )
@@ -2100,7 +2137,7 @@ contains
     end subroutine get_radial_line
 
     !>   is for 2d rotation matrix generation
-    pure function rotmat2d( ang ) result( mat )
+    pure function rotmat2d_sp( ang ) result( mat )
         real, intent(in) :: ang ! in degrees
         real :: mat(2,2), ang_in_rad
         ang_in_rad = ang*pi/180.
@@ -2108,12 +2145,21 @@ contains
         mat(1,2) = sin(ang_in_rad)
         mat(2,1) = -mat(1,2)
         mat(2,2) = mat(1,1)
-    end function rotmat2d
+    end function rotmat2d_sp
 
-
+    !>   is for 2d rotation matrix generation
+    pure function rotmat2d_dp( ang ) result( mat )
+        real(dp), intent(in) :: ang ! in degrees
+        real(dp) :: mat(2,2), ang_in_rad
+        ang_in_rad = ang*dpi/180._dp
+        mat(1,1) = cos(ang_in_rad)
+        mat(1,2) = sin(ang_in_rad)
+        mat(2,1) = -mat(1,2)
+        mat(2,2) = mat(1,1)
+    end function rotmat2d_dp
 
     !>  in-plane parameters to 3x3 transformation matrix
-    function make_transfmat( psi, tx, ty )result( R )
+    function make_transfmat_sp( psi, tx, ty )result( R )        
         real,intent(in) :: psi,tx,ty
         real            :: R(3,3),radpsi,cospsi,sinpsi
         radpsi = deg2rad( psi )
@@ -2127,8 +2173,25 @@ contains
         R(1,3) = tx
         R(2,3) = ty
         R(3,3) = 1.
-    end function make_transfmat
+    end function make_transfmat_sp
 
+    !>  in-plane parameters to 3x3 transformation matrix
+    function make_transfmat_dp( psi, tx, ty )result( R )        
+        real(dp),intent(in) :: psi,tx,ty
+        real(dp)            :: R(3,3),radpsi,cospsi,sinpsi
+        radpsi = deg2rad( psi )
+        cospsi = cos( radpsi )
+        sinpsi = sin( radpsi )
+        R      = 0._dp
+        R(1,1) = cospsi
+        R(2,2) = cospsi
+        R(1,2) = sinpsi
+        R(2,1) = -sinpsi
+        R(1,3) = tx
+        R(2,3) = ty
+        R(3,3) = 1._dp
+    end function make_transfmat_dp
+    
     !>   is for converting a rotation matrix to axis-angle representation
     subroutine rotmat2axis( R, axis )
         real, intent(in)  :: R(3,3)

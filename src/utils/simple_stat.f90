@@ -14,9 +14,12 @@ interface moment
 end interface
 
 interface pearsn
-    module procedure pearsn_1
-    module procedure pearsn_2
-    module procedure pearsn_3
+    module procedure pearsn_1_sp
+    module procedure pearsn_2_sp
+    module procedure pearsn_3_sp
+    module procedure pearsn_1_dp
+    module procedure pearsn_2_dp
+    module procedure pearsn_3_dp    
 end interface
 
 interface normalize
@@ -453,7 +456,7 @@ contains
     !>    calculates Pearson's correlation coefficient
     !! \param x input reference array
     !! \param y input test array
-    function pearsn_1( x, y ) result( r )
+    function pearsn_1_sp( x, y ) result( r )
         real, intent(in) :: x(:),y(:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: j, n
@@ -475,12 +478,12 @@ contains
         end do
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
-    end function pearsn_1
+    end function pearsn_1_sp
 
     !>    calculates Pearson's correlation coefficient
     !! \param x input reference array
     !! \param y input test array
-    function pearsn_2( x, y ) result( r )
+    function pearsn_2_sp( x, y ) result( r )
         real, intent(in) :: x(:,:),y(:,:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: i, j, nx, ny
@@ -505,12 +508,12 @@ contains
         end do
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
-    end function pearsn_2
+    end function pearsn_2_sp
 
     !>    calculates Pearson's correlation coefficient
     !! \param x input reference array
     !! \param y input test array
-    function pearsn_3( x, y ) result( r )
+    function pearsn_3_sp( x, y ) result( r )
         real, intent(in) :: x(:,:,:),y(:,:,:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: i, j, k, nx, ny, nz
@@ -539,8 +542,99 @@ contains
         end do
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
-    end function pearsn_3
+    end function pearsn_3_sp
 
+    !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
+    function pearsn_1_dp( x, y ) result( r )
+        real(dp), intent(in) :: x(:),y(:)
+        real(dp) :: r,ax,ay,sxx,syy,sxy,xt,yt
+        integer  :: j, n
+        n = size(x)
+        if( size(y) /= n ) stop 'Arrays not equal size, in pearsn_1, module: simple_stat'
+        ax  = sum(x)/real(n,kind=dp)
+        ay  = sum(y)/real(n,kind=dp)
+        sxx = 0._dp
+        syy = 0._dp
+        sxy = 0._dp
+        !$omp parallel do default(shared) private(j,xt,yt) &
+        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
+        do j=1,n
+            xt  = x(j)-ax
+            yt  = y(j)-ay
+            sxx = sxx+xt**2
+            syy = syy+yt**2
+            sxy = sxy+xt*yt
+        end do
+        !$omp end parallel do
+        r = max(-1._dp,min(1._dp,sxy/sqrt(sxx*syy)))
+    end function pearsn_1_dp
+
+    !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
+    function pearsn_2_dp( x, y ) result( r )
+        real(dp), intent(in) :: x(:,:),y(:,:)
+        real(dp) :: r,ax,ay,sxx,syy,sxy,xt,yt
+        integer  :: i, j, nx, ny
+        nx = size(x,1)
+        ny = size(x,2)
+        if( size(y,1) /= nx .or. size(y,2) /= ny ) stop 'Arrays not equal size, in pearsn_2, module: simple_stat'
+        ax  = sum(x)/real(nx*ny,kind=dp)
+        ay  = sum(y)/real(nx*ny,kind=dp)
+        sxx = 0._dp
+        syy = 0._dp
+        sxy = 0._dp
+        !$omp parallel do default(shared) private(i,j,xt,yt) collapse(2)&
+        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
+        do i=1,nx
+            do j=1,ny
+                xt  = x(i,j)-ax
+                yt  = y(i,j)-ay
+                sxx = sxx+xt**2
+                syy = syy+yt**2
+                sxy = sxy+xt*yt
+            end do
+        end do
+        !$omp end parallel do
+        r = max(-1._dp,min(1._dp,sxy/sqrt(sxx*syy)))
+    end function pearsn_2_dp
+
+    !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
+    function pearsn_3_dp( x, y ) result( r )
+        real(dp), intent(in) :: x(:,:,:),y(:,:,:)
+        real(dp) :: r,ax,ay,sxx,syy,sxy,xt,yt
+        integer  :: i, j, k, nx, ny, nz
+        nx = size(x,1)
+        ny = size(x,2)
+        nz = size(x,3)
+        if( size(y,1) /= nx .or. size(y,2) /= ny .or. size(y,3) /= nz )&
+        stop 'Arrays not equal size, in pearsn_3, module: simple_stat'
+        ax  = sum(x)/real(nx*ny*nz,kind=dp)
+        ay  = sum(y)/real(nx*ny*nz,kind=dp)
+        sxx = 0._dp
+        syy = 0._dp
+        sxy = 0._dp
+        !$omp parallel do default(shared) private(i,j,k,xt,yt) collapse(2)&
+        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
+        do i=1,nx
+            do j=1,ny
+                do k=1,nz
+                    xt  = x(i,j,k)-ax
+                    yt  = y(i,j,k)-ay
+                    sxx = sxx+xt**2
+                    syy = syy+yt**2
+                    sxy = sxy+xt*yt
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        r = max(-1._dp,min(1._dp,sxy/sqrt(sxx*syy)))
+    end function pearsn_3_dp
+    
     !>    calculates the Pearson correlation for pre-normalized data
     !! \param x input reference array
     !! \param y input test array

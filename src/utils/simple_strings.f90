@@ -20,6 +20,11 @@ private :: LOWER_CASE_LETTERS, UPPER_CASE_LETTERS, INTEGERS, NEW_LINES_C, BLANK_
 BLANK_CHARACTERS, BLANKS_AND_NEW_LINES, INTEGER_DIGITS
 public
 
+interface real2str
+    module procedure real2str_sp
+    module procedure real2str_dp
+end interface real2str
+
 contains
 
     function spaces( n ) result( str )
@@ -340,13 +345,21 @@ contains
     end function str2real
 
     !> \brief  converts a real number to a string
-    function real2str(rval) result(str)
+    function real2str_sp(rval) result(str)
         real, intent(in)  :: rval
         character(len=32) :: str
         write(str,*) rval
         call removesp(str)
-    end function real2str
-
+    end function real2str_sp
+    
+    !> \brief  converts a real number to a string
+    function real2str_dp(rval) result(str)
+        real(dp), intent(in) :: rval
+        character(len=64)    :: str
+        write(str,*) rval
+        call removesp(str)
+    end function real2str_dp
+    
     !>  \brief  turn integer variable into character variable
     !! - now supports negative values
     function int2str(intg) result(string)
