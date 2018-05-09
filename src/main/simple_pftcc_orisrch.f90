@@ -6,6 +6,8 @@ use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_build,             only: build
 use simple_ori,               only: ori
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
+use simple_opt_spec,          only: opt_spec
+use simple_optimizer,         only: optimizer
 implicit none
 
 public :: pftcc_orisrch
@@ -17,8 +19,10 @@ type :: pftcc_orisrch
     private
     class(build),            pointer     :: bp          => null()  !< pointer to build
     class(polarft_corrcalc), pointer     :: pftcc_ptr   => null()  !< pointer to pftcc object
-    type(pftcc_shsrch_grad), allocatable :: grad_shsrch_objs(:)    !< origin shift search objects, L-BFGS with gradient
-    type(ori),               allocatable :: e_trials(:)            !< trial orientations (one per thread)
+    class(optimizer),        pointer     :: nlopt                  !< optimizer object
+    type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj        !< origin shift search objects, L-BFGS with gradient
+    type(ori)                            :: e_trial                !< trial orientation
+    type(opt_spec)                       :: ospec                  !< optimizer specification object
     real                                 :: cost_best              !< current best cost
     real                                 :: sh_best(2)  = 0        !< current best shift
     integer                              :: inpl_best   = 0        !< current best in-plane rotation
@@ -36,28 +40,20 @@ contains
 
     !> constructor
     subroutine new( self, pftcc, b, p, nrestarts )
-        use simple_projector, only: projector
-        use simple_params,    only: params
+        use simple_projector,   only: projector
+        use simple_params,      only: params
+        use simple_opt_factory, only: opt_factory
         class(pftcc_orisrch),            intent(inout) :: self      !< instance
         class(polarft_corrcalc), target, intent(in)    :: pftcc     !< correlator
         class(build),            target, intent(in)    :: b         !< builder
         class(params),                   intent(in)    :: p         !< parameters
         integer,               optional, intent(in)    :: nrestarts !< simplex restarts (randomized bounds)
+        type(opt_factory) :: opt_fact
         integer :: ithr, i
-        real    :: lims_sh(2,2), lims_sh_init(2,2)
+        real    :: lims(2,2), lims_sh(2,2), lims_sh_init(2,2)
         ! kill allocatables
-        if( allocated(self%e_trials) )then
-            do i=1,size(self%e_trials)
-                call self%e_trials(i)%kill
-            end do
-            deallocate(self%e_trials)
-        endif
-        if( allocated(self%grad_shsrch_objs) )then
-            do i=1,size(self%grad_shsrch_objs)
-                call self%grad_shsrch_objs(i)%kill
-            end do
-            deallocate(self%grad_shsrch_objs)
-        endif
+        ! call self%e_trial%kill
+        ! call self%grad_shsrch_obj%kill
         ! set nrestarts
         self%nrestarts = 3
         if( present(nrestarts) ) self%nrestarts = nrestarts
@@ -67,17 +63,25 @@ contains
         self%bp => b
         ! get # rotations
         self%nrots = pftcc%get_nrots()
-        ! create trial orientations and in-plane search objects (one per thread)
-        allocate(self%grad_shsrch_objs(nthr_glob), self%e_trials(nthr_glob))
+        ! create trial orientation
+        call self%e_trial%new_ori_clean()
+        ! create in-plane search object
         lims_sh(:,1)      = -p%trs
         lims_sh(:,2)      =  p%trs
         lims_sh_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_sh_init(:,2) =  SHC_INPL_TRSHWDTH
-        do ithr=1,nthr_glob
-            call self%e_trials(ithr)%new_ori_clean
-            call self%grad_shsrch_objs(ithr)%new(self%pftcc_ptr, lims_sh, lims_init=lims_sh_init,&
-                &shbarrier=p%shbarrier, maxits=MAXITS)
-        end do
+        call self%grad_shsrch_obj%new(self%pftcc_ptr, lims_sh, lims_init=lims_sh_init,&
+            &shbarrier=p%shbarrier, maxits=MAXITS)
+        ! make optimizer spec
+        lims = 0.
+        lims(1,2) = 359.99
+        lims(2,2) = 180.00
+        call self%ospec%specify('simplex', 2, ftol=1e-4, gtol=1e-4, limits=lims,&
+            &limits_init=lims, nrestarts=self%nrestarts, maxits=MAXITS)
+        ! generate the optimizer object
+        call opt_fact%new(self%ospec, self%nlopt)
+        ! associate costfun
+        self%ospec%costfun => costfun_wrapper
     end subroutine new
 
     !> set particle index for search
@@ -89,10 +93,6 @@ contains
 
     !> minimisation
     function minimize( self, o_inout, angerr_deg, irot ) result( cxy )
-        use simple_ori,         only: ori
-        use simple_opt_factory, only: opt_factory
-        use simple_optimizer,   only: optimizer
-        use simple_opt_spec,    only: opt_spec
         class(pftcc_orisrch), intent(inout) :: self
         class(ori),           intent(inout) :: o_inout
         real,                 intent(inout) :: angerr_deg
@@ -102,9 +102,6 @@ contains
         end type pftcc_ref
         type(pftcc_ref),  allocatable :: pftcc_refs(:)
         real,             allocatable :: cxy(:)
-        class(optimizer), pointer     :: nlopt
-        type(opt_factory)             :: opt_fact
-        type(opt_spec)                :: ospec
         real    :: cost, cost_init, lims(2,2), lims_init(2,2)
         integer :: ithr
         ! copy nthr_glob pftcc references so we can put them back after minimization is done
@@ -115,37 +112,27 @@ contains
         end do
 
         ! PREPARATION
-        ! associate costfun
-        ospec%costfun => costfun_wrapper
         ! initialize with input projection direction
-        ospec%x(1) = o_inout%e1get()
-        ospec%x(2) = o_inout%e2get()
-        ! set limits
-        lims = 0.
-        lims(1,2) = 359.99
-        lims(2,2) = 180.00
-        lims_init(1,1) = max(ospec%x(1) - angerr_deg, 0.)
-        lims_init(1,2) = min(ospec%x(1) + angerr_deg, lims(1,2))
-        lims_init(2,1) = max(ospec%x(2) - angerr_deg, 0.)
-        lims_init(2,2) = min(ospec%x(2) + angerr_deg, lims(2,2))
-        ! make optimizer spec
-        call ospec%specify('simplex', 2, ftol=1e-4, gtol=1e-4, limits=lims,&
-            &limits_init=lims_init, nrestarts=self%nrestarts, maxits=MAXITS)
-        ! generate the optimizer object
-        call opt_fact%new(ospec, nlopt)
+        self%ospec%x(1) = o_inout%e1get()
+        self%ospec%x(2) = o_inout%e2get()
+        ! set limits for simplex initialisation
+        self%ospec%limits_init(1,1) = max(self%ospec%x(1) - angerr_deg, 0.)
+        self%ospec%limits_init(1,2) = min(self%ospec%x(1) + angerr_deg, lims(1,2))
+        self%ospec%limits_init(2,1) = max(self%ospec%x(2) - angerr_deg, 0.)
+        self%ospec%limits_init(2,2) = min(self%ospec%x(2) + angerr_deg, lims(2,2))
 
         ! MINIMISATION
-        ospec%nevals   = 0
-        self%cost_best = self%costfun(ospec%x, ospec%ndim)
+        self%ospec%nevals   = 0
+        self%cost_best = self%costfun(self%ospec%x, self%ospec%ndim)
         cost_init      = self%cost_best ! for later comparison
-        call nlopt%minimize(ospec, self, cost)
+        call self%nlopt%minimize(self%ospec, self, cost)
 
         ! OUTPUT
         if( cost <= cost_init )then
             ! set output
             cxy(1)  = -cost ! correlation
             ! set Euler
-            call o_inout%set_euler([ospec%x(1),ospec%x(2),360. - self%pftcc_ptr%get_rot(self%inpl_best)])
+            call o_inout%set_euler([self%ospec%x(1),self%ospec%x(2),360. - self%pftcc_ptr%get_rot(self%inpl_best)])
             ! set shift (shift vector already rotated to the frame of reference in pftcc_shsrch_grad)
             cxy(2:) = self%sh_best
             call o_inout%set_shift(self%sh_best)
@@ -187,17 +174,18 @@ contains
         real              :: cost
         integer           :: ithr, irot
         real, allocatable :: cxy(:)
-        ! thread-safe extraction of projection
+        ! set Euler angle
+        call self%e_trial%set_euler([vec(1),vec(2),0.])
+        ! thread-safe extraction of projection (because pftcc is an OpenMP shared data structure)
         ithr = omp_get_thread_num() + 1
-        call self%e_trials(ithr)%set_euler([vec(1),vec(2),0.])
         if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-            call self%bp%vol%fproject_polar(ithr, self%e_trials(ithr), self%pftcc_ptr, iseven=.true.)
+            call self%bp%vol%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.true.)
         else
-            call self%bp%vol_odd%fproject_polar(ithr, self%e_trials(ithr), self%pftcc_ptr, iseven=.false.)
+            call self%bp%vol_odd%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.false.)
         endif
         ! in-plane search with L-BFGS-B and callback for exhaustive in-plane rotation search
-        call self%grad_shsrch_objs(ithr)%set_indices(ithr, self%particle)
-        cxy  = self%grad_shsrch_objs(ithr)%minimize(irot=irot)
+        call self%grad_shsrch_obj%set_indices(ithr, self%particle)
+        cxy  = self%grad_shsrch_obj%minimize(irot=irot)
         if( irot == 0 )then ! no better solution could be identified
             cost = self%cost_best
             return
