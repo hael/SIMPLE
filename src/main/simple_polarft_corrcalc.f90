@@ -252,7 +252,7 @@ contains
                 self%l_cc_objfun   = .true.
             case('ccres')
                 self%l_cc_objfun = .false.
-                allocate(self%ptcl_bfac_weights(1:self%nptcls, self%kfromto(1):self%kfromto(2)),&
+                allocate(self%ptcl_bfac_weights(self%kfromto(1):self%kfromto(2), 1:self%nptcls),&
                     &self%ptcl_bfac_norms(1:self%nptcls), self%inv_resarrsq(self%kfromto(1):self%kfromto(2)))
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
@@ -317,9 +317,9 @@ contains
             self%polar(self%nrots + 1:self%nrots+self%pftsz,:) * &
             (PI/real(self%ldim(2) / 2))    ! y-part
         ! allocate others
-        allocate(self%pfts_refs_even(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                 &self%pfts_refs_odd(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                 &self%pfts_ptcls(1:self%nptcls,self%pftsz,self%kfromto(1):self%kfromto(2)),&
+        allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                 &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                  &self%sqsums_ptcls(1:self%nptcls),self%fftdat(self%nthr),&
                  &self%fftdat_ptcls(1:self%nptcls,self%kfromto(1):self%kfromto(2)),&
                  &self%heap_vars(self%nthr),stat=alloc_stat)
@@ -409,9 +409,9 @@ contains
         complex(sp),             intent(in)    :: pft(:,:) !< reference pft
         logical,                 intent(in)    :: iseven   !< logical eo-flag
         if( iseven )then
-            self%pfts_refs_even(iref,:,:) = pft
+            self%pfts_refs_even(:,:,iref) = pft
         else
-            self%pfts_refs_odd(iref,:,:)  = pft
+            self%pfts_refs_odd(:,:,iref)  = pft
         endif
     end subroutine set_ref_pft
 
@@ -420,7 +420,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self     !< this object
         integer,                 intent(in)    :: iptcl    !< particle index
         complex(sp),             intent(in)    :: pft(:,:) !< particle's pft
-        self%pfts_ptcls(self%pinds(iptcl),:,:) = pft
+        self%pfts_ptcls(:,:,self%pinds(iptcl)) = pft
         ! calculate the square sum required for correlation calculation
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine set_ptcl_pft
@@ -436,9 +436,9 @@ contains
         complex(sp),             intent(in)    :: comp
         logical,                 intent(in)    :: iseven
         if( iseven )then
-            self%pfts_refs_even(iref,irot,k) = comp
+            self%pfts_refs_even(irot,k,iref) = comp
         else
-            self%pfts_refs_odd(iref,irot,k)  = comp
+            self%pfts_refs_odd(irot,k,iref)  = comp
         endif
     end subroutine set_ref_fcomp
 
@@ -451,27 +451,27 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, irot, k
         complex(sp),             intent(in)    :: comp
-        self%pfts_ptcls(self%pinds(iptcl),irot,k) = comp
+        self%pfts_ptcls(irot,k,self%pinds(iptcl)) = comp
     end subroutine set_ptcl_fcomp
     !>  \brief  zeroes the iref reference
      !! \param iref reference index
     subroutine zero_ref( self, iref )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
-        self%pfts_refs_even(iref,:,:) = zero
-        self%pfts_refs_odd(iref,:,:)  = zero
+        self%pfts_refs_even(:,:,iref) = zero
+        self%pfts_refs_odd(:,:,iref)  = zero
     end subroutine zero_ref
 
     subroutine cp_even2odd_ref( self, iref )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
-        self%pfts_refs_odd(iref,:,:) = self%pfts_refs_even(iref,:,:)
+        self%pfts_refs_odd(:,:,iref) = self%pfts_refs_even(:,:,iref)
     end subroutine cp_even2odd_ref
 
     subroutine cp_even_ref2ptcl( self, iref, iptcl )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
-        self%pfts_ptcls(self%pinds(iptcl),:,:) = self%pfts_refs_even(iref,:,:)
+        self%pfts_ptcls(:,:,self%pinds(iptcl)) = self%pfts_refs_even(:,:,iref)
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine cp_even_ref2ptcl
 
@@ -598,7 +598,7 @@ contains
         integer,                 intent(in) :: iptcl
         complex(sp), allocatable :: pft(:,:)
         allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-        source=self%pfts_ptcls(self%pinds(iptcl),:,:), stat=alloc_stat)
+        source=self%pfts_ptcls(:,:,self%pinds(iptcl)), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: get_ptcl_pft; simple_polarft_corrcalc",alloc_stat)
     end function get_ptcl_pft
 
@@ -611,10 +611,10 @@ contains
         complex(sp), allocatable :: pft(:,:)
         if( iseven )then
             allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-            source=self%pfts_refs_even(iref,:,:), stat=alloc_stat)
+            source=self%pfts_refs_even(:,:,iref), stat=alloc_stat)
         else
             allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-            source=self%pfts_refs_odd(iref,:,:), stat=alloc_stat)
+            source=self%pfts_refs_odd(:,:,iref), stat=alloc_stat)
         endif
         if(alloc_stat.ne.0)call allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
@@ -647,8 +647,8 @@ contains
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iptcl
-        call gnufor_image(real(self%pfts_ptcls(self%pinds(iptcl),:,:)),  palette='gray')
-        call gnufor_image(aimag(self%pfts_ptcls(self%pinds(iptcl),:,:)), palette='gray')
+        call gnufor_image( real(self%pfts_ptcls(:,:,self%pinds(iptcl))), palette='gray')
+        call gnufor_image(aimag(self%pfts_ptcls(:,:,self%pinds(iptcl))), palette='gray')
     end subroutine vis_ptcl
 
     !>  \brief  is for plotting a particle polar FT
@@ -659,11 +659,11 @@ contains
         integer,                 intent(in) :: iref
         logical,                 intent(in) :: iseven
         if( iseven )then
-            call gnufor_image(real(self%pfts_refs_even(iref,:,:)),  palette='gray')
-            call gnufor_image(aimag(self%pfts_refs_even(iref,:,:)), palette='gray')
+            call gnufor_image( real(self%pfts_refs_even(:,:,iref)), palette='gray')
+            call gnufor_image(aimag(self%pfts_refs_even(:,:,iref)), palette='gray')
         else
-            call gnufor_image(real(self%pfts_refs_odd(iref,:,:)),  palette='gray')
-            call gnufor_image(aimag(self%pfts_refs_odd(iref,:,:)), palette='gray')
+            call gnufor_image( real(self%pfts_refs_odd(:,:,iref)), palette='gray')
+            call gnufor_image(aimag(self%pfts_refs_odd(:,:,iref)), palette='gray')
         endif
     end subroutine vis_ref
 
@@ -688,7 +688,7 @@ contains
     subroutine memoize_sqsum_ptcl( self, i )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i
-        self%sqsums_ptcls(i) = sum(csq(self%pfts_ptcls(i,:,:)))
+        self%sqsums_ptcls(i) = sum(csq(self%pfts_ptcls(:,:,i)))
     end subroutine memoize_sqsum_ptcl
 
     !>  \brief  is for memoization of the ffts used in gencorrs
@@ -710,8 +710,8 @@ contains
                 ! get thread index
                 ithr = omp_get_thread_num() + 1
                 ! copy particle pfts
-                carray(ithr)%re = real(self%pfts_ptcls(i,:,ik))
-                carray(ithr)%im = aimag(self%pfts_ptcls(i,:,ik)) * self%fft_factors
+                carray(ithr)%re = real(self%pfts_ptcls(:,ik,i))
+                carray(ithr)%im = aimag(self%pfts_ptcls(:,ik,i)) * self%fft_factors
                 ! FFT
                 call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_ptcls(i,ik)%re)
                 call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_ptcls(i,ik)%im)
@@ -732,9 +732,9 @@ contains
         if( self%l_cc_objfun )then
             ! nothing to do
         else
-            self%ptcl_bfac_weights(self%pinds(iptcl),:) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
-            where( self%ptcl_bfac_weights(self%pinds(iptcl),:) < TINY) self%ptcl_bfac_weights(self%pinds(iptcl),:) = 0.
-            self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
+            self%ptcl_bfac_weights(:,self%pinds(iptcl)) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
+            where( self%ptcl_bfac_weights(:,self%pinds(iptcl)) < TINY) self%ptcl_bfac_weights(:,self%pinds(iptcl)) = 0.
+            self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(:,self%pinds(iptcl)))
         endif
     end subroutine memoize_bfac
 
@@ -790,12 +790,12 @@ contains
         type(ctfparams) :: ctfparms
         integer         :: iptcl
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
-        allocate(self%ctfmats(1:self%nptcls,self%pftsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+        allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2",alloc_stat)
         do iptcl=self%pfromto(1),self%pfromto(2)
             if( self%pinds(iptcl) > 0 )then
                 ctfparms = spproj%get_ctfparams( trim(oritype), iptcl )
-                self%ctfmats(self%pinds(iptcl),:,:) = self%create_polar_ctfmat(ctfparms, self%pftsz)
+                self%ctfmats(:,:,self%pinds(iptcl)) = self%create_polar_ctfmat(ctfparms, self%pftsz)
             endif
         end do
     end subroutine create_polar_ctfmats
@@ -809,12 +809,12 @@ contains
         real(sp),                intent(out)   :: sqsum_ref
         ! copy
         if( self%iseven(i) )then
-            pft_ref = self%pfts_refs_even(iref,:,:)
+            pft_ref = self%pfts_refs_even(:,:,iref)
         else
-            pft_ref = self%pfts_refs_odd(iref,:,:)
+            pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         ! multiply with CTF
-        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(i,:,:)
+        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
         ! for corr normalisation
         sqsum_ref = sum(csq(pft_ref(:,self%kfromto(1):kstop)))
     end subroutine prep_ref4corr
@@ -898,15 +898,15 @@ contains
             rot = irot
         end if
         if( irot == 1 )then
-            tmp = sum( pft_ref(:,:) * conjg(self%pfts_ptcls(i,:,:)))
+            tmp = sum( pft_ref(:,:) * conjg(self%pfts_ptcls(:,:,i)))
         else if( irot <= self%pftsz )then
-            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,:) * conjg(self%pfts_ptcls(i,rot:self%pftsz,:)))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      :) *       self%pfts_ptcls(i,  1:rot-1,     :))
+            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,:) * conjg(self%pfts_ptcls(rot:self%pftsz,:,i)))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      :) *       self%pfts_ptcls(  1:rot-1,     :,i))
         else if( irot == self%pftsz + 1 )then
-            tmp = sum( pft_ref(:,:) * self%pfts_ptcls(i,:,:) )
+            tmp = sum( pft_ref(:,:) * self%pfts_ptcls(:,:,i) )
         else
-            tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(i,rot:self%pftsz,:))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,:) * conjg( self%pfts_ptcls(i,1:rot-1,:) ))
+            tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(rot:self%pftsz,:,i))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,:) * conjg( self%pfts_ptcls( 1:rot-1,      :,i)))
         end if
         corr = real(tmp)
     end function calc_corr_for_rot
@@ -925,15 +925,15 @@ contains
             rot = irot
         end if
         if( irot == 1 )then
-            tmp = sum( pft_ref(:,:) * conjg(self%pfts_ptcls(i,:,:)))
+            tmp = sum( pft_ref(:,:) * conjg(self%pfts_ptcls(:,:,i)))
         else if( irot <= self%pftsz )then
-            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,:) * conjg(self%pfts_ptcls(i,rot:self%pftsz,:)))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      :) *       self%pfts_ptcls(i,  1:rot-1,     :))
+            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,:) * conjg(self%pfts_ptcls(rot:self%pftsz,:,i)))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      :) *       self%pfts_ptcls(  1:rot-1,     :,i))
         else if( irot == self%pftsz + 1 ) then
-            tmp = sum( pft_ref(:,:) * self%pfts_ptcls(i,:,:) )
+            tmp = sum( pft_ref(:,:) * self%pfts_ptcls(:,:,i) )
         else
-            tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(i,rot:self%pftsz,:))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,:) * conjg( self%pfts_ptcls(i,1:rot-1,:) ))
+            tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(rot:self%pftsz,:,i))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,:) * conjg( self%pfts_ptcls( 1:rot-1,      :,i)))
         end if
         corr = real(tmp, kind=dp)
     end function calc_corr_for_rot_8
@@ -951,15 +951,15 @@ contains
             rot = irot
         end if
         if( irot == 1 )then
-            tmp =       sum((pft_ref(:,:) - self%pfts_ptcls(i,:,:))**2.0)
+            tmp =       sum((pft_ref(:,:) - self%pfts_ptcls(:,:,i))**2.0)
         else if( irot <= self%pftsz )then
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:) - self%pfts_ptcls(i,rot:self%pftsz,:))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - conjg(self%pfts_ptcls(i,1:rot-1,:)))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:) - self%pfts_ptcls(rot:self%pftsz,:,i))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - conjg(self%pfts_ptcls(1:rot-1,:,i)))**2.0)
         else if( irot == self%pftsz + 1 )then
-            tmp = sum((pft_ref(:,:) - conjg(self%pfts_ptcls(i,:,:)))**2.0)
+            tmp = sum((pft_ref(:,:) - conjg(self%pfts_ptcls(:,:,i)))**2.0)
         else
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:) - conjg(self%pfts_ptcls(i,rot:self%pftsz,:)))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(i,1:rot-1,:))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:) - conjg(self%pfts_ptcls(rot:self%pftsz,:,i)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(1:rot-1,:,i))**2.0)
         end if
         euclid = abs(tmp)
     end function calc_euclid_for_rot
@@ -978,15 +978,15 @@ contains
             rot = irot
         end if
         if( irot == 1 )then
-            tmp =       sum((pft_ref(:,:) - self%pfts_ptcls(i,:,:))**2.0)
+            tmp =       sum((pft_ref(:,:) - self%pfts_ptcls(:,:,i))**2.0)
         else if( irot <= self%pftsz )then
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:)          - self%pfts_ptcls(i,rot:self%pftsz,:))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - conjg(self%pfts_ptcls(i,1:rot-1,:)))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:)          - self%pfts_ptcls(rot:self%pftsz,:,i))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - conjg(self%pfts_ptcls(1:rot-1,:,i)))**2.0)
         else if( irot == self%pftsz + 1 )then
-            tmp =       sum((pft_ref(:,:) - conjg(self%pfts_ptcls(i,:,:)))**2.0)
+            tmp =       sum((pft_ref(:,:) - conjg(self%pfts_ptcls(:,:,i)))**2.0)
         else
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:)          - conjg(self%pfts_ptcls(i,rot:self%pftsz,:)))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(i,1:rot-1,:))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,:)          - conjg(self%pfts_ptcls(rot:self%pftsz,:,i)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(1:rot-1,:,i))**2.0)
         end if
         euclid = abs(tmp)
     end function calc_euclid_for_rot_8
@@ -1006,15 +1006,15 @@ contains
             rot = irot
         end if
         if (irot == 1) then
-            tmp = sum( pft_ref(:,k) * conjg(self%pfts_ptcls(i,:,k)))
+            tmp = sum( pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)))
         else if (irot <= self%pftsz) then
-            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,k) * conjg(self%pfts_ptcls(i,rot:self%pftsz,k)))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      k) *       self%pfts_ptcls(i,  1:rot-1,     k))
+            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,k) * conjg(self%pfts_ptcls(rot:self%pftsz,k,i)))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      k) *       self%pfts_ptcls(  1:rot-1,     k,i))
         else if (irot == self%pftsz + 1) then
-            tmp = sum( pft_ref(:,k) * self%pfts_ptcls(i,:,k) )
+            tmp = sum( pft_ref(:,k) * self%pfts_ptcls(:,k,i) )
         else
-            tmp =       sum( pft_ref(1:self%pftsz-rot+1,k)          *        self%pfts_ptcls(i,rot:self%pftsz,k))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,k) * conjg( self%pfts_ptcls(i,1:rot-1,k) ))
+            tmp =       sum( pft_ref(1:self%pftsz-rot+1,k)          *        self%pfts_ptcls(rot:self%pftsz,k,i))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,k) * conjg( self%pfts_ptcls(1:rot-1,k,i) ))
         end if
         corr = real(tmp)
     end function calc_corrk_for_rot_8
@@ -1033,15 +1033,15 @@ contains
             rot = irot
         end if
         if( irot == 1 )then
-            tmp =       sum((pft_ref(:,k) - self%pfts_ptcls(i,:,k))**2.0)
+            tmp =       sum((pft_ref(:,k) - self%pfts_ptcls(:,k,i))**2.0)
         else if( irot <= self%pftsz )then
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(i,rot:self%pftsz,k))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(i,1:rot-1,k)))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i)))**2.0)
         else if( irot == self%pftsz + 1 )then
-            tmp =       sum((pft_ref(:,k) - conjg(self%pfts_ptcls(i,:,k)))**2.0)
+            tmp =       sum((pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i)))**2.0)
         else
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(i,rot:self%pftsz,k)))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(i,1:rot-1,k))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i))**2.0)
         end if
         euclid = abs(tmp)
     end function calc_euclidk_for_rot
@@ -1060,15 +1060,15 @@ contains
             rot = irot
         end if
         if( irot == 1 )then
-            tmp =       sum((pft_ref(:,k) - self%pfts_ptcls(i,:,k))**2.0)
+            tmp =       sum((pft_ref(:,k) - self%pfts_ptcls(:,k,i))**2.0)
         else if( irot <= self%pftsz )then
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(i,rot:self%pftsz,k))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(i,1:rot-1,k)))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i)))**2.0)
         else if( irot == self%pftsz + 1 )then
-            tmp =       sum((pft_ref(:,k) - conjg(self%pfts_ptcls(i,:,k)))**2.0)
+            tmp =       sum((pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i)))**2.0)
         else
-            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(i,rot:self%pftsz,k)))**2.0)
-            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(i,1:rot-1,k))**2.0)
+            tmp =       sum((pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i)))**2.0)
+            tmp = tmp + sum((pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i))**2.0)
         end if
         euclid = abs(tmp)
     end function calc_euclidk_for_rot_8
@@ -1088,7 +1088,7 @@ contains
         call self%prep_ref4corr(iref, i, pft_ref, sqsum_ref, self%kfromto(2))
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(i,:,k)))
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
             frc(k)    = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
         end do
@@ -1114,20 +1114,20 @@ contains
         shmat   =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(i) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(i,:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,i)) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(i,:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,i)) * shmat
             endif
         else
             if( self%iseven(i) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
             endif
         endif
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(i,:,k)))
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
             frc(k)    = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
         end do
@@ -1162,7 +1162,7 @@ contains
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sqsum_ref, kstop)
         call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), kstop, corrs_over_k)
-        sqsum_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl), :, self%kfromto(1):kstop)))
+        sqsum_ptcl = sum(csq(self%pfts_ptcls(:, self%kfromto(1):kstop, self%pinds(iptcl))))
         cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
     end subroutine gencorrs_cc_2
 
@@ -1184,15 +1184,15 @@ contains
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd (:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd (:,:,iref) * shmat
             endif
         endif
         sqsum_ref = sum(csq(pft_ref))
@@ -1215,9 +1215,9 @@ contains
         cc(:) = 0.
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
+            cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(k,self%pinds(iptcl))) / sqrt(sumsqref * sumsqptcl)
         end do
         cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
     end subroutine gencorrs_resnorm_1
@@ -1237,11 +1237,11 @@ contains
         cc(:) = 0.
         do k=self%kfromto(1),kstop
             call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
+            cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(k,self%pinds(iptcl))) / sqrt(sumsqref * sumsqptcl)
         end do
-        cc(:) = cc(:) / sum(self%ptcl_bfac_weights(self%pinds(iptcl),self%kfromto(1):kstop))
+        cc(:) = cc(:) / sum(self%ptcl_bfac_weights(self%kfromto(1):kstop,self%pinds(iptcl)))
     end subroutine gencorrs_resnorm_2
 
     subroutine gencorrs_resnorm_3( self, iref, iptcl, shvec, cc )
@@ -1262,23 +1262,23 @@ contains
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd (:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd (:,:,iref) * shmat
             endif
         endif
         cc(:) = 0.
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
+            cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(k,self%pinds(iptcl))) / sqrt(sumsqref * sumsqptcl)
         end do
         cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
     end subroutine gencorrs_resnorm_3
@@ -1349,15 +1349,15 @@ contains
         shmat   =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd (:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd (:,:,iref) * shmat
             endif
         endif
         sqsum_ref = sum(csq(pft_ref))
@@ -1383,15 +1383,15 @@ contains
         shmat   =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
             endif
         endif
         sqsum_ref = sum(csq(pft_ref))
@@ -1417,24 +1417,24 @@ contains
         shmat   =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
             endif
         endif
         cc = 0.0_dp
         ! with B-factor weighting
         do k = self%kfromto(1),self%kfromto(2)
             sqsumk_ref  = sum(csq(pft_ref(:,k)))
-            sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+            sqsumk_ptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-            cc          = cc + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
+            cc          = cc + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
         end do
         cc = cc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end function gencorr_resnorm_for_rot_8
@@ -1473,15 +1473,15 @@ contains
         shmat       =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
             endif
         endif
         denom       = sqrt(sum(csq(pft_ref)) * self%sqsums_ptcls(self%pinds(iptcl)))
@@ -1516,31 +1516,31 @@ contains
         shmat        =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd (:,:,iref)  * shmat
             endif
         endif
         f    = 0.0_dp
         grad = 0.0_dp
-        pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+        pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,    :)
         pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         do k = self%kfromto(1), self%kfromto(2)
             sqsumk_ref  = sum(csq(pft_ref(:,k)))
-            sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+            sqsumk_ptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
             corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-            f           = f +       (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+            f           = f +       (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denom
             corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-            grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+            grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denom
             corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-            grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+            grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denom
         end do
         f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
@@ -1580,15 +1580,15 @@ contains
         shmat       =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
             endif
         endif
         denom       = sqrt(sum(csq(pft_ref)) * self%sqsums_ptcls(self%pinds(iptcl)))
@@ -1621,15 +1621,15 @@ contains
         shmat        =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             else
-                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             endif
         else
             if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
             endif
         endif
         pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
@@ -1637,12 +1637,12 @@ contains
         grad = 0.0_dp
         do k = self%kfromto(1), self%kfromto(1)
             sqsumk_ref  = sum(csq(pft_ref(:,k)))
-            sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+            sqsumk_ptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
             corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-            grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+            grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denom
             corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-            grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+            grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denom
         end do
         grad = grad / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_resnorm_grad_only_for_rot_8
