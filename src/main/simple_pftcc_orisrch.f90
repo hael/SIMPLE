@@ -29,11 +29,13 @@ type :: pftcc_orisrch
     integer                              :: particle    = 0        !< particle pft index
     integer                              :: nrots       = 0        !< # rotations
     integer                              :: nrestarts   = 3        !< simplex restarts (randomized bounds)
+    logical                              :: exists=.false.
   contains
     procedure          :: new
     procedure          :: set_particle
     procedure          :: minimize
     procedure, private :: costfun
+    procedure          :: kill
 end type pftcc_orisrch
 
 contains
@@ -55,6 +57,8 @@ contains
         ! call self%e_trial%kill
         ! call self%grad_shsrch_obj%kill
         ! set nrestarts
+        call self%kill
+        allocate(self%grad_shsrch_obj)
         self%nrestarts = 3
         if( present(nrestarts) ) self%nrestarts = nrestarts
         ! set pointer to corrcalc object
@@ -198,5 +202,14 @@ contains
             self%inpl_best = irot
         endif
     end function costfun
+
+    !> \brief  is a destructor
+    subroutine kill( self )
+        class(pftcc_orisrch), intent(inout) :: self !< instance
+        if( self%exists )then
+            deallocate( self%grad_shsrch_obj )
+            self%exists = .false.
+        endif
+    end subroutine kill
 
 end module simple_pftcc_orisrch
