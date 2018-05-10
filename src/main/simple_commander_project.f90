@@ -13,6 +13,7 @@ public :: project2txt_commander
 public :: txt2project_commander
 public :: print_project_info_commander
 public :: print_project_header_commander
+public :: print_project_vals_commander
 public :: new_project_commander
 public :: update_project_commander
 public :: import_movies_commander
@@ -36,6 +37,10 @@ type, extends(commander_base) :: print_project_header_commander
   contains
     procedure :: execute      => exec_print_project_header
 end type print_project_header_commander
+type, extends(commander_base) :: print_project_vals_commander
+  contains
+    procedure :: execute      => exec_print_project_vals
+end type print_project_vals_commander
 type, extends(commander_base) :: new_project_commander
   contains
     procedure :: execute      => exec_new_project
@@ -110,7 +115,7 @@ contains
     subroutine exec_print_project_header( self, cline )
         use simple_binoris, only: binoris
         class(print_project_header_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
+        class(cmdline),                        intent(inout) :: cline
         type(binoris)                 :: bos_doc
         character(len=:), allocatable :: fname
         fname = cline%get_carg('projfile')
@@ -118,6 +123,55 @@ contains
         call bos_doc%print_header
         call bos_doc%close
     end subroutine exec_print_project_header
+
+    !> prints the values of inputted keys in the inputted segment
+    subroutine exec_print_project_vals( self, cline )
+        use simple_binoris,    only: binoris
+        use simple_sp_project, only: oritype2segment
+        use simple_binoris,    only: binoris
+        use simple_ori,        only: ori
+        class(print_project_vals_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(binoris)                 :: bos_doc
+        character(len=:), allocatable :: keys, fname, oritype, str
+        character(len=STDLEN)         :: args(32)
+        logical    :: ischar, isthere
+        type(oris) :: os
+        type(ori)  :: o
+        integer    :: nargs, iseg, noris, ikey, iori
+        real       :: rval
+        ! parse the keys
+        keys = cline%get_carg('keys')
+        call parsestr(keys, ',', args, nargs)
+        ! open the project file
+        fname = cline%get_carg('projfile')
+        call bos_doc%open(fname)
+        ! figure out which segment
+        oritype = cline%get_carg('oritype')
+        iseg    = oritype2segment(oritype)
+        noris   = bos_doc%get_n_records(iseg)
+        if( noris == 0 ) return
+        ! read segment
+        call os%new_clean(noris)
+        call bos_doc%read_segment(iseg, os)
+        do iori=1,noris
+            do ikey=1,nargs
+                isthere = os%isthere(iori,trim(args(ikey)),ischar)
+                if( isthere )then
+                    if( ischar )then
+                        call os%getter(iori, trim(args(ikey)), str)
+                        write(*,'(a)',advance='no') trim(str)//' '
+                    else
+                        call os%getter(iori, trim(args(ikey)), rval)
+                        write(*,'(f12.4,a)',advance='no') rval, ' '
+                    endif
+                else
+                    write(*,'(f12.4,a)',advance='no') 0., ' '
+                endif
+            end do
+            write(*,*) ''
+        end do
+    end subroutine exec_print_project_vals
 
     !> for creating a new project
     subroutine exec_new_project( self, cline )

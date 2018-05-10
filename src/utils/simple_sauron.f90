@@ -1,11 +1,11 @@
 ! SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
 ! provides support for one-line per one particle input/output
 module simple_sauron
-    use simple_defs
-    use simple_strings, only: str2format, str2real, str2int, parsestr, split_str
-    use simple_error, only: allocchk
-    use simple_hash,  only: hash
-    use simple_chash, only: chash
+use simple_defs
+use simple_strings, only: str2format, str2real, str2int, parsestr, split_str
+use simple_error,   only: allocchk
+use simple_hash,    only: hash
+use simple_chash,   only: chash
 implicit none
 
 contains
@@ -26,15 +26,7 @@ contains
         do iarg=1,nargs
             args_pair(2) = args(iarg)
             call split_str(args_pair(2), '=', args_pair(1))
-            if( index(args_pair(1),' ')==0 ) write(*,'(a,a)')&
-                &'WARNING! Invalid key; simple_sauron :: sauron_line_parser:', trim(args_pair(1))
-            if( index(args_pair(2),' ')==0 ) write(*,'(a)')&
-                &'WARNING! Invalid arg; simple_sauron :: sauron_line_parser:', trim(args_pair(2))
-            if(len(args_pair(1)) == 0 ) write(*,'(a)')&
-                &'WARNING! Invalid key; simple_sauron :: sauron_line_parser'
-            if(len(args_pair(2)) == 0 ) write(*,'(a)')&
-                &'WARNING! Invalid arg; simple_sauron :: sauron_line_parser'
-            keys(iarg) = args_pair(1) !      CHARACTER expression will be truncated in assignment (32/256)
+            keys(iarg) = trim(args_pair(1))
             vals(iarg) = args_pair(2)
             select case(str2format(vals(iarg)))
                 case( 'real' )

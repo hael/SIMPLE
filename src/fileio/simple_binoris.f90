@@ -355,9 +355,9 @@ contains
 
     subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo )
         use simple_oris,   only: oris
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        class(oris),    intent(inout) :: os
+        class(binoris),    intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        class(oris),       intent(inout) :: os
         integer, optional, intent(in) :: fromto(2)
         logical, optional, intent(in) :: only_ctfparams_state_eo
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))

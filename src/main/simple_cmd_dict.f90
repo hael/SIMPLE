@@ -122,6 +122,7 @@ contains
         call chdict%push('inner',         'inner mask radius(in pixels)')
         call chdict%push('job_memory_per_task', 'memory in MB per task in distributed exec (typically memory per socket)')
         call chdict%push('jumpsz',        'size of contigous segment')
+        call chdict%push('keys',          'keys of values to print')
         call chdict%push('kv',            'acceleration voltage(in kV){300.}')
         call chdict%push('label',         'discrete label(class|state){class}')
         call chdict%push('lp',            'low-pass limit(in A)')

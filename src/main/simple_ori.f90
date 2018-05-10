@@ -531,14 +531,19 @@ contains
     end function hash_size
 
     !>  \brief  check for presence of key in the ori hash
-    function isthere( self, key ) result( found )
-        class(ori),       intent(inout) :: self
-        character(len=*), intent(in)    :: key
+    function isthere( self, key, ischar ) result( found )
+        class(ori),        intent(inout) :: self
+        character(len=*),  intent(in)    :: key
+        logical, optional, intent(out)   :: ischar
         logical :: hash_found, chash_found, found
         hash_found  = self%htab%isthere(key)
         chash_found = self%chtab%isthere(key)
         found = .false.
         if( hash_found .or. chash_found ) found = .true.
+        if( present(ischar) )then
+            ischar = .false.
+            if( chash_found ) ischar = .true.
+        endif
     end function isthere
 
     !>  \brief  whether state is zero
@@ -629,7 +634,7 @@ contains
         call self%set('x', real(nint(self%get('x'))))
         call self%set('y', real(nint(self%get('y'))))
     end subroutine round_shifts
-    
+
     !>  \brief  corrects the Euler angle bounds
     subroutine shift( self )
         class(ori), intent(inout) :: self

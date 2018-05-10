@@ -5,7 +5,7 @@ use simple_oris,    only: oris
 use simple_binoris, only: binoris
 implicit none
 
-public :: sp_project
+public :: sp_project, oritype2segment
 private
 
 integer, parameter :: MAXN_OS_SEG = 13
@@ -127,7 +127,7 @@ contains
                 os_ptr => self%os_out
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: new_with_os_segptr'
+                stop 'unsupported oritype; sp_project :: new_seg_with_ptr'
         end select
     end subroutine new_seg_with_ptr
 
@@ -1563,7 +1563,7 @@ contains
         if( present(numlen_in) ) numlen = numlen_in
         parts  = split_nobjs_even(nptcls, ndocs)
         ! convert from flag to enumerator to integer
-        isegment = which_flag2segment(oritype)
+        isegment = oritype2segment(oritype)
         ! allocate merged oris
         call self%new_seg_with_ptr( nptcls, oritype, os_ptr )
         ! read & transfer
@@ -1746,7 +1746,7 @@ contains
         select case(fname2format(fname))
             case('O')
                 ! *.simple project file
-                isegment = which_flag2segment(which)
+                isegment = oritype2segment(which)
                 call self%bos%open(fname)
                 call self%segreader(isegment)
                 call self%bos%close
@@ -1999,37 +1999,37 @@ contains
 
     ! private supporting subroutines / functions
 
-    integer function which_flag2segment( which )
+    integer function oritype2segment( which )
         character(len=*),  intent(in) :: which
         integer :: isegment
         select case(trim(which))
             case('mic')
-                which_flag2segment = MIC_SEG
+                oritype2segment = MIC_SEG
             case('stk')
-                which_flag2segment = STK_SEG
+                oritype2segment = STK_SEG
             case('ptcl2D')
-                which_flag2segment = PTCL2D_SEG
+                oritype2segment = PTCL2D_SEG
             case('cls2D')
-                which_flag2segment = CLS2D_SEG
+                oritype2segment = CLS2D_SEG
             case('cls3D')
-                which_flag2segment = CLS3D_SEG
+                oritype2segment = CLS3D_SEG
             case('ptcl3D')
-                which_flag2segment = PTCL3D_SEG
+                oritype2segment = PTCL3D_SEG
             case('out')
-                which_flag2segment = OUT_SEG
+                oritype2segment = OUT_SEG
             case('frcs')
-                which_flag2segment = FRCS_SEG
+                oritype2segment = FRCS_SEG
             case('fscs')
-                which_flag2segment = FSCS_SEG
+                oritype2segment = FSCS_SEG
             case('projinfo')
-                which_flag2segment = PROJINFO_SEG
+                oritype2segment = PROJINFO_SEG
             case('jobproc')
-                which_flag2segment = JOBPROC_SEG
+                oritype2segment = JOBPROC_SEG
             case('compenv')
-                which_flag2segment = COMPENV_SEG
+                oritype2segment = COMPENV_SEG
             case DEFAULT
                 stop 'unsupported which flag; sp_project :: which_flag2isgement'
         end select
-    end function which_flag2segment
+    end function oritype2segment
 
 end module simple_sp_project

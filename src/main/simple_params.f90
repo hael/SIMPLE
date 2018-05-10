@@ -129,6 +129,7 @@ type :: params
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.simple)
+    character(len=STDLEN) :: keys=''
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
@@ -510,6 +511,7 @@ contains
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
+        call check_carg('keys',           self%keys)
         call check_carg('kmeans',         self%kmeans)
         call check_carg('label',          self%label)
         call check_carg('local',          self%local)

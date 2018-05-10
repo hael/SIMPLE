@@ -441,12 +441,13 @@ contains
     end function isthere_1
 
     !>  \brief  is for checking if parameter is present
-    function isthere_2( self, i, key ) result( is )
-        class(oris),      intent(inout) :: self
-        integer,          intent(in)    :: i
-        character(len=*), intent(in)    :: key
+    function isthere_2( self, i, key, ischar ) result( is )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: i
+        character(len=*),  intent(in)    :: key
+        logical, optional, intent(out)   :: ischar
         logical :: is
-        is = self%o(i)%isthere(key)
+        is = self%o(i)%isthere(key, ischar)
     end function isthere_2
 
     !>  \brief  is for getting the maximum hash size

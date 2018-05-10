@@ -86,6 +86,7 @@ type(rotmats2oris_commander)         :: xrotmats2oris
 type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
 type(print_project_header_commander) :: xprint_project_header
+type(print_project_vals_commander)   :: xprint_project_vals
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)      :: xtseries_extract
@@ -832,6 +833,12 @@ select case(prg)
         keys_required(1) = 'projfile'
         call cline%parse_oldschool(keys_required(:1))
         call xprint_project_header%execute(cline)
+    case( 'print_project_vals' )
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'keys'
+        keys_required(3) = 'oritype'
+        call cline%parse_oldschool(keys_required(:3))
+        call xprint_project_vals%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 
