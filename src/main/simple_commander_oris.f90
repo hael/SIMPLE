@@ -13,7 +13,6 @@ implicit none
 
 public :: cluster_oris_commander
 public :: make_oris_commander
-public :: map2ptcls_commander
 public :: orisops_commander
 public :: oristats_commander
 public :: rotmats2oris_commander
@@ -28,10 +27,6 @@ type, extends(commander_base) :: make_oris_commander
   contains
     procedure :: execute      => exec_make_oris
 end type make_oris_commander
-type, extends(commander_base) :: map2ptcls_commander
-  contains
-    procedure :: execute      => exec_map2ptcls
-end type map2ptcls_commander
 type, extends(commander_base) :: orisops_commander
   contains
     procedure :: execute      => exec_orisops
@@ -137,136 +132,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_ORIS NORMAL STOP ****')
     end subroutine exec_make_oris
-
-    !> for mapping parameters that have been obtained using class averages to the individual particle images
-    subroutine exec_map2ptcls( self, cline )
-        use simple_image,   only: image
-        use simple_corrmat, only: calc_cartesian_corrmat
-        class(map2ptcls_commander), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
-        type state_organiser !> map2ptcls state struct
-            integer, allocatable :: particles(:)
-            type(ori)            :: ori3d
-        end type state_organiser
-        type(state_organiser), allocatable :: labeler(:)
-        type(image),           allocatable :: imgs_sel(:), imgs_cls(:)
-        real,                  allocatable :: correlations(:,:)
-        integer,               allocatable :: rejected_particles(:)
-        logical,               allocatable :: selected(:)
-        integer              :: isel, nsel, loc(1), iptcl, pind, icls
-        integer              :: nlines_oritab, nlines_oritab3D, nlines_deftab
-        integer              :: ldim2(3), ldim3(3)
-        real                 :: corr, rproj, rstate
-        type(params)         :: p
-        type(build)          :: b
-        class(oris), pointer :: o_oritab3D
-        type(ori)            :: ori2d, ori_comp, o
-        type(sp_project)     :: spproj
-        p = params(cline)                                 ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        if( cline%defined('stk2') )then
-            ! find number of selected cavgs
-            call find_ldim_nptcls(p%stk2, ldim2, nsel)
-            ! find number of original cavgs
-            call find_ldim_nptcls(p%stk3, ldim3, p%ncls)
-            if( p%ncls < nsel ) stop 'nr of original clusters cannot be less than the number of selected ones'
-            if( any(ldim2(:2) /= ldim3(:2)) )then
-                print *, 'ldim2: ', ldim2(:2)
-                print *, 'ldim3: ', ldim3(:2)
-                stop 'ERROR, dimensions of stk2/stk3 non-congruent; commander_oris :: map2ptcls'
-            endif
-            p%box = ldim2(1)
-        else
-            call b%a%remap_cls()
-            p%ncls = b%a%get_n('class')
-            nsel   = p%ncls
-        endif
-        ! find number of lines in input document
-        nlines_oritab = binread_nlines(p, p%oritab)
-        if( cline%defined('deftab') )then
-            nlines_deftab = binread_nlines(p, p%deftab)
-            if( nlines_oritab /= nlines_deftab ) stop 'nr lines in oritab .ne. nr lines in deftab; must be congruent!'
-        endif
-        if( cline%defined('stk2') )then
-            allocate(imgs_sel(nsel), imgs_cls(p%ncls),stat=alloc_stat)
-            if(alloc_stat /= 0)call allocchk("commander_oris::map2ptcls imgs_sel/cls",alloc_stat)
-            ! read images
-            do isel=1,nsel
-                call imgs_sel(isel)%new([p%box,p%box,1], p%smpd)
-                call imgs_sel(isel)%read(p%stk2, isel)
-            end do
-            do icls=1,p%ncls
-                call imgs_cls(icls)%new([p%box,p%box,1], p%smpd)
-                call imgs_cls(icls)%read(p%stk3, icls)
-            end do
-            write(*,'(a)') '>>> CALCULATING CORRELATIONS'
-            call calc_cartesian_corrmat(imgs_sel, imgs_cls, correlations)
-            ! find selected clusters & map selected to original clusters & extract the particle indices
-            allocate(labeler(nsel), selected(p%ncls),stat=alloc_stat)
-            if(alloc_stat /= 0)call allocchk("commander_oris:: map2ptcls labeler, selected",alloc_stat)
-            ! initialise selection array
-            selected = .false.
-            write(*,'(a)') '>>> MAPPING SELECTED TO ORIGINAL CLUSTERS'
-            do isel=1,nsel
-                loc              = maxloc(correlations(isel,:))
-                selected(loc(1)) = .true.
-                call b%a%get_pinds(loc(1), 'class', labeler(isel)%particles)
-            end do
-            ! erase deselected (by setting their state to zero)
-            do icls=1,p%ncls
-                if( selected(icls) ) cycle
-                if( b%a%get_pop(icls, 'class') > 0 )then
-                    call b%a%get_pinds(icls, 'class',rejected_particles)
-                    do iptcl=1,size(rejected_particles)
-                        call b%a%set(rejected_particles(iptcl), 'state', 0.)
-                    end do
-                    deallocate(rejected_particles)
-                endif
-            end do
-        else
-            allocate(labeler(nsel),stat=alloc_stat)
-            if(alloc_stat /= 0)call allocchk("commander_oris:: map2ptcls labeler",alloc_stat)
-            do isel=1,nsel
-                call b%a%get_pinds(isel, 'class', labeler(isel)%particles)
-            end do
-        endif
-        if( cline%defined('oritab3D') )then
-            if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
-            nlines_oritab3D = binread_nlines(p, p%oritab3D)
-            if( nlines_oritab3D /= nsel ) stop '# lines in oritab3D /= nr of selected cavgs'
-            call spproj%new_seg_with_ptr(nsel, 'cls3D', o_oritab3D)
-            call binread_oritab(p%oritab3D, spproj, o_oritab3D, [1,nsel])
-            ! compose orientations and set states
-            do isel=1,nsel
-                ! get 3d ori info
-                o      = o_oritab3D%get_ori(isel)
-                rproj  = o%get('proj')
-                rstate = o%get('state')
-                corr   = o%get('corr')
-                do iptcl=1,size(labeler(isel)%particles)
-                    ! get particle index
-                    pind = labeler(isel)%particles(iptcl)
-                    ! get 2d ori
-                    ori2d = b%a%get_ori(pind)
-                    if( cline%defined('mul') )then
-                        call ori2d%set('x', p%mul*ori2d%get('x'))
-                        call ori2d%set('y', p%mul*ori2d%get('y'))
-                    endif
-                    ! transfer original parameters in b%a
-                    ori_comp = b%a%get_ori(pind)
-                    ! compose ori3d and ori2d
-                    call o%compose3d2d(ori2d, ori_comp)
-                    ! set parameters in b%a
-                    call b%a%set_ori(pind, ori_comp)
-                    call b%a%set(pind, 'corr',  corr)
-                    call b%a%set(pind, 'proj',  rproj)
-                    call b%a%set(pind, 'state', rstate)
-                end do
-            end do
-        endif
-        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,p%nptcls])
-        call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
-    end subroutine exec_map2ptcls
 
     subroutine exec_orisops( self, cline )
         class(orisops_commander), intent(inout) :: self

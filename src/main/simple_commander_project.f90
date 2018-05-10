@@ -12,6 +12,7 @@ implicit none
 public :: project2txt_commander
 public :: txt2project_commander
 public :: print_project_info_commander
+public :: print_project_header_commander
 public :: new_project_commander
 public :: update_project_commander
 public :: import_movies_commander
@@ -31,6 +32,10 @@ type, extends(commander_base) :: print_project_info_commander
   contains
     procedure :: execute      => exec_print_project_info
 end type print_project_info_commander
+type, extends(commander_base) :: print_project_header_commander
+  contains
+    procedure :: execute      => exec_print_project_header
+end type print_project_header_commander
 type, extends(commander_base) :: new_project_commander
   contains
     procedure :: execute      => exec_new_project
@@ -100,6 +105,19 @@ contains
         call spproj%kill
         call simple_end('**** PRINT_PROJECT_INFO NORMAL STOP ****')
     end subroutine exec_print_project_info
+
+    !> convert binary (.simple) oris doc to text (.txt)
+    subroutine exec_print_project_header( self, cline )
+        use simple_binoris, only: binoris
+        class(print_project_header_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(binoris)                 :: bos_doc
+        character(len=:), allocatable :: fname
+        fname = cline%get_carg('projfile')
+        call bos_doc%open(fname)
+        call bos_doc%print_header
+        call bos_doc%close
+    end subroutine exec_print_project_header
 
     !> for creating a new project
     subroutine exec_new_project( self, cline )

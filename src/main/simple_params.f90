@@ -166,8 +166,8 @@ type :: params
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
     character(len=STDLEN) :: stktab=''            !< list of per-micrograph stacks
-    character(len=STDLEN) :: stk2=''              !< 2nd stack(in map2ptcls/select: selected(cavgs).ext)
-    character(len=STDLEN) :: stk3=''              !< 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+    character(len=STDLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
+    character(len=STDLEN) :: stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
     character(len=STDLEN) :: stk_backgr=''        !< stack with image for background subtraction
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc

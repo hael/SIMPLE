@@ -22,7 +22,6 @@ implicit none
 
 ! PRE-PROCESSING PROGRAMS
 type(preprocess_commander)           :: xpreprocess
-type(select_frames_commander)        :: xselect_frames
 type(powerspecs_commander)           :: xpowerspecs
 type(motion_correct_commander)       :: xmotion_correct
 type(ctf_estimate_commander)         :: xctf_estimate
@@ -40,8 +39,7 @@ type(rank_cavgs_commander)           :: xrank_cavgs
 type(npeaks_commander)               :: xnpeaks
 type(nspace_commander)               :: xnspace
 type(refine3D_init_commander)        :: xrefine3D_init
-type(rec_test_commander)             :: xrec_test
-type(multiptcl_init_commander)       :: xmultiptcl_init
+! type(multiptcl_init_commander)       :: xmultiptcl_init
 type(prime3D_commander)              :: xprime3D
 type(check_3Dconv_commander)         :: xcheck_3Dconv
 
@@ -65,18 +63,15 @@ type(check_box_commander)            :: xcheck_box
 type(check_nptcls_commander)         :: xcheck_nptcls
 
 ! VOLOPS PROGRAMS
-type(postprocess_commander)          :: xpostprocess ! DUPLICATED
+type(postprocess_commander)          :: xpostprocess   ! DUPLICATED
 type(reproject_commander)            :: xreproject     ! DUPLICATED
 type(volaverager_commander)          :: xvolaverager
 type(volume_smat_commander)          :: xvolume_smat
 type(dock_volpair_commander)         :: xdock_volpair
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
-type(scale_commander)                :: xscale       ! DUPLICATED
+type(scale_commander)                :: xscale         ! DUPLICATED
 type(binarise_commander)             :: xbinarise
-type(corrcompare_commander)          :: xcorrcompare
-type(image_diff_commander)           :: ximage_diff
-type(image_smat_commander)           :: ximage_smat
 
 ! MISCELLANOUS PROGRAMS
 type(masscen_commander)              :: xmasscen
@@ -86,11 +81,11 @@ type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(map2ptcls_commander)            :: xmap2ptcls
 type(cluster_oris_commander)         :: xcluster_oris
 type(rotmats2oris_commander)         :: xrotmats2oris
 type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
+type(print_project_header_commander) :: xprint_project_header
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)      :: xtseries_extract
@@ -120,10 +115,8 @@ select case(prg)
     ! PRE-PROCESSING PROGRAMS
 
     case( 'preprocess' )
-        !==Program preprocess
-        !
-        ! <preprocess/begin>is a program that executes motion_correct, ctf_estimate and pick in sequence
-        ! <preprocess/end>
+        ! executes motion_correct, ctf_estimate and pick in sequence
+        keys_required(1)   = 'projfile'
         ! set optional keys
         keys_optional(1)   = 'nthr'
         keys_optional(2)   = 'refs'
@@ -155,8 +148,7 @@ select case(prg)
         keys_optional(28)  = 'ndev'
         keys_optional(29)  = 'pcontrast'
         keys_optional(30)  = 'ctfreslim'
-        ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:30))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
@@ -169,30 +161,8 @@ select case(prg)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
         call xpreprocess%execute(cline)
-    case( 'select_frames' )
-        !==Program select_frames
-        !
-        ! <select_frames/begin>is a program for selecting contiguous segments of frames from DDD movies
-        ! <select_frames/end>
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'fbody'
-        keys_required(3) = 'fromf'
-        keys_required(4) = 'tof'
-        keys_required(5) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'startit'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:1))
-        ! execute
-        call xselect_frames%execute(cline)
     case( 'powerspecs' )
-        !==Program powerspecs
-        !
-        ! <powerspecs/begin>is a program for generating powerspectra from a stack or filetable<powerspecs/end>
-        !
-        ! set required keys
+        ! for generating powerspectra from a stack or filetable
         keys_required(1) = 'smpd'
         keys_required(2) = 'fbody'
         ! set optional keys
@@ -204,27 +174,14 @@ select case(prg)
         keys_optional(6) = 'startit'
         keys_optional(7) = 'lp'
         keys_optional(8) = 'clip'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:2), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
-        ! execute
         call xpowerspecs%execute(cline)
     case( 'motion_correct' )
-        !==Program motion_correct
-        !
-        ! <motion_correct/begin>is a program for movie alignment or motion_correctring based the same principal strategy as
-        ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
-        ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
-        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
-        ! of which deserve a comment. If dose_rate and exp_time are given the individual frames will be
-        ! low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier
-        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given
-        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given,
-        ! a contiguous subset of frames will be averaged without any dose-weighting applied.
-        ! <motion_correct/end>
-        !
+        ! for movie alignment
+        keys_required(1)  = 'projfile'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'fbody'
@@ -242,21 +199,17 @@ select case(prg)
         keys_optional(14) = 'fromf'
         keys_optional(15) = 'tof'
         keys_optional(16) = 'nsig'
-        ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:16))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
-        ! execute
         call xmotion_correct%execute(cline)
     case( 'ctf_estimate' )
-        !==Program ctf_estimate
-        !
-        ! <ctf_estimate/begin>is a SIMPLE program for fitting the CTF<ctf_estimate/end>
-        !
+        ! for fitting the CTF
+        keys_required(1)  = 'projfile'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'pspecsz'
@@ -267,33 +220,21 @@ select case(prg)
         keys_optional(7) = 'astigtol'
         keys_optional(8) = 'phaseplate'
         keys_optional(9) = 'dir'
-        ! parse command line
-        call cline%parse_oldschool(keys_optional=keys_optional(:9))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
-        ! execute
         call xctf_estimate%execute(cline)
     case( 'map_cavgs_selection' )
-        !==Program map_cavgs_selection
-        !
-        ! <map_cavgs_selection/begin>is for mapping class average selection to project<map_cavgs_selection/end>
-        !
-        ! set required keys
+        ! for mapping class average selection to project
         keys_required(1)  = 'stk'
         keys_required(2)  = 'stk2'
         keys_required(3)  = 'projfile'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3))
-        ! execute
         call xmap_cavgs_selection%execute(cline)
     case( 'motion_correct_ctf_estimate' )
-        !==Program motion_correct_ctf_estimate
-        !
-        ! <motion_correct_ctf_estimate/begin>is a pipelined motion_correct + ctf_estimate program<motion_correct_ctf_estimate/end>
-        !
-        ! set required keys
+        ! pipelined motion_correct + ctf_estimate
         keys_required(1)  = 'filetab'
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'kv'
@@ -323,7 +264,6 @@ select case(prg)
         keys_optional(21) = 'dfstep'
         keys_optional(22) = 'astigtol'
         keys_optional(23) = 'phaseplate'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:5), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no')
@@ -336,32 +276,23 @@ select case(prg)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
         if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
-        ! execute
         call xpreprocess%execute(cline)
     case( 'pick' )
-        !==Program pick
-        !
-        ! <pick/begin>is a template-based picker program<pick/end>
-        !
-        ! set required keys
-        keys_required(1) = 'refs'
+        ! for template-based particle picking
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'refs'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
         keys_optional(4) = 'ndev'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:4))
-        ! execute
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
         call xpick%execute(cline)
 
     ! CLUSTER2D PROGRAMS
 
     case( 'make_cavgs' )
-        !==Program make_cavgs
-        !
-        ! <make_cavgs/begin>is used  to produce class averages or initial random references
-        ! for cluster2D execution. <make_cavgs/end>
+        ! for producing class averages or initial random references for cluster2D execution
         keys_required(1)  = 'projfile'
         ! set optional keys
         keys_optional(1)  = 'nthr'
@@ -373,19 +304,12 @@ select case(prg)
         keys_optional(7)  = 'refs'
         keys_optional(8)  = 'remap_cls'
         keys_optional(9)  = 'weights2D'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:1), keys_optional(:9))
-        ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
-        ! execute
         call xmake_cavgs%execute(cline)
     case( 'cluster2D' )
-        !==Program cluster2D
-        !
-        ! <cluster2D/begin>is a reference-free 2D alignment/clustering algorithm adopted from the prime3D
-        ! probabilistic ab initio 3D reconstruction algorithm<cluster2D/end>
-        !
-        ! set required keys
+        ! is a reference-free 2D alignment/clustering algorithm adopted from the PRIME
+        ! probabilistic ab initio 3D reconstruction algorithm
         keys_required(1)  = 'projfile'
         keys_required(2)  = 'msk'
         keys_required(3)  = 'ncls'
@@ -410,7 +334,6 @@ select case(prg)
         keys_optional(18) = 'match_filt'
         keys_optional(19) = 'dyncls'
         keys_optional(20) = 'shellw'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:20))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
@@ -419,73 +342,41 @@ select case(prg)
         if( .not. cline%defined('eo')        ) call cline%set('eo',       'no')
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',    30.)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D','no')
-        ! execute
         call xcluster2D%execute(cline)
     case( 'cavgassemble' )
-        !==Program cavgassemble
-        !
-        ! <cavgassemble/begin>is a program that assembles class averages when the clustering
-        ! program (cluster2D) has been executed in distributed mode<cavgassemble/end>
-        !
-        ! set required keys
+        ! for assembling class averages when the clustering
+        ! program (cluster2D) has been executed in distributed mode
         keys_required(1) = 'projfile'
         keys_required(2) = 'nparts'
         keys_required(3) = 'ncls'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'refs'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:2))
-        ! execute
         call xcavgassemble%execute(cline)
     case( 'check_2Dconv' )
-        !==Program check_2Dconv
-        !
-        ! <check_2Dconv/begin>is a program for checking if a cluster2D run has converged.
-        ! The statistics outputted include (1) the overlap between the distribution of parameters
-        ! for succesive runs. (2) The percentage of search space scanned, i.e. how many reference
-        ! images are evaluated on average. (3) The average correlation between the images and
-        ! their corresponding best matching reference section. If convergence to a local optimum
-        ! is achieved, the fraction increases. Convergence is achieved if the parameter distribution
-        ! overlap is larger than 0.95 and more than 99% of the reference sections need to be
-        ! searched to find an improving solution<check_2Dconv/end>
-        !
-        ! set required keys
+        ! for convergence checking and run-time stats printing (3D)
         keys_required(1) = 'projfile'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:1))
         ! set defaults
         call cline%set('oritype', 'ptcl2D')
-        ! execute
         call xcheck_2Dconv%execute(cline)
     case( 'rank_cavgs' )
-        !==Program rank_cavgs
-        !
-        ! <rank_cavgs/begin>is a program for ranking class averages by decreasing population, given the
-        ! stack of class averages (stk argument) and the 2D orientations document (oritab)
-        ! generated by cluster2D<rank_cavgs/end>
-        !
-        ! set required keys
+        ! for ranking class averages
         keys_required(1) = 'projfile'
         keys_required(2) = 'stk'
         ! set optional keys
         keys_optional(1) = 'outstk'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
         ! set defaults
         call cline%set('oritype', 'cls2D')
-        ! execute
         call xrank_cavgs%execute(cline)
 
-    ! PRIME3D PROGRAMS
+    ! REFINE3D PROGRAMS
 
     case( 'npeaks' )
-        !==Program npeaks
-        !
-        ! <npeaks/begin>is a program for checking the number of nonzero orientation weights (number of correlation peaks
-        ! included in the weighted reconstruction)<npeaks/end>
-        !
-        ! set required keys
+        ! for checking the number of nonzero orientation weights (number of correlation peaks
+        ! included in the weighted reconstruction)
         keys_required(1) = 'smpd'
         keys_required(2) = 'box'
         keys_required(3) = 'lp'
@@ -493,26 +384,18 @@ select case(prg)
         keys_optional(1) = 'nspace'
         keys_optional(2) = 'moldiam'
         keys_optional(3) = 'pgrp'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! set defaults
-        if( .not. cline%defined('lp') )     call cline%set('lp',       20.)
-        ! execute
+        if( .not. cline%defined('lp') ) call cline%set('lp', 20.)
         call xnpeaks%execute(cline)
     case( 'nspace' )
-        !==Program nspace
-        !
-        ! <nspace/begin>is a program for calculating the expected resolution obtainable with different values of nspace
-        ! (number of discrete projection directions used for discrete search)<nspace/end>
-        !
-        ! set required keys
+        ! for calculating the expected resolution obtainable with different values of nspace
+        ! (number of discrete projection directions used for discrete search)
         keys_required(1)  = 'moldiam'
-        ! parse command line
         call cline%parse_oldschool(keys_required=keys_required(:1))
-        ! execute
         call xnspace%execute(cline)
     case( 'refine3D_init' )
-        ! set required keys
+        ! initialization of 3D refinement
         keys_required(1) = 'msk'
         keys_required(2) = 'pgrp'
         keys_required(3) = 'projfile'
@@ -522,54 +405,47 @@ select case(prg)
         keys_optional(3) = 'nspace'
         keys_optional(4) = 'nran'
         keys_optional(5) = 'shellw'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
-        ! execute
         call xrefine3D_init%execute(cline)
-    case( 'multiptcl_init' )
-        !==Program multiptcl_init
-        !
-        ! <multiptcl_init/begin>is a program for generating random initial models for initialisation of PRIME3D
-        ! when run in multiparticle mode<multiptcl_init/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'ctf'
-        keys_required(3)  = 'pgrp'
-        keys_required(4)  = 'nstates'
-        keys_required(5)  = 'msk'
-        keys_required(6)  = 'oritab'
-        ! set optionnal keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'inner'
-        keys_optional(4)  = 'width'
-        keys_optional(5)  = 'lp'
-        keys_optional(6)  = 'eo'
-        keys_optional(7)  = 'frac'
-        keys_optional(8)  = 'state2split'
-        keys_optional(9)  = 'norec'
-        keys_optional(10) = 'mul'
-        keys_optional(11) = 'zero'
-        keys_optional(12) = 'tseries'
-        keys_optional(13) = 'center'
-        keys_optional(14) = 'stk'
-        keys_optional(15) = 'stktab'
-        keys_optional(16) = 'phaseplate'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:16))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
-        ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
-        !execute
-        call xmultiptcl_init%execute(cline)
+    ! case( 'multiptcl_init' )
+    !     ! for generating random initial models for initialisation multiparticle analysis
+    !     keys_required(1)  = 'smpd'
+    !     keys_required(2)  = 'ctf'
+    !     keys_required(3)  = 'pgrp'
+    !     keys_required(4)  = 'nstates'
+    !     keys_required(5)  = 'msk'
+    !     keys_required(6)  = 'oritab'
+    !     ! set optionnal keys
+    !     keys_optional(1)  = 'nthr'
+    !     keys_optional(2)  = 'deftab'
+    !     keys_optional(3)  = 'inner'
+    !     keys_optional(4)  = 'width'
+    !     keys_optional(5)  = 'lp'
+    !     keys_optional(6)  = 'eo'
+    !     keys_optional(7)  = 'frac'
+    !     keys_optional(8)  = 'state2split'
+    !     keys_optional(9)  = 'norec'
+    !     keys_optional(10) = 'mul'
+    !     keys_optional(11) = 'zero'
+    !     keys_optional(12) = 'tseries'
+    !     keys_optional(13) = 'center'
+    !     keys_optional(14) = 'stk'
+    !     keys_optional(15) = 'stktab'
+    !     keys_optional(16) = 'phaseplate'
+    !     ! parse command line
+    !     call cline%parse_oldschool(keys_required(:6), keys_optional(:16))
+    !     ! sanity check
+    !     if( cline%defined('stk') .or. cline%defined('stktab') )then
+    !         ! all ok
+    !     else
+    !         stop 'stk or stktab need to be part of command line!'
+    !     endif
+    !     ! set defaults
+    !     if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
+    !     !execute
+    !     call xmultiptcl_init%execute(cline)
     case( 'refine3D' )
         ! set required keys
         keys_required(1)  = 'vol1'
@@ -603,7 +479,6 @@ select case(prg)
         keys_optional(24) = 'rrate'
         keys_optional(25) = 'update_frac'
         keys_optional(26)  = 'shellw'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:4), keys_optional(:26))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
@@ -615,39 +490,9 @@ select case(prg)
                 if( .not. cline%defined('oritab')  ) stop 'refine=MULTI requires ORITAB input'
             endif
         endif
-        ! execute
         call xprime3D%execute(cline)
-    case( 'rec_test' )
-        ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'msk'
-        keys_required(3) = 'ctf'
-        keys_required(4) = 'pgrp'
-        keys_required(5) = 'oritab'
-        keys_required(6) = 'stk'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:1))
-        ! execute
-        call xrec_test%execute(cline)
     case( 'check_3Dconv' )
-        !==Program check_3Dconv
-        !
-        ! <check_3Dconv/begin>is a program for checking if a PRIME3D run has converged. The statistics
-        ! outputted include (1) angle of feasible region, which is proportional to the angular
-        ! resolution of the set of discrete projection directions being searched. (2) The average angular
-        ! distance between orientations in the present and previous iteration. In the early iterations,
-        ! the distance is large because a diverse set of orientations is explored. If convergence to a
-        ! local optimum is achieved, the distance decreases. (3) The percentage of search space scanned,
-        ! i.e. how many reference images are evaluated on average. (4) The average correlation between
-        ! the images and their corresponding best matching reference sections. (5) The average standard
-        ! deviation of the Euler angles. Convergence is achieved if the angular distance between the
-        ! orientations in successive iterations falls significantly below the angular resolution of the
-        ! search space and more than 99% of the reference sections need to be matched on average
-        ! <check_3Dconv/end>
-        !
-        ! set required keys
+        ! for convergence checking and run-time stats printing (3D)
         keys_required(1) = 'projfile'
         keys_required(2) = 'pgrp'
         ! set optional keys
@@ -666,19 +511,7 @@ select case(prg)
     ! COMMON-LINES PROGRAMS
 
     case( 'symsrch' )
-        !==Program symsrch
-        !
-        ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume
-        ! reconstructed without assuming any point-group symmetry. The program takes as input an
-        ! asymmetrical 3D reconstruction. The alignment document for all the particle images
-        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to
-        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions,
-        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational
-        ! transformation is applied to the inputted orientations, and a new alignment document is produced.
-        ! Input this document to reconstruct3D together with the images and the point-group symmetry to generate a
-        ! symmetrised map.<symsrch/end>
-        !
-        ! set required keys
+        ! search for symmetry axis of vol
         keys_required(1) = 'vol1'
         keys_required(2) = 'smpd'
         keys_required(3) = 'msk'
@@ -690,7 +523,6 @@ select case(prg)
         keys_optional(3) = 'hp'
         keys_optional(4) = 'nspace'
         keys_optional(5) = 'center'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:5), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('nspace') )then
@@ -698,18 +530,12 @@ select case(prg)
         endif
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 30.)
-        ! execute
         call xsymsrch%execute(cline)
 
     ! SYMMETRY PROGRAMs
 
     case( 'sym_aggregate' )
-        !==Program symsrch
-        !
-        ! <sym_aggregate/begin>is a program for robust identification of the symmetry axis
-        ! of a map using image-to-volume simiarity validation of the axis<sym_aggregate/end>
-        !
-        ! set required keys
+        ! for robust identification of the symmetry axis of a map using image-to-volume simiarity validation of the axis
         keys_required(1) = 'vol1'
         keys_required(2) = 'smpd'
         keys_required(3) = 'msk'
@@ -720,20 +546,14 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:6), keys_optional(:3))
         ! set defaults
         call cline%set('eo','no')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
-        ! execute
         call xsym_aggregate%execute(cline)
     case( 'dsymsrch' )
-        !==Program symsrch
-        !
-        ! <dsymsrch/begin>is a program for identifying rotational symmetries in class averages of
-        ! D-symmetric molecules and generating a cylinder that matches the shape.<dsymsrch/end>
-        !
-        ! set required keys
+        ! for identifying rotational symmetries in class averages of D-symmetric molecules
+        ! and generating a cylinder that matches the shape
         keys_required(1) = 'smpd'
         keys_required(2) = 'msk'
         keys_required(3) = 'pgrp'
@@ -743,33 +563,24 @@ select case(prg)
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'outfile'
         keys_optional(4) = 'outvol'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
-        ! execute
         call xdsymsrch%execute(cline)
 
     ! MASK PROGRAMS
 
     case( 'resmask' )
-        !==Program resmask
-        !
-        ! <resmask/begin>is a program for 3D envelope masking for resolution estimation<resmask/end>
-        !
-        ! set required keys
+        ! for 3D envelope masking for resolution estimation
         keys_required(1) = 'smpd'
         keys_required(2) = 'msk'
         keys_required(3) = 'mskfile'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3))
-        ! execute
         call xresmask%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
 
     case( 'reconstruct3D' )
-        ! set required keys
         keys_required(1)  = 'projfile'
         keys_required(2)  = 'pgrp'
         keys_required(3)  = 'msk'
@@ -779,24 +590,12 @@ select case(prg)
         keys_optional(3)  = 'frac'
         keys_optional(4)  = 'mskfile'
         keys_optional(5)  = 'shellw'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
-        ! execute
         call xreconstruct3D%execute(cline)
     case( 'volassemble_eo' )
-        !==Program volassemble_eo
-        !
-        ! <volassemble_eo/begin>is a program that assembles volume(s) when the reconstruction
-        ! program (reconstruct3D with eo=yes) has been executed in distributed mode. inner applies a soft-edged
-        ! inner mask. An inner mask is used for icosahedral virus reconstruction, because the
-        ! DNA or RNA core is often unordered and  if not removed it may negatively impact the
-        ! alignment. The width parameter controls the fall-off of the edge of the
-        ! inner mask<volassemble_eo/end>
-        !
-        ! set required keys
         keys_required(1) = 'nparts'
         keys_required(2) = 'projfile'
         keys_required(3) = 'msk'
@@ -805,67 +604,34 @@ select case(prg)
         keys_optional(2) = 'state'
         keys_optional(3) = 'nstates'
         keys_optional(4) = 'mskfile'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
-        ! execute
         call xvolassemble_eo%execute(cline)
     case( 'volassemble' )
-        !==Program volassemble
-        !
-        ! <volassemble/begin>is a program that assembles volume(s) when the reconstruction program
-        ! (reconstruct3D) has been executed in distributed mode. odd is used to assemble the odd reconstruction,
-        ! even is used to assemble the even reconstruction, eo is used to assemble both the even and the
-        ! odd reconstruction and state is used to assemble the inputted state. Normally, you do not fiddle with
-        ! these parameters. They are used internally<volassemble/end>
-        !
-        ! set required keys
         keys_required(1) = 'nparts'
         keys_required(2) = 'projfile'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'state'
         keys_optional(3) = 'nstates'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
-        ! execute
         call xvolassemble%execute(cline)
 
     ! CHECKER PROGRAMS
 
     case( 'check_box' )
-        !==Program check_box
-        !
-        ! <check_box/begin>is a program for checking the image dimensions of MRC and SPIDER
-        !  stacks and volumes<check_box/end>
-        !
-        ! set optional keys
         keys_optional(1) = 'stk'
         keys_optional(2) = 'vol1'
-        ! parse command line
         call cline%parse_oldschool( keys_optional=keys_optional(:2))
-        ! execute
         call xcheck_box%execute(cline)
     case( 'check_nptcls' )
-        !==Program check_nptcls
-        !
-        ! <check_nptcls/begin>is a program for checking the number of images in MRC and SPIDER
-        ! stacks<check_nptcls/end>
-        !
-        ! set optional keys
         keys_required(1) = 'stk'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:1))
-        ! execute
         call xcheck_nptcls%execute(cline)
 
     ! VOLOPS PROGRAMS
 
     case( 'postprocess' )
-        !==Program postprocess
-        !
-        ! <postprocess/begin>is a program for post-processing of volumes<postprocess/end>
-        !
-        ! set required keys
+        ! for post-processing of volumes
         keys_required(1)  = 'vol1'
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'msk'
@@ -883,25 +649,10 @@ select case(prg)
         keys_optional(11) = 'vol_filt'
         keys_optional(12) = 'inner'
         keys_optional(13) = 'mirr'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:13))
-        ! execute
         call xpostprocess%execute(cline)
-    case( 'project' )
-        !==Program project
-        !
-        ! <project/begin>is a program for projecting a volume using interpolation in Fourier space. Input is a SPIDER or
-        ! MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections
-        ! are generated by extraction of central sections from the Fourier volume and back transformation of the 2D FTs.
-        ! nspace controls the number of projection images generated with quasi-even projection directions. The
-        ! oritab parameter allows you to input the orientations that you wish to have your volume projected in. If
-        ! rnd=yes, random rather than quasi-even projections are generated, trs then controls the halfwidth of
-        ! the random origin shift. Less commonly used parameters are pgrp, which controls the point-group symmetry
-        ! c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is
-        ! used to restrict the set of projections to within the asymmetric unit.
-        ! neg inverts the contrast of the projections. <project/end>
-        !
-        ! set required keys
+    case( 'reproject' )
+        ! for re-projecting a volume using interpolation in Fourier space
         keys_required(1)  = 'vol1'
         keys_required(2)  = 'smpd'
         ! set optional keys
@@ -915,36 +666,22 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'top'
         keys_optional(10) = 'msk'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:2), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
         if( .not. cline%defined('alpha') ) call cline%set('alpha', 2.)
-        ! execute
         call xreproject%execute(cline)
     case( 'volaverager' )
-        !==Program volaverager
-        !
-        ! <volaverager/begin>is a program for averaging volumes according to state label in oritab
-        ! <volaverager/end>
-        !
-        ! set required keys
+        ! for averaging volumes according to state label in oritab
         keys_required(1) = 'vollist'
         keys_required(2) = 'oritab'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
-        ! execute
         call xvolaverager%execute(cline)
     case( 'volume_smat' )
-        !==Program volume_smat
-        !
-        ! <volume_smat/begin>is a program for creating a similarity matrix based on volume2volume
-        ! correlation<volume_smat/end>
-        !
-        ! set required keys
+        ! for creating a similarity matrix based on volume2volume correlation
         keys_required(1) = 'vollist'
         keys_required(2) = 'smpd'
         keys_required(3) = 'lp'
@@ -952,17 +689,10 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'hp'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:4), keys_optional(:2))
-        ! execute
         call xvolume_smat%execute(cline)
     case( 'dock_volpair' )
-        !==Program dock_volpair
-        !
-        ! <dock_volpair/begin>is a program for docking a pair of volumes. vol1 is reference and vol2 target.
-        ! <dock_volpair/end>
-        !
-        ! set required keys
+        ! for docking a pair of volumes. vol1 is reference and vol2 target
         keys_required(1) = 'vol1'
         keys_required(2) = 'vol2'
         keys_required(3) = 'smpd'
@@ -972,20 +702,13 @@ select case(prg)
         keys_optional(1) = 'hp'
         keys_optional(2) = 'dockmode'
         keys_optional(3) = 'outvol'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
-        ! execute
         call xdock_volpair%execute(cline)
 
     ! GENERAL IMAGE PROCESSING PROGRAMS
 
     case( 'scale' )
-        !==Program scale
-        !
-        ! <scale/begin>is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks
-        ! and volumes<scale/end>
-        !
-        ! set required keys
+        !  provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
         keys_required(1)  = 'smpd'
         ! set optional keys
         keys_optional(1)  = 'stk'
@@ -999,16 +722,10 @@ select case(prg)
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
         keys_optional(11) = 'outstk2'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:1),keys_optional(:11))
-        ! execute
         call xscale%execute(cline)
     case( 'binarise' )
-        !==Program binarise
-        !
-        ! <binarise/begin>is a program for binarisation of stacks and volumes<binarise/end>
-        !
-        ! set optional keys
+        ! for binarisation of stacks and volumes
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'stk'
         keys_optional(3)  = 'vol1'
@@ -1019,75 +736,13 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
-        ! parse command line
         call cline%parse_oldschool(keys_optional=keys_optional(:10))
-        ! execute
         call xbinarise%execute(cline)
-    case( 'corrcompare' )
-        !==Program corrcompare
-        !
-        ! <corrcompare/begin>is a program for comparing stacked images using real-space and Fourier-based approaches
-        ! <corrcompare/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'stk2'
-        ! set optional keys
-        keys_optional(1) = 'msk'
-        keys_optional(2) = 'stats'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'smpd'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
-        ! execute
-        call xcorrcompare%execute(cline)
-     case( 'image_diff' )
-        !==Program corrcompare
-        !
-        ! <image_diff/begin>is a program for comparing stacked images using differences
-        ! <image_diff/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'stk2'
-        ! set optional keys
-        keys_optional(1) = 'msk'
-        keys_optional(2) = 'stats'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'smpd'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
-        ! execute
-        call ximage_diff%execute(cline)
-    case( 'image_smat' )
-        !==Program image_smat
-        !
-        ! <image_smat/begin>is a program for creating a similarity matrix based on common line correlation. The idea
-        ! being that it should be possible to cluster images based on their 3D similarity witout having a 3D model
-        ! by only operating on class averages and find averages that fit well together in 3D<image_smat/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'lp'
-        keys_optional(2) = 'msk'
-        keys_optional(3) = 'hp'
-        keys_optional(4) = 'nthr'
-        ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
-        ! execute
-        call ximage_smat%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
 
     case( 'masscen' )
-        !==Program masscen
-        !
-        ! <masscen/begin>is a program for centering images acccording to their
-        ! centre of mass<masscen/end>
-        !
-        ! set required keys
+        ! for centering images acccording to their centre of mass
         keys_required(1) = 'stk'
         keys_required(2) = 'smpd'
         keys_required(3) = 'lp'
@@ -1095,34 +750,20 @@ select case(prg)
         keys_optional(1) = 'msk'
         keys_optional(2) = 'neg'
         keys_optional(3) = 'outstk'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
-        ! execute
         call xmasscen%execute(cline)
     case( 'cluster_smat' )
-        !==Program cluster_smat
-        !
-        ! <cluster_smat/begin>is a program for clustering a similarity matrix and use
-        ! an combined cluster validation index to assess the quality of the clustering
-        ! based on the number of clusters<cluster_smat/end>
-        !
-        ! set required keys
+        ! for clustering a similarity matrix and use an combined cluster validation
+        ! index to assess the quality of the clustering
         keys_required(1) = 'nptcls'
         keys_required(2) = 'fname'
         keys_required(3) = 'ncls'
         keys_required(4) = 'label'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
-        ! execute
         call xcluster_smat%execute(cline)
     case( 'intgpeaks' )
-        !==Program intgpeaks
-        !
-        ! <intgpeaks/begin>is a program for <intgpeaks/end>
-        !
-        ! set required keys
         keys_required(1) = 'vol1'
         keys_required(2) = 'pdbfile'
         keys_required(3) = 'smpd'
@@ -1130,16 +771,10 @@ select case(prg)
         keys_optional(1) = 'outfile'
         keys_optional(2) = 'msk'
         keys_optional(3) = 'inner'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
-        ! execute
         call xintgpeaks%execute(cline)
     case( 'print_dose_weights' )
-        !==Program print_dose_weights
-        !
-        ! <print_dose_weights/begin>is a program for printing the dose weights applied to individual frames<print_dose_weights/end>
-        !
-        ! set required keys
+        ! for printing the dose weights applied to individual frames
         keys_required(1) = 'nframes'
         keys_required(2) = 'exp_time'
         keys_required(3) = 'dose_rate'
@@ -1147,127 +782,68 @@ select case(prg)
         keys_required(5) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'kv'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:5),keys_optional(:1))
-        ! execute
         call xprint_dose_weights%execute(cline)
     case( 'res' )
-        !==Program res
-        !
-        ! <res/begin>is a program for checking the low-pass resolution limit for a given Fourier index<res/end>
-        !
-        !set required keys
+        ! for checking the low-pass resolution limit for a given Fourier index
         keys_required(1) = 'smpd'
         keys_required(2) = 'find'
         keys_required(3) = 'box'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3))
-        !execute
         call xres%execute(cline)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
 
     case( 'cluster_oris' )
-        !==Program cluster_oris
-        !
-        ! <cluster_oris/begin>is a program for clustering orientations based on geodesic distance<cluster_oris/end>
-        !
-        ! Required keys
+        ! for clustering orientations based on geodesic distance
         keys_required(1) = 'oritab'
         keys_required(2) = 'ncls'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'oritype'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
-        ! execute
         call xcluster_oris%execute(cline)
-    case( 'map2ptcls_doc' )
-        !==Program map2ptcls
-       !
-       ! <map2ptcls/begin>is a program for mapping parameters that have been obtained using class averages to
-       ! the individual particle images<map2ptcls/end>
-       !
-       ! set required keys
-       keys_required(1) = 'oritab'
-       ! set optional keys
-       keys_optional(1) = 'nthr'
-       keys_optional(2) = 'oritab3D'
-       keys_optional(3) = 'deftab'
-       keys_optional(4) = 'outfile'
-       keys_optional(5) = 'mul'
-       ! parse command line
-       call cline%parse_oldschool(keys_required(:1), keys_optional(:5))
-       ! set defaults
-       if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
-       ! execute
-       call xmap2ptcls%execute(cline)
     case( 'rotmats2oris' )
-        !==Program rotmats2oris
-        !
-        ! <rotmats2oris/begin>converts a text file (9 records per line) describing
-        ! rotation matrices into a SIMPLE oritab<rotmats2oris/end>
-        !
-        ! Required keys
+        ! converts a text file (9 records per line) describing rotation matrices into a SIMPLE oritab
         keys_required(1)  = 'infile'
         ! set optional keys
         keys_optional(1)  = 'outfile'
         keys_optional(2)  = 'oritype'
-        ! parse command line
         call cline%parse_oldschool( keys_required(:1), keys_optional(:2) )
-        ! set defaults
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
-        ! execute
         call xrotmats2oris%execute(cline)
     case( 'txt2project' )
-        !==Program txt2project
-        !
-        ! <txt2project/begin>adds or replaces a text oritab in a binary *.simple project file<txt2project/end>
-        !
-        ! Required keys
+        ! adds or replaces a text oritab in a binary *.simple project file
         keys_required(1) = 'oritab'
         keys_required(2) = 'projfile'
         keys_required(3) = 'oritype'
         call cline%parse_oldschool(keys_required(:3))
-        ! execute
         call xtxt2project%execute(cline)
     case( 'project2txt' )
-        !==Program project2txt
-        !
-        ! <project2txt/begin>converts a binary *.simple project file to a text oritab<project2txt/end>
-        !
-        ! Required keys
+        ! converts a binary *.simple project file to a text oritab
         keys_required(1) = 'projfile'
         keys_required(2) = 'oritype'
         ! set optional keys
         keys_optional(1)  = 'outfile'
         call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
-        ! execute
         call xproject2txt%execute(cline)
+    case( 'print_project_header' )
+        ! converts a binary *.simple project file to a text oritab<project2txt/end>
+        keys_required(1) = 'projfile'
+        call cline%parse_oldschool(keys_required(:1))
+        call xprint_project_header%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 
      case( 'tseries_extract' )
-        !==Program tseries_extract
-        !
-        ! <tseries_extract/begin>is a program for creating overlapping chunks of nframesgrp frames from time-series data
-        ! <tseries_extract/end>
-        !
-        ! set required keys
+        ! for creating overlapping chunks of nframesgrp frames from time-series data
         keys_required(1) = 'filetab'
         keys_required(2) = 'smpd'
         keys_required(3) = 'nframesgrp'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3))
-        ! execute
         call xtseries_extract%execute(cline)
     case( 'tseries_track' )
-        !==Program tseries_track
-        !
-        ! <tseries_track/begin>is a program for particle tracking in time-series data
-        ! <tseries_track/end>
-        !
-        ! set required keys
+        ! for particle tracking in time-series data
         keys_required(1) = 'filetab'
         keys_required(2) = 'fbody'
         keys_required(3) = 'smpd'
@@ -1280,23 +856,16 @@ select case(prg)
         keys_optional(6) = 'box'
         keys_optional(7) = 'neg'
         keys_optional(8) = 'cenlp'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
         if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
-        ! execute
         call xtseries_track%execute(cline)
     case('tseries_backgr_subtr')
-        !==Program tseries_backgr_subtr
-        !
-        ! <tseries_backgr_subtr/begin>is a program for background subtraction in time-series data.
-        ! The goal is to subtract the two graphene peaks @ 2.14 A and @ 1.23 A. This is done by
-        ! band-pass filtering the background image, recommended (and default settings) are hp=5.0
-        ! lp=1.1 and width=5.0. <tseries_backgr_subtr/end>
-        !
-        ! set required keys
+        ! for background subtraction in time-series data. The goal is to subtract the two graphene
+        ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
+        ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
         keys_required(1) = 'stk'
         keys_required(2) = 'stk_backgr'
         keys_required(3) = 'smpd'
@@ -1307,73 +876,44 @@ select case(prg)
         keys_optional(4) = 'width'
         keys_optional(5) = 'deftab'
         keys_optional(6) = 'outstk'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:3), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('hp')    ) call cline%set('hp',    5.0)
         if( .not. cline%defined('lp')    ) call cline%set('lp',    1.1)
         if( .not. cline%defined('width') ) call cline%set('width', 5.0)
-        ! execute
         call xtseries_backgr_subtr%execute(cline)
     case( 'tseries_split' )
-        !==Program tseries_split
-        !
-        ! <tseries_split/begin>is a program for splitting a time-series stack and its associated orientations
-        ! <tseries_split/end>
-        !
-        ! set required keys
+        ! for splitting a time-series stack and its associated orientations
         keys_required(1) = 'stk'
         keys_required(2) = 'oritab'
         keys_required(3) = 'smpd'
         keys_required(4) = 'chunksz'
         keys_required(5) = 'stepsz'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:5))
-        ! execute
         call xtseries_split%execute(cline)
 
     ! PARALLEL PROCESSING PROGRAMS
 
     case( 'merge_nnmat' )
-        !==Program merge_nnmat
-        !
-        ! <merge_nnmat/begin>is a program for merging partial nearest neighbour matrices calculated
-        ! in distributed mode<merge_nnmat/end>
-        !
-        ! set required keys
+        ! for merging partial nearest neighbour matrices calculated in distributed mode
         keys_required(1) = 'nptcls'
         keys_required(2) = 'nparts'
         keys_required(3) = 'nnn'
-        ! parse command line
         call cline%parse_oldschool( keys_required(:3) )
-        ! execute
         call xmerge_nnmat%execute(cline)
     case( 'merge_similarities' )
-        !==Program merge_similarities
-        !
-        ! <merge_similarities/begin>is a program for merging similarities calculated between pairs of objects
-        ! into a similarity matrix that can be inputted to cluster_smat<merge_similarities/end>
-        !
-        ! set required keys
+        ! for merging similarities calculated between pairs of objects into a
+        ! similarity matrix that can be inputted to cluster_smat
         keys_required(1) = 'nptcls'
         ! set optional keys
         keys_optional(1) = 'nparts'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:1), keys_optional(:1))
-        ! execute
         call xmerge_similarities%execute(cline)
     case( 'split_pairs' )
-        !==Program split_pairs
-        !
-        ! <split_pairs/begin>is a program for splitting calculations between pairs of objects
-        ! into balanced partitions<split_pairs/end>
-        !
-        ! set required keys
+        ! for splitting calculations between pairs of objects into balanced partitions
         keys_required(1) = 'nptcls'
         keys_required(2) = 'nparts'
-        ! parse command line
         call cline%parse_oldschool(keys_required(:2))
-        ! execute
         call xsplit_pairs%execute(cline)
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)

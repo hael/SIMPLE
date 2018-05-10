@@ -13,9 +13,8 @@ implicit none
 public :: npeaks_commander
 public :: nspace_commander
 public :: refine3D_init_commander
-public :: multiptcl_init_commander
+! public :: multiptcl_init_commander
 public :: prime3D_commander
-public :: rec_test_commander
 public :: check_3Dconv_commander
 private
 #include "simple_local_flags.inc"
@@ -32,18 +31,14 @@ type, extends(commander_base) :: refine3D_init_commander
   contains
     procedure :: execute      => exec_refine3D_init
 end type refine3D_init_commander
-type, extends(commander_base) :: multiptcl_init_commander
-  contains
-    procedure :: execute      => exec_multiptcl_init
-end type multiptcl_init_commander
+! type, extends(commander_base) :: multiptcl_init_commander
+!   contains
+!     procedure :: execute      => exec_multiptcl_init
+! end type multiptcl_init_commander
 type, extends(commander_base) :: prime3D_commander
   contains
     procedure :: execute      => exec_refine3D
 end type prime3D_commander
-type, extends(commander_base) :: rec_test_commander
-  contains
-    procedure :: execute      => exec_rec_test
-end type rec_test_commander
 type, extends(commander_base) :: check_3Dconv_commander
   contains
     procedure :: execute      => exec_check_3Dconv
@@ -165,48 +160,48 @@ contains
 
     end subroutine exec_refine3D_init
 
-    subroutine exec_multiptcl_init( self, cline )
-        use simple_rec_master, only: exec_rec_master
-        use simple_binoris_io, only: binwrite_oritab
-        class(multiptcl_init_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
-        p = params(cline) ! constants & derived constants produced
-        call b%build_general_tbox(p, cline)
-        if( .not. cline%defined('oritab') )then
-            call b%a%rnd_oris
-            call b%a%zero_shifts
-        endif
-        if( cline%defined('state2split') )then
-            if( cline%defined('oritab') )then
-                p%nstates = b%a%get_n('state')
-                call b%a%split_state(p%state2split)
-                p%nstates = p%nstates + 1
-            else
-                stop 'Need oritab to be defined when state2split is defined on command line; simple_multiptcl_init'
-            endif
-        else if( p%tseries .eq. 'yes' )then
-            call b%a%ini_tseries(p%nstates, 'state')
-        else
-            call b%a%rnd_states(p%nstates)
-            if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
-        endif
-        if( p%norec .ne. 'yes' )then
-            if( cline%defined('lp') )then
-                call b%build_rec_tbox(p)
-                p%eo = 'no'
-            else
-                call b%build_rec_eo_tbox(p)
-                p%eo = 'yes'
-            endif
-            call exec_rec_master(b, p, cline, 'startvol')
-        endif
-        if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
-        call binwrite_oritab('multiptcl_startdoc'//trim(METADATA_EXT), b%spproj, b%a, [1,b%a%get_noris()])
-        ! end gracefully
-        call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_multiptcl_init
+    ! subroutine exec_multiptcl_init( self, cline )
+    !     use simple_rec_master, only: exec_rec_master
+    !     use simple_binoris_io, only: binwrite_oritab
+    !     class(multiptcl_init_commander), intent(inout) :: self
+    !     class(cmdline),                  intent(inout) :: cline
+    !     type(params) :: p
+    !     type(build)  :: b
+    !     p = params(cline) ! constants & derived constants produced
+    !     call b%build_general_tbox(p, cline)
+    !     if( .not. cline%defined('oritab') )then
+    !         call b%a%rnd_oris
+    !         call b%a%zero_shifts
+    !     endif
+    !     if( cline%defined('state2split') )then
+    !         if( cline%defined('oritab') )then
+    !             p%nstates = b%a%get_n('state')
+    !             call b%a%split_state(p%state2split)
+    !             p%nstates = p%nstates + 1
+    !         else
+    !             stop 'Need oritab to be defined when state2split is defined on command line; simple_multiptcl_init'
+    !         endif
+    !     else if( p%tseries .eq. 'yes' )then
+    !         call b%a%ini_tseries(p%nstates, 'state')
+    !     else
+    !         call b%a%rnd_states(p%nstates)
+    !         if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
+    !     endif
+    !     if( p%norec .ne. 'yes' )then
+    !         if( cline%defined('lp') )then
+    !             call b%build_rec_tbox(p)
+    !             p%eo = 'no'
+    !         else
+    !             call b%build_rec_eo_tbox(p)
+    !             p%eo = 'yes'
+    !         endif
+    !         call exec_rec_master(b, p, cline, 'startvol')
+    !     endif
+    !     if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
+    !     call binwrite_oritab('multiptcl_startdoc'//trim(METADATA_EXT), b%spproj, b%a, [1,b%a%get_noris()])
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
+    ! end subroutine exec_multiptcl_init
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
@@ -266,22 +261,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
     end subroutine exec_refine3D
-
-    subroutine exec_rec_test( self, cline )
-        use simple_reconstructor_tester, only: exec_rec_batch_gridprep
-        class(rec_test_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        type(params)               :: p
-        type(build)                :: b
-        p = params(cline)                     ! parameters generated
-        call b%build_general_tbox(p, cline)   ! general objects built
-        p%eo = 'yes'                          ! default
-        call b%build_strategy3D_tbox(p) ! prime3D objects built
-        ! call exec_old_school_rec( b, p, cline )
-        call exec_rec_batch_gridprep( b, p, cline )
-        ! end gracefully
-        call simple_end('**** SIMPLE_REC_TEST NORMAL STOP ****')
-    end subroutine exec_rec_test
 
     subroutine exec_check_3Dconv( self, cline )
         class(check_3Dconv_commander), intent(inout) :: self

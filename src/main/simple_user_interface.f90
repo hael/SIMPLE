@@ -84,7 +84,7 @@ type(simple_program), target :: make_pickrefs
 type(simple_program), target :: mask
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
-type(simple_program), target :: new_project_
+type(simple_program), target :: new_project
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -96,7 +96,7 @@ type(simple_program), target :: preprocess_stream
 type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_info
-type(simple_program), target :: project
+type(simple_program), target :: reproject
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
@@ -237,7 +237,7 @@ contains
         call new_print_fsc
         call new_print_magic_boxes
         call new_print_project_info
-        call new_project
+        call new_reproject
         call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
@@ -313,7 +313,7 @@ contains
             case('motion_correct_tomo')
                 ptr2prg => motion_correct_tomo
             case('new_project')
-                ptr2prg => new_project_
+                ptr2prg => new_project
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -336,8 +336,8 @@ contains
                 ptr2prg => print_magic_boxes
             case('print_project_info')
                 ptr2prg => print_project_info
-            case('project')
-                ptr2prg => project
+            case('reproject')
+                ptr2prg => reproject
             case('reconstruct3D')
                 ptr2prg => reconstruct3D
             case('refine3D')
@@ -418,7 +418,7 @@ contains
         write(*,'(A)') make_oris%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
-        write(*,'(A)') new_project_%name
+        write(*,'(A)') new_project%name
         write(*,'(A)') normalize_%name
         write(*,'(A)') orisops%name
         write(*,'(A)') oristats%name
@@ -426,7 +426,7 @@ contains
         write(*,'(A)') print_fsc%name
         write(*,'(A)') print_magic_boxes%name
         write(*,'(A)') print_project_info%name
-        write(*,'(A)') project%name
+        write(*,'(A)') reproject%name
         write(*,'(A)') select_%name
         write(*,'(A)') shift%name
         write(*,'(A)') simulate_movie%name
@@ -1132,7 +1132,7 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, eo)
-        initial_3Dmodel%filt_ctrls(4)%cval_default = 'no' 
+        initial_3Dmodel%filt_ctrls(4)%cval_default = 'no'
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -1483,7 +1483,7 @@ contains
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
-        call new_project_%new(&
+        call new_project%new(&
         &'new_project',&                     ! name
         &'Create a new project',&            ! descr_short
         &'is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling &
@@ -1498,8 +1498,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call new_project_%set_input('parm_ios', 1, projname)
-        call new_project_%set_input('parm_ios', 2, user_email)
+        call new_project%set_input('parm_ios', 1, projname)
+        call new_project%set_input('parm_ios', 2, user_email)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1509,13 +1509,13 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call new_project_%set_input('comp_ctrls', 1, time_per_image)
-        call new_project_%set_input('comp_ctrls', 2, user_account)
-        call new_project_%set_input('comp_ctrls', 3, user_project)
-        call new_project_%set_input('comp_ctrls', 4, qsys_partition)
-        call new_project_%set_input('comp_ctrls', 5, qsys_qos)
-        call new_project_%set_input('comp_ctrls', 6, qsys_reservation)
-        call new_project_%set_input('comp_ctrls', 7, job_memory_per_task)
+        call new_project%set_input('comp_ctrls', 1, time_per_image)
+        call new_project%set_input('comp_ctrls', 2, user_account)
+        call new_project%set_input('comp_ctrls', 3, user_project)
+        call new_project%set_input('comp_ctrls', 4, qsys_partition)
+        call new_project%set_input('comp_ctrls', 5, qsys_qos)
+        call new_project%set_input('comp_ctrls', 6, qsys_reservation)
+        call new_project%set_input('comp_ctrls', 7, job_memory_per_task)
     end subroutine new_new_project
 
     subroutine new_pick
@@ -1833,12 +1833,12 @@ contains
         ! <empty>
     end subroutine new_print_project_info
 
-    subroutine new_project
+    subroutine new_reproject
         ! PROGRAM SPECIFICATION
-        call project%new(&
-        &'project',&                           ! name
-        &'Project volume',&                    ! descr_short
-        &'is a program for projecting a volume using Fourier interpolation. Input is a SPIDER or &
+        call reproject%new(&
+        &'reproject',&                           ! name
+        &'Re-project volume',&                    ! descr_short
+        &'is a program for re-projecting a volume using Fourier interpolation. Input is a SPIDER or &
         &MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections &
         &are generated by extracting central sections from the Fourier volume and back transforming the 2D FTs. &
         &nspace controls the number of projection directions. The  oritab parameter allows you to input the orientations &
@@ -1850,25 +1850,25 @@ contains
         &2, 3, 0, 2, 0, 1, 1, .false.)         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call project%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume for creating 2D central &
+        call reproject%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume for creating 2D central &
         & sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc')
-        call project%set_input('img_ios', 2,  outstk)
+        call reproject%set_input('img_ios', 2,  outstk)
         ! parameter input/output
-        call project%set_input('parm_ios', 1, smpd)
-        call project%set_input('parm_ios', 2, oritab)
-        call project%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast','Invert contrast of projections(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call reproject%set_input('parm_ios', 1, smpd)
+        call reproject%set_input('parm_ios', 2, oritab)
+        call reproject%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast','Invert contrast of projections(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
-        call project%set_input('srch_ctrls', 1, nspace)
-        call project%set_input('srch_ctrls', 2, pgrp)
+        call reproject%set_input('srch_ctrls', 1, nspace)
+        call reproject%set_input('srch_ctrls', 2, pgrp)
         ! filter controls
         ! <empty>
         ! mask controls
-        call project%set_input('mask_ctrls', 1, msk)
+        call reproject%set_input('mask_ctrls', 1, msk)
         ! computer controls
-        call project%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_project
+        call reproject%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_reproject
 
     subroutine new_normalize
         ! PROGRAM SPECIFICATION

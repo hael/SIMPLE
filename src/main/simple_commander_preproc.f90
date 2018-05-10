@@ -11,7 +11,6 @@ use simple_commander_base,      only: commander_base
 implicit none
 
 public :: preprocess_commander
-public :: select_frames_commander
 public :: powerspecs_commander
 public :: motion_correct_commander
 public :: ctf_estimate_commander
@@ -25,10 +24,6 @@ type, extends(commander_base) :: preprocess_commander
   contains
     procedure :: execute      => exec_preprocess
 end type preprocess_commander
-type, extends(commander_base) :: select_frames_commander
-  contains
-    procedure :: execute      => exec_select_frames
-end type select_frames_commander
 type, extends(commander_base) :: powerspecs_commander
  contains
    procedure :: execute       => exec_powerspecs
@@ -190,71 +185,6 @@ contains
         call qsys_job_finished( p, 'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
-
-    subroutine exec_select_frames( self, cline )
-        use simple_image,               only: image
-        class(select_frames_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(params)                       :: p
-        type(build)                        :: b
-        integer                            :: nmovies, nframes, frame, numlen, ldim(3)
-        integer                            :: fromto(2), movie, cnt, cnt2, ntot, lfoo(3), ifoo
-        character(len=STDLEN), allocatable :: movienames(:)
-        character(len=:), allocatable      :: new_name
-        type(image)                        :: img_frame
-        p = params(cline) ! constants & derived constants produced
-        call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
-        call read_filetable(p%filetab, movienames)
-        nmovies = size(movienames)
-        ! find ldim and numlen (length of number string)
-        if( cline%defined('startit') )then
-            call find_ldim_nptcls(movienames(p%startit), ldim, ifoo)
-        endif
-        DebugPrint  'logical dimension: ', ldim
-        ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
-        numlen = len(int2str(nmovies))
-        DebugPrint  'length of number string: ', numlen
-        ! determine loop range
-        if( cline%defined('part') )then
-            if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = p%fromp
-                fromto(2) = p%top
-                ntot = fromto(2)-fromto(1)+1
-            else
-                stop 'fromp & top args need to be defined in parallel execution; simple_select_frames'
-            endif
-        else
-            fromto(1) = 1
-            if( cline%defined('startit') ) fromto(1) = p%startit
-            fromto(2) = nmovies
-            ntot      = nmovies
-        endif
-        DebugPrint  'fromto: ', fromto(1), fromto(2)
-        call img_frame%new([ldim(1),ldim(2),1], p%smpd)
-        ! loop over exposures (movies)
-        cnt2 = 0
-        do movie=fromto(1),fromto(2)
-            if( .not. file_exists(movienames(movie)) )then
-                write(*,*) 'inputted movie stack does not exist: ', trim(adjustl(movienames(movie)))
-            endif
-            cnt2 = cnt2+1
-            ! get number of frames from stack
-            call find_ldim_nptcls(movienames(movie), lfoo, nframes)
-            DebugPrint  'number of frames: ', nframes
-            ! create new name
-            allocate(new_name, source=trim(adjustl(p%fbody))//int2str_pad(movie, numlen)//p%ext)
-            cnt = 0
-            do frame=p%fromp,p%top
-                cnt = cnt+1
-                call img_frame%read(movienames(movie),frame)
-                call img_frame%write(new_name,cnt)
-            end do
-            deallocate(new_name)
-            write(*,'(f4.0,1x,a)') 100.*(real(cnt2)/real(ntot)), 'percent of the movies processed'
-        end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_SELECT_FRAMES NORMAL STOP ****')
-    end subroutine exec_select_frames
 
     subroutine exec_powerspecs( self, cline )
         use simple_image,               only: image

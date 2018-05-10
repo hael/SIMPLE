@@ -10,11 +10,8 @@ implicit none
 
 public :: binarise_commander
 public :: convert_commander
-public :: corrcompare_commander
 public :: ctfops_commander
 public :: filter_commander
-public :: image_diff_commander
-public :: image_smat_commander
 public :: normalize_commander
 public :: scale_commander
 public :: stack_commander
@@ -30,10 +27,6 @@ type, extends(commander_base) :: convert_commander
   contains
     procedure :: execute      => exec_convert
 end type convert_commander
-type, extends(commander_base) :: corrcompare_commander
-  contains
-    procedure :: execute      => exec_corrcompare
-end type corrcompare_commander
 type, extends(commander_base) :: ctfops_commander
   contains
     procedure :: execute      => exec_ctfops
@@ -42,14 +35,6 @@ type, extends(commander_base) :: filter_commander
   contains
     procedure :: execute      => exec_filter
 end type filter_commander
-type, extends(commander_base) :: image_smat_commander
- contains
-   procedure :: execute      => exec_image_smat
-end type image_smat_commander
-type, extends(commander_base) :: image_diff_commander
- contains
-   procedure :: execute      => exec_image_diff
-end type image_diff_commander
 type, extends(commander_base) :: normalize_commander
   contains
     procedure :: execute      => exec_normalize
@@ -153,85 +138,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
     end subroutine exec_convert
-
-    subroutine exec_corrcompare( self, cline )
-        class(corrcompare_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(params)      :: p
-        type(build)       :: b
-        integer           :: iptcl, j
-        real              :: corr, ave, sdev, var, fsc05, fsc0143
-        real, allocatable :: res(:), corrs(:), corrs_sum(:)
-        logical           :: err
-        p = params(cline)                                 ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        res = b%img%get_res()
-        allocate(corrs(b%img%get_filtsz()))
-        if( cline%defined('msk') )then
-            if( p%stats .eq. 'yes' )then
-                deallocate(corrs)
-                allocate(corrs(p%nptcls), stat=alloc_stat)
-                if(alloc_stat.ne.0)call allocchk('In: simple_commander_imgproc::corrcompare 1 ',alloc_stat)
-            endif
-            do iptcl=1,p%nptcls
-                call b%img%read(p%stk, iptcl)
-                call b%img_copy%read(p%stk2, iptcl)
-                if( cline%defined('lp') )then
-                    call b%img%mask(p%msk, 'soft')
-                    call b%img_copy%mask(p%msk, 'soft')
-                    corr = b%img%corr(b%img_copy, lp_dyn=p%lp)
-                    if( p%stats .eq. 'yes' )then
-                        corrs(iptcl) = corr
-                    else
-                        write(*,'(A,1X,F7.3)') '>>> FOURIER CORRELATION:', corr
-                    endif
-                else
-                    call b%img%mask(p%msk, 'hard')
-                    call b%img_copy%mask(p%msk, 'hard')
-                    corr = b%img%real_corr(b%img_copy)
-                    if( p%stats .eq. 'yes' )then
-                        corrs(iptcl) = corr
-                    else
-                        write(*,'(A,1X,F7.3)') '>>> REAL-SPACE CORRELATION:', corr
-                    endif
-                endif
-                call progress(iptcl,p%nptcls)
-            end do
-            if( p%stats .eq. 'yes' )then
-                call moment(corrs, ave, sdev, var, err )
-                if( cline%defined('lp') )then
-                    write(*,'(A,1X,F7.3)') '>>> FOURIER CORRELATION AVERAGE:', ave
-                    write(*,'(A,1X,F7.3)') '>>> FOURIER CORRELATION STDEV:  ', sdev
-                else
-                    write(*,'(A,1X,F7.3)') '>>> REAL-SPACE CORRELATION AVERAGE:', ave
-                    write(*,'(A,1X,F7.3)') '>>> REAL-SPACE CORRELATION STDEV:  ', sdev
-                endif
-                if( allocated(corrs) ) deallocate(corrs)
-            endif
-        else
-            if( .not. cline%defined('smpd') ) stop 'need smpd 4 FRC comarison!'
-            do iptcl=1,p%nptcls
-                call b%img%read(p%stk, iptcl)
-                call b%img_copy%read(p%stk2, iptcl)
-                call b%img%fsc(b%img_copy, corrs)
-                if( .not. allocated(corrs_sum) )then
-                    allocate(corrs_sum(size(corrs)), stat=alloc_stat)
-                    if(alloc_stat.ne.0)call allocchk('In: simple_commander_imgproc:: corrcompare , 2',alloc_stat)
-                    corrs_sum = 0.
-                endif
-                corrs_sum = corrs_sum+corrs
-            end do
-            corrs_sum = corrs_sum/real(p%nptcls)
-            do j=1,size(res)
-                write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs_sum(j)
-            end do
-            call get_resolution( corrs_sum, res, fsc05, fsc0143 )
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', fsc0143
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', fsc05
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_CORRCOMPARE NORMAL STOP ****')
-    end subroutine exec_corrcompare
 
     !> for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
@@ -360,59 +266,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
-
-    !> for creating a similarity matrix based on image2image correlation
-    subroutine exec_image_smat(self, cline)
-        use simple_corrmat, only: calc_cartesian_corrmat
-        class(image_smat_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
-        integer              :: iptcl, funit, io_stat
-        real, allocatable    :: corrmat(:,:)
-        p = params(cline, .false.) ! constants & derived constants produced
-        call b%build_general_tbox(p, cline, do3d=.false., nooritab=.true.) ! general objects built (no oritab reading)
-        allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: simple_image_smat, 1',alloc_stat)
-        do iptcl=1,p%nptcls
-            call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
-            call b%imgs_sym(iptcl)%read(p%stk, iptcl)
-        end do
-        write(*,'(a)') '>>> CALCULATING CORRELATIONS'
-        if( cline%defined('lp') )then
-            if( .not. cline%defined('msk') ) stop 'need mask radius (msk) 4 Fourier corr calc!'
-            call calc_cartesian_corrmat(b%imgs_sym, corrmat, p%msk, p%lp)
-        else
-            if( cline%defined('msk') )then
-                call calc_cartesian_corrmat(b%imgs_sym, corrmat, p%msk)
-            else
-                call calc_cartesian_corrmat(b%imgs_sym, corrmat)
-            endif
-        endif
-        call fopen(funit, status='REPLACE', action='WRITE', file='img_smat.bin', access='STREAM',iostat=io_stat)
-        call fileiochk("commander_imgproc; image_smat failed to open image_smat.bin ", io_stat)
-        write(unit=funit,pos=1,iostat=io_stat) corrmat
-        call fileiochk("commander_imgproc; image_smat failed to write image_smat.bin ", io_stat)
-        call fclose(funit,errmsg="commander_imgproc; image_smat failed to close image_smat.bin ")
-        ! end gracefully
-        call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
-    end subroutine exec_image_smat
-
-    !> volume/image_diff is a program for creating a volume based on volume difference
-    !! this is purely for direct comparison of images in debugging
-    subroutine exec_image_diff(self, cline)
-        use simple_procimgfile, only: diff_imgfiles
-        class(image_diff_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
-        p = params(cline, .false.) ! constants & derived constants produced
-        call b%build_general_tbox(p, cline, do3d=.false., nooritab=.true.) ! general objects built (no oritab reading)
-        if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
-        call diff_imgfiles(p%stk, p%stk2, p%outstk, p%smpd)
-        ! end gracefully
-        call simple_end('**** SIMPLE_IMAGE_DIFF NORMAL STOP ****')
-    end subroutine exec_image_diff
 
     !> normalize is a program for normalization of MRC or SPIDER stacks and volumes.
     !! If you want to normalize your images inputted with stk, set norm=yes.
