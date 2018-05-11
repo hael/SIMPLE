@@ -60,8 +60,8 @@ contains
         a_copy    =  bp%a
         nproj_sym = comlin_srch_get_nproj( pgrp=trim(p%pgrp) )
         write(*,'(A,I3)') '>>> NUMBER OF REFERENCE PROJECTIONS IN ASU: ', nproj_sym
-        call resoris%new_clean(nproj_sym)
-        call espace%new_clean(nproj_sym)
+        call resoris%new(nproj_sym)
+        call espace%new(nproj_sym)
         ! make optimizer spec
         if( opt_str.ne.'simplex' .and. opt_str.ne.'de' .and. opt_str.ne.'oasis' )then
             call simple_stop ('Unsupported minimizer in simple_comlin_srch; comlin_srch_init')
@@ -125,7 +125,7 @@ contains
             stop 'range out of bound; simple_comlin_srch :: comlin_coarsesrch_symaxis'
         endif
         ntot = fromto(2) - fromto(1) + 1
-        call resoris%new_clean(nproj_sym)
+        call resoris%new(nproj_sym)
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         write(*,'(A)') '>>> GLOBAL GRID SYMMETRY AXIS SEARCH'
         cnt = 0
@@ -242,7 +242,7 @@ contains
         elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
             cost = 1.
         else
-            call o%new_ori_clean
+            call o%new
             call o%set_euler(vec)
             oswap = o
             call oswap%swape1e3

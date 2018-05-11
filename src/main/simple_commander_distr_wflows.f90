@@ -1081,7 +1081,7 @@ contains
         call cline_gridsrch%set('oritype',  p_master%oritype)
         ! local project update
         ! reference orientations for common lines
-        call spproj%os_cls3D%new_clean(p_master%nspace)
+        call spproj%os_cls3D%new(p_master%nspace)
         call spproj%os_cls3D%spiral
         ! name change
         call spproj%projinfo%delete_entry('projname')
@@ -1096,7 +1096,7 @@ contains
 
         ! 2. SELECTION OF SYMMETRY PEAKS TO REFINE
         nbest_here = min(NBEST, spproj%os_cls3D%get_noris())
-        call grid_symaxes%new_clean(nbest_here)
+        call grid_symaxes%new(nbest_here)
         order = spproj%os_cls3D%order_corr()
         cnt = 0
         do i = comlin_srch_nproj, comlin_srch_nproj-nbest_here+1, -1
@@ -1130,7 +1130,7 @@ contains
 
         ! 4. REAL-SPACE EVALUATION
         ! adding reference orientations to ptcl3D segment to allow for reconstruction
-        call e%new_clean(p_master%nspace)
+        call e%new(p_master%nspace)
         call e%spiral
         ctfvars%smpd = p_master%smpd
         call spproj%add_stk(trim(SYMPROJSTK), ctfvars, e)

@@ -16,9 +16,6 @@ private
 !>  orientation parameter stuct and operations
 type :: ori
     private
-    real        :: euls(3)=0.        !< Euler angle
-    real        :: normal(3)=0.      !< Fourier plane normal
-    real        :: rmat(3,3)=0.      !< rotation matrix
     type(hash)  :: htab              !< hash table for the parameters
     type(chash) :: chtab             !< hash table for the filenames etc.
     logical     :: existence=.false. !< to indicate existence
@@ -26,7 +23,6 @@ type :: ori
     ! CONSTRUCTOR
     procedure          :: new_ori
     procedure          :: new => new_ori
-    procedure          :: new_ori_clean
     procedure          :: ori_from_rotmat
     ! SETTERS
     procedure          :: reject
@@ -44,7 +40,6 @@ type :: ori
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
-    procedure, private :: rnd_romat
     procedure          :: rnd_euler_1
     procedure          :: rnd_euler_2
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
@@ -69,6 +64,7 @@ type :: ori
     procedure          :: get_state
     procedure          :: hash_size
     procedure          :: isthere
+    procedure          :: ischar
     procedure          :: isstatezero
     procedure          :: ori2str
     procedure          :: ori2strlen_trim
@@ -122,41 +118,19 @@ contains
     subroutine new_ori( self )
         class(ori), intent(inout) :: self
         call self%kill
-        self%htab = hash()
-        call self%set_euler([0.,0.,0.])
-        call self%htab%set('e1',0.)
-        call self%htab%set('e2',0.)
-        call self%htab%set('e3',0.)
-        call self%htab%set('x',0.)
-        call self%htab%set('y',0.)
-        call self%htab%set('dist',180.)
-        call self%htab%set('state',1.)
-        call self%htab%set('frac',0.)
-        call self%htab%set('eo',-1.) ! -1. is default (low-pass set); 0. for even; 1. for odd
-        self%chtab = chash()
-        self%existence = .true.
-    end subroutine new_ori
-
-    !>  \brief  is a constructor
-    subroutine new_ori_clean( self )
-        class(ori), intent(inout) :: self
-        call self%kill
         self%htab  = hash()
         self%chtab = chash()
         self%existence = .true.
-    end subroutine new_ori_clean
+    end subroutine new_ori
 
     !>  \brief  is a parameterized constructor
     subroutine ori_from_rotmat( self, rotmat )
         class(ori), intent(inout) :: self
         real, intent(in)          :: rotmat(3,3) !< rotation matrix
-        call self%new_ori_clean
-        self%rmat = rotmat
-        self%euls = m2euler(self%rmat)
-        call self%htab%set('e1',self%euls(1))
-        call self%htab%set('e2',self%euls(2))
-        call self%htab%set('e3',self%euls(3))
-        self%normal = matmul(zvec, self%rmat)
+        real :: euls(3)
+        call self%new
+        euls = m2euler(rotmat)
+        call self%set_euler(euls)
     end subroutine ori_from_rotmat
 
     ! SETTERS
@@ -183,9 +157,6 @@ contains
     subroutine copy_ori( self_out, self_in )
         class(ori), intent(in)    :: self_in
         class(ori), intent(inout) :: self_out
-        self_out%euls   = self_in%euls
-        self_out%normal = self_in%normal
-        self_out%rmat   = self_in%rmat
         self_out%htab   = self_in%htab
         self_out%chtab  = self_in%chtab
     end subroutine copy_ori
@@ -202,46 +173,46 @@ contains
     end subroutine delete_entry
 
     !>  \brief  is a setter
-    subroutine set_euler( self, euls  )
+    subroutine set_euler( self, euls )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: euls(3)!< Euler angle
-        self%rmat   = euler2m(euls(1),euls(2),euls(3))
-        self%euls   = m2euler(self%rmat)
-        call self%htab%set('e1',self%euls(1))
-        call self%htab%set('e2',self%euls(2))
-        call self%htab%set('e3',self%euls(3))
-        self%normal = matmul(zvec, self%rmat)
+        real,       intent(in)    :: euls(3) !< Euler angle
+        real :: euls_here(3), rmat(3,3)
+        rmat = euler2m(euls)
+        euls_here = m2euler(rmat)
+        call self%htab%set('e1',euls_here(1))
+        call self%htab%set('e2',euls_here(2))
+        call self%htab%set('e3',euls_here(3))
     end subroutine set_euler
 
     !>  \brief  is a setter
     subroutine e1set( self, e1 )
         class(ori), intent(inout) :: self
         real, intent(in)          :: e1     !< Euler angle
-        call self%set_euler([e1,self%euls(2),self%euls(3)])
+        call self%htab%set('e1', e1)
     end subroutine e1set
 
     !>  \brief  is a setter
     subroutine e2set( self, e2 )
         class(ori), intent(inout) :: self
         real, intent(in)          :: e2      !< Euler angle
-        call self%set_euler([self%euls(1),e2,self%euls(3)])
+        call self%htab%set('e2', e2)
     end subroutine e2set
 
     !>  \brief  is a setter
     subroutine e3set( self, e3 )
         class(ori), intent(inout) :: self
         real, intent(in)          :: e3      !< Euler angle
-        call self%set_euler([self%euls(1),self%euls(2),e3])
+        call self%htab%set('e3', e3)
     end subroutine e3set
 
     !>  \brief  is a setter
     subroutine swape1e3( self )
         class(ori), intent(inout) :: self
-        real :: e
-        e = self%euls(1)
-        self%euls(1) = self%euls(3)
-        self%euls(3) = e
-        call self%set_euler(self%euls)
+        real :: e1, e3
+        e1 = self%htab%get('e1')
+        e3 = self%htab%get('e3')
+        call self%htab%set('e1', e3)
+        call self%htab%set('e3', e1)
     end subroutine swape1e3
 
     !>  \brief  is a setter
@@ -276,64 +247,30 @@ contains
         call self%chtab%set(key, val)
     end subroutine set_2
 
-    !>  \brief  for generating a random rotation matrix
-    subroutine rnd_romat( self )
-        ! Fast Random Rotation Matrices, Arvo, Graphics Gems III, 1992
-        class(ori), intent(inout) :: self
-        real :: theta, phi, z, vx, vy, vz
-        real :: r, st, ct, sx, sy
-        ! init
-        theta = ran3()*TWOPI
-        phi   = ran3()*TWOPI
-        z     = ran3()*2.
-        ! V
-        r  = sqrt( z )
-        vx = r*sin( phi )
-        vy = r*cos( phi )
-        vz = sqrt( 2.-z )
-        ! S=Vt*R; sz=vz
-        st = sin( theta )
-        ct = cos( theta )
-        sx = vx*ct - vy*st
-        sy = vx*st + vy*ct
-        ! M
-        self%rmat(1,1) = vx * sx - ct
-        self%rmat(1,2) = vx * sy - st
-        self%rmat(1,3) = vx * vz
-        self%rmat(2,1) = vy * sx + st
-        self%rmat(2,2) = vy * sy - ct
-        self%rmat(2,3) = vy * vz
-        self%rmat(3,1) = vz * sx
-        self%rmat(3,2) = vz * sy
-        self%rmat(3,3) = 1. - z
-    end subroutine rnd_romat
-
     !>  \brief  for generating a random Euler angle
     subroutine rnd_euler_1( self, eullims )
         class(ori),     intent(inout) :: self
         real, optional, intent(inout) :: eullims(3,2)!< Euler angles
         logical :: found
+        real    :: euls(3), rmat(3,3)
         if( present(eullims) )then
             found = .false.
             do while( .not.found )
-                call self%rnd_romat
-                self%euls = m2euler(self%rmat)
-                if( self%euls(1) >= eullims(1,2) )cycle
-                if( self%euls(2) >= eullims(2,2) )cycle
-                if( self%euls(3) >= eullims(3,2) )cycle
-                if( self%euls(1) < eullims(1,1) )cycle
-                if( self%euls(2) < eullims(2,1) )cycle
-                if( self%euls(3) < eullims(3,1) )cycle
+                call rnd_romat(rmat)
+                euls = m2euler(rmat)
+                if( euls(1) >= eullims(1,2) )cycle
+                if( euls(2) >= eullims(2,2) )cycle
+                if( euls(3) >= eullims(3,2) )cycle
+                if( euls(1) < eullims(1,1) )cycle
+                if( euls(2) < eullims(2,1) )cycle
+                if( euls(3) < eullims(3,1) )cycle
                 found = .true.
             end do
         else
-            call self%rnd_romat
-            self%euls = m2euler(self%rmat)
+            call rnd_romat(rmat)
+            euls = m2euler(rmat)
         endif
-        call self%set('e1',self%euls(1))
-        call self%set('e2',self%euls(2))
-        call self%set('e3',self%euls(3))
-        self%normal = matmul(zvec, self%rmat)
+        call self%set_euler(euls)
     end subroutine rnd_euler_1
 
     !>  \brief  for generating a random Euler angle neighbour to o_prev
@@ -415,7 +352,7 @@ contains
         class(ori),       intent(inout) :: self
         character(len=*), intent(inout) :: line
         logical :: isthere(3)
-        call self%new_ori_clean
+        call self%new
         call sauron_line_parser(line, self%htab, self%chtab)
         isthere(1) = self%htab%isthere('e1')
         isthere(2) = self%htab%isthere('e2')
@@ -437,42 +374,48 @@ contains
     pure function get_euler( self ) result( euls )
         class(ori), intent(in) :: self
         real :: euls(3)
-        euls = self%euls
+        euls(1) = self%htab%get('e1')
+        euls(2) = self%htab%get('e2')
+        euls(3) = self%htab%get('e3')
     end function get_euler
 
     !>  \brief  is a getter
     pure function e1get( self ) result( e1 )
         class(ori), intent(in) :: self
         real :: e1
-        e1 = self%euls(1)
+        e1 = self%htab%get('e1')
     end function e1get
 
     !>  \brief  is a getter
     pure function e2get( self ) result( e2 )
         class(ori), intent(in) :: self
         real :: e2
-        e2 = self%euls(2)
+        e2 = self%htab%get('e2')
     end function e2get
 
     !>  \brief  is a getter
     pure function e3get( self ) result( e3 )
         class(ori), intent(in) :: self
         real :: e3
-        e3 = self%euls(3)
+        e3 = self%htab%get('e3')
     end function e3get
 
     !>  \brief  is a getter
     pure function get_normal( self ) result( normal )
         class(ori), intent(in) :: self
-        real :: normal(3)
-        normal = self%normal
+        real :: normal(3), rmat(3,3), euls(3)
+        euls = self%get_euler()
+        rmat   = euler2m(euls)
+        normal = matmul(zvec, rmat)
     end function get_normal
 
     !>  \brief  is a getter
     pure function get_mat( self ) result( mat )
         class(ori), intent(in) :: self
         real, dimension(3,3) :: mat
-        mat = self%rmat
+        real :: euls(3)
+        euls = self%get_euler()
+        mat  = euler2m(euls)
     end function get_mat
 
     !>  \brief  is a getter
@@ -531,20 +474,23 @@ contains
     end function hash_size
 
     !>  \brief  check for presence of key in the ori hash
-    function isthere( self, key, ischar ) result( found )
+    function isthere( self, key ) result( found )
         class(ori),        intent(inout) :: self
         character(len=*),  intent(in)    :: key
-        logical, optional, intent(out)   :: ischar
         logical :: hash_found, chash_found, found
         hash_found  = self%htab%isthere(key)
         chash_found = self%chtab%isthere(key)
         found = .false.
         if( hash_found .or. chash_found ) found = .true.
-        if( present(ischar) )then
-            ischar = .false.
-            if( chash_found ) ischar = .true.
-        endif
     end function isthere
+
+    !>  \brief  test for character key
+    function ischar( self, key ) result( is )
+        class(ori),        intent(inout) :: self
+        character(len=*),  intent(in)    :: key
+        logical :: is
+        is = self%chtab%isthere(key)
+    end function ischar
 
     !>  \brief  whether state is zero
     logical function isstatezero( self )
@@ -589,9 +535,12 @@ contains
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
         class(ori), intent(inout) :: self
-        write(*,*) self%rmat(1,1), self%rmat(1,2), self%rmat(1,3), &
-            &      self%rmat(2,1), self%rmat(2,2), self%rmat(2,3), &
-            &      self%rmat(3,1), self%rmat(3,2), self%rmat(3,3)
+        real :: euls(3), rmat(3,3)
+        euls = self%get_euler()
+        rmat = euler2m(euls)
+        write(*,*) rmat(1,1), rmat(1,2), rmat(1,3), &
+            &      rmat(2,1), rmat(2,2), rmat(2,3), &
+            &      rmat(3,1), rmat(3,2), rmat(3,3)
     end subroutine print_mat
 
     !>  \brief prints ori data
@@ -639,11 +588,17 @@ contains
     subroutine shift( self )
         class(ori), intent(inout) :: self
         logical :: doshift
+        real    :: euls(3), rmat(3,3)
         doshift = .false.
-        if( self%euls(1) < 0. .or. self%euls(1) > 360. ) doshift = .true.
-        if( self%euls(2) < 0. .or. self%euls(2) > 180. ) doshift = .true.
-        if( self%euls(3) < 0. .or. self%euls(3) > 360. ) doshift = .true.
-        if( doshift ) self%euls = m2euler(self%rmat)
+        euls = self%get_euler()
+        if( euls(1) < 0. .or. euls(1) > 360. ) doshift = .true.
+        if( euls(2) < 0. .or. euls(2) > 180. ) doshift = .true.
+        if( euls(3) < 0. .or. euls(3) > 360. ) doshift = .true.
+        if( doshift )then
+            rmat = euler2m(euls)
+            euls = m2euler(rmat)
+            call self%set_euler(euls)
+        endif
     end subroutine shift
 
     !>  \brief  is for composing Euler angles
@@ -653,15 +608,17 @@ contains
     function compeuler( self1, self2 ) result( self_out )
         class(ori), intent(in) :: self1, self2
         type(ori) :: self_out
+        real      :: euls(3), euls1(3), euls2(3), rmat(3,3), rmat1(3,3), rmat2(3,3)
         call self_out%new_ori
-        self_out%rmat = matmul(self2%rmat,self1%rmat)  ! multiplication of two rotation matrices commute (n>2 not)
+        euls1 = self1%get_euler()
+        euls2 = self2%get_euler()
+        rmat1 = euler2m(euls1)
+        rmat2 = euler2m(euls2)
+        rmat = matmul(rmat2,rmat1)  ! multiplication of two rotation matrices commute (n>2 not)
         ! the composed rotation matrix is constructed
         ! convert to euler
-        self_out%euls = m2euler(self_out%rmat)
-        call self_out%set('e1',self_out%euls(1))
-        call self_out%set('e2',self_out%euls(2))
-        call self_out%set('e3',self_out%euls(3))
-        self_out%normal = matmul(zvec, self_out%rmat)
+        euls = m2euler(rmat)
+        call self_out%set_euler(euls)
     end function compeuler
 
     !>  combines 3d and 2d oris and flags for ptcl mirroring
@@ -716,31 +673,33 @@ contains
 
     subroutine map3dshift22d( self, sh3d )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: sh3d(3) !< 3D shift
-        real                      :: old_x,old_y,x,y,cx,cy
-        real                      :: u(3),v(3),shift(3)
-        real                      :: phi,cosphi,sinphi
-        phi    = deg2rad( self%e3get() )
+        real,       intent(in)    :: sh3d(3) !< 3D shift
+        real :: old_x,old_y,x,y,cx,cy
+        real :: u(3),v(3),shift(3),euls(3)
+        real :: phi,cosphi,sinphi,rmat(3,3)
+        euls   = self%get_euler()
+        phi    = deg2rad(euls(3))
         cosphi = cos( phi )
         sinphi = sin( phi )
         old_x  = self%get('x')
         old_y  = self%get('y')
         ! 3D Shift rotated with respect to projdir
-        shift = matmul( self%rmat,sh3d )
+        rmat  = euler2m(euls)
+        shift = matmul(rmat,sh3d)
         ! Projection onto xy plane
-        shift = shift-dot_product( shift,zvec )*zvec
+        shift = shift - dot_product(shift,zvec) * zvec
         ! e3-composed xy plane unit vectors
         u = [  cosphi,sinphi,0. ]
         v = [ -sinphi,cosphi,0. ]
         ! composed shift clockwise components
-        cx =  old_x*cosphi+old_y*sinphi+dot_product( u,shift )
-        cy = -old_x*sinphi+old_y*cosphi+dot_product( v,shift )
+        cx =  old_x * cosphi + old_y * sinphi + dot_product(u,shift)
+        cy = -old_x * sinphi + old_y * cosphi + dot_product(v,shift)
         ! Identification
-        x = cx*cosphi-cy*sinphi
-        y = cx*sinphi+cy*cosphi
+        x = cx * cosphi - cy * sinphi
+        y = cx * sinphi + cy * cosphi
         ! the end
-        call self%set( 'x',x )
-        call self%set( 'y',y )
+        call self%set('x', x)
+        call self%set('y', y)
     end subroutine map3dshift22d
 
     !>  \brief  generates the opposite hand of an Euler angle
@@ -748,19 +707,18 @@ contains
     !!          this operation changes the handedness of the volume
     subroutine mirror3d( self )
         class(ori), intent(inout) :: self
-        real :: mirr_mat(3,3)
+        real :: mirr_mat(3,3), rmat(3,3), euls(3)
         mirr_mat = 0.
         mirr_mat(1,1) = 1.
         mirr_mat(2,2) = 1.
         mirr_mat(3,3) = -1.
-        self%rmat = matmul(mirr_mat,matmul(self%rmat,mirr_mat))
+        euls = self%get_euler()
+        rmat = euler2m(euls)
+        rmat = matmul(mirr_mat,matmul(rmat,mirr_mat))
         ! the mirrored rotation matrix is constructed
         ! convert to euler
-        self%euls = m2euler(self%rmat)
-        call self%set('e1',self%euls(1))
-        call self%set('e2',self%euls(2))
-        call self%set('e3',self%euls(3))
-        self%normal = matmul(zvec, self%rmat)
+        euls = m2euler(rmat)
+        call self%set_euler(euls)
     end subroutine mirror3d
 
     !>  \brief  generates the mirror of the projection
@@ -769,15 +727,17 @@ contains
     subroutine mirror2d( self )
         class(ori), intent(inout) :: self
         type(ori) :: old
+        real      :: euls(3), rmat(3,3), euls_mirr(3)
         old = self
-        self%rmat = euler2m(self%euls(1), 180.+self%euls(2), 180.-self%euls(3))
+        euls = self%get_euler()
+        euls_mirr(1) = euls(1)
+        euls_mirr(2) = 180. + euls(2)
+        euls_mirr(3) = 180. - euls(3)
+        rmat = euler2m(euls_mirr)
         ! the mirrored rotation matrix is constructed
         ! convert to euler
-        self%euls = m2euler(self%rmat)
-        call self%set('e1',self%euls(1))
-        call self%set('e2',self%euls(2))
-        call self%set('e3',self%euls(3))
-        self%normal = matmul(zvec, self%rmat)
+        euls = m2euler(rmat)
+        call self%set_euler(euls)
     end subroutine mirror2d
 
     ! GEODESIC DISTANCE METRIC
@@ -801,11 +761,16 @@ contains
     pure real function geodesic_dist( self1, self2 )
         class(ori), intent(in) :: self1, self2
         real :: Imat(3,3), sumsq, diffmat(3,3)
+        real :: euls1(3), euls2(3), rmat1(3,3), rmat2(3,3)
         Imat      = 0.
         Imat(1,1) = 1.
         Imat(2,2) = 1.
         Imat(3,3) = 1.
-        diffmat = Imat-matmul(self1%rmat,transpose(self2%rmat))
+        euls1 = self1%get_euler()
+        euls2 = self2%get_euler()
+        rmat1 = euler2m(euls1)
+        rmat2 = euler2m(euls2)
+        diffmat = Imat - matmul(rmat1,transpose(rmat2))
         sumsq   = sum(diffmat*diffmat)
         if( sumsq > 0.0001 )then
             geodesic_dist = sqrt(sumsq)
@@ -828,8 +793,10 @@ contains
     !! \param self1,self2 ori class type rotational matrices
     pure function euldist( self1, self2 ) result( dist )
         class(ori), intent(in) :: self1, self2
-        real :: dist
-        dist = myacos(dot_product(self1%normal,self2%normal))
+        real :: dist, normal1(3), normal2(3)
+        normal1 = self1%get_normal()
+        normal2 = self2%get_normal()
+        dist = myacos(dot_product(normal1,normal2))
     end function euldist
 
     !>  \brief  calculates the distance (in radians) btw all df:s
@@ -875,42 +842,32 @@ contains
     ! PRIVATE STUFF
 
     !>  \brief  makes a rotation matrix from a Spider format Euler triplet
-    !! \param e1,e2,e3 Euler triplet
-    pure function euler2m( e1, e2, e3 ) result( r )
-        real, intent(in)     :: e1, e2, e3
+    pure function euler2m( euls ) result( r )
+        real, intent(in)     :: euls(3)
         real, dimension(3,3) :: r1, r2, r3, r, tmp
-        r1 = rotmat(e1,3) ! rotation around z
-        r2 = rotmat(e2,2) ! tilt
-        r3 = rotmat(e3,3) ! rotation around z
+        r1 = rotmat(euls(1),3) ! rotation around z
+        r2 = rotmat(euls(2),2) ! tilt
+        r3 = rotmat(euls(3),3) ! rotation around z
         ! order of multiplication is r3r2r1
         tmp = matmul(r3,r2)
-        r = matmul(tmp,r1)
+        r   = matmul(tmp,r1)
     end function euler2m
 
     !> \brief  calculates the derivatives of the rotation matrices w.r.t. one Euler angle
-    !! \param e1,e2,e3 Euler triplet
-    subroutine euler2dm( e1, e2, e3, drmat )
-        real, intent(in)     :: e1, e2, e3
+    subroutine euler2dm( euls, drmat )
+        real, intent(in)     :: euls(3)
         real, intent(out)    :: drmat(3,3,3)
         real, dimension(3,3) :: r1, r2, r3, dr1, dr2, dr3
-        r1  =  rotmat(e1,3) ! rotation around z
-        r2  =  rotmat(e2,2) ! tilt
-        r3  =  rotmat(e3,3) ! rotation around z
-        dr1 = drotmat(e1,3) ! derivative of r1 w.r.t. e1
-        dr2 = drotmat(e2,2) ! derivative of r2 w.r.t. e2
-        dr3 = drotmat(e3,3) ! derivative of r3 w.r.t. e3
+        r1  =  rotmat(euls(1),3) ! rotation around z
+        r2  =  rotmat(euls(2),2) ! tilt
+        r3  =  rotmat(euls(3),3) ! rotation around z
+        dr1 = drotmat(euls(1),3) ! derivative of r1 w.r.t. e1
+        dr2 = drotmat(euls(2),2) ! derivative of r2 w.r.t. e2
+        dr3 = drotmat(euls(3),3) ! derivative of r3 w.r.t. e3
         drmat(:,:,1) = matmul(matmul(r3,r2),dr1)
         drmat(:,:,2) = matmul(matmul(r3,dr2),r1)
         drmat(:,:,3) = matmul(matmul(dr3,r2),r1)
     end subroutine euler2dm
-
-    !>  \brief  calculates the normal of a Fourier plane
-    pure function euler2vec( phi, theta, psi ) result( normal )
-        real, intent(in) :: phi, theta, psi
-        real :: normal(3), mat(3,3)
-        mat = euler2m( phi, theta, psi )
-        normal = matmul(zvec,mat)
-    end function euler2vec
 
     !>  \brief  returns a Spider format Euler triplet, given a rotation matrix
     pure function m2euler( mat ) result ( euls )
@@ -1041,6 +998,38 @@ contains
             ! beware of the signs:z-rot is really negative
         endif
     end function drotmat
+
+    !>  \brief  for generating a random rotation matrix
+    subroutine rnd_romat( rmat )
+        ! Fast Random Rotation Matrices, Arvo, Graphics Gems III, 1992
+        real, intent(out) :: rmat(3,3)
+        real :: theta, phi, z, vx, vy, vz
+        real :: r, st, ct, sx, sy
+        ! init
+        theta = ran3()*TWOPI
+        phi   = ran3()*TWOPI
+        z     = ran3()*2.
+        ! V
+        r  = sqrt( z )
+        vx = r*sin( phi )
+        vy = r*cos( phi )
+        vz = sqrt( 2.-z )
+        ! S=Vt*R; sz=vz
+        st = sin( theta )
+        ct = cos( theta )
+        sx = vx*ct - vy*st
+        sy = vx*st + vy*ct
+        ! M
+        rmat(1,1) = vx * sx - ct
+        rmat(1,2) = vx * sy - st
+        rmat(1,3) = vx * vz
+        rmat(2,1) = vy * sx + st
+        rmat(2,2) = vy * sy - ct
+        rmat(2,3) = vy * vz
+        rmat(3,1) = vz * sx
+        rmat(3,2) = vz * sy
+        rmat(3,3) = 1. - z
+    end subroutine rnd_romat
 
     ! UNIT TEST
 

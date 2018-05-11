@@ -616,7 +616,7 @@ contains
                 if( box_inside(ldim, nint(boxdata(iptcl,1:2)), p%box) )oris_mask(iptcl) = .true.
             end do
             nptcls_eff = count(oris_mask)
-            call o_ptcls%new_clean(nptcls)
+            call o_ptcls%new(nptcls)
             ! extract ctf info
             if( o_mic%isthere('dfx') )then
                 if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then

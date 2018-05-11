@@ -35,7 +35,7 @@ contains
         integer    :: iptcl, jptcl, icen, jcen, cnt, npairs, i, j, nmems, curr_pop
         type(oris) :: ceninfo, clsdoc
         ! read class doc
-        call clsdoc%new_clean(p%nptcls)
+        call clsdoc%new(p%nptcls)
         call clsdoc%read(p%classdoc)
         ! xtract class populations
         clspops = clsdoc%get_all('pop')
@@ -76,7 +76,7 @@ contains
         call aprop%propagate(centers, labels, simsum)
         ! report clustering solution
         p%ncls = size(centers)
-        call clsdoc%new_clean(p%nptcls)
+        call clsdoc%new(p%nptcls)
         do iptcl=1,p%nptcls
             call clsdoc%set(iptcl, 'class', real(labels(iptcl)))
         end do
@@ -115,7 +115,7 @@ contains
         write(*,'(a,1x,f8.4)') '>>> # CLUSTERS FOUND        ', real(p%ncls)
         write(*,'(a,1x,f8.4)') '>>> WITHIN  CLUSTER CORR    ', corr_within_cls_avg
         write(*,'(a,1x,f8.4)') '>>> BETWEEN CLUSTER CORR    ', corr_between_cls_avg
-        call ceninfo%new_clean(p%ncls)
+        call ceninfo%new(p%ncls)
         do icen=1,p%ncls
             where( labels == icen )
                 mask = .true.

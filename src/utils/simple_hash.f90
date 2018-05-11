@@ -247,9 +247,9 @@ contains
     end function lookup
 
     !>  \brief  gets a value in the hash
-    function get( self, key ) result( val )
-        class(hash),      intent(inout) :: self
-        character(len=*), intent(in)    :: key
+    pure function get( self, key ) result( val )
+        class(hash),      intent(in) :: self
+        character(len=*), intent(in) :: key
         real    :: val
         integer :: i
         val = 0.

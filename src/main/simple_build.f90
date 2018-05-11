@@ -97,26 +97,26 @@ contains
         ! b%a is now a pointer to a field in b%spproj
         select case(p%spproj_a_seg)
             case(MIC_SEG)
-                call self%spproj%os_mic%new_clean(p%nptcls)
+                call self%spproj%os_mic%new(p%nptcls)
                 self%a => self%spproj%os_mic
             case(STK_SEG)
-                call self%spproj%os_stk%new_clean(p%nptcls)
+                call self%spproj%os_stk%new(p%nptcls)
                 self%a => self%spproj%os_stk
             case(PTCL2D_SEG)
-                call self%spproj%os_ptcl2D%new_clean(p%nptcls)
+                call self%spproj%os_ptcl2D%new(p%nptcls)
                 self%a => self%spproj%os_ptcl2D
             case(CLS2D_SEG)
-                call self%spproj%os_cls2D%new_clean(p%nptcls)
+                call self%spproj%os_cls2D%new(p%nptcls)
                 self%a => self%spproj%os_cls2D
             case(CLS3D_SEG)
-                call self%spproj%os_cls3D%new_clean(p%nptcls)
+                call self%spproj%os_cls3D%new(p%nptcls)
                 self%a => self%spproj%os_cls3D
             case(PTCL3D_SEG)
-                call self%spproj%os_ptcl3D%new_clean(p%nptcls)
+                call self%spproj%os_ptcl3D%new(p%nptcls)
                 self%a => self%spproj%os_ptcl3D
             case DEFAULT
                 ! using ptcl3D as the generic segment
-                call self%spproj%os_ptcl3D%new_clean(p%nptcls)
+                call self%spproj%os_ptcl3D%new(p%nptcls)
                 self%a => self%spproj%os_ptcl3D
         end select
         ! read from project file
@@ -199,9 +199,9 @@ contains
         DebugPrint 'created & filled object for orientations'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction spaces
-        call self%e%new_clean( p%nspace )
+        call self%e%new( p%nspace )
         call self%e%spiral( p%nsym, p%eullims )
-        call self%e_bal%new_clean(NSPACE_BALANCE)
+        call self%e_bal%new(NSPACE_BALANCE)
         call self%e_bal%spiral( p%nsym, p%eullims )
         ! create angular subspace
         self%grid_projs = self%e%create_proj_subspace(NPDIRS_SUBSPACE, p%nsym, p%eullims)

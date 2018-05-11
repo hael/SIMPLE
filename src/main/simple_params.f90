@@ -952,7 +952,7 @@ contains
             call bos%open(trim(self%projfile))
             if( self%stream.eq.'no' )then
                 if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_a_seg)
-                call o%new_ori_clean
+                call o%new
                 select case(self%spproj_a_seg)
                     case(MIC_SEG)
                         call bos%read_first_segment_record(MIC_SEG, o)

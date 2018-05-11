@@ -105,25 +105,25 @@ contains
         class(oris), pointer,      intent(inout) :: os_ptr
         select case(trim(oritype))
             case('mic')
-                call self%os_mic%new_clean(n)
+                call self%os_mic%new(n)
                 os_ptr => self%os_mic
             case('stk')
-                call self%os_stk%new_clean(n)
+                call self%os_stk%new(n)
                 os_ptr => self%os_stk
             case('ptcl2D')
-                call self%os_ptcl2D%new_clean(n)
+                call self%os_ptcl2D%new(n)
                 os_ptr => self%os_ptcl2D
             case('cls2D')
-                call self%os_cls2D%new_clean(n)
+                call self%os_cls2D%new(n)
                 os_ptr => self%os_cls2D
             case('cls3D')
-                call self%os_cls3D%new_clean(n)
+                call self%os_cls3D%new(n)
                 os_ptr => self%os_cls3D
             case('ptcl3D')
-                call self%os_ptcl3D%new_clean(n)
+                call self%os_ptcl3D%new(n)
                 os_ptr => self%os_ptcl3D
             case('out')
-                call self%os_out%new_clean(n)
+                call self%os_out%new(n)
                 os_ptr => self%os_out
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype)
@@ -142,7 +142,7 @@ contains
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
-            call self%projinfo%new_clean(1)
+            call self%projinfo%new(1)
         endif
         ! projname & profile
         if( self%projinfo%isthere('projname') )then
@@ -188,7 +188,7 @@ contains
         if( self%compenv%get_noris() == 1 )then
             ! no need to construct field
         else
-            call self%compenv%new_clean(1)
+            call self%compenv%new(1)
         endif
         ! compenv has to be filled as strings as it is used as a string only dictionnary
         ! get from environment
@@ -287,7 +287,7 @@ contains
                     os_ptr = os_append_ptr
                 else
                     ! append
-                    call os%new_clean(n + n2append)
+                    call os%new(n + n2append)
                     do i=1,n
                         call os%set_ori(i, os_ptr%get_ori(i))
                     enddo
@@ -372,7 +372,7 @@ contains
         end do
         ! map selection to self%os_cls3D
         sz_cls3D = self%os_cls3D%get_noris()
-        if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new_clean(sz_cls2D)
+        if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new(sz_cls2D)
         sz_cls3D = sz_cls2D
         do icls=1,sz_cls3D
             call self%os_cls3D%set(icls, 'state', real(states(icls)))
@@ -413,7 +413,7 @@ contains
             stop 'ABORTING! sp_project :: add_single_movie'
         endif
         ! update ori
-        call os_ptr%new_clean(1)
+        call os_ptr%new(1)
         call simple_full_path(moviename, fname, 'simple_sp_project::add_single_movie')
         call find_ldim_nptcls(trim(fname), ldim, nframes)
         if( nframes <= 0 )then
@@ -486,7 +486,7 @@ contains
         nprev_mics = os_ptr%get_noris()
         ntot       = nmics + nprev_mics
         if( nprev_mics == 0 )then
-            call os_ptr%new_clean(ntot)
+            call os_ptr%new(ntot)
         else
             call os_ptr%reallocate(ntot)
         endif
@@ -592,9 +592,9 @@ contains
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_stk == 1 )then
-            call self%os_stk%new_clean(1)
-            call self%os_ptcl2D%new_clean(nptcls)
-            call self%os_ptcl3D%new_clean(nptcls)
+            call self%os_stk%new(1)
+            call self%os_ptcl2D%new(nptcls)
+            call self%os_ptcl3D%new(nptcls)
             fromp = 1
             top   = n_os
         else
@@ -778,7 +778,7 @@ contains
                 ctfvars%l_phaseplate = .false.
             endif
             ! import
-            call os_ptcls%new_clean(nptcls)
+            call os_ptcls%new(nptcls)
             do iptcl=1,nptcls
                 call os_ptcls%set_ori(iptcl, o_stk)
             end do
@@ -846,7 +846,7 @@ contains
         cs    = self%os_stk%get(1,'cs')
         kv    = self%os_stk%get(1,'kv')
         fraca = self%os_stk%get(1,'fraca')
-        call self%os_stk%new_clean(nparts)
+        call self%os_stk%new(nparts)
         call simple_mkdir(trim(STKPARTSDIR), status=status)
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
@@ -946,7 +946,7 @@ contains
         if( n_os_out == 0 )then
             n_os_out = 1
             ind      = 1
-            call self%os_out%new_clean(n_os_out)
+            call self%os_out%new(n_os_out)
         else
             ind = 0
             do i=1,n_os_out
@@ -995,7 +995,7 @@ contains
         if( n_os_out == 0 )then
             n_os_out = 1
             ind      = 1
-            call self%os_out%new_clean(n_os_out)
+            call self%os_out%new(n_os_out)
         else
             ind = 0
             do i=1,n_os_out
@@ -1582,7 +1582,7 @@ contains
                 write(*,*) 'partsz: ', partsz
                 stop
             endif
-            call os_part%new_clean(n_records)
+            call os_part%new(n_records)
             call bos_doc%read_segment(isegment, os_part)
             call bos_doc%close()
             ! transfer to self
@@ -1614,7 +1614,7 @@ contains
         ! ensure ptcl3D field congruent with ptcl2D field
         noris_ptcl3D = self%os_ptcl3D%get_noris()
         noris_ptcl2D = self%os_ptcl2D%get_noris()
-        if( noris_ptcl3D /= noris_ptcl2D ) call self%os_ptcl3D%new_clean(noris_ptcl2D)
+        if( noris_ptcl3D /= noris_ptcl2D ) call self%os_ptcl3D%new(noris_ptcl2D)
         ! do the mapping
         ncls = self%os_cls3D%get_noris()
         do icls=1,ncls
@@ -1790,38 +1790,38 @@ contains
         n = self%bos%get_n_records(isegment)
         select case(isegment)
             case(MIC_SEG)
-                call self%os_mic%new_clean(n)
+                call self%os_mic%new(n)
                 call self%bos%read_segment(isegment, self%os_mic)
             case(STK_SEG)
-                call self%os_stk%new_clean(n)
+                call self%os_stk%new(n)
                 call self%bos%read_segment(isegment, self%os_stk,    only_ctfparams_state_eo=only_ctfparams_state_eo)
             case(PTCL2D_SEG)
-                call self%os_ptcl2D%new_clean(n)
+                call self%os_ptcl2D%new(n)
                 call self%bos%read_segment(isegment, self%os_ptcl2D, only_ctfparams_state_eo=only_ctfparams_state_eo)
             case(CLS2D_SEG)
-                call self%os_cls2D%new_clean(n)
+                call self%os_cls2D%new(n)
                 call self%bos%read_segment(isegment, self%os_cls2D)
             case(CLS3D_SEG)
-                call self%os_cls3D%new_clean(n)
+                call self%os_cls3D%new(n)
                 call self%bos%read_segment(isegment, self%os_cls3D)
             case(PTCL3D_SEG)
-                call self%os_ptcl3D%new_clean(n)
+                call self%os_ptcl3D%new(n)
                 call self%bos%read_segment(isegment, self%os_ptcl3D, only_ctfparams_state_eo=only_ctfparams_state_eo)
             case(OUT_SEG)
-                call self%os_out%new_clean(n)
+                call self%os_out%new(n)
                 call self%bos%read_segment(isegment, self%os_out)
             case(FRCS_SEG)
                 call self%read_2Darray_segment(FRCS_SEG, self%frcs)
             case(FSCS_SEG)
                 call self%read_2Darray_segment(FSCS_SEG, self%fscs)
             case(PROJINFO_SEG)
-                call self%projinfo%new_clean(n)
+                call self%projinfo%new(n)
                 call self%bos%read_segment(isegment, self%projinfo)
             case(JOBPROC_SEG)
-                call self%jobproc%new_clean(n)
+                call self%jobproc%new(n)
                 call self%bos%read_segment(isegment, self%jobproc)
             case(COMPENV_SEG)
-                call self%compenv%new_clean(n)
+                call self%compenv%new(n)
                 call self%bos%read_segment(isegment, self%compenv)
         end select
     end subroutine segreader

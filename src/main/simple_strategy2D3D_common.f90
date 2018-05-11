@@ -573,7 +573,7 @@ contains
         integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143
-        call b%spproj%os_cls2D%new_clean(p%ncls)
+        call b%spproj%os_cls2D%new(p%ncls)
         call b%a%get_pops(pops, 'class', maxn=p%ncls)
         do icls=1,p%ncls
             call b%projfrcs%estimate_res(icls, frc05, frc0143)

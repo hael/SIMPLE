@@ -382,7 +382,7 @@ contains
                 do istk=1,n_newstks
                     o_stk  = os_stk_in%get_ori(n_stk+istk)
                     nptcls = nint(o_stk%get('nptcls'))
-                    call os_ptcls%new_clean(nptcls)
+                    call os_ptcls%new(nptcls)
                     do iptcl=1,nptcls
                         call os_ptcls%set_ori(iptcl, o_stk)
                     enddo

@@ -74,7 +74,7 @@ contains
         integer          :: noris
         p     = params(cline)
         noris = nlines(p%oritab)
-        call os%new_clean(noris)
+        call os%new(noris)
         call os%read(p%oritab)
         if( file_exists(p%projfile) )then
             call spproj%read(p%projfile)
@@ -134,15 +134,21 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(binoris)                 :: bos_doc
         character(len=:), allocatable :: keys, fname, oritype, str
+        logical,          allocatable :: keys_present(:)
         character(len=STDLEN)         :: args(32)
         logical    :: ischar, isthere
         type(oris) :: os
         type(ori)  :: o
-        integer    :: nargs, iseg, noris, ikey, iori
+        integer    :: nargs, iseg, noris, ikey, iori, state
         real       :: rval
         ! parse the keys
         keys = cline%get_carg('keys')
-        call parsestr(keys, ',', args, nargs)
+        if( str_has_substr(keys, ',') )then
+            call parsestr(keys, ',', args, nargs)
+        else
+            args(1) = keys
+            nargs   = 1
+        endif
         ! open the project file
         fname = cline%get_carg('projfile')
         call bos_doc%open(fname)
@@ -152,12 +158,28 @@ contains
         noris   = bos_doc%get_n_records(iseg)
         if( noris == 0 ) return
         ! read segment
-        call os%new_clean(noris)
+        call os%new(noris)
         call bos_doc%read_segment(iseg, os)
-        do iori=1,noris
-            do ikey=1,nargs
-                isthere = os%isthere(iori,trim(args(ikey)),ischar)
-                if( isthere )then
+        ! look for keys
+        allocate(keys_present(nargs))
+        do ikey=1,nargs
+            keys_present(ikey) = os%isthere(trim(args(ikey)))
+        end do
+        ! print
+        if( all(keys_present) )then
+            do iori=1,noris
+                ! first we write the index
+                write(*,'(i9,a)',advance='no') iori, ' '
+                ! then the state
+                if( os%isthere(iori,'state') )then
+                    state = nint(os%get(iori,'state'))
+                else
+                    state = 1
+                endif
+                write(*,'(i3,a)',advance='no') state, ' '
+                ! then the key values
+                do ikey=1,nargs
+                    ischar = os%ischar(iori,trim(args(ikey)))
                     if( ischar )then
                         call os%getter(iori, trim(args(ikey)), str)
                         write(*,'(a)',advance='no') trim(str)//' '
@@ -165,12 +187,15 @@ contains
                         call os%getter(iori, trim(args(ikey)), rval)
                         write(*,'(f12.4,a)',advance='no') rval, ' '
                     endif
-                else
-                    write(*,'(f12.4,a)',advance='no') 0., ' '
-                endif
+                end do
+                write(*,*) ''
             end do
-            write(*,*) ''
-        end do
+        else
+            do ikey=1,nargs
+                if( .not. keys_present(ikey) ) write(*,*) 'key: ', trim(args(ikey)), ' is missing in segment'
+            end do
+            write(*,*) 'ERROR! print request failed due to missing keys; simple_commander_project :: exec_print_project_vals'
+        endif
     end subroutine exec_print_project_vals
 
     !> for creating a new project
@@ -342,13 +367,13 @@ contains
         ! oris input
         if( inputted_oritab )then
             ndatlines = binread_nlines(p, p%oritab)
-            call os%new_clean(ndatlines)
+            call os%new(ndatlines)
             call binread_oritab(p%oritab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_deftab )then
             ndatlines = binread_nlines(p, p%deftab)
-            call os%new_clean(ndatlines)
+            call os%new(ndatlines)
             call binread_oritab(p%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
@@ -360,7 +385,7 @@ contains
                 write(*,*) 'unsupported nr of rec:s in plaintexttab'
                 stop 'commander_project :: exec_extract_ptcls'
             endif
-            call os%new_clean(ndatlines)
+            call os%new(ndatlines)
             allocate( line(nrecs) )
             do i=1,ndatlines
                 call paramfile%readNextDataLine(line)
@@ -527,7 +552,7 @@ contains
         ! add stack if present
         if( cline%defined('stk') )then
             if( n_ori_inputs == 0 .and. trim(p%ctf) .eq. 'no' )then
-                call os%new_clean(p%nptcls)
+                call os%new(p%nptcls)
                 call os%set_all2single('state', 1.0)
                 call spproj%add_single_stk(p%stk, ctfvars, os)
             endif

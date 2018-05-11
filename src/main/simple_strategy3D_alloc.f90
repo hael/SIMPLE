@@ -108,7 +108,7 @@ contains
         do iptcl = p%fromp, p%top
             if( ptcl_mask(iptcl) )then
                 ! orientation peaks
-                call o_peaks(iptcl)%new_clean(npeaks)
+                call o_peaks(iptcl)%new(npeaks)
                 ! transfer CTF params
                 if( p%ctf.ne.'no' )then
                     call o_peaks(iptcl)%set_all2single('kv',    b%a%get(iptcl,'kv')   )

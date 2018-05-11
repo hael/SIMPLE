@@ -68,7 +68,7 @@ contains
         ! get # rotations
         self%nrots = pftcc%get_nrots()
         ! create trial orientation
-        call self%e_trial%new_ori_clean()
+        call self%e_trial%new()
         ! create in-plane search object
         lims_sh(:,1)      = -p%trs
         lims_sh(:,2)      =  p%trs

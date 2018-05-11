@@ -298,7 +298,7 @@ contains
         if( spproj%os_cls3D%get_noris() > 0 )then
             os = spproj%os_cls3D
         else
-            call os%new_clean( ncavgs )
+            call os%new( ncavgs )
         endif
         call work_proj%add_single_stk(trim(stk), ctfvars, os)
         call spproj%kill

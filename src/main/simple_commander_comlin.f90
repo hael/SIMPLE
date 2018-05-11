@@ -58,7 +58,7 @@ contains
             if( p%center.eq.'yes' ) shvec = b%vol%center(p%cenlp,p%msk)
             if( p%part.eq.1 )then
                 ! writes shifts for distributed execution
-                call oshift%new_clean(1)
+                call oshift%new(1)
                 call oshift%set(1,'x',shvec(1))
                 call oshift%set(1,'y',shvec(2))
                 call oshift%set(1,'z',shvec(3))
@@ -102,11 +102,11 @@ contains
             ! fetch orientation to refine
             orientation = b%spproj%os_cls3D%get_ori(p%part)
             ! b%a contained the coarse solutions, needs to be rebuilt for common line toolbox
-            call b%a%new_clean(p%nptcls)
+            call b%a%new(p%nptcls)
             call b%a%spiral
             call b%build_comlin_tbox(p) ! objects for common lines based alignment built
             ! fetch reference orientations
-            call b%e%new_clean(p%nspace)
+            call b%e%new(p%nspace)
             call b%e%read(SYMPROJTAB, [1,p%nspace])
             do i=1,p%nptcls
                 call b%ref_imgs(1,i)%new([p%box, p%box, 1], p%smpd)
@@ -124,7 +124,7 @@ contains
             ! search
             call comlin_srch_init( b, p, 'simplex', 'sym')
             call comlin_singlesrch_symaxis(orientation)
-            call orientation_best%new_clean(1)
+            call orientation_best%new(1)
             call orientation_best%set_ori(1, orientation)
             symaxes_str       = trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT)
             b%spproj%os_cls3D = orientation_best

@@ -216,7 +216,7 @@ contains
         if( b%a%get_noris() == p%ncls )then
             ! all we need to do is fetch from classdoc in projfile &
             ! order according to resolution
-            call clsdoc_ranked%new_clean(p%ncls)
+            call clsdoc_ranked%new(p%ncls)
             res = b%spproj%os_cls2D%get_all('res')
             allocate(order(p%ncls))
             order = (/(iclass,iclass=1,p%ncls)/)

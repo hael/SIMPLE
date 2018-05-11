@@ -26,7 +26,6 @@ type :: oris
   contains
     ! CONSTRUCTORS
     procedure          :: new
-    procedure          :: new_clean
     procedure          :: reallocate
     ! GETTERS
     procedure          :: e1get
@@ -50,6 +49,7 @@ type :: oris
     procedure, private :: isthere_1
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
+    procedure          :: ischar
     procedure          :: max_hash_size
     procedure          :: max_ori_strlen_trim
     procedure          :: get_n
@@ -234,21 +234,6 @@ contains
     end subroutine new
 
     !>  \brief  is a constructor
-    subroutine new_clean( self, n )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: n
-        integer :: alloc_stat, i
-        call self%kill
-        self%n = n
-        allocate( self%o(self%n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('new_clean; simple_oris',alloc_stat)
-        do i=1,n
-            call self%o(i)%new_ori_clean
-        end do
-        DebugPrint ' simple_oris::new_clean initiated'
-    end subroutine new_clean
-
-    !>  \brief  is a constructor
     subroutine reallocate( self, new_n )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: new_n
@@ -260,7 +245,7 @@ contains
         old_n = self%n
         tmp   = self
         ! reallocate
-        call self%new_clean(new_n)
+        call self%new(new_n)
         ! stash back the old data
         do i=1,old_n
             self%o(i) = tmp%o(i)
@@ -441,14 +426,21 @@ contains
     end function isthere_1
 
     !>  \brief  is for checking if parameter is present
-    function isthere_2( self, i, key, ischar ) result( is )
+    function isthere_2( self, i, key ) result( is )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: i
         character(len=*),  intent(in)    :: key
-        logical, optional, intent(out)   :: ischar
         logical :: is
-        is = self%o(i)%isthere(key, ischar)
+        is = self%o(i)%isthere(key)
     end function isthere_2
+
+    function ischar( self, i, key ) result ( is )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: i
+        character(len=*),  intent(in)    :: key
+        logical :: is
+        is = self%o(i)%ischar(key)
+    end function ischar
 
     !>  \brief  is for getting the maximum hash size
     integer function max_hash_size( self )
@@ -1303,7 +1295,7 @@ contains
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
         integer   :: i
-        call self_out%new_clean(self_in%n)
+        call self_out%new(self_in%n)
         do i=1,self_in%n
             self_out%o(i) = self_in%o(i)
         end do
@@ -2338,7 +2330,7 @@ contains
                 integer :: i
                 if( allocated(avail) )deallocate(avail, stat=alloc_stat)
                 allocate(avail(n), source=.false., stat=alloc_stat)
-                call tmp%new_clean(n)
+                call tmp%new(n)
                 call tmp%spiral_1
                 do i = 1, n
                     if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )&
@@ -2806,7 +2798,7 @@ contains
                 call self%get_pinds(icls, 'class', pinds, consider_w=.false.)
                 if(.not.allocated(pinds)) cycle
                 pop = size(pinds)
-                call os%new_clean(pop)
+                call os%new(pop)
                 do i=1,pop
                     call os%set_ori(i, self%get_ori(pinds(i)))
                 enddo
