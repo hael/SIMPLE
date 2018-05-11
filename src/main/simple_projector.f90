@@ -207,14 +207,16 @@ contains
     end subroutine fproject_polar
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine dfproject_polar( self, euls, pftcc, dplane )
+    subroutine dfproject_polar( self, iref, euls, pftcc, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(projector),        intent(inout) :: self          !< projector object
-        real(dp),                intent(inout) :: euls(3)       !< orientation
-        class(polarft_corrcalc), intent(inout) :: pftcc         !< object that holds the polar image
-        complex, allocatable,    intent(inout) :: dplane(:,:,:) !< derivative(s) of projected plane, has to be of dim(nrot,nk,3)
+        class(projector),        intent(inout) :: self    !< projector object
+        integer,                 intent(in)    :: iref    !< which reference
+        real(dp),                intent(inout) :: euls(3) !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
+        logical,                 intent(in)    :: iseven  !< eo flag        
         integer         :: irot, k, pdim(3)
         real(dp)        :: vec(3), loc(3)
+        complex         :: dfcomp(3)
         type(ori_light) :: or
         pdim = pftcc%get_pdim()        
         do irot=1,pdim(1)
@@ -222,21 +224,23 @@ contains
                 vec(:2)            = real(pftcc%get_coord(irot,k),kind=dp)
                 vec(3)             = 0._dp
                 loc                = matmul(vec,or%euler2m(euls))
-                dplane(irot, k, :) = self%dinterp_fcomp(euls, loc, vec )
+                dfcomp             = self%dinterp_fcomp(euls, loc, vec )
+                call pftcc%set_dref_fcomp( iref, irot, k, dfcomp, iseven )
             end do
         end do
     end subroutine dfproject_polar
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fdf_project_polar( self, euls, pftcc, plane, dplane )
+    subroutine fdf_project_polar( self, iref, euls, pftcc, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(projector),        intent(inout) :: self          !< projector object
-        real(dp),                intent(inout) :: euls(3)       !< orientation
-        class(polarft_corrcalc), intent(inout) :: pftcc         !< object that holds the polar ima
-        complex, allocatable,    intent(inout) :: plane(:,:)    !< projected plane
-        complex, allocatable,    intent(inout) :: dplane(:,:,:) !< derivative(s) of projected plane, has to be of dim(nrot,nk,3)
+        class(projector),        intent(inout) :: self    !< projector object
+        integer,                 intent(in)    :: iref    !< which reference
+        real(dp),                intent(inout) :: euls(3) !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
+        logical,                 intent(in)    :: iseven  !< eo flag        
         integer         :: irot, k, pdim(3)
         real(dp)        :: vec(3), loc(3)
+        complex         :: fcomp, dfcomp(3)
         type(ori_light) :: or
         pdim = pftcc%get_pdim()
         do irot=1,pdim(1)
@@ -244,7 +248,9 @@ contains
                 vec(:2) = real(pftcc%get_coord(irot,k),kind=dp)
                 vec(3)  = 0._dp
                 loc     = matmul(vec,or%euler2m(euls))
-                dplane(irot, k, :) = self%fdf_interp_fcomp(euls, loc, vec, plane(irot, k))
+                dfcomp  = self%fdf_interp_fcomp(euls, loc, vec, fcomp)
+                call pftcc%set_ref_fcomp( iref, irot, k, fcomp, iseven )                
+                call pftcc%set_dref_fcomp( iref, irot, k, dfcomp, iseven )
             end do
         end do
     end subroutine fdf_project_polar
@@ -301,7 +307,7 @@ contains
         real(dp),         intent(in)                             :: euls(3)
         real(dp),         intent(in)                             :: loc(3)
         real(dp),         intent(in)                             :: q(3)
-        complex(dp)                                              :: res(3)
+        complex(sp)                                              :: res(3)
         real(dp)                                                 :: drotmat(3,3,3)
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1, w2, w3
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_t, dw2_t, dw3_t    !theta
@@ -320,21 +326,13 @@ contains
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))
         dRdangle(:,3) = matmul(q, drotmat(:,:,3))
-        w1  = 1.0_dp
-        w2  = 1.0_dp
-        w3  = 1.0_dp
+        w1  = 1.0_dp ; w2  = 1.0_dp ; w3  = 1.0_dp
         ! theta
-        dw1_t = 1.0_dp
-        dw2_t = 1.0_dp
-        dw3_t = 1.0_dp
+        dw1_t = 1.0_dp ; dw2_t = 1.0_dp ; dw3_t = 1.0_dp
         ! psi
-        dw1_p = 1.0_dp
-        dw2_p = 1.0_dp
-        dw3_p = 1.0_dp
+        dw1_p = 1.0_dp ; dw2_p = 1.0_dp ; dw3_p = 1.0_dp
         ! phi
-        dw1_ph = 1.0_dp
-        dw2_ph = 1.0_dp
-        dw3_ph = 1.0_dp            
+        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp            
         do i=1,self%wdim
             w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
             w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
@@ -355,9 +353,9 @@ contains
         wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t 
         wp  = dw1_p  * w2 * w3  + w1 * dw2_p  * w3  + w1 * w2 * dw3_p
         wph = dw1_ph * w2 * w3  + w1 * dw2_ph * w3  + w1 * w2 * dw3_ph
-        res(1) = sum( wt  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
-        res(2) = sum( wp  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
-        res(3) = sum( wph * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )                
+        res(1) = real( sum( wt  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) )
+        res(2) = real( sum( wp  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) )
+        res(3) = real( sum( wph * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) )
     end function dinterp_fcomp
 
     !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
@@ -369,8 +367,8 @@ contains
         real(dp),         intent(in)                             :: euls(3)
         real(dp),         intent(in)                             :: loc(3)
         real(dp),         intent(in)                             :: q(3)
-        complex,          intent(out)                            :: fcomp        
-        complex                                                  :: res(3)
+        complex(sp),      intent(out)                            :: fcomp        
+        complex(sp)                                              :: res(3)
         real(dp)                                                 :: drotmat(3,3,3)
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1, w2, w3
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_t, dw2_t, dw3_t    !theta
@@ -389,21 +387,13 @@ contains
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))
         dRdangle(:,3) = matmul(q, drotmat(:,:,3))
-        w1  = 1.0_dp
-        w2  = 1.0_dp
-        w3  = 1.0_dp
+        w1  = 1.0_dp ; w2  = 1.0_dp ; w3  = 1.0_dp
         ! theta
-        dw1_t = 1.0_dp
-        dw2_t = 1.0_dp
-        dw3_t = 1.0_dp
+        dw1_t = 1.0_dp ; dw2_t = 1.0_dp ; dw3_t = 1.0_dp
         ! psi
-        dw1_p = 1.0_dp
-        dw2_p = 1.0_dp
-        dw3_p = 1.0_dp
+        dw1_p = 1.0_dp ; dw2_p = 1.0_dp ; dw3_p = 1.0_dp
         ! phi
-        dw1_ph = 1.0_dp
-        dw2_ph = 1.0_dp
-        dw3_ph = 1.0_dp            
+        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp            
         do i=1,self%wdim
             w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
             w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
@@ -425,10 +415,10 @@ contains
         wp  = dw1_p  * w2 * w3  + w1 * dw2_p  * w3  + w1 * w2 * dw3_p
         wph = dw1_ph * w2 * w3  + w1 * dw2_ph * w3  + w1 * w2 * dw3_ph
         w   = w1 * w2 * w3
-        res(1) = sum( wt  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
-        res(2) = sum( wp  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
-        res(3) = sum( wph * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
-        fcomp  = sum( w  *  self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )        
+        res(1) = real( sum( wt  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) )
+        res(2) = real( sum( wp  * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) )
+        res(3) = real( sum( wph * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) )
+        fcomp  = real( sum( w  *  self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) )      
     end function fdf_interp_fcomp
     
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)

@@ -92,6 +92,8 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: ctfmats(:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
+    complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)  !< derivatives w.r.t. orientation angles of 3D complex matrices
+    complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)   !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
     complex(sp),         allocatable :: fft_factors(:)        !< phase factors for accelerated gencorrs routines
     type(fftw_arrs),     allocatable :: fftdat(:)             !< arrays for accelerated gencorrs routines
@@ -111,6 +113,7 @@ type :: polarft_corrcalc
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
     procedure          :: set_ref_fcomp
+    procedure          :: set_dref_fcomp    
     procedure          :: set_ptcl_fcomp
     procedure          :: zero_ref
     procedure          :: cp_even2odd_ref
@@ -318,6 +321,8 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                  &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                 &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,self%nthr),&
+                 &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,self%nthr),&
                  &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                  &self%sqsums_ptcls(1:self%nptcls),self%fftdat(self%nthr),&
                  &self%fftdat_ptcls(1:self%nptcls,self%kfromto(1):self%kfromto(2)),&
@@ -440,6 +445,23 @@ contains
             self%pfts_refs_odd(irot,k,iref)  = comp
         endif
     end subroutine set_ref_fcomp
+
+    !>  \brief set_dref_fcomp sets a reference derivative Fourier component
+    !! \param iref reference index
+    !! \param irot rotation index
+    !! \param k  index (third dim ptfs_refs)
+    !! \param scomp derivative Fourier component
+    subroutine set_dref_fcomp( self, iref, irot, k, dcomp, iseven )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, irot, k
+        complex(sp),             intent(in)    :: dcomp(3)
+        logical,                 intent(in)    :: iseven
+        if( iseven )then
+            self%pfts_drefs_even(:,iref,irot,k) = dcomp
+        else
+            self%pfts_drefs_odd(:,iref,irot,k)  = dcomp
+        endif
+    end subroutine set_dref_fcomp
 
     !>  \brief  sets a particle Fourier component
     !! \param iptcl particle index
@@ -1720,8 +1742,8 @@ contains
             if( allocated(self%ptcl_bfac_norms)   ) deallocate(self%ptcl_bfac_norms)
             if( allocated(self%inv_resarrsq)      ) deallocate(self%inv_resarrsq)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
-                &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_ptcls,&
-                &self%fft_factors, self%fftdat, self%fftdat_ptcls,&
+                &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
+                self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls,&
                 &self%iseven, self%pinds)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
