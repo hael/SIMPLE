@@ -35,6 +35,7 @@ type :: oris
     procedure          :: get_noris
     procedure          :: get_ori
     procedure          :: get
+    procedure          :: get_static
     procedure, private :: getter_1
     procedure, private :: getter_2
     generic            :: getter => getter_1, getter_2
@@ -332,6 +333,15 @@ contains
         real,             intent(inout) :: val
         call self%o(i)%getter(key, val)
     end subroutine getter_2
+
+    !>  \brief  is a getter with fixed length return string
+    function get_static( self, i, key )result( val )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        character(len=STDLEN)           :: val
+        val = trim(self%o(i)%get_static(key))
+    end function get_static
 
     !>  \brief  is for getting an array of 'key' values
     function get_all( self, key, fromto ) result( arr )
@@ -1638,7 +1648,6 @@ contains
         character(len=*), intent(in)    :: state_or_class
         integer, allocatable :: parts(:,:)
         integer :: ipart, iptcl
-        !$ allocate(parts(self%n,2))
         parts = split_nobjs_even(self%n, nsplit)
         do ipart=1,nsplit
             do iptcl=parts(ipart,1),parts(ipart,2)
@@ -2213,7 +2222,6 @@ contains
         logical,          intent(out)   :: err
         real, allocatable :: vals(:), all_vals(:)
         real, allocatable :: states(:)
-        !$ allocate(states(self%n), all_vals(self%n), vals(self%n))
         states   = self%get_all('state')
         all_vals = self%get_all(which)
         vals     = pack(all_vals, mask=(states > 0.5))
@@ -2348,7 +2356,6 @@ contains
         allocate( inds(self%n), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
         DebugPrint " In oris:: order allocated ?"
-        !$ allocate(specscores(self%n))
         specscores = self%get_all('specscore')
         DebugPrint " In oris:: order allocated yes"
         inds = (/(i,i=1,self%n)/)
@@ -2370,7 +2377,6 @@ contains
         integer :: i
         allocate( inds(self%n), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
-        !$ allocate(corrs(self%n))
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
         call hpsort(corrs, inds)
@@ -2600,9 +2606,7 @@ contains
                     deallocate(specscores,weights)
                 enddo
             else
-                !$ allocate(specscores(self%n))
                 specscores = self%get_all('specscore')
-                !$ allocate(weights(self%n))
                 weights    = self%get_all('w')
                 where( weights < 0.5 )
                     specscores = 0.
@@ -3484,7 +3488,6 @@ contains
         call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
         call os%rnd_corrs()
         DebugPrint "simple_oris::test_oris rnd_corrs called"
-        !$ allocate(order(os%n))
         order = os%order()
         DebugPrint "simple_oris::test_oris order called"
         if( doprint )then

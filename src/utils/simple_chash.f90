@@ -42,6 +42,7 @@ type :: chash
     procedure, private :: get_1
     procedure, private :: get_2
     generic            :: get => get_1, get_2
+    procedure          :: get_static
     procedure          :: get_key
     procedure          :: chash2str
     procedure          :: size_of
@@ -316,6 +317,21 @@ contains
         character(len=:), allocatable :: val
         if( allocated(self%values(ival)%str) ) allocate(val, source=trim(self%values(ival)%str))
     end function get_2
+
+    !>  \brief  returns fixed length value from the chash
+    function get_static( self, key ) result( val )
+        class(chash),     intent(in)  :: self
+        character(len=*), intent(in)  :: key
+        character(len=STDLEN)         :: val
+        integer :: i
+        do i=1,self%chash_index
+            if( trim(self%keys(i)%str) .eq. trim(key) )then
+                val = trim(self%values(i)%str)
+                return
+            endif
+        end do
+        val = ''
+    end function get_static
 
     !>  \brief  gets a key in the chash
     function get_key( self, ikey ) result( val )

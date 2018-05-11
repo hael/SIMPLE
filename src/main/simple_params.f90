@@ -92,85 +92,44 @@ type :: params
     character(len=3)      :: weights2D='no'       !< to use 2d spectral weights(yes|no){no}
     character(len=3)      :: weights3D='no'       !< to use 3d spectral weights(yes|no){yes}
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
-    ! other character variables in ascending alphabetical order
-    character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
-    character(len=4)      :: automsk='no'
+    ! files & directories strings in ascending alphabetical order
     character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
     character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
-    character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: classdoc=''          !< doc with per-class stats(.txt)
     character(len=STDLEN) :: comlindoc=''         !< clustering_shc_nclsX.txt
-    character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: cwd=''
     character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
-    character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dir=''               !< directory
     character(len=STDLEN) :: dir_movies=''        !< grab mrc mrcs files from here
     character(len=STDLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
     character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=STDLEN) :: dir_target=''        !< put output here
     character(len=STDLEN) :: dir_ptcls=''
-    character(len=STDLEN) :: dir_mics=''          !< grab micrographs from here
-    character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
-    character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
-    character(len=STDLEN) :: exec_dir=''          !< auto-named execution directory
-    character(len=STDLEN) :: executable=''        !< name of executable
-    character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
-    character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
-    character(len=STDLEN) :: extrmode='all'
-    character(len=STDLEN) :: fbody=''             !< file body
-    character(len=STDLEN) :: featstk='expecstk.bin'
     character(len=STDLEN) :: filetab=''           !< list of files(.txt)
     character(len=STDLEN) :: fname=''             !< file name
     character(len=STDLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
-    character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
-    character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
-    character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.simple)
-    character(len=STDLEN) :: keys=''
-    character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=STDLEN) :: mskvols(MAXS)=''
-    character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
-    character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
     character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
-    character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN) :: outfile=''           !< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
-    character(len=STDLEN) :: ctf_estimate_doc=''       !< per-micrograph CTF parameters to transfer
-    character(len=STDLEN) :: pcastk='pcavecinstk.bin'
-    character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
-    character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
-    character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
-    character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
     character(len=STDLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
-    character(len=STDLEN) :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
-    character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
-    character(len=STDLEN) :: refs_even=''
-    character(len=STDLEN) :: refs_odd=''
-    character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
-    character(len=STDLEN) :: split_mode='even'
-    character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
     character(len=STDLEN) :: stktab=''            !< list of per-micrograph stacks
     character(len=STDLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
     character(len=STDLEN) :: stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
     character(len=STDLEN) :: stk_backgr=''        !< stack with image for background subtraction
-    character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=STDLEN) :: vol=''
     character(len=STDLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
@@ -180,6 +139,44 @@ type :: params
     character(len=STDLEN) :: vols_odd(MAXS)=''
     character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
     character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
+    ! other character variables in ascending alphabetical order
+    character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
+    character(len=4)      :: automsk='no'
+    character(len=STDLEN) :: boxtype='eman'
+    character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
+    character(len=STDLEN) :: cwd=''
+    character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
+    character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
+    character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
+    character(len=STDLEN) :: exec_dir=''          !< auto-named execution directory
+    character(len=STDLEN) :: executable=''        !< name of executable
+    character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
+    character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
+    character(len=STDLEN) :: fbody=''             !< file body
+    character(len=STDLEN) :: featstk='expecstk.bin'
+    character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
+    character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
+    character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
+    character(len=STDLEN) :: keys=''
+    character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
+    character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
+    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
+    character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
+    character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
+    character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
+    character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
+    character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
+    character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
+    character(len=STDLEN) :: projname=''          !< SIMPLE  project name
+    character(len=STDLEN) :: real_filter=''
+    character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
+    character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
+    character(len=STDLEN) :: refs_even=''
+    character(len=STDLEN) :: refs_odd=''
+    character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
+    character(len=STDLEN) :: split_mode='even'
+    character(len=STDLEN) :: stk_part=''
+    character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
     ! integer variables in ascending alphabetical order
     integer :: astep=1
@@ -429,14 +426,14 @@ contains
         integer, optional, intent(in)      :: spproj_a_seg
         character(len=STDLEN), allocatable :: sp_files(:)
         character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt, debug_local, verbose_local
-        logical               :: vol_defined(MAXS)
-        character(len=STDLEN) :: stk_part_fname
-        character(len=1)      :: checkupfile(50)
-        type(binoris)         :: bos
-        type(ori)             :: o
-        integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        integer               :: spproj_a_seg_inputted, idir, nsp_files
-        logical               :: nparts_set, aamix, ddel_scaled, sp_required
+        logical                   :: vol_defined(MAXS)
+        character(len=STDLEN)     :: stk_part_fname
+        character(len=1)          :: checkupfile(50)
+        type(binoris)             :: bos
+        type(ori)                 :: o
+        integer                   :: i, ncls, ifoo, lfoo(3), cntfile, istate
+        integer                   :: spproj_a_seg_inputted, idir, nsp_files
+        logical                   :: nparts_set, aamix, ddel_scaled, sp_required
         nparts_set    = .false.
         debug_local   = 'no'
         verbose_local = 'no'
@@ -489,7 +486,6 @@ contains
         call check_carg('dir_reject',     self%dir_reject)
         call check_carg('dir_select',     self%dir_select)
         call check_carg('dir_target',     self%dir_target)
-        call check_carg('dir_mics',       self%dir_mics)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
@@ -503,7 +499,6 @@ contains
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)
-        call check_carg('extrmode',       self%extrmode)
         call check_carg('fbody',          self%fbody)
         call check_carg('for3D',          self%for3D)
         call check_carg('ft2img',         self%ft2img)
@@ -578,7 +573,6 @@ contains
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
         call check_file('classdoc',       self%classdoc,     'T')
-        call check_file('ctf_estimate_doc', self%ctf_estimate_doc,  'T', 'O')
         call check_file('comlindoc',      self%comlindoc,    'T')
         call check_file('deftab',         self%deftab,       'T', 'O')
         call check_file('doclist',        self%doclist,      'T')
@@ -840,15 +834,6 @@ contains
 !>>> END, EXECUTION RELATED
 
 !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
-        ! put ctf_estimate_doc (if defined) as oritab
-        if( cline%defined('ctf_estimate_doc') )then
-            if( .not. cline%defined('oritab') )then
-                call cline%set('oritab', self%ctf_estimate_doc)
-                self%oritab = self%ctf_estimate_doc
-            else
-                write(*,*) 'WARNING! Could not set ctf_estimate_doc to oritab because oritab is defined'
-            endif
-        endif
         ! determines whether at least one volume is on the cmdline
         vol_defined = .false.
         do i=1,self%nstates
@@ -1386,14 +1371,14 @@ contains
                 character(len=*),           intent(in)    :: file
                 character(len=*),           intent(inout) :: var
                 character(len=1), optional, intent(in)    :: allowed1, allowed2, notAllowed
-                character(len=1) :: file_descr
-                logical          :: raise_exception
+                character(len=:), allocatable :: abspath_file
+                character(len=1)              :: file_descr
+                logical                       :: raise_exception
                 if( cline%defined(file) )then
-                    var = cline%get_carg(file)
-                    DebugPrint 'var = ', var
-                    file_descr = fname2format(var)
-                    DebugPrint 'file_descr = ', file_descr
+                    var             = cline%get_carg(file)
+                    file_descr      = fname2format(var)
                     raise_exception = .false.
+                    DebugPrint 'var; file_descr: '//trim(var)//' = '//file_descr
                     if( present(allowed1) )then
                         if( present(allowed2) )then
                             if( allowed1 == file_descr .or. allowed2 == file_descr )then
@@ -1436,6 +1421,12 @@ contains
                             write(*,*) 'file: ', trim(file)
                             call simple_stop('This file format is not supported by SIMPLE; simple_params::check_file')
                     end select
+                    ! if( file_exists(file) )then
+                    !     ! updates name to include absolute path
+                    !     call simple_full_path(var, abspath_file, 'params :: check_file', check_exists=.false.)
+                    !     var = trim(abspath_file)
+                    !     deallocate(abspath_file)
+                    ! endif
                     DebugPrint file, '=', var
                 endif
             end subroutine check_file
@@ -1500,17 +1491,6 @@ contains
                     DebugPrint iarg, '=', var
                 endif
             end subroutine check_iarg
-
-            ! subroutine check_larg( larg, var )
-            !     character(len=*), intent(in)  :: larg
-            !     logical, intent(out) :: var
-            !     integer :: tmp
-            !     if( cline%defined(larg) )then
-            !         tmp =  NINT( cline%get_rarg(larg) )
-            !         var = tmp /= 0
-            !         DebugPrint larg, '=', var
-            !     endif
-            ! end subroutine check_larg
 
             subroutine check_rarg( rarg, var )
                 character(len=*), intent(in)  :: rarg

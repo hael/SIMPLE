@@ -96,6 +96,8 @@ contains
         character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),      allocatable :: output_dir_motion_correct
         logical                            :: l_pick
+        ! seed the random number generator
+        call seed_rnd
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
@@ -378,7 +380,7 @@ contains
     end subroutine exec_make_cavgs_distr
 
     subroutine exec_cluster2D_distr( self, cline )
-        use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
+        use simple_procimgfile,         only: random_selection_from_imgfile, copy_imgfile
         use simple_commander_cluster2D, only:   check_2Dconv_commander
         class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -400,6 +402,8 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! seed the random number (no general toolbox built)
+        call seed_rnd
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
@@ -883,7 +887,6 @@ contains
     subroutine exec_reconstruct3D_distr( self, cline )
         class(reconstruct3D_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        ! type(split_commander)              :: xsplit
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
         type(cmdline)                      :: cline_volassemble

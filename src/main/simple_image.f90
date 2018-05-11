@@ -1463,7 +1463,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: rval
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cmplx(rval,0.)
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * rval
     end subroutine mul_cmat_at_1
 
     !! multiply cmat with complex k at index phys
@@ -1479,7 +1479,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: h,k,l
         real,              intent(in)    :: rval
-        self%cmat(h,k,l) = self%cmat(h,k,l) * cmplx(rval,0.)
+        self%cmat(h,k,l) = self%cmat(h,k,l) * rval
     end subroutine mul_cmat_at_3
 
     !! multiply cmat at index h,k,l by complex

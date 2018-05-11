@@ -56,6 +56,7 @@ type :: ori
     procedure          :: get_normal
     procedure          :: get_mat
     procedure          :: get
+    procedure          :: get_static
     procedure, private :: getter_1
     procedure, private :: getter_2
     generic            :: getter => getter_1, getter_2
@@ -425,6 +426,14 @@ contains
         real :: val
         val = self%htab%get(key)
     end function get
+
+    !>  \brief  is a getter with fixed length return string
+    function get_static( self, key )result( val )
+        class(ori),           intent(inout) :: self
+        character(len=*),     intent(in)    :: key
+        character(len=STDLEN)               :: val
+        val = trim(self%chtab%get_static(key))
+    end function get_static
 
     !>  \brief  is a getter
     subroutine getter_1( self, key, val )

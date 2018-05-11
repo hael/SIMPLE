@@ -50,7 +50,6 @@ contains
         call chdict%push('countvox',      'count # voxels(yes|no){no}')
         call chdict%push('cs',            'spherical aberration constant(in mm){2.7}')
         call chdict%push('ctf',           'ctf flag(yes|no|flip)')
-        call chdict%push('ctf_estimate_doc',   'per-micrograph CTF parameters to transfer')
         call chdict%push('ctfreslim',     'ctf resolution (A) for setting state flag {8 A}')
         call chdict%push('ctfsq',         'apply ctf**2 to the images(yes|no){no}')
         call chdict%push('ctfstats',      'calculate ctf statistics(yes|no){no}')

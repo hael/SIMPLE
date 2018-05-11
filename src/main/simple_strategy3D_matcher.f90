@@ -263,7 +263,7 @@ contains
         if( DEBUG ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
         ! memoize CTF matrices
         if( trim(p%oritype) .eq. 'ptcl3D' )then
-            if( b%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl3D')
+            if( b%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_absctfmats(b%spproj, 'ptcl3D')
         else
             ! class averages have no CTF
         endif

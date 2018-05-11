@@ -97,7 +97,6 @@ type :: polarft_corrcalc
     type(fftw_arrs),     allocatable :: fftdat(:)             !< arrays for accelerated gencorrs routines
     type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)     !< for memoization of particle  FFTs in accelerated gencorrs routines
     logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC
-    logical                          :: phaseplate            !< images obtained with the Volta
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
@@ -145,8 +144,8 @@ type :: polarft_corrcalc
     procedure          :: memoize_ffts
     procedure          :: memoize_bfac
     ! CALCULATORS
-    procedure, private :: create_polar_ctfmat
-    procedure          :: create_polar_ctfmats
+    procedure, private :: create_polar_absctfmat
+    procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
     procedure, private :: calc_corrs_over_k
     procedure, private :: calc_k_corrs
@@ -173,7 +172,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cc_for_rot
     procedure          :: gencorr_cc_for_rot_8
     procedure          :: gencorr_cc_grad_for_rot_8
-    procedure          :: gencorr_cc_grad_only_for_rot_8  
+    procedure          :: gencorr_cc_grad_only_for_rot_8
     procedure          :: gencorr_resnorm_for_rot_8
     procedure          :: gencorr_resnorm_grad_for_rot_8
     procedure          :: gencorr_resnorm_grad_only_for_rot_8
@@ -245,7 +244,6 @@ contains
         self%kfromto     = p%kfromto                             !< Fourier index range
         self%nk          = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
         self%nthr        = p%nthr                                !< # OpenMP threads
-        self%phaseplate  = p%tfplan%l_phaseplate                 !< images obtained with the Volta
         ! take care of objective function flags
         select case(trim(p%objfun))
             case('cc')
@@ -747,7 +745,7 @@ contains
     !! \param add_phshift additional phase shift (radians) introduced by the Volta
     !! \param endrot number of rotations
     !! \return ctfmat matrix with CTF values
-    function create_polar_ctfmat( self, ctfparms, endrot ) result( ctfmat )
+    function create_polar_absctfmat( self, ctfparms, endrot ) result( ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf, only: ctf
@@ -761,6 +759,7 @@ contains
         allocate( ctfmat(endrot,self%kfromto(1):self%kfromto(2)) )
         inv_ldim = 1./real(self%ldim)
         tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+        call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
         !$omp parallel do collapse(2) default(shared) private(irot,k,hinv,kinv,spaFreqSq,ang)&
         !$omp schedule(static) proc_bind(close)
         do irot=1,endrot
@@ -769,20 +768,18 @@ contains
                 kinv           = self%polar(irot+self%nrots,k)*inv_ldim(2)
                 spaFreqSq      = hinv*hinv+kinv*kinv
                 ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                if( self%phaseplate )then
-                    ctfmat(irot,k) = tfun%eval(spaFreqSq, ctfparms%dfx, ctfparms%dfy,&
-                        &ctfparms%angast, ang, ctfparms%phshift)
+                if( ctfparms%l_phaseplate )then
+                    ctfmat(irot,k) = abs( tfun%eval(spaFreqSq, ang, ctfparms%phshift) )
                 else
-                    ctfmat(irot,k) = tfun%eval(spaFreqSq, ctfparms%dfx, ctfparms%dfy,&
-                        &ctfparms%angast, ang)
+                    ctfmat(irot,k) = abs( tfun%eval(spaFreqSq, ang) )
                 endif
             end do
         end do
         !$omp end parallel do
-    end function create_polar_ctfmat
+    end function create_polar_absctfmat
 
     !>  \brief  is for generating all matrices of CTF values
-    subroutine create_polar_ctfmats( self, spproj, oritype )
+    subroutine create_polar_absctfmats( self, spproj, oritype )
         use simple_sp_project,  only: sp_project
         class(polarft_corrcalc),   intent(inout) :: self
         class(sp_project), target, intent(inout) :: spproj
@@ -795,13 +792,12 @@ contains
         do iptcl=self%pfromto(1),self%pfromto(2)
             if( self%pinds(iptcl) > 0 )then
                 ctfparms = spproj%get_ctfparams( trim(oritype), iptcl )
-                self%ctfmats(:,:,self%pinds(iptcl)) = self%create_polar_ctfmat(ctfparms, self%pftsz)
+                self%ctfmats(:,:,self%pinds(iptcl)) = self%create_polar_absctfmat(ctfparms, self%pftsz)
             endif
         end do
-    end subroutine create_polar_ctfmats
+    end subroutine create_polar_absctfmats
 
     subroutine prep_ref4corr( self, iref, i, pft_ref, sqsum_ref, kstop )
-        use simple_estimate_ssnr, only: fsc2optlp
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, i
         integer,                 intent(in)    :: kstop

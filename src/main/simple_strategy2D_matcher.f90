@@ -229,7 +229,7 @@ contains
             endif
         end do
         ! memoize CTF matrices
-        if( b%spproj%get_ctfflag('ptcl2D').ne.'no' ) call pftcc%create_polar_ctfmats(b%spproj, 'ptcl2D')
+        if( b%spproj%get_ctfflag('ptcl2D').ne.'no' ) call pftcc%create_polar_absctfmats(b%spproj, 'ptcl2D')
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
 

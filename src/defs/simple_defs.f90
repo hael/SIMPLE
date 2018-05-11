@@ -100,7 +100,7 @@ real, parameter    :: TAU_DEFAULT             = 0.005     !< controls the sharpe
                                                           !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D           = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH         = 0.01      !< threshold for orientations softmax weights
-real,    parameter :: BSC                     = 50.      !< for shell reconstruction b-factor calculation
+real,    parameter :: BSC                     = 20.      !< for shell reconstruction b-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -148,12 +148,12 @@ integer, parameter :: fp_kind = DP
 
 ! debugging and print verbosity flags
 #ifdef _DEBUG
-logical :: global_debug   = .false.  !< global debugging flag
-logical :: global_verbose = .false.  !< global flag for verbosity set to TRUE in debug mode
+logical :: global_debug   = .true.  !< global debugging flag
+logical :: global_verbose = .true.  !< global flag for verbosity set to TRUE in debug mode
 #else
 logical :: global_debug   = .false. !< global flag for debugging disabled
 #ifdef VERBOSE
-logical :: global_verbose = .false.  !< global flag for verbosity TRUE with VERBOSE compilation flag
+logical :: global_verbose = .true.  !< global flag for verbosity TRUE with VERBOSE compilation flag
 #else
 logical :: global_verbose = .false. !< global flag for verbosity FALSE by default
 #endif

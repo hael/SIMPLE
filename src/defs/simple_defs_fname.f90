@@ -15,6 +15,7 @@ character(len=*), parameter :: SCALE_SUFFIX         = '_sc'
 character(len=*), parameter :: THUMBNAIL_SUFFIX     = '_thumb'
 character(len=*), parameter :: INTGMOV_SUFFIX       = '_intg'
 character(len=*), parameter :: POWSPEC_SUFFIX       = '_pspec'
+character(len=*), parameter :: PPROC_SUFFIX         = '_pproc'
 ! stack part related and file format constants
 character(len=*), parameter :: STKPARTSDIR          = 'stack_parts'
 character(len=*), parameter :: STKPARTFBODY         = trim(STKPARTSDIR)//'/stack_part'

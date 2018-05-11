@@ -8,7 +8,7 @@ use simple_params,   only: params
 implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
-&prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
+&eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
 &prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
 &build_pftcc_particles
 private
@@ -375,7 +375,7 @@ contains
     end subroutine grid_ptcl_tst
 
     !>  \brief  prepares all particle images for alignment
-    subroutine build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, is3D,  ptcl_mask )
+    subroutine build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, is3D, ptcl_mask )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_polarizer,        only: polarizer
         class(build),            intent(inout) :: b
@@ -421,45 +421,19 @@ contains
         class(image),     intent(inout) :: img_in
         class(polarizer), intent(inout) :: img_out
         logical,          intent(in)    :: is3D
-        type(ctf) :: tfun
-        real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
-        real      :: x, y, dfx, dfy, angast, phshift
-        integer   :: ifrc
+        type(ctf)       :: tfun
+        type(ctfparams) :: ctfparms
+        real            :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz()), x, y
+        integer         :: ifrc
+        ! shift
         x = b%a%get(iptcl, 'x')
         y = b%a%get(iptcl, 'y')
+        ! CTF parameters
+        ctfparms = b%spproj%get_ctfparams(p%oritype, iptcl)
         ! normalise
         call img_in%norm()
         ! move to Fourier space
         call img_in%fft()
-        ! deal with CTF
-        select case(p%ctf)
-            case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
-                call simple_stop('ctf=mul is not supported; simple_strategy2D3D_common :: prepimg4align')
-            case('no')   ! do nothing
-            case('yes')  ! do nothing
-            case('flip') ! flip back
-                ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
-                ! that these parameters are part of the doc is checked in the params class
-                tfun = ctf(p%smpd, b%a%get(iptcl,'kv'), b%a%get(iptcl,'cs'), b%a%get(iptcl,'fraca'))
-                select case(p%tfplan%mode)
-                    case('astig') ! astigmatic CTF
-                        dfx    = b%a%get(iptcl,'dfx')
-                        dfy    = b%a%get(iptcl,'dfy')
-                        angast = b%a%get(iptcl,'angast')
-                    case('noastig') ! non-astigmatic CTF
-                        dfx    = b%a%get(iptcl,'dfx')
-                        dfy    = dfx
-                        angast = 0.
-                    case DEFAULT
-                        write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
-                        stop 'simple_strategy2D3D_common :: prepimg4align'
-                end select
-                phshift = 0.
-                if( p%tfplan%l_phaseplate ) phshift = b%a%get(iptcl,'phshift')
-                call tfun%apply_serial(img_in, dfx, 'flip', dfy, angast, phshift)
-            case DEFAULT
-                call simple_stop('Unsupported ctf mode; simple_strategy2D3D_common :: prepimg4align')
-        end select
         ! shell normalization & filter
         if( is3D )then
             if( trim(p%eo) .ne. 'no' )then
@@ -481,8 +455,22 @@ contains
                 call img_in%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
-        ! shift image to rotational origin
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
+        ! Shift image to rotational origin & phase-flipping
+        select case(ctfparms%ctfflag)
+            case(CTFFLAG_NO, CTFFLAG_FLIP)  ! shift only
+                if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
+            case(CTFFLAG_YES)               ! phase flip & shift
+                ctfparms = b%spproj%get_ctfparams(p%oritype, iptcl)
+                tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
+                    call tfun%phaseflip_and_shift_serial(img_in, -x, -y, ctfparms)
+                else
+                    call tfun%apply_serial(img_in, 'flip', ctfparms)
+                endif
+            case DEFAULT
+                write(*,*)'Unsupported CTF flag: ', ctfparms%ctfflag
+                stop 'simple_strategy2D3D_common :: prepimg4align'
+        end select
         ! back to real-space
         call img_in%ifft()
         ! clip image if needed
@@ -823,7 +811,7 @@ contains
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, '_pproc')
+                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, PPROC_SUFFIX)
                     call b%vol%fft()
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
@@ -896,7 +884,7 @@ contains
                 call b%vol2%write(p%vols_odd(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol   = add2fbody(trim(p%vols(s)), p%ext, '_pproc')
+                    pprocvol   = add2fbody(trim(p%vols(s)), p%ext, PPROC_SUFFIX)
                     b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)

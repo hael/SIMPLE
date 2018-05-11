@@ -798,6 +798,7 @@ contains
         integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer    :: nptcls, nptcls_part, numlen, status
         real       :: smpd, cs, kv, fraca
+        if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk==0 )then
@@ -932,7 +933,7 @@ contains
                 write(*,*)'Invalid CAVG kind: ', trim(which)
                 stop 'sp_project :: add_cavgs2os_out'
         end select
-        ! fuul path and existence check
+        ! full path and existence check
         call simple_full_path(stk, cavg_stk, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
         call find_ldim_nptcls(cavg_stk, ldim, nptcls)
@@ -1059,7 +1060,7 @@ contains
             if( allocated(stkname) ) deallocate(stkname)
             call self%os_out%getter(ind,'stk',stkname)
             ncls = nint(self%os_out%get(ind, 'nptcls'))
-            smpd = nint(self%os_out%get(ind, 'smpd'))
+            smpd = self%os_out%get(ind, 'smpd')
         else
             stkname = NIL
             ncls    = 0
@@ -1311,6 +1312,8 @@ contains
                 ptcl_field => self%os_ptcl2D
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
+            case('cls3D')
+                ptcl_field => self%os_cls3D
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
                 stop 'sp_project :: get_ctfparams'
@@ -1318,31 +1321,6 @@ contains
         ! extract the CTF parameters
         ! do the index mapping
         call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk)
-        ! CTF flag
-        if( self%os_stk%isthere(stkind, 'ctf') )then
-            call self%os_stk%getter(stkind, 'ctf', ctfflag)
-        else if( ptcl_field%isthere(iptcl, 'ctf') )then
-            call ptcl_field%getter(iptcl, 'ctf', ctfflag)
-        else
-            ctfflag = NIL
-        endif
-        if( trim(ctfflag).eq.NIL )then
-            write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
-            stop 'sp_project :: get_ctfparams'
-        else
-            l_noctf = .false.
-            select case(trim(ctfflag))
-                case('no')
-                    ctfvars%ctfflag = CTFFLAG_NO
-                    l_noctf = .true.
-                case('yes')
-                    ctfvars%ctfflag = CTFFLAG_YES
-                case('mul')
-                    stop 'ERROR ctf=mul deprecated; simple_classaverager :: cavger_new'
-                case('flip')
-                    ctfvars%ctfflag = CTFFLAG_FLIP
-            end select
-        endif
         ! sampling distance
         if( self%os_stk%isthere(stkind, 'smpd') )then
             ctfvars%smpd = self%os_stk%get(stkind, 'smpd')
@@ -1352,6 +1330,45 @@ contains
             write(*,*) 'ERROR! smpd (sampling distance) lacking in os_stk_field'
             stop 'sp_project :: get_ctfparams'
         endif
+        ! CTF flag
+        if( trim(oritype).eq.'cls3D' )then
+            ! parameters left to defaults for class averages
+            ctfvars%ctfflag = CTFFLAG_NO
+            ctfvars%dfx     = 0.
+            ctfvars%dfy     = 0.
+            ctfvars%angast  = 0.
+            ctfvars%phshift = 0.
+            ctfvars%kv      = 0.
+            ctfvars%cs      = 0.
+            ctfvars%fraca   = 0.
+            ctfvars%l_phaseplate = .false.
+            return
+        endif
+        if( self%os_stk%isthere(stkind, 'ctf') )then
+            ctfflag = trim(self%os_stk%get_static(stkind, 'ctf'))
+        else if( ptcl_field%isthere(iptcl, 'ctf') )then
+            ctfflag = trim(ptcl_field%get_static(iptcl, 'ctf'))
+        else
+            ctfflag = NIL
+        endif
+        l_noctf = .false.
+        select case(trim(ctfflag))
+            case(NIL)
+                write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
+                stop 'sp_project :: get_ctfparams'
+            case('no')
+                ctfvars%ctfflag = CTFFLAG_NO
+                l_noctf = .true.
+            case('yes')
+                ctfvars%ctfflag = CTFFLAG_YES
+            case('mul')
+                stop 'ERROR ctf=mul deprecated; simple_sp_project :: get_ctfparams'
+            case('flip')
+                ctfvars%ctfflag = CTFFLAG_FLIP
+            case DEFAULT
+                write(*,*)'unsupported ctf flag:', trim(ctfflag), stkind, iptcl
+                stop 'unsupported ctf flag; simple_sp_project :: get_ctfparams'
+        end select
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
             ctfvars%kv = self%os_stk%get(stkind, 'kv')
@@ -1390,7 +1407,8 @@ contains
         if( ptcl_field%isthere(iptcl, 'dfx') )then
             ctfvars%dfx = ptcl_field%get(iptcl, 'dfx')
         else
-            write(*,*) 'ERROR! dfx (defocus in x) lacking in os_stk_field'
+            write(*,*) 'ERROR! dfx (defocus in x) lacking in ptcl_field'
+            call ptcl_field%print_(iptcl)
             stop 'sp_project :: get_ctfparams'
         endif
         ! defocus in y
@@ -2001,7 +2019,6 @@ contains
 
     integer function oritype2segment( which )
         character(len=*),  intent(in) :: which
-        integer :: isegment
         select case(trim(which))
             case('mic')
                 oritype2segment = MIC_SEG

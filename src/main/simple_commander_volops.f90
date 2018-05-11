@@ -242,7 +242,7 @@ contains
             endif
         endif
         ! output
-        p%outvol = add2fbody(trim(p%vols(state)), p%ext, '_pproc')
+        p%outvol = add2fbody(trim(p%vols(state)), p%ext, PPROC_SUFFIX)
         call b%vol%write(p%outvol)
         ! also output mirrored by default (unless otherwise stated on command line)
         if( .not. cline%defined('mirr') .or. p%mirr .ne. 'no' )then

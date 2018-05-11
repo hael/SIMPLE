@@ -488,14 +488,10 @@ contains
         allocate(cmsg, source=trim(adjustl(cmdline)))
         if( l_suppress_errors )then
             allocate(tmp, source=cmsg//' '//SUPPRESS_MSG)
-            cmsg = tmp
+            cmsg = trim(tmp)
         endif
-#if defined(PGI)
-        exec_stat = system(trim(adjustl(cmsg)))
-#else
-        call execute_command_line(cmsg, wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmdmsg)
+        call execute_command_line(trim(cmsg), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmdmsg)
         if( .not. l_suppress_errors ) call raise_sys_error( cmsg, exec_stat, cstat, cmdmsg )
-#endif
         if( l_doprint )then
             write(*,*) 'command            : ', cmsg
             write(*,*) 'status of execution: ', exec_stat
@@ -1769,9 +1765,10 @@ contains
     end subroutine simple_dump_mem_usage
 
 
-    subroutine simple_full_path (infile, absolute_name, errmsg)
+    subroutine simple_full_path (infile, absolute_name, errmsg, check_exists)
         character(len=*),              intent(in)  :: infile, errmsg
         character(len=:), allocatable, intent(out) :: absolute_name
+        logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                                :: cstring
         integer(1),          dimension(:), pointer :: iptr
         character(kind=c_char),            pointer :: fstring(:)
@@ -1780,10 +1777,15 @@ contains
         character(kind=c_char,len=LONGSTRLEN)      :: outfilename_c
         integer :: slen, i
         integer :: lengthin, status, lengthout
-        if( .not.file_exists(trim(infile)) )then
-            write(*,*)'File does not exists: ', trim(infile)
-            write(*,*)trim(errmsg)
-            stop
+        logical :: check_exists_here
+        check_exists_here = .true.
+        if( present(check_exists) )check_exists_here = check_exists
+        if( check_exists_here )then
+            if( .not.file_exists(trim(infile)) )then
+                write(*,*)'File does not exists: ', trim(infile)
+                write(*,*)trim(errmsg)
+                stop
+            endif
         endif
         lengthin     = len_trim(infile)
         cstring      = c_loc(fstr)

@@ -15,7 +15,7 @@ type :: kbinterpol
     procedure :: get_alpha
     procedure :: get_wdim
     procedure :: apod
-    procedure :: apod_dp    
+    procedure :: apod_dp
     procedure :: dapod
     procedure :: instr
 end type kbinterpol
@@ -117,7 +117,7 @@ contains
     elemental function instr( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
-        real :: r, arg1, arg2
+        real :: r, arg2
         ! arg1 = self%piW * x
         ! arg1 = self%betasq - arg1 * arg1
         ! if( arg1 > 0. )then
@@ -211,12 +211,12 @@ contains
                 fma(y,fma(y,fma(y,fma(y,fma(y,fma(y,0.32411d-3, &
                 0.301532d-2),0.2658733d-1),0.15084934d0), &
                 0.51498869d0),0.87890594d0),0.5d0) )
-#else            
+#else
             bessi1 = x*(                                             &
                 0.5d0 + y*(0.87890594d0 + y*(0.51498869d0 +          &
                 y*(0.15084934d0 + y*(0.2658733d-1 + y*(0.301532d-2 + &
                 y* 0.32411d-3))))))
-#endif            
+#endif
         else
             y   = 3.75d0 / ax
             bx  = exp(ax) / sqrt(ax)
