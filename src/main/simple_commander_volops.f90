@@ -114,7 +114,7 @@ contains
         res = even%get_res()
         allocate(corrs(even%get_filtsz()))
         call even%fsc(odd, corrs)
-        if( p%tfplan%l_phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
+        if( p%l_phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         do j=1,size(res)
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do

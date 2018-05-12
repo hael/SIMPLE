@@ -79,7 +79,6 @@ type :: build
     procedure                           :: kill_strategy2D_tbox
     procedure                           :: build_extremal3D_tbox
     procedure                           :: kill_extremal3D_tbox
-    procedure                           :: raise_hard_ctf_exception
 end type build
 
 contains
@@ -132,13 +131,6 @@ contains
         endif
         if( metadata_read )then
             call self%spproj%read(p%projfile)
-            ! ctf planning
-            select case(trim(p%oritype))
-                case('mic')
-                    ! nothing to do
-                case DEFAULT
-                    p%tfplan%mode = self%spproj%get_ctfmode(p%oritype)
-            end select
             ! update cwd of project (in case the params class changed exec dir)
             call self%spproj%projinfo%set(1, 'cwd', trim(p%cwd))
         else
@@ -150,18 +142,6 @@ contains
                 if( p%deftab /= '' ) call binread_ctfparams_state_eo(p%deftab,  self%spproj, self%a, [1,p%nptcls])
                 if( p%oritab /= '' ) call binread_oritab(p%oritab,              self%spproj, self%a, [1,p%nptcls])
                 DebugPrint 'read deftab'
-            endif
-            ! ctf planning
-            if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then
-                p%tfplan%mode = 'astig'
-            else if( self%a%isthere('dfx') )then
-                p%tfplan%mode = 'noastig'
-            else
-                p%tfplan%mode = 'no'
-            endif
-            if( p%tfplan%flag .ne. 'no' .and. p%tfplan%mode .eq. 'no' )then
-                write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
-                write(*,'(a)') 'but your input orientation table lacks defocus values'
             endif
         endif
         write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
@@ -197,7 +177,6 @@ contains
             endif
         endif
         DebugPrint 'created & filled object for orientations'
-        if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction spaces
         call self%e%new( p%nspace )
         call self%e%spiral( p%nsym, p%eullims )
@@ -345,7 +324,6 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         call self%kill_rec_tbox
-        call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p, self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
@@ -368,7 +346,6 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         call self%kill_rec_eo_tbox
-        call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p, self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
@@ -391,7 +368,6 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         call self%kill_strategy2D_tbox
-        call self%raise_hard_ctf_exception(p)
         if( p%neigh.eq.'yes' )then
             if( self%spproj%os_cls3D%get_noris() == p%ncls )then
                 call self%spproj%os_cls3D%nearest_proj_neighbors(p%nnn, self%nnmat)
@@ -419,7 +395,6 @@ contains
         class(params), intent(in)    :: p
         integer :: nnn
         call self%kill_strategy3D_tbox
-        call self%raise_hard_ctf_exception(p)
         if( p%eo .ne. 'no' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 1', alloc_stat)
@@ -466,7 +441,6 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         call self%kill_extremal3D_tbox
-        call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
@@ -486,35 +460,5 @@ contains
             self%extremal3D_tbox_exists = .false.
         endif
     end subroutine kill_extremal3D_tbox
-
-    !> \brief  fall-over if CTF params are missing
-    subroutine raise_hard_ctf_exception( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
-        if( p%tfplan%flag.ne.'no' )then
-            select case(p%spproj_a_seg)
-                case(MIC_SEG)
-                    !
-                case(STK_SEG)
-                    if( .not. self%a%isthere('cs') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks cs'
-                    if( .not. self%a%isthere('kv') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks kv'
-                    if( .not. self%a%isthere('fraca') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks fraca'
-                case(PTCL2D_SEG,PTCL3D_SEG)
-                    if( .not. self%a%isthere('dfx') ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks defocus values'
-                case(CLS2D_SEG)
-                    !
-                case(CLS3D_SEG)
-                    !
-                case DEFAULT
-                    !
-            end select
-        endif
-        if( p%tfplan%l_phaseplate )then
-            if( .not. self%a%isthere('phshift') )then
-                write(*,*) 'ERROR! l_phaseplate = .true. and input doc lacks radian phshift'
-                stop
-            endif
-        endif
-    end subroutine raise_hard_ctf_exception
 
 end module simple_build

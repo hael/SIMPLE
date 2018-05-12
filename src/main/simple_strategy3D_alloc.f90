@@ -115,14 +115,9 @@ contains
                     call o_peaks(iptcl)%set_all2single('cs',    b%a%get(iptcl,'cs')   )
                     call o_peaks(iptcl)%set_all2single('fraca', b%a%get(iptcl,'fraca'))
                     call o_peaks(iptcl)%set_all2single('dfx',   b%a%get(iptcl,'dfx')  )
-                    if( p%tfplan%mode .eq. 'astig' )then
-                        call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfy')   )
-                        call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
-                    else
-                        call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfx'))
-                        call o_peaks(iptcl)%set_all2single('angast', 0.)
-                    endif
-                    if( p%tfplan%l_phaseplate )then
+                    call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfy')   )
+                    call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
+                    if( p%l_phaseplate )then
                         call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
                     endif
                 endif

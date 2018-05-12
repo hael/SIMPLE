@@ -523,7 +523,7 @@ contains
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
         call cline_reproject%set('projfile', trim(ORIG_WORK_PROJFILE))
-        call cline_reproject%set('vol1',     vol_iter)
+        call cline_reproject%set('vol1',     'rec_final'//p_master%ext)
         call cline_reproject%set('oritab',   'final_oris.txt')
         call xreproject%execute(cline_reproject)
         ! end gracefully

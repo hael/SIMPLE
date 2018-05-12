@@ -152,7 +152,6 @@ contains
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         if( cline%defined('oritab') .or. cline%defined('deftab') )then
-            call b%raise_hard_ctf_exception(p)
         else
             stop 'oritab/deftab with CTF info needed for phase flipping/multiplication/CTF image generation'
         endif

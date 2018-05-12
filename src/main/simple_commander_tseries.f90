@@ -161,7 +161,7 @@ contains
         type(build)  :: b
         type(image)  :: img_backgr, img_backgr_wctf
         type(ctf)    :: tfun
-        logical      :: params_present(4), ctfastig
+        logical      :: params_present(4)
         real         :: dfx, dfy, angast
         integer      :: iptcl
         p = params(cline)             ! parameters generated
@@ -184,7 +184,6 @@ contains
                 if( .not. params_present(4) ) write(*,*) 'ERROR! input deftab lacks dfx'
                 stop
             endif
-            ctfastig = b%a%isthere('dfy') .and. b%a%isthere('angast')
         endif
         do iptcl=1,p%nptcls
             call progress(iptcl,p%nptcls)
@@ -196,15 +195,10 @@ contains
             if( cline%defined('deftab') )then
                 tfun = ctf(p%smpd, b%a%get(iptcl,'kv'), b%a%get(iptcl,'cs'), b%a%get(iptcl,'fraca'))
                 dfx = b%a%get(iptcl, 'dfx')
-                if( ctfastig )then
-                    dfy    = b%a%get(iptcl, 'dfy'   )
-                    angast = b%a%get(iptcl, 'angast')
-                    call tfun%apply(b%img, dfx, 'flip', dfy=dfy, angast=angast)
-                    call tfun%apply(img_backgr_wctf, dfx, 'flip', dfy=dfy, angast=angast)
-                else
-                    call tfun%apply(b%img, dfx, 'flip')
-                    call tfun%apply(img_backgr_wctf, dfx, 'flip')
-                endif
+                dfy    = b%a%get(iptcl, 'dfy'   )
+                angast = b%a%get(iptcl, 'angast')
+                call tfun%apply(b%img, dfx, 'flip', dfy=dfy, angast=angast)
+                call tfun%apply(img_backgr_wctf, dfx, 'flip', dfy=dfy, angast=angast)
             endif
             ! fwd ft
             call b%img%fft()

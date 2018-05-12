@@ -449,7 +449,7 @@ contains
             endif
         endif
         if( ifrc > 0 )then
-            call b%projfrcs%frc_getter(ifrc, p%hpind_fsc, p%tfplan%l_phaseplate, frc)
+            call b%projfrcs%frc_getter(ifrc, p%hpind_fsc, p%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
                 call img_in%shellnorm_and_apply_filter_serial(filter)
@@ -532,7 +532,7 @@ contains
         endif
         if( p%l_match_filt )then
             ! anisotropic matched filter
-            call b%projfrcs%frc_getter(icls, p%hpind_fsc, p%tfplan%l_phaseplate, frc)
+            call b%projfrcs%frc_getter(icls, p%hpind_fsc, p%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
                 call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
@@ -863,7 +863,7 @@ contains
                 call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
                 call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
-                call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%tfplan%l_phaseplate)
+                call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%l_phaseplate)
                 call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
                 call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
@@ -942,7 +942,7 @@ contains
             call even_imgs(iproj)%fft()
             call odd_imgs(iproj)%fft()
             call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)
-            if( p%tfplan%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
+            if( p%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
             call projfrcs%set_frc(iproj, frc, state)
             call even_imgs(iproj)%kill
             call odd_imgs(iproj)%kill

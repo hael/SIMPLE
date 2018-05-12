@@ -35,7 +35,6 @@ type, extends(image) :: reconstructor
     integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits
     integer                     :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
-    logical                     :: tfastig        = .false.     !< astigmatic CTF or not
     logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
   contains
@@ -94,12 +93,7 @@ contains
         self%winsz       =  p%winsz
         self%alpha       =  p%alpha
         self%ctfflag     =  spproj%get_ctfflag_type(p%oritype)
-        DebugPrint '(DEBUG) reconstructor :: alloc_rho; self%ctfflag: ', self%ctfflag
-        self%tfastig     =  .false.
-        if( trim(spproj%get_ctfmode(p%oritype)) .eq. 'astig' ) self%tfastig = .true.
-        DebugPrint '(DEBUG) reconstructor :: alloc_rho; spproj%get_ctfmode(p%oritype): ', trim(spproj%get_ctfmode(p%oritype))
         self%phaseplate  =  spproj%has_phaseplate(p%oritype)
-        DebugPrint '(DEBUG) reconstructor :: alloc_rho; spproj%has_phaseplate(p%oritype): ', spproj%has_phaseplate(p%oritype)
         self%kbwin       =  kbinterpol(self%winsz,self%alpha)
         self%wdim        =  self%kbwin%get_wdim()
         self%lims        =  self%loop_lims(2)

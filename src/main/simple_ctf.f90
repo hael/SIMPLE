@@ -191,25 +191,21 @@ contains
         class(image),     intent(inout) :: img         !< image (output)
         real,             intent(in)    :: dfx         !< defocus x-axis
         character(len=*), intent(in)    :: mode        !< abs, ctf, flip, flipneg, neg, square
-        real, optional,   intent(in)    :: dfy         !< defocus y-axis
-        real, optional,   intent(in)    :: angast      !< angle of astigmatism
+        real,             intent(in)    :: dfy         !< defocus y-axis
+        real,             intent(in)    :: angast      !< angle of astigmatism
         real, optional,   intent(in)    :: bfac        !< bfactor
         real, optional,   intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         integer :: lims(3,2),h,k,phys(3),ldim(3)
-        real    :: ang, tval, ddfy, aangast, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
+        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
         if( img%is_3d() )then
             print *, 'ldim: ', img%get_ldim()
             stop 'Only 4 2D images; ctf2img; simple_ctf'
         endif
         ! set CTF params
-        ddfy = dfx
-        if( present(dfy) ) ddfy = dfy
-        aangast = 0.
-        if( present(angast) ) aangast = angast
         aadd_phshift = 0.
         if( present(add_phshift) ) aadd_phshift = add_phshift
         ! init object
-        call self%init(dfx, ddfy, aangast)
+        call self%init(dfx, dfy, angast)
         ! initialize
         call img%set_ft(.true.)
         img      = 0.
@@ -531,27 +527,23 @@ contains
                 class(image),     intent(inout) :: img         !< image (output)
                 real,             intent(in)    :: dfx         !< defocus x-axis
                 character(len=*), intent(in)    :: mode        !< abs, ctf, flip, flipneg, neg, square
-                real, optional,   intent(in)    :: dfy         !< defocus y-axis
-                real, optional,   intent(in)    :: angast      !< angle of astigmatism
+                real,             intent(in)    :: dfy         !< defocus y-axis
+                real,             intent(in)    :: angast      !< angle of astigmatism
                 real, optional,   intent(in)    :: bfac        !< bfactor
                 real, optional,   intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
                 type(ctf) :: tfun
                 integer   :: lims(3,2),h,k,phys(3),ldim(3)
-                real      :: ang, tval, ddfy, aangast, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
+                real      :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
                 if( img%is_3d() )then
                     print *, 'ldim: ', img%get_ldim()
                     stop 'Only 4 2D images; ctf2img; simple_ctf'
                 endif
                 ! set CTF params
-                ddfy = dfx
-                if( present(dfy) ) ddfy = dfy
-                aangast = 0.
-                if( present(angast) ) aangast = angast
                 aadd_phshift = 0.
                 if( present(add_phshift) ) aadd_phshift = add_phshift
                 ! init object
                 tfun = ctf(SMPD, KV, CS, AC)
-                call tfun%init(dfx, ddfy, aangast)
+                call tfun%init(dfx, dfy, angast)
                 ! initialize
                 img      = cmplx(0.,0.)
                 lims     = img%loop_lims(2)
@@ -565,7 +557,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = tfun%eval(spaFreqSq, dfx, ddfy, aangast, ang, aadd_phshift)
+                        tval      = tfun%eval(spaFreqSq, dfx, dfy, angast, ang, aadd_phshift)
                         select case(mode)
                             case('abs')
                                 tval = abs(tval)

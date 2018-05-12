@@ -17,7 +17,6 @@ private
 type :: params
     ! global objects
     type(ori)                      :: ori_glob
-    type(ctfplan)                  :: tfplan
     class(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
@@ -383,6 +382,7 @@ type :: params
     logical :: l_remap_cls    = .false.
     logical :: l_cc_objfun    = .true.
     logical :: l_cc_bfac      = .true.
+    logical :: l_phaseplate   = .false.
     logical :: l_dev          = .false.
   contains
     procedure, private :: set_img_format
@@ -519,7 +519,6 @@ contains
         call check_carg('neg',            self%neg)
         call check_carg('neigh',          self%neigh)
         call check_carg('noise_norm',     self%noise_norm)
-        ! call check_carg('noise',          self%noise)
         call check_carg('norec',          self%norec)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
@@ -932,7 +931,8 @@ contains
             self%projfile = trim(self%projname)//'.simple'
             call cline%set('projfile', trim(self%projfile))
         endif
-        if( file_exists(trim(self%projfile)) )then
+        if( file_exists(trim(self%projfile)) )then ! existence should be the only requirement here (not sp_required)
+                                                   ! or the private_exec programs don't get what they need
             ! get nptcls/box/smpd from project file
             call bos%open(trim(self%projfile))
             if( self%stream.eq.'no' )then
@@ -968,38 +968,36 @@ contains
                     call bos%read_first_segment_record(STK_SEG, o)
             end select
             if( .not. cline%defined('ctf') )then
-                self%tfplan%flag = 'no'
                 if( o%exists() )then
                     if( o%isthere('ctf') )then
                         call o%getter('ctf', ctfflag)
-                        self%tfplan%flag = trim(ctfflag)
+                        self%ctf = trim(ctfflag)
                     endif
                 endif
-                self%ctf = trim(self%tfplan%flag)
-            else
-                self%tfplan%flag = self%ctf
             endif
             if( .not. cline%defined('phaseplate') )then
                 if( o%isthere('phaseplate') )then
                     call o%getter('phaseplate', phaseplate)
-                    self%tfplan%l_phaseplate = trim(phaseplate).eq.'yes'
+                    self%phaseplate   = trim(phaseplate)
+                    self%l_phaseplate = trim(self%phaseplate).eq.'yes'
                 else
-                    self%tfplan%l_phaseplate = .false.
+                    self%phaseplate   = 'no'
+                    self%l_phaseplate = .false.
                 endif
             else
-                self%tfplan%l_phaseplate = trim(self%phaseplate).eq.'yes'
+                self%l_phaseplate = trim(self%phaseplate).eq.'yes'
             endif
             call bos%close
         else if( self%stk .ne. '' )then
             if( file_exists(self%stk) )then
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
-                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
-                     DebugPrint 'found logical dimension of stack: ', lfoo
-                     DebugPrint 'found nr of ptcls from stack: ', self%nptcls
+                    call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
+                    DebugPrint 'found logical dimension of stack: ', lfoo
+                    DebugPrint 'found nr of ptcls from stack: ', self%nptcls
                 endif
             else
-                write(*,'(a,1x,a)') 'Inputted stack file does not exist!', trim(self%stk)
+                write(*,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', trim(self%stk)
                 stop
             endif
         else if( self%oritab .ne. '' )then
@@ -1016,8 +1014,7 @@ contains
                     self%box = self%ldim(1)
                 endif
             else
-                write(*,'(a,1x,a)') 'Inputted stack file does not exist!', trim(self%refs)
-                stop
+                ! we don't check for existence of refs as they can be output as well as input (cavgassemble)
             endif
         endif
         ! check file formats
@@ -1282,12 +1279,6 @@ contains
                 call simple_stop('need exp_time to be part of the command line! simple_params :: new')
             endif
             self%l_dose_weight = .true.
-        endif
-        ! prepare CTF plan
-        if( .not.cline%defined('projfile') .and. .not.cline%defined('projname') )then
-            self%tfplan%flag         = self%ctf
-            self%tfplan%l_phaseplate = .false.
-            if( self%phaseplate .eq. 'yes' ) self%tfplan%l_phaseplate = .true.
         endif
         ! set default nnn value to 10% of the search space
         if( .not. cline%defined('nnn') )then

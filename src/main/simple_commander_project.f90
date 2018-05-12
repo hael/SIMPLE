@@ -140,7 +140,7 @@ contains
         type(oris) :: os
         type(ori)  :: o
         integer    :: nargs, iseg, noris, ikey, iori, state
-        real       :: rval
+        real       :: rval, norm(3)
         ! parse the keys
         keys = cline%get_carg('keys')
         if( str_has_substr(keys, ',') )then
@@ -163,7 +163,11 @@ contains
         ! look for keys
         allocate(keys_present(nargs))
         do ikey=1,nargs
-            keys_present(ikey) = os%isthere(trim(args(ikey)))
+            if( trim(args(ikey)).eq.'eulnorm' )then
+                keys_present(ikey) = os%isthere('e1') .and. os%isthere('e1')
+            else
+                keys_present(ikey) = os%isthere(trim(args(ikey)))
+            endif
         end do
         ! print
         if( all(keys_present) )then
@@ -179,13 +183,20 @@ contains
                 write(*,'(i3,a)',advance='no') state, ' '
                 ! then the key values
                 do ikey=1,nargs
-                    ischar = os%ischar(iori,trim(args(ikey)))
-                    if( ischar )then
-                        call os%getter(iori, trim(args(ikey)), str)
-                        write(*,'(a)',advance='no') trim(str)//' '
+                    if( trim(args(ikey)).eq.'eulnorm' )then
+                        norm = os%get_normal(iori)
+                        write(*,'(f12.4,a)',advance='no') norm(1), ' '
+                        write(*,'(f12.4,a)',advance='no') norm(2), ' '
+                        write(*,'(f12.4,a)',advance='no') norm(3), ' '
                     else
-                        call os%getter(iori, trim(args(ikey)), rval)
-                        write(*,'(f12.4,a)',advance='no') rval, ' '
+                        ischar = os%ischar(iori,trim(args(ikey)))
+                        if( ischar )then
+                            call os%getter(iori, trim(args(ikey)), str)
+                            write(*,'(a)',advance='no') trim(str)//' '
+                        else
+                            call os%getter(iori, trim(args(ikey)), rval)
+                            write(*,'(f12.4,a)',advance='no') rval, ' '
+                        endif
                     endif
                 end do
                 write(*,*) ''
@@ -333,7 +344,7 @@ contains
         type(oris)       :: os
         type(nrtxtfile)  :: paramfile
         logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
-        integer          :: i, ndatlines, nrecs, n_ori_inputs
+        integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
         type(ctfparams)  :: ctfvars
 
         p = params(cline)
@@ -552,9 +563,10 @@ contains
         ! add stack if present
         if( cline%defined('stk') )then
             if( n_ori_inputs == 0 .and. trim(p%ctf) .eq. 'no' )then
+                ! get number of particles from stack
+                call find_ldim_nptcls(p%stk, lfoo, p%nptcls)
                 call os%new(p%nptcls)
                 call os%set_all2single('state', 1.0)
-                call spproj%add_single_stk(p%stk, ctfvars, os)
             endif
             call spproj%add_single_stk(p%stk, ctfvars, os)
         endif

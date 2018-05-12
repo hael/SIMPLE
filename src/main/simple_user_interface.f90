@@ -536,8 +536,8 @@ contains
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
         call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
         call set_param(frcs,           'frcs',         'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
-        call set_param(mkdir_,         'mkdir',        'binary', 'Make auto-named dir for output', 'Make auto-named consequtively numbered dir for output(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(mkdir_,         'mkdir',        'binary', 'Make auto-named dir for output', 'Make auto-named consequtively numbered dir for output(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 

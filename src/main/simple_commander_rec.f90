@@ -140,7 +140,7 @@ contains
             if( L_BENCH ) rt_gen_projection_frcs = rt_gen_projection_frcs + toc(t_gen_projection_frcs)
             call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
             if( L_BENCH ) t_gen_anisotropic_optlp = tic()
-            call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%tfplan%l_phaseplate)
+            call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%l_phaseplate)
             if( L_BENCH ) rt_gen_anisotropic_optlp = rt_gen_anisotropic_optlp + toc(t_gen_anisotropic_optlp)
             call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
             call b%eorecvol%get_res(res05s(s), res0143s(s))

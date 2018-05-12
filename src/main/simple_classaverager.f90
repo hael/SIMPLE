@@ -107,7 +107,6 @@ contains
         ctfflag = b%spproj%get_ctfflag_type('ptcl2D')
         ! set phaseplate flag
         phaseplate = b%spproj%has_phaseplate('ptcl2D')
-        ! phaseplate    = p%tfplan%l_phaseplate
         ! smpd
         smpd          = p%smpd
         ! set ldims
@@ -160,18 +159,11 @@ contains
                 precs(cnt)%pw   = spproj%os_ptcl2D%get(iptcl,'w')
                 precs(cnt)%bfac = 0.
             endif
-            ctfvars          = spproj%get_ctfparams('ptcl2D',iptcl)
-            precs(cnt)%tfun  = ctf(pp%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
-            select case(trim(pp%tfplan%mode))
-                case('astig') ! astigmatic CTF
-                    precs(cnt)%dfx    = ctfvars%dfx
-                    precs(cnt)%dfy    = ctfvars%dfy
-                    precs(cnt)%angast = ctfvars%angast
-                case('noastig') ! non-astigmatic CTF
-                    precs(cnt)%dfx    = ctfvars%dfx
-                    precs(cnt)%dfy    = ctfvars%dfx
-                    precs(cnt)%angast = 0.
-            end select
+            ctfvars            = spproj%get_ctfparams('ptcl2D',iptcl)
+            precs(cnt)%tfun    = ctf(pp%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
+            precs(cnt)%dfx     = ctfvars%dfx
+            precs(cnt)%dfy     = ctfvars%dfy
+            precs(cnt)%angast  = ctfvars%angast
             precs(cnt)%phshift = 0.
             if( phaseplate ) precs(cnt)%phshift = ctfvars%phshift
         end do

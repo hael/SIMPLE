@@ -67,7 +67,7 @@ contains
     procedure          :: get_nmovies
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
-    procedure          :: get_ctfmode
+    ! procedure          :: get_ctfmode
     procedure          :: has_phaseplate
     procedure          :: get_ctfparams
     procedure          :: is_virgin_field
@@ -1175,36 +1175,36 @@ contains
         enddo
     end function get_nmovies
 
-    character(len=STDLEN) function get_ctfmode( self, oritype )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        class(oris), pointer          :: ptcl_field
-        logical :: dfx_here, dfy_here
-        nullify(ptcl_field)
-        ! set field pointer
-        select case(trim(oritype))
-            case('ptcl2D')
-                ptcl_field => self%os_ptcl2D
-            case('ptcl3D')
-                ptcl_field => self%os_ptcl3D
-            case('cls2D', 'cls3D')
-                get_ctfmode = 'no'
-                return
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: get_ctfmode'
-        end select
-        ! defocus
-        dfx_here = ptcl_field%isthere(1, 'dfx')
-        dfy_here = ptcl_field%isthere(1, 'dfy')
-        if( dfx_here .and. dfy_here )then
-            get_ctfmode = 'astig'
-        else if( dfx_here )then
-            get_ctfmode = 'noastig'
-        else
-            get_ctfmode = 'no'
-        endif
-    end function get_ctfmode
+    ! character(len=STDLEN) function get_ctfmode( self, oritype )
+    !     class(sp_project), target, intent(inout) :: self
+    !     character(len=*),          intent(in)    :: oritype
+    !     class(oris), pointer          :: ptcl_field
+    !     logical :: dfx_here, dfy_here
+    !     nullify(ptcl_field)
+    !     ! set field pointer
+    !     select case(trim(oritype))
+    !         case('ptcl2D')
+    !             ptcl_field => self%os_ptcl2D
+    !         case('ptcl3D')
+    !             ptcl_field => self%os_ptcl3D
+    !         case('cls2D', 'cls3D')
+    !             get_ctfmode = 'no'
+    !             return
+    !         case DEFAULT
+    !             write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
+    !             stop 'sp_project :: get_ctfmode'
+    !     end select
+    !     ! defocus
+    !     dfx_here = ptcl_field%isthere(1, 'dfx')
+    !     dfy_here = ptcl_field%isthere(1, 'dfy')
+    !     if( dfx_here .and. dfy_here )then
+    !         get_ctfmode = 'astig'
+    !     else if( dfx_here )then
+    !         get_ctfmode = 'noastig'
+    !     else
+    !         get_ctfmode = 'no'
+    !     endif
+    ! end function get_ctfmode
 
     character(len=STDLEN) function get_ctfflag( self, oritype )
         class(sp_project), target, intent(inout) :: self

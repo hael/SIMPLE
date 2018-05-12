@@ -91,7 +91,7 @@ contains
         self%numlen     = p%numlen
         self%msk        = p%msk
         self%automsk    = file_exists(p%mskfile)
-        self%phaseplate = p%tfplan%l_phaseplate
+        self%phaseplate = p%l_phaseplate
         self%hpind_fsc  = p%hpind_fsc
         ! create composites
         if( self%automsk )then

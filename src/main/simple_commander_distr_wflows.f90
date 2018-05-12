@@ -304,7 +304,7 @@ contains
         ! cleanup
         call qsys_cleanup(p_master)
         ! graceful ending
-        call simple_end('**** SIMPLE_DISTR_ctf_estimate NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate_distr
 
     subroutine exec_pick_distr( self, cline )
