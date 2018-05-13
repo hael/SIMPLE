@@ -15,7 +15,6 @@ use simple_strategy2D_neigh,      only: strategy2D_neigh
 use simple_strategy2D_stochastic, only: strategy2D_stochastic
 use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
 use simple_strategy2D3D_common,   only: set_bp_range2d,prep2dref,build_pftcc_particles
-!use simple_filterer               ! use all in there
 use simple_classaverager          ! use all in there
 implicit none
 
@@ -48,7 +47,7 @@ contains
         class(strategy2D), pointer :: strategy2Dsrch(:)
         type(strategy2D_spec)      :: strategy2Dspec
         integer :: iptcl, icls, i, fnr, cnt
-        real    :: corr_bound, frac_srch_space, extr_thresh
+        real    :: extr_bound, frac_srch_space, extr_thresh
         logical :: doprint, l_partial_sums, l_extr, l_frac_update
 
         if( L_BENCH )then
@@ -82,12 +81,18 @@ contains
             ! factorial decay, -2 because first step is always greedy
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-2)
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
-            corr_bound  = b%a%extremal_bound(extr_thresh)
+            ! extr_bound = b%a%extremal_bound(extr_thresh, 'corr')
+            select case(trim(p%objfun))
+                case('cc')
+                    extr_bound = b%a%extremal_bound(extr_thresh, 'corr')
+                case('ccres')
+                    extr_bound = b%a%extremal_bound(extr_thresh, 'bfac')
+            end select
             write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
-            write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_bound
+            write(*,'(A,F8.2)') '>>> EXTREMAL THRESHOLD:    ', extr_bound
         else
             extr_thresh = 0.
-            corr_bound  = -huge(corr_bound)
+            extr_bound  = -huge(extr_bound)
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
@@ -173,7 +178,7 @@ contains
         endif
 
         ! B-factor
-        if( p%shellw.eq.'yes' .and. which_iter > 3 )then
+        if( p%shellw.eq.'yes' .and. which_iter >= 3 )then
             call b%a%calc_bfac_rec
         else
             call b%a%set_all2single('bfac_rec', 0.)
@@ -217,13 +222,11 @@ contains
                 ! search spec
                 strategy2Dspec%iptcl      =  iptcl
                 strategy2Dspec%iptcl_map  =  cnt
-                strategy2Dspec%corr_bound =  corr_bound
+                strategy2Dspec%extr_bound =  extr_bound
                 strategy2Dspec%pp         => p
                 strategy2Dspec%ppftcc     => pftcc
                 strategy2Dspec%pa         => b%a
                 if( allocated(b%nnmat) ) strategy2Dspec%nnmat => b%nnmat
-                strategy2Dspec%fit_bfac = .false.
-                if( p%objfun.eq.'ccres' .and. which_iter>10 ) strategy2Dspec%fit_bfac = .true.
                 ! search object
                 call strategy2Dsrch(iptcl)%new(strategy2Dspec)
             endif

@@ -435,8 +435,7 @@ contains
             case(CTFFLAG_NO, CTFFLAG_FLIP)  ! shift only
                 if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
             case(CTFFLAG_YES)               ! phase flip & shift
-                ctfparms = b%spproj%get_ctfparams(p%oritype, iptcl)
-                tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
                     call tfun%phaseflip_and_shift_serial(img_in, -x, -y, ctfparms)
                 else

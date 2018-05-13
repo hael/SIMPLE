@@ -245,17 +245,18 @@ contains
         self%nk          = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
         self%nthr        = p%nthr                                !< # OpenMP threads
         ! take care of objective function flags
+        allocate(self%inv_resarrsq(self%kfromto(1):self%kfromto(2)))
+        self%inv_resarrsq = self%smpd * real(self%ldim(1)) / real((/(k,k=self%kfromto(1),self%kfromto(2))/))
+        self%inv_resarrsq = -1. / (4.*self%inv_resarrsq*self%inv_resarrsq)
         select case(trim(p%objfun))
             case('cc')
-                self%l_cc_objfun   = .true.
+                self%l_cc_objfun = .true.
             case('ccres')
                 self%l_cc_objfun = .false.
                 allocate(self%ptcl_bfac_weights(self%kfromto(1):self%kfromto(2), 1:self%nptcls),&
-                    &self%ptcl_bfac_norms(1:self%nptcls), self%inv_resarrsq(self%kfromto(1):self%kfromto(2)))
+                    &self%ptcl_bfac_norms(1:self%nptcls))
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
-                self%inv_resarrsq      = self%smpd * real(self%ldim(1)) / real((/(k,k=self%kfromto(1),self%kfromto(2))/))
-                self%inv_resarrsq      = -1. / (4.*self%inv_resarrsq*self%inv_resarrsq)
             case DEFAULT
                 write(*,*) 'unsupported objective function: ', trim(p%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'

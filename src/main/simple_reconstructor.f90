@@ -389,7 +389,7 @@ contains
         type(ctf) :: tfun
         complex   :: comp, oshift
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
-        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, freq_sq, bfac_sc
+        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, bfac_sc
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rotmats(os%get_noris(),se%get_nsym(),3,3)
         logical   :: do_bfac_rec
         ! take care of optional state flag
@@ -429,7 +429,7 @@ contains
         ! the parallellisation must run over one plane @ the time to avoid race conditions
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint
-        !$omp parallel default(shared) private(i,h,k,sh,rsh_sq,freq_sq,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+        !$omp parallel default(shared) private(i,h,k,sh,rsh_sq,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
         do isym=1,nsym
             do iori=1,noris
                 if( ows(iori) < TINY .or. states(iori) /= sstate ) cycle
@@ -503,16 +503,16 @@ contains
         use simple_gridding, only: mul_w_instr
         class(reconstructor), intent(inout) :: self
         integer,    optional, intent(in)    :: maxits
-        type(kbinterpol)     :: kbwin
-        type(image)          :: W_img, Wprev_img
-        real                 :: val_prev, val, invrho
-        integer              :: h, k, m, phys(3), iter
-        integer              :: maxits_here
-        complex, parameter   :: one   = cmplx(1.,0.)
-        real,    parameter   :: winsz = 2.
+        type(kbinterpol)   :: kbwin
+        type(image)        :: W_img, Wprev_img
+        real               :: winsz, val_prev, val, invrho
+        integer            :: h, k, m, phys(3), iter, maxits_here
+        complex, parameter :: one   = cmplx(1.,0.)
+        complex, parameter :: zero  = cmplx(0.,0.)
         maxits_here = GRIDCORR_MAXITS
         if( present(maxits) )maxits_here = maxits
         ! kernel
+        winsz = max(1., 2.*self%kbwin%get_winsz())
         kbwin = kbinterpol(winsz, self%alpha)
         if( maxits_here > 0 )then
             call W_img%new(self%ldim_img, self%get_smpd())
@@ -528,8 +528,8 @@ contains
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
                         phys  = W_img%comp_addr_phys([h,k,m])
-                        call W_img%set_cmat_at(phys(1),phys(2),phys(3), cmplx(0., 0.))
-                        call Wprev_img%set_cmat_at(phys(1),phys(2),phys(3),cmplx(0., 0.))
+                        call W_img%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                        call Wprev_img%set_cmat_at(phys(1),phys(2),phys(3), zero)
                     end do
                 end do
             end do
@@ -565,7 +565,7 @@ contains
                             if( val > 1.0e38 )then
                                 val = 0.
                             else
-                                val = min(val_prev/val, 1e20)
+                                val = min(val_prev/val, 1.e20)
                             endif
                             call W_img%set_cmat_at( phys(1),phys(2),phys(3), cmplx(val, 0.))
                         end do
@@ -594,9 +594,9 @@ contains
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
-                        phys   = self%comp_addr_phys([h, k, m])
+                        phys = self%comp_addr_phys([h, k, m])
                         if( self%rho(phys(1),phys(2),phys(3)) < 1.e-20 )then
-                            call self%set_cmat_at(phys(1),phys(2),phys(3), cmplx(0.,0.) )
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
                         else
                             call self%mul_cmat_at(phys(1),phys(2),phys(3), 1./self%rho(phys(1),phys(2),phys(3)))
                         endif

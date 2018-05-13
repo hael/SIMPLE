@@ -2599,58 +2599,6 @@ contains
         endif
     end subroutine calc_spectral_weights
 
-    ! !>  \brief  calculates normalized & bounded spectral particle weights
-    ! subroutine calc_spectral_weights( self, frac )
-    !     class(oris), intent(inout) :: self
-    !     real,        intent(in)    :: frac
-    !     integer           :: i, nstates, istate, cnt, mystate
-    !     real, allocatable :: weights(:), specscores(:), specscores_sel(:)
-    !     real    :: ave, sdev, var
-    !     logical :: err
-    !     call self%calc_hard_weights( frac )
-    !     if( self%isthere('specscore') )then
-    !         nstates = self%get_n('state')
-    !         if( nstates > 1 )then
-    !             do istate=1,nstates
-    !                 specscores = self%get_arr('specscore', state=istate)
-    !                 weights    = self%get_arr('w',         state=istate)
-    !                 where( weights < 0.5 )
-    !                     specscores = 0.
-    !                 end where
-    !                 weights = corrs2weights(specscores)
-    !                 cnt = 0
-    !                 do i=1,self%n
-    !                     mystate = nint(self%o(i)%get('state'))
-    !                     if( mystate == istate )then
-    !                         cnt = cnt + 1
-    !                         call self%o(i)%set('w', weights(cnt))
-    !                     else if( mystate == 0 )then
-    !                         call self%o(i)%set('w', 0.0)
-    !                     endif
-    !                 enddo
-    !                 deallocate(specscores,weights)
-    !             enddo
-    !         else
-    !             specscores = self%get_all('specscore')
-    !             weights    = self%get_all('w')
-    !             specscores_sel = pack(specscores, mask=weights > 0.5)
-    !             call moment(specscores_sel, ave, sdev, var, err)
-    !             specscores = (specscores-ave) * 4. / sdev ! normalization to std dev *4.
-    !             specscores = 1. / (1. + exp(-specscores)) ! logistic
-    !             where(weights < 0.5)specscores = 0.       ! take frac into account
-    !             where(specscores < TINY)                  ! numerical stability
-    !                 specscores = 0.
-    !             else where(specscores > 0.999)
-    !                 specscores = 1.
-    !             end where
-    !             do i=1,self%n
-    !                 call self%o(i)%set('w', specscores(i))
-    !             end do
-    !             deallocate(specscores,weights,specscores_sel)
-    !         endif
-    !     endif
-    ! end subroutine calc_spectral_weights
-
     subroutine adjust_score_for_defocus( self, which, minmax )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
@@ -2703,8 +2651,8 @@ contains
     end subroutine adjust_score_for_defocus
 
     subroutine calc_bfac_rec( self )
-        class(oris),      intent(inout) :: self
-        real, allocatable :: states(:), scores(:)
+        class(oris), intent(inout) :: self
+        real,    allocatable :: states(:), scores(:)
         logical, allocatable :: mask(:)
         real    :: avg, sdev
         integer :: i
@@ -3063,23 +3011,40 @@ contains
     end function find_angres_geod
 
     !>  \brief  to find the correlation bound in extremal search
-    function extremal_bound( self, thresh ) result( corr_bound )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: thresh
-        real,    allocatable       :: corrs(:), corrs_incl(:)
-        logical, allocatable       :: incl(:)
+    function extremal_bound( self, thresh, which ) result( score_bound )
+        class(oris),             intent(inout) :: self
+        real,                    intent(in)    :: thresh ! is a fraction
+        character(len=*), optional, intent(in) :: which
+        real,    allocatable  :: scores(:), scores_incl(:)
+        logical, allocatable  :: incl(:)
+        character(len=KEYLEN) :: which_here
         integer :: n_incl, thresh_ind
-        real    :: corr_bound
-        ! grab relevant correlations
-        corrs      = self%get_all('corr')
-        incl       = self%included()
-        corrs_incl = pack(corrs, mask=incl)
-        ! sort correlations & determine threshold
-        n_incl     = size(corrs_incl)
-        call hpsort(corrs_incl)
+        real    :: score_bound
+        if( present(which) )then
+            which_here = trim(which)
+        else
+            which_here = 'corr'
+        endif
+        select case(trim(which_here))
+            case('corr')
+                ! to use in conjunction with objfun=cc
+            case('bfac')
+                ! to use in conjunction with objfun=ccres
+            case DEFAULT
+                write(*,*)'Invalid metric: ', trim(which_here)
+                stop 'simple_oris :: extremal_bound'
+        end select
+        ! fetch scores
+        scores      = self%get_all(which_here)
+        incl        = self%included()
+        scores_incl = pack(scores, mask=incl)
+        ! sort & determine threshold
+        n_incl      = size(scores_incl)
+        call hpsort(scores_incl)
+        if( trim(which_here).eq.'bfac' )call reverse(scores_incl)
         thresh_ind  = nint(real(n_incl) * thresh)
-        corr_bound  = corrs_incl(thresh_ind)
-        deallocate(corrs, incl, corrs_incl)
+        score_bound = scores_incl(thresh_ind)
+        deallocate(scores, incl, scores_incl)
     end function extremal_bound
 
     !>  \brief  to find the neighborhood size for weighted orientation assignment

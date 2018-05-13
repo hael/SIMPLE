@@ -4,10 +4,8 @@ module simple_image
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-!!import classes
 use simple_ftiter,  only: ftiter
 use simple_imgfile, only: imgfile
-!!import functions
 use simple_winfuns, only: winfuns
 use simple_fftw3
 use gnufor2

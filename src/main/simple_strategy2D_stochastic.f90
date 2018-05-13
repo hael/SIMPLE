@@ -31,17 +31,25 @@ contains
     subroutine srch_stochastic( self )
         class(strategy2D_stochastic), intent(inout) :: self
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
-        real    :: corrs(self%s%nrots), inpl_corr, corr_bound, cc_glob
-        logical :: found_better, do_inplsrch, glob_best_set
+        real    :: corrs(self%s%nrots), inpl_corr, cc_glob
+        logical :: found_better, do_inplsrch, glob_best_set, do_shc
         if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             do_inplsrch   = .true.
-            corr_bound    = -1.
             cc_glob       = -1.
             glob_best_set = .false.
             call self%s%prep4srch
-            if( self%spec%corr_bound < 0. .or. self%s%prev_corr > self%spec%corr_bound )then
+            ! do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_corr > self%spec%extr_bound)
+            ! objective function based logics for performing extremal search
+            if( self%spec%ppftcc%objfun_is_ccres() )then
+                ! based on b-factor for objfun=ccres (the lower the better)
+                do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_bfac < self%spec%extr_bound)
+            else
+                ! based on correlation for objfun=cc (the higher the better)
+                do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_corr > self%spec%extr_bound)
+            endif
+            if( do_shc )then
                 ! SHC move
-                found_better = .false.
+                found_better      = .false.
                 self%s%nrefs_eval = 0
                 do isample=1,self%s%nrefs
                     iref = srch_order(self%s%iptcl_map, isample)
@@ -133,7 +141,7 @@ contains
             if( .not. is_a_number(self%s%best_corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_strategy2D_srch :: stochastic_srch'
                 print *, self%s%iptcl, self%s%best_class, self%s%best_corr, self%s%best_rot
-                print *, (corr_bound < 0. .or. self%s%prev_corr > corr_bound)
+                print *, 'do_shc: ', do_shc
             endif
             call self%s%store_solution
         else

@@ -1,24 +1,23 @@
 ! an orientation
 module simple_ori_light
-    !include 'simple_lib.f08'
-    use simple_defs
-    implicit none
+use simple_defs
+implicit none
 
-    private
-    public :: ori_light
-    
-    type :: ori_light
-    contains
-        procedure, nopass, private :: euler2dm_sp
-        procedure, nopass, private :: euler2dm_dp
-        generic :: euler2dm => euler2dm_sp, euler2dm_dp
-        procedure, nopass, private :: euler2m_sp
-        procedure, nopass, private :: euler2m_dp
-        generic :: euler2m => euler2m_sp, euler2m_dp        
-    end type ori_light
-    
+private
+public :: ori_light
+
+type :: ori_light
 contains
-     
+    procedure, nopass, private :: euler2dm_sp
+    procedure, nopass, private :: euler2dm_dp
+    generic :: euler2dm => euler2dm_sp, euler2dm_dp
+    procedure, nopass, private :: euler2m_sp
+    procedure, nopass, private :: euler2m_dp
+    generic :: euler2m => euler2m_sp, euler2m_dp
+end type ori_light
+
+contains
+
     !> \brief  calculates the derivatives of the rotation matrices w.r.t. one Euler angle
     !! \param e1,e2,e3 Euler triplet
     subroutine euler2dm_sp( euls, drmat )
@@ -80,7 +79,7 @@ contains
                 ! beware of the signs:z-rot is really negative
             endif
             r = r * pi / 180.
-        end function drotmat_sp        
+        end function drotmat_sp
     end subroutine euler2dm_sp
 
     !> \brief  calculates the derivatives of the rotation matrices w.r.t. one Euler angle
@@ -146,7 +145,7 @@ contains
             r = r * dpi / 180._dp
         end function drotmat_dp
     end subroutine euler2dm_dp
-    
+
     !>  \brief  makes a rotation matrix from a Spider format Euler triplet
     !! \param e1,e2,e3 Euler triplet
     pure function euler2m_sp( euls ) result( r )
@@ -259,5 +258,4 @@ contains
         endif
     end function rotmat_dp
 
-  
 end module simple_ori_light

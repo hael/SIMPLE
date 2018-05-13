@@ -255,8 +255,8 @@ contains
         logical               :: srch4symaxis, do_autoscale, do_eo
         ! seed the random number generator
         call seed_rnd
-        ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        ! hard set oritype
+        call cline%set('oritype', 'out')
         ! auto-scaling prep
         do_autoscale = (cline%get_carg('autoscale').eq.'yes')
         ! now, remove autoscale flag from command line, since no scaled partial stacks
@@ -268,6 +268,8 @@ contains
         p_master = params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
+        ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
+        call cline%set('oritype', 'ptcl3D')
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
@@ -315,7 +317,11 @@ contains
         call cline%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
         call work_proj%update_projinfo(cline)
         ! split
-        call work_proj%split_stk(p_master%nparts)
+        if(p_master%nparts > 1)then
+            call work_proj%split_stk(p_master%nparts)
+        else
+            call work_proj%write()
+        endif
         ! down-scale
         orig_box     = work_proj%get_box()
         orig_msk     = p_master%msk
@@ -336,7 +342,7 @@ contains
             projfile    = p_master%projfile
         endif
         ! prepare command lines from prototype
-        ! projects names are subject to change depending on scaling annd are updated individually
+        ! projects names are subject to change depending on scaling and are updated individually
         call cline%delete('projname')
         call cline%delete('projfile')
         cline_reconstruct3D         = cline
@@ -398,14 +404,14 @@ contains
             call cline_reconstruct3D%set('oritab',   'symdoc'//trim(METADATA_EXT))
             ! refinement step now uses the symmetrised vol and doc
             ! call cline_refine3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT)) !! TO UPDATE
-            call cline_refine3D_refine%set('vol1',   'rec_sym'//p_master%ext)
+            ! call cline_refine3D_refine%set('vol1',   'rec_sym'//p_master%ext)
+            ! (4) RECONSTRUCT AT ORIGINAL SCALE
+            ! call cline_reconstruct3D%set('prg',      'reconstruct3D')
+            ! call cline_reconstruct3D%set('projfile', trim(ORIG_WORK_PROJFILE))
+            ! call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
         endif
-        ! (4) RECONSTRUCT AT ORIGINAL SCALE
-        call cline_reconstruct3D%set('prg',      'reconstruct3D')
-        call cline_reconstruct3D%set('projfile', trim(ORIG_WORK_PROJFILE))
-        call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
-        ! (5) REFINE STEP
-        call cline_refine3D_refine%set('prg', 'refine3D')
+        ! (5) REFINE3D REFINE STEP
+        call cline_refine3D_refine%set('prg',      'refine3D')
         call cline_refine3D_refine%set('projfile', trim(ORIG_WORK_PROJFILE))
         call cline_refine3D_refine%set('msk',      orig_msk)
         call cline_refine3D_refine%set('box',      real(orig_box))
@@ -430,7 +436,7 @@ contains
         write(*,'(A)') '>>>'
         call xrefine3D_distr%execute(cline_refine3D_snhc)
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
+        write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
         write(*,'(A)') '>>>'
         call xrefine3D_distr%execute(cline_refine3D_init)
         iter = cline_refine3D_init%get_rarg('endit')
@@ -447,9 +453,6 @@ contains
             write(*,'(A)') '>>>'
             call xreconstruct3D%execute(cline_reconstruct3D)
             status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
-        else
-            ! refinement step needs to use iter dependent vol/oritab
-            call cline_refine3D_refine%set('vol1', trim(vol_iter))
         endif
         ! prep refinement stage
         call work_proj%read_segment('ptcl3D', trim(WORK_PROJFILE))
@@ -489,16 +492,17 @@ contains
         call work_proj%kill()
         ! reconstruct at original scale
         if( do_autoscale )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
-            write(*,'(A)') '>>>'
-            call xreconstruct3D%execute(cline_reconstruct3D)
-            status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, trim(vol_iter))
+            ! write(*,'(A)') '>>>'
+            ! write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
+            ! write(*,'(A)') '>>>'
+            ! call xreconstruct3D%execute(cline_reconstruct3D)
+            ! status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, trim(vol_iter))
+        else
+            call cline_refine3D_refine%set('vol1', trim(vol_iter))
         endif
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> PROBABILISTIC REFINEMENT AT ORIGINAL SAMPLING'
         write(*,'(A)') '>>>'
-        call cline_refine3D_refine%set('vol1', trim(vol_iter))
         call cline_refine3D_refine%set('startit', iter + 1.)
         call xrefine3D_distr%execute(cline_refine3D_refine)
         iter = cline_refine3D_refine%get_rarg('endit')

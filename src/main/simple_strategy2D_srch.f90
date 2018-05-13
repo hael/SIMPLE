@@ -18,11 +18,9 @@ type strategy2D_spec
     class(polarft_corrcalc), pointer :: ppftcc     => null()
     class(oris),             pointer :: pa         => null()
     integer,                 pointer :: nnmat(:,:) => null()
-    real    :: corr_bound = 0.
+    real    :: extr_bound = 0.
     integer :: iptcl      = 0
     integer :: iptcl_map  = 0
-    logical :: do_extr    = .false.
-    logical :: fit_bfac   = .true.
 end type strategy2D_spec
 
 type strategy2D_srch
@@ -47,10 +45,10 @@ type strategy2D_srch
     real                             :: best_shvec(2) =  0.  !< best shift vector found by search
     real                             :: prev_corr     = -1.  !< previous best correlation
     real                             :: best_corr     = -1.  !< best corr found by search
+    real                             :: prev_bfac     =  0.  !< previous b-factor
     real                             :: specscore     =  0.  !< spectral score
     logical                          :: dyncls     = .true.  !< whether to turn on dynamic class update (use of low population threshold)
     logical                          :: doshift    = .true.  !< origin shift search indicator
-    logical                          :: fit_bfac   = .true.  !< static/fitted b-factor for objfun=ccres
   contains
     procedure :: new
     procedure :: prep4srch
@@ -83,7 +81,6 @@ contains
         self%top        =  spec%pp%top
         self%nnn        =  spec%pp%nnn
         self%dyncls     =  (spec%pp%dyncls.eq.'yes')
-        self%fit_bfac   =  spec%fit_bfac
         ! construct composites
         lims(:,1)       = -spec%pp%trs
         lims(:,2)       =  spec%pp%trs
@@ -111,9 +108,13 @@ contains
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
-        ! calculate previous best corr (treshold for better)
+        ! calculate previous best corr (treshold for better) & b-factor
         if( self%prev_class > 0 )then
-            call memoize_bfac ! prior to any correlation calculation
+            self%prev_bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
+            if(self%pftcc_ptr%objfun_is_ccres())then
+                 ! prior to correlation calculation
+                call self%pftcc_ptr%memoize_bfac(self%iptcl, self%prev_bfac)
+            endif
             call self%pftcc_ptr%gencorrs(self%prev_class, self%iptcl, corrs)
             self%prev_corr  = max(0., corrs(self%prev_rot))
             self%best_corr  = self%prev_corr
@@ -121,24 +122,15 @@ contains
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_corr  = 0.
             self%best_corr  = 0.
-            call memoize_bfac
+            self%prev_bfac  = 0.
+            if(self%pftcc_ptr%objfun_is_ccres())then
+                call self%pftcc_ptr%memoize_bfac(self%iptcl, self%prev_bfac)
+            endif
         endif
+        call self%a_ptr%set(self%iptcl, 'bfac', self%prev_bfac)
         ! calculate spectral score
         self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
         if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
-
-        contains
-
-            subroutine memoize_bfac
-                real :: bfac
-                if( self%fit_bfac )then
-                    bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
-                    call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
-                    call self%a_ptr%set(self%iptcl, 'bfac', bfac)
-                else
-                    if(self%pftcc_ptr%objfun_is_ccres()) call self%a_ptr%set(self%iptcl, 'bfac', 200.)
-                endif
-            end subroutine memoize_bfac
     end subroutine prep4srch
 
     subroutine inpl_srch( self )

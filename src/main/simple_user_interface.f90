@@ -1105,7 +1105,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                          ! descr_long
         &'simple_distr_exec',&                                                          ! executable
-        &0, 1, 0, 10, 4, 3, 2, .true.)                                                  ! # entries in each group, requires sp_project
+        &0, 1, 0, 10, 5, 3, 2, .true.)                                                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1133,6 +1133,7 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, eo)
         initial_3Dmodel%filt_ctrls(4)%cval_default = 'no'
+        call initial_3Dmodel%set_input('filt_ctrls', 5, shellw)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
