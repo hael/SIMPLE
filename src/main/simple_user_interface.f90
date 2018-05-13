@@ -2072,7 +2072,7 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
         call refine3D%set_input('filt_ctrls', 6, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        &filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('filt_ctrls', 8, shellw)

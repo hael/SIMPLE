@@ -1,13 +1,13 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
 include 'simple_lib.f08'
-use simple_cmdline,             only: cmdline
-use simple_qsys_env,            only: qsys_env
-use simple_qsys_funs,           only: qsys_cleanup, qsys_watcher
-use simple_build,               only: build
-use simple_params,              only: params
-use simple_commander_base,      only: commander_base
-use simple_sp_project,          only: sp_project
+use simple_cmdline,        only: cmdline
+use simple_qsys_env,       only: qsys_env
+use simple_qsys_funs,      only: qsys_cleanup, qsys_watcher
+use simple_build,          only: build
+use simple_params,         only: params
+use simple_commander_base, only: commander_base
+use simple_sp_project,     only: sp_project
 implicit none
 
 public :: preprocess_distr_commander
@@ -19,7 +19,7 @@ public :: pick_distr_commander
 public :: make_cavgs_distr_commander
 public :: cluster2D_distr_commander
 public :: refine3D_init_distr_commander
-public :: prime3D_distr_commander
+public :: refine3D_distr_commander
 public :: reconstruct3D_distr_commander
 public :: tseries_track_distr_commander
 public :: symsrch_distr_commander
@@ -62,10 +62,10 @@ type, extends(commander_base) :: refine3D_init_distr_commander
   contains
     procedure :: execute      => exec_refine3D_init_distr
 end type refine3D_init_distr_commander
-type, extends(commander_base) :: prime3D_distr_commander
+type, extends(commander_base) :: refine3D_distr_commander
   contains
     procedure :: execute      => exec_refine3D_distr
-end type prime3D_distr_commander
+end type refine3D_distr_commander
 type, extends(commander_base) :: reconstruct3D_distr_commander
   contains
     procedure :: execute      => exec_reconstruct3D_distr
@@ -615,7 +615,7 @@ contains
     subroutine exec_refine3D_distr( self, cline )
         use simple_commander_refine3D, only: check_3Dconv_commander
         use simple_commander_volops,   only: postprocess_commander
-        class(prime3D_distr_commander), intent(inout) :: self
+        class(refine3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
         type(refine3D_init_distr_commander) :: xrefine3D_init_distr
@@ -672,7 +672,7 @@ contains
 
         ! for parallel volassemble over states
         allocate(state_assemble_finished(p_master%nstates) , stat=alloc_stat)
-        if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_prime3D_distr state_assemble ",alloc_stat)
+        if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_refine3D_distr state_assemble ",alloc_stat)
 
         ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,p_master%nstates

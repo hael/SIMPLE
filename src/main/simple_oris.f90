@@ -147,7 +147,7 @@ type :: oris
     procedure, private :: rot_1
     procedure, private :: rot_2
     generic            :: rot => rot_1, rot_2
-    procedure, private :: median_1
+    procedure          :: median_1
     generic            :: median => median_1
     procedure          :: stats
     procedure          :: minmax
@@ -2181,37 +2181,16 @@ contains
     end subroutine rot_2
 
     !>  \brief  for identifying the median value of parameter which within the cluster class
-    function median_1( self, which, class ) result( med )
+    function median_1( self, which ) result( med )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        real, allocatable :: vals(:)
-        integer :: pop, i
+        real,    allocatable :: vals(:), vals4med(:)
+        logical, allocatable :: incl(:)
         real :: med
-        if( present(class) )then
-            med = 0.
-            pop = self%get_pop(class, 'class')
-            if( pop == 0 ) return
-            vals = self%get_arr(which, class)
-            if( pop == 1 )then
-                med = vals(1)
-                return
-            endif
-            if( pop == 2 )then
-                med = (vals(1)+vals(2))/2.
-                return
-            endif
-        else
-            allocate( vals(self%n), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('In: median_1, module: simple_oris',alloc_stat)
-            vals = 0.
-            do i=1,self%n
-                vals(i) = self%o(i)%get(which)
-            end do
-        endif
-        ! calculate median
-        med = median_nocopy(vals)
-        if(allocated(vals))deallocate(vals)
+        incl     = self%included()
+        vals     = self%get_all(which)
+        vals4med = pack(vals, incl)
+        med      = median_nocopy(vals)
     end function median_1
 
     !>  \brief  is for calculating variable statistics

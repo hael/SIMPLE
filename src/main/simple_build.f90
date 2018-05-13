@@ -27,7 +27,7 @@ type :: build
     class(oris), pointer                :: a => null()        !< pointer to field in spproj
     type(oris)                          :: e, e_bal           !< discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
-    type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
+    type(convergence)                   :: conv               !< object for convergence checking of the 2D/3D approaches
     type(image)                         :: img                !< individual image/projector objects
     type(polarizer)                     :: img_match          !< -"-
     type(image)                         :: img_pad            !< -"-
@@ -47,22 +47,22 @@ type :: build
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol           !< object for eo reconstruction
     type(reconstructor)                 :: recvol             !< object for reconstruction
-    ! PRIME TOOLBOX
+    ! STRATEGY3D TOOLBOX
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(reconstructor_eo), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)           !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer,                allocatable :: grid_projs(:)      !< projection directions for coarse grid search
     ! PRIVATE EXISTENCE VARIABLES
-    logical, private                    :: general_tbox_exists          = .false.
-    logical, private                    :: cluster_tbox_exists          = .false.
-    logical, private                    :: comlin_tbox_exists           = .false.
-    logical, private                    :: rec_tbox_exists              = .false.
-    logical, private                    :: eo_rec_tbox_exists           = .false.
-    logical, private                    :: hadamard_prime3D_tbox_exists = .false.
-    logical, private                    :: hadamard_prime2D_tbox_exists = .false.
-    logical, private                    :: extremal3D_tbox_exists       = .false.
-    logical, private                    :: read_features_exists         = .false.
+    logical, private                    :: general_tbox_exists    = .false.
+    logical, private                    :: cluster_tbox_exists    = .false.
+    logical, private                    :: comlin_tbox_exists     = .false.
+    logical, private                    :: rec_tbox_exists        = .false.
+    logical, private                    :: eo_rec_tbox_exists     = .false.
+    logical, private                    :: strategy3D_tbox_exists = .false.
+    logical, private                    :: strategy2D_tbox_exists = .false.
+    logical, private                    :: extremal3D_tbox_exists = .false.
+    logical, private                    :: read_features_exists   = .false.
   contains
     procedure                           :: build_spproj
     procedure                           :: build_general_tbox
@@ -363,7 +363,7 @@ contains
         endif
     end subroutine kill_rec_eo_tbox
 
-    !> \brief  constructs the prime2D toolbox
+    !> \brief  constructs the strategy2D toolbox
     subroutine build_strategy2D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
@@ -372,24 +372,24 @@ contains
             if( self%spproj%os_cls3D%get_noris() == p%ncls )then
                 call self%spproj%os_cls3D%nearest_proj_neighbors(p%nnn, self%nnmat)
             else
-               call simple_stop('simple_build::build_hadamard_prime2D_tbox size of os_cls3D segment of spproj does not conform with # clusters (ncls)')
+               call simple_stop('simple_build::build_strategy2D_tbox size of os_cls3D segment of spproj does not conform with # clusters (ncls)')
             endif
         endif
         call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)
-        write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
-        self%hadamard_prime2D_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
+        self%strategy2D_tbox_exists = .true.
     end subroutine build_strategy2D_tbox
 
-    !> \brief  destructs the prime2D toolbox
+    !> \brief  destructs the strategy2D toolbox
     subroutine kill_strategy2D_tbox( self )
         class(build), intent(inout) :: self
-        if( self%hadamard_prime2D_tbox_exists )then
+        if( self%strategy2D_tbox_exists )then
             call self%projfrcs%kill
-            self%hadamard_prime2D_tbox_exists = .false.
+            self%strategy2D_tbox_exists = .false.
         endif
     end subroutine kill_strategy2D_tbox
 
-    !> \brief  constructs the prime3D toolbox
+    !> \brief  constructs the strategy3D toolbox
     subroutine build_strategy3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
@@ -408,15 +408,15 @@ contains
         endif
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
-        write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
-        self%hadamard_prime3D_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
+        self%strategy3D_tbox_exists = .true.
     end subroutine build_strategy3D_tbox
 
-    !> \brief  destructs the prime3D toolbox
+    !> \brief  destructs the strategy3D toolbox
     subroutine kill_strategy3D_tbox( self )
         class(build), intent(inout) :: self
         integer :: i
-        if( self%hadamard_prime3D_tbox_exists )then
+        if( self%strategy3D_tbox_exists )then
             if( allocated(self%eorecvols) )then
                 do i=1,size(self%eorecvols)
                     call self%eorecvols(i)%kill
@@ -432,7 +432,7 @@ contains
             endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
             call self%projfrcs%kill
-            self%hadamard_prime3D_tbox_exists = .false.
+            self%strategy3D_tbox_exists = .false.
         endif
     end subroutine kill_strategy3D_tbox
 

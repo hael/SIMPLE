@@ -57,6 +57,8 @@ contains
     ! os_out related methods
     procedure          :: add_cavgs2os_out
     procedure          :: add_frcs2os_out
+    procedure          :: add_vol2os_out
+    procedure, private :: add_entry2os_out
     procedure          :: get_cavgs_stk
     procedure          :: get_frcs
     ! getters
@@ -67,7 +69,6 @@ contains
     procedure          :: get_nmovies
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
-    ! procedure          :: get_ctfmode
     procedure          :: has_phaseplate
     procedure          :: get_ctfparams
     procedure          :: is_virgin_field
@@ -920,77 +921,76 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd, which )
+    subroutine add_cavgs2os_out( self, stk, smpd, which_imgkind )
         class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: stk, which
+        character(len=*),      intent(in)    :: stk, which_imgkind
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=:), allocatable :: cavg_stk, imgkind
+        character(len=:), allocatable :: stk_abspath, imgkind
         integer :: ldim(3), nptcls, n_os_out, ind, i
-        select case(trim(which))
+        select case(trim(which_imgkind))
             case('cavg','cavg_even','cavg_odd')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid CAVG kind: ', trim(which)
+                write(*,*)'Invalid CAVG kind: ', trim(which_imgkind)
                 stop 'sp_project :: add_cavgs2os_out'
         end select
         ! full path and existence check
-        call simple_full_path(stk, cavg_stk, 'sp_project :: add_cavgs2os_out')
+        call simple_full_path(stk, stk_abspath, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
-        call find_ldim_nptcls(cavg_stk, ldim, nptcls)
-        if( ldim(1) /= ldim(2) )then
-            write(*,*) 'xdim: ', ldim(1)
-            write(*,*) 'ydim: ', ldim(2)
-            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_os_out'
-        endif
-        ! check if field is empty
-        n_os_out = self%os_out%get_noris()
-        if( n_os_out == 0 )then
-            n_os_out = 1
-            ind      = 1
-            call self%os_out%new(n_os_out)
-        else
-            ind = 0
-            do i=1,n_os_out
-                if( self%os_out%isthere(i,'imgkind') )then
-                    call self%os_out%getter(i,'imgkind',imgkind)
-                    if(trim(imgkind).eq.trim(which))then
-                        ind = i
-                        exit
-                    endif
-                endif
-            end do
-            if( ind == 0 )then
-                n_os_out = n_os_out + 1
-                call self%os_out%reallocate(n_os_out)
-                ind = n_os_out
-            endif
-        endif
+        call find_ldim_nptcls(stk_abspath, ldim, nptcls)
+        ! add os_out entry
+        call self%add_entry2os_out(which_imgkind, ind)
         ! fill-in field
-        call self%os_out%set(ind, 'stk',     trim(cavg_stk))
+        call self%os_out%set(ind, 'stk',     trim(stk_abspath))
         call self%os_out%set(ind, 'box',     real(ldim(1)))
         call self%os_out%set(ind, 'nptcls',  real(nptcls))
         call self%os_out%set(ind, 'fromp',   1.0)
         call self%os_out%set(ind, 'top',     real(nptcls))
         call self%os_out%set(ind, 'smpd',    real(smpd))
         call self%os_out%set(ind, 'stkkind', 'single')
-        call self%os_out%set(ind, 'imgkind', trim(which))
+        call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
         call self%os_out%set(ind, 'ctf',     'no')
     end subroutine add_cavgs2os_out
 
-    subroutine add_frcs2os_out( self, frc, which )
-        class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: frc, which
+    subroutine add_frcs2os_out( self, frc, which_imgkind )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: frc, which_imgkind
         character(len=:), allocatable :: frc_abspath, imgkind
         integer :: n_os_out, ind, i
-        select case(trim(which))
+        select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid FRC kind: ', trim(which)
+                write(*,*)'Invalid FRC kind: ', trim(which_imgkind)
                 stop 'sp_project :: add_frcs2os_out'
         end select
-        ! fuul path and existence check
+        ! full path and existence check
         call simple_full_path(frc, frc_abspath, 'sp_project :: add_frcs2os_out')
+        ! add os_out entry
+        call self%add_entry2os_out(which_imgkind, ind)
+        ! fill-in field
+        call self%os_out%set(ind, 'frcs', trim(frc_abspath))
+        call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
+    end subroutine add_frcs2os_out
+
+    subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: vol, which_imgkind
+        real,              intent(in)    :: smpd
+        integer,           intent(in)    :: state
+        character(len=:), allocatable :: vol_abspath, imgkind
+        integer :: n_os_out, ind, i, ldim(3), ifoo
+        select case(trim(which_imgkind))
+        case('vol_cavg','vol')
+                ! all good
+            case DEFAULT
+                write(*,*)'Invalid VOL kind: ', trim(which_imgkind)
+                stop 'sp_project :: add_vol2os_out'
+        end select
+        ! full path and existence check
+        call simple_full_path(vol, vol_abspath, 'sp_project :: add_vol2os_out')
+        ! find_dimension of inputted volume
+        call find_ldim_nptcls(vol_abspath, ldim, ifoo)
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then
@@ -1002,7 +1002,46 @@ contains
             do i=1,n_os_out
                 if( self%os_out%isthere(i,'imgkind') )then
                     call self%os_out%getter(i,'imgkind',imgkind)
-                    if(trim(imgkind).eq.trim(which))then
+                    if(trim(imgkind).eq.trim(which_imgkind))then
+                        if( self%os_out%get_state(i) == state )then
+                            ind = i
+                            exit
+                        endif
+                    endif
+                endif
+            end do
+            if( ind == 0 )then
+                n_os_out = n_os_out + 1
+                call self%os_out%reallocate(n_os_out)
+                ind = n_os_out
+            endif
+        endif
+        ! fill-in field
+        call self%os_out%set(ind, 'vol',     trim(vol_abspath))
+        call self%os_out%set(ind, 'box',     real(ldim(1)))
+        call self%os_out%set(ind, 'smpd',    smpd)
+        call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
+        call self%os_out%set(ind, 'state',   real(state))
+    end subroutine add_vol2os_out
+
+    subroutine add_entry2os_out( self, which_imgkind, ind )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: which_imgkind
+        integer,           intent(out)   :: ind
+        character(len=:), allocatable :: imgkind
+        integer :: n_os_out, i
+        ! check if field is empty
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 )then
+            n_os_out = 1
+            ind      = 1
+            call self%os_out%new(n_os_out)
+        else
+            ind = 0
+            do i=1,n_os_out
+                if( self%os_out%isthere(i,'imgkind') )then
+                    call self%os_out%getter(i,'imgkind',imgkind)
+                    if(trim(imgkind).eq.trim(which_imgkind))then
                         ind = i
                         exit
                     endif
@@ -1014,26 +1053,23 @@ contains
                 ind = n_os_out
             endif
         endif
-        ! fill-in field
-        call self%os_out%set(ind, 'frcs', trim(frc_abspath))
-        call self%os_out%set(ind, 'imgkind', trim(which))
-    end subroutine add_frcs2os_out
+    end subroutine add_entry2os_out
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, which, fail )
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, which_imgkind, fail )
         class(sp_project),             intent(inout) :: self
         character(len=:), allocatable, intent(inout) :: stkname
         integer,                       intent(out)   :: ncls
         real,                          intent(out)   :: smpd
-        character(len=*),              intent(in)    :: which
+        character(len=*),              intent(in)    :: which_imgkind
         logical,          optional,    intent(in)    :: fail
         character(len=:), allocatable :: imgkind
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
-        select case(trim(which))
+        select case(trim(which_imgkind))
             case('cavg','cavg_even','cavg_odd')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid CAVG kind: ', trim(which)
+                write(*,*)'Invalid CAVG kind: ', trim(which_imgkind)
                 stop 'sp_project :: get_cavgs_stk'
         end select
         fail_here = .true.
@@ -1047,7 +1083,7 @@ contains
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
                 call self%os_out%getter(i,'imgkind',imgkind)
-                if(trim(imgkind).eq.trim(which))then
+                if(trim(imgkind).eq.trim(which_imgkind))then
                     ind = i
                     cnt = cnt + 1
                 endif
@@ -1068,19 +1104,19 @@ contains
         endif
     end subroutine get_cavgs_stk
 
-    subroutine get_frcs( self, frcs, which, fail )
+    subroutine get_frcs( self, frcs, which_imgkind, fail )
         class(sp_project),             intent(inout) :: self
         character(len=:), allocatable, intent(inout) :: frcs
-        character(len=*),              intent(in)    :: which
+        character(len=*),              intent(in)    :: which_imgkind
         logical,          optional,    intent(in)    :: fail
         character(len=:), allocatable :: imgkind
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
-        select case(trim(which))
+        select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid FRC kind: ', trim(which)
+                write(*,*)'Invalid FRC kind: ', trim(which_imgkind)
                 stop 'sp_project :: get_frcs'
         end select
         fail_here = .true.
@@ -1094,7 +1130,7 @@ contains
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
                 call self%os_out%getter(i,'imgkind',imgkind)
-                if(trim(imgkind).eq.trim(which))then
+                if(trim(imgkind).eq.trim(which_imgkind))then
                     ind = i
                     cnt = cnt + 1
                 endif
@@ -1174,37 +1210,6 @@ contains
             if( trim(imgkind).eq.'movie' ) get_nmovies = get_nmovies + 1
         enddo
     end function get_nmovies
-
-    ! character(len=STDLEN) function get_ctfmode( self, oritype )
-    !     class(sp_project), target, intent(inout) :: self
-    !     character(len=*),          intent(in)    :: oritype
-    !     class(oris), pointer          :: ptcl_field
-    !     logical :: dfx_here, dfy_here
-    !     nullify(ptcl_field)
-    !     ! set field pointer
-    !     select case(trim(oritype))
-    !         case('ptcl2D')
-    !             ptcl_field => self%os_ptcl2D
-    !         case('ptcl3D')
-    !             ptcl_field => self%os_ptcl3D
-    !         case('cls2D', 'cls3D')
-    !             get_ctfmode = 'no'
-    !             return
-    !         case DEFAULT
-    !             write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-    !             stop 'sp_project :: get_ctfmode'
-    !     end select
-    !     ! defocus
-    !     dfx_here = ptcl_field%isthere(1, 'dfx')
-    !     dfy_here = ptcl_field%isthere(1, 'dfy')
-    !     if( dfx_here .and. dfy_here )then
-    !         get_ctfmode = 'astig'
-    !     else if( dfx_here )then
-    !         get_ctfmode = 'noastig'
-    !     else
-    !         get_ctfmode = 'no'
-    !     endif
-    ! end function get_ctfmode
 
     character(len=STDLEN) function get_ctfflag( self, oritype )
         class(sp_project), target, intent(inout) :: self
@@ -1474,11 +1479,11 @@ contains
 
     ! modifiers
 
-    subroutine set_sp_oris( self, which, os )
+    subroutine set_sp_oris( self, which_imgkind, os )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: which
+        character(len=*),  intent(in)    :: which_imgkind
         class(oris),       intent(inout) :: os
-        select case(trim(which))
+        select case(trim(which_imgkind))
             case('mic')
                 self%os_mic    = os
             case('stk')
@@ -1500,7 +1505,7 @@ contains
             case('compenv')
                 self%compenv   = os
             case DEFAULT
-                stop 'unsupported which flag; sp_project :: set_sp_oris'
+                stop 'unsupported which_imgkind flag; sp_project :: set_sp_oris'
         end select
     end subroutine set_sp_oris
 

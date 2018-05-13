@@ -9,7 +9,7 @@ implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
+&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
 &build_pftcc_particles
 private
 #include "simple_local_flags.inc"
@@ -92,7 +92,8 @@ contains
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
-        logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist, kstop_grid_set
+        logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
+        logical               :: kstop_grid_set
         kstop_grid_set = .false.
         select case(p%eo)
             case('yes','aniso')
@@ -134,11 +135,15 @@ contains
                         endif
                     end do
                     loc    = maxloc(mapres) ! worst resolved
-                    lp_ind = get_lplim_at_corr(b%fsc(loc(1),:), p%lplim_crit)
+                    ! get median updatecnt
+                    if( b%a%median('updatecnt') > 1.0 )then
+                        lp_ind = get_lplim_at_corr(b%fsc(loc(1),:), p%lplim_crit)
+                    else
+                        lp_ind = get_lplim_at_corr(b%fsc(loc(1),:), 0.5)
+                    endif
                     ! low pass limit
                     p%kfromto(2) = calc_fourier_index(resarr(lp_ind), p%boxmatch, p%smpd)
                     if( p%kfromto(2) == 1 )then
-                        stop
                         call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
                     endif
                     ! set highest Fourier index for coarse grid search
@@ -146,9 +151,9 @@ contains
                     kstop_grid_set = .true.
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
-                    p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
+                    p%kfromto(2)     = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
                 else if( b%a%isthere(p%fromp,'lp') )then
-                    p%kfromto(2) = calc_fourier_index(b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd)
+                    p%kfromto(2)     = calc_fourier_index(b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd)
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_strategy2D3D_common'
@@ -174,21 +179,18 @@ contains
             case('no')
                 ! set Fourier index range
                 p%kfromto(1) = max(2, calc_fourier_index( p%hp, p%boxmatch, p%smpd))
+                p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
                 if( cline%defined('lpstop') )then
-                    p%kfromto(2) = min(calc_fourier_index(p%lp, p%boxmatch, p%smpd),&
-                    &calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
-                else
-                    p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
+                    p%kfromto(2) = min(p%kfromto(2), calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
                 endif
                 p%lp_dyn = p%lp
                 call b%a%set_all2single('lp',p%lp)
             case DEFAULT
-
                 call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
         end select
         ! set highest Fourier index for coarse grid search
-        if( .not. kstop_grid_set )        p%kstop_grid = p%kfromto(2)
-        if( p%kstop_grid > p%kfromto(2) ) p%kstop_grid = p%kfromto(2)
+        if( .not. kstop_grid_set )          p%kstop_grid = p%kfromto(2)
+        if( p%kstop_grid > p%kfromto(2) )   p%kstop_grid = p%kfromto(2)
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
@@ -346,33 +348,6 @@ contains
             endif
         endif
     end subroutine grid_ptcl_2
-
-    !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl_tst( b, p, img, orientation, ctfvars )
-        use simple_kbinterpol, only: kbinterpol
-        use simple_ori,  only: ori
-        class(build),          intent(inout) :: b
-        class(params),         intent(inout) :: p
-        class(image),          intent(inout) :: img
-        class(ori),            intent(inout) :: orientation
-        type(ctfparams),       intent(in)    :: ctfvars
-        real       :: pw
-        integer    :: s, npeaks, eo, nstates
-        npeaks  = 1
-        nstates = 1
-        ! particle weight
-        pw = 1.0
-        if( orientation%isthere('w') ) pw = orientation%get('w')
-        if( pw <= TINY ) return
-        ! e/o flag
-        eo = 0
-        if( p%eo .ne. 'no' ) eo = nint(orientation%get('eo'))
-        s  = 1
-        ! fwd ft
-        call img%fft()
-        ! one peak & one state
-         call b%eorecvols(s)%grid_fplane(b%se, orientation, ctfvars, img, eo, pwght=pw)
-    end subroutine grid_ptcl_tst
 
     !>  \brief  prepares all particle images for alignment
     subroutine build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, is3D, ptcl_mask )

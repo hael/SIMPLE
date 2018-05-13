@@ -1,4 +1,4 @@
-! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
+! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_refine3D
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
@@ -7,14 +7,13 @@ use simple_build,          only: build
 use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
-
 implicit none
 
 public :: npeaks_commander
 public :: nspace_commander
 public :: refine3D_init_commander
 ! public :: multiptcl_init_commander
-public :: prime3D_commander
+public :: refine3D_commander
 public :: check_3Dconv_commander
 private
 #include "simple_local_flags.inc"
@@ -35,10 +34,10 @@ end type refine3D_init_commander
 !   contains
 !     procedure :: execute      => exec_multiptcl_init
 ! end type multiptcl_init_commander
-type, extends(commander_base) :: prime3D_commander
+type, extends(commander_base) :: refine3D_commander
   contains
     procedure :: execute      => exec_refine3D
-end type prime3D_commander
+end type refine3D_commander
 type, extends(commander_base) :: check_3Dconv_commander
   contains
     procedure :: execute      => exec_check_3Dconv
@@ -86,7 +85,7 @@ contains
         integer, parameter :: MAXIMGS=1000
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_strategy3D_tbox(p)     ! prime3D objects built
+        call b%build_strategy3D_tbox(p)     ! strategy3D objects built
         ! generate the random model
         if( cline%defined('nran') )then
             call gen_random_model( p%nran )
@@ -205,7 +204,7 @@ contains
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
-        class(prime3D_commander), intent(inout) :: self
+        class(refine3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)               :: p
         type(build)                :: b
@@ -215,7 +214,7 @@ contains
         converged  = .false.
         p = params(cline) ! parameters generated
         if( p%neigh.eq.'yes' .and. .not. cline%defined('oritab') )then
-            stop 'need oritab input for execution of prime3D with this refine mode'
+            stop 'need oritab input for execution of refine3D with this refine mode'
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
@@ -224,7 +223,7 @@ contains
         else
            stop 'need a starting low-pass limit (set lp or find)!'
         endif
-        call b%build_strategy3D_tbox(p) ! prime3D objects built
+        call b%build_strategy3D_tbox(p) ! strategy3D objects built
         startit = 1
         if( cline%defined('startit') )startit = p%startit
         if( startit == 1 )call b%a%clean_updatecnt
@@ -259,7 +258,7 @@ contains
             end do
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
 
     subroutine exec_check_3Dconv( self, cline )

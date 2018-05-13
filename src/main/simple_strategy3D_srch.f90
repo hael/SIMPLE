@@ -38,6 +38,7 @@ type strategy3D_srch
     integer, allocatable             :: nnvec(:)                  !< nearest neighbours indices
     integer                          :: iptcl         = 0         !< global particle index
     integer                          :: iptcl_map     = 0         !< index in pre-allocated 2D arrays
+    integer                          :: kstop_grid    = 0         !< Frequency limit of first coarse grid search
     integer                          :: nrefs         = 0         !< total # references (nstates*nprojs)
     integer                          :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
     integer                          :: nstates       = 0         !< # states
@@ -46,6 +47,7 @@ type strategy3D_srch
     integer                          :: npeaks        = 0         !< # peaks (nonzero orientation weights)
     integer                          :: npeaks_eff    = 0         !< effective # peaks
     integer                          :: npeaks_grid   = 0         !< # peaks after coarse search
+    integer                          :: nsym          = 0         !< symmetry order
     integer                          :: nbetter       = 0         !< # better orientations identified
     integer                          :: nrefs_eval    = 0         !< # references evaluated
     integer                          :: nnn_static    = 0         !< # nearest neighbors (static)
@@ -53,8 +55,6 @@ type strategy3D_srch
     integer                          :: prev_roind    = 0         !< previous in-plane rotation index
     integer                          :: prev_state    = 0         !< previous state index
     integer                          :: prev_ref      = 0         !< previous reference index
-    integer                          :: kstop_grid    = 0         !< Frequency limit of first coarse grid search
-    integer                          :: nsym          = 0         !< symmetry order
     real                             :: prev_corr     = 1.        !< previous best correlation
     real                             :: specscore     = 0.        !< spectral score
     real                             :: prev_shvec(2) = 0.        !< previous origin shift vector
@@ -82,25 +82,25 @@ contains
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%pftcc_ptr  => spec%ppftcc
-        self%a_ptr      => spec%pa
-        self%se_ptr     => spec%pse
-        self%iptcl      =  spec%iptcl
-        self%iptcl_map  =  spec%iptcl_map
-        self%nstates    =  spec%pp%nstates
-        self%nprojs     =  spec%pp%nspace
-        self%nrefs      =  self%nprojs*self%nstates
-        self%nrots      =  round2even(twopi*real(spec%pp%ring2))
-        self%npeaks     =  npeaks
-        self%nbetter    =  0
-        self%nrefs_eval =  0
-        self%nsym       =  self%se_ptr%get_nsym()
-        self%doshift    =  spec%pp%l_doshift
-        self%neigh      =  spec%pp%neigh == 'yes'
-        self%nnn_static =  spec%pp%nnn
-        self%nnn        =  spec%pp%nnn
-        self%nnnrefs    =  self%nnn*self%nstates
-        self%kstop_grid =  spec%pp%kstop_grid
+        self%pftcc_ptr    => spec%ppftcc
+        self%a_ptr        => spec%pa
+        self%se_ptr       => spec%pse
+        self%iptcl        =  spec%iptcl
+        self%iptcl_map    =  spec%iptcl_map
+        self%nstates      =  spec%pp%nstates
+        self%nprojs       =  spec%pp%nspace
+        self%nrefs        =  self%nprojs*self%nstates
+        self%nrots        =  round2even(twopi*real(spec%pp%ring2))
+        self%npeaks       =  npeaks
+        self%nbetter      =  0
+        self%nrefs_eval   =  0
+        self%nsym         =  self%se_ptr%get_nsym()
+        self%doshift      =  spec%pp%l_doshift
+        self%neigh        =  spec%pp%neigh == 'yes'
+        self%nnn_static   =  spec%pp%nnn
+        self%nnn          =  spec%pp%nnn
+        self%nnnrefs      =  self%nnn*self%nstates
+        self%kstop_grid   =  spec%pp%kstop_grid
         ! multiple states
         if( self%nstates == 1 )then
             self%npeaks_grid = GRIDNPEAKS

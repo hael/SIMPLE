@@ -1,19 +1,15 @@
-! projection-matching based on Hadamard products, high-level search routines for PRIME3D
+! projection-matching based on Hadamard products, high-level search routines for REFINE3D
 module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_polarft_corrcalc,         only: polarft_corrcalc
-
-use simple_strategy3D_alloc,         only: o_peaks, clean_strategy3D, prep_strategy3D
-
+use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_strategy3D_alloc, only: o_peaks, clean_strategy3D, prep_strategy3D
 use simple_timer
 implicit none
 
-public :: refine3D_exec
-public :: preppftcc4align, pftcc
+public :: refine3D_exec, preppftcc4align, pftcc
 private
-! #include "simple_local_flags.inc"
 
 logical, parameter             :: L_BENCH = .false., DEBUG = .false.
 type(polarft_corrcalc), target :: pftcc
@@ -57,17 +53,22 @@ contains
         type(image),     allocatable :: rec_imgs(:)
         integer, target, allocatable :: symmat(:,:)
         logical,         allocatable :: het_mask(:)
-        class(strategy3D), pointer   :: strategy3Dsrch(:)
+        !---> The below is to allow particle-dependent decision about which 3D strategy to use
+        type :: strategy3D_per_ptcl
+            class(strategy3D), pointer :: ptr => null()
+        end type strategy3D_per_ptcl
+        type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
+        !<---- hybrid or combined search strategies can then be implemented as extensions of the
+        !      relevant strategy3D base class
         type(strategy3D_spec) :: strategy3Dspec
         type(ori)             :: orientation
         type(kbinterpol)      :: kbwin
         type(sym)             :: c1_symop
         type(prep4cgrid)      :: gridprep
         type(ctfparams)       :: ctfvars
-        real    :: frac_srch_space, extr_thresh, corr_thresh
-        real    :: bfac_rec, specscore_avg
-        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, ibatch, npeaks
-        integer :: batchlims(2)
+        real    :: frac_srch_space, extr_thresh, corr_thresh, bfac_rec, specscore_avg
+        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch
+        integer :: ibatch, npeaks, batchlims(2), updatecnt
         logical :: doprint, do_extr, is_virgin
 
         if( L_BENCH )then
@@ -156,7 +157,7 @@ contains
                 allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
                 zero_pop    = count(.not.b%a%included(consider_w=.false.))
                 corr_thresh = -huge(corr_thresh)
-                if(p%l_frac_update) then
+                if( p%l_frac_update )then
                     ptcl_mask = .true.
                     iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)) * (2.-p%update_frac))
                     if( which_iter==1 .or.(frac_srch_space <= 99. .and. p%extr_iter <= iextr_lim) )&
@@ -201,10 +202,13 @@ contains
         call prep_strategy3D( b, p, ptcl_mask, npeaks )
         if( DEBUG ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
-        ! switch for polymorphic strategy3D construction
+        ! switch for per-particle polymorphic strategy3D construction
+        allocate(strategy3Dsrch(p%fromp:p%top))
         select case(trim(p%refine))
             case('snhc')
-                allocate(strategy3D_snhc_single :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr)
+                end do
             case('single')
                 ! check if virgin
                 select case(trim(p%oritype))
@@ -216,27 +220,48 @@ contains
                         write(*,*) 'oritype: ', trim(p%oritype)
                         stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
                 end select
-                ! allocate the appropriate polymorphic type
-                if( is_virgin )then
-                    allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top))
-                else
-                    allocate(strategy3D_single        :: strategy3Dsrch(p%fromp:p%top))
-                endif
+                ! polymorphic assignment based on is_virgin and updatecnt
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) )then
+                        updatecnt = nint(b%a%get(iptcl,'updatecnt'))
+                        if( updatecnt == 1 .or. is_virgin )then
+                            allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
+                        else
+                            allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr)
+                        endif
+                    endif
+                end do
             case('multi')
-                allocate(strategy3D_multi         :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) )then
+                        updatecnt = nint(b%a%get(iptcl,'updatecnt'))
+                        if( updatecnt == 1 )then
+                            allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr)
+                        else
+                            allocate(strategy3D_multi        :: strategy3Dsrch(iptcl)%ptr)
+                        endif
+                    endif
+                end do
             case('cont_single')
-                allocate(strategy3D_cont_single   :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr)
+                end do
             case('greedy_single')
-                allocate(strategy3D_greedy_single :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
+                end do
             case('greedy_multi')
-                allocate(strategy3D_greedy_multi  :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_multi  :: strategy3Dsrch(iptcl)%ptr)
+                end do
             case('cluster','clustersym','clusterdev')
-                allocate(strategy3D_cluster       :: strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cluster       :: strategy3Dsrch(iptcl)%ptr)
+                end do
             case DEFAULT
                 write(*,*) 'refine flag: ', trim(p%refine)
                 stop 'Refinement mode unsupported'
         end select
-        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::prime3D_exec strategy3D objects ",alloc_stat)
         ! construct search objects
         cnt = 0
         do iptcl=p%fromp,p%top
@@ -257,7 +282,7 @@ contains
                 if( allocated(het_mask) )     strategy3Dspec%do_extr    =  het_mask(iptcl)
                 if( allocated(symmat) )       strategy3Dspec%symmat     => symmat
                 ! search object
-                call strategy3Dsrch(iptcl)%new(strategy3Dspec, npeaks)
+                call strategy3Dsrch(iptcl)%ptr%new(strategy3Dspec, npeaks)
             endif
         end do
         if( DEBUG ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
@@ -278,7 +303,7 @@ contains
             !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
             do i=1,nptcls2update
                 iptcl = pinds(i)
-                call strategy3Dsrch(iptcl)%srch
+                call strategy3Dsrch(iptcl)%ptr%srch
             end do
             !$omp end parallel do
         endif
@@ -288,7 +313,10 @@ contains
         call b%vol%kill
         call b%vol_odd%kill
         do iptcl = p%fromp,p%top
-            if( ptcl_mask(iptcl) ) call strategy3Dsrch(iptcl)%kill
+            if( ptcl_mask(iptcl) )then
+                call strategy3Dsrch(iptcl)%ptr%kill
+                strategy3Dsrch(iptcl)%ptr => null()
+            endif
         end do
         deallocate(strategy3Dsrch)
         if( L_BENCH ) rt_align = toc(t_align)

@@ -1,10 +1,10 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
 include 'simple_lib.f08'
-use simple_commander_base,        only: commander_base
-use simple_cmdline,               only: cmdline
-use simple_params,                only: params
-use simple_sp_project,            only: sp_project
+use simple_commander_base, only: commander_base
+use simple_cmdline,        only: cmdline
+use simple_params,         only: params
+use simple_sp_project,     only: sp_project
 implicit none
 
 public :: cluster2D_autoscale_commander
@@ -211,22 +211,21 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-         use simple_commander_distr_wflows, only: prime3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
-        use simple_oris,                    only: oris
-        use simple_commander_volops,        only: reproject_commander
-        use simple_commander_rec,           only: reconstruct3D_commander
+        use simple_commander_distr_wflows, only: refine3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
+        use simple_oris,                   only: oris
+        use simple_commander_volops,       only: reproject_commander
+        use simple_commander_rec,          only: reconstruct3D_commander
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
         real,    parameter :: CENLP=30. !< consistency with refine3D
         integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        ! integer, parameter :: MAXITS_SNHC=5, MAXITS_INIT=2, MAXITS_REFINE=5 ! 4 testing
         integer, parameter :: STATE=1, NPROJS_SYMSRCH=50, MAXITS_SNHC_RESTART=3
         integer, parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         integer, parameter :: NRESTARTS=5
         character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE = 'initial_3Dmodel_tmpproj.simple'
         ! distributed commanders
-        type(prime3D_distr_commander)       :: xprime3D_distr
+        type(refine3D_distr_commander)      :: xrefine3D_distr
         type(symsrch_distr_commander)       :: xsymsrch_distr
         type(scale_project_distr_commander) :: xscale_distr
         ! shared-mem commanders
@@ -405,7 +404,7 @@ contains
         call cline_reconstruct3D%set('prg',      'reconstruct3D')
         call cline_reconstruct3D%set('projfile', trim(ORIG_WORK_PROJFILE))
         call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
-        ! (5) PRIME3D REFINE STEP
+        ! (5) REFINE STEP
         call cline_refine3D_refine%set('prg', 'refine3D')
         call cline_refine3D_refine%set('projfile', trim(ORIG_WORK_PROJFILE))
         call cline_refine3D_refine%set('msk',      orig_msk)
@@ -429,11 +428,11 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
         write(*,'(A)') '>>>'
-        call xprime3D_distr%execute(cline_refine3D_snhc)
+        call xrefine3D_distr%execute(cline_refine3D_snhc)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
         write(*,'(A)') '>>>'
-        call xprime3D_distr%execute(cline_refine3D_init)
+        call xrefine3D_distr%execute(cline_refine3D_init)
         iter = cline_refine3D_init%get_rarg('endit')
         call set_iter_dependencies
         if( srch4symaxis )then
@@ -490,18 +489,18 @@ contains
         call work_proj%kill()
         ! reconstruct at original scale
         if( do_autoscale )then
-                write(*,'(A)') '>>>'
-                write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
-                write(*,'(A)') '>>>'
-                call xreconstruct3D%execute(cline_reconstruct3D)
-                status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, trim(vol_iter))
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
+            write(*,'(A)') '>>>'
+            call xreconstruct3D%execute(cline_reconstruct3D)
+            status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, trim(vol_iter))
         endif
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP AT ORIGINAL SAMPLING'
+        write(*,'(A)') '>>> PROBABILISTIC REFINEMENT AT ORIGINAL SAMPLING'
         write(*,'(A)') '>>>'
         call cline_refine3D_refine%set('vol1', trim(vol_iter))
         call cline_refine3D_refine%set('startit', iter + 1.)
-        call xprime3D_distr%execute(cline_refine3D_refine)
+        call xrefine3D_distr%execute(cline_refine3D_refine)
         iter = cline_refine3D_refine%get_rarg('endit')
         call set_iter_dependencies
         ! copy final volumes
@@ -582,7 +581,7 @@ contains
         use simple_sym,              only: sym
         !use simple_commander_rec,    only: reconstruct3D_commander
         use simple_commander_volops, only: postprocess_commander
-        use simple_commander_distr_wflows, only: prime3D_distr_commander, reconstruct3D_distr_commander
+        use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         ! constants
@@ -590,7 +589,7 @@ contains
         integer,          parameter :: MAXITS2 = 40
         character(len=*), parameter :: one     = '01'
         ! distributed commanders
-        type(prime3D_distr_commander)        :: xprime3D_distr
+        type(refine3D_distr_commander)       :: xrefine3D_distr
         type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
         ! shared-mem commanders
         type(postprocess_commander) :: xpostprocess
@@ -739,9 +738,9 @@ contains
 
         ! STAGE1: frozen orientation parameters
         write(*,'(A)')    '>>>'
-        write(*,'(A,I3)') '>>> PRIME3D - STAGE 1'
+        write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 1'
         write(*,'(A)')    '>>>'
-        call xprime3D_distr%execute(cline_refine3D1)
+        call xrefine3D_distr%execute(cline_refine3D1)
         iter   = nint(cline_refine3D1%get_rarg('endit'))
         oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
@@ -767,9 +766,9 @@ contains
         call cline_refine3D2%set('maxits',  real(startit + MAXITS2))
         call cline_refine3D2%set('oritab',  trim(oritab))
         write(*,'(A)')    '>>>'
-        write(*,'(A,I3)') '>>> PRIME3D - STAGE 2'
+        write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 2'
         write(*,'(A)')    '>>>'
-        call xprime3D_distr%execute(cline_refine3D2)
+        call xrefine3D_distr%execute(cline_refine3D2)
         iter   = nint(cline_refine3D2%get_rarg('endit'))
         oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
@@ -863,7 +862,7 @@ contains
         use simple_binoris_io,       only: binread_nlines, binread_oritab, binwrite_oritab
         use simple_oris,             only: oris
         use simple_commander_volops, only: postprocess_commander
-        use simple_commander_distr_wflows, only: prime3D_distr_commander, reconstruct3D_distr_commander
+        use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
         class(cluster3D_refine_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
@@ -872,7 +871,7 @@ contains
         character(len=:), allocatable :: FINAL_FBODY
         character(len=:), allocatable :: FINAL_DOC
         ! distributed commanders
-        type(prime3D_distr_commander)       :: xprime3D_distr
+        type(refine3D_distr_commander)      :: xrefine3D_distr
         type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
         ! shared-mem commanders
         type(postprocess_commander)   :: xpostprocess
@@ -1048,7 +1047,7 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I2)')'>>> REFINING STATE: ', state
             write(*,'(A)')   '>>>'
-            ! prime3D prep
+            ! prep
             cline_refine3D = cline_refine3D_master
             call cline_refine3D%set('oritab', trim(init_docs(state)))
             if( l_hasvols(state) )then
@@ -1063,8 +1062,8 @@ contains
                 endif
             endif
             if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(p_master%mskvols(state)))
-            ! run prime3D
-            call xprime3D_distr%execute(cline_refine3D)
+            ! run
+            call xrefine3D_distr%execute(cline_refine3D)
             ! harvest outcome
             iter   = nint(cline_refine3D%get_rarg('endit'))
             oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
@@ -1076,7 +1075,7 @@ contains
                 call os_master%set(iptcl, 'state', real(state))
             enddo
             call os_state%kill
-            call prime3d_cleanup
+            call refine3D_cleanup
         enddo
 
         ! final document
@@ -1103,7 +1102,7 @@ contains
         contains
 
             ! stash docs, volumes , etc.
-            subroutine prime3d_cleanup
+            subroutine refine3D_cleanup
                 character(len=STDLEN) :: src, dist
                 character(len=*), parameter :: one = '01'
                 character(len=3) :: str_iter
@@ -1143,7 +1142,7 @@ contains
                     src  = trim(ANISOLP_FBODY)//one//p_master%ext
                     if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                 endif
-            end subroutine prime3d_cleanup
+            end subroutine refine3D_cleanup
 
     end subroutine exec_cluster3D_refine
 

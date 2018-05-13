@@ -25,7 +25,7 @@ type(cluster2D_stream_distr_commander)    :: xcluster2D_stream_distr
 
 ! REFINE3D
 type(refine3D_init_distr_commander)       :: xrefine3D_init_distr
-type(prime3D_distr_commander)             :: xprime3D_distr
+type(refine3D_distr_commander)             :: xprime3D_distr
 type(reconstruct3D_distr_commander)       :: xreconstruct3D_distr
 type(symsrch_distr_commander)             :: xsymsrch_distr
 

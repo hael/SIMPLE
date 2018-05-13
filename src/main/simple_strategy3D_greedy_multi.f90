@@ -75,8 +75,8 @@ contains
 
             subroutine per_ref_srch
                 state = proj_space_state(self%s%iptcl_map,iref)
-                if( state_exists(state) )then
-                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, inpl_corrs) ! In-plane correlations
+                if( state_exists(state) )then    
+                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, inpl_corrs) ! in-plane correlations
                     inpl_ind   = maxloc(inpl_corrs)                                ! greedy in-plane index
                     inpl_corr  = inpl_corrs(inpl_ind(1))                           ! max in plane correlation
                     call self%s%store_solution(iref, iref, inpl_ind(1), inpl_corr)
