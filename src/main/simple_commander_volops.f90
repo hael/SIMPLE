@@ -171,7 +171,8 @@ contains
             ! 2do
 
         else if( cline%defined('vol1') )then
-            call b%vol%read(p%vols(1))
+            state = 1
+            call b%vol%read(p%vols(state))
             call b%vol%fft()
         else
             stop 'ERROR! either projfile or vol1 needs to be part of command line; commander_volops :: postprocess'
