@@ -142,17 +142,17 @@ contains
         endif
     end function minimize
 
-    function get_nevals( self ) result( nevals )
-        class(pftcc_shsrch), intent(inout) :: self
-        integer :: nevals
-        nevals = self%ospec%nevals
-    end function get_nevals
+    ! function get_nevals( self ) result( nevals )
+    !     class(pftcc_shsrch), intent(inout) :: self
+    !     integer :: nevals
+    !     nevals = self%ospec%nevals
+    ! end function get_nevals
 
-    subroutine get_peaks( self, peaks )
-        class(pftcc_shsrch), intent(inout) :: self
-        real, allocatable,   intent(out)   :: peaks(:,:) !< output peak matrix
-        allocate(peaks(1,2))
-        peaks(1,:) = self%ospec%x
-    end subroutine get_peaks
+    ! subroutine get_peaks( self, peaks )
+    !     class(pftcc_shsrch), intent(inout) :: self
+    !     real, allocatable,   intent(out)   :: peaks(:,:) !< output peak matrix
+    !     allocate(peaks(1,2))
+    !     peaks(1,:) = self%ospec%x
+    ! end subroutine get_peaks
 
 end module simple_pftcc_shsrch

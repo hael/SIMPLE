@@ -30,6 +30,9 @@ end type volassemble_commander
 
 contains
 
+
+
+
     !> for reconstructing volumes from image stacks and their estimated orientations
     subroutine exec_reconstruct3D( self, cline )
         use simple_rec_master, only: exec_rec_master
@@ -47,8 +50,8 @@ contains
             case DEFAULT
                 stop 'unknonw eo flag; simple_commander_rec :: exec_reconstruct3D'
         end select
-        call exec_rec_master(b, p, cline)
-        ! end gracefully
+        call exec_rec_master(b, p)
+        ! end gracefullyY
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D
 

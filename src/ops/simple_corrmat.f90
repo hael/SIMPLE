@@ -10,7 +10,7 @@ use simple_image,  only: image
 
 implicit none
 
-public :: calc_cartesian_corrmat, calc_roinv_corrmat
+public :: calc_cartesian_corrmat!, calc_roinv_corrmat
 private
 
 interface calc_cartesian_corrmat
@@ -135,32 +135,32 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_2
 
-    subroutine calc_roinv_corrmat( pftcc, corrmat )
-        ! assumes particles/references in pftcc identical sets
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        real, allocatable,       intent(out)   :: corrmat(:,:)
-        real    :: corrs(pftcc%get_nrots())
-        integer :: iref, iptcl, nptcls, nrefs, loc(1)
-        nptcls = pftcc%get_nptcls()
-        nrefs  = pftcc%get_nrefs()
-        if( nptcls /= nrefs ) stop 'nptcls == nrefs in pftcc required; simple_corrmat :: calc_roinv_corrmat'
-        if( allocated(corrmat) ) deallocate(corrmat)
-        allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk('In: calc_roinv_corrmat; simple_corrmat')
-        corrmat = 1.
-        !$omp parallel do default(shared) schedule(guided) private(iref,iptcl,corrs,loc) proc_bind(close)
-        do iref=1,nptcls - 1
-            do iptcl=iref + 1,nptcls
-                ! rotational corr
-                call pftcc%gencorrs(iref, iptcl, corrs)
-                loc  = maxloc(corrs)
-                corrmat(iref,iptcl) = corrs(loc(1))
-                ! symmetrize
-                corrmat(iptcl,iref) = corrmat(iref,iptcl)
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine calc_roinv_corrmat
+    ! subroutine calc_roinv_corrmat( pftcc, corrmat )
+    !     ! assumes particles/references in pftcc identical sets
+    !     use simple_polarft_corrcalc, only: polarft_corrcalc
+    !     class(polarft_corrcalc), intent(inout) :: pftcc
+    !     real, allocatable,       intent(out)   :: corrmat(:,:)
+    !     real    :: corrs(pftcc%get_nrots())
+    !     integer :: iref, iptcl, nptcls, nrefs, loc(1)
+    !     nptcls = pftcc%get_nptcls()
+    !     nrefs  = pftcc%get_nrefs()
+    !     if( nptcls /= nrefs ) stop 'nptcls == nrefs in pftcc required; simple_corrmat :: calc_roinv_corrmat'
+    !     if( allocated(corrmat) ) deallocate(corrmat)
+    !     allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
+    !     if(alloc_stat/=0)call allocchk('In: calc_roinv_corrmat; simple_corrmat')
+    !     corrmat = 1.
+    !     !$omp parallel do default(shared) schedule(guided) private(iref,iptcl,corrs,loc) proc_bind(close)
+    !     do iref=1,nptcls - 1
+    !         do iptcl=iref + 1,nptcls
+    !             ! rotational corr
+    !             call pftcc%gencorrs(iref, iptcl, corrs)
+    !             loc  = maxloc(corrs)
+    !             corrmat(iref,iptcl) = corrs(loc(1))
+    !             ! symmetrize
+    !             corrmat(iptcl,iref) = corrmat(iref,iptcl)
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    ! end subroutine calc_roinv_corrmat
 
 end module simple_corrmat

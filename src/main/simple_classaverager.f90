@@ -6,7 +6,7 @@ use simple_params,  only: params
 use simple_image,   only: image
 implicit none
 
-public :: cavger_new, cavger_transf_oridat, cavger_get_cavg, cavger_set_cavg, cavger_assemble_sums,&
+public :: cavger_new, cavger_transf_oridat, cavger_assemble_sums,&
 cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
 cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged
 private
@@ -274,39 +274,39 @@ contains
         end do
     end function class_pop
 
-    !>  \brief  is for getting a class average
-    subroutine cavger_get_cavg( class, which, img )
-        integer,              intent(in)    :: class
-        character(len=*),     intent(in)    :: which
-        class(image),         intent(inout) :: img
-        select case(which)
-            case('even')
-                call img%copy(cavgs_even(class))
-            case('odd')
-                call img%copy(cavgs_odd(class))
-            case('merged')
-                call img%copy(cavgs_merged(class))
-            case DEFAULT
-                call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
-        end select
-    end subroutine cavger_get_cavg
+    ! !>  \brief  is for getting a class average
+    ! subroutine cavger_get_cavg( class, which, img )
+    !     integer,              intent(in)    :: class
+    !     character(len=*),     intent(in)    :: which
+    !     class(image),         intent(inout) :: img
+    !     select case(which)
+    !         case('even')
+    !             call img%copy(cavgs_even(class))
+    !         case('odd')
+    !             call img%copy(cavgs_odd(class))
+    !         case('merged')
+    !             call img%copy(cavgs_merged(class))
+    !         case DEFAULT
+    !             call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
+    !     end select
+    ! end subroutine cavger_get_cavg
 
     !>  \brief  is for setting a class average
-    subroutine cavger_set_cavg( class, which, img )
-        integer,              intent(in)    :: class
-        character(len=*),     intent(in)    :: which
-        class(image),         intent(in)    :: img
-        select case(which)
-            case('even')
-                call cavgs_even(class)%copy(img)
-            case('odd')
-                call cavgs_odd(class)%copy(img)
-            case('merged')
-                call cavgs_merged(class)%copy(img)
-            case DEFAULT
-                call simple_stop('unsupported which flag; simple_classaverager :: set_cavg')
-        end select
-    end subroutine cavger_set_cavg
+    ! subroutine cavger_set_cavg( class, which, img )
+    !     integer,              intent(in)    :: class
+    !     character(len=*),     intent(in)    :: which
+    !     class(image),         intent(in)    :: img
+    !     select case(which)
+    !         case('even')
+    !             call cavgs_even(class)%copy(img)
+    !         case('odd')
+    !             call cavgs_odd(class)%copy(img)
+    !         case('merged')
+    !             call cavgs_merged(class)%copy(img)
+    !         case DEFAULT
+    !             call simple_stop('unsupported which flag; simple_classaverager :: set_cavg')
+    !     end select
+    ! end subroutine cavger_set_cavg
 
     ! calculators
 
@@ -667,7 +667,7 @@ contains
                     call cavgs_merged(icls)%write(fname, icls)
                 end do
             case DEFAULT
-                call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
+                call simple_stop('unsupported which flag; simple_classaverager :: get_write')
         end select
     end subroutine cavger_write
 
@@ -696,7 +696,7 @@ contains
                     call cavgs_merged(icls)%read(fname, icls)
                 end do
             case DEFAULT
-                call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
+                call simple_stop('unsupported which flag; simple_classaverager :: get_read')
         end select
     end subroutine cavger_read
 

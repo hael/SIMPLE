@@ -64,6 +64,8 @@ type :: ori
     procedure          :: get_3Dshift
     procedure          :: get_state
     procedure          :: hash_size
+   ! procedure          :: hash_vals
+   ! procedure          :: chash_size
     procedure          :: isthere
     procedure          :: ischar
     procedure          :: isstatezero
@@ -78,7 +80,7 @@ type :: ori
     procedure          :: read
     ! CALCULATORS
     procedure          :: round_shifts
-    procedure, private :: shift
+    !procedure, private :: shift
     procedure, private :: compeuler
     procedure          :: compose3d2d
     procedure          :: map3dshift22d
@@ -89,11 +91,11 @@ type :: ori
     generic            :: operator(.geod.)   => geodesic_dist
     generic            :: operator(.geodsc.) => geodesic_dist_scaled
     procedure, private :: euldist
-    procedure, private :: inpldist
+!    procedure, private :: inpldist
     procedure, private :: inplrotdist
     generic            :: operator(.compose.)     => compeuler
     generic            :: operator(.euldist.)     => euldist
-    generic            :: operator(.inpldist.)    => inpldist
+    !generic            :: operator(.inpldist.)    => inpldist
     generic            :: operator(.inplrotdist.) => inplrotdist
     ! DESTRUCTORS
     procedure          :: kill_chash
@@ -824,11 +826,11 @@ contains
 
     !>  \brief  calculates the distance (in radians) btw all df:s
     !! \param self1,self2 ori class type rotaional matrices
-    pure function inpldist( self1, self2 ) result( dist )
-        class(ori), intent(in) :: self1, self2
-        real :: dist
-        dist = ((self1.inplrotdist.self2)+(self1.euldist.self2))/2.
-    end function inpldist
+    ! pure function inpldist( self1, self2 ) result( dist )
+    !     class(ori), intent(in) :: self1, self2
+    !     real :: dist
+    !     dist = ((self1.inplrotdist.self2)+(self1.euldist.self2))/2.
+    ! end function inpldist
 
     !>  \brief  calculates the distance (in radians) btw the in-plane rotations
     !! \param self1,self2 ori class type rotaional matrices

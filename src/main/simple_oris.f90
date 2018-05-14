@@ -63,9 +63,9 @@ type :: oris
     procedure, private :: calc_sum
     procedure          :: get_sum
     procedure          :: get_avg
-    procedure, private :: calc_nonzero_sum
-    procedure          :: get_nonzero_sum
-    procedure          :: get_nonzero_avg
+ !   procedure, private :: calc_nonzero_sum
+ !   procedure          :: get_nonzero_sum
+ !   procedure          :: get_nonzero_avg
     procedure          :: ang_sdev
     procedure          :: included
     procedure          :: get_nevenodd
@@ -105,17 +105,17 @@ type :: oris
     procedure          :: zero_shifts
     procedure          :: mul_shifts
     procedure          :: rnd_oris
-    procedure          :: rnd_proj_space
-    procedure          :: rnd_neighbors
-    procedure          :: rnd_gau_neighbors
-    procedure          :: rnd_ori
-    procedure          :: rnd_cls
-    procedure          :: rnd_oris_discrete
-    procedure          :: rnd_inpls
-    procedure          :: rnd_trs
-    procedure          :: rnd_ctf
-    procedure          :: rnd_states
-    procedure          :: rnd_classes
+!   procedure          :: rnd_proj_space
+!   procedure          :: rnd_neighbors
+!   procedure          :: rnd_gau_neighbors
+    procedure          :: rnd_ori!
+!   procedure          :: rnd_cls
+    procedure          :: rnd_oris_discrete!
+    procedure          :: rnd_inpls!
+!   procedure          :: rnd_trs
+    procedure          :: rnd_ctf!
+    procedure          :: rnd_states!
+!   procedure          :: rnd_classes
     procedure          :: rnd_lps
     procedure          :: rnd_corrs
     procedure          :: revshsgn
@@ -148,7 +148,7 @@ type :: oris
     procedure, private :: rot_1
     procedure, private :: rot_2
     generic            :: rot => rot_1, rot_2
-    procedure          :: median_1
+    procedure, private :: median_1
     generic            :: median => median_1
     procedure          :: stats
     procedure          :: minmax
@@ -158,24 +158,24 @@ type :: oris
     procedure          :: order
     procedure          :: order_corr
     procedure          :: order_cls
-    procedure          :: reduce_projs
-    procedure, private :: balance_1
-    procedure, private :: balance_2
-    generic            :: balance => balance_1, balance_2
+!   procedure          :: reduce_projs
+!   procedure, private :: balance_1
+!   procedure, private :: balance_2
+!   generic            :: balance => balance_1, balance_2
     procedure          :: calc_hard_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_spectral_weights
-    procedure          :: adjust_score_for_defocus
+!   procedure          :: adjust_score_for_defocus
     procedure          :: calc_bfac_rec
-    procedure          :: reject_above
+!   procedure          :: reject_above
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
-    procedure          :: find_closest_ori
+!   procedure          :: find_closest_ori
     procedure          :: find_closest_oris
-    procedure          :: calc_euldists
-    procedure, private :: find_centroid_proj_1
-    procedure, private :: find_centroid_proj_2
-    generic            :: find_centroid_proj => find_centroid_proj_1, find_centroid_proj_2
+!   procedure          :: calc_euldists
+!   procedure, private :: find_centroid_proj_1
+!   procedure, private :: find_centroid_proj_2
+!   generic            :: find_centroid_proj => find_centroid_proj_1, find_centroid_proj_2
     procedure, private :: create_proj_subspace_1
     procedure, private :: create_proj_subspace_2
     generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
@@ -185,7 +185,7 @@ type :: oris
     procedure          :: find_angres_geod
     procedure          :: extremal_bound
     procedure          :: find_npeaks
-    procedure          :: find_athres_from_npeaks
+!   procedure          :: find_athres_from_npeaks
     procedure          :: find_npeaks_from_athres
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
@@ -193,9 +193,9 @@ type :: oris
     procedure          :: mirror2d
     procedure          :: mirror3d
     procedure          :: add_shift2class
-    procedure, nopass  :: corr_oris
+    procedure          :: corr_oris
     procedure          :: gen_smat
-    procedure          :: geodesic_dist
+!   procedure          :: geodesic_dist
     procedure, private :: diststat_1
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
@@ -983,80 +983,80 @@ contains
 
     !>  \brief  is for calculating the nonzero sum of 'which' variables with
     !!          filtering based on class/state/fromto
-    subroutine calc_nonzero_sum( self, which, sum, cnt, class, state, fromto )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real,              intent(out)   :: sum
-        integer,           intent(out)   :: cnt
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        integer :: clsnr, i, mystate, istart, istop
-        real    :: val
-        logical :: class_present, state_present
-        class_present = present(class)
-        state_present = present(state)
+    ! subroutine calc_nonzero_sum( self, which, sum, cnt, class, state, fromto )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: which
+    !     real,              intent(out)   :: sum
+    !     integer,           intent(out)   :: cnt
+    !     integer, optional, intent(in)    :: class
+    !     integer, optional, intent(in)    :: state
+    !     integer, optional, intent(in)    :: fromto(2)
+    !     integer :: clsnr, i, mystate, istart, istop
+    !     real    :: val
+    !     logical :: class_present, state_present
+    !     class_present = present(class)
+    !     state_present = present(state)
 
-        cnt = 0
-        sum = 0.
-        if( present(fromto) )then
-            istart = fromto(1)
-            istop  = fromto(2)
-        else
-            istart = 1
-            istop  = self%n
-        endif
-        do i=istart,istop
-            mystate = nint(self%get( i, 'state'))
-            if( mystate == 0 ) cycle
-            val = self%get(i, which)
-            if( .not. is_a_number(val) ) val = 0.
-            if( val > 0. )then
-                if( class_present )then
-                    clsnr = nint(self%get( i, 'class'))
-                    if( clsnr == class )then
-                        cnt = cnt+1
-                        sum = sum+val
-                    endif
-                else if( state_present )then
-                    if( mystate == state )then
-                        cnt = cnt+1
-                        sum = sum+val
-                    endif
-                else
-                    cnt = cnt+1
-                    sum = sum+val
-                endif
-            endif
-        end do
-    end subroutine calc_nonzero_sum
+    !     cnt = 0
+    !     sum = 0.
+    !     if( present(fromto) )then
+    !         istart = fromto(1)
+    !         istop  = fromto(2)
+    !     else
+    !         istart = 1
+    !         istop  = self%n
+    !     endif
+    !     do i=istart,istop
+    !         mystate = nint(self%get( i, 'state'))
+    !         if( mystate == 0 ) cycle
+    !         val = self%get(i, which)
+    !         if( .not. is_a_number(val) ) val = 0.
+    !         if( val > 0. )then
+    !             if( class_present )then
+    !                 clsnr = nint(self%get( i, 'class'))
+    !                 if( clsnr == class )then
+    !                     cnt = cnt+1
+    !                     sum = sum+val
+    !                 endif
+    !             else if( state_present )then
+    !                 if( mystate == state )then
+    !                     cnt = cnt+1
+    !                     sum = sum+val
+    !                 endif
+    !             else
+    !                 cnt = cnt+1
+    !                 sum = sum+val
+    !             endif
+    !         endif
+    !     end do
+    ! end subroutine calc_nonzero_sum
 
     !>  \brief  is for getting the sum of 'which' variables with
     !!          filtering based on class/state/fromto
-    function get_nonzero_sum( self, which, class, state, fromto ) result( sum )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        integer :: cnt
-        real    :: sum
-        call self%calc_nonzero_sum(which, sum, cnt, class, state, fromto)
-    end function get_nonzero_sum
+    ! function get_nonzero_sum( self, which, class, state, fromto ) result( sum )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: which
+    !     integer, optional, intent(in)    :: class
+    !     integer, optional, intent(in)    :: state
+    !     integer, optional, intent(in)    :: fromto(2)
+    !     integer :: cnt
+    !     real    :: sum
+    !     call self%calc_nonzero_sum(which, sum, cnt, class, state, fromto)
+    ! end function get_nonzero_sum
 
     !>  \brief  is for getting the average of 'which' variables with
     !!          filtering based on class/state/fromto
-    function get_nonzero_avg( self, which, class, state, fromto ) result( avg )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        integer :: cnt
-        real    :: avg, sum
-        call self%calc_nonzero_sum(which, sum, cnt, class, state, fromto)
-        avg = sum/real(cnt)
-    end function get_nonzero_avg
+    ! function get_nonzero_avg( self, which, class, state, fromto ) result( avg )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: which
+    !     integer, optional, intent(in)    :: class
+    !     integer, optional, intent(in)    :: state
+    !     integer, optional, intent(in)    :: fromto(2)
+    !     integer :: cnt
+    !     real    :: avg, sum
+    !     call self%calc_nonzero_sum(which, sum, cnt, class, state, fromto)
+    !     avg = sum/real(cnt)
+    ! end function get_nonzero_avg
 
     !>  \brief  angular standard deviation
     real function ang_sdev( self, nstates, npeaks )
@@ -1540,47 +1540,47 @@ contains
 
     !>  \brief  generates nnn stochastic neighbors to o_prev with angular threshold athres
     !!          optional proj indicates projection direction only threshold or not
-    subroutine rnd_neighbors( self, nnn, o_prev, athres, proj )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: nnn
-        class(ori),        intent(in)    :: o_prev
-        real,              intent(in)    :: athres
-        logical, optional, intent(in)    :: proj
-        integer :: i
-        call self%new(nnn)
-        do i=1,nnn
-            call self%o(i)%rnd_euler(o_prev, athres, proj)
-            if( present(proj) )then
-                if( proj ) call self%e3set(i,0.)
-            endif
-        end do
-    end subroutine rnd_neighbors
+    ! subroutine rnd_neighbors( self, nnn, o_prev, athres, proj )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: nnn
+    !     class(ori),        intent(in)    :: o_prev
+    !     real,              intent(in)    :: athres
+    !     logical, optional, intent(in)    :: proj
+    !     integer :: i
+    !     call self%new(nnn)
+    !     do i=1,nnn
+    !         call self%o(i)%rnd_euler(o_prev, athres, proj)
+    !         if( present(proj) )then
+    !             if( proj ) call self%e3set(i,0.)
+    !         endif
+    !     end do
+    ! end subroutine rnd_neighbors
 
     !>  \brief  generates nnn stochastic projection direction neighbors to o_prev
     !!          with a sigma of the random Gaussian tilt angle of asig
-    subroutine rnd_gau_neighbors( self, nnn, o_prev, asig, eullims )
-        class(oris),    intent(inout) :: self
-        integer,        intent(in)    :: nnn
-        class(ori),     intent(in)    :: o_prev
-        real,           intent(in)    :: asig
-        real, optional, intent(inout) :: eullims(3,2)
-        type(ori) :: o_transform, o_rnd
-        real      :: val
-        integer   :: i
-        call o_transform%new
-        call self%new(nnn)
-        do i=1,nnn
-            call o_transform%rnd_euler(eullims)
-            val = gasdev(0., asig)
-            do while(abs(val) > eullims(2,2))
-                val = gasdev(0., asig)
-            enddo
-            call o_transform%e2set(val)
-            call o_transform%e3set(0.)
-            o_rnd = o_prev.compose.o_transform
-            call self%set_ori(i, o_rnd)
-        end do
-    end subroutine rnd_gau_neighbors
+    ! subroutine rnd_gau_neighbors( self, nnn, o_prev, asig, eullims )
+    !     class(oris),    intent(inout) :: self
+    !     integer,        intent(in)    :: nnn
+    !     class(ori),     intent(in)    :: o_prev
+    !     real,           intent(in)    :: asig
+    !     real, optional, intent(inout) :: eullims(3,2)
+    !     type(ori) :: o_transform, o_rnd
+    !     real      :: val
+    !     integer   :: i
+    !     call o_transform%new
+    !     call self%new(nnn)
+    !     do i=1,nnn
+    !         call o_transform%rnd_euler(eullims)
+    !         val = gasdev(0., asig)
+    !         do while(abs(val) > eullims(2,2))
+    !             val = gasdev(0., asig)
+    !         enddo
+    !         call o_transform%e2set(val)
+    !         call o_transform%e3set(0.)
+    !         o_rnd = o_prev.compose.o_transform
+    !         call self%set_ori(i, o_rnd)
+    !     end do
+    ! end subroutine rnd_gau_neighbors
 
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
@@ -1637,21 +1637,21 @@ contains
     end subroutine rnd_ori
 
     !>  \brief  for generating random clustering
-    subroutine rnd_cls( self, ncls, srch_inpl )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: ncls
-        logical, optional, intent(in)    :: srch_inpl
-        logical :: ssrch_inpl
-        integer :: i
-        call self%rnd_classes(ncls)
-        ssrch_inpl = .true.
-        if( present(srch_inpl) ) ssrch_inpl = srch_inpl
-        do i=1,self%n
-            if( ssrch_inpl )then
-                call self%o(i)%rnd_inpl
-            endif
-        end do
-    end subroutine rnd_cls
+    ! subroutine rnd_cls( self, ncls, srch_inpl )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: ncls
+    !     logical, optional, intent(in)    :: srch_inpl
+    !     logical :: ssrch_inpl
+    !     integer :: i
+    !     call self%rnd_classes(ncls)
+    !     ssrch_inpl = .true.
+    !     if( present(srch_inpl) ) ssrch_inpl = srch_inpl
+    !     do i=1,self%n
+    !         if( ssrch_inpl )then
+    !             call self%o(i)%rnd_inpl
+    !         endif
+    !     end do
+    ! end subroutine rnd_cls
 
     !>  \brief  for generating an initial clustering of time series
     subroutine ini_tseries( self, nsplit, state_or_class )
@@ -1716,18 +1716,18 @@ contains
     end subroutine rnd_inpls
 
     !>  \brief  randomizes the origin shifts
-    subroutine rnd_trs( self, trs )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: trs
-        integer :: i
-        real :: x, y
-        do i=1,self%n
-            x = ran3()*2.0*trs-trs
-            y = ran3()*2.0*trs-trs
-            call self%o(i)%set('x', x)
-            call self%o(i)%set('y', y)
-        end do
-    end subroutine rnd_trs
+    ! subroutine rnd_trs( self, trs )
+    !     class(oris), intent(inout) :: self
+    !     real,        intent(in)    :: trs
+    !     integer :: i
+    !     real :: x, y
+    !     do i=1,self%n
+    !         x = ran3()*2.0*trs-trs
+    !         y = ran3()*2.0*trs-trs
+    !         call self%o(i)%set('x', x)
+    !         call self%o(i)%set('y', y)
+    !     end do
+    ! end subroutine rnd_trs
 
     !>  \brief  randomizes the CTF parameters
     subroutine rnd_ctf( self, kv, cs, fraca, defocus, deferr, astigerr )
@@ -1799,24 +1799,24 @@ contains
     end subroutine rnd_states
 
     !>  \brief  randomizes classes in oris
-    subroutine rnd_classes( self, ncls )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: ncls
-        integer, allocatable       :: classes(:)
-        type(ran_tabu)             :: rt
-        integer :: i
-        if( ncls > 1 )then
-            allocate(classes(self%n), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("simple_oris::rnd_classes",alloc_stat)
-            rt = ran_tabu(self%n)
-            call rt%balanced(ncls, classes)
-            do i=1,self%n
-                call self%o(i)%set('class', real(classes(i)))
-            end do
-            call rt%kill
-            deallocate(classes)
-        endif
-    end subroutine rnd_classes
+    ! subroutine rnd_classes( self, ncls )
+    !     class(oris), intent(inout) :: self
+    !     integer,     intent(in)    :: ncls
+    !     integer, allocatable       :: classes(:)
+    !     type(ran_tabu)             :: rt
+    !     integer :: i
+    !     if( ncls > 1 )then
+    !         allocate(classes(self%n), stat=alloc_stat)
+    !         if(alloc_stat.ne.0)call allocchk("simple_oris::rnd_classes",alloc_stat)
+    !         rt = ran_tabu(self%n)
+    !         call rt%balanced(ncls, classes)
+    !         do i=1,self%n
+    !             call self%o(i)%set('class', real(classes(i)))
+    !         end do
+    !         call rt%kill
+    !         deallocate(classes)
+    !     endif
+    ! end subroutine rnd_classes
 
     !>  \brief  randomizes low-pass limits in oris
     subroutine rnd_lps( self )
@@ -1976,7 +1976,6 @@ contains
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(inout) :: line
-        logical   :: params_are_there(11)
         type(ori) :: o_tmp
         call o_tmp%str2ori(line)
         if( o_tmp%isthere('smpd')    ) call self%o(i)%set('smpd',    o_tmp%get('smpd'))
@@ -2396,280 +2395,278 @@ contains
 
     !>  \brief  reduces the number of projection directions, useful for balancing
     !!          operations
-    subroutine reduce_projs( self, nprojs_reduced, nsym, eullims )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nprojs_reduced, nsym
-        real,        intent(in)    :: eullims(3,2)
-        type(oris) :: osubspace
-        type(ori)  :: o_single
-        integer    :: iptcl
-        ! generate discrete projection direction space
-        call osubspace%new( nprojs_reduced )
-        call osubspace%spiral( nsym, eullims )
-        ! reduction
-        do iptcl=1,self%n
-            o_single = self%get_ori(iptcl)
-            call self%set(iptcl, 'proj', real(osubspace%find_closest_proj(o_single)))
-        end do
-        call osubspace%kill
-    end subroutine reduce_projs
+    ! subroutine reduce_projs( self, nprojs_reduced, nsym, eullims )
+    !     class(oris), intent(inout) :: self
+    !     integer,     intent(in)    :: nprojs_reduced, nsym
+    !     real,        intent(in)    :: eullims(3,2)
+    !     type(oris) :: osubspace
+    !     type(ori)  :: o_single
+    !     integer    :: iptcl
+    !     ! generate discrete projection direction space
+    !     call osubspace%new( nprojs_reduced )
+    !     call osubspace%spiral( nsym, eullims )
+    !     ! reduction
+    !     do iptcl=1,self%n
+    !         o_single = self%get_ori(iptcl)
+    !         call self%set(iptcl, 'proj', real(osubspace%find_closest_proj(o_single)))
+    !     end do
+    !     call osubspace%kill
+    ! end subroutine reduce_projs
 
-    !>  \brief  applies a one-sided balance restraint on the number of particles
-    !!          in 2D classes based on corr/specscore order
-    subroutine balance_1( self, popmax, skewness, use_specscore )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: popmax
-        real,              intent(out)   :: skewness
-        logical, optional, intent(in)    :: use_specscore
-        integer, allocatable :: inds(:), inds_tmp(:)
-        logical, allocatable :: included(:)
-        real,    allocatable :: scores(:)
-        integer :: i, j, n, pop
-        logical :: uuse_specscore
-        if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: balance_1 assumes w  set')
-        uuse_specscore = .false.
-        if( present(use_specscore) )then
-            if( use_specscore )then
-                uuse_specscore = self%isthere('specscore')
-            endif
-        endif
-        if( .not. self%isthere('class') ) call simple_stop('class label must be set; oris :: balance_1')
-        n = self%get_n('class')
-        allocate(included(self%n),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: balance, module: simple_oris',alloc_stat)
-        included = .false.
-        do i=1,n ! n is number of classes
-            ! get class population
-            pop = self%get_pop(i, 'class', consider_w=.true.)
-            ! zero case
-            if( pop < 1 ) cycle
-            ! get indices of particles in class subject to weight not zero
-            call self%get_pinds(i, 'class', inds, consider_w=.true.)
-            if( pop <= popmax )then ! all inclded
-                do j=1,pop
-                    included(inds(j)) = .true.
-                end do
-            else ! popmax threshold applied
-                allocate(scores(pop), inds_tmp(pop))
-                do j=1,pop
-                    if( uuse_specscore )then
-                        scores(j) = self%o(inds(j))%get('specscore')
-                    else
-                        scores(j) = self%o(inds(j))%get('corr')
-                    endif
-                    inds_tmp(j) = inds(j)
-                end do
-                call hpsort(scores, inds_tmp)
-                do j=pop,pop - popmax + 1,-1
-                    included(inds_tmp(j)) = .true.
-                end do
-                deallocate(scores, inds_tmp)
-            endif
-        end do
-        ! communicate selection to instance
-        do i=1,self%n
-            if( included(i) )then
-                call self%o(i)%set('state_balance', 1.0)
-            else
-                call self%o(i)%set('state_balance', 0.0)
-            endif
-        end do
-        ! communicate skewness as fraction of excluded
-        skewness = real(self%n - count(included))/real(self%n)
-    end subroutine balance_1
+    ! !>  \brief  applies a one-sided balance restraint on the number of particles
+    ! !!          in 2D classes based on corr/specscore order
+    ! subroutine balance_1( self, popmax, skewness, use_specscore )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: popmax
+    !     real,              intent(out)   :: skewness
+    !     logical, optional, intent(in)    :: use_specscore
+    !     integer, allocatable :: inds(:), inds_tmp(:)
+    !     logical, allocatable :: included(:)
+    !     real,    allocatable :: scores(:)
+    !     integer :: i, j, n, pop
+    !     logical :: uuse_specscore
+    !     if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: balance_1 assumes w  set')
+    !     uuse_specscore = .false.
+    !     if( present(use_specscore) )then
+    !         if( use_specscore )then
+    !             uuse_specscore = self%isthere('specscore')
+    !         endif
+    !     endif
+    !     if( .not. self%isthere('class') ) call simple_stop('class label must be set; oris :: balance_1')
+    !     n = self%get_n('class')
+    !     allocate(included(self%n),stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk('In: balance, module: simple_oris',alloc_stat)
+    !     included = .false.
+    !     do i=1,n ! n is number of classes
+    !         ! get class population
+    !         pop = self%get_pop(i, 'class', consider_w=.true.)
+    !         ! zero case
+    !         if( pop < 1 ) cycle
+    !         ! get indices of particles in class subject to weight not zero
+    !         call self%get_pinds(i, 'class', inds, consider_w=.true.)
+    !         if( pop <= popmax )then ! all inclded
+    !             do j=1,pop
+    !                 included(inds(j)) = .true.
+    !             end do
+    !         else ! popmax threshold applied
+    !             allocate(scores(pop), inds_tmp(pop))
+    !             do j=1,pop
+    !                 if( uuse_specscore )then
+    !                     scores(j) = self%o(inds(j))%get('specscore')
+    !                 else
+    !                     scores(j) = self%o(inds(j))%get('corr')
+    !                 endif
+    !                 inds_tmp(j) = inds(j)
+    !             end do
+    !             call hpsort(scores, inds_tmp)
+    !             do j=pop,pop - popmax + 1,-1
+    !                 included(inds_tmp(j)) = .true.
+    !             end do
+    !             deallocate(scores, inds_tmp)
+    !         endif
+    !     end do
+    !     ! communicate selection to instance
+    !     do i=1,self%n
+    !         if( included(i) )then
+    !             call self%o(i)%set('state_balance', 1.0)
+    !         else
+    !             call self%o(i)%set('state_balance', 0.0)
+    !         endif
+    !     end do
+    !     ! communicate skewness as fraction of excluded
+    !     skewness = real(self%n - count(included))/real(self%n)
+    ! end subroutine balance_1
 
-    !>  \brief  applies a one-sided balance restraint on the number of particles
-    !!          in projection groups based on corr/specscore order
-    subroutine balance_2( self, popmax, nspace_bal, nsym, eullims, skewness, use_specscore )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: popmax, nspace_bal, nsym
-        real,              intent(in)    :: eullims(3,2)
-        real,              intent(out)   :: skewness
-        logical, optional, intent(in)    :: use_specscore
-        type(oris)           :: osubspace
-        type(ori)            :: o_single
-        integer, allocatable :: inds(:), inds_tmp(:), clustering(:), clustszs(:)
-        real,    allocatable :: scores(:)
-        logical, allocatable :: ptcl_mask(:), included(:)
-        integer              :: i, j, n, pop, iptcl, icls, cnt
-        logical              :: uuse_specscore
-        if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: balance assumes w  set')
-        uuse_specscore = .false.
-        if( present(use_specscore) )then
-            if( use_specscore )then
-                uuse_specscore = self%isthere('specscore')
-            endif
-        endif
-        if( .not. self%isthere('proj') ) call simple_stop('proj label must be set; oris :: balance')
-        n = self%get_n('proj')
-        ptcl_mask = self%included(consider_w=.true.)
-        allocate(clustering(self%n), clustszs(nspace_bal), included(self%n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In oris :: balance',alloc_stat)
-        clustering = 0
-        clustszs   = 0
-        included   = .false.
-        ! generate discrete projection direction space
-        call osubspace%new( nspace_bal )
-        call osubspace%spiral( nsym, eullims )
-        ! cluster the projection directions
-        do iptcl=1,self%n
-            if( ptcl_mask(iptcl) )then
-                o_single = self%get_ori(iptcl)
-                clustering(iptcl) = osubspace%find_closest_proj(o_single)
-            else
-                clustering(iptcl) = 0
-            endif
-        end do
-        ! loop over clusters
-        do icls=1,nspace_bal
-            pop = count(clustering == icls)
-            ! zero case
-            if( pop < 1 ) cycle
-            ! get indices of particles in cluster
-            allocate(inds(pop))
-            cnt = 0
-            do iptcl=1,self%n
-                if( clustering(iptcl) == icls )then
-                    cnt = cnt + 1
-                    inds(cnt) = iptcl
-                endif
-            end do
-            if( pop <= popmax )then ! all inclded
-                do j=1,pop
-                    included(inds(j)) = .true.
-                end do
-            else ! popmax threshold applied
-                allocate(scores(pop), inds_tmp(pop))
-                do j=1,pop
-                    if( uuse_specscore )then
-                        scores(j) = self%o(inds(j))%get('specscore')
-                    else
-                        scores(j) = self%o(inds(j))%get('corr')
-                    endif
-                    inds_tmp(j) = inds(j)
-                end do
-                call hpsort(scores, inds_tmp)
-                do j=pop,pop - popmax + 1,-1
-                    included(inds_tmp(j)) = .true.
-                end do
-                deallocate(scores, inds_tmp)
-            endif
-            deallocate(inds)
-        end do
-        ! communicate selection to instance
-        do i=1,self%n
-            if( included(i) )then
-                call self%o(i)%set('state_balance', 1.0)
-            else
-                call self%o(i)%set('state_balance', 0.0)
-            endif
-        end do
-        ! communicate skewness as fraction of excluded
-        skewness = real(self%n - count(included))/real(self%n)
-    end subroutine balance_2
+    ! !>  \brief  applies a one-sided balance restraint on the number of particles
+    ! !!          in projection groups based on corr/specscore order
+    ! subroutine balance_2( self, popmax, nspace_bal, nsym, eullims, skewness, use_specscore )
+    !     class(oris),       intent(inout) :: self
+    !     integer,           intent(in)    :: popmax, nspace_bal, nsym
+    !     real,              intent(in)    :: eullims(3,2)
+    !     real,              intent(out)   :: skewness
+    !     logical, optional, intent(in)    :: use_specscore
+    !     type(oris)           :: osubspace
+    !     type(ori)            :: o_single
+    !     integer, allocatable :: inds(:), inds_tmp(:), clustering(:), clustszs(:)
+    !     real,    allocatable :: scores(:)
+    !     logical, allocatable :: ptcl_mask(:), included(:)
+    !     integer              :: i, j, n, pop, iptcl, icls, cnt
+    !     logical              :: uuse_specscore
+    !     if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: balance assumes w  set')
+    !     uuse_specscore = .false.
+    !     if( present(use_specscore) )then
+    !         if( use_specscore )then
+    !             uuse_specscore = self%isthere('specscore')
+    !         endif
+    !     endif
+    !     if( .not. self%isthere('proj') ) call simple_stop('proj label must be set; oris :: balance')
+    !     n = self%get_n('proj')
+    !     ptcl_mask = self%included(consider_w=.true.)
+    !     allocate(clustering(self%n), clustszs(nspace_bal), included(self%n), stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk('In oris :: balance',alloc_stat)
+    !     clustering = 0
+    !     clustszs   = 0
+    !     included   = .false.
+    !     ! generate discrete projection direction space
+    !     call osubspace%new( nspace_bal )
+    !     call osubspace%spiral( nsym, eullims )
+    !     ! cluster the projection directions
+    !     do iptcl=1,self%n
+    !         if( ptcl_mask(iptcl) )then
+    !             o_single = self%get_ori(iptcl)
+    !             clustering(iptcl) = osubspace%find_closest_proj(o_single)
+    !         else
+    !             clustering(iptcl) = 0
+    !         endif
+    !     end do
+    !     ! loop over clusters
+    !     do icls=1,nspace_bal
+    !         pop = count(clustering == icls)
+    !         ! zero case
+    !         if( pop < 1 ) cycle
+    !         ! get indices of particles in cluster
+    !         allocate(inds(pop))
+    !         cnt = 0
+    !         do iptcl=1,self%n
+    !             if( clustering(iptcl) == icls )then
+    !                 cnt = cnt + 1
+    !                 inds(cnt) = iptcl
+    !             endif
+    !         end do
+    !         if( pop <= popmax )then ! all inclded
+    !             do j=1,pop
+    !                 included(inds(j)) = .true.
+    !             end do
+    !         else ! popmax threshold applied
+    !             allocate(scores(pop), inds_tmp(pop))
+    !             do j=1,pop
+    !                 if( uuse_specscore )then
+    !                     scores(j) = self%o(inds(j))%get('specscore')
+    !                 else
+    !                     scores(j) = self%o(inds(j))%get('corr')
+    !                 endif
+    !                 inds_tmp(j) = inds(j)
+    !             end do
+    !             call hpsort(scores, inds_tmp)
+    !             do j=pop,pop - popmax + 1,-1
+    !                 included(inds_tmp(j)) = .true.
+    !             end do
+    !             deallocate(scores, inds_tmp)
+    !         endif
+    !         deallocate(inds)
+    !     end do
+    !     ! communicate selection to instance
+    !     do i=1,self%n
+    !         if( included(i) )then
+    !             call self%o(i)%set('state_balance', 1.0)
+    !         else
+    !             call self%o(i)%set('state_balance', 0.0)
+    !         endif
+    !     end do
+    !     ! communicate skewness as fraction of excluded
+    !     skewness = real(self%n - count(included))/real(self%n)
+    ! end subroutine balance_2
 
-    !>  \brief  calculates spectral particle weights
-    subroutine calc_spectral_weights( self, frac )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
-        integer           :: i, nstates, istate, cnt, mystate
-        real, allocatable :: weights(:), specscores(:)
-        call self%calc_hard_weights( frac )
-        if( self%isthere('specscore') )then
-            nstates = self%get_n('state')
-            if( nstates > 1 )then
-                do istate=1,nstates
-                    specscores = self%get_arr('specscore', state=istate)
-                    weights    = self%get_arr('w',         state=istate)
-                    where( weights < 0.5 )
-                        specscores = 0.
-                    end where
-                    weights = corrs2weights(specscores)
-                    cnt = 0
-                    do i=1,self%n
-                        mystate = nint(self%o(i)%get('state'))
-                        if( mystate == istate )then
-                            cnt = cnt + 1
-                            call self%o(i)%set('w', weights(cnt))
-                        else if( mystate == 0 )then
-                            call self%o(i)%set('w', 0.0)
-                        endif
-                    enddo
-                    deallocate(specscores,weights)
-                enddo
-            else
-                specscores = self%get_all('specscore')
-                weights    = self%get_all('w')
-                where( weights < 0.5 )
-                    specscores = 0.
-                end where
-                weights = corrs2weights(specscores)
-                do i=1,self%n
-                    call self%o(i)%set('w', weights(i))
-                end do
-                deallocate(specscores,weights)
-            endif
-        endif
-    end subroutine calc_spectral_weights
+    ! !>  \brief  calculates spectral particle weights
+    ! subroutine calc_spectral_weights( self, frac )
+    !     class(oris), intent(inout) :: self
+    !     real,        intent(in)    :: frac
+    !     integer           :: i, nstates, istate, cnt, mystate
+    !     real, allocatable :: weights(:), specscores(:)
+    !     call self%calc_hard_weights( frac )
+    !     if( self%isthere('specscore') )then
+    !         nstates = self%get_n('state')
+    !         if( nstates > 1 )then
+    !             do istate=1,nstates
+    !                 specscores = self%get_arr('specscore', state=istate)
+    !                 weights    = self%get_arr('w',         state=istate)
+    !                 where( weights < 0.5 )
+    !                     specscores = 0.
+    !                 end where
+    !                 weights = corrs2weights(specscores)
+    !                 cnt = 0
+    !                 do i=1,self%n
+    !                     mystate = nint(self%o(i)%get('state'))
+    !                     if( mystate == istate )then
+    !                         cnt = cnt + 1
+    !                         call self%o(i)%set('w', weights(cnt))
+    !                     else if( mystate == 0 )then
+    !                         call self%o(i)%set('w', 0.0)
+    !                     endif
+    !                 enddo
+    !                 deallocate(specscores,weights)
+    !             enddo
+    !         else
+    !             specscores = self%get_all('specscore')
+    !             weights    = self%get_all('w')
+    !             where( weights < 0.5 )
+    !                 specscores = 0.
+    !             end where
+    !             weights = corrs2weights(specscores)
+    !             do i=1,self%n
+    !                 call self%o(i)%set('w', weights(i))
+    !             end do
+    !             deallocate(specscores,weights)
+    !         endif
+    !     endif
+    ! end subroutine calc_spectral_weights
 
-    subroutine adjust_score_for_defocus( self, which, minmax )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        real,             intent(in)    :: minmax(2)
-        real    :: df, score, sum_df, sum_df_sq, adj_df
-        real    :: sum_score, sum_score_sq, dot_df_score, var_df, avg_df
-        integer :: i, n
-        if( .not.self%isthere('dfx') .or. .not.self%isthere(which) )return
-        n            = 0
-        sum_df       = 0.
-        sum_df_sq    = 0.
-        dot_df_score = 0.
-        sum_score    = 0.
-        sum_score_sq = 0.
-        do i = 1, self%n
-            if( self%get_state(i) == 0) cycle
-            n            = n + 1
-            df           = calc_df()
-            score        = self%get(i,which)
-            sum_df       = sum_df + df
-            sum_df_sq    = sum_df_sq + df*df
-            dot_df_score = dot_df_score + df*score
-            sum_score    = sum_score + score
-            sum_score_sq = sum_score + score*score
-        enddo
-        avg_df = sum_df / real(n)
-        var_df = real(n) * sum_df_sq - sum_df**2.
-        if( var_df < 1.e-6 )return
-        adj_df = (real(n) * dot_df_score - sum_df * sum_score) / var_df
-        do i = 1, self%n
-            if( self%get_state(i) == 0) cycle
-            score = self%get(i,which)
-            score = score - (calc_df()-avg_df) * adj_df
-            score = max(minmax(1), score)
-            score = min(minmax(2), score)
-            call self%o(i)%set(which, score)
-        enddo
+    ! subroutine adjust_score_for_defocus( self, which, minmax )
+    !     class(oris),      intent(inout) :: self
+    !     character(len=*), intent(in)    :: which
+    !     real,             intent(in)    :: minmax(2)
+    !     real    :: df, score, sum_df, sum_df_sq, adj_df
+    !     real    :: sum_score, sum_score_sq, dot_df_score, var_df, avg_df
+    !     integer :: i, n
+    !     if( .not.self%isthere('dfx') .or. .not.self%isthere(which) )return
+    !     n            = 0
+    !     sum_df       = 0.
+    !     sum_df_sq    = 0.
+    !     dot_df_score = 0.
+    !     sum_score    = 0.
+    !     sum_score_sq = 0.
+    !     do i = 1, self%n
+    !         if( self%get_state(i) == 0) cycle
+    !         n            = n + 1
+    !         df           = calc_df()
+    !         score        = self%get(i,which)
+    !         sum_df       = sum_df + df
+    !         sum_df_sq    = sum_df_sq + df*df
+    !         dot_df_score = dot_df_score + df*score
+    !         sum_score    = sum_score + score
+    !         sum_score_sq = sum_score + score*score
+    !     enddo
+    !     avg_df = sum_df / real(n)
+    !     var_df = real(n) * sum_df_sq - sum_df**2.
+    !     if( var_df < 1.e-6 )return
+    !     adj_df = (real(n) * dot_df_score - sum_df * sum_score) / var_df
+    !     do i = 1, self%n
+    !         if( self%get_state(i) == 0) cycle
+    !         score = self%get(i,which)
+    !         score = score - (calc_df()-avg_df) * adj_df
+    !         score = max(minmax(1), score)
+    !         score = min(minmax(2), score)
+    !         call self%o(i)%set(which, score)
+    !     enddo
 
-        contains
+    !     contains
 
-            real function calc_df()
-                real :: dfx
-                dfx = self%o(i)%get('dfx')
-                if( self%o(i)%isthere('dfy') )then
-                    calc_df = (dfx + self%o(i)%get('dfy')) / 2.
-                else
-                    calc_df = self%o(i)%get('dfy')
-                endif
-            end function calc_df
-    end subroutine adjust_score_for_defocus
+    !         real function calc_df()
+    !             real :: dfx
+    !             dfx = self%o(i)%get('dfx')
+    !             if( self%o(i)%isthere('dfy') )then
+    !                 calc_df = (dfx + self%o(i)%get('dfy')) / 2.
+    !             else
+    !                 calc_df = self%o(i)%get('dfy')
+    !             endif
+    !         end function calc_df
+    ! end subroutine adjust_score_for_defocus
 
     subroutine calc_bfac_rec( self )
         class(oris), intent(inout) :: self
         real,    allocatable :: states(:), scores(:)
         logical, allocatable :: mask(:)
         real    :: avg, sdev
-        integer :: i
-        logical :: err
         if( self%isthere('specscore') )then
             states = self%get_all('state')
             mask   = states > 0.5
@@ -2690,22 +2687,22 @@ contains
         endif
     end subroutine calc_bfac_rec
 
-    subroutine reject_above( self, which, thres )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        real,             intent(in)    :: thres
-        integer :: i
-        real    :: val
-        if( self%isthere(which) )then
-            do i=1,self%n
-                val = self%o(i)%get(which)
-                if( val > thres ) call self%o(i)%set('state_balance', 0.)
-            end do
-        else
-            print *, 'which: ', trim(which)
-            stop 'variable not part of oris; simple_oris :: reject_above'
-        endif
-    end subroutine reject_above
+    ! subroutine reject_above( self, which, thres )
+    !     class(oris),      intent(inout) :: self
+    !     character(len=*), intent(in)    :: which
+    !     real,             intent(in)    :: thres
+    !     integer :: i
+    !     real    :: val
+    !     if( self%isthere(which) )then
+    !         do i=1,self%n
+    !             val = self%o(i)%get(which)
+    !             if( val > thres ) call self%o(i)%set('state_balance', 0.)
+    !         end do
+    !     else
+    !         print *, 'which: ', trim(which)
+    !         stop 'variable not part of oris; simple_oris :: reject_above'
+    !     endif
+    ! end subroutine reject_above
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )
@@ -2735,7 +2732,7 @@ contains
         real,        intent(in)    :: frac
         integer,     intent(in)    :: ncls
         type(oris)           :: os
-        integer, allocatable :: order(:), pinds(:)
+        integer, allocatable :: pinds(:)
         integer :: i, icls, pop
         if( frac < 0.99 )then
             do icls=1,ncls
@@ -2795,24 +2792,24 @@ contains
     end subroutine find_closest_projs
 
     !>  \brief  to find the closest matching orientation with respect to state
-    function find_closest_ori( self, o_in, state ) result( closest )
-        class(oris),       intent(inout) :: self
-        class(ori),        intent(in) :: o_in
-        integer, optional, intent(in) :: state
-        real     :: dists(self%n), large
-        integer  :: loc(1), closest, i
-        if( present(state) )then
-            if( state<0 )call simple_stop('Invalid state in simple_oris%find_closest_proj')
-            dists(:) = huge(large)
-            do i=1,self%n
-                if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).geod.o_in
-            end do
-        else
-            forall( i=1:self%n )dists(i)=self%o(i).geod.o_in
-        endif
-        loc     = minloc( dists )
-        closest = loc(1)
-    end function find_closest_ori
+    ! function find_closest_ori( self, o_in, state ) result( closest )
+    !     class(oris),       intent(inout) :: self
+    !     class(ori),        intent(in) :: o_in
+    !     integer, optional, intent(in) :: state
+    !     real     :: dists(self%n), large
+    !     integer  :: loc(1), closest, i
+    !     if( present(state) )then
+    !         if( state<0 )call simple_stop('Invalid state in simple_oris%find_closest_proj')
+    !         dists(:) = huge(large)
+    !         do i=1,self%n
+    !             if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).geod.o_in
+    !         end do
+    !     else
+    !         forall( i=1:self%n )dists(i)=self%o(i).geod.o_in
+    !     endif
+    !     loc     = minloc( dists )
+    !     closest = loc(1)
+    ! end function find_closest_ori
 
     !>  \brief  to find the closest matching orientations
     subroutine find_closest_oris( self, o_in, oriinds )
@@ -2832,69 +2829,69 @@ contains
     end subroutine find_closest_oris
 
     !>  \brief  to calculate all euler distances to one orientation
-    subroutine calc_euldists( self, o_in, dists )
-        class(oris), intent(in)  :: self
-        class(ori),  intent(in)  :: o_in
-        real,        intent(out) :: dists(self%n)
-        integer :: i
-        do i=1,self%n
-            dists(i) = self%o(i).euldist.o_in
-        end do
-    end subroutine calc_euldists
+    ! subroutine calc_euldists( self, o_in, dists )
+    !     class(oris), intent(in)  :: self
+    !     class(ori),  intent(in)  :: o_in
+    !     real,        intent(out) :: dists(self%n)
+    !     integer :: i
+    !     do i=1,self%n
+    !         dists(i) = self%o(i).euldist.o_in
+    !     end do
+    ! end subroutine calc_euldists
 
     !>  \brief  to identify the projection direction that minimises the distance to all others
-    function find_centroid_proj_1( self ) result( icen )
-        class(oris), intent(in) :: self
-        real    :: dmat(self%n,self%n), dists(self%n)
-        integer :: i, j, loc(1), icen
-        ! odd cases
-        if( self%n == 1)then
-            icen = 1
-            return
-        endif
-        if( self%n == 2 )then
-            if( ran3() <= 0.5 )then
-                icen = 1
-            else
-                icen = 2
-            endif
-            return
-        endif
-        ! calculate distance matrix
-        dmat = 0.
-        do i=1,self%n - 1
-            do j=i + 1, self%n
-                dmat(i,j) = self%o(i).euldist.self%o(j)
-                dmat(j,i) = dmat(i,j)
-            end do
-        end do
-        ! find centroid
-        do i=1,self%n
-            dists(i) = 0.
-            do j=1,self%n
-                if( i /= j )then
-                    dists(i) = dists(i) + dmat(i,j)
-                endif
-            end do
-        end do
-        loc  = minloc(dists)
-        icen = loc(1)
-    end function find_centroid_proj_1
+    ! function find_centroid_proj_1( self ) result( icen )
+    !     class(oris), intent(in) :: self
+    !     real    :: dmat(self%n,self%n), dists(self%n)
+    !     integer :: i, j, loc(1), icen
+    !     ! odd cases
+    !     if( self%n == 1)then
+    !         icen = 1
+    !         return
+    !     endif
+    !     if( self%n == 2 )then
+    !         if( ran3() <= 0.5 )then
+    !             icen = 1
+    !         else
+    !             icen = 2
+    !         endif
+    !         return
+    !     endif
+    !     ! calculate distance matrix
+    !     dmat = 0.
+    !     do i=1,self%n - 1
+    !         do j=i + 1, self%n
+    !             dmat(i,j) = self%o(i).euldist.self%o(j)
+    !             dmat(j,i) = dmat(i,j)
+    !         end do
+    !     end do
+    !     ! find centroid
+    !     do i=1,self%n
+    !         dists(i) = 0.
+    !         do j=1,self%n
+    !             if( i /= j )then
+    !                 dists(i) = dists(i) + dmat(i,j)
+    !             endif
+    !         end do
+    !     end do
+    !     loc  = minloc(dists)
+    !     icen = loc(1)
+    ! end function find_centroid_proj_1
 
     !>  \brief  to identify the projection direction that minimises the distance to all others
-    function find_centroid_proj_2( self, state ) result( icen )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: state
-        real, allocatable :: states(:)
-        type(oris) :: self_copy
-        integer    :: icen
-        states = self%get_all('state')
-        icen   = 0 ! indicates no centroid found
-        if( .not. any(nint(states) .eq. state) ) return
-        self_copy = self
-        call self_copy%compress(mask=nint(states) .eq. state)
-        icen = self_copy%find_centroid_proj_1()
-    end function find_centroid_proj_2
+    ! function find_centroid_proj_2( self, state ) result( icen )
+    !     class(oris), intent(inout) :: self
+    !     integer,     intent(in)    :: state
+    !     real, allocatable :: states(:)
+    !     type(oris) :: self_copy
+    !     integer    :: icen
+    !     states = self%get_all('state')
+    !     icen   = 0 ! indicates no centroid found
+    !     if( .not. any(nint(states) .eq. state) ) return
+    !     self_copy = self
+    !     call self_copy%compress(mask=nint(states) .eq. state)
+    !     icen = self_copy%find_centroid_proj_1()
+    ! end function find_centroid_proj_2
 
     !>  \brief  to identify a subspace of projection directions
     function create_proj_subspace_1( self, nsub ) result( subspace_projs )
@@ -3092,27 +3089,27 @@ contains
     end function find_npeaks
 
     !>  \brief  find angular threshold from number of peaks
-    function find_athres_from_npeaks( self, npeaks ) result( athres )
-        class(oris), intent(in) :: self
-        integer,     intent(in) :: npeaks
-        real :: athres, dist, maxdist
-        integer :: pdirinds(npeaks), i, j
-        athres = 0.
-        do i=1,self%n
-            call self%find_closest_projs(self%o(i), pdirinds)
-            maxdist = 0.
-            do j=1,npeaks
-                if( i /= pdirinds(j) )then
-                    dist = self%o(i).euldist.self%o(pdirinds(j))
-                    if( dist > maxdist )then
-                        maxdist = dist
-                    endif
-                endif
-            end do
-            athres = athres + maxdist
-        end do
-        athres = rad2deg(athres / real(self%n))
-    end function find_athres_from_npeaks
+    ! function find_athres_from_npeaks( self, npeaks ) result( athres )
+    !     class(oris), intent(in) :: self
+    !     integer,     intent(in) :: npeaks
+    !     real :: athres, dist, maxdist
+    !     integer :: pdirinds(npeaks), i, j
+    !     athres = 0.
+    !     do i=1,self%n
+    !         call self%find_closest_projs(self%o(i), pdirinds)
+    !         maxdist = 0.
+    !         do j=1,npeaks
+    !             if( i /= pdirinds(j) )then
+    !                 dist = self%o(i).euldist.self%o(pdirinds(j))
+    !                 if( dist > maxdist )then
+    !                     maxdist = dist
+    !                 endif
+    !             endif
+    !         end do
+    !         athres = athres + maxdist
+    !     end do
+    !     athres = rad2deg(athres / real(self%n))
+    ! end function find_athres_from_npeaks
 
     !>  \brief  find number of peaks from angular threshold
     function find_npeaks_from_athres( self, athres ) result( npeaks )
@@ -3232,34 +3229,34 @@ contains
 
     !>  \brief  calculates the average geodesic distance between the input orientation
     !!          and all other orientations in the instance, part_of_set acts as mask
-    real function geodesic_dist( self, o, part_of_set, weights )
-        class(oris),       intent(in) :: self
-        class(ori),        intent(in) :: o
-        logical, optional, intent(in) :: part_of_set(self%n)
-        real,    optional, intent(in) :: weights(self%n)
-        logical, allocatable :: class_part_of_set(:)
-        real,    allocatable :: class_weights(:)
-        integer :: i
-        real    :: dists(self%n)
-        if( present(part_of_set) )then
-            allocate(class_part_of_set(self%n), source=part_of_set)
-        else
-            allocate(class_part_of_set(self%n), source=.true.)
-        endif
-        if( present(weights) )then
-            allocate(class_weights(self%n), source=weights)
-        else
-            allocate(class_weights(self%n), source=1.0)
-        endif
-        dists = 0.
-        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
-        do i=1,self%n
-            dists(i) = self%o(i).geod.o
-        end do
-        !$omp end parallel do
-        geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
-        deallocate(class_part_of_set, class_weights)
-    end function geodesic_dist
+    ! real function geodesic_dist( self, o, part_of_set, weights )
+    !     class(oris),       intent(in) :: self
+    !     class(ori),        intent(in) :: o
+    !     logical, optional, intent(in) :: part_of_set(self%n)
+    !     real,    optional, intent(in) :: weights(self%n)
+    !     logical, allocatable :: class_part_of_set(:)
+    !     real,    allocatable :: class_weights(:)
+    !     integer :: i
+    !     real    :: dists(self%n)
+    !     if( present(part_of_set) )then
+    !         allocate(class_part_of_set(self%n), source=part_of_set)
+    !     else
+    !         allocate(class_part_of_set(self%n), source=.true.)
+    !     endif
+    !     if( present(weights) )then
+    !         allocate(class_weights(self%n), source=weights)
+    !     else
+    !         allocate(class_weights(self%n), source=1.0)
+    !     endif
+    !     dists = 0.
+    !     !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
+    !     do i=1,self%n
+    !         dists(i) = self%o(i).geod.o
+    !     end do
+    !     !$omp end parallel do
+    !     geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
+    !     deallocate(class_part_of_set, class_weights)
+    ! end function geodesic_dist
 
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
@@ -3433,13 +3430,13 @@ contains
         call os%write('test_oris_rndoris.txt')
         call os2%read('test_oris_rndoris.txt')
         call os2%write('test_oris_rndoris_copy.txt')
-        corr = corr_oris(os,os2)
+        corr = os%corr_oris(os2)
         if( corr > 0.99 ) passed = .true.
         if( .not. passed ) call simple_stop('read/write failed')
         passed = .false.
         call os%rnd_states(5)
         call os%write('test_oris_rndoris_rndstates.txt')
-        if( corr_oris(os,os2) > 0.99 ) passed = .true.
+        if( os%corr_oris(os2) > 0.99 ) passed = .true.
         if( .not. passed ) call simple_stop('statedoc read/write failed!')
         write(*,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.

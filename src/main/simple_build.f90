@@ -67,17 +67,17 @@ type :: build
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
     procedure                           :: build_comlin_tbox
-    procedure                           :: kill_comlin_tbox
+    procedure, private                  :: kill_comlin_tbox
     procedure                           :: build_rec_tbox
-    procedure                           :: kill_rec_tbox
+    procedure, private                  :: kill_rec_tbox
     procedure                           :: build_rec_eo_tbox
-    procedure                           :: kill_rec_eo_tbox
+    procedure, private                  :: kill_rec_eo_tbox
     procedure                           :: build_strategy3D_tbox
-    procedure                           :: kill_strategy3D_tbox
+    procedure, private                  :: kill_strategy3D_tbox
     procedure                           :: build_strategy2D_tbox
     procedure                           :: kill_strategy2D_tbox
-    procedure                           :: build_extremal3D_tbox
-    procedure                           :: kill_extremal3D_tbox
+    !procedure                           :: build_extremal3D_tbox
+    !procedure                           :: kill_extremal3D_tbox
 end type build
 
 contains
@@ -434,6 +434,7 @@ contains
     end subroutine kill_strategy3D_tbox
 
     !> \brief  constructs the extremal3D toolbox
+<<<<<<< variant A
     subroutine build_extremal3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
@@ -446,6 +447,35 @@ contains
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.
     end subroutine build_extremal3D_tbox
+>>>>>>> variant B
+    ! subroutine build_extremal3D_tbox( self, p )
+    !     class(build),  intent(inout) :: self
+    !     class(params), intent(in)    :: p
+    !     call self%kill_extremal3D_tbox
+    !     call self%raise_hard_ctf_exception(p)
+    !     allocate( self%recvols(1), stat=alloc_stat )
+    !     if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
+    !     call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
+    !     call self%recvols(1)%alloc_rho(p, self%spproj)
+    !     if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+    !     write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
+    !     self%extremal3D_tbox_exists = .true.
+    ! end subroutine build_extremal3D_tbox
+####### Ancestor
+    subroutine build_extremal3D_tbox( self, p )
+        class(build),  intent(inout) :: self
+        class(params), intent(in)    :: p
+        call self%kill_extremal3D_tbox
+        call self%raise_hard_ctf_exception(p)
+        allocate( self%recvols(1), stat=alloc_stat )
+        if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
+        call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
+        call self%recvols(1)%alloc_rho(p, self%spproj)
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
+        self%extremal3D_tbox_exists = .true.
+    end subroutine build_extremal3D_tbox
+======= end
 
     !> \brief  destructs the toolbox for continuous refinement
     subroutine kill_extremal3D_tbox( self )

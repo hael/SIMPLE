@@ -3,7 +3,6 @@ module simple_rec_master
 include 'simple_lib.f08'
 use simple_build,     only: build
 use simple_params,    only: params
-use simple_cmdline,   only: cmdline
 use simple_qsys_funs, only: qsys_job_finished
 implicit none
 
@@ -13,28 +12,23 @@ private
 
 contains
 
-    subroutine exec_rec_master( b, p, cline, fbody_in )
+    subroutine exec_rec_master( b, p, fbody_in )
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: fbody_in
-        if( cline%defined('mul') ) call b%a%mul_shifts(p%mul)
         select case(p%eo)
             case( 'yes', 'aniso' )
-                call exec_eorec_distr( b, p, cline, fbody_in )
+                call exec_eorec_distr( b, p, fbody_in )
             case( 'no' )
-                call exec_rec( b, p, cline, fbody_in )
+                call exec_rec( b, p, fbody_in )
             case DEFAULT
                 call simple_stop('unknonw eo flag; simple_rec_master :: exec_rec_master')
         end select
-        if( cline%defined('mul') ) stop 'mul flag no longer supported; rec_master :: exec_rec_master'
     end subroutine exec_rec_master
 
-    subroutine exec_rec( b, p, cline, fbody_in )
-        use simple_timer
+    subroutine exec_rec( b, p, fbody_in )
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
@@ -74,11 +68,10 @@ contains
         call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
-    subroutine exec_eorec_distr( b, p, cline, fbody_in )
+    subroutine exec_eorec_distr( b, p, fbody_in )
         use simple_strings, only: int2str_pad
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody, fname
         integer :: s

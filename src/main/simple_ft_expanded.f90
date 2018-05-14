@@ -38,7 +38,7 @@ type :: ft_expanded
     procedure          :: new_2
     procedure          :: new_3
     generic            :: new => new_1, new_2, new_3
-    procedure          :: copy
+   procedure          :: copy
     ! checkers
     procedure          :: exists
     procedure, private :: same_dims
@@ -255,7 +255,7 @@ contains
                 stop 'cannot sum ft_expanded objects of different dims; add; simple_ft_expanded'
             endif
         else
-            call self%copy(self2add)
+            self = self2add
             self%cmat = self%cmat*ww
         endif
     end subroutine add
@@ -562,7 +562,7 @@ contains
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmpmat_im_2d(hind,kind) = imag(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg))
                 end do
             end do
             !$omp end parallel do
@@ -573,7 +573,7 @@ contains
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     ft_exp_tmp_cmat12(hind,kind)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
-                    ft_exp_tmpmat_im_2d(hind,kind) = imag(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg))
                 end do
             end do
             !$omp end parallel do
@@ -597,7 +597,7 @@ contains
                     arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     tmp                            = ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg)
                     ft_exp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    ft_exp_tmpmat_im_2d(hind,kind) = imag(tmp)
+                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(tmp)
                 end do
             end do
             !$omp end parallel do
@@ -610,7 +610,7 @@ contains
                     ft_exp_tmp_cmat12(hind,kind)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
                     tmp                            = ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg)
                     ft_exp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    ft_exp_tmpmat_im_2d(hind,kind) = imag(tmp)
+                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(tmp)
                 end do
             end do
             !$omp end parallel do

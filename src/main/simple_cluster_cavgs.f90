@@ -3,7 +3,6 @@ include 'simple_lib.f08'
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_build,            only: build
 use simple_params,           only: params
-use simple_corrmat,          only: calc_roinv_corrmat
 use simple_aff_prop,         only: aff_prop
 use simple_strategy2D3D_common ! use all in there
 use simple_oris,             only: oris
@@ -50,7 +49,7 @@ contains
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! calculate similarity matrix in parallel
-        call calc_roinv_corrmat( pftcc, corrmat )
+        corrmat = pftcc%calc_roinv_corrmat()
         npairs = (p%nptcls * (p%nptcls - 1)) / 2
         allocate(tmp(npairs), mask(p%nptcls), inds(p%nptcls), included(p%nptcls))
         cnt = 0
@@ -62,7 +61,7 @@ contains
         end do
         ! calculate similarity matrix in parallel of mirrored even references
         call pftcc%swap_ptclsevenodd
-        call calc_roinv_corrmat( pftcc, corrmat )
+        corrmat = pftcc%calc_roinv_corrmat()
         cnt = 0
         do iptcl=1,p%nptcls - 1
             do jptcl=iptcl + 1,p%nptcls

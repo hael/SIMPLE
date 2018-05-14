@@ -1,9 +1,8 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_refine3D
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
@@ -78,9 +77,9 @@ contains
         type(params)       :: p
         type(build)        :: b
         integer, parameter :: MAXIMGS=1000
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_strategy3D_tbox(p)     ! strategy3D objects built
+        call init_params(cline)            ! parameters generated
+        call b%build_general_tbox( cline)  ! general objects built
+        call b%build_strategy3D_tbox()     ! strategy3D objects built
         ! generate the random model
         if( cline%defined('nran') )then
             call gen_random_model( p%nran )
@@ -157,25 +156,23 @@ contains
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
         class(refine3D_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(params)               :: p
-        type(build)                :: b
+        class(cmdline),            intent(inout) :: cline
         integer                    :: i, startit
         logical                    :: converged
         real                       :: corr, corr_prev
         converged  = .false.
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         if( p%neigh.eq.'yes' .and. .not. cline%defined('oritab') )then
             stop 'need oritab input for execution of refine3D with this refine mode'
         endif
-        call b%build_general_tbox(p, cline)   ! general objects built
+        call b%build_general_tbox(cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
         if( cline%defined('lp') .or. cline%defined('find').or. p%eo .ne. 'no')then
             ! alles ok!
         else
            stop 'need a starting low-pass limit (set lp or find)!'
         endif
-        call b%build_strategy3D_tbox(p) ! strategy3D objects built
+        call b%build_strategy3D_tbox() ! strategy3D objects built
         startit = 1
         if( cline%defined('startit') )startit = p%startit
         if( startit == 1 )call b%a%clean_updatecnt
@@ -184,7 +181,7 @@ contains
             if( cline%defined('find') )then
                 p%lp = calc_lowpass_lim( p%find, p%boxmatch, p%smpd )
             endif
-            call refine3D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
+            call refine3D_exec( cline, startit, converged) ! partition or not, depending on 'part'
         else
             p%find = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
             ! init extremal dynamics
@@ -195,7 +192,7 @@ contains
             endif
             corr = -1
             do i=startit,p%maxits
-                call refine3D_exec(b, p, cline, i, converged)
+                call refine3D_exec( cline, i, converged)
                 ! updates extremal iteration
                 p%extr_iter = p%extr_iter + 1
                 if( .not. p%l_distr_exec .and. p%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
@@ -216,13 +213,11 @@ contains
     subroutine exec_check_3Dconv( self, cline )
         class(check_3Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)      :: p
-        type(build)       :: b
         real, allocatable :: maplp(:)
         integer           :: istate, loc(1)
         logical           :: limset, converged, update_res
-        p = params(cline) ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call init_params(cline)                         ! parameters generated
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         limset = .false. ;  update_res = .false.
         if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates), stat=alloc_stat)

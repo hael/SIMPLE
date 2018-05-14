@@ -42,10 +42,10 @@ contains
     procedure, private :: slice2bytepos
     procedure          :: rSlices
     procedure          :: wSlices
-    procedure          :: print_header
+ !   procedure          :: print_header
     procedure          :: getDims
     procedure          :: getDim
-    procedure          :: getPixSz
+  !  procedure          :: getPixSz
     procedure          :: getIform
     procedure          :: getMode
     procedure          :: setIform
@@ -237,11 +237,7 @@ contains
     !>  \brief  reads a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rSlices( self, first_slice, last_slice, rarr )
-#ifdef PGI
-        use ISO_C_BINDING
-#else
         use, intrinsic :: iso_c_binding
-#endif
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
@@ -251,9 +247,6 @@ contains
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         logical                     :: arr_is_ready,alloc_tmparr
         class(ImgHead), pointer     :: ptr=>null()
-#ifdef PGI
-        include 'lib3f.h'
-#endif
         ! Check that the first and last slice numbers given make sense
         if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; rSlices; simple_imgfile'
         ! Get the dims of the image file
@@ -362,11 +355,7 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
-#ifdef PGI
-        use ISO_C_BINDING
-#else
         use, intrinsic :: iso_c_binding
-#endif
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
@@ -380,9 +369,6 @@ contains
         real                        :: min_val,max_val
         class(ImgHead), pointer     :: ptr=>null()
         class(ImgHead), allocatable :: imghed
-#ifdef PGI
-        include 'lib3f.h'
-#endif
         ! Check that the first and last slice numbers given make sense
         if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; wSlices; simple_imgfile'
         ! Get the dims of the image file
@@ -495,12 +481,12 @@ contains
     end subroutine wSlices
 
     !>  \brief  Print out basic information about the file
-    subroutine print_header( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object
-        write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
-        call self%overall_head%print_imghead()
-        write(*,'(a)') ' '
-    end subroutine print_header
+    ! subroutine print_header( self )
+    !     class(imgfile), intent(in) :: self   !< Imagefile object
+    !     write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
+    !     call self%overall_head%print_imghead()
+    !     write(*,'(a)') ' '
+    ! end subroutine print_header
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )
@@ -518,10 +504,10 @@ contains
     end function getDim
 
     !>  \brief  Return the pixel size of the image data (in Angstroms)
-    real function getPixSz( self )
-        class(imgfile), intent(in) :: self
-        getPixSz = self%overall_head%getPixSz()
-    end function getPixSz
+    ! real function getPixSz( self )
+    !     class(imgfile), intent(in) :: self
+    !     getPixSz = self%overall_head%getPixSz()
+    ! end function getPixSz
 
     !>  \brief  Return the format descriptor of the stack
     integer function getIform( self )

@@ -8,6 +8,7 @@ use simple_error, only: simple_stop, allocchk
 use simple_math
 use simple_strings, only: int2str_pad
 use simple_fftw3
+use simple_params, only: p
 implicit none
 
 public :: polarft_corrcalc
@@ -120,25 +121,25 @@ type :: polarft_corrcalc
     procedure          :: set_ref_fcomp
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
-    procedure          :: zero_ref
+!   procedure          :: zero_ref
     procedure          :: cp_even2odd_ref
     procedure          :: cp_even_ref2ptcl
     procedure          :: swap_ptclsevenodd
     ! GETTERS
-    procedure          :: get_pfromto
-    procedure          :: get_nptcls
-    procedure          :: get_nrefs
+!   procedure          :: get_pfromto
+!   procedure          :: get_nptcls
+!   procedure          :: get_nrefs
     procedure          :: get_nrots
-    procedure          :: get_ring2
-    procedure          :: get_pftsz
-    procedure          :: get_ldim
-    procedure          :: get_kfromto
+!   procedure          :: get_ring2
+!   procedure          :: get_pftsz
+!   procedure          :: get_ldim
+!   procedure          :: get_kfromto
     procedure          :: get_pdim
     procedure          :: get_rot
-    procedure          :: get_rots_for_applic
+!   procedure          :: get_rots_for_applic
     procedure          :: get_roind
     procedure          :: get_coord
-    procedure          :: get_ptcl_pft
+!   procedure          :: get_ptcl_pft
     procedure          :: get_ref_pft
     procedure          :: objfun_is_ccres
     procedure          :: exists
@@ -193,6 +194,7 @@ type :: polarft_corrcalc
     procedure          :: calc_frc
     procedure          :: specscore
     procedure          :: fit_bfac
+    procedure          :: calc_roinv_corrmat
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -202,15 +204,14 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
-    subroutine new( self, nrefs, p, ptcl_mask, eoarr )
-        use simple_params, only: params
+    subroutine new( self, nrefs, ptcl_mask, eoarr )
+        
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs
-        class(params),           intent(in)    :: p
         logical, optional,       intent(in)    :: ptcl_mask(p%fromp:p%top)
         integer, optional,       intent(in)    :: eoarr(p%fromp:p%top)
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
-        integer             :: alloc_stat, irot, k, ithr, i, ik, cnt
+        integer             :: local_stat,irot, k, ithr, i, ik, cnt
         logical             :: even_dims, test(2)
         real(sp)            :: ang
         integer(kind=c_int) :: wsdm_ret
@@ -258,7 +259,8 @@ contains
         self%nk          = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
         self%nthr        = p%nthr                                !< # OpenMP threads
         ! take care of objective function flags
-        allocate(self%inv_resarrsq(self%kfromto(1):self%kfromto(2)))
+        allocate(self%inv_resarrsq(self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+        if(alloc_stat/=0)call allocchk("Inv_resarrsq failed allocation; simple_polarft_corrcalc ; new")
         self%inv_resarrsq = self%smpd * real(self%ldim(1)) / real((/(k,k=self%kfromto(1),self%kfromto(2))/))
         self%inv_resarrsq = -1. / (4.*self%inv_resarrsq*self%inv_resarrsq)
         select case(trim(p%objfun))
@@ -321,7 +323,7 @@ contains
         endif
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-         if(alloc_stat.ne.0)call allocchk('shift argument transfer array; new; simple_polarft_corrcalc')
+        if(alloc_stat.ne.0)call allocchk('shift argument transfer array; new; simple_polarft_corrcalc')
         self%argtransf(:self%pftsz,:)   = &
             self%polar(:self%pftsz,:)   * &
             (PI/real(self%ldim(1) / 2))    ! x-part
@@ -337,6 +339,8 @@ contains
                  &self%sqsums_ptcls(1:self%nptcls),self%fftdat(self%nthr),&
                  &self%fftdat_ptcls(1:self%nptcls,self%kfromto(1):self%kfromto(2)),&
                  &self%heap_vars(self%nthr),stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk('shared arrays; new; simple_polarft_corrcalc')
+        local_stat=0
         do ithr=1,self%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -358,6 +362,7 @@ contains
                 &self%heap_vars(ithr)%fdf_T1_8(self%kfromto(1):self%kfromto(2),3),&
                 &self%heap_vars(ithr)%fdf_T2_8(self%kfromto(1):self%kfromto(2),3),&
                 &stat=alloc_stat)
+            if(alloc_stat.ne.0) exit
         end do
         if(alloc_stat.ne.0)call allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs_even = zero
@@ -519,26 +524,26 @@ contains
 
     ! GETTERS
 
-    !>  \brief  for getting the logical particle range
-    function get_pfromto( self ) result( lim )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer :: lim(2)
-        lim = self%pfromto
-    end function get_pfromto
+    ! !>  \brief  for getting the logical particle range
+    ! function get_pfromto( self ) result( lim )
+    !     class(polarft_corrcalc), intent(inout) :: self
+    !     integer :: lim(2)
+    !     lim = self%pfromto
+    ! end function get_pfromto
 
-    !>  \brief  for getting the number of particles
-    pure function get_nptcls( self ) result( nptcls )
-        class(polarft_corrcalc), intent(in) :: self
-        integer :: nptcls
-        nptcls = self%nptcls
-    end function get_nptcls
+    ! !>  \brief  for getting the number of particles
+    ! pure function get_nptcls( self ) result( nptcls )
+    !     class(polarft_corrcalc), intent(in) :: self
+    !     integer :: nptcls
+    !     nptcls = self%nptcls
+    ! end function get_nptcls
 
-    !>  \brief  for getting the number of references
-    pure function get_nrefs( self ) result( nrefs )
-        class(polarft_corrcalc), intent(in) :: self
-        integer :: nrefs
-        nrefs = self%nrefs
-    end function get_nrefs
+    ! !>  \brief  for getting the number of references
+    ! pure function get_nrefs( self ) result( nrefs )
+    !     class(polarft_corrcalc), intent(in) :: self
+    !     integer :: nrefs
+    !     nrefs = self%nrefs
+    ! end function get_nrefs
 
     !>  \brief  for getting the number of in-plane rotations
     pure function get_nrots( self ) result( nrots )
@@ -547,35 +552,35 @@ contains
         nrots = self%nrots
     end function get_nrots
 
-    !>  \brief  for getting the particle radius (ring2)
-    function get_ring2( self ) result( ring2 )
-        class(polarft_corrcalc), intent(in) :: self
-        integer :: ring2
-        ring2 = self%ring2
-    end function get_ring2
+    ! !>  \brief  for getting the particle radius (ring2)
+    ! function get_ring2( self ) result( ring2 )
+    !     class(polarft_corrcalc), intent(in) :: self
+    !     integer :: ring2
+    !     ring2 = self%ring2
+    ! end function get_ring2
 
-    !>  \brief  for getting the number of reference rotations (size of second dim of self%pfts_refs_even)
-    function get_pftsz( self ) result( pftsz )
-        class(polarft_corrcalc), intent(in) :: self
-        integer :: pftsz
-        pftsz = self%pftsz
-    end function get_pftsz
+    ! !>  \brief  for getting the number of reference rotations (size of second dim of self%pfts_refs_even)
+    ! function get_pftsz( self ) result( pftsz )
+    !     class(polarft_corrcalc), intent(in) :: self
+    !     integer :: pftsz
+    !     pftsz = self%pftsz
+    ! end function get_pftsz
 
-    !>  \brief  for getting the logical dimension of the original Cartesian image
-    function get_ldim( self ) result( ldim )
-        class(polarft_corrcalc), intent(in) :: self
-        integer :: ldim(3)
-        ldim = self%ldim
-    end function get_ldim
+    ! !>  \brief  for getting the logical dimension of the original Cartesian image
+    ! function get_ldim( self ) result( ldim )
+    !     class(polarft_corrcalc), intent(in) :: self
+    !     integer :: ldim(3)
+    !     ldim = self%ldim
+    ! end function get_ldim
 
-    !>  \brief  for getting the Fourier index range (hp/lp)
-    function get_kfromto( self ) result( lim )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer :: lim(2)
-        lim = self%kfromto
-    end function get_kfromto
+    ! !>  \brief  for getting the Fourier index range (hp/lp)
+    ! function get_kfromto( self ) result( lim )
+    !     class(polarft_corrcalc), intent(inout) :: self
+    !     integer :: lim(2)
+    !     lim = self%kfromto
+    ! end function get_kfromto
 
-    !>  \brief  for getting the dimensions of the reference polar FT
+    ! !>  \brief  for getting the dimensions of the reference polar FT
     function get_pdim( self ) result( pdim )
         class(polarft_corrcalc), intent(in) :: self
         integer :: pdim(3)
@@ -596,13 +601,13 @@ contains
         rot = self%angtab(roind)
     end function get_rot
 
-    !>  \brief is for getting the (sign inversed) rotations for application in
-    !!         classaverager/reconstructor
-    function get_rots_for_applic( self ) result( inplrots )
-        class(polarft_corrcalc), intent(in) :: self
-        real, allocatable :: inplrots(:)
-        allocate(inplrots(self%nrots), source=360. - self%angtab)
-    end function get_rots_for_applic
+    ! !>  \brief is for getting the (sign inversed) rotations for application in
+    ! !!         classaverager/reconstructor
+    ! function get_rots_for_applic( self ) result( inplrots )
+    !     class(polarft_corrcalc), intent(in) :: self
+    !     real, allocatable :: inplrots(:)
+    !     allocate(inplrots(self%nrots), source=360. - self%angtab)
+    ! end function get_rots_for_applic
 
     !>  \brief is for getting the discrete in-plane rotational
     !!         index corresponding to continuous rotation rot
@@ -2018,6 +2023,35 @@ contains
         fit_bfac = fit_bfac / denom
         fit_bfac = max(0., fit_bfac)
     end function fit_bfac
+
+
+   function calc_roinv_corrmat( self) result(corrmat )
+        ! assumes particles/references in pftcc identical sets
+
+        class(polarft_corrcalc), intent(inout) :: self
+        real, allocatable   :: corrmat(:,:)
+        real    :: corrs(self%nrots)
+        integer :: iref, iptcl, loc(1)
+        if( self%nptcls /= self%nrefs ) stop 'nptcls == nrefs in pftcc required; simple_corrmat :: calc_roinv_corrmat'
+        if( allocated(corrmat) ) deallocate(corrmat)
+        allocate(corrmat(self%nptcls,self%nptcls), stat=alloc_stat)
+        if(alloc_stat/=0)call allocchk('In: calc_roinv_corrmat; simple_corrmat')
+        corrmat = 1.
+        !$omp parallel do default(shared) schedule(guided) private(iref,iptcl,corrs,loc) proc_bind(close)
+        do iref=1,self%nptcls - 1
+            do iptcl=iref + 1,self%nptcls
+                ! rotational corr
+                call self%gencorrs(iref, iptcl, corrs)
+                loc  = maxloc(corrs)
+                corrmat(iref,iptcl) = corrs(loc(1))
+                ! symmetrize
+                corrmat(iptcl,iref) = corrmat(iref,iptcl)
+            end do
+        end do
+        !$omp end parallel do
+    end function calc_roinv_corrmat
+
+
 
     ! DESTRUCTOR
 
