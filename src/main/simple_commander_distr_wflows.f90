@@ -565,6 +565,7 @@ contains
                     endif
                 endif
             end subroutine remap_empty_cavgs
+
     end subroutine exec_cluster2D_distr
 
     subroutine exec_refine3D_init_distr( self, cline )
@@ -616,7 +617,7 @@ contains
         use simple_commander_refine3D, only: check_3Dconv_commander
         use simple_commander_volops,   only: postprocess_commander
         class(refine3D_distr_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(refine3D_init_distr_commander) :: xrefine3D_init_distr
         type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
@@ -639,7 +640,7 @@ contains
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real                  :: corr, corr_prev
         integer               :: s, state, iter, iostat
-        logical               :: vol_defined, have_oris, do_abinitio
+        logical               :: vol_defined, have_oris, do_abinitio, converged
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -802,10 +803,6 @@ contains
             end do
             call qsys_watcher(state_assemble_finished)
             ! rename volumes, postprocess & update job_descr
-
-            !!!!!!!!!! do we need to read spproj here???
-            ! call binread_oritab(trim(oritab), b%spproj, b%a, [1,p_master%nptcls])
-
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
                 if( b%a%get_pop( state, 'state' ) == 0 )then
@@ -840,8 +837,8 @@ contains
                     ! post-process
                     vol = 'vol'//trim(int2str(state))
                     call cline_postprocess%set( 'vol1', trim(vol_iter))
-                    fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
-                    optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+                    fsc_file   = FSC_FBODY//trim(str_state)//'.bin'
+                    optlp_file = ANISOLP_FBODY//trim(str_state)//p_master%ext
                     if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
                         call cline_postprocess%delete('lp')
                         call cline_postprocess%set('fsc', trim(fsc_file))
@@ -861,13 +858,30 @@ contains
                 endif
             enddo
             ! CONVERGENCE
-            if(p_master%refine.eq.'cluster') call cline_check_3Dconv%delete('update_res')
-            call xcheck_3Dconv%execute( cline_check_3Dconv )
-            if( iter >= p_master%startit+2 )then
+            converged = .false.
+            if( p_master%refine.eq.'cluster' ) call cline_check_3Dconv%delete('update_res')
+            call xcheck_3Dconv%execute(cline_check_3Dconv)
+            if( iter >= p_master%startit + 2 )then
                 ! after a minimum of 2 iterations
-                if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) exit
+                if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
             endif
-            if( iter >= p_master%maxits ) exit
+            if( iter >= p_master%maxits ) converged = .true.
+            if( converged )then
+                ! update sp_project with the final volume(s)
+                if( trim(p_master%refine) .eq. 'snhc' )then
+                    str_state = int2str_pad(1,2)
+                    call b%spproj%add_vol2os_out(trim(SNHCVOL)//trim(str_state)//p_master%ext,&
+                        &b%spproj%get_smpd(), 1, 'vol')
+                else
+                    do state = 1,p_master%nstates
+                        str_state = int2str_pad(state,2)
+                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                        call b%spproj%add_vol2os_out(vol_iter, b%spproj%get_smpd(), state, 'vol')
+                    enddo
+                endif
+                call b%spproj%write()
+                exit ! main loop
+            endif
             ! ITERATION DEPENDENT UPDATES
             if( cline_check_3Dconv%defined('trs') .and. .not.job_descr%isthere('trs') )then
                 ! activates shift search if frac >= 90

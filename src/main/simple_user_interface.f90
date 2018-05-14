@@ -1554,14 +1554,17 @@ contains
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                            ! executable
-        &1, 2, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process', &
-        & 'input volume e.g. vol.mrc', .true., '')
+        & 'input volume e.g. vol.mrc', .false., '')
         ! parameter input/output
         call postprocess%set_input('parm_ios', 1, smpd)
         call postprocess%set_input('parm_ios', 2, mkdir_)
+        call postprocess%set_input('parm_ios', 3, projfile)
+        postprocess%parm_ios(3)%required = .false.
+        call postprocess%set_input('parm_ios', 4, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
         ! alternative inputs
         ! <empty>
         ! search controls

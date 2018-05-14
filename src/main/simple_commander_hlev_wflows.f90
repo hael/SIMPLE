@@ -518,6 +518,8 @@ contains
         call work_proj%kill
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
+        ! add rec_final to os_out
+        call spproj%add_vol2os_out('rec_final'//p_master%ext, spproj%get_smpd(), 1, 'vol_cavg')
         ! write results
         call spproj%write()
         ! reprojections

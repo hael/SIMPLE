@@ -163,12 +163,20 @@ contains
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: state, ldim(3)
-        state = 1
         ! pre-proc
         p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline) ! general objects built
-        call b%vol%read(p%vols(state))
-        call b%vol%fft()
+        if( cline%defined('projfile') )then
+
+            ! 2do
+
+        else if( cline%defined('vol1') )then
+            call b%vol%read(p%vols(1))
+            call b%vol%fft()
+        else
+            stop 'ERROR! either projfile or vol1 needs to be part of command line; commander_volops :: postprocess'
+        endif
+
         if( cline%defined('fsc') )then
             ! optimal low-pass filter from FSC
             if( file_exists(p%fsc) )then
