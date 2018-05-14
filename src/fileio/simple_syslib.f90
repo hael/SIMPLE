@@ -425,8 +425,17 @@ interface
         character(kind=c_char,len=1),dimension(*),intent(in) :: file2
         integer(c_int), intent(in) :: len2
     end function fcopy
+    function fcopy_mmap(file1, len1, file2, len2) bind(c,name="fcopy_mmap")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: fcopy_mmap                                       !> return success of fcopy
+        character(kind=c_char,len=1),dimension(*),intent(in) :: file1
+        integer(c_int), intent(in) :: len1
+        character(kind=c_char,len=1),dimension(*),intent(in) :: file2
+        integer(c_int), intent(in) :: len2
+      end function fcopy_mmap
 
-    function fcopy2(file1, len1, file2, len2) bind(c,name="fcopy2")
+    function fcopy2(file1, len1, file2, len2) bind(c,name="fcopy_sendfile")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: fcopy2                                       !> return success of fcopy
@@ -624,6 +633,29 @@ contains
             trim(fname2),__FILENAME__,__LINE__)
         deallocate(f1,f2)
     end subroutine syslib_copy_file
+
+    !> \brief Copy file1 to file1
+    subroutine syslib_copy_file3(fname1, fname2, status)
+        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
+        integer, intent(out), optional :: status
+        character(kind=c_char, len=:), allocatable :: f1, f2
+        character(len=1) c
+        integer:: in, out, ioerr
+        status = 0
+        if(.not. file_exists(fname1) )&
+            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" does not exist",__FILENAME__,__LINE__)
+        if( dir_exists(fname1) )&
+            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
+
+        if(global_debug) print *,"In simple_copy_file"
+        allocate(f1, source=trim(adjustl(fname1))//achar(0))
+        allocate(f2, source=trim(adjustl(fname2))//achar(0))
+        status = fcopy_mmap(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
+        if (status/=0)&
+            call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
+            trim(fname2),__FILENAME__,__LINE__)
+        deallocate(f1,f2)
+    end subroutine syslib_copy_file3
 
     !> \brief Copy file1 to file1
     subroutine syslib_copy_file2(fname1, fname2, status)

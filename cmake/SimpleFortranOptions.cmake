@@ -29,6 +29,7 @@ set (CLANG_FAIL_MSG  "FATAL ERROR: SIMPLE cannot support Clang Preprocessor.
 Set FC,CC, and CPP environment variables to GNU compilers, e.g. in bash:
 export FC=/sw/bin/gfortran
 export CC=/sw/bin/gcc
+export CXX=/sw/bin/g++
 export CPP=/sw/bin/cpp-5
 
 Clang has overridden Gfortran links /usr/bin/gfortran GRRR!
@@ -36,7 +37,7 @@ Make sure you prepend  /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or
 In LD_LIBRARY_PATH prepend the appropriate lib path.
     ")
 
-option(USE_GNU_EXTENSIONS "Enable GNU extensions in C " )
+option(USE_GNU_EXTENSIONS "Enable GNU extensions in C " OFF)
 if(USE_GNU_EXTENSIONS)
   set(C_DIALECT gnu)
 else()
@@ -49,10 +50,10 @@ if(Fortran_COMPILER_NAME MATCHES "gfortran*")
     OUTPUT_VARIABLE ACTUAL_FC_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-    message(STATUS "gfortran points to Clang -- Trying other paths")
+    message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file (
       CMAKE_Fortran_COMPILER
-      NAMES gfortran- gfortran-4.9 gfortran-5 gfortran-6 gfortran5 gfortran6
+      NAMES gfortran- gfortran-4.9 gfortran-5 gfortran-6 gfortran-7 gfortran-8 gfortran5 gfortran6 gfortran7 gfortran8
       PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
@@ -62,10 +63,50 @@ if(Fortran_COMPILER_NAME MATCHES "gfortran*")
 ${CLANG_FATAL_MSG}")
     endif()
   endif()
-endif()
+
 
 get_filename_component(FORTRAN_PARENT_DIR ${CMAKE_Fortran_COMPILER} PATH)
 message(STATUS "FORTRAN_PARENT_DIR ${FORTRAN_PARENT_DIR}")
+
+message(STATUS "Making sure your C compiler points to the correct binary")
+
+  execute_process(COMMAND ${CMAKE_C_COMPILER} --version
+    OUTPUT_VARIABLE ACTUAL_C_TARGET
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(ACTUAL_C_TARGET MATCHES "Clang|clang")
+    message(STATUS "WARNING gcc points to Clang -- Trying other paths, starting with ${FORTRAN_PARENT_DIR}")
+    find_file (
+      CMAKE_C_COMPILER
+      NAMES gcc- gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc8 gcc7 gcc6 gcc5 gcc4.9
+      PATHS ${FORTRAN_PARENT_DIR} /usr/local/bin /opt/local/bin /sw/bin /usr/bin
+      #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+      DOC "Searching for GNU gcc preprocessor, starting with ${FORTRAN_PARENT_DIR} "
+      )
+    if(NOT EXIST "${CMAKE_C_COMPILER}")
+      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_C_COMPILER} --
+${CLANG_FATAL_MSG}")
+    endif()
+  endif()
+
+message(STATUS "Making sure your C++ compiler points to the correct binary")
+
+  execute_process(COMMAND ${CMAKE_CXX_COMPILER} --version
+    OUTPUT_VARIABLE ACTUAL_CXX_TARGET
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(ACTUAL_CXX_TARGET MATCHES "Clang|clang")
+    message(STATUS "WARNING g++ points to Clang -- Trying other paths")
+    find_file (
+      CMAKE_CXX_COMPILER
+      NAMES g++- g++-8 g++-7 g++-6 g++-5 g++-4.9 g++8 g++7 g++6 g++5 g++4.9 g++
+      PATHS ${FORTRAN_PARENT_DIR} /usr/local/bin /opt/local/bin /sw/bin /usr/bin
+      DOC "Searching for GNU g++ preprocessor "
+      )
+    if(NOT EXIST "${CMAKE_C_COMPILER}")
+      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_C_COMPILER} --
+${CLANG_FATAL_MSG}")
+    endif()
+  endif()
+endif()
 
 message(STATUS "Making sure your preprocessor points to the correct binary")
 if(TMP_CPP_COMPILER MATCHES "cpp*")
@@ -76,7 +117,7 @@ if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
   message(STATUS "Found cpp is actually Clang -- Trying other paths")
   find_file (
     TMP_CPP_COMPILER cpp-
-    NAMES  cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
+    NAMES  cpp-8 cpp-7 cpp-6 cpp-5 cpp-4.9 cpp8 cpp7 cpp6 cpp5 cpp4.9 cpp
     PATHS ${FORTRAN_PARENT_DIR} /usr/local/bin /opt/local/bin /sw/bin /usr/bin
     #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
     DOC "Searching for GNU cpp preprocessor "
@@ -95,15 +136,12 @@ if(CMAKE_INSTALL_LIBDIR MATCHES "lib64")
   set(CMAKE_INSTALL_LIBDIR "lib" CACHE STRING "" FORCE)
 endif()
 
-
-
 #figure out our git version
 option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
 mark_as_advanced(UPDATE_GIT_VERSION_INFO)
 if(UPDATE_GIT_VERSION_INFO)
 	include(GitInfo)
 endif()
-
 
 #################################################################
 # Setting up options
@@ -571,7 +609,7 @@ endif()
 # SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
 
 if(USE_OPENMP)
-  add_definitions("-DOPENMP -fopenmp")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DOPENMP -fopenmp")
 endif()
 
 if(USE_MPI)
@@ -783,7 +821,7 @@ if(APPLE)
   # use, i.e. don't skip the full RPATH for the build tree
   SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
 
-  # when building, don't use the install RPATH already
+  # when building, don't use the install RPATH
   # (but later on when installing)
   SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
 

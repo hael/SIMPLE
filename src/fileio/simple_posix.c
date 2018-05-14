@@ -6,15 +6,18 @@
  *
  *   Michael Eager   2018
  */
+#define _DEBUG 1
 #define  _POSIX_C_SOURCE 200809L
 #define _THREAD_SAFE
 //#define _FORTIFY_SOURCE
 #define _SVID_SOURCE
 #define _GNU_SOURCE             /* See feature_test_macros(7) */
 #ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#include <MacTypes.h>
 #define _BSD_SOURCE
 #define __DARWIN_C_SOURCE
-#define DT_DIR 4
+//#define DT_DIR 4
 #endif
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -28,15 +31,15 @@
 #include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <dirent.h>      /* DIR and scandir */
+#include <unistd.h>       /* getpid()  */
+#include <dirent.h>      /* DIR and scandir,DT_DIR */
 #include <time.h>
 #include <glob.h>
 #include <limits.h>      /* PATH_MAX */
 #ifdef __linux__
 #include<linux/limits.h>
-#include <ftw.h>
 #endif
+#include <ftw.h>
 /* By default, print all messages of severity info and above.  */
 #ifdef _DEBUG
 static int global_debug = 3;
@@ -67,7 +70,8 @@ static char *global_progname = "simple_posix";
 #define GLOB_RM_ALL glob_rm_all_
 #define GET_ABSOLUTE_PATHNAME get_absolute_pathname_
 #define FCOPY fcopy_
-#define FCOPY2 fcopy2_
+#define FCOPY_MMAP fcopy_mmap
+#define FCOPY_SENDFILE fcopy_sendfile
 #define FREE_FILE_LIST free_file_list_
 #define SUBPROCESS subprocess_
 #define WAIT_PID wait_pid_
@@ -881,8 +885,8 @@ int wait_pid(int* cpid)
 
 
 
-#ifdef _POSIX_MAPPED_FILES
-int fcopy(char* file1,  int*len1, char* file2, int*len2)
+//#ifdef _POSIX_MAPPED_FILES
+int fcopy_mmap(char* file1,  int*len1, char* file2, int*len2)
 {
 
     int sfd, dfd;
@@ -910,9 +914,7 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2)
         sfd = open(buffer1, O_RDONLY);
         if(sfd) {
             filesize = lseek(sfd, 0, SEEK_END);
-
             src = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE, sfd, 0);
-
             /* DESTINATION */
             dfd = open(buffer2, O_RDWR | O_CREAT, 0666);
             if(dfd) {
@@ -951,7 +953,7 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2)
     }
     return flag;
 }
-#else
+
 
 // Copy file in chunks of 1k bytes
 int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
@@ -1002,17 +1004,19 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_
     }
     return flag;
 }
-#endif
 
 
 #ifdef __APPLE__
 #include <sys/socket.h>
 #include <sys/uio.h>
+int fcopy_sendfile(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
+{ return fcopy(file1,len1, file2,len2, ivf_file1, ivf_file2);
+}
 #else
 #include <sys/sendfile.h>
-#endif
 
-int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
+
+int fcopy_sendfile(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
 {
     dprintf(stderr, "In fcopy2\n");
     dprintf(stderr, "DEBUG: In fcopy2 file1:%s \n size :%zu\t%d\t%zu\n", file1, strlen(file1), *len1, ivf_file1);
@@ -1035,7 +1039,7 @@ int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size
         struct stat st;
         if(0 == stat(buffer1, &st)) {
             int INPUTsize = st.st_size;
-            off_t OSX_INPUTsize = (off_t) INPUTsize;
+	    //            off_t OSX_INPUTsize = (off_t) INPUTsize;
             dprintf(stderr, "In fcopy2 opening files\n");
             FILE *fin = fopen(buffer1, "r");
             if(fin) {
@@ -1047,16 +1051,10 @@ int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size
                     //        fseek(fin, 0L, SEEK_END);
                     //size_t toCopy = ftell(fin);
                     //rewind(fin); //fseek(fin, 0L, SEEK_SET);
-#ifdef __APPLE__
-                    offset = ftello(fin);
-                    //ssize_t sent = sendfile(fileno(fout), fileno(fin), offset, OSX_INPUTsize);
-                    fseeko(fin, offset, SEEK_SET);
-#else
 
                     offset = ftello(fin);
                     sent = sendfile(fileno(fout), fileno(fin), &offset, INPUTsize);
                     fseeko(fin, offset, SEEK_SET);
-#endif
                     if(sent != INPUTsize) {
                         printf("%d %s\nfcopy2 failed to copy file %s to %s\n", errno, strerror(errno), buffer1, buffer2);
                         perror("Failed : simple_posix.c::fcopy2 copying file\n");
@@ -1084,7 +1082,7 @@ int fcopy2(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size
     }
     return flag;
 }
-
+#endif
 
 char * lrealpath(const char *filename)
 {
@@ -1160,6 +1158,11 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 #include <mach/mach_types.h>
 #include <mach/mach_init.h>
 #include <mach/mach_host.h>
+#include <sys/sysctl.h>
+#include <libproc.h>
+#include <mach/vm_types.h>
+#include <mach/vm_task.h>
+#include <mach/task.h>
 #else
 #include <sys/sysinfo.h>
 #endif
@@ -1172,53 +1175,56 @@ int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram,
 
 #ifdef __APPLE__
 //Total RAM used
-/*     int mib[2]; */
-/*     int64_t physical_memory; */
-/*     mib[0] = CTL_HW; */
-/*     mib[1] = HW_MEMSIZE; */
-/*     length = sizeof(int64_t); */
-/*     sysctl(mib, 2, &physical_memory, &length, NULL, 0); */
+    int mib[2];
+    int64_t physical_memory;
+    mib[0] = CTL_HW;
+    mib[1] = HW_MEMSIZE;
+    size_t length = sizeof(int64_t);
+    sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+
+    struct proc_taskinfo p_info;
+    int result = proc_pidinfo( getpid(), PROC_PIDTASKINFO, 0,  & p_info, sizeof( p_info ) ) ;
+
+    //Virtual Memory Currently Used by my Process
+    struct task_basic_info t_info;
+    mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
+
+    if(KERN_SUCCESS != task_info(mach_task_self(),
+                                 TASK_BASIC_INFO, (task_info_t)&t_info,
+                                 &t_info_count)) {
+        perror("unable to get virtual memswap usage by calling taskinfo");
+        return -1;
+    }
+// resident size is in t_info.resident_size;
+// virtual size is in t_info.virtual_size;
 
 
-/*     //Virtual Memory Currently Used by my Process */
-/*     struct task_basic_info t_info; */
-/*     mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT; */
+    // RAM currently used
+    vm_size_t page_size;
+    mach_port_t mach_port;
+    mach_msg_type_number_t count;
+    vm_statistics64_data_t vm_stats;
+    long long free_memory;
+    long long used_memory;
+    mach_port = mach_host_self();
+    count = sizeof(vm_stats) / sizeof(natural_t);
+    if(KERN_SUCCESS == host_page_size(mach_port, &page_size) &&
+       KERN_SUCCESS == host_statistics64(mach_port, HOST_VM_INFO,
+                                         (host_info64_t)&vm_stats, &count)) {
+        free_memory = (int64_t)vm_stats.free_count * (int64_t)page_size;
 
-/*     if(KERN_SUCCESS != task_info(mach_task_self(), */
-/*                                  TASK_BASIC_INFO, (task_info_t)&t_info, */
-/*                                  &t_info_count)) { */
-/*         perror("unable to get virtual memswap usage by calling taskinfo"); */
-/*         return -1; */
-/*     } */
-/* // resident size is in t_info.resident_size; */
-/* // virtual size is in t_info.virtual_size; */
-
-
-/*     // RAM currently used */
-/*     vm_size_t page_size; */
-/*     mach_port_t mach_port; */
-/*     mach_msg_type_number_t count; */
-/*     vm_statistics64_data_t vm_stats; */
-
-/*     mach_port = mach_host_self(); */
-/*     count = sizeof(vm_stats) / sizeof(natural_t); */
-/*     if(KERN_SUCCESS == host_page_size(mach_port, &page_size) && */
-/*        KERN_SUCCESS == host_statistics64(mach_port, HOST_VM_INFO, */
-/*                                          (host_info64_t)&vm_stats, &count)) { */
-/*         long long free_memory = (int64_t)vm_stats.free_count * (int64_t)page_size; */
-
-/*         long long used_memory = ((int64_t)vm_stats.active_count + */
-/*                                  (int64_t)vm_stats.inactive_count + */
-/*                                  (int64_t)vm_stats.wire_count) * (int64_t)page_size; */
-/*         printf("free memory: %lld\nused memory: %lld\n", free_memory, used_memory); */
-/*     } */
+        used_memory = ((int64_t)vm_stats.active_count +
+                                 (int64_t)vm_stats.inactive_count +
+                                 (int64_t)vm_stats.wire_count) * (int64_t)page_size;
+        printf("free memory: %lld\nused memory: %lld\n", free_memory, used_memory);
+    }
 
 
-/*     *totalram =  physical_memory;          /\* Total usable main memory size (bytes)*\/ */
-/*     *sharedram = t_info.virtual_size;     /\* Amount of shared memory *\/ */
-/*     *bufferram = t_info.resident_size;    /\* Memory used by buffers *\/ */
-/*     *totalhigh = free_memory + used_memory; /\* Total high water mark memory size *\/ */
-/*     *HWMusage =  used_memory;             /\* high memory size used *\/ */
+    *totalram =  physical_memory;          /* Total usable main memory size (bytes)*/
+    *sharedram = t_info.virtual_size;     /* Amount of shared memory */
+    *bufferram = t_info.resident_size;    /* Memory used by buffers */
+    *totalhigh = free_memory + used_memory; /* Total high water mark memory size */
+    *HWMusage =  used_memory;             /* high memory size used */
 
 #else
     struct sysinfo s;

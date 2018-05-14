@@ -191,7 +191,7 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
   PERMISSIONS   OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
   )
 
-  if(${BUILD_DOCS} OR VERBOSE)
+  if(${BUILD_DOCS})
 
     #
     # User manual and tutorial
@@ -230,7 +230,6 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
 
 OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
 OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
-
 option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
 if(VERBOSE) #only for the fool-hardy
   OPTION(USE_FAST_MATH_OPTIMISATION "Optimize code for fastmath. " OFF)
@@ -238,7 +237,6 @@ if(VERBOSE) #only for the fool-hardy
   OPTION(USE_AUTO_PARALLELISE "Optimize code for parallel systems. [Intel and PGI only]" OFF)
   OPTION(USE_AGGRESSIVE_OPTIMISATION "Flags for aggressive optimization level. Unroll all loops and inline functions."  OFF)
   option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
-
   #
   # CTest
   #
@@ -252,8 +250,6 @@ if(VERBOSE) #only for the fool-hardy
   include(CMakeGraphVizOptions)
   include(GenericLogging)
 endif()
-
-
 
 #################################################################
 #

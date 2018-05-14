@@ -153,6 +153,7 @@ if (io_stat /= 0 .or. (.not. file_exists('testcopy.mrc'))) then
 else
     call exec_cmdline("diff -q testcopy.mrc SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc" )
 endif
+print *, '>>> Syslib function Test 2d: syslib_copy_file '
 TBLOCK()
 call syslib_copy_file(trim('SIMPLE_TEST_FILEIO_'//datestr//'/cubes.mrc'), trim('testcopy1.mrc'), status=io_stat)
 TSTOP()
@@ -161,7 +162,7 @@ if (io_stat /= 0 .or. (.not. file_exists('testcopy1.mrc'))) then
 else
     call exec_cmdline("diff -q testcopy1.mrc SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc" )
 endif
-
+print *, '>>> Syslib function Test 2d: syslib_copy_file2 '
 TBLOCK()
 call syslib_copy_file2(trim('SIMPLE_TEST_FILEIO_'//datestr//'/cubes.mrc'), trim('testcopy2.mrc'), status=io_stat)
 TSTOP()
@@ -170,6 +171,7 @@ if (io_stat /= 0 .or. (.not. file_exists('testcopy2.mrc'))) then
 else
     call exec_cmdline("diff -q testcopy2.mrc SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc" )
 endif
+print *, '>>> Syslib function Test 2d: syslib_copy_file Fortran streaming '
 TBLOCK()
 call syslib_copy_file_stream(trim('SIMPLE_TEST_FILEIO_'//datestr//'/cubes.mrc'), trim('testcopy3.mrc'), status=io_stat)
 TSTOP()
@@ -178,6 +180,7 @@ if (io_stat /= 0 .or. (.not. file_exists('testcopy3.mrc'))) then
 else
     call exec_cmdline("diff -q testcopy3.mrc SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc" )
 endif
+! print *, '>>> Syslib function Test 2d: syslib_copy_file_direct  Fortran direct copy'
 ! TBLOCK()
 ! call syslib_copy_file_direct(trim('SIMPLE_TEST_FILEIO_'//datestr//'/cubes.mrc'), trim('testcopy4.mrc'), status=io_stat)
 ! TSTOP()
@@ -190,7 +193,11 @@ endif
 ! else
 !     print *, '    simple_copy_file success'
 ! endif
-call exec_cmdline("rm  -f testcopy*.mrc; rm -rf SIMPLE_TEST_FILEIO* " )
+print *, '>>> Syslib function Test 2d: system cp '
+TBLOCK()
+call exec_cmdline(trim("cp SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc testcopy0.mrc"))
+TSTOP()
+call exec_cmdline("rm  -f testcopy*.mrc; rm -rf SIMPLE_TEST_FILEIO* ")
 
 
 print *, '>>>'
