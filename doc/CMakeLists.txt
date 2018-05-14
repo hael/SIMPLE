@@ -1,6 +1,7 @@
 
 find_package(LATEX)
-if (LATEX_FOUND)
+find_package(ImageMagick)
+if (LATEX_FOUND AND ImageMagick_FOUND)
 include(UseLATEX)
 # set(LATEX_OUTPUT_PATH doc)
 
