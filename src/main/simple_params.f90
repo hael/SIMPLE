@@ -432,7 +432,6 @@ contains
         integer                   :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer                   :: spproj_a_seg_inputted, idir, nsp_files
         logical                   :: nparts_set, aamix, ddel_scaled, sp_required
-        DebugPrint '**************** In params'
         nparts_set    = .false.
         debug_local   = 'no'
         verbose_local = 'no'
@@ -459,7 +458,6 @@ contains
         ! default initialisations that depend on meta-data file format
         self%outfile = 'outfile'//trim(METADATA_EXT)
         ! checkers in ascending alphabetical order
-        DebugPrint '**************** In params before check cargs'
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
         call check_carg('append',         self%append)
@@ -565,7 +563,6 @@ contains
         call check_carg('weights2D',      self%weights2D)
         call check_carg('weights3D',      self%weights3D)
         call check_carg('zero',           self%zero)
-        DebugPrint '**************** In params after check cargs'
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
@@ -604,7 +601,6 @@ contains
         call check_file('vollist',        self%vollist,      'T')
         call check_file('voltab',         self%voltab,       'T')
         call check_file('voltab2',        self%voltab2,      'T')
-        DebugPrint '**************** In params after check file'
         ! Integer args
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
