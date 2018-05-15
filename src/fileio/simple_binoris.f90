@@ -1,10 +1,10 @@
 ! for manging orientation data using binary files
 module simple_binoris
-use simple_defs    ! use all in there
+use simple_defs     ! use all in there
 use simple_strings, only: spaces
-use simple_error,  only: allocchk
-use simple_fileio, only: fopen, fclose, fileiochk, funit_size
-use simple_syslib, only: del_file, file_exists
+use simple_error,   only: allocchk
+use simple_fileio,  only: fopen, fclose, fileiochk, funit_size
+use simple_syslib,  only: del_file, file_exists
 implicit none
 
 public :: binoris
@@ -25,9 +25,9 @@ end type file_header_segment
 type binoris
     private
     type(file_header_segment) :: header(MAX_N_SEGEMENTS)
-    integer                   :: n_segments = 0
-    integer                   :: funit      = 0
-    logical                   :: l_open     = .false.
+    integer                   :: n_segments  = 0
+    integer                   :: funit       = 0
+    logical                   :: l_open      = .false.
   contains
     ! I/O
     procedure          :: open
@@ -38,23 +38,22 @@ type binoris
     procedure          :: print_header
     procedure, private :: write_segment_1
     procedure, private :: write_segment_2
-    procedure, private :: write_segment_3
-    generic            :: write_segment => write_segment_1, write_segment_2, write_segment_3
+    generic            :: write_segment => write_segment_1, write_segment_2
+    procedure          :: write_segment_inside
     procedure, private :: add_segment_1
     procedure, private :: add_segment_2
-    procedure, private :: add_segment_3
     procedure, private :: update_byte_ranges
     procedure          :: read_first_segment_record
     procedure          :: read_segment_1
     procedure          :: read_segment_2
-    procedure          :: read_segment_3
-    generic            :: read_segment => read_segment_1, read_segment_2, read_segment_3
+    generic            :: read_segment => read_segment_1, read_segment_2
     procedure          :: read_segment_ctfparams_state_eo
     ! getters
     procedure          :: get_n_segments
     procedure          :: get_fromto
     procedure          :: get_n_records
     procedure          :: get_n_bytes_per_record
+    procedure          :: get_n_bytes_tot
 end type binoris
 
 contains
@@ -66,7 +65,7 @@ contains
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
         integer(kind=8)    :: filesz
-        integer            :: io_status, isegment
+        integer            :: isegment
         character(len=512) :: io_message
         ! deletion logics
         if( present(del_if_exists) )then
@@ -167,6 +166,111 @@ contains
         end do
     end subroutine print_header
 
+    subroutine write_segment_inside( self, isegment, os, fromto )
+        use simple_oris,   only: oris
+        class(binoris),    intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        class(oris),       intent(inout) :: os ! indexed from 1 to nptcls
+        integer, optional, intent(in)    :: fromto(2)
+        character(len=:), allocatable :: str_dyn
+        integer         :: i, nspaces, noris, iseg
+        integer(kind=8) :: end_part1, start_part3, end_part3
+        integer(kind=8) :: n_bytes_part3, n_bytes_part3_orig, ibytes
+        character(len=1), allocatable :: bytearr_part1(:), bytearr_part3(:)
+        noris = os%get_noris()
+        if( noris == 0 ) return
+        if( present(fromto) )then
+            if( fromto(1) < 1 .or. fromto(2) > noris )then
+                write(*,*) 'noris : ', noris
+                write(*,*) 'fromto: ', fromto
+                stop 'fromto out of range; binoris :: write_segment_inside'
+            endif
+        endif
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_inside'
+
+        ! READ RAW BYTES OF PART 1 OF FILE
+        ! figure out byte range
+        end_part1 = N_BYTES_HEADER
+        if( isegment > 1 )then
+            do iseg=1,isegment-1
+                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
+                    end_part1 = end_part1 + self%header(iseg)%n_records * self%header(iseg)%n_bytes_per_record
+                endif
+            end do
+        endif
+        ! allocate & read
+        allocate( bytearr_part1(1:end_part1) )
+        read(unit=self%funit,pos=1) bytearr_part1
+
+        ! READ RAW BYTES OF PART 3 OF FILE
+        ! figure out byte range
+        if( isegment < self%n_segments )then
+            start_part3 = N_BYTES_HEADER
+            do iseg=1,isegment
+                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
+                    start_part3 = start_part3 + self%header(iseg)%n_records * self%header(iseg)%n_bytes_per_record
+                endif
+            end do
+            start_part3 = start_part3 + 1
+            end_part3 = self%get_n_bytes_tot()
+            ! allocate & read 3d part
+            allocate( bytearr_part3(start_part3:end_part3) )
+            read(unit=self%funit,pos=start_part3) bytearr_part3
+        endif
+
+        ! add segment to stack, this sets all the information needed for allocation
+        call self%add_segment_1(isegment, os, fromto)
+        ! update byte ranges in header
+        call self%update_byte_ranges
+        ! validate byte ranges
+        if( self%header(isegment)%first_data_byte - 1 /= end_part1 )then
+            write(*,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
+            write(*,*) 'end of part 1 (bytes)     : ', end_part1
+            write(*,*) 'ERROR! end of part 1 of file does not match first data byte of segment'
+            stop 'simple_binoris :: write_segment_inside'
+        endif
+        if( allocated(bytearr_part3) )then
+            ! calculate byte size of second part of file, given the updated header
+            n_bytes_part3 = 0
+            do iseg=isegment + 1,self%n_segments
+                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
+                    n_bytes_part3 = n_bytes_part3 + self%header(iseg)%n_bytes_per_record * self%header(iseg)%n_records
+                endif
+            end do
+            ! compare with original
+            n_bytes_part3_orig = end_part3 - start_part3 + 1
+            if( n_bytes_part3_orig /= n_bytes_part3 )then
+                write(*,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
+                write(*,*) '# bytes of part 3 in updated : ', n_bytes_part3
+                write(*,*) 'ERROR! byte sizes of part3 in original and updated do not match'
+                stop 'simple_binoris :: write_segment_inside'
+            endif
+        endif
+
+        ! WRITE FILE
+        ! 1st part
+        write(unit=self%funit,pos=1) bytearr_part1
+        ! write orientation data (2nd part)
+        ibytes = self%header(isegment)%first_data_byte
+        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+            str_dyn = os%ori2str(i)
+            nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
+            if( nspaces > 0 )then
+                write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
+            else
+                write(unit=self%funit,pos=ibytes) str_dyn
+            endif
+            ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+        end do
+        ! 3d part
+        if( allocated(bytearr_part3) )then
+            write(unit=self%funit,pos=self%header(isegment + 1)%first_data_byte) bytearr_part3
+        endif
+        ! write updated header
+        write(unit=self%funit,pos=1) self%header
+        ! so no need to update header in file after this operation
+    end subroutine write_segment_inside
+
     subroutine write_segment_1( self, isegment, os, fromto )
         use simple_oris,   only: oris
         class(binoris),    intent(inout) :: self
@@ -174,7 +278,8 @@ contains
         class(oris),       intent(inout) :: os ! indexed from 1 to nptcls
         integer, optional, intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
-        integer :: i, ibytes, io_status, nspaces, noris
+        integer :: i, nspaces, noris
+        integer(kind=8) :: ibytes
         noris = os%get_noris()
         if( noris == 0 ) return
         if( present(fromto) )then
@@ -208,7 +313,8 @@ contains
         integer,        intent(in)    :: isegment
         integer,        intent(in)    :: fromto(2), strlen_max
         type(str4arr),  intent(inout) :: sarr(:) ! indexed from 1 to nptcls
-        integer :: i, ibytes, io_status, nspaces
+        integer :: i, nspaces
+        integer(kind=8) :: ibytes
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_2'
         ! add segment to stack
         call self%add_segment_2(isegment, fromto, strlen_max)
@@ -230,27 +336,6 @@ contains
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
     end subroutine write_segment_2
-
-    subroutine write_segment_3( self, isegment, arr )
-        class(binoris),    intent(inout) :: self
-        integer,           intent(in)    :: isegment
-        real, allocatable, intent(in)    :: arr(:,:)
-        integer :: i, ibytes, io_status, nspaces
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_3'
-        ! add segment to stack
-        if( .not. allocated(arr) ) return
-        call self%add_segment_3(isegment, arr)
-        ! update byte ranges in header
-        call self%update_byte_ranges
-        ! write orientation data
-        ibytes = self%header(isegment)%first_data_byte
-        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            write(unit=self%funit,pos=ibytes) arr(i,:)
-            DebugPrint 'wrote: ', sizeof(arr(i,:)),&
-                &' segment: ', isegment, ' bytes, starting @: ', ibytes
-            ibytes = ibytes + self%header(isegment)%n_bytes_per_record
-        end do
-    end subroutine write_segment_3
 
     subroutine add_segment_1( self, isegment, os, fromto )
         use simple_oris,   only: oris
@@ -299,26 +384,6 @@ contains
         self%header(isegment)%n_records = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
     end subroutine add_segment_2
 
-    subroutine add_segment_3( self, isegment, arr )
-        class(binoris),    intent(inout) :: self
-        integer,           intent(in)    :: isegment
-        real, allocatable, intent(in)    :: arr(:,:)
-        if( .not. allocated(arr) ) return
-        ! sanity check isegment
-        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
-            write(*,*) 'isegment: ', isegment
-            stop 'ERROR, isegment out of range; binoris :: add_segment_3'
-        endif
-        if( isegment > self%n_segments ) self%n_segments = isegment
-        ! set range in segment
-        self%header(isegment)%fromto(1) = 1
-        self%header(isegment)%fromto(2) = size(arr,1)
-        ! set n_bytes_per_record
-        self%header(isegment)%n_bytes_per_record = sizeof(arr(1,:))
-        ! set n_records
-        self%header(isegment)%n_records = size(arr,1)
-    end subroutine add_segment_3
-
     subroutine update_byte_ranges( self )
         class(binoris), intent(inout) :: self
         integer(kind=8) :: n_bytes_tot
@@ -361,7 +426,8 @@ contains
         integer, optional, intent(in) :: fromto(2)
         logical, optional, intent(in) :: only_ctfparams_state_eo
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-        integer :: i, ibytes, irec
+        integer :: i, irec
+        integer(kind=8) :: ibytes
         logical :: present_fromto, oonly_ctfparams_state_eo
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_1'
         if( isegment < 1 .or. isegment > self%n_segments )then
@@ -406,7 +472,8 @@ contains
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
         type(str4arr),  intent(inout) :: sarr(:)
-        integer :: i, ibytes
+        integer :: i
+        integer(kind=8) :: ibytes
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_2'
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
@@ -425,34 +492,6 @@ contains
         endif
     end subroutine read_segment_2
 
-    subroutine read_segment_3( self, isegment, arr )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        real,           intent(inout) :: arr(:,:)
-        integer :: i, ibytes
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_3'
-        if( isegment < 1 .or. isegment > self%n_segments )then
-            write(*,*) 'isegment: ', isegment
-            stop 'isegment out of bound; binoris :: read_segment_3'
-        endif
-        if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
-            if( size(arr, 1) /= self%header(isegment)%n_records )then
-                stop 'First dimension of array not congruent with # records in file; binoris :: read_segment_3'
-            endif
-            if( size(arr,2)*4 /= self%header(isegment)%n_bytes_per_record )then
-                stop 'Second dimension of array not congruent with # bytes per record in file; binoris :: read_segment_3'
-            endif
-            ! read orientation data into array of allocatable strings
-            ibytes = self%header(isegment)%first_data_byte
-            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-                read(unit=self%funit,pos=ibytes) arr(i,:)
-                ibytes = ibytes + self%header(isegment)%n_bytes_per_record
-            end do
-        else
-            ! empty segment, nothing to do
-        endif
-    end subroutine read_segment_3
-
     subroutine read_segment_ctfparams_state_eo( self, isegment, os )
         use simple_ori,    only: ori
         use simple_oris,   only: oris
@@ -463,7 +502,8 @@ contains
         character(len=32)  :: flags(NFLAGS)
         type(ori)          :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-        integer :: i, j, ibytes
+        integer(kind=8) :: ibytes
+        integer :: i, j
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_ctfparams_state_eo'
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
@@ -522,5 +562,17 @@ contains
         integer,        intent(in) :: isegment
         get_n_bytes_per_record = self%header(isegment)%n_bytes_per_record
     end function get_n_bytes_per_record
+
+    pure integer(kind=8) function get_n_bytes_tot( self )
+        class(binoris), intent(in) :: self
+        integer :: isegment
+        get_n_bytes_tot = N_BYTES_HEADER
+        if( self%n_segments <= 0 ) return
+        do isegment=1,self%n_segments
+            if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
+                get_n_bytes_tot = get_n_bytes_tot + self%header(isegment)%n_bytes_per_record * self%header(isegment)%n_records
+            endif
+        end do
+    end function get_n_bytes_tot
 
 end module simple_binoris

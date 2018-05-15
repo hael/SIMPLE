@@ -88,7 +88,7 @@ contains
                         shvec(1) = real(xsh)
                         shvec(2) = real(ysh)
                         shvec(3) = 0.
-                        corr = ftexp_img%corr_shifted(ftexp_trial, shvec)
+                        corr = real(ftexp_img%corr_shifted_8(ftexp_trial, dble(shvec)))
                         if( corr > corr_best )then
                             corr_best = corr
                             xsh_best  = xsh
@@ -145,7 +145,7 @@ contains
         write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR'
         !$omp parallel do schedule(auto) default(shared) private(itst)
         do itst=1,NTST
-            corr = ftexp_ref%corr_shifted(ftexp_ptcl, shvecs(itst,:))
+            corr = real(ftexp_ref%corr_shifted_8(ftexp_ptcl, dble(shvecs(itst,:))))
         end do
         !$omp end parallel do
 

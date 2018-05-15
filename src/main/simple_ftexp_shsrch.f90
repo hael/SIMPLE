@@ -1,4 +1,4 @@
-! shift search using expanded Fourier transforms (used in motion_correct)
+! shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
 module simple_ftexp_shsrch
 include 'simple_lib.f08'
 use simple_opt_factory, only: opt_factory
@@ -16,78 +16,39 @@ type(opt_spec)                :: ospec             !< optimizer specification ob
 class(optimizer),   pointer   :: nlopt=>null()     !< pointer to nonlinear optimizer
 class(ft_expanded), pointer   :: reference=>null() !< reference pft
 class(ft_expanded), pointer   :: particle=>null()  !< particle pft
-character(len=:), allocatable :: opt_str           !< optimiser string descriptor
-integer                       :: nrestarts=3       !< number of optimisation restarts
 real,    parameter            :: TOL=1e-4          !< tolerance parameter
 integer, parameter            :: MAXITS=30         !< maximum number of iterations
+real                          :: maxHWshift = 0.   !< maximum half-width of shift
 real                          :: motion_correctftol = 1e-4
 real                          :: motion_correctgtol = 1e-4
 
 contains
 
     !> Initialise  ftexp_shsrch
-    subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in, motion_correct_ftol, motion_correct_gtol )
+    subroutine ftexp_shsrch_init( ref, ptcl, trs, motion_correct_ftol, motion_correct_gtol )
         class(ft_expanded), target, intent(in) :: ref, ptcl
-        real,                       intent(in) :: lims(2,2)
-        character(len=*), optional, intent(in) :: opt
-        integer,          optional, intent(in) :: nrestarts_in
+        real,                       intent(in) :: trs
         real,             optional, intent(in) :: motion_correct_ftol, motion_correct_gtol
-        if (present(motion_correct_ftol)) then
+        if( present(motion_correct_ftol) )then
             motion_correctftol = motion_correct_ftol
         else
             motion_correctftol = TOL
         end if
-        if (present(motion_correct_gtol)) then
+        if( present(motion_correct_gtol) )then
             motion_correctgtol = motion_correct_gtol
         else
             motion_correctgtol = TOL
         end if
-        ! set pointers
-        reference => ref
-        particle  => ptcl
-        ! set opt_str & nrestarts
-        if( allocated(opt_str) ) deallocate(opt_str)
-        if( present(opt) ) then
-            allocate(opt_str, source=trim(opt))
-        else
-            allocate(opt_str, source='simplex')
-        endif
-        nrestarts = 1
-        if( present(nrestarts_in) ) nrestarts = nrestarts_in
-        ! make optimizer spec
-        call ospec%specify(opt_str, 2, ftol=motion_correctftol, gtol=motion_correctgtol,&
-            limits=lims, nrestarts=nrestarts )
-        ! set optimizer cost function
-        if( trim(opt_str) .eq. 'lbfgsb' )then
-            call ospec%set_costfun_8(ftexp_shsrch_cost_8)
-            call ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
-            call ospec%set_fdfcostfun_8(ftexp_shsrch_fdfcost_8)
-        else
-            call ospec%set_costfun(ftexp_shsrch_cost)
-        end if
-        ! generate optimizer object with the factory
-        if( associated(nlopt) )then
-            call nlopt%kill
-            deallocate(nlopt)
-        end if
-        call ofac%new(ospec, nlopt)
+        reference  => ref
+        particle   => ptcl
+        maxHWshift =  trs
     end subroutine ftexp_shsrch_init
 
     subroutine ftexp_shsrch_reset_ptrs( ref, ptcl )
         class(ft_expanded), intent(in), target :: ref, ptcl
-        ! re-set pointers
         reference => ref
         particle  => ptcl
     end subroutine ftexp_shsrch_reset_ptrs
-
-    !> Cost function
-    function ftexp_shsrch_cost( fun_self, vec, D ) result( cost )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: cost
-        cost = -reference%corr_shifted(particle, -vec)
-    end function ftexp_shsrch_cost
 
     !> Cost function, double precision
     function ftexp_shsrch_cost_8( fun_self, vec, D ) result(cost)
@@ -95,7 +56,7 @@ contains
         integer,      intent(in)    :: D
         real(kind=8), intent(in)    :: vec(D)
         real(kind=8)                :: cost
-        cost = -reference%corr_shifted_8_2d(particle, -vec)
+        cost = -reference%corr_shifted_8(particle, -vec)
     end function ftexp_shsrch_cost_8
 
     !> Gradient function, double precision
@@ -104,7 +65,7 @@ contains
         integer,      intent(in)    :: D
         real(dp), intent(inout) :: vec( D )
         real(dp), intent(out)   :: grad( D )
-        call reference%corr_gshifted_8_2d(particle, -vec, grad)
+        call reference%corr_gshifted_8(particle, -vec, grad)
     end subroutine ftexp_shsrch_gcost_8
 
     !> Gradient & cost function, double precision
@@ -113,47 +74,34 @@ contains
         integer,      intent(in)    :: D
         real(kind=8), intent(inout) :: vec(D)
         real(kind=8), intent(out)   :: f, grad(D)
-        call reference%corr_fdfshifted_8_2d(particle, -vec, f, grad)
+        call reference%corr_fdfshifted_8(particle, -vec, f, grad)
         f    = f    * (-1.0_dp)
     end subroutine ftexp_shsrch_fdfcost_8
 
     !> Main search routine
     function ftexp_shsrch_minimize( prev_corr, prev_shift ) result( cxy )
         real, optional, intent(in) :: prev_corr, prev_shift(2)
-        real :: cxy(3), max_shift, maxlim, lims(2,2)
+        real :: cxy(3), lims(2,2) ! max_shift, maxlim
         class(*), pointer :: fun_self => null()
-        if( present(prev_shift) )then
-            max_shift = maxval(abs(prev_shift))
-            maxlim   = maxval(abs(ospec%limits))
-            if( max_shift > maxlim )then
-                ! re-specify the limits
-                lims(:,1) = -max_shift
-                lims(:,2) = max_shift
-                call ospec%specify(opt_str, 2, ftol=motion_correctftol, gtol=motion_correctgtol, limits=lims, nrestarts=nrestarts)
-                ! set optimizer cost function
-                if( opt_str == 'lbfgsb' ) then
-                    call ospec%set_costfun_8(ftexp_shsrch_cost_8)
-                    call ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
-                    call ospec%set_fdfcostfun_8(ftexp_shsrch_fdfcost_8)
-                else
-                    call ospec%set_costfun(ftexp_shsrch_cost)
-                end if
-                ! generate optimizer object with the factory
-                if( associated(nlopt) )then
-                    call nlopt%kill
-                    deallocate(nlopt)
-                end if
-                call ofac%new(ospec, nlopt)
-            endif
-            ospec%x = prev_shift
-        else
-            ospec%x = 0.
-        endif
-        call nlopt%minimize(ospec, fun_self, cxy(1))
-        if( opt_str == 'lbfgsb' ) then
-            call reference%corr_normalize(particle, cxy(1))
-            call ft_exp_reset_tmp_pointers
+        lims(1,1) = prev_shift(1) - maxHWshift
+        lims(1,2) = prev_shift(1) + maxHWshift
+        lims(2,1) = prev_shift(2) - maxHWshift
+        lims(2,2) = prev_shift(2) + maxHWshift
+        call ospec%specify('lbfgsb', 2, ftol=motion_correctftol, gtol=motion_correctgtol, limits=lims) ! nrestarts=nrestarts
+        call ospec%set_costfun_8(ftexp_shsrch_cost_8)
+        call ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
+        call ospec%set_fdfcostfun_8(ftexp_shsrch_fdfcost_8)
+        ! generate optimizer object with the factory
+        if( associated(nlopt) )then
+            call nlopt%kill
+            deallocate(nlopt)
         end if
+        call ofac%new(ospec, nlopt)
+        ! set initial solution to previous shift
+        ospec%x = prev_shift
+        call nlopt%minimize(ospec, fun_self, cxy(1))
+        call reference%corr_normalize(particle, cxy(1))
+        call ft_exp_reset_tmp_pointers
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! shift
         if( present(prev_corr) )then
@@ -178,7 +126,7 @@ contains
         call img_ref%fft()
         call ftexp_ref%new(img_ref, hp, lp)
         call ftexp_ptcl%new(img_ptcl, hp, lp)
-        call ftexp_shsrch_init(ftexp_ref, ftexp_ptcl, lims, 'simplex', 3)
+        call ftexp_shsrch_init(ftexp_ref, ftexp_ptcl, trs)
         do i=1,100
             x = ran3()*2*TRS-TRS
             y = ran3()*2*TRS-TRS

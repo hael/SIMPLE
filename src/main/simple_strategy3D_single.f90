@@ -2,7 +2,6 @@
 module simple_strategy3D_single
 include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! use all in there
-!use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D_multi, only: strategy3D_multi
 implicit none
 
@@ -20,7 +19,6 @@ contains
 
     subroutine oris_assign_single( self )
         use simple_ori,  only: ori
-        ! use simple_oris, only: oris
         use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_sdev,&
             &fit_bfactors, convergence_stats_single
         class(strategy3D_single), intent(inout) :: self

@@ -83,7 +83,6 @@ contains
     procedure          :: read_ctfparams_state_eo
     procedure          :: read_segment
     procedure, private :: segreader
-    procedure, private :: read_2Darray_segment
     ! writers
     procedure          :: write
     procedure          :: write_segment
@@ -1848,19 +1847,6 @@ contains
                 call self%bos%read_segment(isegment, self%compenv)
         end select
     end subroutine segreader
-
-    subroutine read_2Darray_segment( self, isegment, array )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: isegment
-        real, allocatable, intent(out)   :: array(:,:)
-        real    :: rval
-        integer :: ndim1, ndim2
-        ndim1 = self%bos%get_n_records(isegment)
-        ndim2 = int(self%bos%get_n_bytes_per_record(isegment) / sizeof(rval))
-        if( allocated(array) ) deallocate(array)
-        allocate( array(ndim1,ndim2), source=0. )
-        call self%bos%read_segment(isegment, array)
-    end subroutine read_2Darray_segment
 
     ! writers
 

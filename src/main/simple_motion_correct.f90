@@ -36,7 +36,6 @@ integer                         :: nframes        = 0         !< number of frame
 integer                         :: fixed_frame    = 0         !< fixed frame of reference (0,0)
 integer                         :: ldim(3)        = [0,0,0]   !< logical dimension of frame
 integer                         :: ldim_scaled(3) = [0,0,0]   !< shrunken logical dimension of frame
-real                            :: maxHWshift       = 0.      !< maximum halfwidth shift
 real                            :: hp             = 0.        !< high-pass limit
 real                            :: lp             = 0.        !< low-pass limit
 real                            :: resstep        = 0.        !< resolution step size (in angstrom)
@@ -67,7 +66,7 @@ contains
         logical,           intent(out)   :: err               !< error flag
         real, optional,    intent(in)    :: nsig              !< # sigmas (for outlier removal)
         real    :: ave, sdev, var, minw, maxw
-        real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
+        real    :: cxy(3), corr_prev, frac_improved, corrfrac
         integer :: iframe, iter, nimproved, updateres, i
         logical :: didsave, didupdateres, err_stat
         ! initialise
@@ -82,14 +81,8 @@ contains
             return
         endif
         ! make search object ready
-        lims(:,1) = -maxHWshift
-        lims(:,2) =  maxHWshift
-        if( str_has_substr(p%opt,'bfgs') ) then
-            call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims, 'lbfgsb', &
-                motion_correct_ftol = p%motion_correctftol, motion_correct_gtol = p%motion_correctgtol)
-        else
-            call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims)
-        end if
+        call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), p%scale * p%trs, &
+            motion_correct_ftol = p%motion_correctftol, motion_correct_gtol = p%motion_correctgtol)
         ! initialise with small random shifts (to average out dead/hot pixels)
         do iframe=1,nframes
             opt_shifts(iframe,1) = ran3()*2.*SMALLSHIFT-SMALLSHIFT
@@ -244,7 +237,6 @@ contains
         DebugPrint 'logical dimension of frame: ',        ldim
         DebugPrint 'scaled logical dimension of frame: ', ldim_scaled
         DebugPrint 'number of frames: ',                  nframes
-        maxHWshift = p%trs/p%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
         fixed_frame = nint(real(nframes)/2.)
         ! set reslims
