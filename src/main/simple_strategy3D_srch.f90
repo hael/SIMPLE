@@ -255,7 +255,7 @@ contains
 
     subroutine inpl_srch( self )
         class(strategy3D_srch), intent(inout) :: self
-        real, allocatable :: cxy(:)
+        real    :: cxy(3)
         integer :: i, ref, irot
         if( self%doshift )then
             ! BFGS

@@ -392,13 +392,13 @@ contains
         type(cmdline)         :: cline_cavgassemble
         type(cmdline)         :: cline_make_cavgs
         ! other variables
-        type(qsys_env)        :: qenv
-        type(params)          :: p_master
-        type(build)           :: b
-        character(len=STDLEN) :: refs, refs_even, refs_odd, str, str_iter
-        integer               :: iter
-        type(chash)           :: job_descr
-        real                  :: frac_srch_space
+        type(qsys_env)            :: qenv
+        type(params)              :: p_master
+        type(build)               :: b
+        character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter
+        integer                   :: iter
+        type(chash)               :: job_descr
+        real                      :: frac_srch_space
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -667,9 +667,12 @@ contains
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
         call cline_refine3D_init%set(       'prg', 'refine3D_init' ) ! required for distributed call
+        call cline_postprocess%set('prg', 'postprocess' )   ! required for local call
         if( trim(p_master%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_postprocess%set('nstates', 1.)
         call cline_postprocess%set('mirr',  'no')
+        call cline_postprocess%delete('projfile')
+        call cline_postprocess%delete('projname')
 
         ! for parallel volassemble over states
         allocate(state_assemble_finished(p_master%nstates) , stat=alloc_stat)
@@ -696,7 +699,7 @@ contains
         do_abinitio = .not. have_oris .and. .not. vol_defined
         if( do_abinitio )then
             call xrefine3D_init_distr%execute( cline_refine3D_init)
-            call cline%set('vol1', 'startvol_state01'//p_master%ext)
+            call cline%set('vol1', trim(STARTVOL_FBODY)//'01'//p_master%ext)
         else if( have_oris .and. .not. vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )

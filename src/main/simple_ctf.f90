@@ -12,7 +12,7 @@ module simple_ctf
 include 'simple_lib.f08'
 implicit none
 
-public :: ctf, ctf_test
+public :: ctf
 private
 
 type ctf
@@ -36,7 +36,6 @@ type ctf
     generic            :: eval => eval_1, eval_2, eval_3, eval_4
     procedure, private :: evalPhSh
     procedure, private :: eval_df
-    procedure          :: ctf2img
     procedure          :: apply
     procedure          :: apply_serial
     procedure          :: phaseflip_and_shift_serial
@@ -183,72 +182,6 @@ contains
         df = 0.5 * (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
     end function eval_df
 
-    !>  \brief  is for making a CTF image
-    !!          modes: abs, ctf, flip, flipneg, neg, square
-    subroutine ctf2img( self, img, dfx, mode, dfy, angast, bfac, add_phshift )
-        use simple_image, only: image
-        class(ctf),       intent(inout) :: self        !< instance
-        class(image),     intent(inout) :: img         !< image (output)
-        real,             intent(in)    :: dfx         !< defocus x-axis
-        character(len=*), intent(in)    :: mode        !< abs, ctf, flip, flipneg, neg, square
-        real,             intent(in)    :: dfy         !< defocus y-axis
-        real,             intent(in)    :: angast      !< angle of astigmatism
-        real, optional,   intent(in)    :: bfac        !< bfactor
-        real, optional,   intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        integer :: lims(3,2),h,k,phys(3),ldim(3)
-        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
-        if( img%is_3d() )then
-            print *, 'ldim: ', img%get_ldim()
-            stop 'Only 4 2D images; ctf2img; simple_ctf'
-        endif
-        ! set CTF params
-        aadd_phshift = 0.
-        if( present(add_phshift) ) aadd_phshift = add_phshift
-        ! init object
-        call self%init(dfx, dfy, angast)
-        ! initialize
-        call img%set_ft(.true.)
-        img      = 0.
-        lims     = img%loop_lims(2)
-        ldim     = img%get_ldim()
-        inv_ldim = 1./real(ldim)
-        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) &
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                hinv      = real(h) * inv_ldim(1)
-                kinv      = real(k) * inv_ldim(2)
-                spaFreqSq = hinv * hinv + kinv * kinv
-                ang       = atan2(real(k),real(h))
-                tval      = self%eval(spaFreqSq, ang, aadd_phshift)
-                select case(mode)
-                    case('abs')
-                        tval = abs(tval)
-                    case('ctf')
-                        ! tval = tval
-                    case('flip')
-                        tval = sign(1.,tval)
-                    case('flipneg')
-                        tval = -sign(1.,tval)
-                    case('neg')
-                        tval = -tval
-                    case('square')
-                        tval = min(1.,max(tval * tval,0.001))
-                    case('sqrt')
-                        tval = min(1.,max(tval * tval,0.001))
-                        tval = sqrt(tval * tval)
-                    case DEFAULT
-                        write(*,*) 'mode:', mode
-                        stop 'unsupported in ctf2img; simple_ctf'
-                end select
-                phys = img%comp_addr_phys([h,k,0])
-                call img%set_fcomp([h,k,0], phys, cmplx(tval,0.))
-            end do
-        end do
-        !$omp end parallel do
-        if( present(bfac) ) call img%apply_bfac(bfac)
-    end subroutine ctf2img
-
     !>  \brief  is for applying CTF to an image
     subroutine apply( self, img, dfx, mode, dfy, angast, bfac, add_phshift )
         use simple_image, only: image
@@ -260,32 +193,32 @@ contains
         real, optional,   intent(in)    :: angast      !< angle of astigmatism
         real, optional,   intent(in)    :: bfac        !< bfactor
         real, optional,   intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        integer     :: ldim(3), ldim_pd(3)
-        real        :: aadd_phshift
-        type(image) :: ctfimg, img_pd
+        integer         :: ldim(3), ldim_pd(3)
+        type(ctfparams) :: ctfvars
+        type(image)     :: img_pd
         ldim = img%get_ldim()
         if( img%is_3d() )then
             print *, 'ldim: ', ldim
             stop 'Only 4 2D images; apply; simple_ctf'
         endif
+        ctfvars%smpd = self%smpd
+        ctfvars%dfx  = dfx
+        if(present(dfy))         ctfvars%dfy     = dfy
+        if(present(angast))      ctfvars%angast  = angast
+        if(present(add_phshift)) ctfvars%phshift = add_phshift
         if( img%is_ft() )then
-            call ctfimg%new(ldim, self%smpd)
-            call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac, add_phshift)
-            call img%mul(ctfimg)
+            call self%apply_serial(img, mode, ctfvars)
         else
             ldim_pd(1:2) = 2*ldim(1:2)
             ldim_pd(3)   = 1
-            call ctfimg%new(ldim_pd, self%smpd)
             call img_pd%new(ldim_pd, self%smpd)
-            call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac, add_phshift)
             call img%pad_mirr(img_pd)
             call img_pd%fft()
-            call img_pd%mul(ctfimg)
+            call self%apply_serial(img_pd, mode, ctfvars)
             call img_pd%ifft()
             call img_pd%clip(img)
             call img_pd%kill()
         endif
-        call ctfimg%kill
     end subroutine apply
 
     !>  \brief  is for optimised serial application of CTF
@@ -470,119 +403,5 @@ contains
         class(ctf), intent(in) :: self
         wavelength = 12.26 / sqrt((1000.0 * self%kV) + (0.9784*(1000.0 * self%kV)**2)/(10.0**6.0))
     end function kV2wl
-
-    !>  \brief This test compare ctf2img implementations
-    subroutine ctf_test
-        use simple_image, only: image
-        type(ctf)               :: tfun
-        type(image)             :: img1, img2
-        real                    :: dfx_ran, dfy_ran, angast_ran, phshift_ran, err, minmax(2)
-        integer, parameter      :: BOX=512, NTST=10
-        real,    parameter      :: SMPD=1.26, KV=300., CS=2.7, AC=0.1
-        real,       allocatable :: tvals_old(:,:), tvals_new(:,:)
-        integer                 :: itst
-        integer(timer_int_kind) :: tctf
-         ! test:            1 err    :    0.00000000
-         ! test:            2 err    :    0.00000000
-         ! test:            3 err    :    0.00000000
-         ! test:            4 err    :    0.00000000
-         ! test:            5 err    :    0.00000000
-         ! test:            6 err    :    0.00000000
-         ! test:            7 err    :    0.00000000
-         ! test:            8 err    :    0.00000000
-         ! test:            9 err    :    0.00000000
-         ! test:           10 err    :    0.00000000
-         ! err    :    0.00000000
-         ! time(s):   0.33581284400000000
-        tctf   = tic()
-        err = 0.
-        do itst=1,NTST
-            dfx_ran     = 0.5 + ran3() * 4.5
-            dfy_ran     = 0.5 + ran3() * 4.5
-            angast_ran  = ran3() * 2. * pi
-            phshift_ran = ran3()
-            ! previous implementation
-            call img1%new([BOX,BOX,1], SMPD)
-            call img1%set_ft(.true.)
-            call ctf2img_old(img1, dfx_ran, 'ctf', dfy_ran, angast_ran, add_phshift=phshift_ran)
-            ! current
-            call img2%new([BOX,BOX,1], SMPD)
-            call img2%set_ft(.true.)
-            tfun = ctf(SMPD, KV, CS, AC)
-            call tfun%ctf2img(img2, dfx_ran, 'ctf', dfy_ran, angast_ran, add_phshift=phshift_ran)
-            !
-            img1   = img1.lone.img2
-            minmax = img1%minmax()
-            err = err + minmax(2)
-            print *, 'test: ', itst, '; err    : '  , minmax(2)
-        enddo
-        print *, 'err    : '  , err
-        print *, 'time(s): ', toc(tctf)
-
-
-        contains
-
-            !>  \brief  is for making a CTF image, previous implementation
-            subroutine ctf2img_old(img, dfx, mode, dfy, angast, bfac, add_phshift )
-                class(image),     intent(inout) :: img         !< image (output)
-                real,             intent(in)    :: dfx         !< defocus x-axis
-                character(len=*), intent(in)    :: mode        !< abs, ctf, flip, flipneg, neg, square
-                real,             intent(in)    :: dfy         !< defocus y-axis
-                real,             intent(in)    :: angast      !< angle of astigmatism
-                real, optional,   intent(in)    :: bfac        !< bfactor
-                real, optional,   intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-                type(ctf) :: tfun
-                integer   :: lims(3,2),h,k,phys(3),ldim(3)
-                real      :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
-                if( img%is_3d() )then
-                    print *, 'ldim: ', img%get_ldim()
-                    stop 'Only 4 2D images; ctf2img; simple_ctf'
-                endif
-                ! set CTF params
-                aadd_phshift = 0.
-                if( present(add_phshift) ) aadd_phshift = add_phshift
-                ! init object
-                tfun = ctf(SMPD, KV, CS, AC)
-                call tfun%init(dfx, dfy, angast)
-                ! initialize
-                img      = cmplx(0.,0.)
-                lims     = img%loop_lims(2)
-                ldim     = img%get_ldim()
-                inv_ldim = 1./real(ldim)
-                !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) &
-                !$omp schedule(static) proc_bind(close)
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        hinv      = real(h) * inv_ldim(1)
-                        kinv      = real(k) * inv_ldim(2)
-                        spaFreqSq = hinv * hinv + kinv * kinv
-                        ang       = atan2(real(k),real(h))
-                        tval      = tfun%eval(spaFreqSq, dfx, dfy, angast, ang, aadd_phshift)
-                        select case(mode)
-                            case('abs')
-                                tval = abs(tval)
-                            case('ctf')
-                                ! tval = tval
-                            case('flip')
-                                tval = sign(1.,tval)
-                            case('flipneg')
-                                tval = -sign(1.,tval)
-                            case('neg')
-                                tval = -tval
-                            case('square')
-                                tval = min(1.,max(tval**2.,0.001))
-                            case DEFAULT
-                                write(*,*) 'mode:', mode
-                                stop 'unsupported in ctf2img; simple_ctf'
-                        end select
-                        phys = img%comp_addr_phys([h,k,0])
-                        call img%set_fcomp([h,k,0], phys, cmplx(tval,0.))
-                    end do
-                end do
-                !$omp end parallel do
-                if( present(bfac) ) call img%apply_bfac(bfac)
-            end subroutine ctf2img_old
-
-    end subroutine ctf_test
 
 end module simple_ctf

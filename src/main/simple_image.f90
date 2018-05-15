@@ -2571,6 +2571,7 @@ contains
         real,         intent(in)    :: rval
         self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rval
     end subroutine mul_rmat_at_1
+
     ! elementwise multiplication in real-space
     elemental pure subroutine mul_rmat_at_2( self,i, j, k, rval )
         class(image), intent(inout) :: self
@@ -3661,14 +3662,15 @@ contains
         ldim(3)  = 1
         ldim_col = [2*ldim(1)+border, ldim(2), 1]
         call img_out%new(ldim_col,1.)
-        img_out = background
+        img_out%rmat = background
         ! pad & copy left image
         call img_pad%new(ldim,self1%get_smpd())
+        img_pad%rmat = background
         call self1%norm4viz
         call self1%pad(img_pad, backgr=background)
         img_out%rmat(:ldim(1),:ldim(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         ! pad & copy right image
-        img_pad%rmat = 128.
+        img_pad%rmat = background
         call self2%norm4viz
         call img_pad%set_smpd(self2%get_smpd())
         call self2%pad(img_pad, backgr=background)

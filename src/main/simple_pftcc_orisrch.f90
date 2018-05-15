@@ -104,12 +104,11 @@ contains
         type pftcc_ref
             complex, allocatable :: pft_ref_even(:,:), pft_ref_odd(:,:)
         end type pftcc_ref
-        type(pftcc_ref),  allocatable :: pftcc_refs(:)
-        real,             allocatable :: cxy(:)
-        real    :: cost, cost_init, lims(2,2), lims_init(2,2)
+        type(pftcc_ref), allocatable :: pftcc_refs(:)
+        real    :: cost, cost_init, lims(2,2), lims_init(2,2), cxy(3)
         integer :: ithr
         ! copy nthr_glob pftcc references so we can put them back after minimization is done
-        allocate(pftcc_refs(nthr_glob), cxy(3))
+        allocate(pftcc_refs(nthr_glob))
         do ithr=1,nthr_glob
             pftcc_refs(ithr)%pft_ref_even = self%pftcc_ptr%get_ref_pft(ithr, iseven=.true.)
             pftcc_refs(ithr)%pft_ref_odd  = self%pftcc_ptr%get_ref_pft(ithr, iseven=.false.)
@@ -175,9 +174,9 @@ contains
         class(pftcc_orisrch), intent(inout) :: self
         integer,              intent(in)    :: D
         real,                 intent(in)    :: vec(D)
-        real              :: cost
-        integer           :: ithr, irot
-        real, allocatable :: cxy(:)
+        real     :: cost
+        integer  :: ithr, irot
+        real     :: cxy(3)
         ! set Euler angle
         call self%e_trial%set_euler([vec(1),vec(2),0.])
         ! thread-safe extraction of projection (because pftcc is an OpenMP shared data structure)
@@ -189,7 +188,7 @@ contains
         endif
         ! in-plane search with L-BFGS-B and callback for exhaustive in-plane rotation search
         call self%grad_shsrch_obj%set_indices(ithr, self%particle)
-        cxy  = self%grad_shsrch_obj%minimize(irot=irot)
+        cxy = self%grad_shsrch_obj%minimize(irot=irot)
         if( irot == 0 )then ! no better solution could be identified
             cost = self%cost_best
             return

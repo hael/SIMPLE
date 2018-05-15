@@ -6,7 +6,7 @@
  *
  *   Michael Eager   2018
  */
-#define _DEBUG 1
+//#define _DEBUG 1
 #define  _POSIX_C_SOURCE 200809L
 #define _THREAD_SAFE
 //#define _FORTIFY_SOURCE

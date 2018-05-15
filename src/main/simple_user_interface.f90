@@ -52,6 +52,7 @@ type :: simple_program
     procedure          :: print_cmdline
     procedure          :: print_prg_descr_long
     procedure          :: write2json
+    procedure          :: get_name
     procedure          :: get_nrequired_keys
     procedure          :: get_required_keys
     procedure          :: is_distr
@@ -3024,6 +3025,11 @@ contains
             end subroutine create_section
 
     end subroutine write2json
+
+    character(len=STDLEN) function get_name( self )
+        class(simple_program), intent(in) :: self
+        get_name = trim(self%name)
+    end function get_name
 
     integer function get_nrequired_keys( self )
         class(simple_program), intent(in) :: self

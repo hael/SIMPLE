@@ -4,7 +4,7 @@ use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
 integer, parameter :: MAXNKEYS=100, KEYLEN=32
 ! GLOBAL STRINGS CONSTANTS
 integer, parameter :: STDLEN     = 256  !< standard string length
-integer, parameter :: LONGSTRLEN = 2048 !< longer string length
+integer, parameter :: LONGSTRLEN = 1024 !< longer string length
 ! EXTENSIONS
 character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'
@@ -66,7 +66,6 @@ character(len=3), parameter :: NIL                  = 'nil'
 ! oritype enumeration
 enum, bind(c)
     enumerator :: MIC_SEG=1, STK_SEG=2, PTCL2D_SEG=3, CLS2D_SEG=4, CLS3D_SEG=5,&
-    &PTCL3D_SEG=6, OUT_SEG=7, FRCS_SEG=9, FSCS_SEG=10, PROJINFO_SEG=11, JOBPROC_SEG=12,&
-    &COMPENV_SEG=13, GENERIC_SEG=6
+    &PTCL3D_SEG=6, OUT_SEG=7, PROJINFO_SEG=11, JOBPROC_SEG=12, COMPENV_SEG=13, GENERIC_SEG=6
 end enum
 end module simple_defs_fname

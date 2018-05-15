@@ -117,10 +117,9 @@ contains
     function minimize( self, irot ) result( cxy )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(out)   :: irot
-        real, allocatable :: cxy(:)
+        real              :: cxy(3)
         real              :: cost, cost_init, corrs(self%nrots)
         integer           :: loc(1)
-        allocate(cxy(3))
         ! minimisation
         self%ospec%x      = 0.
         self%ospec%nevals = 0

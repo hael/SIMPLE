@@ -1,7 +1,6 @@
 ! provides global distribution of constants and derived constants
 module simple_params
 include 'simple_lib.f08'
-use simple_ori,     only: ori
 use simple_cmdline, only: cmdline
 use simple_binoris, only: binoris
 use simple_user_interface, only: simple_program, get_prg_ptr
@@ -16,7 +15,6 @@ private
 !> global parameters
 type :: params
     ! global objects
-    type(ori)                      :: ori_glob
     class(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
@@ -92,67 +90,69 @@ type :: params
     character(len=3)      :: weights3D='no'       !< to use 3d spectral weights(yes|no){yes}
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
-    character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
-    character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
-    character(len=STDLEN) :: classdoc=''          !< doc with per-class stats(.txt)
-    character(len=STDLEN) :: comlindoc=''         !< clustering_shc_nclsX.txt
-    character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
-    character(len=STDLEN) :: dir=''               !< directory
-    character(len=STDLEN) :: dir_movies=''        !< grab mrc mrcs files from here
-    character(len=STDLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
-    character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
-    character(len=STDLEN) :: dir_target=''        !< put output here
-    character(len=STDLEN) :: dir_ptcls=''
-    character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
-    character(len=STDLEN) :: filetab=''           !< list of files(.txt)
-    character(len=STDLEN) :: fname=''             !< file name
-    character(len=STDLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin)
-    character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
-    character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.simple)
-    character(len=STDLEN) :: mskfile=''           !< maskfile.ext
-    character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
-    character(len=STDLEN) :: mskvols(MAXS)=''
-    character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
-    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
-    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
-    character(len=STDLEN) :: outfile=''           !< output document
-    character(len=STDLEN) :: outstk=''            !< output image stack
-    character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
-    character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
-    character(len=STDLEN) :: pdbfile=''           !< PDB file
-    character(len=STDLEN) :: pdfile='pdfile.bin'
-    character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
-    character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
-    character(len=STDLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
-    character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
-    character(len=STDLEN) :: stktab=''            !< list of per-micrograph stacks
-    character(len=STDLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
-    character(len=STDLEN) :: stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
-    character(len=STDLEN) :: stk_backgr=''        !< stack with image for background subtraction
-    character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
-    character(len=STDLEN) :: vol=''
-    character(len=STDLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
-    character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt)
-    character(len=STDLEN) :: vols(MAXS)=''
-    character(len=STDLEN) :: vols_even(MAXS)=''
-    character(len=STDLEN) :: vols_odd(MAXS)=''
-    character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
-    character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
+    character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
+    character(len=LONGSTRLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
+    character(len=LONGSTRLEN) :: classdoc=''          !< doc with per-class stats(.txt)
+    character(len=LONGSTRLEN) :: comlindoc=''         !< clustering_shc_nclsX.txt
+    character(len=LONGSTRLEN) :: cwd=''
+    character(len=LONGSTRLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
+    character(len=LONGSTRLEN) :: dir=''               !< directory
+    character(len=LONGSTRLEN) :: dir_movies=''        !< grab mrc mrcs files from here
+    character(len=LONGSTRLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
+    character(len=LONGSTRLEN) :: dir_select='selected'!< move selected files to here{selected}
+    character(len=LONGSTRLEN) :: dir_target=''        !< put output here
+    character(len=LONGSTRLEN) :: dir_ptcls=''
+    character(len=LONGSTRLEN) :: doclist=''           !< list of oritabs for different states
+    character(len=LONGSTRLEN) :: exec_dir=''          !< auto-named execution directory
+    character(len=LONGSTRLEN) :: filetab=''           !< list of files(.txt)
+    character(len=LONGSTRLEN) :: fname=''             !< file name
+    character(len=LONGSTRLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin)
+    character(len=LONGSTRLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
+    character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt|.simple)
+    character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
+    character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
+    character(len=LONGSTRLEN) :: mskvols(MAXS)=''
+    character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
+    character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
+    character(len=LONGSTRLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
+    character(len=LONGSTRLEN) :: outfile=''           !< output document
+    character(len=LONGSTRLEN) :: outstk=''            !< output image stack
+    character(len=LONGSTRLEN) :: outstk2=''           !< output image stack 2nd
+    character(len=LONGSTRLEN) :: outvol=''            !< output volume{outvol.ext}
+    character(len=LONGSTRLEN) :: pdbfile=''           !< PDB file
+    character(len=LONGSTRLEN) :: pdfile='pdfile.bin'
+    character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
+    character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
+    character(len=LONGSTRLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
+    character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
+    character(len=LONGSTRLEN) :: refs_even=''
+    character(len=LONGSTRLEN) :: refs_odd=''
+    character(len=LONGSTRLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
+    character(len=LONGSTRLEN) :: stktab=''            !< list of per-micrograph stacks
+    character(len=LONGSTRLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
+    character(len=LONGSTRLEN) :: stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
+    character(len=LONGSTRLEN) :: stk_backgr=''        !< stack with image for background subtraction
+    character(len=LONGSTRLEN) :: unidoc=''            !< unified resources and orientations doc
+    character(len=LONGSTRLEN) :: vol=''
+    character(len=LONGSTRLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
+    character(len=LONGSTRLEN) :: vollist=''           !< table (text file) of volume files(.txt)
+    character(len=LONGSTRLEN) :: vols(MAXS)=''
+    character(len=LONGSTRLEN) :: vols_even(MAXS)=''
+    character(len=LONGSTRLEN) :: vols_odd(MAXS)=''
+    character(len=LONGSTRLEN) :: voltab=''            !< table (text file) of volume files(.txt)
+    character(len=LONGSTRLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: cwd=''
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
-    character(len=STDLEN) :: exec_dir=''          !< auto-named execution directory
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
-    character(len=STDLEN) :: featstk='expecstk.bin'
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
@@ -169,9 +169,6 @@ type :: params
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
-    character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
-    character(len=STDLEN) :: refs_even=''
-    character(len=STDLEN) :: refs_odd=''
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -420,6 +417,7 @@ contains
 
     !> \brief  is a constructor
     subroutine new( self, cline, allow_mix, del_scaled, spproj_a_seg )
+        use simple_ori, only: ori
         class(params),     intent(inout)   :: self
         class(cmdline),    intent(inout)   :: cline
         logical, optional, intent(in)      :: allow_mix, del_scaled
@@ -446,8 +444,6 @@ contains
         if( present(spproj_a_seg) ) self%spproj_a_seg = spproj_a_seg
         ! file counter
         cntfile = 0
-        ! make global ori
-        call self%ori_glob%new
         ! take care of debug/verbose flags
         call check_carg('debug', debug_local)
         if( debug_local == 'yes' )then
@@ -593,6 +589,9 @@ contains
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
+        call check_file('refs',           self%refs,         notAllowed='T')
+        call check_file('refs_even',      self%refs_even,    notAllowed='T')
+        call check_file('refs_odd',       self%refs_odd,     notAllowed='T')
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
@@ -782,7 +781,10 @@ contains
         if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
             ! the associated(self%ptr2prg) condition required for commanders executed within
             ! distributed workflows without invoking simple_private_exec
-            if( .not. cline%defined('projfile') )then ! so that distributed execution can deal with mulpile project files (eg scaling)
+            sp_required = self%ptr2prg%requires_sp_project()
+            if( .not.cline%defined('projfile') .and. sp_required )then
+                ! so that distributed execution can deal with multiple project files (eg scaling)
+                ! and simple_exec can also not require a project file
                 if( nsp_files > 1 )then
                     write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
                     do i=1,nsp_files
@@ -791,7 +793,6 @@ contains
                     stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
                 endif
             endif
-            sp_required = self%ptr2prg%requires_sp_project()
         else
             sp_required = .false.
         endif
@@ -836,7 +837,9 @@ contains
         ! determines whether at least one volume is on the cmdline
         vol_defined = .false.
         do i=1,self%nstates
-            if( cline%defined( trim('vol')//int2str(i) )) vol_defined(i) = .true.
+            if( cline%defined( trim('vol')//int2str(i) ))then
+                vol_defined(i) = .true.
+            endif
         enddo
         ! check inputted vols
         if( cline%defined('vollist') )then
@@ -1315,47 +1318,89 @@ contains
         contains
 
             subroutine check_vol( i )
-                integer, intent(in)   :: i
-                character(len=STDLEN) :: nam
-                nam = 'vol'//int2str(i)
-                if( cline%defined(nam) )then
-                    call check_file(nam, self%vols(i), notAllowed='T')
-                    if( .not. file_exists(self%vols(i)) )then
-                        write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
-                        stop
+                integer,           intent(in) :: i
+                character(len=STDLEN)         :: key
+                character(len=LONGSTRLEN)     :: vol
+                character(len=:), allocatable :: abs_fname
+                key = 'vol'//int2str(i)
+                if( cline%defined(key) )then
+                    vol = trim(cline%get_carg(key))
+                    if( vol(1:1).eq.'/' )then
+                        ! already in absolute path format
+                        call check_file(key, self%vols(i), notAllowed='T')
+                        if( .not. file_exists(self%vols(i)) )then
+                            write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 1'
+                            stop
+                        endif
+                    else
+                        if( self%mkdir .eq. 'yes' )then
+                            ! with respect to parent folder
+                            ! needs to be done here because not part of the check_file list
+                            vol = '../'//trim(vol)
+                            call cline%set(key, vol)
+                        endif
+                        call check_file(key, self%vols(i), notAllowed='T')
+                        if( .not. file_exists(self%vols(i)) )then
+                            write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
+                            stop
+                        else
+                            call simple_full_path(self%vols(i), abs_fname, 'params :: check_vol', check_exists=.false.)
+                            if( len_trim( abs_fname) > LONGSTRLEN )then
+                                write(*,*)'Argument too long: ',trim( abs_fname)
+                                stop 'simple_params :: new :: check_vol'
+                            endif
+                            self%vols(i) = trim(abs_fname)
+                            call cline%set(key, trim(self%vols(i)))
+                            deallocate(abs_fname)
+                        endif
                     endif
-                    DebugPrint nam, '=', self%vols(i)
                 endif
             end subroutine check_vol
 
             subroutine read_vols
-                character(len=STDLEN) :: filenam, nam
-                integer :: nl, fnr, i, io_stat
-                filenam = cline%get_carg('vollist')
-                nl      = nlines(filenam)
-                call fopen(fnr, file=filenam, iostat=io_stat)
-                if(io_stat /= 0) call fileiochk("params ; read_vols error opening "//trim(filenam), io_stat)
+                character(len=LONGSTRLEN)     :: filename, name
+                character(len=:), allocatable :: abs_name
+                integer                       :: nl, fnr, i, io_stat
+                filename = cline%get_carg('vollist')
+                if( filename(1:1).ne.'/' )then
+                    if( self%mkdir.eq.'yes' ) filename = '../'//trim(filename)
+                endif
+                nl = nlines(filename)
+                call fopen(fnr, file=filename, iostat=io_stat)
+                if(io_stat /= 0) call fileiochk("params ; read_vols error opening "//trim(filename), io_stat)
                 do i=1,nl
-                    read(fnr,*, iostat=io_stat) nam
-                    if(io_stat /= 0) call fileiochk("params ; read_vols error reading "//trim(filenam), io_stat)
-                    if( nam .ne. '' ) self%vols(i) = trim(nam)
+                    read(fnr,*, iostat=io_stat) name
+                    if(io_stat /= 0) call fileiochk("params ; read_vols error reading "//trim(filename), io_stat)
+                    if( name .ne. '' )then
+                        call simple_full_path(name, abs_name, 'params :: read_vols', check_exists=.false.)
+                        self%vols(i) = trim(abs_name)
+                        deallocate(abs_name)
+                    endif
                 end do
-                call fclose(fnr,errmsg="params ; read_vols error closing "//trim(filenam))
+                call fclose(fnr,errmsg="params ; read_vols error closing "//trim(filename))
             end subroutine read_vols
 
             subroutine read_masks
-                character(len=STDLEN) :: filenam, nam
-                integer :: nl, fnr, i, io_stat
-                filenam = cline%get_carg('msklist')
-                nl      = nlines(filenam)
-                call fopen(fnr, file=filenam, iostat=io_stat)
-                if(io_stat /= 0) call fileiochk("params ; read_masks error opening "//trim(filenam), io_stat)
+                character(len=LONGSTRLEN)     :: filename, name
+                character(len=:), allocatable :: abs_name
+                integer                       :: nl, fnr, i, io_stat
+                filename = cline%get_carg('msklist')
+                if( filename(1:1).ne.'/' )then
+                    if( self%mkdir.eq.'yes' ) filename = '../'//trim(filename)
+                endif
+                nl = nlines(filename)
+                call fopen(fnr, file=filename, iostat=io_stat)
+                if(io_stat /= 0) call fileiochk("params ; read_masks error opening "//trim(filename), io_stat)
                 do i=1,nl
-                    read(fnr,*, iostat=io_stat) nam
-                    if(io_stat /= 0) call fileiochk("params ; read_masks error reading "//trim(filenam), io_stat)
-                    if( nam .ne. '' ) self%mskvols(i) = trim(nam)
+                    read(fnr,*, iostat=io_stat) name
+                    if(io_stat /= 0) call fileiochk("params ; read_masks error reading "//trim(filename), io_stat)
+                    if( name .ne. '' )then
+                        call simple_full_path(name, abs_name, 'params :: read_masks', check_exists=.false.)
+                        self%mskvols(i) = trim(abs_name)
+                        deallocate(abs_name)
+                    endif
                 end do
-                call fclose(fnr,errmsg="params ; read_masks error closing "//trim(filenam))
+                call fclose(fnr,errmsg="params ; read_masks error closing "//trim(filename))
             end subroutine read_masks
 
             subroutine check_file( file, var, allowed1, allowed2, notAllowed )
@@ -1369,7 +1414,7 @@ contains
                     var             = cline%get_carg(file)
                     file_descr      = fname2format(var)
                     raise_exception = .false.
-                    DebugPrint 'var; file_descr: '//trim(var)//' = '//file_descr
+                    DebugPrint 'var; file_descr: '//trim(var)//' = '//trim(file_descr)
                     if( present(allowed1) )then
                         if( present(allowed2) )then
                             if( allowed1 == file_descr .or. allowed2 == file_descr )then
@@ -1412,13 +1457,18 @@ contains
                             write(*,*) 'file: ', trim(file)
                             call simple_stop('This file format is not supported by SIMPLE; simple_params::check_file')
                     end select
-                    ! if( file_exists(file) )then
-                    !     ! updates name to include absolute path
-                    !     call simple_full_path(var, abspath_file, 'params :: check_file', check_exists=.false.)
-                    !     var = trim(abspath_file)
-                    !     deallocate(abspath_file)
-                    ! endif
-                    DebugPrint file, '=', var
+                    if( file_exists(var) )then
+                        ! updates name to include absolute path
+                        call simple_full_path(var, abspath_file, 'params :: check_file', check_exists=.false.)
+                        if( len_trim(abspath_file) > LONGSTRLEN )then
+                            write(*,*)'Argument too long: ',trim(abspath_file)
+                            stop 'simple_params :: new :: checkfile'
+                        endif
+                        var = trim(abspath_file)
+                        call cline%set(file,trim(var))
+                        deallocate(abspath_file)
+                    endif
+                    DebugPrint trim(file), '=', trim(var)
                 endif
             end subroutine check_file
 
@@ -1470,7 +1520,7 @@ contains
                 character(len=*), intent(inout) :: var
                 if( cline%defined(carg) )then
                     var = cline%get_carg(carg)
-                    DebugPrint carg, '=', var
+                    DebugPrint trim(carg), '=', trim(var)
                 endif
             end subroutine check_carg
 
@@ -1479,7 +1529,7 @@ contains
                 integer,          intent(out) :: var
                 if( cline%defined(iarg) )then
                     var = nint(cline%get_rarg(iarg))
-                    DebugPrint iarg, '=', var
+                    DebugPrint trim(iarg), '=', var
                 endif
             end subroutine check_iarg
 
@@ -1488,7 +1538,7 @@ contains
                 real, intent(out) :: var
                 if( cline%defined(rarg) )then
                     var = cline%get_rarg(rarg)
-                    DebugPrint rarg, '=', var
+                    DebugPrint trim(rarg), '=', var
                 endif
             end subroutine check_rarg
 

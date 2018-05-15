@@ -83,7 +83,7 @@ integer, parameter :: NARGMAX=500
 
 type args
     private
-    character(len=STDLEN) :: args(NARGMAX)
+    character(len=LONGSTRLEN) :: args(NARGMAX)
   contains
     procedure :: is_present
 end type
@@ -146,7 +146,7 @@ end function
 
 subroutine test_args()
     type(args) :: as
-    character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath
+    character(len=LONGSTRLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath
     integer               :: funit, n, i,io_stat, status, length1, length2
     integer, allocatable  :: buff(:)
     character(len=STDLEN) :: varlist = 'simple/simple_varlist.txt'

@@ -55,13 +55,13 @@ contains
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
-        type(sp_project)      :: spproj, spproj_sc
-        type(params)          :: p_master
+        type(sp_project)              :: spproj, spproj_sc
+        type(params)                  :: p_master
         character(len=:), allocatable :: projfile_sc, stk, stk_filt
-        character(len=LONGSTRLEN) :: finalcavgs, finalcavgs_ranked, refs_sc
-        real                  :: scale_stage1, scale_stage2
-        integer               :: istk, nparts, last_iter_stage1, last_iter_stage2
-        logical               :: scaling
+        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
+        real     :: scale_stage1, scale_stage2
+        integer  :: istk, nparts, last_iter_stage1, last_iter_stage2
+        logical  :: scaling
         ! seed the random number generator
         call seed_rnd
         ! set oritype
@@ -70,7 +70,7 @@ contains
         p_master = params(cline, del_scaled=.true.)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        nparts   = p_master%nparts
+        nparts = p_master%nparts
         if( p_master%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function
             ! SPLITTING
@@ -99,10 +99,10 @@ contains
                 call xscale_distr%execute( cline_scale1 )
                 ! scale references
                 if( cline%defined('refs') )then
-                    call cline_scalerefs%set('stk', cline%get_carg('refs'))
-                    refs_sc = trim(cline_scalerefs%get_carg('refs')) //trim(SCALE_SUFFIX)//p_master%ext
+                    call cline_scalerefs%set('stk', trim(p_master%refs))
+                    refs_sc = 'refs'//trim(SCALE_SUFFIX)//p_master%ext
                     call cline_scalerefs%set('outstk', trim(refs_sc))
-                    call cline_scalerefs%set('smpd', cline%get_rarg('smpd'))
+                    call cline_scalerefs%set('smpd', p_master%smpd)
                     call cline_scalerefs%set('newbox', cline_scale1%get_rarg('newbox'))
                     call xscale%execute(cline_scalerefs)
                     call cline_cluster2D_stage1%set('refs',trim(refs_sc))

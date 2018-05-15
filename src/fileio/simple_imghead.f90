@@ -1230,7 +1230,7 @@ contains
                 call get_spifile_info(fname, ldim, iform, maxim, smpd, conv, ddoprint)
                 nptcls = maxim
             case DEFAULT
-                write(*,*) 'fname: ', fname
+                write(*,*) 'fname: ', trim(fname)
                 write(*,*) 'format descriptor: ', fname2format(fname)
                 stop 'File format not supported; find_ldim_nptcls; simple_imghead'
         end select

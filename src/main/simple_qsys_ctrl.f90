@@ -97,7 +97,7 @@ contains
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
         integer, optional,        intent(in)    :: numlen           !< length of number string
-        integer :: ipart,iostat
+        integer :: ipart
         call self%kill
         self%stream                 =  stream
         self%exec_binary            =  exec_binary
@@ -476,7 +476,6 @@ contains
             ! move everything up so '1' is index for next job to be run
             subroutine updatestack
                 type(cmdline), allocatable :: tmp_stack(:)
-                logical,       allocatable :: tmp_l(:)
                 integer :: i
                 if( self%cline_stacksz > 1 )then
                     tmp_stack = self%stream_cline_stack(2:)

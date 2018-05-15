@@ -107,6 +107,9 @@ contains
         endif
         ! read in movies
         call spproj%read( p%projfile )
+        if( spproj%get_nmovies() == 0 )then
+            stop 'No movie to process!'
+        endif
         ! range
         if( p%stream.eq.'yes' )then
             ! STREAMING MODE
@@ -321,6 +324,10 @@ contains
             fromto(2) = spproj%os_mic%get_noris()
         endif
         ntot = fromto(2) - fromto(1) + 1
+        ! sanity check
+        if( spproj%get_nmovies() == 0 )then
+            stop 'No movie to process!'
+        endif
         ! for series of tomographic movies we need to calculate the time_per_frame
         if( p%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
@@ -382,6 +389,9 @@ contains
         ntot = fromto(2) - fromto(1) + 1
         ! read in integrated movies
         call spproj%read_segment( 'mic', p%projfile, fromto )
+        if( spproj%get_nintgs() == 0 )then
+            stop 'No integrated micrograph to process!'
+        endif
         ! loop over exposures (movies)
         cnt= 0
         do imic = fromto(1),fromto(2)
@@ -477,6 +487,9 @@ contains
         ntot = fromto(2) - fromto(1) + 1
         ! read in integrated movies
         call spproj%read_segment('mic', p%projfile, fromto)
+        if( spproj%get_nintgs() == 0 )then
+            stop 'No integrated micrograph to process!'
+        endif
         ! main loop
         cnt = 0
         do imic=fromto(1),fromto(2)
@@ -527,6 +540,9 @@ contains
         output_dir = './'
         ! read in integrated movies
         call spproj%read_segment('mic', p%projfile)
+        if( spproj%get_nintgs() == 0 )then
+            stop 'No integrated micrograph to process!'
+        endif
         ntot  = spproj%os_mic%get_noris()
         ! sanity checks
         allocate(mics_mask(ntot), source=.false.)
@@ -706,7 +722,6 @@ contains
                 inside = .true.        ! box is inside
                 if( any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
             end function box_inside
-
     end subroutine exec_extract
 
 end module simple_commander_preprocess

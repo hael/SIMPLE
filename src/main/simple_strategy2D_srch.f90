@@ -135,7 +135,7 @@ contains
 
     subroutine inpl_srch( self )
         class(strategy2D_srch), intent(inout) :: self
-        real, allocatable :: cxy(:)
+        real              :: cxy(3)
         integer           :: irot
         self%best_shvec = [0.,0.]
         if( self%doshift )then

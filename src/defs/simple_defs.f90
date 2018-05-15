@@ -130,9 +130,9 @@ integer,           parameter :: SZSN_STEP  = 3
 integer,           parameter :: SZSN_MAX   = 20
 
 ! global  variables
-integer(kind=c_int)       :: nthr_glob                 !< number of threads global variable
-logical                   :: l_distr_exec_glob         !< global distributed execution flag
-character(len=LONGSTRLEN) :: cmdline_glob              !< global command line string
+integer(kind=c_int)           :: nthr_glob                 !< number of threads global variable
+logical                       :: l_distr_exec_glob         !< global distributed execution flag
+character(len=:), allocatable :: cmdline_glob              !< global command line string
 
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000

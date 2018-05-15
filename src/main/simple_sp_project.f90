@@ -22,10 +22,6 @@ type sp_project
     type(oris)        :: os_ptcl3D ! per-particle 3D os,       segment 6
     type(oris)        :: os_out    ! critical project outputs, segment 7
 
-    ! ARRAY REPRESENTATIONS OF BINARY FILE SEGMENTS FOR FRCS & FSCS
-    real, allocatable :: frcs(:,:) ! Fourier Ring  Corrs      segment 9
-    real, allocatable :: fscs(:,:) ! Fourier Shell Corrs      segment 10
-
     ! ORIS REPRESENTATIONS OF PROJECT DATA / DISTRIBUTED SYSTEM INFO / SYSTEM MANAGEMENT STUFF
     ! segments 11-20 reserved for project info, job management etc.
     type(oris)        :: projinfo  ! project information      segment 11
@@ -67,6 +63,7 @@ contains
     procedure          :: get_smpd
     procedure          :: get_nmics
     procedure          :: get_nmovies
+    procedure          :: get_nintgs
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
     procedure          :: has_phaseplate
@@ -1211,6 +1208,19 @@ contains
         enddo
     end function get_nmovies
 
+    integer function get_nintgs( self )
+        class(sp_project), target, intent(inout) :: self
+        character(len=:), allocatable :: imgkind
+        integer :: i
+        get_nintgs = 0
+        do i=1,self%os_mic%get_noris()
+            call self%os_mic%getter(i,'imgkind',imgkind)
+            if( trim(imgkind).eq.'mic' )then
+                if( self%os_mic%isthere(i,'intg') )get_nintgs = get_nintgs + 1
+            endif
+        enddo
+    end function get_nintgs
+
     character(len=STDLEN) function get_ctfflag( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
@@ -1696,12 +1706,6 @@ contains
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 3D      segment (6) :', n
         n = self%os_out%get_noris()
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in out                  segment (7) :', n
-        n = 0
-        if( allocated(self%frcs) ) n = size(self%frcs,1)
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in FRCs                 segment (9) :', n
-        n = 0
-        if( allocated(self%fscs) ) n = size(self%fscs,1)
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in FSCs                 segment (10):', n
         n = self%projinfo%get_noris()
         if( n > 0 ) write(*,'(a,1x,i10)') '# entries in project info         segment (11):', n
         n = self%jobproc%get_noris()
@@ -1833,10 +1837,6 @@ contains
             case(OUT_SEG)
                 call self%os_out%new(n)
                 call self%bos%read_segment(isegment, self%os_out)
-            case(FRCS_SEG)
-                call self%read_2Darray_segment(FRCS_SEG, self%frcs)
-            case(FSCS_SEG)
-                call self%read_2Darray_segment(FSCS_SEG, self%fscs)
             case(PROJINFO_SEG)
                 call self%projinfo%new(n)
                 call self%bos%read_segment(isegment, self%projinfo)
@@ -1992,10 +1992,6 @@ contains
                 call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
             case(OUT_SEG)
                 call self%bos%write_segment(isegment, self%os_out)
-            case(FRCS_SEG)
-                call self%bos%write_segment(FRCS_SEG, self%frcs)
-            case(FSCS_SEG)
-                call self%bos%write_segment(FSCS_SEG, self%fscs)
             case(PROJINFO_SEG)
                 call self%bos%write_segment(isegment, self%projinfo)
             case(JOBPROC_SEG)
@@ -2039,10 +2035,6 @@ contains
                 oritype2segment = PTCL3D_SEG
             case('out')
                 oritype2segment = OUT_SEG
-            case('frcs')
-                oritype2segment = FRCS_SEG
-            case('fscs')
-                oritype2segment = FSCS_SEG
             case('projinfo')
                 oritype2segment = PROJINFO_SEG
             case('jobproc')

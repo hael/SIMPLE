@@ -10,18 +10,18 @@ private
 
 !> cmdarg key/value pair command-line type
 type cmdarg
-    character(len=KEYLEN) :: key=''
-    character(len=STDLEN) :: carg=''
-    logical               :: defined=.false.
-    real                  :: rarg=0.
+    character(len=KEYLEN)     :: key=''
+    character(len=LONGSTRLEN) :: carg=''
+    logical                   :: defined=.false.
+    real                      :: rarg=0.
 end type cmdarg
 
 type cmdline
-    integer                   :: NMAX=60
-    type(cmdarg)              :: cmds(60)
-    character(len=KEYLEN)     :: checker(60)
-    character(len=LONGSTRLEN) :: entire_line=''
-    integer                   :: argcnt=0, ncheck=0
+    integer               :: NMAX=60
+    type(cmdarg)          :: cmds(60)
+    character(len=KEYLEN) :: checker(60)
+    character(len=8192)   :: entire_line
+    integer               :: argcnt=0, ncheck=0
 contains
     procedure          :: parse
     procedure          :: parse_oldschool
@@ -55,7 +55,7 @@ contains
         type(str4arr), allocatable     :: keys_required(:)
         type(args)                     :: allowed_args
         class(simple_program), pointer :: ptr2prg => null()
-        character(len=STDLEN)          :: arg
+        character(len=LONGSTRLEN)      :: arg
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt  = command_argument_count()
@@ -108,7 +108,7 @@ contains
             if( cmdstat == -1 )then
                 write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(*,*) 'which likely exceeds the length limit STDLEN'
+                write(*,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
@@ -122,11 +122,12 @@ contains
         use simple_args, only: args
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
-        character(len=STDLEN) :: arg, exec_name
-        type(args)            :: allowed_args
-        integer               :: i, cmdstat, cmdlen, ikey
-        integer               :: nreq, cmdargcnt
-        logical               :: distr_exec
+        character(len=STDLEN)     :: exec_name
+        character(len=LONGSTRLEN) :: arg
+        type(args)                :: allowed_args
+        integer                   :: i, cmdstat, cmdlen, ikey
+        integer                   :: nreq, cmdargcnt
+        logical                   :: distr_exec
         call getarg(0,exec_name)
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt = command_argument_count()
@@ -160,7 +161,7 @@ contains
             if( cmdstat == -1 )then
                 write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(*,*) 'which likely exceeds the length limit STDLEN'
+                write(*,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
@@ -215,7 +216,7 @@ contains
         self%cmds(:)%rarg    = self2copy%cmds(:)%rarg
         ! copy rest
         self%checker(:)  = self2copy%checker(:)
-        self%entire_line = self2copy%entire_line
+        self%entire_line = trim(self2copy%entire_line)
         self%argcnt      = self2copy%argcnt
         self%ncheck      = self2copy%ncheck
     end subroutine copy
@@ -364,7 +365,7 @@ contains
         integer           :: i, io_stat, ri, ikey, nreq
         call h%new( self%NMAX )
         call h%read( trim(fname) )
-        self%entire_line = h%chash2str()
+        self%entire_line = trim(h%chash2str())
         self%argcnt = h%size_of()
         if( self%argcnt < 2 )then
             call print_cmdline(keys_required, keys_optional)
@@ -495,7 +496,7 @@ contains
         if( cmdstat == -1 )then
             write(*,*) 'ERROR! while parsing the command line'
             write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-            write(*,*) 'which likely exeeds the lenght limit STDLEN'
+            write(*,*) 'which likely exeeds the lenght limit LONGSTRLEN'
             write(*,*) 'Create a symbolic link with shorter name in the cwd'
             stop
         endif

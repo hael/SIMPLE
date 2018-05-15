@@ -177,7 +177,7 @@ contains
         else
             stop 'ERROR! either projfile or vol1 needs to be part of command line; commander_volops :: postprocess'
         endif
-
+        p%outvol = add2fbody(trim(p%vols(state)), p%ext, PPROC_SUFFIX)
         if( cline%defined('fsc') )then
             ! optimal low-pass filter from FSC
             if( file_exists(p%fsc) )then
@@ -251,7 +251,6 @@ contains
             endif
         endif
         ! output
-        p%outvol = add2fbody(trim(p%vols(state)), p%ext, PPROC_SUFFIX)
         call b%vol%write(p%outvol)
         ! also output mirrored by default (unless otherwise stated on command line)
         if( .not. cline%defined('mirr') .or. p%mirr .ne. 'no' )then
