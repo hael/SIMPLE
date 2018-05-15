@@ -49,12 +49,12 @@ integer               :: cmdstat, cmdlen, pos
 ! parse command line
 call get_command_argument(1, args, cmdlen, cmdstat)
 call get_command(entire_line)
-if( str_has_substr(entire_line, 'prg=list') ) call list_distr_prgs_in_ui
 pos = index(args, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, args, pos )
 prg = args(pos+1:) ! this is the program name
 ! make UI
 call make_user_interface
+if( str_has_substr(entire_line, 'prg=list') ) call list_distr_prgs_in_ui
 
 select case(prg)
 
