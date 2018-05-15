@@ -584,6 +584,9 @@ contains
         write(*,*) trim(cmdline_glob)
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        print *,'***********************after set oritype'
+        call flush(6)
+        call cline%printline
         ! make master parameters
         p_master = params(cline)
         ! set mkdir to no (to avoid nested directory structure)

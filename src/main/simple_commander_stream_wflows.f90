@@ -51,6 +51,7 @@ contains
         p_master        = params(cline)
         p_master%stream = 'yes'
         l_pick          = cline%defined('refs')
+        call cline%set('mkdir', 'no')
         ! output directories
         if( cline%defined('dir') )then
             output_dir = trim(p_master%dir)//'/'
