@@ -124,7 +124,7 @@ contains
             stop
         endif
         call self%e_sym%swape1e3
-        call self%set_subgrps
+        if(trim(self%pgrp).ne.'d1')call self%set_subgrps
         self%eullims = self%build_srchrange()
     end subroutine new
 

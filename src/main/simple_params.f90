@@ -869,6 +869,11 @@ contains
             self%box  = self%ldim(1)
             DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
+        ! directories
+        if( self%mkdir.eq.'yes' )then
+            if( self%dir_movies(1:1).ne.'/' )self%dir_movies = '../'//trim(self%dir_movies)
+        endif
+        ! project file segment
         if( cline%defined('oritype') )then ! oritype overrides any other spproj_a_seg setter
             ! this determines the spproj_a_seg
             if( present(spproj_a_seg) ) spproj_a_seg_inputted = self%spproj_a_seg

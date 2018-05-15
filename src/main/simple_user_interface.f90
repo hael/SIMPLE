@@ -1700,7 +1700,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &2,14, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2,13, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -1716,12 +1716,11 @@ contains
         call preprocess_stream%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess_stream%set_input('parm_ios', 8, pspecsz)
-        call preprocess_stream%set_input('parm_ios', 9, numlen)
-        call preprocess_stream%set_input('parm_ios', 10, kv)
-        call preprocess_stream%set_input('parm_ios', 11, cs)
-        call preprocess_stream%set_input('parm_ios', 12, fraca)
-        call preprocess_stream%set_input('parm_ios', 13, smpd)
-        call preprocess_stream%set_input('parm_ios', 14, mkdir_)
+        call preprocess_stream%set_input('parm_ios', 9, kv)
+        call preprocess_stream%set_input('parm_ios', 10, cs)
+        call preprocess_stream%set_input('parm_ios', 11, fraca)
+        call preprocess_stream%set_input('parm_ios', 12, smpd)
+        call preprocess_stream%set_input('parm_ios', 13, mkdir_)
         ! alternative inputs
         ! <empty>
         ! search controls

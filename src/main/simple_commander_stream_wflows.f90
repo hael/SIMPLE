@@ -118,6 +118,7 @@ contains
                     deallocate(stream_spprojfile)
                 enddo
                 call spproj%write()
+                call spproj%os_stk%write('ptcls_for_2dstream.txt')
                 deallocate(completed_jobs)
             endif
             ! wait

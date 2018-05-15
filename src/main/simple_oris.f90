@@ -75,6 +75,7 @@ type :: oris
     procedure          :: print_matrices
     procedure          :: sample4update_and_incrcnt
     procedure          :: sample4update_and_incrcnt2D
+    procedure          :: has_been_searched
     procedure          :: ori2str
     ! SETTERS
     procedure, private :: assign
@@ -1289,6 +1290,13 @@ contains
             end do
         endif
     end subroutine sample4update_and_incrcnt2D
+
+    !>  \brief  check wether the orientation has any typical search parameter
+    logical function has_been_searched( self, i )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        has_been_searched = self%o(i)%has_been_searched()
+    end function has_been_searched
 
     !>  \brief  joins the hashes into a string that represent the ith ori
     function ori2str( self, i ) result( str )

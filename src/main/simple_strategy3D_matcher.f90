@@ -69,7 +69,7 @@ contains
         real    :: frac_srch_space, extr_thresh, corr_thresh, bfac_rec, specscore_avg
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch
         integer :: ibatch, npeaks, batchlims(2), updatecnt
-        logical :: doprint, do_extr, is_virgin
+        logical :: doprint, do_extr
 
         if( L_BENCH )then
             t_init = tic()
@@ -210,21 +210,11 @@ contains
                     if( ptcl_mask(iptcl) ) allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('single')
-                ! check if virgin
-                select case(trim(p%oritype))
-                    case('ptcl3D')
-                        is_virgin = b%spproj%is_virgin_field('ptcl3D')
-                    case('cls3D')
-                        is_virgin = b%spproj%is_virgin_field('cls3D')
-                    case DEFAULT
-                        write(*,*) 'oritype: ', trim(p%oritype)
-                        stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
-                end select
                 ! polymorphic assignment based on is_virgin and updatecnt
                 do iptcl=p%fromp,p%top
                     if( ptcl_mask(iptcl) )then
                         updatecnt = nint(b%a%get(iptcl,'updatecnt'))
-                        if( updatecnt == 1 .or. is_virgin )then
+                        if( .not.b%a%has_been_searched(iptcl) .or. updatecnt == 1 )then
                             allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
                         else
                             allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr)

@@ -67,6 +67,7 @@ type :: ori
     procedure          :: isthere
     procedure          :: ischar
     procedure          :: isstatezero
+    procedure          :: has_been_searched
     procedure          :: ori2str
     procedure          :: ori2strlen_trim
     procedure          :: ori2chash
@@ -506,6 +507,19 @@ contains
         class(ori),       intent(inout) :: self
         isstatezero = (self%get_state() == 0)
     end function isstatezero
+
+    !>  \brief  check wether the orientation has any typical search parameter
+    logical function has_been_searched( self )
+        class(ori), intent(inout) :: self
+        has_been_searched = .true.
+        if( abs(self%e1get())     > TINY )return
+        if( abs(self%e2get())     > TINY )return
+        if( abs(self%e3get())     > TINY )return
+        if( abs(self%get('corr')) > TINY )return
+        if( abs(self%get('x'))    > TINY )return
+        if( abs(self%get('y'))    > TINY )return
+        has_been_searched = .false.
+    end function has_been_searched
 
     !>  \brief  joins the hashes into a string that represent the ori
     function ori2str( self ) result( str )

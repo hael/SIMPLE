@@ -4,17 +4,9 @@ module simple_strategy2D_matcher
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
-use simple_strategy2D,            only: strategy2D
-use simple_strategy2D_srch,       only: strategy2D_spec
-use simple_strategy2D_greedy,     only: strategy2D_greedy
-use simple_strategy2D_neigh,      only: strategy2D_neigh
-use simple_strategy2D_stochastic, only: strategy2D_stochastic
-use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
-use simple_strategy2D3D_common,   only: set_bp_range2d,prep2dref,build_pftcc_particles
 use simple_classaverager          ! use all in there
 implicit none
 
@@ -38,17 +30,31 @@ contains
     subroutine cluster2D_exec( b, p, cline, which_iter )
         use simple_qsys_funs,    only: qsys_job_finished
         use simple_binoris_io,   only: binwrite_oritab
+        use simple_strategy2D3D_common,   only: set_bp_range2d
+        use simple_strategy2D,            only: strategy2D
+        use simple_strategy2D_srch,       only: strategy2D_spec
+        use simple_strategy2D_greedy,     only: strategy2D_greedy
+        use simple_strategy2D_neigh,      only: strategy2D_neigh
+        use simple_strategy2D_stochastic, only: strategy2D_stochastic
+        use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
         class(build),  target, intent(inout) :: b
         class(params), target, intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: which_iter
-        integer, allocatable       :: prev_pops(:), pinds(:)
-        logical, allocatable       :: ptcl_mask(:)
-        class(strategy2D), pointer :: strategy2Dsrch(:)
-        type(strategy2D_spec)      :: strategy2Dspec
-        integer :: iptcl, icls, i, fnr, cnt
-        real    :: extr_bound, frac_srch_space, extr_thresh
-        logical :: doprint, l_partial_sums, l_extr, l_frac_update
+        class(cmdline),        intent(inout) :: cline
+        integer,               intent(in)    :: which_iter
+        integer, allocatable  :: prev_pops(:), pinds(:)
+        logical, allocatable  :: ptcl_mask(:)
+        !---> The below is to allow particle-dependent decision about which 2D strategy to use
+        type :: strategy2D_per_ptcl
+            class(strategy2D), pointer         :: ptr => null()
+        end type strategy2D_per_ptcl
+        type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
+        !<---- hybrid or combined search strategies can then be implemented as extensions of the
+        !      relevant strategy2D base class
+        !class(strategy2D), pointer :: strategy2Dsrch(:)
+        type(strategy2D_spec) :: strategy2Dspec
+        integer               :: iptcl, icls, i, fnr, cnt, update_cnt
+        real                  :: extr_bound, frac_srch_space, extr_thresh
+        logical               :: doprint, l_partial_sums, l_extr, l_frac_update
 
         if( L_BENCH )then
             t_init = tic()
@@ -115,8 +121,16 @@ contains
         else
             nptcls2update = p%top - p%fromp + 1
             allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
-            pinds = (/(i,i=p%fromp,p%top)/)
+            pinds     = (/(i,i=p%fromp,p%top)/)
             ptcl_mask = .true.
+            do iptcl=p%fromp,p%top
+                if( b%a%isthere('update_cnt') )then
+                    update_cnt = nint(b%a%get(iptcl,'update_cnt'))
+                    call b%a%set(iptcl,'update_cnt', real(update_cnt+1))
+                else
+                    call b%a%set(iptcl,'update_cnt', 1.)
+                endif
+            enddo
         endif
 
         ! PREP REFERENCES
@@ -203,17 +217,24 @@ contains
         ! array allocation for strategy2D
         call prep_strategy2D( b, p, ptcl_mask, which_iter )
         ! switch for polymorphic strategy2D construction
+        allocate(strategy2Dsrch(p%fromp:p%top))
         select case(trim(p%neigh))
             case('yes')
-                allocate(strategy2D_neigh :: strategy2Dsrch(p%fromp:p%top), stat=alloc_stat)
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy2D_neigh :: strategy2Dsrch(iptcl)%ptr)
+                end do
             case DEFAULT
-                if( b%spproj%is_virgin_field('ptcl2D') )then
-                    allocate(strategy2D_greedy :: strategy2Dsrch(p%fromp:p%top), stat=alloc_stat)
-                else
-                    allocate(strategy2D_stochastic :: strategy2Dsrch(p%fromp:p%top), stat=alloc_stat)
-                endif
+                do iptcl=p%fromp,p%top
+                    if( ptcl_mask(iptcl) )then
+                        update_cnt = nint(b%a%get(iptcl,'update_cnt'))
+                        if( .not.b%a%has_been_searched(iptcl) .or. update_cnt == 1 )then
+                            allocate(strategy2D_greedy     :: strategy2Dsrch(iptcl)%ptr)
+                        else
+                            allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr)
+                        endif
+                    endif
+                enddo
         end select
-        if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2D objects ")
         ! actual construction
         cnt = 0
         do iptcl = p%fromp, p%top
@@ -228,7 +249,7 @@ contains
                 strategy2Dspec%pa         => b%a
                 if( allocated(b%nnmat) ) strategy2Dspec%nnmat => b%nnmat
                 ! search object
-                call strategy2Dsrch(iptcl)%new(strategy2Dspec)
+                call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif
         end do
         ! memoize CTF matrices
@@ -246,7 +267,7 @@ contains
         !$omp parallel do default(shared) schedule(guided) private(i,iptcl) proc_bind(close)
         do i=1,nptcls2update
            iptcl = pinds(i)
-           call strategy2Dsrch(iptcl)%srch
+           call strategy2Dsrch(iptcl)%ptr%srch
         end do
         !$omp end parallel do
 
@@ -255,7 +276,8 @@ contains
         call pftcc%kill
         do i=1,nptcls2update
            iptcl = pinds(i)
-           call strategy2Dsrch(iptcl)%kill
+           call strategy2Dsrch(iptcl)%ptr%kill
+           nullify(strategy2Dsrch(iptcl)%ptr)
         end do
         deallocate( strategy2Dsrch )
         if( L_BENCH ) rt_align = toc(t_align)
@@ -321,6 +343,7 @@ contains
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p, which_iter )
         use simple_polarizer, only: polarizer
+        use simple_strategy2D3D_common,   only: prep2dref,build_pftcc_particles
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer,       intent(in)    :: which_iter

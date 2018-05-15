@@ -122,9 +122,11 @@ contains
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_corr  = 0.
             self%best_corr  = 0.
-            self%prev_bfac  = 0.
             if(self%pftcc_ptr%objfun_is_ccres())then
+                self%prev_bfac  = 500.
                 call self%pftcc_ptr%memoize_bfac(self%iptcl, self%prev_bfac)
+            else
+                self%prev_bfac  = 0.
             endif
         endif
         call self%a_ptr%set(self%iptcl, 'bfac', self%prev_bfac)

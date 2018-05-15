@@ -604,6 +604,7 @@ contains
         real                        :: ang, rot
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
+        call cline%set('mkdir','no')
         if( cline%defined('stk') .or. cline%defined('vol1') )then
             p = params(cline) ! constants & derived constants produced
             if( cline%defined('vol1') )then

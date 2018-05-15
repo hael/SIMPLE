@@ -921,8 +921,8 @@ contains
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk, which_imgkind
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=:), allocatable :: stk_abspath, imgkind
-        integer :: ldim(3), nptcls, n_os_out, ind, i
+        character(len=:), allocatable :: stk_abspath
+        integer :: ldim(3), nptcls, ind
         select case(trim(which_imgkind))
             case('cavg','cavg_even','cavg_odd')
                 ! all good
@@ -951,8 +951,8 @@ contains
     subroutine add_frcs2os_out( self, frc, which_imgkind )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: frc, which_imgkind
-        character(len=:), allocatable :: frc_abspath, imgkind
-        integer :: n_os_out, ind, i
+        character(len=:), allocatable :: frc_abspath
+        integer :: ind
         select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
@@ -1458,6 +1458,7 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         class(oris), pointer :: os
+        integer :: i, n
         nullify(os)
         is_virgin_field = .false.
         ! set field pointer
@@ -1472,17 +1473,15 @@ contains
                 write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
                 stop 'sp_project :: is_virgin_field'
         end select
-        if( os%get_noris() == 0 )then
+        n = os%get_noris()
+        if( n == 0 )then
             write(*,*) 'WARNING! cannot check virginity of non-existent field (touched for the very first time???)'
             print *,'WARNING! cannot check virginity of non-existent field (touched for the very first time???)'
             return
         endif
-        if( any( abs(os%get_all('e3')  )>TINY) )return
-        if( any( abs(os%get_all('e1')  )>TINY) )return
-        if( any( abs(os%get_all('e2')  )>TINY) )return
-        if( any( abs(os%get_all('corr'))>TINY) )return
-        if( any( abs(os%get_all('x')   )>TINY) )return
-        if( any( abs(os%get_all('y')   )>TINY) )return
+        do i=1,n
+            if( os%has_been_searched(i) )return
+        enddo
         is_virgin_field = .true.
     end function is_virgin_field
 
