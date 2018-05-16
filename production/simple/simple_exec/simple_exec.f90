@@ -25,6 +25,7 @@ type(new_project_commander)          :: xnew_project
 type(update_project_commander)       :: xupdate_project
 type(print_project_info_commander)   :: xprint_project_info
 type(import_movies_commander)        :: ximport_movies
+type(import_boxes_commander)         :: ximport_boxes
 type(import_particles_commander)     :: ximport_particles
 type(import_cavgs_commander)         :: ximport_cavgs
 
@@ -99,6 +100,9 @@ select case(prg)
     case( 'import_movies' )
         call cline%parse()
         call ximport_movies%execute(cline)
+    case( 'import_boxes' )
+        call cline%parse()
+        call ximport_boxes%execute(cline)
     case( 'import_particles' )
         call cline%parse()
         call ximport_particles%execute(cline)

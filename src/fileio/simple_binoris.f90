@@ -67,13 +67,11 @@ contains
         integer(kind=8)    :: filesz
         integer            :: isegment
         character(len=512) :: io_message
-        ! deletion logics
         if( present(del_if_exists) )then
             if( del_if_exists )then
                 call del_file(trim(fname))
             endif
         endif
-        ! existence logics
         if( .not. file_exists(trim(fname)) )then
             call open_local
             return
@@ -96,7 +94,7 @@ contains
         do isegment=1,MAX_N_SEGEMENTS
             ! update # segments counter
             if( self%header(isegment)%n_bytes_per_record > 0 .and. self%header(isegment)%n_records > 0&
-                &.and. self%header(isegment)%first_data_byte > 0 ) self%n_segments = isegment ! to allow empty in-between segments
+                &.and. self%header(isegment)%first_data_byte > 0 ) self%n_segments = isegment
         end do
 
         contains

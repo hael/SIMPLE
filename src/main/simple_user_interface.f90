@@ -76,6 +76,7 @@ type(simple_program), target :: fsc
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
+type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
 type(simple_program), target :: import_particles
@@ -217,6 +218,7 @@ contains
         call new_info_image
         call new_info_stktab
         call new_initial_3Dmodel
+        call new_import_boxes
         call new_import_cavgs
         call new_import_movies
         call new_import_particles
@@ -295,6 +297,8 @@ contains
                 ptr2prg => info_stktab
             case('initial_3Dmodel')
                 ptr2prg => initial_3Dmodel
+            case('import_boxes')
+                ptr2prg => import_boxes
             case('import_cavgs')
                 ptr2prg => import_cavgs
             case('import_movies')
@@ -413,6 +417,7 @@ contains
         write(*,'(A)') fsc%name
         write(*,'(A)') info_image%name
         write(*,'(A)') info_stktab%name
+        write(*,'(A)') import_boxes%name
         write(*,'(A)') import_cavgs%name
         write(*,'(A)') import_movies%name
         write(*,'(A)') import_particles%name
@@ -1143,6 +1148,31 @@ contains
         call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
     end subroutine new_initial_3Dmodel
+
+    subroutine new_import_boxes
+        ! PROGRAM SPECIFICATION
+        call import_boxes%new(&
+        &'import_boxes',&                                  ! name
+        &'Import EMAN box coordinates to SIMPLE project',& ! descr_short
+        &'is a program for importing EMAN1.9 box coordinates to the project. The *box (text) files should be listed in boxtab',&
+        &'simple_exec',&                                   ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call import_boxes%set_input('parm_ios', 1, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_import_boxes
 
     subroutine new_import_cavgs
         ! PROGRAM SPECIFICATION

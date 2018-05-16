@@ -86,7 +86,9 @@ contains
     ! writers
     procedure          :: write
     procedure          :: write_segment
+    procedure          :: write_segment_inside
     procedure, private :: segwriter
+    procedure, private :: segwriter_inside
     ! destructor
     procedure          :: kill
 end type sp_project
@@ -1758,9 +1760,9 @@ contains
         call self%bos%close
     end subroutine read_ctfparams_state_eo
 
-    subroutine read_segment( self, which, fname, fromto )
+    subroutine read_segment( self, oritype, fname, fromto )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: which
+        character(len=*),  intent(in)    :: oritype
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
         integer :: isegment
@@ -1771,13 +1773,13 @@ contains
         select case(fname2format(fname))
             case('O')
                 ! *.simple project file
-                isegment = oritype2segment(which)
+                isegment = oritype2segment(oritype)
                 call self%bos%open(fname)
                 call self%segreader(isegment)
                 call self%bos%close
             case('T')
                 ! *.txt plain text ori file
-                select case(trim(which))
+                select case(trim(oritype))
                     case('mic')
                         call self%os_mic%read(fname)
                     case('stk')
@@ -1799,7 +1801,7 @@ contains
                     case('compenv')
                         call self%compenv%read(fname)
                     case DEFAULT
-                        stop 'unsupported which flag; sp_project :: read_segment'
+                        stop 'unsupported oritype flag; sp_project :: read_segment'
                 end select
             case DEFAULT
                 write(*,*) 'fname: ', trim(fname)
@@ -1878,9 +1880,36 @@ contains
         call self%bos%close
     end subroutine write
 
-    subroutine write_segment( self, which, fname, fromto )
+    subroutine write_segment_inside( self, oritype, fname, fromto )
+        class(sp_project),          intent(inout) :: self
+        character(len=*),           intent(in)    :: oritype
+        character(len=*), optional, intent(in)    :: fname
+        integer,          optional, intent(in)    :: fromto(2)
+        character(len=:), allocatable :: projfile
+        integer :: iseg
+        if( present(fname) )then
+            if( fname2format(fname) .ne. 'O' )then
+                write(*,*) 'fname: ', trim(fname)
+                stop 'file format not supported; sp_project :: write'
+            endif
+            projfile = trim(fname)
+        else
+            call self%projinfo%getter(1, 'projfile', projfile)
+        endif
+        if( file_exists(projfile) )then
+            iseg = oritype2segment(oritype)
+            call self%bos%open(projfile, del_if_exists=.false.)
+            call self%segwriter_inside(iseg, fromto)
+        else
+            call self%write(fname, fromto)
+        endif
+        ! no need to update header (taken care of in binoris object)
+        call self%bos%close
+    end subroutine write_segment_inside
+
+    subroutine write_segment( self, oritype, fname, fromto )
         class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: which
+        character(len=*),  intent(in)    :: oritype
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
         select case(fname2format(fname))
@@ -1888,7 +1917,7 @@ contains
                 stop 'write_segment is not supported for *.simple project files; sp_project :: write_segment'
             case('T')
                 ! *.txt plain text ori file
-                select case(trim(which))
+                select case(trim(oritype))
                     case('mic')
                         if( self%os_mic%get_noris() > 0 )then
                             call self%os_mic%write(fname)
@@ -1950,7 +1979,7 @@ contains
                             write(*,*) 'WARNING, no compenv-type oris available to write; sp_project :: write_segment'
                         endif
                     case DEFAULT
-                        stop 'unsupported which flag; sp_project :: write_segment'
+                        stop 'unsupported oritype flag; sp_project :: write_segment'
                 end select
             case DEFAULT
                 write(*,*) 'fname: ', trim(fname)
@@ -1986,6 +2015,34 @@ contains
         end select
     end subroutine segwriter
 
+    subroutine segwriter_inside( self, isegment, fromto )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        integer, optional, intent(in)    :: fromto(2)
+        select case(isegment)
+            case(MIC_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_mic, fromto)
+            case(STK_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_stk)
+            case(PTCL2D_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_ptcl2D, fromto)
+            case(CLS2D_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_cls2D)
+            case(CLS3D_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_cls3D, fromto)
+            case(PTCL3D_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_ptcl3D, fromto)
+            case(OUT_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_out)
+            case(PROJINFO_SEG)
+                call self%bos%write_segment_inside(isegment, self%projinfo)
+            case(JOBPROC_SEG)
+                call self%bos%write_segment_inside(isegment, self%jobproc)
+            case(COMPENV_SEG)
+                call self%bos%write_segment_inside(isegment, self%compenv)
+        end select
+    end subroutine segwriter_inside
+
     ! destructor
 
     subroutine kill( self )
@@ -2003,9 +2060,9 @@ contains
 
     ! private supporting subroutines / functions
 
-    integer function oritype2segment( which )
-        character(len=*),  intent(in) :: which
-        select case(trim(which))
+    integer function oritype2segment( oritype )
+        character(len=*),  intent(in) :: oritype
+        select case(trim(oritype))
             case('mic')
                 oritype2segment = MIC_SEG
             case('stk')
@@ -2027,7 +2084,7 @@ contains
             case('compenv')
                 oritype2segment = COMPENV_SEG
             case DEFAULT
-                stop 'unsupported which flag; sp_project :: which_flag2isgement'
+                stop 'unsupported oritype flag; sp_project :: oritype_flag2isgement'
         end select
     end function oritype2segment
 

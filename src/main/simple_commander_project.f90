@@ -17,6 +17,7 @@ public :: print_project_vals_commander
 public :: new_project_commander
 public :: update_project_commander
 public :: import_movies_commander
+public :: import_boxes_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
 private
@@ -53,6 +54,10 @@ type, extends(commander_base) :: import_movies_commander
   contains
     procedure :: execute      => exec_import_movies
 end type import_movies_commander
+type, extends(commander_base) :: import_boxes_commander
+  contains
+    procedure :: execute      => exec_import_boxes
+end type import_boxes_commander
 type, extends(commander_base) :: import_particles_commander
   contains
     procedure :: execute      => exec_import_particles
@@ -274,13 +279,17 @@ contains
         logical          :: inputted_boxtab
         integer          :: nmovf, nboxf, i
         type(ctfparams)  :: ctfvars
-        character(len=:),      allocatable :: phaseplate
+        character(len=:),      allocatable :: phaseplate, boxf_abspath
         character(len=STDLEN), allocatable :: boxfnames(:)
         p = params(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
-        if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
+        if( .not. file_exists(trim(p%projfile)) )then
+            write(*,*) 'Project file: ', trim(p%projfile), ' does not exists!'
+            stop 'ERROR! simple_commander_project :: exec_import_movies'
+        endif
+        call spproj%read(p%projfile)
         ! CTF
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
@@ -306,8 +315,6 @@ contains
         if( trim(p%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
         ! update project info
         call spproj%update_projinfo( cline )
-        ! update computer environment
-        call spproj%update_compenv( cline )
         ! updates segment
         call spproj%add_movies(p%filetab, ctfvars)
         ! add boxtab
@@ -321,13 +328,48 @@ contains
                 stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
             endif
             do i=1,nmovf
-                call spproj%os_mic%set(i, 'boxfile', trim(boxfnames(i)))
+                call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+                call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         endif
         ! write project file
         call spproj%write
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
+
+    !> for importing particle coordinates (boxes) in EMAN1.9 format
+    subroutine exec_import_boxes( self, cline )
+        class(import_boxes_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(sp_project) :: spproj
+        type(params)     :: p
+        integer          :: nos_mic, nboxf, i
+        character(len=:),      allocatable :: boxf_abspath
+        character(len=STDLEN), allocatable :: boxfnames(:)
+        p = params(cline)
+        ! project file management
+        if( .not. file_exists(trim(p%projfile)) )then
+            write(*,*) 'Project file: ', trim(p%projfile), ' does not exists!'
+            stop 'ERROR! simple_commander_project :: exec_import_boxes'
+        endif
+        call spproj%read(p%projfile)
+        ! get boxfiles into os_mic
+        call read_filetable(p%boxtab, boxfnames)
+        nboxf   = size(boxfnames)
+        nos_mic = spproj%os_mic%get_noris()
+        if( nboxf /= nos_mic )then
+            write(*,*) '# boxfiles       : ', nboxf
+            write(*,*) '# os_mic entries : ', nos_mic
+            stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
+        endif
+        do i=1,nos_mic
+            call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+            call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
+        end do
+        ! write project file
+        call spproj%write
+        call simple_end('**** IMPORT_BOXES NORMAL STOP ****')
+    end subroutine exec_import_boxes
 
     !> for importing extracted particles
     subroutine exec_import_particles( self, cline )
