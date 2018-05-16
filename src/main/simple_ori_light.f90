@@ -152,6 +152,9 @@ contains
         real, intent(in)     :: euls(3)
         real, dimension(3,3) :: r1, r2, r3, r, tmp
         real                 :: e1, e2, e3
+        e1 = euls(1)
+        e2 = euls(2)
+        e3 = euls(3)
         r1 = rotmat_sp(e1,3) ! rotation around z
         r2 = rotmat_sp(e2,2) ! tilt
         r3 = rotmat_sp(e3,3) ! rotation around z
@@ -166,6 +169,9 @@ contains
         real(dp), intent(in)     :: euls(3)
         real(dp), dimension(3,3) :: r1, r2, r3, r, tmp
         real(dp)                 :: e1, e2, e3
+        e1 = euls(1)
+        e2 = euls(2)
+        e3 = euls(3)
         r1 = rotmat_dp(e1,3) ! rotation around z
         r2 = rotmat_dp(e2,2) ! tilt
         r3 = rotmat_dp(e3,3) ! rotation around z
