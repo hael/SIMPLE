@@ -62,7 +62,6 @@ type :: build
     logical, private                    :: strategy3D_tbox_exists = .false.
     logical, private                    :: strategy2D_tbox_exists = .false.
     logical, private                    :: extremal3D_tbox_exists = .false.
-    logical, private                    :: read_features_exists   = .false.
   contains
     procedure                           :: build_spproj
     procedure                           :: build_general_tbox

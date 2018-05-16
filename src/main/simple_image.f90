@@ -1632,29 +1632,34 @@ contains
     function get_npix( self, mskrad ) result( npix )
         class(image), intent(in) :: self
         real,         intent(in) :: mskrad
-        real                     :: ci, cj, ck, e
-        integer                  :: npix, i, j, k
+        real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3)), e
+        integer :: i, j, k, ir, jr, kr, npix
+        ! count # pixels
         npix = 0
-        ci = -real(self%ldim(1))/2.
-        do i=1,self%ldim(1)
-            cj = -real(self%ldim(2))/2.
-            do j=1,self%ldim(2)
-                ck = -real(self%ldim(3))/2.
-                do k=1,self%ldim(3)
-                    if( self%ldim(3) > 1 )then
-                        e = hardedge(ci,cj,ck,mskrad)
-                    else
-                        e = hardedge(ci,cj,mskrad)
-                    endif
-                    if( e > 0.5 )then
-                        npix = npix+1
-                    endif
-                    ck = ck+1
-                end do
-                cj = cj+1.
-            end do
-            ci = ci+1.
-        end do
+        if( self%is_3d() )then
+            ! 3d
+            do i=1,self%ldim(1)/2
+                ir = self%ldim(1)+1-i
+                do j=1,self%ldim(2)/2
+                    jr = self%ldim(2)+1-j
+                    do k=1,self%ldim(3)/2
+                        kr = self%ldim(3)+1-k
+                        e = hardedge(cis(i),cjs(j),cks(k),mskrad)
+                        if( e > 0.5 ) npix = npix + 1
+                    enddo
+                enddo
+            enddo
+        else
+            ! 2d
+            do i=1,self%ldim(1)/2
+                ir = self%ldim(1)+1-i
+                do j=1,self%ldim(2)/2
+                    jr = self%ldim(2)+1-j
+                    e = hardedge(cis(i),cjs(j),mskrad)
+                    if( e > 0.5 ) npix = npix + 1
+                enddo
+            enddo
+        endif
     end function get_npix
 
     !>  \brief   get_lfny
@@ -1748,17 +1753,14 @@ contains
     subroutine serialize( self, pcavec, mskrad )
         class(image),      intent(inout) :: self
         real, allocatable, intent(inout) :: pcavec(:)
-        real, optional,    intent(in)    :: mskrad
-        integer                          :: i, j, k, npix
-        real                             :: ci, cj, ck, e
-        logical                          :: pack, usemsk = .false.
-        if( present(mskrad) )usemsk=.true.
-        if( self%ft ) call simple_stop('ERROR, serialization not yet implemented for FTs; serialize; simple_image')
-        if( usemsk )then
-            npix = self%get_npix(mskrad)
-        else
-            npix = self%ldim(1)*self%ldim(2)*self%ldim(3)
-        endif
+        real,              intent(in)    :: mskrad
+        real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3)), e
+        integer :: i, j, k, ir, jr, kr, npix
+        logical :: pack
+        if( self%ft ) call simple_stop('ERROR, serialization not implemented for FTs; serialize; simple_image')
+        ! count # pixels
+        npix = self%get_npix(mskrad)
+        ! pack or unpack?
         if( allocated(pcavec) )then
             if( size(pcavec) /= npix ) call simple_stop('size mismatch mask/npix; serialize; simple_image')
             pack = .false.
@@ -1768,34 +1770,45 @@ contains
             if(alloc_stat/=0)call allocchk('serialize; simple_image')
             pcavec = 0.
         endif
-        npix = 0
-        ci = -real(self%ldim(1))/2.
-        do i=1,self%ldim(1)
-            cj = -real(self%ldim(2))/2.
-            do j=1,self%ldim(2)
-                ck = -real(self%ldim(3))/2.
-                do k=1,self%ldim(3)
-                    if( usemsk )then
-                        if( self%ldim(3) > 1 )then
-                            e = hardedge(ci,cj,ck,mskrad)
-                        else
-                            e = hardedge(ci,cj,mskrad)
+        ! fill in
+        if( self%is_3d() )then
+            ! 3d
+            do i=1,self%ldim(1)/2
+                ir = self%ldim(1)+1-i
+                do j=1,self%ldim(2)/2
+                    jr = self%ldim(2)+1-j
+                    do k=1,self%ldim(3)/2
+                        kr = self%ldim(3)+1-k
+                        e = hardedge(cis(i),cjs(j),cks(k),mskrad)
+                        if( e > 0.5 )then
+                            npix = npix + 1
+                            if( pack )then
+                                pcavec(npix) = self%rmat(i,j,k)
+                            else
+                                self%rmat(i,j,k) = pcavec(npix)
+                            endif
                         endif
-                    endif
-                    if( (e>0.5).or.(.not.usemsk) )then
-                        npix = npix+1
+                    enddo
+                enddo
+            enddo
+        else
+            ! 2d
+            do i=1,self%ldim(1)/2
+                ir = self%ldim(1)+1-i
+                do j=1,self%ldim(2)/2
+                    jr = self%ldim(2)+1-j
+                    e = hardedge(cis(i),cjs(j),mskrad)
+                    if( e > 0.5 )then
+                        npix = npix + 1
                         if( pack )then
                             pcavec(npix) = self%rmat(i,j,k)
                         else
                             self%rmat(i,j,k) = pcavec(npix)
                         endif
                     endif
-                    ck = ck+1
-                end do
-                cj = cj+1.
-            end do
-            ci = ci+1.
-        end do
+                enddo
+            enddo
+        endif
     end subroutine serialize
 
     !>  \brief winserialize is for packing/unpacking a serialized image vector for convolutional pca analysis
@@ -6341,73 +6354,6 @@ contains
             call simple_stop('even dimensions assumed; shift_phorig; simple_image')
         endif
     end subroutine shift_phorig
-
-    !> \brief shift  is for origin shifting an image
-    !! \param x position in axis 0
-    !! \param y position in axis 1
-    !! \param z position in axis 2
-    !! \param lp_dyn low-pass cut-off freq
-    !! \param imgout processed image
-    !!
-    ! subroutine shift( self, shvec, lp_dyn, imgout )
-    !     class(image),           intent(inout) :: self
-    !     real,                   intent(in)    :: shvec(3)
-    !     real,         optional, intent(in)    :: lp_dyn
-    !     class(image), optional, intent(inout) :: imgout
-    !     integer :: h, k, l, lims(3,2), phys(3)
-    !     real    :: shvec_here(3)
-    !     logical :: didft, imgout_present, lp_dyn_present
-    !     imgout_present = present(imgout)
-    !     lp_dyn_present = present(lp_dyn)
-    !     if( all(abs(shvec) < TINY) )then
-    !         if( imgout_present ) call imgout%copy(self)
-    !         return
-    !     endif
-    !     shvec_here = shvec
-    !     if( self%ldim(3) == 1 ) shvec_here(3) = 0.0
-    !     didft = .false.
-    !     if( .not. self%ft )then
-    !         call self%fft()
-    !         didft = .true.
-    !     endif
-    !     if( lp_dyn_present )then
-    !         lims = self%fit%loop_lims(1,lp_dyn)
-    !     else
-    !         lims = self%fit%loop_lims(2)
-    !     endif
-    !     if( imgout_present )then
-    !         imgout%ft = .true.
-    !         !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
-    !         !$omp schedule(static) proc_bind(close)
-    !         do h=lims(1,1),lims(1,2)
-    !             do k=lims(2,1),lims(2,2)
-    !                 do l=lims(3,1),lims(3,2)
-    !                     phys = self%fit%comp_addr_phys([h,k,l])
-    !                     imgout%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-    !                     self%oshift([h,k,l], shvec_here)
-    !                 end do
-    !             end do
-    !         end do
-    !         !$omp end parallel do
-    !     else
-    !         !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
-    !         !$omp schedule(static) proc_bind(close)
-    !         do h=lims(1,1),lims(1,2)
-    !             do k=lims(2,1),lims(2,2)
-    !                 do l=lims(3,1),lims(3,2)
-    !                     phys = self%fit%comp_addr_phys([h,k,l])
-    !                     self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-    !                     self%oshift([h,k,l], shvec_here)
-    !                 end do
-    !             end do
-    !         end do
-    !         !$omp end parallel do
-    !     endif
-    !     if( didft )then
-    !         call self%ifft()
-    !         if( imgout_present ) call imgout%ifft()
-    !     endif
-    ! end subroutine shift
 
     !> \brief shift  is for origin shifting an image
     !! \param x position in axis 0

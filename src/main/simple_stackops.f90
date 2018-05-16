@@ -38,7 +38,6 @@ contains
         real               :: x, y
         integer            :: n, fnum, ier, i, ldim(3)
         logical            :: err
-
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
         call raise_exception( n, ldim, 'make_pattern_stack' )
@@ -167,8 +166,6 @@ contains
         call img%kill
         call avg%kill
     end subroutine frameavg_stack
-
-
 
     !>  \brief  is for calculating the acf of a stack
     !! \param fname2acf  output filename

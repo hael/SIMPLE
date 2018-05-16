@@ -5,7 +5,7 @@ use simple_image,   only: image
 use simple_oris,    only: oris
 implicit none
 
-private ! :: raise_exception_imgfile
+private
 
 !! Basic Operations
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile

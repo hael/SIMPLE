@@ -250,7 +250,6 @@ type :: params
     integer :: part=1
     integer :: pcasz=0
     integer :: pid=0               !< process ID
-    integer :: ppca=0
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: recl_cgrid=-1
@@ -659,7 +658,6 @@ contains
         call check_iarg('nvox',           self%nvox)
         call check_iarg('offset',         self%offset)
         call check_iarg('part',           self%part)
-        call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
