@@ -1,13 +1,6 @@
 ! an orientation
 module simple_ori
-!include 'simple_lib.f08'
-use simple_defs
-use simple_error, only: simple_stop
-use simple_hash,  only: hash
-use simple_chash, only: chash
-use simple_math,  only: myacos, deg2rad, rad2deg, make_transfmat, rotmat2d
-use simple_rnd,   only: ran3
-use simple_stat,  only: pearsn
+include 'simple_lib.f08'
 implicit none
 
 public :: ori, test_ori
@@ -553,8 +546,17 @@ contains
         use simple_chash, only: chash
         class(ori), intent(in) :: self
         type(chash) :: ch
+        type(hash) :: h
+
+        integer :: i
         ch = self%chtab
-        call self%htab%push2chash(ch, as_ints=.true.)
+        h = self%htab
+        if( h%size_of() >= 1 )then
+            do i=1,h%size_of()
+                call ch%push(h%get_str(i),&
+                    &int2str(int( h%get_value_at(i) ) ) )
+            end do
+        endif
     end function ori2chash
 
     !<  \brief  to print the rotation matrix

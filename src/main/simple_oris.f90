@@ -2,15 +2,7 @@
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
-!include 'simple_lib.f08'
-use simple_defs
-use simple_error,    only: allocchk, simple_stop
-use simple_ran_tabu, only: ran_tabu
-use simple_math
-use simple_fileio,   only: file_exists, fopen, fclose, fileiochk
-use simple_strings,  only: str_has_substr
-use simple_rnd,      only: gasdev, ran3, irnd_uni
-use simple_stat,     only: moment, corrs2weights, pearsn
+include 'simple_lib.f08'
 use simple_ori,      only: ori
 implicit none
 

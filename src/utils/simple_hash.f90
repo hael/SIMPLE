@@ -36,7 +36,9 @@ type :: hash
     procedure          :: lookup
     procedure          :: get
     procedure          :: get_values
-    procedure          :: push2chash
+    procedure          :: get_str
+    procedure          :: get_value_at
+  !  procedure          :: push2chash
     procedure          :: hash2str
     procedure          :: size_of
     ! I/O
@@ -261,6 +263,31 @@ contains
         end do
     end function get
 
+        !>  \brief  gets a value in the hash
+    function get_str( self, keyindx ) result( vstr )
+        class(hash),      intent(inout) :: self
+        integer,          intent(in)    :: keyindx
+        character(len=:), allocatable   :: vstr
+
+        if(keyindx > 0 .and.  keyindx .le. self%hash_index)then
+           allocate(vstr, source=trim(self%keys(keyindx)%str))
+       endif
+
+   end function get_str
+
+        !>  \brief  gets a value in the hash
+    function get_value_at( self, keyindx ) result( val )
+        class(hash),      intent(inout) :: self
+        integer,          intent(in)    :: keyindx
+        real :: val
+        val=0.
+        if(keyindx > 0 .and.  keyindx .le. self%hash_index)then
+            val = self%values(keyindx)
+       endif
+
+   end function get_value_at
+
+
     !>  \brief  returns the values of the hash
     function get_values( self ) result( values )
         class(hash), intent(inout) :: self
@@ -269,22 +296,22 @@ contains
     end function get_values
 
     !>  \brief  pushes the hash content to chash
-    subroutine push2chash( self, ch, as_ints )
-        use simple_chash, only: chash
-        class(hash),  intent(in)    :: self
-        class(chash), intent(inout) :: ch
-        logical,      intent(in)    :: as_ints
-        integer :: i
-        if( self%hash_index >= 1 )then
-            do i=1,self%hash_index
-                if( as_ints )then
-                    call ch%push(trim(self%keys(i)%str), int2str(int(self%values(i))))
-                else
-                    call ch%push(trim(self%keys(i)%str), real2str(self%values(i)))
-                endif
-            end do
-        endif
-    end subroutine push2chash
+    ! subroutine push2chash( self, ch, as_ints )
+    !     use simple_chash, only: chash
+    !     class(hash),  intent(in)    :: self
+    !     class(chash), intent(inout) :: ch
+    !     logical,      intent(in)    :: as_ints
+    !     integer :: i
+    !     if( self%hash_index >= 1 )then
+    !         do i=1,self%hash_index
+    !             if( as_ints )then
+    !                 call ch%push(trim(self%keys(i)%str), int2str(int(self%values(i))))
+    !             else
+    !                 call ch%push(trim(self%keys(i)%str), real2str(self%values(i)))
+    !             endif
+    !         end do
+    !     endif
+    ! end subroutine push2chash
 
     !>  \brief  convert hash to string
     function hash2str( self ) result( str )
