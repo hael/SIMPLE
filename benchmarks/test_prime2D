@@ -11,18 +11,22 @@ if [ ! -d "${SIMPLE_TESTBENCH_DATA}/bgal" ]; then
     echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
 fi
 
-echo "${SIMPLE_PATH}"
-echo "${SIMPLE_TESTBENCH_DATA}"
-cd "${SIMPLE_TESTBENCH_DATA}"/betagal
-prime_cleanup.pl
-pkill simple_exec
+cd ${SIMPLE_TESTBENCH_DATA}/betagal
+echo " ## Running PRIME2D TESTBENCH on betagal                                          "
+echo " ## Expected Completion Output: 10 cores Intel Xeon E5-2650, Compiled with GNU_RELEASE_FFTW  "
+echo " ##
+ **** SIMPLE_CLUSTER2D NORMAL STOP ****
+
+real	10m5.721s
+user	1m26.475s
+sys	0m1.997s"
+
 [ -d prime2D_bench ] && rm -rf prime2D_bench
 mkdir prime2D_bench && cd prime2D_bench
 
-simple_private_exec prg=import_particles ctf=yes cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc smpd=1.275 projfile=betagal.simple
-nohup simple_distr_exec prg=cluster2D projfile=betagal.simple nparts=2 nthr=4 ncls=100 msk=88
+nice simple_exec prg=import_particles ctf=yes smpd=1.275 cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc projfile=betagal.simple
+time nice simple_distr_exec prg=cluster2D projfile=betagal.simple nparts=2 nthr=10 ncls=50 msk=88
 
 #nohup simple_distr_exec prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt > PRIME2D &
 # BGAL
-
 ## valgrind --tool=cachegrind simple_exec  prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt

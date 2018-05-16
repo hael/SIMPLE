@@ -32,6 +32,7 @@ echo "                                                                          
 [ ! -d reconstruct3D_test ] && mkdir reconstruct3D_test
 cd reconstruct3D_test
 [ -f recvol_state01.mrc ] &&  rm -f recvol_state01.mrc
+[ -f recvol.simple ] &&  rm -f recvol.simple
 simple_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projfile=recvol.simple
 # cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc smpd=1.275 projfile=recvol.simple
 time simple_private_exec prg=reconstruct3D ctf=no msk=50 oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projfile=recvol.simple
