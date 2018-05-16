@@ -141,7 +141,7 @@ select case(prg)
         call cline%parse()
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         call xcenter%execute(cline)
-    case( 'project' ) !! posible renaming to reproject
+    case( 'reproject' ) !! posible renaming to reproject
         call cline%parse()
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)

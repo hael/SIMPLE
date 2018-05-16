@@ -2571,7 +2571,6 @@ contains
         real,         intent(in)    :: rval
         self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rval
     end subroutine mul_rmat_at_1
-
     ! elementwise multiplication in real-space
     elemental pure subroutine mul_rmat_at_2( self,i, j, k, rval )
         class(image), intent(inout) :: self
@@ -3525,7 +3524,7 @@ contains
         if( self%ft )    call simple_stop('not intended for FTs; simple_image :: cos_edge')
         self%rmat   = self%rmat/maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         rfalloff    = real( falloff )
-        falloff_sq  = falloff**2
+        falloff_sq  = falloff**2.
         scalefactor = PI / rfalloff
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat )
         if(alloc_stat /= 0)call allocchk("In simple_image::cos_edge")
@@ -3535,7 +3534,7 @@ contains
             ie = min(i+1,self%ldim(1))       ! right neighbour
             il = max(1,i-falloff)            ! left bounding box limit
             ir = min(i+falloff,self%ldim(1)) ! right bounding box limit
-            if( any(rmat(i,:,:)==1.) )cycle ! no values equal to one
+            if( .not. any(rmat(i,:,:)==1.) )cycle ! no values equal to one
             do j=1,self%ldim(2)
                 js = max(1,j-1)
                 je = min(j+1,self%ldim(2))
@@ -3551,7 +3550,6 @@ contains
                     ! 3d
                     if(.not. any(rmat(i,j,:) == 1.))cycle ! cycle if equal to one
                     do k=1,self%ldim(3)
-
                         if( rmat(i,j,k) /= 1. )cycle
                         ! within mask region
                         ks = max(1,k-1)
