@@ -1,7 +1,6 @@
 ! generic fileio module
 module simple_fileio
 use simple_defs
-use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
 use simple_error,   only: allocchk, simple_stop, simple_error_check
 use simple_syslib, only: file_exists, is_open, is_file_open, is_io,  &

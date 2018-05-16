@@ -1,5 +1,5 @@
 module simple_error
-use simple_defs
+use simple_defs, only: alloc_stat, LONGSTRLEN
 
 #if defined(GNU)
     use, intrinsic :: iso_fortran_env, only: &
@@ -92,7 +92,7 @@ contains
         integer,          intent(in), optional :: io_stat
         character(len=*), intent(in), optional :: msg
         integer :: io_stat_this, last_sys_error
-        character(len=STDLEN ) :: newmsg
+        character(len=LONGSTRLEN ) :: newmsg
         if (present(io_stat))then
             io_stat_this = io_stat
         else

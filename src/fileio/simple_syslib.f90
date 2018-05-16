@@ -13,6 +13,7 @@
 
 module simple_syslib
 use simple_defs
+use simple_error
 use iso_c_binding
 #if defined(GNU)
 use, intrinsic :: iso_fortran_env, only: &
@@ -188,17 +189,17 @@ interface
         integer, intent(in) :: a
     end function loc
 
-        pure subroutine ltime(stime,tarray)
-            integer, intent(in) :: stime
-            integer, intent(out) :: tarray(9)
-        end subroutine ltime
+    pure subroutine ltime(stime,tarray)
+        integer, intent(in) :: stime
+        integer, intent(out) :: tarray(9)
+    end subroutine ltime
 
-        integer function malloc(n)
-            integer, intent(in) :: n
-        end function malloc
+    integer function malloc(n)
+        integer, intent(in) :: n
+    end function malloc
 
-        pure integer function mclock()
-        end function mclock
+    pure integer function mclock()
+    end function mclock
 
     integer function outstr(ch)
         character*(*), intent(in) :: ch
@@ -212,14 +213,14 @@ interface
         character*(*), intent(in) :: str
     end function putenv
 
-        pure double precision function dflmin()
-        end function dflmin
+    pure double precision function dflmin()
+    end function dflmin
 
-        pure double precision function dflmax()
-        end function dflmax
+    pure double precision function dflmax()
+    end function dflmax
 
-        pure double precision function dffrac()
-        end function dffrac
+    pure double precision function dffrac()
+    end function dffrac
 
     pure integer function inmax()
     end function inmax
@@ -228,14 +229,14 @@ interface
         character*(*), intent(in) :: from, to
     end function rename
 
-        pure integer function rindex(a1,a2)
-            character*(*), intent(in) :: a1, a2
-        end function rindex
+    pure integer function rindex(a1,a2)
+        character*(*), intent(in) :: a1, a2
+    end function rindex
 
-        integer function signal(sig,proc,flag)
-            integer, intent(in) :: sig, flag
-            external proc
-        end function signal
+    integer function signal(sig,proc,flag)
+        integer, intent(in) :: sig, flag
+        external proc
+    end function signal
 
     subroutine sleep(itime)
         integer, intent(in) :: itime
@@ -246,23 +247,23 @@ interface
         integer, intent(out) :: statb(*)
     end function stat
 
-        integer function lstat(nm,statb)
-            character*(*), intent(in) :: nm
-            integer, intent(out) :: statb(*)
-        end function lstat
+    integer function lstat(nm,statb)
+        character*(*), intent(in) :: nm
+        integer, intent(out) :: statb(*)
+    end function lstat
 
-        integer function fstat(lu,statb)
-            integer, intent(in) :: lu
-            integer, intent(out) :: statb(*)
-        end function fstat
+    integer function fstat(lu,statb)
+        integer, intent(in) :: lu
+        integer, intent(out) :: statb(*)
+    end function fstat
 
     integer function stime(tp)
         integer, intent(in) :: tp
     end function stime
 
-        integer function symlnk(n1,n2)
-            character*(*), intent(in) :: n1, n2
-        end function symlnk
+    integer function symlnk(n1,n2)
+        character*(*), intent(in) :: n1, n2
+    end function symlnk
 
     integer function system(str)
         character*(*), intent(in) :: str
@@ -326,30 +327,30 @@ interface
     end function isdir
 
     function makedir(dirname) bind(C, name="makedir")
-         import
-         integer(c_int) :: makedir
-         character(c_char),dimension(*),intent(in)  ::  dirname
-     end function makedir
+        import
+        integer(c_int) :: makedir
+        character(c_char),dimension(*),intent(in)  ::  dirname
+    end function makedir
 
-     function removedir(dirname,len, count) bind(C, name="remove_directory")
-         use, intrinsic :: iso_c_binding
-         implicit none
-         integer(c_int) :: removedir
-         character(c_char),dimension(*),intent(in)  ::  dirname
-         integer(c_int), intent(in) :: len
-         integer(c_int), intent(in) :: count
-     end function removedir
+    function removedir(dirname,len, count) bind(C, name="remove_directory")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: removedir
+        character(c_char),dimension(*),intent(in)  ::  dirname
+        integer(c_int), intent(in) :: len
+        integer(c_int), intent(in) :: count
+    end function removedir
 
-     function recursive_delete(dirname,len, count) bind(C, name="recursive_delete")
-         use, intrinsic :: iso_c_binding
-         implicit none
-         integer(c_int) :: recursive_delete
-         character(c_char),dimension(*),intent(in)  ::  dirname
-         integer(c_int), intent(in) :: len
-         integer(c_int), intent(in) :: count
-     end function recursive_delete
+    function recursive_delete(dirname,len, count) bind(C, name="recursive_delete")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: recursive_delete
+        character(c_char),dimension(*),intent(in)  ::  dirname
+        integer(c_int), intent(in) :: len
+        integer(c_int), intent(in) :: count
+    end function recursive_delete
 
-     function get_file_list(path,  ext, count) bind(c,name="get_file_list")
+    function get_file_list(path,  ext, count) bind(c,name="get_file_list")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: get_file_list                           !> return success
@@ -585,7 +586,7 @@ contains
 
     subroutine simple_sleep( secs )
         integer, intent(in) :: secs
-        integer(dp)         :: longtime
+        integer(kind=8)     :: longtime
 #if defined(INTEL)
         integer             :: msecs
         msecs = 1000*INT(secs)
@@ -624,7 +625,6 @@ contains
         if( dir_exists(fname1) )&
             call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
 
-        if(global_debug) print *,"In simple_copy_file"
         allocate(f1, source=trim(adjustl(fname1))//achar(0))
         allocate(f2, source=trim(adjustl(fname2))//achar(0))
         status = fcopy(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
@@ -670,7 +670,6 @@ contains
         if( dir_exists(fname1) )&
             call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
 
-        if(global_debug) print *,"In simple_copy_file"
         allocate(f1, source=trim(adjustl(fname1))//achar(0))
         allocate(f2, source=trim(adjustl(fname2))//achar(0))
         status = fcopy2(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
@@ -821,7 +820,6 @@ contains
 #if defined(GNU)
         allocate(buffer(13), source=0)
         status = stat(trim(adjustl(filename)), buffer)
-
 #elif defined(PGI)
         status =  stat(trim(adjustl(filename)), buffer)
         !        DebugPrint 'fileio       sys_stat PGI stato ', status
@@ -884,7 +882,7 @@ contains
             dir_exists = .true.
             !            print *, " isdir status ", status
            call simple_file_stat( trim(adjustl(dname)), status, buffer, .true. )
-            if(global_debug)then
+           if(global_debug)then
                 print *, " status ", status
                 print *, " file mode ", buffer(3)
                 print *, " last modified ", buffer(10)
@@ -996,8 +994,8 @@ contains
 !                 qq =  makedirqq(path)
 !                 if(.not. qq) io_status = 1
 ! #else
-                allocate(path, source=trim(adjustl(dir))//c_null_char)
-                io_status= makedir(path)
+            allocate(path, source=trim(adjustl(dir))//c_null_char)
+            io_status= makedir(path)
 ! #elif defined(PGI)
 !                 allocate(path, source=trim(tmppath))
 !                 io_status = mkdir(path, int(o'777',c_int16_t))
@@ -1592,13 +1590,15 @@ contains
     function cpu_usage ()
         real    :: cpu_usage
         integer :: ios, i
-        integer :: unit,oldidle, oldsum, sumtimes = 0
-        real    :: percent = 0.
+        integer :: unit,oldidle, oldsum, sumtimes
+        real    :: percent
         character(len = 4) lineID ! 'cpu '
-        integer, dimension(9) :: times = 0
+        integer, dimension(9) :: times
         cpu_usage=0.0
-
-        write(*, *) 'CPU Usage'
+        sumtimes = 0
+        times = 0
+        percent = 0.
+        write(*,'(a)') 'CPU Usage'
         open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
         if (ios /= 0) then
             print *, 'Error opening /proc/stat'
@@ -1782,6 +1782,7 @@ contains
         logical               :: ifxst
 
 #ifdef MACOSX
+        print *," simple_dump_mem_usage cannot run on MacOSX"
         return
 #endif
         !--- get process ID --  make thread safe
