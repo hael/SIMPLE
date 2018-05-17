@@ -181,11 +181,13 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cc_for_rot
     procedure          :: gencorr_cc_for_rot_8
     procedure          :: gencorr_fdf_cc_for_rot_8
+    procedure          :: gencorr_fdf_incshift_cc_for_rot_8
     procedure          :: gencorr_cc_grad_for_rot_8
     procedure          :: gencorr_cc_grad_only_for_rot_8
     procedure          :: gencorr_resnorm_for_rot_8
     procedure          :: gencorr_resnorm_grad_for_rot_8
     procedure          :: gencorr_fdf_resnorm_for_rot_8
+    procedure          :: gencorr_fdf_incshift_resnorm_for_rot_8
     procedure          :: gencorr_resnorm_grad_only_for_rot_8
     procedure, private :: genfrc
     procedure          :: calc_frc
@@ -1523,6 +1525,71 @@ contains
         end do
     end function gencorr_fdf_cc_for_rot_8
 
+    !< brief  generates correlation and derivative for one specific rotation angle, double precision
+    subroutine gencorr_fdf_incshift_cc_for_rot_8( self, iref, iptcl, shvec, irot, f, grad ) 
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: f
+        real(dp),                intent(out)   :: grad(5) ! 3 orientation angles, 2 shifts
+        complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp(:,:), shmat(:,:), pft_dref(:,:,:)
+        real(dp),    pointer :: argmat(:,:)
+        real(dp),    pointer :: fdf_y(:), fdf_T1(:,:), fdf_T2(:,:)
+        real(dp) :: sqsum_ref, denom, corr
+        integer  :: ithr, j, k
+        ithr        =  omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
+        pft_dref    => self%heap_vars(ithr)%pft_dref_8        
+        shmat       => self%heap_vars(ithr)%shmat_8
+        argmat      => self%heap_vars(ithr)%argmat_8
+        fdf_y       => self%heap_vars(ithr)%fdf_y_8
+        fdf_T1      => self%heap_vars(ithr)%fdf_T1_8
+        fdf_T2      => self%heap_vars(ithr)%fdf_T2_8
+        argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
+        shmat       =  cmplx(cos(argmat),sin(argmat),dp)
+        if( self%with_ctf ) then
+            if( self%iseven(self%pinds(iptcl)) ) then
+                pft_ref  = (self%pfts_refs_even(:,:,iref)    * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+                pft_dref = self%pfts_drefs_even(:,:,:,iref)
+            else
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+                pft_dref = self%pfts_drefs_odd(:,:,:,iref)
+            endif
+            do j = 1,3
+                pft_dref(:,:,j) = (pft_dref(:,:,j) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            end do
+        else
+            if( self%iseven(self%pinds(iptcl)) ) then
+                pft_ref  = self%pfts_refs_even(:,:,iref) * shmat
+                pft_dref = self%pfts_drefs_even(:,:,:,iref)
+            else
+                pft_ref  = self%pfts_refs_odd(:,:,iref)  * shmat
+                pft_dref = self%pfts_drefs_odd(:,:,:,iref)
+            endif
+            do j = 1,3
+                pft_dref(:,:,j) = pft_dref(:,:,j) * shmat
+            end do
+        endif
+        sqsum_ref = sum(csq(pft_ref))
+        denom    = sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        do k = self%kfromto(1),self%kfromto(2)
+            fdf_y(k) = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+        end do
+        call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)        
+        f = sum(fdf_y) / denom
+        do j = 1,3
+            grad(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom 
+        end do
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
+        grad(4)     = corr / denom
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
+        grad(5)     = corr / denom        
+    end subroutine gencorr_fdf_incshift_cc_for_rot_8
+
     !< brief  generates correlation for one specific rotation angle, double precision
     function gencorr_resnorm_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1734,6 +1801,78 @@ contains
         cc  = cc  / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         dcc = dcc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end function gencorr_fdf_resnorm_for_rot_8
+
+        !< brief  generates correlation and derivative for one specific rotation angle, double precision
+    subroutine gencorr_fdf_incshift_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, f, grad)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: f
+        real(dp),                intent(out)   :: grad(5) ! 3 orientation angles, 2 shifts
+        complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp1(:,:), pft_ref_tmp2(:,:), shmat(:,:), pft_dref(:,:,:)
+        real(dp),    pointer :: argmat(:,:)
+        real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)        
+        real(dp) :: corrk, sqsumk_ref, sqsumk_ptcl, fdf_yk
+        real(dp) :: bfac_weight, denomk
+        integer  :: ithr, k, j
+        ithr    =  omp_get_thread_num() + 1
+        pft_ref => self%heap_vars(ithr)%pft_ref_8
+        pft_dref => self%heap_vars(ithr)%pft_dref_8
+        shmat   => self%heap_vars(ithr)%shmat_8
+        argmat  => self%heap_vars(ithr)%argmat_8
+        fdf_T1   => self%heap_vars(ithr)%fdf_T1_8
+        fdf_T2   => self%heap_vars(ithr)%fdf_T2_8
+        argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
+        shmat   =  cmplx(cos(argmat),sin(argmat),dp)
+        if( self%with_ctf ) then
+            if( self%iseven(self%pinds(iptcl)) ) then
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+                pft_dref = self%pfts_drefs_even(:,:,:,iref)
+            else
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+                pft_dref = self%pfts_drefs_odd(:,:,:,iref)
+            endif
+            do j = 1,3
+                pft_dref(:,:,j) = (pft_dref(:,:,j) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            end do
+        else
+            if( self%iseven(self%pinds(iptcl)) ) then
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
+                pft_dref = self%pfts_drefs_even(:,:,:,iref)
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
+                pft_dref = self%pfts_drefs_odd(:,:,:,iref)
+            endif
+            do j = 1,3
+                pft_dref(:,:,j) = pft_dref(:,:,j) * shmat
+            end do
+        endif
+        call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)
+        f    = 0.0_dp
+        grad = 0.0_dp
+        pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,    :)
+        pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)        
+        ! with B-factor weighting
+        do k = self%kfromto(1),self%kfromto(2)
+            sqsumk_ref  = sum(csq(pft_ref(:,k)))
+            sqsumk_ptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
+            denomk      = sqrt(sqsumk_ref * sqsumk_ptcl)
+            fdf_yk      = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+            bfac_weight = real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)
+            f           = f + (fdf_yk * bfac_weight) / denomk
+            do j = 1,3
+                grad(j) = grad(j) + bfac_weight * &
+                    &( fdf_T1(k,j) - fdf_yk * fdf_T2(k,j) / sqsumk_ref) / denomk
+            end do
+            fdf_yk      = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
+            grad(4)     = grad(1) + (fdf_yk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denomk
+            fdf_yk      = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
+            grad(5)     = grad(2) + (fdf_yk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denomk
+        end do
+        f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
+        grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
+    end subroutine gencorr_fdf_incshift_resnorm_for_rot_8
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
