@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <signal.h>
 #include <cstdio>
+#include <errno.h>          /*     extern int errno;   */
 
 extern "C" {
 	#include "mongoose.h"
@@ -579,7 +580,11 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 			starline = value + "@";
 			getUniDocValue(unidoc, selectionit, "stackfile", value);
 			stackfile = value + "s";
-			symlink(value.c_str(), stackfile.c_str());
+      if(	symlink(value.c_str(), stackfile.c_str())!=0){
+        fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", value.c_str(),  stackfile.c_str(), errno, strerror(errno));
+        perror("Failed : symlink in writeRelionStar");
+        exit(EXIT_FAILURE);
+      }
 			starline += value + "s";
 			getUniDocValue(unidoc, selectionit, "kv", value);
 			starline += " " + value;
@@ -691,7 +696,11 @@ void ctffindPre (std::string micrographsdirectory, std::string unbluroutput){
 	//	status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
 		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
-			status = symlink(micrographsdirectory.c_str(), "micrographs");
+			if( symlink(micrographsdirectory.c_str(), "micrographs")!=0){
+        fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", micrographsdirectory.c_str(),  "micrographs", errno, strerror(errno));
+        perror("Failed : symlink in ctffindPre");
+        exit(EXIT_FAILURE);
+      }
 			listFilesInDirectory(files, "micrographs" );
 			outit = 0;
 			for(it = 0; it < files.size(); it++) {
@@ -799,7 +808,6 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 	std::string									micrographlink;
 	char*										dname;
 	char*										dirc;
-	int											status;
 
 	outputunidoc = new UniDoc();
 
@@ -809,14 +817,22 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 	if(filetab.is_open()){
 		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
 			//status = symlink(micrographsdirectory.c_str(), "micrographs");
-			status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			if( mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+        fprintf(stderr, "mkdir micrographs \nerrno:%d msg:%s\n", errno, strerror(errno));
+        perror("Failed : mkdir in ctffitPre");
+        exit(EXIT_FAILURE);
+      }
 			listFilesInDirectory(files, micrographsdirectory);
 			outit = 0;
 			for(it = 0; it < files.size(); it++) {
 				if(files[it].find(".mrc") != std::string::npos) {
 					micrographpath = micrographsdirectory + "/" + files[it];
 					micrographlink = "micrographs/" + files[it];
-					status = symlink(micrographpath.c_str(), micrographlink.c_str());
+					if( symlink(micrographpath.c_str(), micrographlink.c_str())!=0){
+            fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", micrographpath.c_str(), micrographlink.c_str(), errno, strerror(errno));
+            perror("Failed : symlink in ctffitPre");
+            exit(EXIT_FAILURE);
+          }
 					outputunidoc->data.push_back("");
 					addUniDocKeyVal(outputunidoc, outit, "intg", "micrographs/" + files[it]);
 					//filetab << micrographsdirectory + "/" + files[it] + "\n";
@@ -829,7 +845,11 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 			readUniDoc(unidoc, unbluroutput);
 			dirc = strdup(unbluroutput.c_str());
 			dname = dirname(dirc);
-			status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			if( mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+        fprintf(stderr, "mkdir micrographs \nerrno:%d msg:%s\n",  errno, strerror(errno));
+        perror("Failed : mkdir in ctffitPre");
+        exit(EXIT_FAILURE);
+      }
 			for(it = 0; it < unidoc->data.size(); it++){
 				outputunidoc->data.push_back("");
 
@@ -837,26 +857,42 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 				addUniDocKeyVal(outputunidoc, it, "intg", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
 				micrographlink = "micrographs/" + value;
-				status = symlink(micrographpath.c_str(), micrographlink.c_str());
-
+				if( symlink(micrographpath.c_str(), micrographlink.c_str())!=0){
+          fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", micrographpath.c_str(),  micrographlink.c_str(), errno, strerror(errno));
+          perror("Failed : symlink in ctffitPre");
+          exit(EXIT_FAILURE);
+        }
 				getUniDocValue(unidoc, it, "forctf", value);
 				addUniDocKeyVal(outputunidoc, it, "forctf", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
 				micrographlink = "micrographs/" + value;
-				status = symlink(micrographpath.c_str(), micrographlink.c_str());
+				if(symlink(micrographpath.c_str(), micrographlink.c_str())!=0){
+          fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", micrographpath.c_str(),  micrographlink.c_str(), errno, strerror(errno));
+          perror("Failed : symlink in ctffitPre");
+          exit(EXIT_FAILURE);
+        }
+
 				filetab << "micrographs/" + value + "\n";
 
 				getUniDocValue(unidoc, it, "pspec", value);
 				addUniDocKeyVal(outputunidoc, it, "pspec", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
 				micrographlink = "micrographs/" + value;
-				status = symlink(micrographpath.c_str(), micrographlink.c_str());
+				if( symlink(micrographpath.c_str(), micrographlink.c_str())!=0){
+          fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", micrographpath.c_str(),  micrographlink.c_str(), errno, strerror(errno));
+          perror("Failed : symlink in ctffitPre");
+          exit(EXIT_FAILURE);
+        }
 
 				getUniDocValue(unidoc, it, "thumb", value);
 				addUniDocKeyVal(outputunidoc, it, "thumb", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
 				micrographlink = "micrographs/" + value;
-				status = symlink(micrographpath.c_str(), micrographlink.c_str());
+				if( symlink(micrographpath.c_str(), micrographlink.c_str())!=0){
+          fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", micrographpath.c_str(),  micrographlink.c_str(), errno, strerror(errno));
+          perror("Failed : symlink in ctffitPre");
+          exit(EXIT_FAILURE);
+        }
 			}
 			delete unidoc;
 		}
@@ -934,14 +970,22 @@ void ini3DPre (std::string simpleinput, std::string mrcinput, std::string& comma
 
 	std::cout << "inipre" << std::endl;
 	if(fileExists(simpleinput)){
-		mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		if( mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+      fprintf(stderr, "mkdir %s \nerrno:%d msg:%s\n", "particles", errno, strerror(errno));
+      perror("Failed : mkdir in ini3DPre");
+      exit(EXIT_FAILURE);
+    }
 		stktab.open("stkparts.txt");
 		dirc = strdup(simpleinput.c_str());
 		inputroot = std::string(dirname(dirc));
 		if(fileExists(inputroot + "/prime2D_selected_clusters.mrc")){
 			command += " stk=" + inputroot + "/prime2D_selected_clusters.mrc";
 			clustersfile = inputroot + "/prime2D_selected_clusters.mrc";
-			symlink(clustersfile.c_str(), "prime2D_selected_clusters.mrc");
+			if( symlink(clustersfile.c_str(), "prime2D_selected_clusters.mrc")!=0){
+        fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", clustersfile.c_str(), "prime2D_selected_clusters.mrc" , errno, strerror(errno));
+      perror("Failed : symlink in ini3Dpre");
+      exit(EXIT_FAILURE);
+    }
 		}
 		std::cout << inputroot << std::endl;
 		if(stktab.is_open()){
@@ -957,7 +1001,12 @@ void ini3DPre (std::string simpleinput, std::string mrcinput, std::string& comma
 					dirc = strdup(stackfilepath.c_str());
 					stktab << "particles/" + std::string(basename(dirc)) << "\n";
 					stackfilelink = "particles/" + std::string(basename(dirc));
-					symlink(stackfilerealpath.c_str(), stackfilelink.c_str());
+					if(symlink(stackfilerealpath.c_str(), stackfilelink.c_str())!=0){
+            fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", stackfilerealpath.c_str(),  stackfilelink.c_str(), errno, strerror(errno));
+            perror("Failed : symlink in prime2DPre");
+            exit(EXIT_FAILURE);
+          }
+
 					stackfilepre = stackfile;
 				}
 				deleteUniDocValue(inputunidoc, inputit, "stackfile");
@@ -987,7 +1036,12 @@ void ini3DPost (std::string directory){
 	UniDoc*						outputunidoc;
 	int							inputit;
 
-	status = chdir(directory.c_str());
+	if( chdir(directory.c_str())!=0 ){
+    fprintf(stderr, "chdir %s \nerrno:%d msg:%s\n", directory.c_str(), errno, strerror(errno));
+    perror("Failed : chdir in ini3DPost");
+    exit(EXIT_FAILURE);
+  }
+
 
 	if(fileExists("ini3d_in.simple") && fileExists("ini3d_in.txt")){
 		listFilesInDirectory(files, directory);
@@ -1200,7 +1254,12 @@ void postprocessPre (std::string volume, std::string& command) {
 		basec = strdup(volume.c_str());
 		volumename = std::string(basename(basec));
 		volumebase = std::string(dirname(basec));
-		symlink(volume.c_str(), volumename.c_str());
+		if(symlink(volume.c_str(), volumename.c_str())!=0){
+      fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", volume.c_str(),  volumename.c_str(), errno, strerror(errno));
+      perror("Failed : symlink in postproccessPre");
+      exit(EXIT_FAILURE);
+    }
+
 		command += " vol1=" + volumename;
 		fscfile = volumename;
 		fscfile.replace(fscfile.end() - 12, fscfile.end(), ".bin");
@@ -1279,7 +1338,11 @@ void prime2DPre (std::string simpleinput){
 	std::string									stackfilelink;
 	std::string									stackfilerealpath;
 
-	mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	if(mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+    fprintf(stderr, "mkdir %s \nerrno:%d msg:%s\n", "particles", errno, strerror(errno));
+    perror("Failed : mkdir in prime2DPre");
+    exit(EXIT_FAILURE);
+  }
 	stktab.open("stkparts.txt");
 	dirc = strdup(simpleinput.c_str());
 	inputroot = std::string(dirname(dirc));
@@ -1301,7 +1364,11 @@ void prime2DPre (std::string simpleinput){
 				stktab << "particles/" + std::string(basename(dirc)) << "\n";
 				std::cout << stackfilepath << " " << stackfilerealpath << std::endl;
 				stackfilelink = "particles/" + std::string(basename(dirc));
-				symlink(stackfilerealpath.c_str(), stackfilelink.c_str());
+				if(symlink(stackfilerealpath.c_str(), stackfilelink.c_str())!=0){
+          fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", stackfilerealpath.c_str(),  stackfilelink.c_str(), errno, strerror(errno));
+          perror("Failed : symlink in prime2DPre");
+          exit(EXIT_FAILURE);
+        }
 				stackfilepre = stackfile;
 			}
 			deleteUniDocValue(inputunidoc, inputit, "stackfile");
@@ -1378,7 +1445,11 @@ void prime3DPre (std::string simpleinput){
 	std::string									stackfilelink;
 	std::string									stackfilerealpath;
 
-	mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	if( mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+    fprintf(stderr, "mkdir particles \nerrno:%d msg:%s\n", errno, strerror(errno));
+    perror("Failed : mkdir in prime3DPre");
+    exit(EXIT_FAILURE);
+  }
 	stktab.open("stkparts.txt");
 	dirc = strdup(simpleinput.c_str());
 	inputroot = std::string(dirname(dirc));
@@ -1397,7 +1468,11 @@ void prime3DPre (std::string simpleinput){
 				stktab << "particles/" + std::string(basename(dirc)) << "\n";
 				std::cout << stackfilepath << " " << stackfilerealpath << std::endl;
 				stackfilelink = "particles/" + std::string(basename(dirc));
-				symlink(stackfilerealpath.c_str(), stackfilelink.c_str());
+				if (symlink(stackfilerealpath.c_str(), stackfilelink.c_str())!=0){
+          fprintf(stderr, "symlink %s %s\nerrno:%d msg:%s\n", stackfilerealpath.c_str(),  stackfilelink.c_str(), errno, strerror(errno));
+          perror("Failed : symlink in prime2DPost");
+          exit(EXIT_FAILURE);
+        }
 				stackfilepre = stackfile;
 			}
 			deleteUniDocValue(inputunidoc, inputit, "stackfile");
@@ -1564,7 +1639,11 @@ void externalJob (JSONResponse* response, struct http_message* message) {
 			} else if (jobtype == "unblur"){
 				unblurPost (jobfolder);
 			} else if (jobtype == "extract"){
-				chdir(jobfolder.c_str());
+				if(chdir(jobfolder.c_str())!=0 ){
+          fprintf(stderr, "chdir %s \nerrno:%d msg:%s\n", jobfolder.c_str(), errno, strerror(errno));
+          perror("Failed : chdir in externalJob");
+          exit(EXIT_FAILURE);
+      }
 				extractPost (jobfolder);
 			}else if (jobtype == "prime3D"){
 				prime3DPost(jobfolder);
@@ -1782,7 +1861,7 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 	std::string								runstring;
 	FILE*									stream;
 	int										jobid;
-	int										status;
+  //	int										status;
 	pid_t 									pid;
 	pid_t 									sid;
 
@@ -1812,9 +1891,17 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 
 			updateJobFolder(outputfolder, table, jobid);
 
-			status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			if( mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+        fprintf(stderr, "mkdir %s \nerrno:%d msg:%s\n", outputfolder.c_str(), errno, strerror(errno));
+        perror("Failed : mkdir in syncJob");
+        exit(EXIT_FAILURE);
+      }
 
-			status = chdir(outputfolder.c_str());
+      if( chdir(outputfolder.c_str())!=0 ){
+        fprintf(stderr, "chdir %s \nerrno:%d msg:%s\n", outputfolder.c_str(), errno, strerror(errno));
+        perror("Failed : chdir in syncJob");
+        exit(EXIT_FAILURE);
+      }
 
 			command = "microscope_sync.sh -s " + sourcefolder + " -d " + destinationfolder + " -i " + fileidentifier;
 
@@ -1885,9 +1972,17 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 
 			updateJobFolder(outputfolder, table, jobid);
 
-			status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			if( mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+        fprintf(stderr, "mkdir %s \nerrno:%d msg:%s\n", outputfolder.c_str(), errno, strerror(errno));
+        perror("Failed : mkdir in simpleJob");
+        exit(EXIT_FAILURE);
+      }
 
-			status = chdir(outputfolder.c_str());
+			if( chdir(outputfolder.c_str())!=0 ){
+        fprintf(stderr, "chdir %s \nerrno:%d msg:%s\n", outputfolder.c_str(), errno, strerror(errno));
+        perror("Failed : chdir in simpleJob");
+        exit(EXIT_FAILURE);
+      }
 
 			if(getRequestVariable(message, "executable", executable) && getRequestVariable(message, "program", program)){
 
@@ -2707,7 +2802,11 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 
 		updateJobFolder(outputfolder, table, jobid);
 
-		status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		if( mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)!=0 ){
+      fprintf(stderr, "mkdir %s \nerrno:%d msg:%s\n", outputfolder.c_str(), errno, strerror(errno));
+      perror("Failed : mkdir in viewManualPick");
+      exit(EXIT_FAILURE);
+    }
 
 		response->jobfolder = outputfolder;
 
