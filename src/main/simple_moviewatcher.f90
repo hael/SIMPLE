@@ -12,7 +12,6 @@ type moviewatcher
     character(len=LONGSTRLEN), allocatable :: history(:)             !< history of movies detected
     character(len=LONGSTRLEN)          :: cwd            = ''    !< CWD
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
-    character(len=LONGSTRLEN)          :: dir_out        = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: fbody          = ''    !< template name
     integer                            :: n_history      = 0     !< history of movies detected
@@ -54,15 +53,12 @@ contains
         endif
         self%cwd         = trim(p%cwd)
         self%watch_dir   = trim(adjustl(p%dir_movies))
-        self%dir_out     = trim(adjustl(p%dir))//'/'
         self%report_time = report_time
         self%ext         = trim(adjustl(p%ext))
         self%fbody       = trim(adjustl(p%fbody))
         if( allocated(prev_movies) )then
-            n = size(prev_movies)
-            allocate(self%history(n))
-            do i=1,n
-                self%history(i) = trim(prev_movies(i))
+            do i=1,size(prev_movies)
+                call self%add2history( trim(prev_movies(i)) )
             enddo
         endif
     end function constructor
@@ -92,46 +88,40 @@ contains
         fail_cnt = 0
         ! builds files array
         call simple_list_files(trim(self%watch_dir)//'/*.mrc*', farray)
+        if( .not.allocated(farray) )return ! nothing to report
+        ! absolute paths
         n_lsfiles = size(farray)
-        if( n_lsfiles .eq. 0 )then
-            return  ! nothing to report
-        endif
         do i = 1, n_lsfiles
             fname = trim(adjustl(farray(i)))
             call simple_full_path(fname, abs_fname, 'movie_watcher :: watch')
             farray(i) = trim(adjustl(abs_fname))
             deallocate(abs_fname)
         enddo
-        ! identifies closed and untouched files
+        ! identifies closed & untouched files
         allocate(is_new_movie(n_lsfiles), source=.false.)
         do i = 1, n_lsfiles
-            fname = trim(adjustl(farray(i)))
-            if( self%is_past(fname) )then
-                is_new_movie(i) = .false.
+            fname           = trim(adjustl(farray(i)))
+            is_new_movie(i) = .not. self%is_past(fname)
+            if( .not.is_new_movie(i) )cycle
+            call simple_file_stat(fname, io_stat, fileinfo, doprint=.false.)
+            is_closed = .not. is_file_open(fname)
+            if( io_stat.eq.0 )then
+                ! new movie
+                last_accessed      = tnow - fileinfo( 9)
+                last_modified      = tnow - fileinfo(10)
+                last_status_change = tnow - fileinfo(11)
+                if(    (last_accessed      > self%report_time)&
+                &.and. (last_modified      > self%report_time)&
+                &.and. (last_status_change > self%report_time)&
+                &.and. is_closed ) is_new_movie(i) = .true.
+                if( is_new_movie(i) )write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',&
+                    &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
             else
-                call simple_file_stat(fname, io_stat, fileinfo, doprint=.false.)
-                is_closed = .not. is_file_open(fname)
-                if( io_stat.eq.0 )then
-                    ! new movie
-                    last_accessed      = tnow - fileinfo( 9)
-                    last_modified      = tnow - fileinfo(10)
-                    last_status_change = tnow - fileinfo(11)
-                    if(    (last_accessed      > self%report_time)&
-                    &.and. (last_modified      > self%report_time)&
-                    &.and. (last_status_change > self%report_time)&
-                    &.and. is_closed ) is_new_movie(i) = .true.
-                else
-                    ! some error occured
-                    fail_cnt = fail_cnt + 1
-                    print *,'Error watching file: ', trim(fname), ' with code: ',io_stat
-                endif
-                if(allocated(fileinfo))deallocate(fileinfo)
+                ! some error occured
+                fail_cnt = fail_cnt + 1
+                print *,'Error watching file: ', trim(fname), ' with code: ',io_stat
             endif
-        enddo
-        ! display
-        do i = 1, n_lsfiles
-            if( is_new_movie(i) )write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',&
-            &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
+            if(allocated(fileinfo))deallocate(fileinfo)
         enddo
         ! report
         n_movies = count(is_new_movie)
@@ -139,11 +129,12 @@ contains
             allocate(movies(n_movies))
             cnt = 0
             do i = 1, n_lsfiles
-                if( .not.is_new_movie(i) )cycle
-                cnt   = cnt + 1
-                fname = trim(adjustl(farray(i)))
-                call self%add2history( fname )
-                movies(cnt) = trim(fname)
+                if( is_new_movie(i) )then
+                    cnt   = cnt + 1
+                    fname = trim(adjustl(farray(i)))
+                    call self%add2history( fname )
+                    movies(cnt) = trim(fname)
+                endif
             enddo
         endif
     end subroutine watch
@@ -194,7 +185,6 @@ contains
         class(moviewatcher), intent(inout) :: self
         self%cwd        = ''
         self%watch_dir  = ''
-        self%dir_out    = ''
         self%ext        = ''
         if(allocated(self%history))deallocate(self%history)
         self%report_time    = 0
