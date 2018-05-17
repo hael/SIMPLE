@@ -470,9 +470,9 @@ contains
         complex(sp),             intent(in)    :: dcomp(3)
         logical,                 intent(in)    :: iseven
         if( iseven )then
-            self%pfts_drefs_even(:,iref,irot,k) = dcomp
+            self%pfts_drefs_even(irot,k,:,iref) = dcomp
         else
-            self%pfts_drefs_odd(:,iref,irot,k)  = dcomp
+            self%pfts_drefs_odd(irot,k,:,iref)  = dcomp
         endif
     end subroutine set_dref_fcomp
 
@@ -977,7 +977,9 @@ contains
         complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop), pft_dref(1:self%pftsz,self%kfromto(1):kstop,nderivs)
         real(dp),                intent(out)   :: T1_k(self%kfromto(1):kstop,nderivs), T2_k(self%kfromto(1):kstop,nderivs)
         integer                                :: k, rot, j
-        complex(dp)                            :: tmp_y(self%kfromto(1):kstop), tmp_T1(self%kfromto(1):kstop,nderivs), tmp_T2(self%kfromto(1):kstop,nderivs)
+        complex(dp)                            :: tmp_y (self%kfromto(1):kstop)
+        complex(dp)                            :: tmp_T1(self%kfromto(1):kstop,nderivs)
+        complex(dp)                            :: tmp_T2(self%kfromto(1):kstop,nderivs)
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -987,21 +989,16 @@ contains
             do k = self%kfromto(1),kstop
                 if( irot == 1 ) then
                     tmp_T1(k,j) = sum( pft_dref(:,k,j) * conjg(self%pfts_ptcls(:,k,i)))
-                    tmp_T2(k,j) = sum( pft_dref(:,k,j) * conjg(pft_ref(:,k)))
                 else if( irot <= self%pftsz ) then
                     tmp_T1(k,j) =               sum( pft_dref(               1:self%pftsz-rot+1,k,j) * conjg(self%pfts_ptcls(rot:self%pftsz,k,i)))
                     tmp_T1(k,j) = tmp_T1(k,j) + sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) *       self%pfts_ptcls(  1:rot-1,     k,i))
-                    tmp_T2(k,j) =               sum( pft_dref(               1:self%pftsz-rot+1,k,j) * conjg(pft_ref(rot:self%pftsz,k)))
-                    tmp_T2(k,j) = tmp_T2(k,j) + sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) *       pft_ref(  1:rot-1,     k))
                 else if( irot == self%pftsz + 1 ) then
                     tmp_T1(k,j) = sum( pft_dref(:,k,j) * self%pfts_ptcls(:,k,i) )
-                    tmp_T2(k,j) = sum( pft_dref(:,k,j) * pft_ref(:,k) )
                 else
                     tmp_T1(k,j) =               sum( pft_dref(               1:self%pftsz-rot+1,k,j) *       self%pfts_ptcls(rot:self%pftsz,k,i))
                     tmp_T1(k,j) = tmp_T1(k,j) + sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) * conjg(self%pfts_ptcls(  1:rot-1,     k,i)) )
-                    tmp_T2(k,j) =               sum( pft_dref(               1:self%pftsz-rot+1,k,j) *       pft_ref(rot:self%pftsz,k))
-                    tmp_T2(k,j) = tmp_T2(k,j) + sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) * conjg(pft_ref(  1:rot-1,     k)) )
                 end if
+                tmp_T2(k,j) = sum( pft_dref(:,k,j) * conjg(pft_ref(:,k)))
             end do
         end do
         T1_k = real(tmp_T1, kind=dp)
@@ -1520,9 +1517,9 @@ contains
             fdf_y(k) = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
         end do
         call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)        
-        cc = sum(fdf_y) / sqsum_ref
+        cc = sum(fdf_y) / denom
         do j = 1,3
-            dcc(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * 2._dp * sum(fdf_T2(:,j)) / sqsum_ref ) / denom 
+            dcc(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom 
         end do
     end function gencorr_fdf_cc_for_rot_8
 
@@ -1683,26 +1680,40 @@ contains
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:), pft_dref(:,:,:)
         real(dp),    pointer :: argmat(:,:)
         real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)        
-        real(dp) :: cc, corrk, sqsumk_ref, sqsumk_ptcl, fdf_y
+        real(dp) :: cc, corrk, sqsumk_ref, sqsumk_ptcl, fdf_yk
+        real(dp) :: bfac_weight, denomk
         integer  :: ithr, k, j
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref_8
+        pft_dref => self%heap_vars(ithr)%pft_dref_8
         shmat   => self%heap_vars(ithr)%shmat_8
         argmat  => self%heap_vars(ithr)%argmat_8
+        fdf_T1   => self%heap_vars(ithr)%fdf_T1_8
+        fdf_T2   => self%heap_vars(ithr)%fdf_T2_8
         argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
         shmat   =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf ) then
             if( self%iseven(self%pinds(iptcl)) ) then
                 pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+                pft_dref = self%pfts_drefs_even(:,:,:,iref)
             else
                 pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+                pft_dref = self%pfts_drefs_odd(:,:,:,iref)
             endif
+            do j = 1,3
+                pft_dref(:,:,j) = (pft_dref(:,:,j) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            end do
         else
             if( self%iseven(self%pinds(iptcl)) ) then
                 pft_ref = self%pfts_refs_even(:,:,iref) * shmat
+                pft_dref = self%pfts_drefs_even(:,:,:,iref)
             else
                 pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
+                pft_dref = self%pfts_drefs_odd(:,:,:,iref)
             endif
+            do j = 1,3
+                pft_dref(:,:,j) = pft_dref(:,:,j) * shmat
+            end do
         endif
         call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)
         cc  = 0.0_dp
@@ -1711,11 +1722,13 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             sqsumk_ref  = sum(csq(pft_ref(:,k)))
             sqsumk_ptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
-            fdf_y       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-            cc          = cc + (fdf_y * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
+            denomk      = sqrt(sqsumk_ref * sqsumk_ptcl)
+            fdf_yk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+            bfac_weight = real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)
+            cc          = cc + (fdf_yk * bfac_weight) / denomk
             do j = 1,3
-                dcc(j) = dcc(j) + real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp) * &
-                    &( fdf_T1(k,j) - fdf_y * 2._dp * fdf_T2(k,j) / sqsumk_ref) / sqrt(sqsumk_ref * sqsumk_ptcl)
+                dcc(j) = dcc(j) + bfac_weight * &
+                    &( fdf_T1(k,j) - fdf_yk * fdf_T2(k,j) / sqsumk_ref) / denomk
             end do            
         end do
         cc  = cc  / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
