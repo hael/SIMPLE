@@ -1,9 +1,8 @@
 ! concrete commander: masking routines
 module simple_commander_mask
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_commander_base, only: commander_base
 implicit none
 
@@ -35,22 +34,20 @@ contains
         use simple_masker,      only: masker
         class(mask_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        type(build)                :: b
-        type(params)               :: p
         type(automask2D_commander) :: automask2D
         type(image)                :: mskvol
         type(atoms)                :: pdb
         type(masker)               :: msker
         character(len=STDLEN)      :: pdbout_fname
         integer                    :: ldim(3)
-        p = params(cline)  ! parameters generated
+        call init_params(cline)  ! parameters generated
         p%boxmatch = p%box ! turns off boxmatch logics
         if( cline%defined('stk') .and. cline%defined('vol1')   ) stop 'Cannot operate on images AND volume at once'
         if( p%automsk.eq.'yes'   .and..not.cline%defined('mw') ) stop 'Missing mw argument for automasking'
         if( p%msktype.ne.'soft'  .and. p%msktype.ne.'hard' .and. p%msktype.ne.'cavg' ) stop 'Invalid mask type'
         if( cline%defined('stk') )then
             ! 2D
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+            call b%build_general_tbox( cline, do3d=.false.) ! general objects built
             if( p%automsk.eq.'yes' )then
                 ! auto
                 if( .not. cline%defined('amsklp') )call cline%set('amsklp', 25.)
@@ -74,7 +71,7 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
-            call b%build_general_tbox(p, cline) ! general objects built
+            call b%build_general_tbox( cline) ! general objects built
             ! reallocate vol (boxmatch issue)
             call b%vol%new([p%box, p%box, p%box], p%smpd)
             if( .not. file_exists(p%vols(1)) ) stop 'Cannot find input volume'
@@ -107,9 +104,9 @@ contains
                 call pdb%new(p%pdbfile)
                 pdbout_fname = trim(get_fbody(p%pdbfile, 'pdb')) // '_centered'
                 if( p%center.eq.'yes' )then
-                    call msker%mask_from_pdb(p, pdb, b%vol, os=b%a, pdbout=pdbout_fname)
+                    call msker%mask_from_pdb( pdb, b%vol, os=b%a, pdbout=pdbout_fname)
                 else
-                    call msker%mask_from_pdb(p, pdb, b%vol)
+                    call msker%mask_from_pdb( pdb, b%vol)
                 endif
                 call b%a%write(p%outfile)
                 call b%vol%write(p%outvol)
@@ -128,12 +125,10 @@ contains
     subroutine exec_automask2D( self, cline )
         class(automask2D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         integer      :: iptcl
-        p = params(cline)                                 ! parameters generated
+        call init_params(cline)                                 ! parameters generated
         p%boxmatch = p%box                                ! turns off boxmatch logics
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
@@ -151,16 +146,14 @@ contains
         use simple_masker, only: masker
         class(resmask_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params)  :: p
-        !type(build)   :: b
         type(masker)  :: mskvol
-        p = params(cline)
+        call init_params(cline)
         p%boxmatch = p%box                  ! turns off boxmatch logics
-        !call b%build_general_tbox(p, cline) ! general objects built
+        ! call b%build_general_tbox( cline)   ! general objects built
         call mskvol%new([p%box,p%box,p%box], p%smpd)
         if( file_exists(p%mskfile) )then
             call mskvol%read(p%mskfile)
-            call mskvol%resmask(p)
+            call mskvol%resmask()
             call mskvol%write('resmask'//p%ext)
             call mskvol%kill
         else

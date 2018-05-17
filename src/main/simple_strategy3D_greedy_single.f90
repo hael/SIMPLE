@@ -3,6 +3,7 @@ module simple_strategy3D_greedy_single
 use simple_strategy3D_alloc         ! use all in there
 use simple_strategy3D_utils         ! use all in there
 use simple_strategy3D_greedy_multi, only: strategy3D_greedy_multi
+use simple_params, only: p
 implicit none
 
 public :: strategy3D_greedy_single
@@ -30,14 +31,14 @@ contains
         ! extract peak info
         call extract_peaks( self%s, corrs )
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, self%spec%pp%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights( self%s, corrs, p%tau, ws, included, best_loc, wcorr )
         ! B factors
         call fit_bfactors( self%s, ws )
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances
         call self%s%se_ptr%sym_dists( self%s%a_ptr%get_ori(self%s%iptcl),&
-            &o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
+            & s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! generate convergence stats
         call convergence_stats_single( self%s, best_loc, euldist )
         ! fraction of search space scanned
@@ -54,14 +55,14 @@ contains
         endif
         call self%s%a_ptr%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call self%s%a_ptr%set_euler(self%s%iptcl, o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
-        call self%s%a_ptr%set_shift(self%s%iptcl, o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
+        call self%s%a_ptr%set_euler(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
+        call self%s%a_ptr%set_shift(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
         call self%s%a_ptr%set(self%s%iptcl, 'state',     1.)
         call self%s%a_ptr%set(self%s%iptcl, 'frac',      frac)
         call self%s%a_ptr%set(self%s%iptcl, 'corr',      wcorr)
         call self%s%a_ptr%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call self%s%a_ptr%set(self%s%iptcl, 'ow',        o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
-        call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
+        call self%s%a_ptr%set(self%s%iptcl, 'ow',         s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
+        call self%s%a_ptr%set(self%s%iptcl, 'proj',       s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      ang_sdev)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint   '>>> STRATEGY3D_GREEDY_SINGLE :: EXECUTED ORIS_ASSIGN_GREEDY_SINGLE'

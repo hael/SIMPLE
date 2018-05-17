@@ -8,7 +8,7 @@ use simple_user_interface, only: simple_program, get_prg_ptr
 !$ use omp_lib_kinds
 implicit none
 
-public :: params
+public :: p, params
 private
 #include "simple_local_flags.inc"
 
@@ -380,14 +380,17 @@ type :: params
     logical :: l_cc_bfac      = .true.
     logical :: l_phaseplate   = .false.
     logical :: l_dev          = .false.
+    logical :: singleton_initiated = .false.
   contains
     procedure, private :: set_img_format
     procedure          :: new
 end type params
 
-interface params
-    module procedure constructor
-end interface
+! interface params
+!     module procedure constructor
+! end interface
+
+type(params) :: p
 
 contains
 
@@ -405,14 +408,14 @@ contains
         end select
     end subroutine set_img_format
 
-    !> \brief  is a constructor
-    function constructor( cline, allow_mix, del_scaled, spproj_a_seg ) result( self )
-        class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: allow_mix, del_scaled
-        integer, optional, intent(in)    :: spproj_a_seg
-        type(params) :: self
-        call self%new( cline, allow_mix, del_scaled, spproj_a_seg)
-    end function constructor
+    ! !> \brief  is a constructor
+    ! function constructor( cline, allow_mix, del_scaled, spproj_a_seg ) result( self )
+    !     class(cmdline),    intent(inout) :: cline
+    !     logical, optional, intent(in)    :: allow_mix, del_scaled
+    !     integer, optional, intent(in)    :: spproj_a_seg
+    !     type(params) :: self
+    !     call self%new( cline, allow_mix, del_scaled, spproj_a_seg)
+    ! end function constructor
 
     !> \brief  is a constructor
     subroutine new( self, cline, allow_mix, del_scaled, spproj_a_seg )

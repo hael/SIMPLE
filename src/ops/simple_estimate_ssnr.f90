@@ -49,30 +49,30 @@ contains
     end subroutine fsc2optlp_sub
 
     !> \brief  converts the SSNR to FSC
-    function ssnr2fsc( ssnr ) result( corrs )
-        real, intent(in)  :: ssnr(:)  !< input SSNR array
-        real, allocatable :: corrs(:) !< output FSC result
-        integer :: nyq, k
-        nyq = size(ssnr)
-        allocate( corrs(nyq),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ",alloc_stat)
-        do k=1,nyq
-            corrs(k) = ssnr(k)/(ssnr(k)+1.)
-        end do
-    end function ssnr2fsc
+    ! function ssnr2fsc( ssnr ) result( corrs )
+    !     real, intent(in)  :: ssnr(:)  !< input SSNR array
+    !     real, allocatable :: corrs(:) !< output FSC result
+    !     integer :: nyq, k
+    !     nyq = size(ssnr)
+    !     allocate( corrs(nyq),stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ",alloc_stat)
+    !     do k=1,nyq
+    !         corrs(k) = ssnr(k)/(ssnr(k)+1.)
+    !     end do
+    ! end function ssnr2fsc
 
-    !> \brief  converts the SSNR 2 the optimal low-pass filter
-    function ssnr2optlp( ssnr ) result( w )
-        real, intent(in)  :: ssnr(:) !<  instrument SSNR
-        real, allocatable :: w(:) !<  FIR low-pass filter
-        integer :: nyq, k
-        nyq = size(ssnr)
-        allocate( w(nyq),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2optlp w ",alloc_stat)
-        do k=1,nyq
-            w(k) = ssnr(k)/(ssnr(k)+1.)
-        end do
-    end function ssnr2optlp
+    ! !> \brief  converts the SSNR 2 the optimal low-pass filter
+    ! function ssnr2optlp( ssnr ) result( w )
+    !     real, intent(in)  :: ssnr(:) !<  instrument SSNR
+    !     real, allocatable :: w(:) !<  FIR low-pass filter
+    !     integer :: nyq, k
+    !     nyq = size(ssnr)
+    !     allocate( w(nyq),stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2optlp w ",alloc_stat)
+    !     do k=1,nyq
+    !         w(k) = ssnr(k)/(ssnr(k)+1.)
+    !     end do
+    ! end function ssnr2optlp
 
     !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
     !! input is template image, accumulative dose (in e/A2) and acceleration voltage
@@ -119,19 +119,19 @@ contains
     end function dose_weight
 
         !> \brief  re-samples a filter array
-    function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
-        real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
-        real, allocatable :: filt_resamp(:) !< output filter array
-        integer :: filtsz_orig, filtsz_resamp, k, ind
-        real    :: dist
-        filtsz_orig   = size(filt_orig)
-        filtsz_resamp = size(res_new)
-        allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::resample_filter ",alloc_stat)
-        do k=1,filtsz_resamp
-            call find(res_orig, filtsz_orig, res_new(k), ind, dist)
-            filt_resamp(k) = filt_orig(ind)
-        end do
-      end function resample_filter
+    ! function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
+    !     real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
+    !     real, allocatable :: filt_resamp(:) !< output filter array
+    !     integer :: filtsz_orig, filtsz_resamp, k, ind
+    !     real    :: dist
+    !     filtsz_orig   = size(filt_orig)
+    !     filtsz_resamp = size(res_new)
+    !     allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::resample_filter ",alloc_stat)
+    !     do k=1,filtsz_resamp
+    !         call find(res_orig, filtsz_orig, res_new(k), ind, dist)
+    !         filt_resamp(k) = filt_orig(ind)
+    !     end do
+    !   end function resample_filter
 
 end module simple_estimate_ssnr

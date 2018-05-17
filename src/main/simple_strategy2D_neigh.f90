@@ -3,6 +3,7 @@ use simple_defs
 use simple_strategy2D_alloc  ! use all in there
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
+use simple_build, only: b ! singleton
 implicit none
 
 public :: strategy2D_neigh
@@ -32,15 +33,15 @@ contains
         class(strategy2D_neigh), intent(inout) :: self
         integer :: iref,loc(1),inpl_ind,inn
         real    :: corrs(self%s%nrots),inpl_corr,corr
-        if( .not. associated(self%spec%nnmat) )&
+        if( .not. allocated(b%nnmat) )&
         &stop 'nnmat need to be associated in self%spec; strategy2D_neigh :: srch_neigh'
         if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = -1.
             ! evaluate neighbors (greedy selection)
             do inn=1,self%s%nnn
-                iref      = self%spec%nnmat(self%s%prev_class,inn)
-                if( cls_pops(iref) == 0 )cycle
+                iref      = b%nnmat(self%s%prev_class,inn)
+                if( s2D%cls_pops(iref) == 0 )cycle
                 call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)

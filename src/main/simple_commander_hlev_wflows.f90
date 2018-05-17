@@ -1,10 +1,10 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
 include 'simple_lib.f08'
-use simple_commander_base, only: commander_base
-use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_sp_project,     only: sp_project
+use simple_commander_base,        only: commander_base
+use simple_cmdline,               only: cmdline
+use simple_sp_project,            only: sp_project
+use simple_singletons
 implicit none
 
 public :: cluster2D_autoscale_commander
@@ -56,7 +56,6 @@ contains
         type(cmdline) :: cline_rank_cavgs
         ! other variables
         type(sp_project)              :: spproj, spproj_sc
-        type(params)                  :: p_master
         character(len=:), allocatable :: projfile_sc, stk, stk_filt
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
         real     :: scale_stage1, scale_stage2
@@ -67,15 +66,15 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! parameters
-        p_master = params(cline, del_scaled=.true.)
+        call init_params(cline, del_scaled=.true.)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        nparts = p_master%nparts
-        if( p_master%l_autoscale )then
+        nparts = p%nparts
+        if( p%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function
             ! SPLITTING
-            call spproj%read(p_master%projfile )
-            call spproj%split_stk(p_master%nparts)
+            call spproj%read(p%projfile )
+            call spproj%split_stk(p%nparts)
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
@@ -83,26 +82,26 @@ contains
             cline_cluster2D_stage1 = cline
             call cline_cluster2D_stage1%set('objfun', 'cc')
             call cline_cluster2D_stage1%delete('automsk')
-            if( p_master%l_frac_update )then
+            if( p%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
             else
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
             ! Scaling
-            call spproj%scale_projfile(p_master%smpd_targets2D(1), projfile_sc,&
+            call spproj%scale_projfile(p%smpd_targets2D(1), projfile_sc,&
                 &cline_cluster2D_stage1, cline_scale1)
             call spproj%kill
             scale_stage1 = cline_scale1%get_rarg('scale')
-            scaling      = trim(projfile_sc) /= trim(p_master%projfile)
+            scaling      = trim(projfile_sc) /= trim(p%projfile)
             if( scaling )then
                 call xscale_distr%execute( cline_scale1 )
                 ! scale references
                 if( cline%defined('refs') )then
-                    call cline_scalerefs%set('stk', trim(p_master%refs))
-                    refs_sc = 'refs'//trim(SCALE_SUFFIX)//p_master%ext
+                    call cline_scalerefs%set('stk', trim(p%refs))
+                    refs_sc = 'refs'//trim(SCALE_SUFFIX)//p%ext
                     call cline_scalerefs%set('outstk', trim(refs_sc))
-                    call cline_scalerefs%set('smpd', p_master%smpd)
+                    call cline_scalerefs%set('smpd', p%smpd)
                     call cline_scalerefs%set('newbox', cline_scale1%get_rarg('newbox'))
                     call xscale%execute(cline_scalerefs)
                     call cline_cluster2D_stage1%set('refs',trim(refs_sc))
@@ -116,7 +115,7 @@ contains
             if( scaling )then
                 call spproj_sc%read_segment( 'ptcl2D', projfile_sc )
                 call spproj_sc%os_ptcl2D%mul_shifts( 1./scale_stage1 )
-                call spproj%read( p_master%projfile )
+                call spproj%read( p%projfile )
                 spproj%os_ptcl2D = spproj_sc%os_ptcl2D
                 call spproj%write_segment_inside('ptcl2D')
                 call spproj%kill()
@@ -136,30 +135,30 @@ contains
             cline_cluster2D_stage2 = cline
             call cline_cluster2D_stage2%set('objfun', 'ccres')
             call cline_cluster2D_stage2%delete('refs')
-            if( p_master%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
+            if( p%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then
-                call cline_cluster2D_stage2%set('update_frac', p_master%update_frac)
+                call cline_cluster2D_stage2%set('update_frac', p%update_frac)
             endif
             ! Scaling
-            call spproj%read( p_master%projfile )
-            call spproj%scale_projfile( p_master%smpd_targets2D(2), projfile_sc,&
+            call spproj%read( p%projfile )
+            call spproj%scale_projfile( p%smpd_targets2D(2), projfile_sc,&
                 &cline_cluster2D_stage2, cline_scale2)
             call spproj%kill
             scale_stage2 = cline_scale2%get_rarg('scale')
-            scaling      = trim(projfile_sc) /= p_master%projfile
+            scaling      = trim(projfile_sc) /= p%projfile
             if( scaling ) call xscale_distr%execute( cline_scale2 )
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(projfile_sc))
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
             last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
-            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
+            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p%ext
             ! Updates project and references
             if( scaling )then
                 ! shift modulation
                 call spproj_sc%read_segment( 'ptcl2D', projfile_sc )
                 call spproj_sc%os_ptcl2D%mul_shifts( 1./scale_stage2 )
-                call spproj%read( p_master%projfile )
+                call spproj%read( p%projfile )
                 spproj%os_ptcl2D = spproj_sc%os_ptcl2D
                 call spproj%write_segment_inside('ptcl2D')
                 call spproj%kill()
@@ -176,7 +175,7 @@ contains
                 call cline_make_cavgs%delete('autoscale')
                 call cline_make_cavgs%delete('balance')
                 call cline_make_cavgs%set('prg',      'make_cavgs')
-                call cline_make_cavgs%set('projfile', p_master%projfile)
+                call cline_make_cavgs%set('projfile', p%projfile)
                 call cline_make_cavgs%set('nparts',   real(nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
                 call xmake_cavgs%execute(cline_make_cavgs)
@@ -185,26 +184,26 @@ contains
             ! no auto-scaling
             call xcluster2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
-            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
+            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p%ext
         endif
         ! adding cavgs & FRCs to project & perform match filtering
-        call spproj%read( p_master%projfile )
+        call spproj%read( p%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd(), 'cavg')
-        stk = add2fbody(trim(finalcavgs),p_master%ext,'_even')
+        stk = add2fbody(trim(finalcavgs),p%ext,'_even')
         call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_even')
-        stk = add2fbody(trim(finalcavgs),p_master%ext,'_odd')
+        stk = add2fbody(trim(finalcavgs),p%ext,'_odd')
         call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_odd')
         call spproj%write_segment_inside('out')
         call spproj%kill()
         ! ranking
-        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
-        call cline_rank_cavgs%set('projfile', trim(p_master%projfile))
+        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p%ext
+        call cline_rank_cavgs%set('projfile', trim(p%projfile))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        call del_file('start2Drefs'//p_master%ext)
+        call del_file('start2Drefs'//p%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D_autoscale
@@ -244,7 +243,6 @@ contains
         character(len=:), allocatable :: projfile, stk, stk_even, stk_odd, stk_filt, ori_stk
         character(len=:), allocatable :: imgkind, frcs_fname, WORK_PROJFILE
         type(ctfparams)       :: ctfvars ! ctf=no by default
-        type(params)          :: p_master
         type(sp_project)      :: spproj, work_proj
         type(oris)            :: os
         real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd
@@ -265,7 +263,7 @@ contains
         ! make master parameters
         do_eo = trim(cline%get_carg('eo')) .eq. 'yes'
         call cline%set('eo','no')
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
@@ -275,10 +273,10 @@ contains
         ! decide wether to search for the symmetry axis or put the point-group in from the start
         ! if the point-group is considered known, it is put in from the start
         srch4symaxis = .false.
-        if( p_master%pgrp_known .eq. 'no' )then
-            if( p_master%pgrp .ne. 'c1' )then
-                if(  p_master%pgrp(1:1).eq.'c'  .or. p_master%pgrp(1:1).eq.'C'&
-                .or. p_master%pgrp(1:2).eq.'d2' .or. p_master%pgrp(1:2).eq.'D2' )then
+        if( p%pgrp_known .eq. 'no' )then
+            if( p%pgrp .ne. 'c1' )then
+                if(  p%pgrp(1:1).eq.'c'  .or. p%pgrp(1:1).eq.'C'&
+                .or. p%pgrp(1:2).eq.'d2' .or. p%pgrp(1:2).eq.'D2' )then
                     srch4symaxis = .true.
                 endif
             endif
@@ -288,13 +286,13 @@ contains
         lplims(1) = 20.
         lplims(2) = 10.
         ! passed
-        if( cline%defined('lpstart') ) lplims(1) = p_master%lpstart
-        if( cline%defined('lpstop')  ) lplims(2) = p_master%lpstop
+        if( cline%defined('lpstart') ) lplims(1) = p%lpstart
+        if( cline%defined('lpstop')  ) lplims(2) = p%lpstop
         ! read project & update sampling distance
-        call spproj%read(p_master%projfile)
+        call spproj%read(p%projfile)
         ! retrieve cavgs stack & FRCS info
         call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd, 'cavg')
-        p_master%smpd = ctfvars%smpd
+        p%smpd = ctfvars%smpd
         ori_stk       = stk
         if( do_eo )call gen_eo_stks
         ! prepare a temporary project file for the class average processing
@@ -317,15 +315,15 @@ contains
         call cline%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
         call work_proj%update_projinfo(cline)
         ! split
-        if(p_master%nparts > 1)then
-            call work_proj%split_stk(p_master%nparts)
+        if(p%nparts > 1)then
+            call work_proj%split_stk(p%nparts)
         else
             call work_proj%write()
         endif
         ! down-scale
         orig_box     = work_proj%get_box()
-        orig_msk     = p_master%msk
-        smpd_target  = max(p_master%smpd, lplims(2)*LP2SMPDFAC)
+        orig_msk     = p%msk
+        smpd_target  = max(p%smpd, lplims(2)*LP2SMPDFAC)
         do_autoscale = do_autoscale .and. smpd_target > work_proj%get_smpd()
         projfile     = trim(WORK_PROJFILE)
         if( do_autoscale )then
@@ -339,7 +337,7 @@ contains
         else
             box         = orig_box
             msk         = orig_msk
-            projfile    = p_master%projfile
+            projfile    = p%projfile
         endif
         ! prepare command lines from prototype
         ! projects names are subject to change depending on scaling and are updated individually
@@ -374,7 +372,7 @@ contains
         call cline_refine3D_init%set('msk',      msk)
         call cline_refine3D_init%set('box',      real(box))
         call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
-        call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//p_master%ext)
+        call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//p%ext)
         call cline_refine3D_init%set('lp',       lplims(1))
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_DEFAULT))
@@ -404,7 +402,7 @@ contains
             call cline_reconstruct3D%set('oritab',   'symdoc'//trim(METADATA_EXT))
             ! refinement step now uses the symmetrised vol and doc
             ! call cline_refine3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT)) !! TO UPDATE
-            ! call cline_refine3D_refine%set('vol1',   'rec_sym'//p_master%ext)
+            ! call cline_refine3D_refine%set('vol1',   'rec_sym'//p%ext)
             ! (4) RECONSTRUCT AT ORIGINAL SCALE
             ! call cline_reconstruct3D%set('prg',      'reconstruct3D')
             ! call cline_reconstruct3D%set('projfile', trim(ORIG_WORK_PROJFILE))
@@ -426,8 +424,8 @@ contains
         endif
         ! (6) RE-PROJECT VOLUME
         call cline_reproject%set('prg',    'project')
-        call cline_reproject%set('outstk', 'reprojs'//p_master%ext)
-        call cline_reproject%set('smpd',    p_master%smpd)
+        call cline_reproject%set('outstk', 'reprojs'//p%ext)
+        call cline_reproject%set('smpd',    p%smpd)
         call cline_reproject%set('msk',     orig_msk)
         call cline_reproject%set('box',     real(orig_box))
         ! execute commanders
@@ -452,7 +450,7 @@ contains
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
             call xreconstruct3D%execute(cline_reconstruct3D)
-            status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
+            status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p%ext, 'rec_sym'//p%ext)
         endif
         ! prep refinement stage
         call work_proj%read_segment('ptcl3D', trim(WORK_PROJFILE))
@@ -471,7 +469,7 @@ contains
         ! re-create project
         allocate(WORK_PROJFILE, source='initial_3Dmodel_tmpproj.simple')
         call del_file(WORK_PROJFILE)
-        ctfvars%smpd       = p_master%smpd
+        ctfvars%smpd       = p%smpd
         work_proj%projinfo = spproj%projinfo
         work_proj%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris()  > 0 ) work_proj%jobproc = spproj%jobproc
@@ -488,7 +486,7 @@ contains
         call cline%set('projname', trim(get_fbody(trim(ORIG_WORK_PROJFILE),trim('simple'))))
         call work_proj%update_projinfo(cline)
         ! split
-        call work_proj%split_stk(p_master%nparts)
+        call work_proj%split_stk(p%nparts)
         call work_proj%kill()
         ! reconstruct at original scale
         if( do_autoscale )then
@@ -496,7 +494,7 @@ contains
             ! write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
             ! write(*,'(A)') '>>>'
             ! call xreconstruct3D%execute(cline_reconstruct3D)
-            ! status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, trim(vol_iter))
+            ! status = simple_rename(trim(VOL_FBODY)//trim(str_state)//p%ext, trim(vol_iter))
         else
             call cline_refine3D_refine%set('vol1', trim(vol_iter))
         endif
@@ -508,18 +506,18 @@ contains
         iter = cline_refine3D_refine%get_rarg('endit')
         call set_iter_dependencies
         ! copy final volumes
-        status = simple_rename(vol_iter, 'rec_final'//p_master%ext)
-        status = simple_rename(add2fbody(vol_iter,p_master%ext,PPROC_SUFFIX), 'rec_final_pproc'//p_master%ext)
+        status = simple_rename(vol_iter, 'rec_final'//p%ext)
+        status = simple_rename(add2fbody(vol_iter,p%ext,PPROC_SUFFIX), 'rec_final_pproc'//p%ext)
         ! update the original project cls3D segment with orientations
         call work_proj%read_segment('ptcl3D', trim(ORIG_WORK_PROJFILE))
-        call spproj%read(p_master%projfile)
+        call spproj%read(p%projfile)
         call work_proj%os_ptcl3D%delete_entry('stkind')
         spproj%os_cls3D = work_proj%os_ptcl3D
         call work_proj%kill
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         ! add rec_final to os_out
-        call spproj%add_vol2os_out('rec_final'//p_master%ext, spproj%get_smpd(), 1, 'vol_cavg')
+        call spproj%add_vol2os_out('rec_final'//p%ext, spproj%get_smpd(), 1, 'vol_cavg')
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! reprojections
@@ -528,7 +526,7 @@ contains
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
         call cline_reproject%set('projfile', trim(ORIG_WORK_PROJFILE))
-        call cline_reproject%set('vol1',     'rec_final'//p_master%ext)
+        call cline_reproject%set('vol1',     'rec_final'//p%ext)
         call cline_reproject%set('oritab',   'final_oris.txt')
         call xreproject%execute(cline_reproject)
         ! end gracefully
@@ -541,7 +539,7 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p%ext
             end subroutine set_iter_dependencies
 
             subroutine gen_eo_stks
@@ -560,8 +558,8 @@ contains
                 stk_filt_even = add2fbody(trim(stk_even), trim(ext), '_filt')
                 stk_filt_odd  = add2fbody(trim(stk_odd),  trim(ext), '_filt')
                 call cline_filter%set('prg',  'filter')
-                call cline_filter%set('nthr', real(p_master%nthr))
-                call cline_filter%set('smpd', p_master%smpd)
+                call cline_filter%set('nthr', real(p%nthr))
+                call cline_filter%set('smpd', p%smpd)
                 call cline_filter%set('frcs', trim(frcs_fname))
                 call cline_filter%set('stk',   trim(stk))
                 call cline_filter%set('outstk',trim(stk_filt))
@@ -585,7 +583,6 @@ contains
         use simple_qsys_env,         only: qsys_env
         use simple_oris,             only: oris
         use simple_sym,              only: sym
-        !use simple_commander_rec,    only: reconstruct3D_commander
         use simple_commander_volops, only: postprocess_commander
         use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
         class(cluster3D_commander), intent(inout) :: self
@@ -607,7 +604,6 @@ contains
         type(sym)                     :: symop
         integer,     allocatable      :: labels(:)
         logical,     allocatable      :: included(:)
-        type(params)                  :: p_master
         type(sp_project)              :: spproj, spproj_states
         class(oris), pointer          :: os => null(), os_states => null()
         character(len=STDLEN)         :: oritab, str_state
@@ -624,8 +620,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
 
         ! make master parameters
-        p_master = params(cline)
-        if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
+        call init_params(cline)
+        if( p%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; cluster3D'
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -640,14 +636,14 @@ contains
         call cline_refine3D1%set('prg', 'refine3D')
         call cline_refine3D2%set('prg', 'refine3D')
         call cline_refine3D1%set('maxits', real(MAXITS1))
-        select case(trim(p_master%refine))
+        select case(trim(p%refine))
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
             case DEFAULT
                 if( .not.cline%defined('refine') )then
                     call cline_refine3D1%set('refine', 'cluster')
                 else
-                    call cline_refine3D1%set('refine', trim(p_master%refine))
+                    call cline_refine3D1%set('refine', trim(p%refine))
                 endif
         end select
         call cline_refine3D2%set('refine', 'multi')
@@ -669,7 +665,7 @@ contains
             ! all good
         else
             ! works out shift lmits for in-plane search
-            trs = MSK_FRAC*real(p_master%msk)
+            trs = MSK_FRAC*real(p%msk)
             trs = min(MAXSHIFT, max(MINSHIFT, trs))
             call cline_refine3D1%set('trs',trs)
             call cline_refine3D2%set('trs',trs)
@@ -677,32 +673,32 @@ contains
 
         ! generate diverse initial labels & orientations
         oritab = 'cluster3Ddoc_init'//trim(METADATA_EXT)
-        call spproj%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os)
-        call binread_oritab(p_master%oritab, spproj, os, [1,p_master%nptcls])
-        if( p_master%eo.eq.'no' )then
+        call spproj%new_seg_with_ptr(p%nptcls, p%oritype, os)
+        call binread_oritab(p%oritab, spproj, os, [1,p%nptcls])
+        if( p%eo.eq.'no' )then
             ! updates e/o flags
             call os%set_all2single('eo', -1.)
         else
             if( os%get_nevenodd() == 0 ) call os%partition_eo
         endif
-        if( trim(p_master%refine) .eq. 'sym' )then
+        if( trim(p%refine) .eq. 'sym' )then
             ! randomize projection directions with respect to symmetry
-            symop = sym(p_master%pgrp)
+            symop = sym(p%pgrp)
             call symop%symrandomize(os)
             call symop%kill
-            call binwrite_oritab(trim('symrnd_'//oritab), spproj, os, [1,p_master%nptcls])
+            call binwrite_oritab(trim('symrnd_'//oritab), spproj, os, [1,p%nptcls])
         endif
         if( cline%defined('oritab2') )then
             ! this is  to force initialisation (4 testing)
-            call spproj_states%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os_states)
-            call binread_oritab(p_master%oritab2, spproj_states, os_states, [1,p_master%nptcls])
+            call spproj_states%new_seg_with_ptr(p%nptcls, p%oritype, os_states)
+            call binread_oritab(p%oritab2, spproj_states, os_states, [1,p%nptcls])
             labels = nint(os_states%get_all('state'))
             call os%set_all('state', real(labels))
             call os_states%kill
         else if( .not. cline%defined('startit') )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-            call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.true.)
+            call diverse_labeling(os, p%nstates, labels, corr_ranked=.true.)
             call os%set_all('state', real(labels))
         else
             ! starting from a previous solution
@@ -714,29 +710,29 @@ contains
         n_incl   = count(included)
         where( .not. included ) labels = 0
         call os%set_all('state', real(labels))
-        call binwrite_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
+        call binwrite_oritab(trim(oritab), spproj, os, [1,p%nptcls])
         call cline_refine3D1%set('oritab', trim(oritab))
         deallocate(labels, included)
 
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-        if( trim(p_master%refine) .eq. 'sym' )then
+        if( trim(p%refine) .eq. 'sym' )then
             call cline%set('oritab', trim('symrnd_'//oritab))
             call cline%set('pgrp', 'c1')
         endif
         call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
-        rename_stat = simple_rename(trim(VOL_FBODY)//one//p_master%ext, trim(CLUSTER3D_VOL)//p_master%ext)
-        if( p_master%eo .ne. 'no' )then
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//p_master%ext, trim(CLUSTER3D_VOL)//'_even'//p_master%ext)
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//p_master%ext,  trim(CLUSTER3D_VOL)//'_odd'//p_master%ext)
+        rename_stat = simple_rename(trim(VOL_FBODY)//one//p%ext, trim(CLUSTER3D_VOL)//p%ext)
+        if( p%eo .ne. 'no' )then
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//p%ext, trim(CLUSTER3D_VOL)//'_even'//p%ext)
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//p%ext,  trim(CLUSTER3D_VOL)//'_odd'//p%ext)
             rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
             rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
-            rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//p_master%ext, trim(CLUSTER3D_ANISOLP)//p_master%ext)
+            rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//p%ext, trim(CLUSTER3D_ANISOLP)//p%ext)
         endif
         ! THis is experimental to keep FCs & RHO matrices from mixed model
-        ! do ipart = 1, p_master%nparts
-        !     allocate(part_str, source=int2str_pad(ipart,p_master%numlen))
-        !     allocate(recname, source=trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
-        !     allocate(rhoname, source='rho_'//trim(VOL_FBODY)//one//'_part'//part_str//p_master%ext)
+        ! do ipart = 1, p%nparts
+        !     allocate(part_str, source=int2str_pad(ipart,p%numlen))
+        !     allocate(recname, source=trim(VOL_FBODY)//one//'_part'//part_str//p%ext)
+        !     allocate(rhoname, source='rho_'//trim(VOL_FBODY)//one//'_part'//part_str//p%ext)
         !     rename_stat = rename(recname, 'cluster3D_'//trim(recname))
         !     rename_stat = rename(rhoname, 'cluster3D_'//trim(rhoname))
         !     deallocate(part_str,recname,rhoname)
@@ -749,19 +745,19 @@ contains
         call xrefine3D_distr%execute(cline_refine3D1)
         iter   = nint(cline_refine3D1%get_rarg('endit'))
         oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-        call binread_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
+        call binread_oritab(trim(oritab), spproj, os, [1,p%nptcls])
         oritab = 'cluster3Ddoc_stage1'//trim(METADATA_EXT)
-        call binwrite_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
+        call binwrite_oritab(trim(oritab), spproj, os, [1,p%nptcls])
 
         ! ! stage 1 reconstruction to obtain resolution estimate when eo .eq. 'no'
-        ! if( p_master%eo .eq. 'no' )then
+        ! if( p%eo .eq. 'no' )then
         !     call cline_reconstruct3D_distr%set('oritab', trim(oritab))
         !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-        !     do state = 1, p_master%nstates
+        !     do state = 1, p%nstates
         !         str_state  = int2str_pad(state, 2)
-        !         call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//p_master%ext)
+        !         call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//p%ext)
         !         call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-        !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p_master%ext)
+        !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p%ext)
         !         call xpostprocess%execute(cline_postprocess)
         !     enddo
         ! endif
@@ -777,19 +773,19 @@ contains
         call xrefine3D_distr%execute(cline_refine3D2)
         iter   = nint(cline_refine3D2%get_rarg('endit'))
         oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-        call binread_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
+        call binread_oritab(trim(oritab), spproj, os, [1,p%nptcls])
         oritab = 'cluster3Ddoc_stage2'//trim(METADATA_EXT)
-        call binwrite_oritab(trim(oritab), spproj, os, [1,p_master%nptcls])
+        call binwrite_oritab(trim(oritab), spproj, os, [1,p%nptcls])
 
         ! stage 2 reconstruction to obtain resolution estimate when eo .eq. 'no'
-        if( p_master%eo .eq. 'no' )then
+        if( p%eo .eq. 'no' )then
             call cline_reconstruct3D_distr%set('oritab', trim(oritab))
             call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-            do state = 1, p_master%nstates
+            do state = 1, p%nstates
                 str_state  = int2str_pad(state, 2)
-                call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//p_master%ext)
+                call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//p%ext)
                 call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-                call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p_master%ext)
+                call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p%ext)
                 call xpostprocess%execute(cline_postprocess)
             enddo
         endif
@@ -890,7 +886,6 @@ contains
         integer,               allocatable :: state_pops(:), states(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: l_hasmskvols(:), l_hasvols(:)
-        type(params)             :: p_master
         type(sp_project)         :: spproj_master
         type(sp_project), target :: spproj_state
         class(oris), pointer     :: os_master => null(), os_state => null()
@@ -906,7 +901,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
 
         ! make master parameters
-        p_master      = params(cline)
+        call init_params(cline)
         l_singlestate = cline%defined('state')
         error         = .false.
         ! set mkdir to no (to avoid nested directory structure)
@@ -918,29 +913,29 @@ contains
         allocate(FINAL_DOC, source='cluster3Ddoc_refine'//trim(METADATA_EXT))
 
         ! sanity checks
-        if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
+        if( p%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; cluster3D_refine'
-        if(.not.file_exists(p_master%oritab))then
-            print *,'Document ',trim(p_master%oritab),' does not exist!'
+        if(.not.file_exists(p%oritab))then
+            print *,'Document ',trim(p%oritab),' does not exist!'
             stop
         endif
 
         ! general prep
-        p_master%nptcls = binread_nlines(p_master, p_master%oritab)
-        call spproj_master%new_seg_with_ptr(p_master%nptcls, p_master%oritype, os_master)
-        call binread_oritab(p_master%oritab, spproj_master, os_master, [1,p_master%nptcls])
-        p_master%nstates = os_master%get_n('state')
-        if(p_master%nstates < 2 .and. .not.l_singlestate)then
-            print *, 'Non-sensical number of states argument for heterogeneity refinement: ',p_master%nstates
+        p%nptcls = binread_nlines( p%oritab)
+        call spproj_master%new_seg_with_ptr(p%nptcls, p%oritype, os_master)
+        call binread_oritab(p%oritab, spproj_master, os_master, [1,p%nptcls])
+        p%nstates = os_master%get_n('state')
+        if(p%nstates < 2 .and. .not.l_singlestate)then
+            print *, 'Non-sensical number of states argument for heterogeneity refinement: ',p%nstates
             stop
         endif
-        allocate(l_hasmskvols(p_master%nstates), source=.false.)
-        allocate(l_hasvols(p_master%nstates),    source=.false.)
-        allocate(init_docs(p_master%nstates), final_docs(p_master%nstates))
+        allocate(l_hasmskvols(p%nstates), source=.false.)
+        allocate(l_hasvols(p%nstates),    source=.false.)
+        allocate(init_docs(p%nstates), final_docs(p%nstates))
         call os_master%get_pops(state_pops, 'state', consider_w=.false.)
-        do state = 1, p_master%nstates
+        do state = 1, p%nstates
             if( state_pops(state) == 0 )cycle
-            if( l_singlestate .and. state.ne.p_master%state )cycle
+            if( l_singlestate .and. state.ne.p%state )cycle
             str_state = int2str_pad(state,2)
             dir = 'state_'//str_state//'/'
             call simple_mkdir(dir)
@@ -956,12 +951,12 @@ contains
             call os_state%set_all('state', real(states))
             deallocate(states)
             init_docs(state) = trim(INIT_FBODY)//str_state//trim(METADATA_EXT)
-            call binwrite_oritab(init_docs(state), spproj_state, os_state, [1,p_master%nptcls])
+            call binwrite_oritab(init_docs(state), spproj_state, os_state, [1,p%nptcls])
             final_docs(state) = trim(FINAL_FBODY)//str_state//trim(METADATA_EXT)
             ! check & move volumes
-            l_hasvols(state) = trim(p_master%vols(state)) .ne. ''
+            l_hasvols(state) = trim(p%vols(state)) .ne. ''
             if( l_hasvols(state) )then
-                if( p_master%eo .ne. 'no' )then
+                if( p%eo .ne. 'no' )then
                     ! fsc
                     fname = trim(FSC_FBODY)//str_state//BIN_EXT
                     if( .not.file_exists(fname) )then
@@ -978,20 +973,20 @@ contains
                         rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                     ! aniso
-                    fname = trim(ANISOLP_FBODY)//str_state//p_master%ext
+                    fname = trim(ANISOLP_FBODY)//str_state//p%ext
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
                         rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
                     ! e/o
-                    fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_even')
+                    fname = add2fbody(trim(p%vols(state)), p%ext, '_even')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
                         rename_stat = simple_rename(fname, dir//trim(fname))
                     endif
-                    fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_odd')
+                    fname = add2fbody(trim(p%vols(state)), p%ext, '_odd')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
@@ -999,25 +994,25 @@ contains
                     endif
                 endif
                 ! volume
-                if( .not.file_exists(p_master%vols(state)) )then
-                    print *, 'File missing: ', p_master%vols(state)
+                if( .not.file_exists(p%vols(state)) )then
+                    print *, 'File missing: ', p%vols(state)
                     error = .true.
                 else
-                    fname = trim(p_master%vols(state))
-                    p_master%vols(state) = dir//trim(fname) ! name change
-                    rename_stat = simple_rename(fname, p_master%vols(state))
+                    fname = trim(p%vols(state))
+                    p%vols(state) = dir//trim(fname) ! name change
+                    rename_stat = simple_rename(fname, p%vols(state))
                 endif
             endif
             ! mask volume
-            l_hasmskvols(state) = trim(p_master%mskvols(state)) .ne. ''
+            l_hasmskvols(state) = trim(p%mskvols(state)) .ne. ''
             if( l_hasmskvols(state) )then
-                if( .not.file_exists(p_master%mskvols(state)) )then
+                if( .not.file_exists(p%mskvols(state)) )then
                     print *, 'File missing: ', trim(fname)
                     error = .true.
                 else
-                    fname = trim(p_master%mskvols(state))
-                    p_master%mskvols(state) = dir//trim(fname)  ! name change
-                    call simple_copy_file(trim(fname), trim(p_master%mskvols(state)))
+                    fname = trim(p%mskvols(state))
+                    p%mskvols(state) = dir//trim(fname)  ! name change
+                    call simple_copy_file(trim(fname), trim(p%mskvols(state)))
                 endif
             endif
         enddo
@@ -1030,7 +1025,7 @@ contains
         call cline%delete('nstates')
         call cline%delete('msklist')
         call cline%delete('mskfile')
-        do state = 1, p_master%nstates
+        do state = 1, p%nstates
             call cline%delete('vol'//int2str_pad(state,1))
         enddo
         cline_refine3D_master     = cline
@@ -1040,14 +1035,14 @@ contains
         if( .not.cline%defined('maxits') ) call cline_refine3D_master%set('maxits', real(MAXITS))
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_distr%set('oritab', trim(FINAL_DOC))
-        call cline_reconstruct3D_distr%set('nstates', trim(int2str(p_master%nstates)))
+        call cline_reconstruct3D_distr%set('nstates', trim(int2str(p%nstates)))
         call cline_reconstruct3D_distr%set('eo', 'yes')
         call cline_postprocess%delete('lp')
 
         ! Main loop
-        do state = 1, p_master%nstates
+        do state = 1, p%nstates
             if( state_pops(state) == 0 )cycle
-            if( l_singlestate .and. state.ne.p_master%state )cycle
+            if( l_singlestate .and. state.ne.p%state )cycle
             str_state = int2str_pad(state,2)
             dir       = 'state_'//str_state//'/'
             write(*,'(A)')   '>>>'
@@ -1057,25 +1052,25 @@ contains
             cline_refine3D = cline_refine3D_master
             call cline_refine3D%set('oritab', trim(init_docs(state)))
             if( l_hasvols(state) )then
-                call cline_refine3D%set('vol1', trim(p_master%vols(state)))
-                if( p_master%eo.ne.'no' )then
+                call cline_refine3D%set('vol1', trim(p%vols(state)))
+                if( p%eo.ne.'no' )then
                     fname = dir//trim(FSC_FBODY)//str_state//BIN_EXT
                     call simple_copy_file(trim(fname),'fsc_state01.bin')
                     fname = dir//trim(FRCS_FBODY)//str_state//BIN_EXT
                     if(file_exists(fname))call simple_copy_file(trim(fname),'frcs_state01.bin')
-                    fname = dir//trim(ANISOLP_FBODY)//str_state//p_master%ext
+                    fname = dir//trim(ANISOLP_FBODY)//str_state//p%ext
                     if(file_exists(fname))call simple_copy_file(trim(fname),'aniso_optlp_state01.mrc')
                 endif
             endif
-            if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(p_master%mskvols(state)))
+            if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(p%mskvols(state)))
             ! run
             call xrefine3D_distr%execute(cline_refine3D)
             ! harvest outcome
             iter   = nint(cline_refine3D%get_rarg('endit'))
             oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
             ! stash
-            call binread_oritab(oritab, spproj_state, os_state, [1,p_master%nptcls])
-            do iptcl = 1,p_master%nptcls
+            call binread_oritab(oritab, spproj_state, os_state, [1,p%nptcls])
+            do iptcl = 1,p%nptcls
                 if( nint(os_master%get(iptcl, 'state')) .ne. 1 )cycle
                 call os_master%set_ori(iptcl, os_state%get_ori(iptcl))
                 call os_master%set(iptcl, 'state', real(state))
@@ -1085,20 +1080,20 @@ contains
         enddo
 
         ! final document
-        call binwrite_oritab(FINAL_DOC, spproj_master, os_master, [1,p_master%nptcls])
+        call binwrite_oritab(FINAL_DOC, spproj_master, os_master, [1,p%nptcls])
 
         ! final reconstruction
-        if( p_master%eo .eq.'no' )then
+        if( p%eo .eq.'no' )then
             call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-            do state = 1, p_master%nstates
+            do state = 1, p%nstates
                 if( state_pops(state) == 0 )cycle
-                if( l_singlestate .and. state.ne.p_master%state )cycle
+                if( l_singlestate .and. state.ne.p%state )cycle
                 str_state = int2str_pad(state, 2)
-                if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p_master%mskvols(state)))
-                vol = 'recvol_state'//trim(str_state)//p_master%ext
+                if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p%mskvols(state)))
+                vol = 'recvol_state'//trim(str_state)//p%ext
                 call cline_postprocess%set('vol1', trim(vol))
                 call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-                call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p_master%ext)
+                call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//p%ext)
                 call xpostprocess%execute(cline_postprocess)
             enddo
         endif
@@ -1118,19 +1113,19 @@ contains
                 do it = 1, iter
                     str_iter = int2str_pad(it,3)
                     ! volumes
-                    src  = trim(VOL_FBODY)//one//'_iter'//str_iter//p_master%ext
-                    dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//p_master%ext
+                    src  = trim(VOL_FBODY)//one//'_iter'//str_iter//p%ext
+                    dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//p%ext
                     rename_stat = simple_rename(src, dist)
-                    src  = trim(VOL_FBODY)//one//'_iter'//str_iter//trim(PPROC_SUFFIX)//p_master%ext
-                    dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//trim(PPROC_SUFFIX)//p_master%ext
+                    src  = trim(VOL_FBODY)//one//'_iter'//str_iter//trim(PPROC_SUFFIX)//p%ext
+                    dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//trim(PPROC_SUFFIX)//p%ext
                     rename_stat = simple_rename(src, dist)
                     ! e/o
-                    if( p_master%eo.ne.'no')then
-                        src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p_master%ext
-                        dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p_master%ext
+                    if( p%eo.ne.'no')then
+                        src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p%ext
+                        dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//p%ext
                         rename_stat = simple_rename(src, dist)
-                        src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p_master%ext
-                        dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p_master%ext
+                        src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p%ext
+                        dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//p%ext
                         rename_stat = simple_rename(src, dist)
                         src = 'RESOLUTION_STATE'//one//'_ITER'//str_iter
                         rename_stat = simple_rename(src, dir//src)
@@ -1140,12 +1135,12 @@ contains
                     if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                 enddo
                 ! resolution measures
-                if( p_master%eo.ne.'no')then
+                if( p%eo.ne.'no')then
                     src  = trim(FSC_FBODY)//one//BIN_EXT
                     if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                     src  = trim(FRCS_FBODY)//one//BIN_EXT
                     if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
-                    src  = trim(ANISOLP_FBODY)//one//p_master%ext
+                    src  = trim(ANISOLP_FBODY)//one//p%ext
                     if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
                 endif
             end subroutine refine3D_cleanup

@@ -1,6 +1,6 @@
 module simple_strategy3D_utils
-use simple_defs              ! use all in there
-use simple_strategy3D_alloc  ! use all in there
+include 'simple_lib.f08'
+use simple_strategy3D_alloc  ! singleton class s3D
 use simple_strategy3D_srch,  only: strategy3D_srch
 implicit none
 
@@ -16,34 +16,34 @@ contains
         state_present = present(state)
         do ipeak = 1, s%npeaks
             cnt = s%nrefs - s%npeaks + ipeak
-            ref = proj_space_inds(s%iptcl_map, cnt)
+            ref = s3D%proj_space_inds(s%iptcl_map, cnt)
             if( ref < 1 .or. ref > s%nrefs )then
                 print *, 'ref: ', ref
                 stop 'ref index out of bound; strategy3D_utils :: extract_peaks'
             endif
             if( state_present )then
-                state = proj_space_state(s%iptcl_map,ref)
-                if( .not. state_exists(state) )then
+                state = s3D%proj_space_state(s%iptcl_map,ref)
+                if( .not. s3D%state_exists(state) )then
                     print *, 'empty state: ', state
                     stop 'strategy3D_utils :: extract_peak'
                 endif
             endif
             ! add shift
             shvec = s%prev_shvec
-            if( s%doshift )shvec = shvec + proj_space_shift(s%iptcl_map,ref,1:2)
+            if( s%doshift )shvec = shvec + s3D%proj_space_shift(s%iptcl_map,ref,1:2)
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
-            corrs(ipeak) = proj_space_corrs(s%iptcl_map,ref)
+            corrs(ipeak) = s3D%proj_space_corrs(s%iptcl_map,ref)
             if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
             if( state_present )then
-                call o_peaks(s%iptcl)%set(ipeak, 'state', real(state))
+                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', real(state))
             else
-                call o_peaks(s%iptcl)%set(ipeak, 'state', 1.)
+                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', 1.)
             endif
-            call o_peaks(s%iptcl)%set(ipeak, 'proj',  real(proj_space_proj(s%iptcl_map,ref)))
-            call o_peaks(s%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
-            call o_peaks(s%iptcl)%set_euler(ipeak, proj_space_euls(s%iptcl_map,ref,1:3))
-            call o_peaks(s%iptcl)%set_shift(ipeak, shvec)
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'proj',  real(s3D%proj_space_proj(s%iptcl_map,ref)))
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
+            call s3D%o_peaks(s%iptcl)%set_euler(ipeak, s3D%proj_space_euls(s%iptcl_map,ref,1:3))
+            call s3D%o_peaks(s%iptcl)%set_shift(ipeak, shvec)
         enddo
     end subroutine extract_peaks
 
@@ -68,16 +68,16 @@ contains
             best_loc = maxloc(corrs)
             ! reweighting according to angular distance to best peak
             ang_lim = deg2rad( s%se_ptr%srchrange_theta()/2. )
-            o_best  = o_peaks(s%iptcl)%get_ori(best_loc(1))
+            o_best  = s3D%o_peaks(s%iptcl)%get_ori(best_loc(1))
             do ipeak = 1,s%npeaks
                 if( ipeak == best_loc(1) )then
                     ang_weights(ipeak) = 1.0
                     cycle
                 endif
                 if( trim(s%se_ptr%get_pgrp()).eq.'c1' )then
-                    ang_dist = o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
+                    ang_dist = s3D%o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
                 else
-                    call s%se_ptr%sym_dists( o_best, o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
+                    call s%se_ptr%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
                     ang_dist = deg2rad( ang_dist )
                 endif
                 if( ang_dist > ang_lim )then
@@ -106,7 +106,7 @@ contains
             wcorr = sum(ws*corrs,mask=included)
         endif
         ! update npeaks individual weights
-        call o_peaks(s%iptcl)%set_all('ow', ws)
+        call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
     end subroutine corrs2softmax_weights
 
     subroutine states_reweight( s, corrs, ws, state_ws, included, state, best_loc, wcorr )
@@ -120,8 +120,8 @@ contains
         if( s%npeaks > 1 .and. s%nstates > 1 )then
             ! states weights
             do ipeak = 1, s%npeaks
-                corrs(ipeak)  = o_peaks(s%iptcl)%get(ipeak,'corr')
-                states(ipeak) = nint(o_peaks(s%iptcl)%get(ipeak,'state'))
+                corrs(ipeak)  = s3D%o_peaks(s%iptcl)%get(ipeak,'corr')
+                states(ipeak) = nint(s3D%o_peaks(s%iptcl)%get(ipeak,'state'))
             enddo
             ! greedy state assignment
             do istate = 1, s%nstates
@@ -137,7 +137,7 @@ contains
             ! weighted corr
             wcorr    = sum(ws*corrs, mask=included)
             ! update npeaks individual weights
-            call o_peaks(s%iptcl)%set_all('ow', ws)
+            call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
         endif
     end subroutine states_reweight
 
@@ -151,15 +151,15 @@ contains
             do ipeak = 1, s%npeaks
                 if( ws(ipeak) > TINY .or. s%npeaks == 1 )then
                     cnt   = s%nrefs - s%npeaks + ipeak
-                    ref   = proj_space_inds(s%iptcl_map, cnt)
+                    ref   = s3D%proj_space_inds(s%iptcl_map, cnt)
                     shvec = 0.
-                    if( s%doshift )shvec = proj_space_shift(s%iptcl_map, ref, 1:2)
-                    roind        = s%pftcc_ptr%get_roind(360. - proj_space_euls(s%iptcl_map, ref, 3))
+                    if( s%doshift )shvec = s3D%proj_space_shift(s%iptcl_map, ref, 1:2)
+                    roind        = s%pftcc_ptr%get_roind(360. - s3D%proj_space_euls(s%iptcl_map, ref, 3))
                     bfacs(ipeak) = s%pftcc_ptr%fit_bfac(ref, s%iptcl, roind, shvec)
                 else
                     bfacs(ipeak) = 0.
                 endif
-                call o_peaks(s%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
+                call s3D%o_peaks(s%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
             enddo
             bfac = sum(ws * bfacs, mask=(ws>TINY))
             call s%a_ptr%set(s%iptcl, 'bfac',  bfac )
@@ -177,14 +177,14 @@ contains
         type(oris) :: sym_os
         ang_sdev = 0.
         if( trim(s%se_ptr%get_pgrp()).eq.'c1' )then
-            ang_sdev = o_peaks(s%iptcl)%ang_sdev(s%nstates, s%npeaks)
+            ang_sdev = s3D%o_peaks(s%iptcl)%ang_sdev(s%nstates, s%npeaks)
         else
             if( s%npeaks > 2 )then
-                sym_os = o_peaks(s%iptcl)
+                sym_os = s3D%o_peaks(s%iptcl)
                 do ipeak = 1, s%npeaks
                     if( ipeak == best_loc(1) )cycle
-                    call s%se_ptr%sym_dists( o_peaks(s%iptcl)%get_ori(best_loc(1)),&
-                        &o_peaks(s%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
+                    call s%se_ptr%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(best_loc(1)),&
+                        &s3D%o_peaks(s%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
                     call sym_os%set_ori(ipeak, osym)
                 enddo
                 ang_sdev = sym_os%ang_sdev(s%nstates, s%npeaks)
@@ -198,7 +198,7 @@ contains
         real,                   intent(in)    :: euldist
         integer :: roind
         real    :: mi_proj, mi_inpl, mi_joint
-        roind    = s%pftcc_ptr%get_roind(360. - o_peaks(s%iptcl)%e3get(best_loc(1)))
+        roind    = s%pftcc_ptr%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_joint = 0.
@@ -223,7 +223,7 @@ contains
         real,                   intent(in)    :: euldist
         integer :: roind, state
         real    :: mi_proj, mi_inpl, mi_joint, mi_state
-        roind    = s%pftcc_ptr%get_roind(360. - o_peaks(s%iptcl)%e3get(best_loc(1)))
+        roind    = s%pftcc_ptr%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_joint = 0.
@@ -236,8 +236,8 @@ contains
             mi_joint = mi_joint + 1.
         endif
         mi_state = 0.
-        state = nint( o_peaks(s%iptcl)%get(best_loc(1), 'state') )
-        if( .not. state_exists(state) )then
+        state = nint( s3D%o_peaks(s%iptcl)%get(best_loc(1), 'state') )
+        if( .not. s3D%state_exists(state) )then
             print *, 'empty state: ', state
             stop 'strategy3D_utils; convergence_stats_multi'
         endif

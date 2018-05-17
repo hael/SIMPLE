@@ -1,9 +1,8 @@
 ! concrete commander: operations on volumes
 module simple_commander_volops
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_projector_hlev, only: reproject, rotvol
@@ -68,13 +67,12 @@ contains
     subroutine exec_fsc( self, cline )
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
-        type(params)      :: p
         type(image)       :: even, odd
         type(masker)      :: mskvol
         integer           :: j, find_plate
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
-        p = params(cline)
+        call init_params(cline)
         ! read even/odd pair
         call even%new([p%box,p%box,p%box], p%smpd)
         call odd%new([p%box,p%box,p%box], p%smpd)
@@ -87,7 +85,7 @@ contains
             if( file_exists(p%mskfile) )then
                 call mskvol%new([p%box,p%box,p%box], p%smpd)
                 call mskvol%read(p%mskfile)
-                call mskvol%resmask(p)
+                call mskvol%resmask()
                 call mskvol%write('resmask'//p%ext)
                 call even%zero_background
                 call odd%zero_background
@@ -131,12 +129,10 @@ contains
     subroutine exec_centervol( self, cline )
         class(centervol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        call init_params(cline)                   ! parameters generated
+        call b%build_general_tbox( cline) ! general objects built
         ! center volume(s)
         allocate(shvec(p%nstates,3))
         do istate=1,p%nstates
@@ -156,16 +152,14 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params)      :: p
-        type(build)       :: b
         type(image)       :: vol_copy, vol_filt
         type(masker)      :: mskvol
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: state, ldim(3)
         ! pre-proc
-        p = params(cline) ! constants & derived constants produced, mode=2
-        call b%build_general_tbox(p, cline) ! general objects built
+        call init_params(cline) ! constants & derived constants produced, mode=2
+        call b%build_general_tbox( cline) ! general objects built
         if( cline%defined('projfile') )then
 
             ! 2do
@@ -239,7 +233,7 @@ contains
                 stop 'commander_volops :: postprocess'
             endif
             call vol_copy%ifft()
-            call mskvol%automask3D(p, vol_copy)
+            call mskvol%automask3D( vol_copy)
             call mskvol%write('automask'//p%ext)
             call b%vol%zero_background
             call b%vol%mul(mskvol)
@@ -271,22 +265,20 @@ contains
         use simple_binoris_io, only: binread_nlines
         class(reproject_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params)             :: p
-        type(build)              :: b
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         if( cline%defined('oritab') )then
-            p%nptcls = binread_nlines(p, p%oritab)
-            call b%build_general_tbox(p, cline)
+            p%nptcls = binread_nlines( p%oritab)
+            call b%build_general_tbox( cline)
             p%nspace = b%a%get_noris()
         else
             p%nptcls = p%nspace
-            call b%build_general_tbox(p, cline)
+            call b%build_general_tbox( cline)
             call b%a%spiral(p%nsym, p%eullims)
         endif
         ! fix volumes and stacks
@@ -295,7 +287,7 @@ contains
         ! masking
         if(cline%defined('msk')) call b%vol%mask(p%msk, 'soft')
         ! generate projections
-        imgs = reproject(b%vol, b%a, p)
+        imgs = reproject(b%vol, b%a)
         loop_end = p%nspace
         if( file_exists(p%outstk) ) call del_file(p%outstk)
         do i=1,loop_end
@@ -312,15 +304,13 @@ contains
     subroutine exec_volaverager( self, cline )
         class(volaverager_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         integer, allocatable               :: ptcls(:)
         character(len=STDLEN), allocatable :: volnames(:)
         type(image)                        :: vol_avg
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo, io_stat
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)
         DebugPrint   'number of volumes: ', nvols
@@ -337,7 +327,7 @@ contains
         call find_ldim_nptcls(volnames(1), p%ldim, ifoo)
         p%box  = p%ldim(1)
         ! build general toolbox
-        call b%build_general_tbox(p, cline) ! general objects built
+        call b%build_general_tbox(cline) ! general objects built
         ! figure out the file extension
         fformat = fname2format(volnames(1))
         select case(fformat)
@@ -383,14 +373,12 @@ contains
     subroutine exec_volops( self, cline )
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         logical           :: here
         type(ori)         :: o
         type(image)       :: vol_rot
         real              :: shvec(3)
-        p = params(cline) ! constants & derived constants produced, mode=2
-        call b%build_general_tbox(p, cline)  ! general objects built
+        call init_params(cline) ! constants & derived constants produced, mode=2
+        call b%build_general_tbox( cline)  ! general objects built
         ! reallocate vol (boxmatch issue)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
         inquire(FILE=p%vols(1), EXIST=here)
@@ -424,7 +412,7 @@ contains
                 call o%new
                 call o%set_euler([p%e1,p%e2,p%e3])
                 shvec   = [p%xsh,p%ysh,p%zsh]
-                vol_rot = rotvol(b%vol, o, p, shvec)
+                vol_rot = rotvol(b%vol, o,  shvec)
                 b%vol   = vol_rot
             endif
             if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
@@ -440,7 +428,6 @@ contains
     subroutine exec_volume_smat( self, cline )
         class(volume_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params), target :: p
         integer              :: funit, io_stat, cnt, npairs,  nvols, loc(1)
         integer              :: ivol, jvol, ldim(3), ipair, ifoo, i, spat_med
         integer              :: furthest_from_spat_med
@@ -452,7 +439,7 @@ contains
         integer,                   allocatable :: pairs(:,:)
         character(len=LONGSTRLEN), allocatable :: vollist(:)
         character(len=:),          allocatable :: fname
-        p = params(cline, .false.)              ! constants & derived constants produced
+        call init_params(cline, .false.)              ! constants & derived constants produced
         call read_filetable(p%vollist, vollist) ! reads in list of volumes
         nvols  = size(vollist)
         npairs = (nvols*(nvols-1))/2
@@ -483,8 +470,8 @@ contains
                 call progress(cnt, npairs)
                 ivol = pairs(ipair,1)
                 jvol = pairs(ipair,2)
-                call read_and_prep_vol( p, vollist(ivol), vol1 )
-                call read_and_prep_vol( p, vollist(jvol), vol2 )
+                call read_and_prep_vol( vollist(ivol), vol1 )
+                call read_and_prep_vol( vollist(jvol), vol2 )
                 call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
                 o = volpft_srch_minimize_eul()
                 corrs(ipair) = o%get('corr')
@@ -515,8 +502,8 @@ contains
                 do jvol=ivol + 1,nvols
                     cnt = cnt + 1
                     call progress(cnt, npairs)
-                    call read_and_prep_vol( p, vollist(ivol), vol1 )
-                    call read_and_prep_vol( p, vollist(jvol), vol2 )
+                    call read_and_prep_vol(  vollist(ivol), vol1 )
+                    call read_and_prep_vol(  vollist(jvol), vol2 )
                     call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
                     o = volpft_srch_minimize_eul()
                     corrmat(ivol,jvol) = o%get('corr')
@@ -557,18 +544,17 @@ contains
     subroutine exec_dock_volpair( self, cline )
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)    :: p
         type(projector) :: vol1, vol2
         type(image)     :: vol_out
         type(ori)       :: orientation
-        p = params(cline, .false.) ! constants & derived constants produced
-        call read_and_prep_vol( p, p%vols(1), vol1 )
-        call read_and_prep_vol( p, p%vols(2), vol2 )
+        call init_params(cline, .false.) ! constants & derived constants produced
+        call read_and_prep_vol(  p%vols(1), vol1 )
+        call read_and_prep_vol(  p%vols(2), vol2 )
         call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
         select case(p%dockmode)
             case('eul')
                 orientation = volpft_srch_minimize_eul()
-                vol_out     = rotvol(vol2, orientation, p)
+                vol_out     = rotvol(vol2, orientation)
             case('shift')
                 orientation = volpft_srch_minimize_shift()
                 call vol2%shift(orientation%get_3Dshift())
@@ -576,12 +562,12 @@ contains
             case('eulshift')
                 orientation = volpft_srch_minimize_eul()
                 orientation = volpft_srch_minimize_shift()
-                vol_out     = rotvol(vol2, orientation, p, orientation%get_3Dshift())
+                vol_out     = rotvol(vol2, orientation, orientation%get_3Dshift())
             case('all')
                 orientation = volpft_srch_minimize_eul()
                 orientation = volpft_srch_minimize_shift()
                 orientation = volpft_srch_minimize_all()
-                vol_out     = rotvol(vol2, orientation, p, orientation%get_3Dshift())
+                vol_out     = rotvol(vol2, orientation, orientation%get_3Dshift())
         end select
         call vol_out%write(p%outvol, del_if_exists=.true.)
         ! end gracefully
@@ -596,17 +582,15 @@ contains
         class(cmdline),                 intent(inout) :: cline !< command line input
         integer,          parameter :: NREFS=100, NPROJS=20
         character(len=*), parameter :: ORIFILE='pickrefs_oris'//trim(TXT_EXT)
-        type(params)                :: p
-        type(build)                 :: b
         type(cmdline)               :: cline_project
         type(reproject_commander)   :: xproject
         integer                     :: nrots, cnt, iref, irot, status
         real                        :: ang, rot
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        call init_params(cline)                   ! parameters generated
+        call b%build_general_tbox( cline) ! general objects built
         call cline%set('mkdir','no')
         if( cline%defined('stk') .or. cline%defined('vol1') )then
-            p = params(cline) ! constants & derived constants produced
+            call init_params(cline) ! constants & derived constants produced
             if( cline%defined('vol1') )then
                 p%nptcls = NPROJS
                 call b%a%new(NPROJS)

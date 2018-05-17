@@ -1,8 +1,9 @@
 ! for common-lines-based search
 module simple_comlin_srch
 include 'simple_lib.f08'
-use simple_build,       only: build
-use simple_params,      only: params
+!use simple_singletons
+use simple_build,       only: b ! singleton
+use simple_params,      only: p ! singleton
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
@@ -21,10 +22,8 @@ integer, parameter :: NBEST      = 30
 integer, parameter :: NBEST_PAIR = 10
 integer, parameter :: ANGSTEP    = 10
 
-class(build),     pointer :: bp=>null()       !< pointer to builder
-class(params),    pointer :: pp=>null()       !< pointer to params
-integer,          pointer :: iptcl=>null()    !< ptcl index
-integer,          pointer :: jptcl=>null()    !< ptcl index
+!integer,          pointer :: iptcl=>null()    !< ptcl index
+!integer,          pointer :: jptcl=>null()    !< ptcl index
 type(opt_factory)         :: ofac             !< optimizer factory
 type(opt_spec)            :: ospec            !< optimizer specification object
 class(optimizer), pointer :: nlopt=>null()    !< pointer to nonlinear optimizer
@@ -43,21 +42,22 @@ real                      :: trs=0.           !< half shift range
 contains
 
     !> common-line mode search constructor
-    subroutine comlin_srch_init( b, p, opt_str, mode )
-        class(build),  target, intent(in) :: b           !< build object
-        class(params), target, intent(in) :: p           !< Parameters
+    subroutine comlin_srch_init( opt_str, mode )
+  !  subroutine comlin_srch_init( b, p, opt_str, mode )
+        ! class(build),  target, intent(in) :: b           !< build object
+        ! class(params), target, intent(in) :: p           !< Parameters
         character(len=*),      intent(in) :: opt_str     !< 'simplex', 'de' or 'oasis' search type
         character(len=*),      intent(in) :: mode        !< 'sym' or 'pair' mode
         character(len=8) :: str_opt= 'simplex'
-        bp        => b
-        pp        => p
-        iptcl     => p%iptcl
-        jptcl     => p%jptcl
+        ! bp        => b
+        ! pp        => p
+!        iptcl     => p%iptcl
+!        jptcl     => p%jptcl
         nptcls    =  p%nptcls
         hp        =  p%hp
         lp        =  p%lp
         trs       =  p%trs
-        a_copy    =  bp%a
+        a_copy    =  b%a
         nproj_sym = comlin_srch_get_nproj( pgrp=trim(p%pgrp) )
         write(*,'(A,I3)') '>>> NUMBER OF REFERENCE PROJECTIONS IN ASU: ', nproj_sym
         call resoris%new(nproj_sym)
@@ -136,10 +136,10 @@ contains
             corr_best   = -1.
             do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
-                bp%a = a_copy
-                call bp%a%rot(orientation)
-                call bp%se%apply2all(bp%a)
-                corr = bp%clins%corr()
+                b%a = a_copy
+                call b%a%rot(orientation)
+                call b%se%apply2all(b%a)
+                corr = b%clins%corr()
                 call orientation%print_ori
                 call orientation%set('corr',corr)
                 if( corr > corr_best )then
@@ -174,8 +174,8 @@ contains
             corr_best   = -1.
             do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
-                call bp%a%set_ori(jptcl, orientation)
-                corr = bp%clins%pcorr(iptcl, jptcl)
+                call b%a%set_ori(p%jptcl, orientation)
+                corr = b%clins%pcorr(p%iptcl, p%jptcl)
                 call orientation%set('corr',corr)
                 if( corr > corr_best )then
                     corr_best = corr
@@ -252,10 +252,10 @@ contains
                 return
             endif
             !
-            call bp%a%rot(o)
-            call bp%se%apply2all(bp%a)
-            cost = -bp%clins%corr()
-            bp%a = a_copy ! puts back unmodified oris
+            call b%a%rot(o)
+            call b%se%apply2all(b%a)
+            cost = -b%clins%corr()
+            b%a = a_copy ! puts back unmodified oris
         endif
     end function comlin_srch_cost
 
@@ -275,9 +275,9 @@ contains
         elseif( vec(5) < -trs .or. vec(5) > trs )then
             cost = 1.
         else
-            call bp%a%set_euler(jptcl, vec(1:3))
-            call bp%a%set_shift(jptcl, vec(4:5))
-            cost = -bp%clins%pcorr(iptcl, jptcl)
+            call b%a%set_euler(p%jptcl, vec(1:3))
+            call b%a%set_shift(p%jptcl, vec(4:5))
+            cost = -b%clins%pcorr(p%iptcl, p%jptcl)
         endif
     end function comlin_pairsrch_cost
 

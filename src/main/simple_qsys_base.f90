@@ -20,21 +20,21 @@ abstract interface
         import :: qsys_base
         class(qsys_base), intent(inout) :: self
     end subroutine generic_new
-    
+
     !>  \brief  getter that returns the submit command of the qsys
     function generic_submit_cmd( self ) result ( submit_cmd )
         import :: qsys_base
         class(qsys_base), intent(in)  :: self
         character(len=:), allocatable :: submit_cmd
     end function generic_submit_cmd
-    
+
     !>  \brief  writes a header instruction for the submit script
     subroutine generic_write_instr( self, job_descr, fhandle )
         use simple_chash, only: chash
         import :: qsys_base
         class(qsys_base),  intent(in) :: self
         class(chash),      intent(in) :: job_descr
-        integer, optional, intent(in) :: fhandle   
+        integer, optional, intent(in) :: fhandle
     end subroutine generic_write_instr
 
     !>  \brief  destructor
@@ -42,7 +42,7 @@ abstract interface
         import :: qsys_base
         class(qsys_base), intent(inout) :: self
     end subroutine generic_kill
-    
+
 end interface
 
 end module simple_qsys_base

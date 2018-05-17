@@ -1,8 +1,9 @@
-
 module simple_binoris_io
+include 'simple_lib.f08'
 use simple_oris,       only: oris
-use simple_fileio,     only: file_exists, nlines,fname2format
+!use simple_fileio,     only: file_exists, nlines,fname2format
 use simple_sp_project, only: sp_project
+use simple_params,  only: p
 implicit none
 
 contains
@@ -47,10 +48,12 @@ contains
         end select
     end subroutine binread_ctfparams_state_eo
 
-    function binread_nlines( p, fname ) result( nl )
-        use simple_params,  only: params
+    !function binread_nlines(  fname ) result( nl )
+    function binread_nlines( fname ) result( nl )
+
+       ! use simple_singletons, only: p
         use simple_binoris, only: binoris
-        class(params),    intent(in) :: p
+        ! class(params),    intent(in) :: p
         character(len=*), intent(in) :: fname
         integer       :: nl
         type(binoris) :: bos

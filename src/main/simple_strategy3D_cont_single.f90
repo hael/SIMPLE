@@ -1,11 +1,12 @@
 ! concrete strategy3D: continuous single-state refinement
 module simple_strategy3D_cont_single
-use simple_strategy3D_alloc    ! use all in there
-use simple_strategy3D_utils,   only: fit_bfactors ! use all in there
-use simple_strategy3D,         only: strategy3D
-use simple_strategy3D_srch,    only: strategy3D_srch, strategy3D_spec
-use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad
-use simple_ori,                only: ori
+use simple_strategy3D_alloc  ! singleton
+use simple_strategy3D_utils, only: fit_bfactors
+use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
+use simple_pftcc_orisrch,    only: pftcc_orisrch_grad
+use simple_ori,              only: ori
+use simple_params, only: p ! singleton
 implicit none
 
 public :: strategy3D_cont_single
@@ -35,7 +36,7 @@ contains
         integer,                       intent(in)    :: npeaks
         call self%s%new(spec, npeaks)
         self%spec = spec
-        call self%cont_srch%new(spec%ppftcc, spec%pb)
+        call self%cont_srch%new(spec%ppftcc)
     end subroutine new_cont_single
 
     subroutine srch_cont_single( self )
@@ -47,7 +48,7 @@ contains
             call self%s%prep4srch()
             call self%cont_srch%set_particle(self%s%iptcl)
             self%o    = self%s%a_ptr%get_ori(self%s%iptcl)
-            cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, self%spec%pp%trs)
+            cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, p%trs)
             self%corr = cxy(1)
             ! prepare weights and orientations
             call self%oris_assign
@@ -106,7 +107,7 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      0.)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    1.)
         ! transfer data to o_peaks
-        call o_peaks(self%s%iptcl)%set_ori(1,self%s%a_ptr%get_ori(self%s%iptcl))
+        call s3D%o_peaks(self%s%iptcl)%set_ori(1,self%s%a_ptr%get_ori(self%s%iptcl))
     end subroutine oris_assign_cont_single
 
     subroutine kill_cont_single( self )

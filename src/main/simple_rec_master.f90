@@ -1,8 +1,9 @@
 ! 3D reconstruction - master module
 module simple_rec_master
 include 'simple_lib.f08'
-use simple_build,     only: build
-use simple_params,    only: params
+! use simple_singletons
+use simple_build,     only: b ! singleton
+use simple_params,    only: p
 use simple_qsys_funs, only: qsys_job_finished
 implicit none
 
@@ -12,23 +13,21 @@ private
 
 contains
 
-    subroutine exec_rec_master( b, p, fbody_in )
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
+    subroutine exec_rec_master(  fbody_in )
         character(len=*), optional, intent(in)    :: fbody_in
         select case(p%eo)
             case( 'yes', 'aniso' )
-                call exec_eorec_distr( b, p, fbody_in )
+                call exec_eorec_distr( fbody_in )
+                !call exec_eorec_distr( b, p, fbody_in )
             case( 'no' )
-                call exec_rec( b, p, fbody_in )
+                call exec_rec( fbody_in )
+               !call exec_rec( b, p, fbody_in )
             case DEFAULT
                 call simple_stop('unknonw eo flag; simple_rec_master :: exec_rec_master')
         end select
     end subroutine exec_rec_master
 
-    subroutine exec_rec( b, p, fbody_in )
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
+    subroutine exec_rec( fbody_in )
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
@@ -47,7 +46,7 @@ contains
                 endif
                 p%vols(s) = fbody//p%ext
                 rho_name      = 'rho_'//fbody//p%ext
-                call b%recvol%rec(p, b%spproj, b%a, b%se, s, part=p%part)
+                call b%recvol%rec( b%spproj, b%a, b%se, s, part=p%part)
                 call b%recvol%compress_exp
                 call b%recvol%write(p%vols(s), del_if_exists=.true.)
                 call b%recvol%write_rho(trim(rho_name))
@@ -58,20 +57,17 @@ contains
                     allocate(fbody, source='recvol_state')
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext
-                call b%recvol%rec(p, b%spproj, b%a, b%se, s)
+                call b%recvol%rec( b%spproj, b%a, b%se, s)
                 call b%recvol%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
             endif
             deallocate(fbody)
         end do
         write(*,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
-        call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
+        call qsys_job_finished( 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
-    subroutine exec_eorec_distr( b, p, fbody_in )
-        use simple_strings, only: int2str_pad
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
+    subroutine exec_eorec_distr( fbody_in )
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody, fname
         integer :: s
@@ -86,10 +82,10 @@ contains
             else
                 allocate(fbody, source='recvol_state')
             endif
-            call b%eorecvol%eorec_distr(p, b%spproj, b%a, b%se, s, fbody=fbody)
+            call b%eorecvol%eorec_distr( b%spproj, b%a, b%se, s, fbody=fbody)
             deallocate(fbody)
         end do
-        call qsys_job_finished( p, 'simple_rec_master :: exec_eorec')
+        call qsys_job_finished( 'simple_rec_master :: exec_eorec')
         write(*,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
     end subroutine exec_eorec_distr
 

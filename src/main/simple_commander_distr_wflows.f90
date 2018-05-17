@@ -1,13 +1,12 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
 include 'simple_lib.f08'
-use simple_cmdline,        only: cmdline
-use simple_qsys_env,       only: qsys_env
-use simple_qsys_funs,      only: qsys_cleanup, qsys_watcher
-use simple_build,          only: build
-use simple_params,         only: params
-use simple_commander_base, only: commander_base
-use simple_sp_project,     only: sp_project
+use simple_qsys_env,            only: qsys_env
+use simple_qsys_funs,           only: qsys_cleanup, qsys_watcher
+use simple_commander_base,      only: commander_base
+use simple_sp_project,          only: sp_project
+use simple_cmdline,             only: cmdline
+use simple_singletons  ! build and params singletons
 implicit none
 
 public :: preprocess_distr_commander
@@ -91,7 +90,6 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(qsys_env)                     :: qenv
         type(chash)                        :: job_descr
-        type(params)                       :: p_master
         type(sp_project)                   :: spproj
         character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),      allocatable :: output_dir_motion_correct
@@ -101,7 +99,7 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! picking
@@ -113,25 +111,25 @@ contains
         ! output directories
         output_dir = './'
         ! read in movies
-        call spproj%read(p_master%projfile)
+        call spproj%read(p%projfile)
         ! DISTRIBUTED EXECUTION
-        p_master%nptcls = spproj%os_mic%get_noris()
-        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        p%nptcls = spproj%os_mic%get_noris()
+        if( p%nparts > p%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! deal with numlen so that length matches JOB_FINISHED indicator files
-        p_master%numlen = len(int2str(p_master%nparts))
-        call cline%set('numlen', real(p_master%numlen))
+        p%numlen = len(int2str(p%nparts))
+        call cline%set('numlen', real(p%numlen))
         ! setup the environment for distributed execution
-        call qenv%new(p_master, numlen=p_master%numlen)
+        call qenv%new( numlen=p%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
-        call spproj%read(p_master%projfile)
-        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        call spproj%read(p%projfile)
+        call spproj%merge_algndocs(p%nptcls, p%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! cleanup
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess_distr
@@ -141,7 +139,6 @@ contains
         class(cmdline),                        intent(inout) :: cline
         type(sp_project)              :: spproj
         type(qsys_env)                :: qenv
-        type(params)                  :: p_master
         type(chash)                   :: job_descr
         character(len=:), allocatable :: output_dir
         ! seed the random number generator
@@ -152,23 +149,23 @@ contains
         ! set oritype
         call cline%set('oritype', 'mic')
         ! make master parameters
-        p_master        = params(cline)
-        p_master%numlen = len(int2str(p_master%nparts))
-        call cline%set('numlen', real(p_master%numlen))
+        call init_params(cline)
+        p%numlen = len(int2str(p%nparts))
+        call cline%set('numlen', real(p%numlen))
         ! output directory
         output_dir = './'
         ! setup the environment for distributed execution
-        call qenv%new(p_master, numlen=p_master%numlen)
+        call qenv%new(numlen=p%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
-        call spproj%read(p_master%projfile)
-        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        call spproj%read(p%projfile)
+        call spproj%merge_algndocs(p%nptcls, p%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct_distr
@@ -181,7 +178,6 @@ contains
         type(oris)               :: exp_doc
         integer                  :: nseries, ipart
         type(qsys_env)           :: qenv
-        type(params)             :: p_master
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
@@ -194,47 +190,47 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         if( cline%defined('tomoseries') )then
-            call read_filetable(p_master%tomoseries, tomonames)
+            call read_filetable(p%tomoseries, tomonames)
         else
             stop 'need tomoseries (filetable of filetables) to be part of the command line when tomo=yes'
         endif
         nseries = size(tomonames)
         call exp_doc%new(nseries)
         if( cline%defined('exp_doc') )then
-            if( file_exists(p_master%exp_doc) )then
-                call exp_doc%read(p_master%exp_doc)
+            if( file_exists(p%exp_doc) )then
+                call exp_doc%read(p%exp_doc)
             else
-                write(*,*) 'the required parameter file (flag exp_doc): ', trim(p_master%exp_doc)
+                write(*,*) 'the required parameter file (flag exp_doc): ', trim(p%exp_doc)
                 stop 'not in cwd'
             endif
         else
             stop 'need exp_doc (line: exp_time=X dose_rate=Y) to be part of the command line when tomo=yes'
         endif
-        p_master%nparts = nseries
-        p_master%nptcls = nseries
+        p%nparts = nseries
+        p%nptcls = nseries
         ! prepare part-dependent parameters
-        allocate(part_params(p_master%nparts), stat=alloc_stat) ! -1. is default excluded value
+        allocate(part_params(p%nparts), stat=alloc_stat) ! -1. is default excluded value
         if(alloc_stat.ne.0)call allocchk("simple_commander_distr_wflows::motion_correct_tomo_moview_distr ", alloc_stat)
-        do ipart=1,p_master%nparts
+        do ipart=1,p%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
-            call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,p_master%numlen_tomo))
+            call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,p%numlen_tomo))
             str = real2str(exp_doc%get(ipart,'exp_time'))
             call part_params(ipart)%set('exp_time', trim(str))
             str = real2str(exp_doc%get(ipart,'dose_rate'))
             call part_params(ipart)%set('dose_rate', trim(str))
         end do
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
-        call qsys_cleanup(p_master)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
+        call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_TOMO NORMAL STOP ****')
     end subroutine exec_motion_correct_tomo_distr
 
@@ -242,7 +238,6 @@ contains
         class(powerspecs_distr_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(qsys_env) :: qenv
-        type(params)   :: p_master
         type(chash)    :: job_descr
         ! seed the random number generator
         call seed_rnd
@@ -252,19 +247,19 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        p_master%nptcls = nlines(p_master%filetab)
-        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        p%nptcls = nlines(p%filetab)
+        if( p%nparts > p%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
         ! clean
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs_distr
@@ -273,7 +268,6 @@ contains
         class(ctf_estimate_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(sp_project)               :: spproj
-        type(params)                   :: p_master
         type(chash)                    :: job_descr
         type(qsys_env)                 :: qenv
         character(len=:), allocatable  :: output_dir
@@ -285,24 +279,24 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        p_master%numlen = len(int2str(p_master%nparts))
-        call cline%set('numlen', real(p_master%numlen))
+        p%numlen = len(int2str(p%nparts))
+        call cline%set('numlen', real(p%numlen))
         ! output directory
         output_dir = './'
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
-        call spproj%read(p_master%projfile)
-        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        call spproj%read(p%projfile)
+        call spproj%merge_algndocs(p%nptcls, p%nparts, 'mic', ALGN_FBODY)
         ! cleanup
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! graceful ending
         call simple_end('**** SIMPLE_DISTR_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate_distr
@@ -312,7 +306,6 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(sp_project)              :: spproj
         type(qsys_env)                :: qenv
-        type(params)                  :: p_master
         type(chash)                   :: job_descr
         character(len=:), allocatable :: output_dir
         ! seed the random number generator
@@ -323,24 +316,24 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        p_master%numlen = len(int2str(p_master%nparts))
-        call cline%set('numlen', real(p_master%numlen))
+        p%numlen = len(int2str(p%nparts))
+        call cline%set('numlen', real(p%numlen))
         ! output directory
         output_dir = './'
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
-        call spproj%read(p_master%projfile)
-        call spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'mic', ALGN_FBODY)
+        call spproj%read(p%projfile)
+        call spproj%merge_algndocs(p%nptcls, p%nparts, 'mic', ALGN_FBODY)
         ! cleanup
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! graceful exit
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
@@ -350,7 +343,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(cmdline)  :: cline_cavgassemble
         type(qsys_env) :: qenv
-        type(params)   :: p_master
+        ! type(params)   :: p
         type(chash)    :: job_descr
         ! seed the random number generator
         call seed_rnd
@@ -360,22 +353,22 @@ contains
         ! set os segment in sp_project
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_cavgassemble%set('projfile', trim(p_master%projfile))
+        call cline_cavgassemble%set('projfile', trim(p%projfile))
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr)
         ! assemble class averages
         call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_make_cavgs_distr
 
@@ -393,8 +386,6 @@ contains
         type(cmdline)         :: cline_make_cavgs
         ! other variables
         type(qsys_env)            :: qenv
-        type(params)              :: p_master
-        type(build)               :: b
         character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter
         integer                   :: iter
         type(chash)               :: job_descr
@@ -407,13 +398,13 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! make builder
-        call b%build_spproj(p_master, cline)
+        call b%build_spproj( cline)
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
 
@@ -428,36 +419,36 @@ contains
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! splitting
-        call b%spproj%split_stk(p_master%nparts)
+        call b%spproj%split_stk(p%nparts)
 
         ! execute initialiser
         if( .not. cline%defined('refs') )then
-            refs               = 'start2Drefs' // p_master%ext
-            p_master%refs      = trim(refs)
-            p_master%refs_even = 'start2Drefs_even'//p_master%ext
-            p_master%refs_odd  = 'start2Drefs_odd'//p_master%ext
+            refs               = 'start2Drefs' // p%ext
+            p%refs      = trim(refs)
+            p%refs_even = 'start2Drefs_even'//p%ext
+            p%refs_odd  = 'start2Drefs_odd'//p%ext
             if( b%spproj%is_virgin_field('ptcl2D') )then
-                call random_selection_from_imgfile(b%spproj, p_master%refs, p_master%box, p_master%ncls)
-                call copy_imgfile(trim(p_master%refs), trim(p_master%refs_even), p_master%smpd, [1,p_master%ncls])
-                call copy_imgfile(trim(p_master%refs), trim(p_master%refs_odd),  p_master%smpd, [1,p_master%ncls])
+                call random_selection_from_imgfile(b%spproj, p%refs, p%box, p%ncls)
+                call copy_imgfile(trim(p%refs), trim(p%refs_even), p%smpd, [1,p%ncls])
+                call copy_imgfile(trim(p%refs), trim(p%refs_odd),  p%smpd, [1,p%ncls])
             else
-                call cline_make_cavgs%set('refs', p_master%refs)
+                call cline_make_cavgs%set('refs', p%refs)
                 call xmake_cavgs%execute(cline_make_cavgs)
             endif
         else
-            refs = trim(p_master%refs)
+            refs = trim(p%refs)
         endif
 
         ! extremal dynamics
         if( cline%defined('extr_iter') )then
-            p_master%extr_iter = p_master%extr_iter - 1
+            p%extr_iter = p%extr_iter - 1
         else
-            p_master%extr_iter = p_master%startit - 1
+            p%extr_iter = p%startit - 1
         endif
 
         ! deal with eo partitioning
         if( b%a%get_nevenodd() == 0 )then
-            if( p_master%tseries .eq. 'yes' )then
+            if( p%tseries .eq. 'yes' )then
                 call b%a%partition_eo(tseries=.true.)
             else
                 call b%a%partition_eo
@@ -466,7 +457,7 @@ contains
         endif
 
         ! main loop
-        iter = p_master%startit - 1
+        iter = p%startit - 1
         do
             iter = iter + 1
             str_iter = int2str_pad(iter,3)
@@ -474,22 +465,22 @@ contains
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
             ! cooling of the randomization rate
-            p_master%extr_iter = p_master%extr_iter + 1
-            call job_descr%set('extr_iter', trim(int2str(p_master%extr_iter)))
-            call cline%set('extr_iter', real(p_master%extr_iter))
+            p%extr_iter = p%extr_iter + 1
+            call job_descr%set('extr_iter', trim(int2str(p%extr_iter)))
+            call cline%set('extr_iter', real(p%extr_iter))
             ! updates
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
             call job_descr%set('frcs', trim(FRCS_FILE))
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
             ! merge orientation documents
-            call b%spproj%merge_algndocs(p_master%nptcls, p_master%nparts, 'ptcl2D', ALGN_FBODY)
+            call b%spproj%merge_algndocs(p%nptcls, p%nparts, 'ptcl2D', ALGN_FBODY)
             ! assemble class averages
-            refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p_master%ext
-            refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext
-            refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p_master%ext
+            refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p%ext
+            refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p%ext
+            refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p%ext
             call cline_cavgassemble%set('refs', trim(refs))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! remapping of empty classes
@@ -510,9 +501,9 @@ contains
                     if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','cavg')
                 endif
             endif
-            if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
+            if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==p%maxits ) exit
         end do
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! report the last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
@@ -528,37 +519,37 @@ contains
                 type(projection_frcs) :: frcs
                 integer, allocatable  :: fromtocls(:,:)
                 integer               :: icls, state
-                if( p_master%dyncls.eq.'yes' )then
-                    call b%spproj%read_segment('ptcl2D', p_master%projfile )
-                    call b%a%fill_empty_classes(p_master%ncls, fromtocls)
+                if( p%dyncls.eq.'yes' )then
+                    call b%spproj%read_segment('ptcl2D', p%projfile )
+                    call b%a%fill_empty_classes(p%ncls, fromtocls)
                     if( allocated(fromtocls) )then
                         ! updates refs
-                        call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
+                        call img_cavg%new([p%box,p%box,1], p%smpd)
                         do icls = 1, size(fromtocls, dim=1)
                             call img_cavg%read(trim(refs), fromtocls(icls, 1))
                             call img_cavg%write(trim(refs), fromtocls(icls, 2))
                         enddo
-                        call img_cavg%read(trim(refs), p_master%ncls)
-                        call img_cavg%write(trim(refs), p_master%ncls)     ! to preserve size
+                        call img_cavg%read(trim(refs), p%ncls)
+                        call img_cavg%write(trim(refs), p%ncls)     ! to preserve size
                         do icls = 1, size(fromtocls, dim=1)
                             call img_cavg%read(trim(refs_even), fromtocls(icls, 1))
                             call img_cavg%write(trim(refs_even), fromtocls(icls, 2))
                         enddo
-                        call img_cavg%read(trim(refs_even), p_master%ncls)
-                        call img_cavg%write(trim(refs_even), p_master%ncls) ! to preserve size
+                        call img_cavg%read(trim(refs_even), p%ncls)
+                        call img_cavg%write(trim(refs_even), p%ncls) ! to preserve size
                         do icls = 1, size(fromtocls, dim=1)
                             call img_cavg%read(trim(refs_odd), fromtocls(icls, 1))
                             call img_cavg%write(trim(refs_odd), fromtocls(icls, 2))
                         enddo
-                        call img_cavg%read(trim(refs_odd), p_master%ncls)
-                        call img_cavg%write(trim(refs_odd), p_master%ncls)  ! to preserve size
+                        call img_cavg%read(trim(refs_odd), p%ncls)
+                        call img_cavg%write(trim(refs_odd), p%ncls)  ! to preserve size
                         ! updates FRCs
                         state     = 1
-                        call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
+                        call frcs%new(p%ncls, p%box, p%smpd, state)
                         call frcs%read(trim(FRCS_FILE))
                         do icls = 1, size(fromtocls, dim=1)
                             call frcs%set_frc( fromtocls(icls,2),&
-                            &frcs%get_frc(fromtocls(icls,1), p_master%box, state), state)
+                            &frcs%get_frc(fromtocls(icls,1), p%box, state), state)
                         enddo
                         ! need to be re-written for distributed apps!
                         call frcs%write(trim(FRCS_FILE))
@@ -574,8 +565,6 @@ contains
         class(cmdline),                       intent(inout) :: cline
         type(cmdline)         :: cline_volassemble
         type(qsys_env)        :: qenv
-        type(build)           :: b
-        type(params)          :: p_master
         character(len=STDLEN) :: vol
         type(chash)           :: job_descr
         ! seed the random number generator
@@ -587,31 +576,31 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%printline
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! make builder
-        call b%build_spproj(p_master, cline)
+        call b%build_spproj( cline)
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! init
         if( cline%defined('vol1') )then
-            vol = trim(p_master%vols(1))
+            vol = trim(p%vols(1))
         else
-            vol = 'startvol_state01'//p_master%ext
+            vol = 'startvol_state01'//p%ext
         endif
         ! splitting
-        call b%spproj%split_stk(p_master%nparts)
+        call b%spproj%split_stk(p%nparts)
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
         call cline_volassemble%set( 'eo',     'no')
         call cline_volassemble%set( 'prg',    'volassemble')
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr)
         call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_refine3D_init_distr
 
@@ -633,8 +622,6 @@ contains
         type(cmdline)         :: cline_postprocess
         ! other variables
         type(qsys_env)        :: qenv
-        type(params)          :: p_master
-        type(build)           :: b
         type(chash)           :: job_descr
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         character(len=STDLEN) :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
@@ -651,13 +638,13 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! make builder
-        call b%build_spproj(p_master, cline)
+        call b%build_spproj( cline)
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
 
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
@@ -670,18 +657,18 @@ contains
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
         call cline_refine3D_init%set(       'prg', 'refine3D_init' ) ! required for distributed call
         call cline_postprocess%set('prg', 'postprocess' )   ! required for local call
-        if( trim(p_master%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
+        if( trim(p%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_postprocess%set('nstates', 1.)
         call cline_postprocess%set('mirr',  'no')
         call cline_postprocess%delete('projfile')
         call cline_postprocess%delete('projname')
 
         ! for parallel volassemble over states
-        allocate(state_assemble_finished(p_master%nstates) , stat=alloc_stat)
+        allocate(state_assemble_finished(p%nstates) , stat=alloc_stat)
         if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_refine3D_distr state_assemble ",alloc_stat)
 
         ! removes unnecessary volume keys and generates volassemble finished names
-        do state = 1,p_master%nstates
+        do state = 1,p%nstates
             vol = 'vol'//int2str( state )
             call cline_check_3Dconv%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
@@ -689,42 +676,42 @@ contains
         enddo
 
         ! splitting
-        call b%spproj%split_stk(p_master%nparts)
+        call b%spproj%split_stk(p%nparts)
 
         ! GENERATE STARTING MODELS & ORIENTATIONS
         vol_defined = .false.
-        do state = 1,p_master%nstates
+        do state = 1,p%nstates
             vol = 'vol' // int2str(state)
             if( cline%defined(trim(vol)) ) vol_defined = .true.
         enddo
-        have_oris   = .not. b%spproj%is_virgin_field(p_master%oritype)
+        have_oris   = .not. b%spproj%is_virgin_field(p%oritype)
         do_abinitio = .not. have_oris .and. .not. vol_defined
         if( do_abinitio )then
             call xrefine3D_init_distr%execute( cline_refine3D_init)
-            call cline%set('vol1', trim(STARTVOL_FBODY)//'01'//p_master%ext)
+            call cline%set('vol1', trim(STARTVOL_FBODY)//'01'//p%ext)
         else if( have_oris .and. .not. vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
-            do state = 1,p_master%nstates
+            do state = 1,p%nstates
                 ! rename volumes and update cline
                 str_state = int2str_pad(state,2)
-                vol = trim(VOL_FBODY)//trim(str_state)//p_master%ext
-                str = trim(STARTVOL_FBODY)//trim(str_state)//p_master%ext
+                vol = trim(VOL_FBODY)//trim(str_state)//p%ext
+                str = trim(STARTVOL_FBODY)//trim(str_state)//p%ext
                 iostat = simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
-                if( p_master%eo .ne. 'no' )then
-                    vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p_master%ext
-                    str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//p_master%ext
+                if( p%eo .ne. 'no' )then
+                    vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p%ext
+                    str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//p%ext
                     iostat= simple_rename( trim(vol_even), trim(str) )
-                    vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p_master%ext
-                    str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//p_master%ext
+                    vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p%ext
+                    str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//p%ext
                     iostat =  simple_rename( trim(vol_odd), trim(str) )
                 endif
             enddo
         else if( .not. have_oris .and. vol_defined )then
             ! projection matching
-            select case( p_master%neigh )
+            select case( p%neigh )
                 case( 'yes' )
                     stop 'refinement method requires input orientation document'
                 case DEFAULT
@@ -733,14 +720,14 @@ contains
         endif
         ! EXTREMAL DYNAMICS
         if( cline%defined('extr_iter') )then
-            p_master%extr_iter = p_master%extr_iter - 1
+            p%extr_iter = p%extr_iter - 1
         else
-            p_master%extr_iter = p_master%startit - 1
+            p%extr_iter = p%startit - 1
         endif
         ! EO PARTITIONING
-        if( p_master%eo .ne. 'no' )then
+        if( p%eo .ne. 'no' )then
             if( b%a%get_nevenodd() == 0 )then
-                if( p_master%tseries .eq. 'yes' )then
+                if( p%tseries .eq. 'yes' )then
                     call b%a%partition_eo(tseries=.true.)
                 else
                     call b%a%partition_eo
@@ -751,7 +738,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
-        iter = p_master%startit - 1
+        iter = p%startit - 1
         corr = -1.
         do
             iter = iter + 1
@@ -759,23 +746,23 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
-            if( have_oris .or. iter > p_master%startit )then
+            if( have_oris .or. iter > p%startit )then
                 call b%spproj%read()
-                if( p_master%refine .eq. 'snhc' )then
+                if( p%refine .eq. 'snhc' )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
                     corr      = b%a%get_avg('corr')
                     if( iter > 1 .and. corr <= corr_prev )then
-                        p_master%szsn = min(SZSN_MAX,p_master%szsn + SZSN_STEP)
+                        p%szsn = min(SZSN_MAX,p%szsn + SZSN_STEP)
                     endif
-                    call job_descr%set('szsn', int2str(p_master%szsn))
-                    call cline%set('szsn', real(p_master%szsn))
+                    call job_descr%set('szsn', int2str(p%szsn))
+                    call cline%set('szsn', real(p%szsn))
                 endif
             endif
             ! exponential cooling of the randomization rate
-            p_master%extr_iter = p_master%extr_iter + 1
-            call job_descr%set('extr_iter', trim(int2str(p_master%extr_iter)))
-            call cline%set('extr_iter', real(p_master%extr_iter))
+            p%extr_iter = p%extr_iter + 1
+            call job_descr%set('extr_iter', trim(int2str(p%extr_iter)))
+            call cline%set('extr_iter', real(p%extr_iter))
             call job_descr%set( 'startit', trim(int2str(iter)))
             call cline%set('startit', real(iter))
             ! FRCs
@@ -785,19 +772,19 @@ contains
                 call job_descr%set('frcs', trim(FRCS_FBODY)//'01'//BIN_EXT)
             endif
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(ALGN_FBODY))
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
             ! ASSEMBLE ALIGNMENT DOCS
-            call b%spproj%merge_algndocs(p_master%nptcls, p_master%nparts, p_master%oritype, ALGN_FBODY)
+            call b%spproj%merge_algndocs(p%nptcls, p%nparts, p%oritype, ALGN_FBODY)
 
             ! ASSEMBLE VOLUMES
-            if( p_master%eo.ne.'no' )then
+            if( p%eo.ne.'no' )then
                 call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
             else
                 call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
             endif
-            do state = 1,p_master%nstates
+            do state = 1,p%nstates
                 str_state = int2str_pad(state,2)
-                if( p_master%eo .ne. 'no' )then
+                if( p%eo .ne. 'no' )then
                     volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
                 else
                     volassemble_output = ''
@@ -808,7 +795,7 @@ contains
             end do
             call qsys_watcher(state_assemble_finished)
             ! rename volumes, postprocess & update job_descr
-            do state = 1,p_master%nstates
+            do state = 1,p%nstates
                 str_state = int2str_pad(state,2)
                 if( b%a%get_pop( state, 'state' ) == 0 )then
                     ! cleanup for empty state
@@ -816,26 +803,26 @@ contains
                     call cline%delete( vol )
                     call job_descr%delete( trim(vol) )
                 else
-                    if( p_master%nstates>1 )then
+                    if( p%nstates>1 )then
                         ! cleanup postprocessing cmdline as it only takes one volume at a time
-                        do s = 1,p_master%nstates
+                        do s = 1,p%nstates
                             vol = 'vol'//int2str(s)
                             call cline_postprocess%delete( trim(vol) )
                         enddo
                     endif
                     ! rename state volume
-                    vol      = trim(VOL_FBODY)//trim(str_state)//p_master%ext
-                    vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p_master%ext
-                    vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p_master%ext
-                    if( p_master%refine .eq. 'snhc' )then
-                        vol_iter  = trim(SNHCVOL)//trim(str_state)//p_master%ext
+                    vol      = trim(VOL_FBODY)//trim(str_state)//p%ext
+                    vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p%ext
+                    vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p%ext
+                    if( p%refine .eq. 'snhc' )then
+                        vol_iter  = trim(SNHCVOL)//trim(str_state)//p%ext
                     else
-                        vol_iter      = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
-                        vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//p_master%ext
-                        vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //p_master%ext
+                        vol_iter      = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p%ext
+                        vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//p%ext
+                        vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //p%ext
                     endif
                     iostat = simple_rename( trim(vol), trim(vol_iter) )
-                    if( p_master%eo .ne. 'no' )then
+                    if( p%eo .ne. 'no' )then
                         iostat= simple_rename( trim(vol_even), trim(vol_iter_even) )
                         iostat= simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
                     endif
@@ -843,17 +830,17 @@ contains
                     vol = 'vol'//trim(int2str(state))
                     call cline_postprocess%set( 'vol1', trim(vol_iter))
                     fsc_file   = FSC_FBODY//trim(str_state)//'.bin'
-                    optlp_file = ANISOLP_FBODY//trim(str_state)//p_master%ext
-                    if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
+                    optlp_file = ANISOLP_FBODY//trim(str_state)//p%ext
+                    if( file_exists(optlp_file) .and. p%eo .ne. 'no' )then
                         call cline_postprocess%delete('lp')
                         call cline_postprocess%set('fsc', trim(fsc_file))
                         call cline_postprocess%set('vol_filt', trim(optlp_file))
-                    else if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
+                    else if( file_exists(fsc_file) .and. p%eo .ne. 'no' )then
                         call cline_postprocess%delete('lp')
                         call cline_postprocess%set('fsc', trim(fsc_file))
                     else
                         call cline_postprocess%delete('fsc')
-                        call cline_postprocess%set('lp', p_master%lp)
+                        call cline_postprocess%set('lp', p%lp)
                     endif
                     call xpostprocess%execute(cline_postprocess)
                     ! updates cmdlines & job description
@@ -864,7 +851,7 @@ contains
             enddo
             ! CONVERGENCE
             converged = .false.
-            if( p_master%refine.eq.'cluster' ) call cline_check_3Dconv%delete('update_res')
+            if( p%refine.eq.'cluster' ) call cline_check_3Dconv%delete('update_res')
             call xcheck_3Dconv%execute(cline_check_3Dconv)
             if( iter >= p_master%startit + 2 )then
                 ! after a minimum of 2 iterations
@@ -895,7 +882,7 @@ contains
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
         end do
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! report the last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
@@ -907,11 +894,10 @@ contains
         class(reconstruct3D_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(qsys_env)                     :: qenv
-        type(params)                       :: p_master
         type(cmdline)                      :: cline_volassemble
         character(len=STDLEN)              :: volassemble_output, str_state
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
-        type(build)                        :: b
+       ! type(build)                        :: b
         type(chash)                        :: job_descr
         integer                            :: state
         ! seed the random number generator
@@ -923,20 +909,20 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call cline%delete('refine')
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! make lightweight builder
-        call b%build_spproj(p_master, cline)
+        call b%build_spproj( cline)
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         call cline%gen_job_descr(job_descr)
         ! splitting
-        call b%spproj%split_stk(p_master%nparts)
+        call b%spproj%split_stk(p%nparts)
         ! eo partitioning
-        if( p_master%eo .ne. 'no' )then
+        if( p%eo .ne. 'no' )then
             if( b%a%get_nevenodd() == 0 )then
-                if( p_master%tseries .eq. 'yes' )then
+                if( p%tseries .eq. 'yes' )then
                     call b%a%partition_eo(tseries=.true.)
                 else
                     call b%a%partition_eo
@@ -945,23 +931,23 @@ contains
             endif
         endif
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
         ! assemble volumes
         ! this is for parallel volassemble over states
-        allocate(state_assemble_finished(p_master%nstates) )
-        do state = 1, p_master%nstates
+        allocate(state_assemble_finished(p%nstates) )
+        do state = 1, p%nstates
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
         cline_volassemble = cline
-        if( p_master%eo .ne. 'no' )then
+        if( p%eo .ne. 'no' )then
             call cline_volassemble%set('prg', 'volassemble_eo')
         else
             call cline_volassemble%set('prg', 'volassemble')
         endif
         ! parallel assembly
-        do state = 1, p_master%nstates
+        do state = 1, p%nstates
             str_state = int2str_pad(state,2)
-            if( p_master%eo .ne. 'no' )then
+            if( p%eo .ne. 'no' )then
                 volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
             else
                 volassemble_output = ''
@@ -972,7 +958,7 @@ contains
         end do
         call qsys_watcher(state_assemble_finished)
         ! termination
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 
@@ -981,7 +967,6 @@ contains
         class(tseries_track_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(qsys_env)                :: qenv
-        type(params)                  :: p_master
         type(chash)                   :: job_descr
         type(nrtxtfile)               :: boxfile
         real,        allocatable      :: boxdata(:,:)
@@ -993,12 +978,12 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        if( .not. file_exists(p_master%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
-        if( nlines(p_master%boxfile) > 0 )then
-            call boxfile%new(p_master%boxfile, 1)
+        if( .not. file_exists(p%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
+        if( nlines(p%boxfile) > 0 )then
+            call boxfile%new(p%boxfile, 1)
             ndatlines = boxfile%get_ndatalines()
             numlen    = len(int2str(ndatlines))
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
@@ -1015,27 +1000,27 @@ contains
         endif
         call boxfile%kill
         call cline%delete('boxfile')
-        p_master%nptcls = ndatlines
-        p_master%nparts = p_master%nptcls
-        if( p_master%ncunits > p_master%nparts )&
+        p%nptcls = ndatlines
+        p%nparts = p%nptcls
+        if( p%ncunits > p%nparts )&
         &stop 'nr of computational units (ncunits) mjust be <= number of entries in boxfiles'
         ! box and numlen need to be part of command line
         call cline%set('box',    real(orig_box))
         call cline%set('numlen', real(numlen)  )
         ! prepare part-dependent parameters
-        allocate(part_params(p_master%nparts))
-        do ipart=1,p_master%nparts
+        allocate(part_params(p%nparts))
+        do ipart=1,p%nparts
             call part_params(ipart)%new(3)
             call part_params(ipart)%set('xcoord', real2str(boxdata(ipart,1)))
             call part_params(ipart)%set('ycoord', real2str(boxdata(ipart,2)))
             call part_params(ipart)%set('ind',    int2str(ipart))
         end do
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! schedule & clean
         call cline%gen_job_descr(job_descr)
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
-        call qsys_cleanup(p_master)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
+        call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
@@ -1044,7 +1029,7 @@ contains
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
         use simple_ori,            only: ori
-         use simple_oris,          only: oris
+        use simple_oris,          only: oris
         use simple_sym,            only: sym
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -1052,7 +1037,6 @@ contains
         type(cmdline)                  :: cline_srch
         type(cmdline)                  :: cline_aggregate
         type(qsys_env)                 :: qenv
-        type(params)                   :: p_master
         type(chash)                    :: job_descr
         type(oris)                     :: o_shift, grid_symaxes,e
         type(ori)                      :: symaxis
@@ -1082,17 +1066,17 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(p_master%pgrp) )
-        p_master%nptcls   = comlin_srch_nproj
-        if( p_master%nparts > comlin_srch_nproj )then
+        comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(p%pgrp) )
+        p%nptcls   = comlin_srch_nproj
+        if( p%nparts > comlin_srch_nproj )then
             stop 'number of partitions (npart) > nr of jobs, adjust!'
         endif
-        call cline%set('nptcls', real(p_master%nspace))
+        call cline%set('nptcls', real(p%nspace))
         ! read in master project
-        call spproj%read(p_master%projfile)
+        call spproj%read(p%projfile)
 
         ! 1. GRID SEARCH
         cline_gridsrch = cline
@@ -1100,10 +1084,10 @@ contains
         call cline_gridsrch%set('refine',   'no') !!
         call cline_gridsrch%set('fbody',    trim(GRIDSYMFBODY))
         call cline_gridsrch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
-        call cline_gridsrch%set('oritype',  p_master%oritype)
+        call cline_gridsrch%set('oritype',  p%oritype)
         ! local project update
         ! reference orientations for common lines
-        call spproj%os_cls3D%new(p_master%nspace)
+        call spproj%os_cls3D%new(p%nspace)
         call spproj%os_cls3D%spiral
         ! name change
         call spproj%projinfo%delete_entry('projname')
@@ -1111,10 +1095,10 @@ contains
         call spproj%update_projinfo(cline_gridsrch)
         call spproj%write
         ! schedule & merge
-        call qenv%new(p_master)
+        call qenv%new()
         call cline_gridsrch%gen_job_descr(job_descr)
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        call spproj%merge_algndocs(comlin_srch_nproj, p_master%nparts, p_master%oritype, trim(GRIDSYMFBODY))
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        call spproj%merge_algndocs(comlin_srch_nproj, p%nparts, p%oritype, trim(GRIDSYMFBODY))
 
         ! 2. SELECTION OF SYMMETRY PEAKS TO REFINE
         nbest_here = min(NBEST, spproj%os_cls3D%get_noris())
@@ -1131,30 +1115,30 @@ contains
         call grid_symaxes%kill
 
         ! 3. REFINEMENT
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         cline_srch = cline
         call cline_srch%set('prg',      'symsrch')
         call cline_srch%set('refine',   'yes') !!
         call cline_srch%set('nthr',     1.) !!
         call cline_srch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
-        call cline_srch%set('oritype',  p_master%oritype)
+        call cline_srch%set('oritype',  p%oritype)
         call cline_srch%set('fbody',    trim(SYMFBODY))
         ! switch to collection of single threaded jobs
-        p_master%nptcls  = min(comlin_srch_nproj, nbest_here)
-        p_master%ncunits = p_master%nparts * p_master%nthr
-        p_master%nparts  = nbest_here
-        p_master%nthr    = 1
+        p%nptcls  = min(comlin_srch_nproj, nbest_here)
+        p%ncunits = p%nparts * p%nthr
+        p%nparts  = nbest_here
+        p%nthr    = 1
         ! schedule & merge
-        call qenv%new(p_master)
+        call qenv%new()
         call cline_srch%gen_job_descr(job_descr)
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        call spproj%merge_algndocs(nbest_here, p_master%nparts, p_master%oritype, trim(SYMFBODY))
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        call spproj%merge_algndocs(nbest_here, p%nparts, p%oritype, trim(SYMFBODY))
 
         ! 4. REAL-SPACE EVALUATION
         ! adding reference orientations to ptcl3D segment to allow for reconstruction
-        call e%new(p_master%nspace)
+        call e%new(p%nspace)
         call e%spiral
-        ctfvars%smpd = p_master%smpd
+        ctfvars%smpd = p%smpd
         call spproj%add_stk(trim(SYMPROJSTK), ctfvars, e)
         call spproj%write
         ! execution
@@ -1175,13 +1159,13 @@ contains
         call spproj%kill
         ! output
         if( cline%defined('projfile') )then
-            call spproj%read(p_master%projfile)
+            call spproj%read(p%projfile)
             if( spproj%os_ptcl3D%get_noris() == 0 )then
-                print *,'No orientations found in this project:',p_master%projfile
+                print *,'No orientations found in this project:',p%projfile
                 stop
             endif
             ! transfer shift and symmetry to input orientations
-            call syme%new(p_master%pgrp)
+            call syme%new(p%pgrp)
             call o_shift%new(1)
             ! retrieve shift
             call o_shift%read(trim(SYMSHTAB), [1,1])
@@ -1191,7 +1175,7 @@ contains
             shvec    = -1. * shvec ! the sign is right
             ! rotate the orientations & transfer the 3d shifts to 2d
             if( cline%defined('state') )then
-                call syme%apply_sym_with_shift(spproj%os_ptcl3D, symaxis, shvec, p_master%state )
+                call syme%apply_sym_with_shift(spproj%os_ptcl3D, symaxis, shvec, p%state )
             else
                 call syme%apply_sym_with_shift(spproj%os_ptcl3D, symaxis, shvec )
             endif
@@ -1199,16 +1183,16 @@ contains
         endif
 
         ! Cleanup
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         call del_file(trim(SYMSHTAB))
         numlen =  len(int2str(nbest_here))
         do i = 1, nbest_here
             part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
             call del_file(trim(part_tab))
         enddo
-        p_master%nparts = nint(cline%get_rarg('nparts'))
-        numlen =  len(int2str(p_master%nparts))
-        do i = 1, p_master%nparts
+        p%nparts = nint(cline%get_rarg('nparts'))
+        numlen =  len(int2str(p%nparts))
+        do i = 1, p%nparts
             part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
             call del_file(trim(part_tab))
         enddo
@@ -1220,12 +1204,10 @@ contains
     subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(qsys_env)                         :: qenv
-        type(params)                           :: p_master
-        type(build)                            :: b
-        type(chash)                            :: job_descr
-        type(cmdline)                          :: cline_scale
-        type(chash),               allocatable :: part_params(:)
+        type(qsys_env)                     :: qenv
+        type(chash)                        :: job_descr
+        type(cmdline)                      :: cline_scale
+        type(chash),           allocatable :: part_params(:)
         character(len=LONGSTRLEN), allocatable :: part_stks(:)
         character(len=STDLEN) :: filetab
         integer, allocatable  :: parts(:,:)
@@ -1235,18 +1217,18 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline)
+        call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! make builder
-        call b%build_spproj(p_master, cline)
+        call b%build_spproj( cline)
         ! copy command line
         cline_scale = cline
         ! prepare part-dependent parameters
         nstks = b%spproj%os_stk%get_noris()
         if( nstks == 0 ) stop 'os_stk field of spproj empty; commander_distr_wflows :: exec_scale_distr'
         if( cline%defined('nparts') )then
-            nparts = min(p_master%nparts, nstks)
+            nparts = min(p%nparts, nstks)
             call cline_scale%set('nparts', real(nparts))
         else
             nparts = 1
@@ -1255,7 +1237,7 @@ contains
         box  = b%spproj%get_box()
         call cline_scale%set('smpd', smpd)
         call cline_scale%set('box',  real(box))
-        p_master%nparts = nparts
+        p%nparts = nparts
         parts = split_nobjs_even(nstks, nparts)
         allocate(part_params(nparts))
         cnt = 0
@@ -1276,15 +1258,15 @@ contains
         end do
         deallocate(parts)
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new()
         ! prepare job description
         call cline_scale%gen_job_descr(job_descr)
         call job_descr%set('prg', 'scale')
         call job_descr%set('autoscale', 'no')
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
         ! clean
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! removes temporary split stktab lists
         do ipart=1,nparts
             filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)

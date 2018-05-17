@@ -7,7 +7,6 @@ use simple_math
 use simple_image,     only: image
 use simple_oris,      only: oris
 use simple_ori,       only: ori
-use simple_sym,       only: sym
 implicit none
 
 contains
@@ -17,6 +16,7 @@ contains
     !!         (2) minimizing the angle between the vector defined by the 3D Fourier index
     !!         and the planes used for calculating FRCs to find a matching filter coeff
     subroutine gen_anisotropic_optlp( vol_filter, projfrcs, e_space, state, pgrp, hpind_fsc, phaseplate )
+        use simple_sym,       only: sym
         use simple_estimate_ssnr,   only: fsc2optlp
         use simple_projection_frcs, only: projection_frcs
         class(image),           intent(inout) :: vol_filter
@@ -164,7 +164,6 @@ contains
     !> \brief fits B-factor, untested
     subroutine fit_bfac( img_ref, img_ptcl, o, tfplan, bfac_range, lp, msk, bfac_best )
         use simple_ctf,   only: ctf
-        use simple_ori,   only: ori
         class(image),  intent(in)    :: img_ref, img_ptcl
         class(ori),    intent(inout) :: o
         type(ctfplan), intent(in)    :: tfplan

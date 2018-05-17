@@ -1,12 +1,7 @@
 ! symmetry search routines
 module simple_symsrcher
 include 'simple_lib.f08'
-
-use simple_cmdline, only: cmdline
-use simple_params,  only: params
-use simple_oris,    only: oris
-use simple_image,   only: image
-use simple_sym,     only: sym
+use simple_params
 implicit none
 
 public :: dsym_cylinder
@@ -15,8 +10,13 @@ private
 contains
 
     !>  dsym_cylinder search intended for symmetry of order D
-    subroutine dsym_cylinder(p, dsym_os, cylinder)
-        class(params), intent(in)    :: p
+    subroutine dsym_cylinder( dsym_os, cylinder)
+    !subroutine dsym_cylinder(p, dsym_os, cylinder)
+        !use simple_params,  only: params
+        use simple_oris,    only: oris
+        use simple_image,   only: image
+        use simple_sym,     only: sym
+!        class(params), intent(in)    :: p
         class(oris),   intent(inout) :: dsym_os
         class(image),  intent(out)   :: cylinder
         type(image)          :: read_img, img_msk, dist_img, roavg_img, topview

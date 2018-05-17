@@ -4,8 +4,8 @@ module simple_strategy2D_matcher
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_build,            only: build
-use simple_params,           only: params
+use simple_build,            only: b     ! singleton
+use simple_params,           only: p     ! singleton
 use simple_cmdline,          only: cmdline
 use simple_classaverager          ! use all in there
 implicit none
@@ -20,14 +20,14 @@ type(polarft_corrcalc), target :: pftcc
 integer                        :: nptcls2update
 integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
 real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
-real(timer_int_kind)           :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
+real(timer_int_kind)           :: rt_tot, rt_tot_sum, rt_refloop_sum
 real(timer_int_kind)           :: rt_inpl_sum
 character(len=STDLEN)          :: benchfname
 
 contains
 
     !>  \brief  is the prime2D algorithm
-    subroutine cluster2D_exec( b, p, cline, which_iter )
+    subroutine cluster2D_exec( cline, which_iter )
         use simple_qsys_funs,    only: qsys_job_finished
         use simple_binoris_io,   only: binwrite_oritab
         use simple_strategy2D3D_common,   only: set_bp_range2d
@@ -37,8 +37,6 @@ contains
         use simple_strategy2D_neigh,      only: strategy2D_neigh
         use simple_strategy2D_stochastic, only: strategy2D_stochastic
         use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
-        class(build),  target, intent(inout) :: b
-        class(params), target, intent(inout) :: p
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         integer, allocatable  :: prev_pops(:), pinds(:)
@@ -134,7 +132,7 @@ contains
         endif
 
         ! PREP REFERENCES
-        call cavger_new(b, p, 'class', ptcl_mask)
+        call cavger_new( 'class', ptcl_mask)
         if( b%a%get_nevenodd() == 0 )then
             stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
         endif
@@ -202,12 +200,13 @@ contains
         if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
 
         ! SET FOURIER INDEX RANGE
-        call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
+        !call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
+        call set_bp_range2D(cline, which_iter, frac_srch_space )
         if( L_BENCH ) rt_init = toc(t_init)
 
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
         if( L_BENCH ) t_prep_pftcc = tic()
-        call preppftcc4align( b, p, which_iter )
+        call preppftcc4align( which_iter )
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         ! INITIALIZE
@@ -215,7 +214,7 @@ contains
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! array allocation for strategy2D
-        call prep_strategy2D( b, p, ptcl_mask, which_iter )
+        call prep_strategy2D( ptcl_mask, which_iter )
         ! switch for polymorphic strategy2D construction
         allocate(strategy2Dsrch(p%fromp:p%top))
         select case(trim(p%neigh))
@@ -228,10 +227,11 @@ contains
                     if( ptcl_mask(iptcl) )then
                         update_cnt = nint(b%a%get(iptcl,'update_cnt'))
                         if( .not.b%a%has_been_searched(iptcl) .or. update_cnt == 1 )then
-                            allocate(strategy2D_greedy     :: strategy2Dsrch(iptcl)%ptr)
+                            allocate(strategy2D_greedy     :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
-                            allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr)
+                            allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         endif
+                        if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
                     endif
                 enddo
         end select
@@ -244,10 +244,9 @@ contains
                 strategy2Dspec%iptcl      =  iptcl
                 strategy2Dspec%iptcl_map  =  cnt
                 strategy2Dspec%extr_bound =  extr_bound
-                strategy2Dspec%pp         => p
                 strategy2Dspec%ppftcc     => pftcc
                 strategy2Dspec%pa         => b%a
-                if( allocated(b%nnmat) ) strategy2Dspec%nnmat => b%nnmat
+                ! if( allocated(b%nnmat) ) strategy2Dspec%nnmat => b%nnmat
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif
@@ -272,7 +271,7 @@ contains
         !$omp end parallel do
 
         ! CLEAN-UP
-        call clean_strategy2D()
+        call clean_strategy2D
         call pftcc%kill
         do i=1,nptcls2update
            iptcl = pinds(i)
@@ -297,7 +296,8 @@ contains
         call cavger_kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
 
-        call qsys_job_finished(p, 'simple_strategy2D_matcher :: cluster2D_exec')
+        ! call qsys_job_finished( 'simple_strategy2D_matcher :: cluster2D_exec')
+        call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.
@@ -341,11 +341,9 @@ contains
     end subroutine cluster2D_exec
 
     !>  \brief  prepares the polarft corrcalc object for search
-    subroutine preppftcc4align( b, p, which_iter )
+    subroutine preppftcc4align( which_iter )
         use simple_polarizer, only: polarizer
         use simple_strategy2D3D_common,   only: prep2dref,build_pftcc_particles
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
         integer,       intent(in)    :: which_iter
         type(polarizer), allocatable :: match_imgs(:)
         integer   :: icls, pop, pop_even, pop_odd
@@ -353,7 +351,7 @@ contains
         logical   :: do_center
         real      :: xyz(3)
         ! create the polarft_corrcalc object
-        call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
+        call pftcc%new(p%ncls,  eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)
         ! this is tro avoid excessive allocation, allocate what is the upper bound on the
@@ -382,16 +380,17 @@ contains
                 do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and.&
                     &(which_iter > 2) .and. .not.p%l_frac_update)
                 ! here we are determining the shifts and map them back to classes
-                call prep2Dref(b, p, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(b, p, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(b, p, cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref( cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
                 else
                     ! put the merged class average in both even and odd positions
+                    ! call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
@@ -399,7 +398,7 @@ contains
         end do
         !$omp end parallel do
         ! PREPARATION OF PARTICLES IN PFTCC
-        call build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, .false.)
+        call build_pftcc_particles( pftcc, batchsz_max, match_imgs, .false.)
         ! DESTRUCT
         do imatch=1,batchsz_max
             call match_imgs(imatch)%kill_polarizer

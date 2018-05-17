@@ -1,14 +1,14 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 include 'simple_lib.f08'
-use simple_build,             only: build
-use simple_params,            only: params
+use simple_build,             only: b
+use simple_params,            only: p
 use simple_oris,              only: oris
 use simple_ori,               only: ori
 use simple_sym,               only: sym
-use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based angle and shift search
-use simple_strategy3D_alloc   ! use all in there
+use simple_strategy3D_alloc   ! singleton s3D
+use simple_polarft_corrcalc
 implicit none
 
 public :: strategy3D_srch, strategy3D_spec
@@ -17,12 +17,10 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
-    class(build),            pointer :: pb            => null()
-    class(params),           pointer :: pp            => null()
     class(polarft_corrcalc), pointer :: ppftcc        => null()
     class(oris),             pointer :: pa            => null()
     class(sym),              pointer :: pse           => null()
-    integer,                 pointer :: nnmat(:,:)    => null()
+    !integer,                 pointer :: nnmat(:,:)    => null()
     integer,                 pointer :: grid_projs(:) => null()
     integer,                 pointer :: symmat(:,:)   => null()
     integer :: iptcl=0, iptcl_map=0, szsn=0
@@ -82,32 +80,33 @@ contains
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%pftcc_ptr    => spec%ppftcc
-        self%a_ptr        => spec%pa
-        self%se_ptr       => spec%pse
-        self%iptcl        =  spec%iptcl
-        self%iptcl_map    =  spec%iptcl_map
-        self%nstates      =  spec%pp%nstates
-        self%nprojs       =  spec%pp%nspace
-        self%nrefs        =  self%nprojs*self%nstates
-        self%nrots        =  round2even(twopi*real(spec%pp%ring2))
-        self%npeaks       =  npeaks
-        self%nbetter      =  0
-        self%nrefs_eval   =  0
-        self%nsym         =  self%se_ptr%get_nsym()
-        self%doshift      =  spec%pp%l_doshift
-        self%neigh        =  spec%pp%neigh == 'yes'
-        self%nnn_static   =  spec%pp%nnn
-        self%nnn          =  spec%pp%nnn
-        self%nnnrefs      =  self%nnn*self%nstates
-        self%kstop_grid   =  spec%pp%kstop_grid
+        ! self%pftcc_ptr  => pftcc
+        self%pftcc_ptr  =>  spec%ppftcc
+        self%a_ptr      => spec%pa
+        self%se_ptr     => spec%pse
+        self%iptcl      =  spec%iptcl
+        self%iptcl_map  =  spec%iptcl_map
+        self%nstates    =  p%nstates
+        self%nprojs     =  p%nspace
+        self%nrefs      =  self%nprojs*self%nstates
+        self%nrots      =  round2even(twopi*real(p%ring2))
+        self%npeaks     =  npeaks
+        self%nbetter    =  0
+        self%nrefs_eval =  0
+        self%nsym       =  self%se_ptr%get_nsym()
+        self%doshift    =  p%l_doshift
+        self%neigh      =  p%neigh == 'yes'
+        self%nnn_static =  p%nnn
+        self%nnn        =  p%nnn
+        self%nnnrefs    =  self%nnn*self%nstates
+        self%kstop_grid =  p%kstop_grid
         ! multiple states
         if( self%nstates == 1 )then
             self%npeaks_grid = GRIDNPEAKS
         else
             ! number of populated states
-            nstates_eff = count(state_exists)
-            select case(trim(spec%pp%refine))
+            nstates_eff = count(s3D%state_exists)
+            select case(trim(p%refine))
             case('cluster','clustersym','clusterdev')
                     self%npeaks_grid = 1
                 case DEFAULT
@@ -115,18 +114,18 @@ contains
                     self%npeaks_grid = GRIDNPEAKS * nstates_eff - (nstates_eff - 1)
             end select
         endif
-        if( spec%pp%neigh.eq.'yes' )then
+        if( self%neigh )then
             self%npeaks_grid = min(self%npeaks_grid,self%nnnrefs)
         else
             self%npeaks_grid = min(self%npeaks_grid,self%nrefs)
         endif
         ! create in-plane search objects
-        lims(:,1)      = -spec%pp%trs
-        lims(:,2)      =  spec%pp%trs
+        lims(:,1)      = -p%trs
+        lims(:,2)      =  p%trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
-            &shbarrier=spec%pp%shbarrier, maxits=MAXITS)
+            &shbarrier=p%shbarrier, maxits=MAXITS)
         self%exists = .true.
         DebugPrint  '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
     end subroutine new
@@ -148,10 +147,10 @@ contains
         self%prev_state = o_prev%get_state()                                          ! state index
         self%prev_roind = self%pftcc_ptr%get_roind(360.-o_prev%e3get())               ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                                        ! shift vector
-        self%prev_ref   = (self%prev_state-1)*self%nprojs + prev_proj(self%iptcl_map) ! previous reference
+        self%prev_ref   = (self%prev_state-1)*self%nprojs + s3D%prev_proj(self%iptcl_map) ! previous reference
         if( self%prev_state > 0 )then
             if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_strategy3D_srch'
-            if( .not. state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_strategy3D_srch'
+            if( .not. s3D%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_strategy3D_srch'
         endif
         if( self%neigh )then
             ! disjoint nearest neighbour set
@@ -190,7 +189,7 @@ contains
         if( self%a_ptr%get_state(self%iptcl) > 0 )then
             ! initialize
             target_projs = 0
-            proj_space_corrs(self%iptcl_map,:) = -1.
+            s3D%proj_space_corrs(self%iptcl_map,:) = -1.
             nrefs = size(grid_projs)
             ! search
             do isample = 1, nrefs
@@ -201,20 +200,20 @@ contains
                 end do
             end do
             ! sort in correlation projection direction space
-            corrs = proj_space_corrs(self%iptcl_map,:)
-            call hpsort(corrs, proj_space_inds(self%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%iptcl_map,:)
+            call hpsort(corrs, s3D%proj_space_inds(self%iptcl_map,:))
             ! return target points
             ntargets = size(target_projs)
             cnt      = 1
-            target_projs( cnt ) = prev_proj(self%iptcl_map) ! previous always part of the targets
+            target_projs( cnt ) = s3D%prev_proj(self%iptcl_map) ! previous always part of the targets
             if( self%nstates == 1 )then
                 ! Single state
                 do isample=self%nrefs,self%nrefs - ntargets + 1,-1
-                    if( target_projs(1) == proj_space_inds(self%iptcl_map,isample) )then
+                    if( target_projs(1) == s3D%proj_space_inds(self%iptcl_map,isample) )then
                         ! direction is already in target set
                     else
                         cnt = cnt + 1
-                        target_projs(cnt) = proj_space_inds(self%iptcl_map,isample)
+                        target_projs(cnt) = s3D%proj_space_inds(self%iptcl_map,isample)
                         if( cnt == ntargets ) exit
                     endif
                 end do
@@ -223,10 +222,10 @@ contains
                 state_cnt = 1                                            ! previous always part of the targets
                 do isample = self%nrefs, 1, -1
                     if( cnt >= self%npeaks_grid )exit                    ! all that we need
-                    iref_state = proj_space_inds(self%iptcl_map,isample) ! reference index to multi-state space
+                    iref_state = s3D%proj_space_inds(self%iptcl_map,isample) ! reference index to multi-state space
                     istate     = ceiling(real(iref_state)/real(self%nprojs))
                     iref       = iref_state - (istate-1)*self%nprojs     ! reference index to single state space
-                    if( .not.state_exists(istate) )cycle
+                    if( .not.s3D%state_exists(istate) )cycle
                     if( any(target_projs == iref) )cycle                 ! direction is already set
                     if( state_cnt(istate) >= GRIDNPEAKS )cycle           ! state is already filled
                     cnt = cnt + 1
@@ -242,12 +241,12 @@ contains
         contains
 
             subroutine per_ref_srch
-                if( state_exists(istate) )then
+                if( s3D%state_exists(istate) )then
                     call self%pftcc_ptr%gencorrs(iref, self%iptcl, self%kstop_grid, inpl_corrs) ! In-plane correlations
                     inpl_ind   = maxloc(inpl_corrs)                   ! greedy in-plane
                     inpl_corr  = inpl_corrs(inpl_ind(1))              ! max in plane correlation
-                    proj_space_corrs(self%iptcl_map,iref) = inpl_corr ! stash in-plane correlation for sorting
-                    proj_space_inds(self%iptcl_map,iref)  = iref      ! stash the index for sorting
+                    s3D%proj_space_corrs(self%iptcl_map,iref) = inpl_corr ! stash in-plane correlation for sorting
+                    s3D%proj_space_inds(self%iptcl_map,iref)  = iref      ! stash the index for sorting
                 endif
             end subroutine per_ref_srch
 
@@ -260,14 +259,14 @@ contains
         if( self%doshift )then
             ! BFGS
             do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                ref = proj_space_inds(self%iptcl_map, i)
+                ref = s3D%proj_space_inds(self%iptcl_map, i)
                 call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
                 cxy = self%grad_shsrch_obj%minimize(irot=irot)
                 if( irot > 0 )then
                     ! irot > 0 guarantees improvement found
-                    proj_space_euls(self%iptcl_map, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
-                    proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
-                    proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
+                    s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
+                    s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
+                    s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
                 endif
             end do
         endif
@@ -281,7 +280,7 @@ contains
         self%prev_state = self%a_ptr%get_state(self%iptcl)
         if( self%prev_state > 0 )then
             self%prev_roind = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))
-            iref = (self%prev_state-1) * self%nprojs + prev_proj(self%iptcl_map)
+            iref = (self%prev_state-1) * self%nprojs + s3D%prev_proj(self%iptcl_map)
             cc = self%pftcc_ptr%gencorr_cc_for_rot(iref, self%iptcl, [0.,0.], self%prev_roind)
             call self%a_ptr%set(self%iptcl,'corr', cc)
         else
@@ -294,9 +293,9 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ind, ref, inpl_ind
         real,                   intent(in)    :: corr
-        proj_space_inds(self%iptcl_map,ind)   = ref
-        proj_space_euls(self%iptcl_map,ref,3) = 360. - self%pftcc_ptr%get_rot(inpl_ind)
-        proj_space_corrs(self%iptcl_map,ref)  = corr
+        s3D%proj_space_inds(self%iptcl_map,ind)   = ref
+        s3D%proj_space_euls(self%iptcl_map,ref,3) = 360. - self%pftcc_ptr%get_rot(inpl_ind)
+        s3D%proj_space_corrs(self%iptcl_map,ref)  = corr
     end subroutine store_solution
 
     subroutine kill( self )

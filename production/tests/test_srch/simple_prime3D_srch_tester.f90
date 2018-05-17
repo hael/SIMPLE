@@ -9,6 +9,7 @@ use simple_cmdline,             only: cmdline            ! singleton
 !use simple_build,              only: build
 !use simple_params,             only: params
 !use simple_image,              only: image
+use simple_singletons
 implicit none
 
 public :: exec_prime3D_srch_test

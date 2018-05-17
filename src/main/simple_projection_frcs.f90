@@ -153,9 +153,23 @@ contains
             self%frcs(sstate,proj,:) = frc
         endif
     end subroutine set_frc
-
+        !> \brief  re-samples a filter array
+    function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
+        real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
+        real, allocatable :: filt_resamp(:) !< output filter array
+        integer :: filtsz_orig, filtsz_resamp, k, ind
+        real    :: dist
+        filtsz_orig   = size(filt_orig)
+        filtsz_resamp = size(res_new)
+        allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::resample_filter ",alloc_stat)
+        do k=1,filtsz_resamp
+            call find(res_orig, filtsz_orig, res_new(k), ind, dist)
+            filt_resamp(k) = filt_orig(ind)
+        end do
+      end function resample_filter
     function get_frc( self, proj, box, state ) result( frc )
-        use simple_estimate_ssnr, only: resample_filter
+        !use simple_estimate_ssnr, only: resample_filter
         class(projection_frcs), intent(in) :: self
         integer,                intent(in) :: proj, box
         integer, optional,      intent(in) :: state

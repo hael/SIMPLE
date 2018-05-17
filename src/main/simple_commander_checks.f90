@@ -1,9 +1,8 @@
 ! concrete commander: checking routines
 module simple_commander_checks
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_commander_base, only: commander_base
 implicit none
 
@@ -33,16 +32,15 @@ end type info_stktab_commander
 contains
 
     !> for checking the image dimensions of MRC and SPIDER stacks and volumes
-    subroutine exec_check_box( self, cline )
+   subroutine exec_check_box( self, cline )
         class(check_box_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(params) :: p
         if( cline%defined('stk') .or. cline%defined('vol1') )then
             ! all ok
         else
             stop 'Either stack (stk) or volume (vol1) needs to be defined on command line!'
         endif
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         call cline%set('box', real(p%box))
         write(*,'(A,1X,I7)') '>>> BOX:', p%box
         ! end gracefully
@@ -53,8 +51,7 @@ contains
     subroutine exec_check_nptcls( self, cline )
         class(check_nptcls_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params) :: p
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         call cline%set('nptcls', real(p%nptcls))
         write(*,'(A,1X,I7)') '>>> NPTCLS:', p%nptcls
         ! end gracefully
@@ -66,11 +63,10 @@ contains
         use simple_image,   only: image
         class(info_image_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(params)      :: p
         type(image)       :: img
         integer           :: ldim(3), maxim, i, n_nans
         real              :: sdev, ave, minv, maxv
-        p = params(cline) ! constants & derived constants produced
+        call init_params(cline) ! constants & derived constants produced
         if( cline%defined('fname') )then
             call find_ldim_nptcls(p%fname, ldim, maxim, doprint=.true.)
         endif
@@ -103,8 +99,7 @@ contains
     subroutine exec_info_stktab( self, cline )
         class(info_stktab_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(params) :: p
-        p = params(cline) ! constants & derived constants produced
+        call init_params(cline) ! constants & derived constants produced
         if( .not. file_exists(p%stktab) )then
             write(*,*) 'file: ', trim(p%stktab), ' not in cwd'
             stop 'commander_checks :: exec_info_stktab'

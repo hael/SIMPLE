@@ -1,6 +1,7 @@
 ! batch-processing manager - functions
 module simple_qsys_funs
 include 'simple_lib.f08'
+use simple_params, only: p ! singleton
 implicit none
 
 interface qsys_watcher
@@ -12,10 +13,7 @@ integer, parameter :: SHORTTIME = 3
 
 contains
 
-    subroutine qsys_cleanup( p )
-        use simple_params, only: params
-        class(params), intent(in) :: p
-        ! character(len=:), allocatable :: rec_base_str, rho_base_str, rec_base_str_part, rho_base_str_part
+    subroutine qsys_cleanup(  )
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
         integer :: istate, iter
         ! single files
@@ -178,11 +176,9 @@ contains
     end subroutine autogen_env_file
 
     !>  Writes the JOB_FINISHED_* file to mark end of computing unit job
-    subroutine qsys_job_finished( p, source )
+    subroutine qsys_job_finished(  source )
         ! generation of this file marks completion of the partition
         ! this file is empty 4 now but may contain run stats etc.
-        use simple_params, only: params
-        class(params),    intent(in) :: p
         character(len=*), intent(in) :: source
         if( p%l_distr_exec .or. p%stream.eq.'yes' )then
             call simple_touch('JOB_FINISHED_'//int2str_pad(p%part,p%numlen), errmsg="qsys_job_finished")
@@ -228,20 +224,20 @@ contains
         end do
     end subroutine qsys_watcher_2
 
-    subroutine exec_simple_prg( exec_bin, cline )
-        use simple_cmdline, only: cmdline
-        character(len=*),  intent(in) :: exec_bin
-        class(cmdline),    intent(in) :: cline
-        type(chash) :: job_descr
-        character(len=1024) :: exec_str
-        character(len=11)   :: suppress_msg='2>/dev/null'
-        integer :: pid
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        exec_str = trim(exec_bin)//' '//job_descr%chash2str()//' '//suppress_msg
-        write(*,'(a)') '>>> EXECUTING COMMAND:'
-        write(*,'(a)') trim(exec_str)
-        call exec_subprocess(exec_str, pid)
-    end subroutine exec_simple_prg
+    ! subroutine exec_simple_prg( exec_bin, cline )
+    !     use simple_cmdline, only: cmdline
+    !     character(len=*),  intent(in) :: exec_bin
+    !     class(cmdline),    intent(in) :: cline
+    !     type(chash) :: job_descr
+    !     character(len=1024) :: exec_str
+    !     character(len=11)   :: suppress_msg='2>/dev/null'
+    !     integer :: pid
+    !     ! prepare job description
+    !     call cline%gen_job_descr(job_descr)
+    !     exec_str = trim(exec_bin)//' '//job_descr%chash2str()//' '//suppress_msg
+    !     write(*,'(a)') '>>> EXECUTING COMMAND:'
+    !     write(*,'(a)') trim(exec_str)
+    !     call exec_subprocess(exec_str, pid)
+    ! end subroutine exec_simple_prg
 
 end module simple_qsys_funs

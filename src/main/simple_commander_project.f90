@@ -3,10 +3,10 @@ module simple_commander_project
 include 'simple_lib.f08'
 use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
 use simple_sp_project,     only: sp_project
 use simple_oris,           only: oris
 use simple_binoris_io,     only: binread_nlines, binread_oritab
+use simple_singletons
 implicit none
 
 public :: project2txt_commander
@@ -73,11 +73,10 @@ contains
     subroutine exec_txt2project( self, cline )
         class(txt2project_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params)     :: p
         type(oris)       :: os
         type(sp_project) :: spproj
         integer          :: noris
-        p     = params(cline)
+        call init_params(cline)
         noris = nlines(p%oritab)
         call os%new(noris)
         call os%read(p%oritab)
@@ -94,9 +93,8 @@ contains
     subroutine exec_project2txt( self, cline )
         class(project2txt_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params)     :: p
         type(sp_project) :: spproj
-        p = params(cline)
+        call init_params(cline)
         call spproj%read(p%projfile)
         call spproj%write_segment(p%oritype, p%outfile)
         call spproj%kill
@@ -108,8 +106,7 @@ contains
         class(print_project_info_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(sp_project) :: spproj
-        type(params)     :: p
-        p = params(cline)
+        call init_params(cline)
         call spproj%read(p%projfile)
         call spproj%print_info
         call spproj%kill
@@ -219,8 +216,7 @@ contains
         class(new_project_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(sp_project) :: spproj
-        type(params)     :: p
-        p = params(cline)
+        call init_params(cline)
         if( file_exists('./'//trim(p%projname)) )then
             write(*,*) 'project directory: ', trim(p%projname), ' already exists in cwd: ', trim(p%cwd)
             write(*,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
@@ -247,8 +243,7 @@ contains
         class(update_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(sp_project) :: spproj
-        type(params)     :: p
-        p = params(cline)
+        call init_params(cline)
         if( .not. file_exists('./'//trim(p%projname)) )then
             write(*,*) 'project directory: ', trim(p%projname), ' does not exist in cwd: ', trim(p%cwd)
             write(*,*) 'Use program new_project to create a new project from scratch'
@@ -275,13 +270,12 @@ contains
         class(import_movies_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(sp_project) :: spproj
-        type(params)     :: p
         logical          :: inputted_boxtab
         integer          :: nmovf, nboxf, i
         type(ctfparams)  :: ctfvars
-        character(len=:),          allocatable :: phaseplate, boxf_abspath
+        character(len=:),      allocatable :: phaseplate, boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        p = params(cline)
+        call init_params(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
@@ -342,11 +336,10 @@ contains
         class(import_boxes_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(sp_project) :: spproj
-        type(params)     :: p
         integer          :: nos_mic, nboxf, i
         character(len=:),      allocatable :: boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        p = params(cline)
+        call init_params(cline)
         ! project file management
         if( .not. file_exists(trim(p%projfile)) )then
             write(*,*) 'Project file: ', trim(p%projfile), ' does not exists!'
@@ -382,15 +375,12 @@ contains
         character(len=:), allocatable :: phaseplate, ctfstr
         real,             allocatable :: line(:)
         type(sp_project) :: spproj
-        type(params)     :: p
         type(oris)       :: os
         type(nrtxtfile)  :: paramfile
         logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
         integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
         type(ctfparams)  :: ctfvars
-
-        p = params(cline)
-
+        call init_params(cline)
         ! PARAMETER INPUT MANAGEMENT
         ! parameter input flags
         inputted_oritab       = cline%defined('oritab')
@@ -419,13 +409,13 @@ contains
         endif
         ! oris input
         if( inputted_oritab )then
-            ndatlines = binread_nlines(p, p%oritab)
+            ndatlines = binread_nlines(p%oritab)
             call os%new(ndatlines)
             call binread_oritab(p%oritab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_deftab )then
-            ndatlines = binread_nlines(p, p%deftab)
+            ndatlines = binread_nlines(p%deftab)
             call os%new(ndatlines)
             call binread_oritab(p%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
@@ -624,8 +614,7 @@ contains
         class(import_cavgs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(sp_project) :: spproj
-        type(params)     :: p
-        p = params(cline)
+        call init_params(cline)
         if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
         call spproj%add_cavgs2os_out(p%stk, p%smpd, 'cavg')
         ! update project info

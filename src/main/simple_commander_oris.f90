@@ -4,11 +4,10 @@ include 'simple_lib.f08'
 use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base
 use simple_binoris_io,     only: binwrite_oritab, binread_nlines, binread_oritab
+use simple_singletons
 implicit none
 
 public :: cluster_oris_commander
@@ -48,18 +47,15 @@ contains
 
     !> cluster_oris is a program for clustering orientations based on geodesic distance
     subroutine exec_cluster_oris( self, cline )
-        !use simple_cluster_shc, only: cluster_shc
         use simple_clusterer,   only: cluster_shc_oris
         class(cluster_oris_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(build)          :: b
-        type(params)         :: p
         type(oris)           :: os_class
         integer              :: icls, iptcl, numlen
         real                 :: avgd, sdevd, maxd, mind
         integer, allocatable :: clsarr(:)
-        p = params(cline)
-        call b%build_general_tbox(p, cline, do3d=.false.)
+        call init_params(cline)
+        call b%build_general_tbox( cline, do3d=.false.)
         call cluster_shc_oris(b%a, p%ncls)
         ! calculate distance statistics
         call b%a%cluster_diststat(avgd, sdevd, maxd, mind)
@@ -89,14 +85,12 @@ contains
     subroutine exec_make_oris( self, cline )
         class(make_oris_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(build)  :: b
         type(ori)    :: orientation
         type(oris)   :: os_even
-        type(params) :: p
         real         :: e3, x, y
         integer      :: i, class
-        p = params(cline)
-        call b%build_general_tbox(p, cline, do3d=.false.)
+        call init_params(cline)
+        call b%build_general_tbox(cline, do3d=.false.)
         if( cline%defined('ncls') )then
             os_even = oris(p%ncls)
             call os_even%spiral(p%nsym, p%eullims)
@@ -136,12 +130,10 @@ contains
     subroutine exec_orisops( self, cline )
         class(orisops_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(build)  :: b
         type(ori)    :: orientation
-        type(params) :: p
         integer      :: s, i
-        p = params(cline)
-        call b%build_general_tbox(p, cline, do3d=.false.)
+        call init_params(cline)
+        call b%build_general_tbox(cline, do3d=.false.)
         if( p%errify .eq. 'yes' )then
             ! introduce error in input orientations
             call b%a%introd_alig_err(p%angerr, p%sherr)
@@ -190,12 +182,10 @@ contains
     subroutine exec_oristats( self, cline )
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(build)          :: b
         type(sp_project)     :: spproj
         class(oris), pointer :: o => null()
         type(oris)           :: osubspace
         type(ori)            :: o_single
-        type(params)         :: p
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
@@ -206,12 +196,12 @@ contains
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
         logical              :: err
-        p = params(cline)
-        call b%build_general_tbox(p, cline, do3d=.false.)
+        call init_params(cline)
+        call b%build_general_tbox(cline, do3d=.false.)
         if( cline%defined('oritab2') )then
             ! Comparison
             if( .not. cline%defined('oritab') ) stop 'need oritab for comparison'
-            if( binread_nlines(p, p%oritab) .ne. binread_nlines(p, p%oritab2) )then
+            if( binread_nlines( p%oritab) .ne. binread_nlines( p%oritab2) )then
                 stop 'inconsistent number of lines in the two oritabs!'
             endif
             call spproj%new_seg_with_ptr(p%nptcls, p%oritype, o)
@@ -370,12 +360,11 @@ contains
         class(rotmats2oris_commander),  intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(nrtxtfile) :: rotmats
-        type(params)    :: p
         type(ori)       :: o
         type(oris)      :: os_out
         integer         :: nrecs_per_line, iline, ndatlines
         real            :: rline(9), rmat(3,3)
-        p = params(cline)
+        call init_params(cline)
         if( cline%defined('infile') )then
             call rotmats%new(p%infile, 1)
             ndatlines = rotmats%get_ndatalines()
@@ -414,8 +403,6 @@ contains
     subroutine exec_vizoris( self, cline )
         class(vizoris_commander),  intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(build)           :: b
-        type(params)          :: p
         type(ori)             :: o, o_prev
         real,    allocatable  :: euldists(:)
         integer, allocatable  :: pops(:)
@@ -423,8 +410,8 @@ contains
         integer               :: i, n, maxpop, funit, closest,io_stat
         real                  :: radius, maxradius, ang, scale, col, avg_geodist,avg_euldist,geodist
         real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3)
-        p = params(cline)
-        call b%build_general_tbox(p, cline, do3d=.false.)
+        call init_params(cline)
+        call b%build_general_tbox( cline, do3d=.false.)
         ! BELOW IS FOR TESTING ONLY
         ! call b%a%spiral
         ! call a%new(2*b%a%get_noris()-1)

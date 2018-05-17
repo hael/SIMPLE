@@ -42,11 +42,9 @@ contains
     subroutine exec_npeaks( self, cline )
         class(npeaks_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(build)  :: b
-        type(params) :: p
         integer :: npeaks
-        p = params(cline) ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.)
+        call init_params(cline) ! parameters generated
+        call b%build_general_tbox( cline, do3d=.false.)
         npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
         write(*,'(A,1X,I4)') '>>> NPEAKS:', npeaks
         ! end gracefully
@@ -57,10 +55,9 @@ contains
         class(nspace_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(oris)   :: o
-        type(params) :: p
         real         :: ares
         integer      :: i
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         do i=500,5000,500
             o = oris(i)
             call o%spiral
@@ -74,8 +71,6 @@ contains
         use simple_qsys_funs,      only: qsys_job_finished
         class(refine3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)       :: p
-        type(build)        :: b
         integer, parameter :: MAXIMGS=1000
         call init_params(cline)            ! parameters generated
         call b%build_general_tbox( cline)  ! general objects built
@@ -91,7 +86,7 @@ contains
             endif
         endif
         ! end gracefully
-        call qsys_job_finished( p, cline%get_carg('prg') )
+        call qsys_job_finished( cline%get_carg('prg') )
         call simple_end('**** SIMPLE_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
 
         contains
@@ -110,7 +105,7 @@ contains
                 integer              :: i, nsamp
 
                 ! init volumes
-                call preprecvols(b, p)
+                call preprecvols()
                 if( trim(p%refine).eq.'tseries' )then
                     call b%a%spiral
                 else
@@ -136,13 +131,13 @@ contains
                     call progress(i, nsamp)
                     orientation = b%a%get_ori(sample(i) + p%fromp - 1)
                     ctfvars     = b%spproj%get_ctfparams(p%oritype, sample(i) + p%fromp - 1)
-                    call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
+                    call read_img_and_norm( sample(i) + p%fromp - 1 )
                     call gridprep%prep(b%img, b%img_pad)
                     call b%recvols(1)%insert_fplane(b%se, orientation, ctfvars, b%img_pad, pwght=1.0)
                 end do
                 deallocate(sample)
-                call norm_struct_facts(b, p)
-                call killrecvols(b, p)
+                call norm_struct_facts()
+                call killrecvols()
                 if( p%part .ne. 1 )then
                     ! so random oris only written once in distributed mode
                 else

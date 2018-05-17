@@ -2,7 +2,7 @@
 
 module simple_tseries_tracker
 include 'simple_lib.f08'
-
+use simple_singletons
 use simple_image,   only: image
 implicit none
 
@@ -31,9 +31,10 @@ contains
     !! \param offset_in offset input value
     !! \param smpd_in smpd input value
     !! \param lp_in lp input value
-    subroutine init_tracker( p, boxcoord )
-        use simple_params, only: params
-        class(params), intent(in) :: p
+    subroutine init_tracker(  boxcoord )
+    !subroutine init_tracker( p, boxcoord )
+        !use simple_params, only: params
+        !class(params), intent(in) :: p
         integer,       intent(in) :: boxcoord(2)
         integer :: n, i
         ! set constants

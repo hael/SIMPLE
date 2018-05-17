@@ -3,7 +3,7 @@ module simple_motion_correct_iter
 include 'simple_lib.f08'
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
-use simple_params,       only: params
+use simple_params,       only: p   ! singleton
 use simple_ori,          only: ori
 use simple_stackops,     only: frameavg_stack
 use simple_motion_correct       ! use all in there
@@ -29,10 +29,9 @@ end type motion_correct_iter
 
 contains
 
-    subroutine iterate( self, cline, p, ctfvars, orientation, fbody, frame_counter, moviename, dir_out )
+    subroutine iterate( self, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out )
         class(motion_correct_iter), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        class(params),              intent(inout) :: p
         type(ctfparams),            intent(inout) :: ctfvars
         class(ori),                 intent(inout) :: orientation
         integer,                    intent(inout) :: frame_counter
@@ -73,7 +72,7 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        call motion_correct_movie(self%moviename, p, ctfvars, corr, shifts, err)
+        call motion_correct_movie(self%moviename, ctfvars, corr, shifts, err)
         if( err ) return
         ! generate sums
         if( p%tomo .eq. 'yes' )then

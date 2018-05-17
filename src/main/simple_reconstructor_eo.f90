@@ -3,7 +3,7 @@ module simple_reconstructor_eo
 include 'simple_lib.f08'
 use simple_reconstructor, only: reconstructor
 use simple_masker,        only: masker
-use simple_params,        only: params
+use simple_params,        only: p
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 implicit none
@@ -72,9 +72,10 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self, p, spproj )
+    subroutine new( self,  spproj )
+    !subroutine new( self, p, spproj )
         class(reconstructor_eo), intent(inout) :: self   !< instance
-        class(params), target,   intent(in)    :: p      !< parameters object (provides constants)
+       ! class(params), target,   intent(in)    :: p      !< parameters object (provides constants)
         class(sp_project),       intent(inout) :: spproj !< project description
         logical     :: neg
         call self%kill
@@ -97,16 +98,19 @@ contains
         if( self%automsk )then
             call self%envmask%new([p%box,p%box,p%box], p%smpd)
             call self%envmask%read(p%mskfile)
-            call self%envmask%resmask(p)
+            call self%envmask%resmask()
         endif
         call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call self%even%alloc_rho(p, spproj)
+        !call self%even%alloc_rho(p, spproj)
+        call self%even%alloc_rho( spproj)
         call self%even%set_ft(.true.)
         call self%odd%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call self%odd%alloc_rho(p, spproj)
+        !call self%odd%alloc_rho(p, spproj)
+        call self%odd%alloc_rho(spproj)
         call self%odd%set_ft(.true.)
         call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call self%eosum%alloc_rho(p, spproj, expand=.false.)
+        !call self%eosum%alloc_rho(p, spproj, expand=.false.)
+        call self%eosum%alloc_rho( spproj, expand=.false.)
         ! set redundant limits
         self%cyc_lims = self%even%loop_lims(3)
         ! set existence
@@ -418,14 +422,15 @@ contains
     ! RECONSTRUCTION
 
     !> \brief  for distributed reconstruction of even/odd maps
-    subroutine eorec_distr( self, p, spproj, o, se, state, fbody )
+    subroutine eorec_distr( self, spproj, o, se, state, fbody )
+    !subroutine eorec_distr( self, p, spproj, o, se, state, fbody )
         use simple_oris,       only: oris
         use simple_sym,        only: sym
-        use simple_params,     only: params
+        !use simple_params,     only: params
         use simple_prep4cgrid, only: prep4cgrid
         use simple_kbinterpol,    only: kbinterpol
         class(reconstructor_eo),    intent(inout) :: self   !< object
-        class(params),              intent(in)    :: p      !< parameters
+        !class(params),              intent(in)    :: p      !< parameters
         class(sp_project),          intent(inout) :: spproj !< project description
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element

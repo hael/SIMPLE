@@ -4,6 +4,7 @@ use simple_strategy3D_alloc  ! use all in there
 use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
+use simple_params, only: p
 implicit none
 
 public :: strategy3D_greedy_multi
@@ -38,11 +39,11 @@ contains
         if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
             if( self%s%neigh )then
                 ! for neighbour modes we do a coarse grid search first
-                if( .not. associated(self%spec%grid_projs) )&
+                if( .not. allocated(b%grid_projs) )&
                 &stop 'need optional grid_projs 4 subspace srch; strategy3D_greedy_multi :: srch_greedy_multi'
-                call self%s%greedy_subspace_srch(self%spec%grid_projs, target_projs)
+                call self%s%greedy_subspace_srch(b%grid_projs, target_projs)
                 ! initialize
-                call self%s%prep4srch(self%spec%nnmat, target_projs)
+                call self%s%prep4srch(b%nnmat, target_projs)
                 nrefs = self%s%nnnrefs
             else
                 ! initialize
@@ -51,17 +52,17 @@ contains
             endif
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
-            proj_space_corrs(self%s%iptcl_map,:) = -1.
+            s3D%proj_space_corrs(self%s%iptcl_map,:) = -1.
             ! search
             do isample=1,nrefs
-                iref = srch_order(self%s%iptcl_map,isample) ! set the reference index
+                iref =  s3D%srch_order(self%s%iptcl_map,isample) ! set the reference index
                 call per_ref_srch                         ! actual search
             end do
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = nrefs
             ! sort in correlation projection direction space
-            corrs = proj_space_corrs(self%s%iptcl_map,:)
-            call hpsort(corrs, proj_space_inds(self%s%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:)
+            call hpsort(corrs, s3D%proj_space_inds(self%s%iptcl_map,:))
             ! take care of the in-planes
             call self%s%inpl_srch
             ! prepare weights & orientation
@@ -74,9 +75,9 @@ contains
         contains
 
             subroutine per_ref_srch
-                state = proj_space_state(self%s%iptcl_map,iref)
-                if( state_exists(state) )then    
-                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, inpl_corrs) ! in-plane correlations
+                state = s3D%proj_space_state(self%s%iptcl_map,iref)
+                if(  s3D%state_exists(state) )then
+                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, inpl_corrs) ! In-plane correlations
                     inpl_ind   = maxloc(inpl_corrs)                                ! greedy in-plane index
                     inpl_corr  = inpl_corrs(inpl_ind(1))                           ! max in plane correlation
                     call self%s%store_solution(iref, iref, inpl_ind(1), inpl_corr)
@@ -97,7 +98,7 @@ contains
         ! extract peak info
         call extract_peaks( self%s, corrs, state )
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, self%spec%pp%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights( self%s, corrs, p%tau, ws, included, best_loc, wcorr )
         ! state reweighting
         call states_reweight( self%s, corrs, ws, state_ws, included, state, best_loc, wcorr )
         ! B factors
@@ -106,11 +107,11 @@ contains
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances
         call self%s%se_ptr%sym_dists( self%s%a_ptr%get_ori(self%s%iptcl),&
-            &o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
+            &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! generate convergence stats
         call convergence_stats_multi( self%s, best_loc, euldist )
         ! fraction of search space scanned
-        neff_states = count(state_exists)
+        neff_states = count(s3D%state_exists)
         if( self%s%neigh )then
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nnn * neff_states)
         else
@@ -124,14 +125,14 @@ contains
         endif
         call self%s%a_ptr%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call self%s%a_ptr%set_euler(self%s%iptcl, o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
-        call self%s%a_ptr%set_shift(self%s%iptcl, o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
+        call self%s%a_ptr%set_euler(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
+        call self%s%a_ptr%set_shift(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
         call self%s%a_ptr%set(self%s%iptcl, 'state',     real(state))
         call self%s%a_ptr%set(self%s%iptcl, 'frac',      frac)
         call self%s%a_ptr%set(self%s%iptcl, 'corr',      wcorr)
         call self%s%a_ptr%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call self%s%a_ptr%set(self%s%iptcl, 'ow',        o_peaks(self%s%iptcl)%get(best_loc(1),'ow')  )
-        call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
+        call self%s%a_ptr%set(self%s%iptcl, 'ow',         s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow')  )
+        call self%s%a_ptr%set(self%s%iptcl, 'proj',       s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      ang_sdev)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint  '>>> STRATEGY3D_GREEDY_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'

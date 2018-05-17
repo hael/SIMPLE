@@ -1,6 +1,7 @@
 ! ctf_estimate iterator
 module simple_ctf_estimate_iter
 include 'simple_lib.f08'
+use simple_params, only: p !singleton
 implicit none
 
 public :: ctf_estimate_iter
@@ -13,13 +14,11 @@ end type ctf_estimate_iter
 
 contains
 
-    subroutine iterate( self, p, ctfvars, moviename_forctf, orientation, dir_out )
-        use simple_params, only: params
+    subroutine iterate( self, ctfvars, moviename_forctf, orientation, dir_out )
         use simple_ori,    only: ori
         use simple_image,  only: image
         use simple_ctf_estimate  ! use all in there
         class(ctf_estimate_iter), intent(inout)      :: self
-        class(params),      intent(inout)      :: p
         type(ctfparams),    intent(in)         :: ctfvars
         character(len=*),   intent(in)         :: moviename_forctf
         class(ori),         intent(inout)      :: orientation

@@ -1,5 +1,5 @@
 program simple_test_speed
-  include 'simple_lib.f08'
+include 'simple_lib.f08'
 use simple_speedtester
 use simple_cmdline, only: cmdline
 implicit none

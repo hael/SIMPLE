@@ -2,7 +2,7 @@
 
 module simple_cluster_valid
 include 'simple_lib.f08'
-    
+
 use simple_oris,   only: oris
 implicit none
 #include "simple_local_flags.inc"

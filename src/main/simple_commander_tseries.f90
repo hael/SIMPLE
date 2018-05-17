@@ -1,9 +1,8 @@
 ! concrete commander: time-series analysis
 module simple_commander_tseries
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_commander_base, only: commander_base
 implicit none
 
@@ -37,13 +36,12 @@ contains
         use simple_image,   only: image
         class(tseries_extract_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(params) :: p
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         character(len=LONGSTRLEN)              :: outfname
         integer      :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
         integer      :: iframe, jframe, nfiles, endit
         type(image)  :: frame_img
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         if( cline%defined('filetab') )then
             call read_filetable(p%filetab, filenames)
             nfiles = size(filenames)
@@ -96,12 +94,12 @@ contains
         use simple_tseries_tracker
         use simple_qsys_funs, only: qsys_job_finished
         class(tseries_track_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(params)      :: p
+         class(cmdline),                 intent(inout) :: cline
+        ! type(params)      :: p
         type(nrtxtfile)   :: boxfile
         integer           :: ndatlines, j, orig_box, numlen
         real, allocatable :: boxdata(:,:)
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         numlen = 5 ! default value
         orig_box = p%box
         ! check file inout existence and read filetables
@@ -136,7 +134,7 @@ contains
             &; simple_commander_tseries :: exec_tseries_track'
         endif
         do j=1,ndatlines
-            call init_tracker(p, nint(boxdata(j,1:2)))
+            call init_tracker( nint(boxdata(j,1:2)))
             call track_particle
             if( cline%defined('ind') )then
                 if( .not. cline%defined('numlen') ) stop 'need numlen to be part of command line if ind is&
@@ -147,7 +145,7 @@ contains
             endif
             call kill_tracker
         end do
-        if( p%l_distr_exec ) call qsys_job_finished(p, 'simple_commander_tseries :: exec_tseries_track')
+        if( p%l_distr_exec ) call qsys_job_finished( 'simple_commander_tseries :: exec_tseries_track')
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
@@ -157,15 +155,15 @@ contains
         use simple_ctf,   only: ctf
         class(tseries_backgr_subtr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
+        ! type(params) :: p
+        ! type(build)  :: b
         type(image)  :: img_backgr, img_backgr_wctf
         type(ctf)    :: tfun
         logical      :: params_present(4)
         real         :: dfx, dfy, angast
         integer      :: iptcl
-        p = params(cline)             ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call init_params(cline)             ! parameters generated
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         ! get background image
         call img_backgr%new([p%box,p%box,1], p%smpd)
         call img_backgr_wctf%new([p%box,p%box,1], p%smpd)
@@ -223,14 +221,14 @@ contains
        ! use simple_ori,      only: ori
         class(tseries_split_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
+        ! type(params) :: p
+        ! type(build)  :: b
         !type(ori)    :: o
         type(oris)   :: os
         character(len=:), allocatable :: stkname, oriname
         integer :: i, iptcl, numlen, istart, istop, cnt, cnt2, ntot
-        p = params(cline) ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call init_params(cline) ! parameters generated
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         numlen = len(int2str(p%nptcls))
         ! count the number of chunks
         ntot = 0

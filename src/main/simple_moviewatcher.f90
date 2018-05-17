@@ -1,7 +1,7 @@
 ! movie watcher for stream processing
 module simple_moviewatcher
 include 'simple_lib.f08'
-use simple_params,        only: params
+use simple_params,        only: p  ! singleton
 implicit none
 
 public :: moviewatcher
@@ -40,8 +40,7 @@ integer,          parameter :: FAIL_TIME   = 7200 ! 2 hours
 contains
 
     !>  \brief  is a constructor
-    function constructor( p, report_time, prev_movies )result( self )
-        class(params),                          intent(in) :: p
+    function constructor( report_time, prev_movies )result( self )
         integer,                                intent(in) :: report_time  ! in seconds
         character(len=LONGSTRLEN), allocatable, intent(in) :: prev_movies(:)
         type(moviewatcher) :: self

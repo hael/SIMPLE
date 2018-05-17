@@ -5,7 +5,7 @@ module simple_motion_correct
 include 'simple_lib.f08'
 use simple_ft_expanded,  only: ft_expanded
 use simple_image,        only: image
-use simple_params,       only: params
+use simple_params,       only: p    ! singleton
 use simple_estimate_ssnr,only: acc_dose2filter
 use simple_oris,         only: oris
 implicit none
@@ -56,10 +56,9 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 contains
 
     !> motion_correct DDD movie
-    subroutine motion_correct_movie( movie_stack_fname, p, ctfvars, corr, shifts, err, nsig )
+    subroutine motion_correct_movie( movie_stack_fname, ctfvars, corr, shifts, err, nsig )
         use simple_ftexp_shsrch
         character(len=*),  intent(in)    :: movie_stack_fname !< filename
-        class(params),     intent(inout) :: p                 !< param object
         type(ctfparams),   intent(inout) :: ctfvars
         real,              intent(out)   :: corr              !< ave correlation per frame
         real, allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
@@ -72,7 +71,7 @@ contains
         ! initialise
         nsig_here = 6.0
         if( present(nsig) ) nsig_here = nsig
-        call motion_correct_init(movie_stack_fname, p, ctfvars)
+        call motion_correct_init(movie_stack_fname, ctfvars)
         err = .false.
         if( nframes < 2 )then
             err = .true.
@@ -206,9 +205,8 @@ contains
     end subroutine motion_correct_movie
 
     !> Initialise motion_correct
-    subroutine motion_correct_init( movie_stack_fname, p, ctfvars )
+    subroutine motion_correct_init( movie_stack_fname, ctfvars )
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
-        class(params),    intent(inout) :: p                  !< params object
         type(ctfparams),  intent(in)    :: ctfvars
         type(image)          :: tmpmovsum
         real                 :: moldiam, dimo4
@@ -270,8 +268,6 @@ contains
         write(*,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
         write(*,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
         if( any(outliers) )then ! remove the outliers & do the rest
-            !$ allocate(rmat(ldim(1),ldim(2),ldim(3)), stat=alloc_stat)
-            !$ if(alloc_stat/=0)call allocchk('motion_correct_init')
             do iframe=1,nframes
                 call progress(iframe, nframes)
                 call frame_tmp%read(movie_stack_fname, iframe)

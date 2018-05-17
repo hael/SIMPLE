@@ -5,10 +5,11 @@ module simple_reconstructor
 use, intrinsic :: iso_c_binding
 include 'simple_lib.f08'
 !! import classes
-use simple_params,     only: params
+use simple_params,     only: p
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_fftw3
+
 implicit none
 
 public :: reconstructor
@@ -72,10 +73,11 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine alloc_rho( self, p, spproj, expand )
+    subroutine alloc_rho( self, spproj, expand )
+    !subroutine alloc_rho( self, p, spproj, expand )
         use simple_sp_project, only: sp_project
         class(reconstructor), intent(inout) :: self   !< this instance
-        class(params),        intent(in)    :: p      !< parameters object
+        !class(params),        intent(in)    :: p      !< parameters object
         class(sp_project),    intent(inout) :: spproj !< project description
         logical, optional,    intent(in)    :: expand !< expand flag
         real    :: inv1, inv2
@@ -675,14 +677,15 @@ contains
     ! RECONSTRUCTION
 
     !> reconstruction routine
-    subroutine rec( self, p, spproj, o, se, state, part )
+    subroutine rec( self,  spproj, o, se, state, part )
+    !subroutine rec( self, p, spproj, o, se, state, part )
         use simple_ori,        only: ori
         use simple_oris,       only: oris
         use simple_sym,        only: sym
         use simple_prep4cgrid, only: prep4cgrid
         use simple_sp_project, only: sp_project
         class(reconstructor), intent(inout) :: self   !< this object
-        class(params),        intent(in)    :: p      !< parameters
+        !class(params),        intent(in)    :: p      !< parameters
         class(sp_project),    intent(inout) :: spproj !< project description
         class(oris),          intent(inout) :: o      !< orientations
         class(sym),           intent(inout) :: se     !< symmetry element

@@ -20,7 +20,7 @@ contains
         character(len=STDLEN) :: args(128), args_pair(2)
         integer :: nargs, iarg, ival, io_stat
         allocate(line_trimmed, source=trim(line))
-        call parsestr(line_trimmed,' ',args,nargs)
+        call parsestr(line_trimmed,' ', args, nargs)
         allocate(keys(nargs), vals(nargs), stat=alloc_stat)
         if(alloc_stat /= 0)call allocchk("simple_sauron::sauron_line_parser ",alloc_stat)
         do iarg=1,nargs

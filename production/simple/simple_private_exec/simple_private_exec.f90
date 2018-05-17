@@ -1,6 +1,7 @@
 ! shared-memory parallelised programs executed by distributed commanders
 program simple_private_exec
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline, only: cmdline, cmdline_err
 use simple_gen_doc
 use simple_commander_project

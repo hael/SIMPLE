@@ -1,11 +1,9 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_commander_base, only: commander_base
-
 implicit none
 
 public :: binarise_commander
@@ -59,8 +57,6 @@ contains
         use simple_image,          only: image
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         integer      :: igrow, iptcl
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
@@ -72,16 +68,16 @@ contains
         if( cline%defined('thres') .and. cline%defined('npix') )then
             stop 'ERROR! either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise'
         endif
-        p = params(cline)                                     ! parameters generated
+        call init_params(cline)                                     ! parameters generated
         if( cline%defined('stk') )then
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+            call b%build_general_tbox(cline, do3d=.false.) ! general objects built
             do iptcl=1,p%nptcls
                 call b%img%read(p%stk, iptcl)
                 call doit(b%img)
                 call b%img%write(p%outstk, iptcl)
             end do
         else if( cline%defined('vol1') )then
-            call b%build_general_tbox(p, cline)               ! general objects built
+            call b%build_general_tbox(cline)               ! general objects built
             call b%vol%read(p%vols(1))
             call doit(b%vol)
             call b%vol%write(p%outvol)
@@ -117,19 +113,17 @@ contains
     subroutine exec_convert( self, cline )
         class(convert_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params), target :: p
-        type(build),  target :: b
         integer              :: iptcl
-        p = params(cline, allow_mix=.true.) ! parameters generated
+        call init_params(cline, allow_mix=.true.) ! parameters generated
         if( cline%defined('stk') )then
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+            call b%build_general_tbox(cline, do3d=.false.) ! general objects built
             do iptcl=1,p%nptcls
                 call progress(iptcl, p%nptcls)
                 call b%img%read(p%stk, iptcl)
                 call b%img%write(p%outstk, iptcl)
             end do
         else if( cline%defined('vol1') )then
-            call b%build_general_tbox(p, cline)               ! general objects built
+            call b%build_general_tbox(cline)               ! general objects built
             call b%vol%read(p%vols(1))
             call b%img%write(p%outvol)
         else
@@ -145,12 +139,10 @@ contains
         use simple_procimgfile, only: apply_ctf_imgfile
         class(ctfops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         type(ctf)    :: tfun
         real         :: dfx, dfy, angast
-        p = params(cline)                                 ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call init_params(cline)                                 ! parameters generated
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         if( cline%defined('oritab') .or. cline%defined('deftab') )then
         else
             stop 'oritab/deftab with CTF info needed for phase flipping/multiplication/CTF image generation'
@@ -186,15 +178,13 @@ contains
         use simple_procimgfile, only:bp_imgfile, real_filter_imgfile, phase_rand_imgfile, matchfilt_imgfile
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         real :: width
-        p     = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         width = 10.
         if( cline%defined('width') ) width = p%width
         if( cline%defined('stk') )then
             ! 2D
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+            call b%build_general_tbox( cline, do3d=.false.) ! general objects built
             if( .not.file_exists(p%stk) )stop 'Cannot find input stack (stk)'
             if( p%phrand .eq. 'no')then
                 ! projection_frcs filtering
@@ -222,7 +212,7 @@ contains
             endif
         else
             ! 3D
-            call b%build_general_tbox(p, cline) ! general objects built
+            call b%build_general_tbox(cline) ! general objects built
             if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume (vol1)'
             call b%vol%read(p%vols(1))
             if( p%phrand.eq.'no')then
@@ -264,18 +254,16 @@ contains
         use simple_procimgfile, only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(normalize_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        type(build)       :: b
-        type(params)      :: p
         real, allocatable :: spec(:)
         integer           :: k
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         if( cline%defined('stk')  .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( p%norm.eq.'yes'       .and. p%noise_norm.eq.'yes' )stop 'Invalid normalization type'
         if( p%norm.eq.'yes'       .and. p%shellnorm .eq.'yes' )stop 'Invalid normalization type'
         if( p%noise_norm.eq.'yes' .and. p%shellnorm .eq.'yes' )stop 'Invalid normalization type'
         if( cline%defined('stk') )then
             ! 2D
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+            call b%build_general_tbox(cline, do3d=.false.) ! general objects built
             if( p%norm.eq.'yes' )then
                 ! Normalization
                 call norm_imgfile(p%stk, p%outstk, p%smpd)
@@ -293,7 +281,7 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
-            call b%build_general_tbox(p, cline)         ! general objects built
+            call b%build_general_tbox(cline)         ! general objects built
             call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
             if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
@@ -325,21 +313,19 @@ contains
         use simple_qsys_funs,      only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         type(image)  :: vol2, img, img2
         real         :: ave, sdev, var, med, smpd_new, smpds_new(2), scale
         integer      :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer      :: ldims_scaled(2,3)
-        character(len=:),          allocatable :: fname
+        character(len=:), allocatable      :: fname
         character(len=LONGSTRLEN), allocatable :: filenames(:)
-        p = params(cline)                     ! parameters generated
+        call init_params(cline)                     ! parameters generated
         call img%new([p%box,p%box,1],p%smpd)  ! image created
         call img2%new([p%box,p%box,1],p%smpd) ! image created
         if( cline%defined('stk') .and. cline%defined('vol1') ) stop 'Cannot operate on images AND volume at once'
         if( cline%defined('stk') )then
             ! 2D
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+            call b%build_general_tbox( cline, do3d=.false.) ! general objects built
             if( cline%defined('scale2') )then
                 call del_file(p%outstk)
                 call del_file(p%outstk2)
@@ -376,7 +362,7 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
-            call b%build_general_tbox(p, cline) ! general objects built
+            call b%build_general_tbox( cline) ! general objects built
             ! reallocate vol (boxmatch issue)
             call b%vol%new([p%box,p%box,p%box], p%smpd)
             if( .not.file_exists(p%vols(1)) ) stop 'Cannot find input volume'
@@ -458,26 +444,24 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished( p, 'simple_commander_imgproc :: exec_scale' )
+        call qsys_job_finished( 'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
 
     !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
         use simple_image,  only: image
-        class(stack_commander),  intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
-        type(params)                           :: p
-        type(build)                            :: b
-        integer                                :: nfiles, ldim(3), ifile, ifoo, cnt
-        integer                                :: lfoo(3), nimgs, iimg
-        character(len=LONGSTRLEN), allocatable :: filenames(:)
-        type(image)                            :: tmp
-        real                                   :: mm(2)
+        class(stack_commander), intent(inout) :: self
+        class(cmdline),         intent(inout) :: cline
+        integer                               :: nfiles, ldim(3), ifile, ifoo, cnt
+        integer                               :: lfoo(3), nimgs, iimg
+        character(len=LONGSTRLEN), allocatable    :: filenames(:)
+        type(image)                           :: tmp
+        real                                  :: mm(2)
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
         endif
-        p = params(cline) ! constants & derived constants produced
-        call b%build_general_tbox(p,cline,do3d=.false.) ! general stuff built
+        call init_params(cline) ! constants & derived constants produced
+        call b%build_general_tbox(cline,do3d=.false.) ! general stuff built
         call read_filetable(p%filetab, filenames)
         nfiles = size(filenames)
         call find_ldim_nptcls(filenames(1),ldim,ifoo)
@@ -519,16 +503,14 @@ contains
         use simple_procimgfile, only: copy_imgfile, add_noise_imgfile, neg_imgfile, shellnorm_imgfile, add_noise_imgfile
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(params)                             :: p
-        type(build)                              :: b
         type(ran_tabu)                           :: rt
         type(oris)                               :: o_here, os_ran
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
         integer :: i, s, cnt, nincl
-        p = params(cline)                                ! parameters generated
+        call init_params(cline)                                ! parameters generated
         p%boxmatch = p%box
-        call b%build_general_tbox(p, cline,do3d=.false.) ! general objects built
+        call b%build_general_tbox( cline,do3d=.false.) ! general objects built
         ! random selection
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'

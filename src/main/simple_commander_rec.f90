@@ -1,12 +1,12 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,         only: cmdline
-use simple_params,          only: params
-use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 use simple_projection_frcs, only: projection_frcs
 use simple_strategy2D3D_common, only:  gen_projection_frcs
+
 implicit none
 
 public :: reconstruct3D_commander
@@ -38,20 +38,18 @@ contains
         use simple_rec_master, only: exec_rec_master
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        call init_params(cline)                   ! parameters generated
+        call b%build_general_tbox( cline) ! general objects built
         select case(p%eo)
             case( 'yes', 'aniso' )
-                call b%build_rec_eo_tbox(p) ! eo_reconstruction objs built
+                call b%build_rec_eo_tbox() ! eo_reconstruction objs built
             case( 'no' )
-                call b%build_rec_tbox(p)    ! reconstruction objects built
+                call b%build_rec_tbox()    ! reconstruction objects built
             case DEFAULT
                 stop 'unknonw eo flag; simple_commander_rec :: exec_reconstruct3D'
         end select
-        call exec_rec_master(b, p)
-        ! end gracefullyY
+        call exec_rec_master
+        ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D
 
@@ -61,8 +59,6 @@ contains
         use simple_filterer,         only: gen_anisotropic_optlp
         class(volassemble_eo_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(params)                  :: p
-        type(build)                   :: b
         type(reconstructor_eo)        :: eorecvol_read
         character(len=:), allocatable :: finished_fname, recname, volname
         character(len=32)             :: eonames(2), resmskname, benchfname
@@ -80,17 +76,17 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_rec_eo_tbox(p)         ! reconstruction toolbox built
-        call b%eorecvol%kill_exp            ! reduced meory usage
+        call init_params(cline)            ! parameters generated
+        call b%build_general_tbox(cline)   ! general objects built
+        call b%build_rec_eo_tbox()         ! reconstruction toolbox built
+        call b%eorecvol%kill_exp           ! reduced meory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_eo_volassemble res05s res0143s",alloc_stat)
         res0143s = 0.
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call eorecvol_read%new(p, b%spproj)
+        call eorecvol_read%new( b%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage
         n = p%nstates*p%nparts
         if( L_BENCH )then
@@ -139,7 +135,7 @@ contains
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
                 t_gen_projection_frcs     = tic()
             endif
-            call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), resmskname, s, b%projfrcs)
+            call gen_projection_frcs( cline, eonames(1), eonames(2), resmskname, s, b%projfrcs)
             if( L_BENCH ) rt_gen_projection_frcs = rt_gen_projection_frcs + toc(t_gen_projection_frcs)
             call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
             if( L_BENCH ) t_gen_anisotropic_optlp = tic()
@@ -221,19 +217,17 @@ contains
         use simple_reconstructor, only: reconstructor
         class(volassemble_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params)                  :: p
-        type(build)                   :: b
         character(len=:), allocatable :: fbody, finished_fname
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state
         type(reconstructor)           :: recvol_read
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_rec_tbox(p)            ! reconstruction toolbox built
+        call init_params(cline)           ! parameters generated
+        call b%build_general_tbox( cline) ! general objects built
+        call b%build_rec_tbox()           ! reconstruction toolbox built
         ! rebuild b%vol according to box size (because it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
         call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call recvol_read%alloc_rho(p, b%spproj)
+        call recvol_read%alloc_rho( b%spproj)
         do ss=1,p%nstates
             if( cline%defined('state') )then
                 s     = 1        ! index in reconstruct3D

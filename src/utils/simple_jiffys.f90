@@ -1,8 +1,6 @@
 ! jiffy =  the time it takes light to travel one centimeter in vacuum
 module simple_jiffys
 use simple_defs         ! singleton
-use, intrinsic :: iso_fortran_env, only: stdout=>OUTPUT_UNIT
-!use simple_fileio       ! singleton
 implicit none
 
 interface assert_eq

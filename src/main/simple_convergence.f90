@@ -2,8 +2,9 @@
 module simple_convergence
 include 'simple_lib.f08'
 use simple_oris,     only: oris
-use simple_params,   only: params
+use simple_params,   only: p
 use simple_cmdline,  only: cmdline
+
 implicit none
 
 public :: convergence
@@ -12,7 +13,6 @@ private
 type convergence
     private
     class(oris),    pointer :: bap    => null() !< pointer to alignment oris object (a) part of build (b)
-    class(params),  pointer :: pp     => null() !< pointer to parameters object
     class(cmdline), pointer :: pcline => null() !< pointer to command line object
     real :: corr      = 0.                      !< average correlation
     real :: dist      = 0.                      !< average angular distance
@@ -40,13 +40,11 @@ end interface convergence
 
 contains
 
-    function constructor( ba, p, cline ) result( self )
+    function constructor( ba, cline ) result( self )
         class(oris),    target, intent(in) :: ba    !< alignment oris object (a) part of build (b)
-        class(params),  target, intent(in) :: p     !< parameters object
         class(cmdline), target, intent(in) :: cline !< command line object
         type(convergence) :: self
         self%bap    => ba
-        self%pp     => p
         self%pcline => cline
     end function constructor
 
@@ -60,9 +58,9 @@ contains
         if( present(ncls) )then
             nncls = ncls
         else
-            nncls = self%pp%ncls
+            nncls =  p%ncls
         endif
-        if( self%pp%l_frac_update )then
+        if( p%l_frac_update )then
             ! fractional particle update
             updatecnts     = self%bap%get_all('updatecnt')
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
@@ -91,19 +89,20 @@ contains
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
-            if( .not. self%pcline%defined('trs') .or. self%pp%trs <  MINSHIFT )then
+            if( .not. self%pcline%defined('trs') .or. p%trs <  MINSHIFT )then
                 ! determine shift bounds
-                self%pp%trs = MSK_FRAC*real(self%pp%msk)
-                self%pp%trs = max(MINSHIFT,self%pp%trs)
-                self%pp%trs = min(MAXSHIFT,self%pp%trs)
+                p%trs = MSK_FRAC*real(p%msk)
+                p%trs = max(MINSHIFT,p%trs)
+                p%trs = min(MAXSHIFT,p%trs)
                 ! set shift search flag
-                self%pp%l_doshift = .true.
+                p%l_doshift = .true.
             endif
         endif
         ! determine convergence
         if( nncls > 1 )then
             converged = .false.
-            if( self%pp%l_frac_update )then
+            !if( self%pp%l_frac_update )then
+            if( p%l_frac_update )then
                 if( self%mi_joint > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
             else
                 if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )converged = .true.
@@ -162,8 +161,10 @@ contains
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
-        if( self%pp%nstates > 1 )&
-        write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
+        !if( self%pp%nstates > 1 )&
+        if( p%nstates > 1 )&
+            !            if( p%nstates > 1 )&
+            write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
         write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
         write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
         write(*,'(A,1X,F7.1)') '>>> AVERAGE # PEAKS:                   ', self%npeaks
@@ -173,17 +174,18 @@ contains
         write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
-            if( .not. self%pcline%defined('trs') .or. self%pp%trs <  MINSHIFT )then
-                ! determine shift bounds
-                self%pp%trs = MSK_FRAC*real(self%pp%msk)
-                self%pp%trs = max(MINSHIFT,self%pp%trs)
-                self%pp%trs = min(MAXSHIFT,self%pp%trs)
-                ! set shift search flag
-                self%pp%l_doshift = .true.
+            if( .not. self%pcline%defined('trs') .or. &
+                & p%trs <  MINSHIFT )then
+                !! determine shift bounds
+                p%trs = MSK_FRAC*real(p%msk)
+                p%trs = max(MINSHIFT,p%trs)
+                p%trs = min(MAXSHIFT,p%trs)
+                ! ! set shift search flag
+                p%l_doshift = .true.
             endif
         endif
         ! determine convergence
-        if( self%pp%nstates == 1 )then
+        if( p%nstates == 1 )then
             if( self%frac    > FRAC_LIM       .and.&
                 self%mi_proj > MI_CLASS_LIM_3D )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
@@ -195,7 +197,7 @@ contains
         else
             ! provides convergence stats for multiple states
             ! by calculating mi_joint for individual states
-            allocate( state_mi_joint(self%pp%nstates), statepops(self%pp%nstates) )
+            allocate( state_mi_joint(p%nstates), statepops(p%nstates) )
             state_mi_joint = 0.
             statepops      = 0.
             do iptcl=1,self%bap%get_noris()
@@ -209,14 +211,14 @@ contains
                 statepops(istate)      = statepops(istate) + 2.0
             end do
             ! normalise the overlap
-            forall( istate=1:self%pp%nstates, statepops(istate)>0. )&
-                &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
+            forall( istate=1:p%nstates, statepops(istate)>0. )&
+               &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
             ! bring back the correct statepops
             statepops = statepops/2.0
             ! the minumum overlap is in charge of convergence
             min_state_mi_joint = minval(state_mi_joint, MASK=statepops>0.)
             ! print the overlaps and pops for the different states
-            do istate=1,self%pp%nstates
+            do istate=1,p%nstates
                 write(*,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
@@ -244,7 +246,7 @@ contains
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
-        allocate( statepops(self%pp%nstates) )
+        allocate( statepops(p%nstates) )
         statepops = 0.
         do iptcl=1,self%bap%get_noris()
             istate = nint(self%bap%get(iptcl,'state'))
@@ -258,7 +260,7 @@ contains
         self%corr = self%bap%get_avg('corr')
         write(*,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
         ! print the overlaps and pops for the different states
-        do istate=1,self%pp%nstates
+        do istate=1,p%nstates
             write(*,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
@@ -306,7 +308,7 @@ contains
     subroutine kill( self )
         class(convergence), intent(inout) :: self
         self%bap    => null()
-        self%pp     => null()
+     !   self%pp     => null()
         self%pcline => null()
     end subroutine kill
 

@@ -43,7 +43,7 @@ contains
             hetsym            = associated(self%spec%symmat)
             self%s%prev_roind = self%s%pftcc_ptr%get_roind(360.-self%s%a_ptr%e3get(self%s%iptcl))
             self%s%prev_corr  = self%s%a_ptr%get(self%s%iptcl, 'corr')
-            self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + prev_proj(self%s%iptcl_map)
+            self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
             w = 1.
             ! B-factor memoization
             if( self%s%pftcc_ptr%objfun_is_ccres() )then
@@ -54,11 +54,11 @@ contains
             ! evaluate all correlations
             corrs = -1.
             do state = 1, self%s%nstates
-                if( .not.state_exists(state) ) cycle
+                if( .not.s3D%state_exists(state) ) cycle
                 if( hetsym )then
                     ! greedy in symmetric unit
                     do isym = 1, self%s%nsym
-                        iproj = self%spec%symmat(prev_proj(self%s%iptcl_map), isym)
+                        iproj = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
                         iref  = (state-1) * self%s%nprojs + iproj
                         call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs_inpl)
                         corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
@@ -66,9 +66,9 @@ contains
                     loc              = maxloc(corrs_sym)
                     isym             = loc(1)
                     corrs(state)     = corrs_sym(isym)
-                    sym_projs(state) = self%spec%symmat(prev_proj(self%s%iptcl_map), isym)
+                    sym_projs(state) = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
                 else
-                    iref = (state-1) * self%s%nprojs + prev_proj(self%s%iptcl_map)
+                    iref = (state-1) * self%s%nprojs +s3D%prev_proj(self%s%iptcl_map)
                     call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs_inpl)
                     ! replaced:
                     ! corrs(state) = corrs_inpl(self%s%prev_roind)
@@ -84,7 +84,7 @@ contains
             if( self%s%prev_corr < self%spec%corr_thresh )then
                 ! state randomization
                 state = irnd_uni(self%s%nstates)
-                do while(state == self%s%prev_state .or. .not.state_exists(state))
+                do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
                     state = irnd_uni(self%s%nstates)
                 enddo
                 corr              = corrs(state)
@@ -100,11 +100,11 @@ contains
                     ! extremal optimization
                     if( hetsym )then
                         ! greedy in symmetric unit
-                        if( sym_projs(state) .ne. prev_proj(self%s%iptcl_map) )then
+                        if( sym_projs(state) .ne. s3D%prev_proj(self%s%iptcl_map) )then
                             mi_proj = 0.
                             iref    = (state-1)*self%s%nprojs + sym_projs(state)
-                            call self%s%a_ptr%e1set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 1))
-                            call self%s%a_ptr%e2set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 2))
+                            call self%s%a_ptr%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1))
+                            call self%s%a_ptr%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 2))
                         endif
                     endif
                 else
@@ -113,30 +113,30 @@ contains
                         if( hetsym )then
                             ! greedy in symmetric units
                             iproj   = sym_projs(state)
-                            if( iproj .ne. prev_proj(self%s%iptcl_map) )then
+                            if( iproj .ne. s3D%prev_proj(self%s%iptcl_map) )then
                                 mi_proj = 0.
                                 iref    = (state-1) * self%s%nprojs + iproj
-                                call self%s%a_ptr%e1set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 1))
-                                call self%s%a_ptr%e2set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 2))
+                                call self%s%a_ptr%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1))
+                                call self%s%a_ptr%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 2))
                             endif
                         else
                             ! greedy in plane
-                            iref = (state-1)*self%s%nprojs + prev_proj(self%s%iptcl_map)
-                            proj_space_corrs(self%s%iptcl_map,iref)        = corr
-                            proj_space_inds(self%s%iptcl_map,self%s%nrefs) = iref
+                            iref = (state-1)*self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
+                            s3D%proj_space_corrs(self%s%iptcl_map,iref)        = corr
+                            s3D%proj_space_inds(self%s%iptcl_map,self%s%nrefs) = iref
                             call self%s%inpl_srch
-                            if( proj_space_corrs(self%s%iptcl_map,iref) > corr )then
-                                corr  = proj_space_corrs(self%s%iptcl_map,iref)
-                                shvec = self%s%a_ptr%get_2Dshift(self%s%iptcl) + proj_space_shift(self%s%iptcl_map,iref,:)
+                            if( s3D%proj_space_corrs(self%s%iptcl_map,iref) > corr )then
+                                corr  = s3D%proj_space_corrs(self%s%iptcl_map,iref)
+                                shvec = self%s%a_ptr%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%iptcl_map,iref,:)
                                 call self%s%a_ptr%set_shift(self%s%iptcl, shvec)
-                                call self%s%a_ptr%e3set(self%s%iptcl, proj_space_euls(self%s%iptcl_map, iref, 3))
+                                call self%s%a_ptr%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 3))
                             endif
-                            if( self%s%prev_roind .ne. self%s%pftcc_ptr%get_roind(360.-proj_space_euls(self%s%iptcl_map, iref, 3)) )then
+                            if( self%s%prev_roind .ne. self%s%pftcc_ptr%get_roind(360.-s3D%proj_space_euls(self%s%iptcl_map, iref, 3)) )then
                                 mi_inpl = 0.
                             endif
                         endif
                     endif
-                    call self%s%a_ptr%set(self%s%iptcl,'proj', real(proj_space_proj(self%s%iptcl_map,iref)))
+                    call self%s%a_ptr%set(self%s%iptcl,'proj', real(s3D%proj_space_proj(self%s%iptcl_map,iref)))
                 endif
             endif
             ! updates peaks and orientation orientation
@@ -149,12 +149,12 @@ contains
             call self%s%a_ptr%set(self%s%iptcl,'mi_state', mi_state)
             call self%s%a_ptr%set(self%s%iptcl,'mi_joint', (mi_state+mi_inpl)/2.)
             call self%s%a_ptr%set(self%s%iptcl,'w',        w)
-            call o_peaks(self%s%iptcl)%set(1,'state', real(state))
-            call o_peaks(self%s%iptcl)%set(1,'corr',  corr)
-            call o_peaks(self%s%iptcl)%set(1,'w',     w)
-            call o_peaks(self%s%iptcl)%set(1,'ow',    1.)
-            call o_peaks(self%s%iptcl)%set_euler(1, self%s%a_ptr%get_euler(self%s%iptcl))
-            call o_peaks(self%s%iptcl)%set_shift(1, self%s%a_ptr%get_2Dshift(self%s%iptcl))
+            call s3D%o_peaks(self%s%iptcl)%set(1,'state', real(state))
+            call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  corr)
+            call s3D%o_peaks(self%s%iptcl)%set(1,'w',     w)
+            call s3D%o_peaks(self%s%iptcl)%set(1,'ow',    1.)
+            call s3D%o_peaks(self%s%iptcl)%set_euler(1, self%s%a_ptr%get_euler(self%s%iptcl))
+            call s3D%o_peaks(self%s%iptcl)%set_shift(1, self%s%a_ptr%get_2Dshift(self%s%iptcl))
         else
             call self%s%a_ptr%reject(self%s%iptcl)
         endif

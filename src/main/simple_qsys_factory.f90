@@ -14,7 +14,7 @@ type :: qsys_factory
     private
     class(qsys_base), allocatable :: qsys_base_type
   contains
-    procedure :: new                   
+    procedure :: new
     procedure :: kill
 end type
 
@@ -43,7 +43,7 @@ contains
         call self%qsys_base_type%new
         ptr => self%qsys_base_type
     end subroutine new
-    
+
     !> \brief  is a destructor
     subroutine kill( self )
         class(qsys_factory), intent(inout) :: self

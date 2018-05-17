@@ -1,6 +1,6 @@
 module simple_strategy2D_stochastic
 include 'simple_lib.f08'
-use simple_strategy2D_alloc, only: cls_pops, srch_order
+use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 implicit none
@@ -52,11 +52,11 @@ contains
                 found_better      = .false.
                 self%s%nrefs_eval = 0
                 do isample=1,self%s%nrefs
-                    iref = srch_order(self%s%iptcl_map, isample)
+                    iref = s2D%srch_order(self%s%iptcl_map, isample)
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs_eval + 1
                     ! passes empty classes
-                    if( cls_pops(iref) == 0 )cycle
+                    if( s2D%cls_pops(iref) == 0 )cycle
                     ! shc update
                     call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs)
                     inpl_ind  = shcloc(self%s%nrots, corrs, self%s%prev_corr)
@@ -87,19 +87,19 @@ contains
                 ! random move
                 self%s%nrefs_eval = 1 ! evaluate one random ref
                 isample           = 1 ! random .ne. prev
-                iref              = srch_order(self%s%iptcl_map, isample)
+                iref              = s2D%srch_order(self%s%iptcl_map, isample)
                 if( self%s%dyncls )then
                     ! all good
                 else
                     ! makes sure the ptcl does not land in an empty class
                     ! such that a search is performed
-                    do while( cls_pops(iref) == 0 )
+                    do while( s2D%cls_pops(iref) == 0 )
                         isample = isample + 1
-                        iref    = srch_order(self%s%iptcl_map, isample)
+                        iref    = s2D%srch_order(self%s%iptcl_map, isample)
                         if( isample.eq.self%s%nrefs )exit
                     enddo
                 endif
-                if( cls_pops(iref) == 0 )then
+                if( s2D%cls_pops(iref) == 0 )then
                     ! empty class
                     do_inplsrch = .false.               ! no in-plane search
                     inpl_ind    = irnd_uni(self%s%nrots)  ! random in-plane

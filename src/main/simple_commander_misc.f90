@@ -2,8 +2,6 @@
 module simple_commander_misc
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
 use simple_ori,            only: ori
@@ -12,6 +10,7 @@ use simple_projector_hlev, only: rotvol
 use simple_sp_project,     only: sp_project
 use simple_image,          only: image
 use simple_binoris_io,     only: binwrite_oritab
+use simple_singletons
 implicit none
 
 public :: cluster_smat_commander
@@ -75,8 +74,6 @@ contains
         use simple_cluster_valid, only: cluster_valid
         class(cluster_smat_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)        :: p
-        type(build)         :: b
         type(cluster_shc)   :: shcc
         type(cluster_valid) :: cvalid
         real, allocatable   :: smat(:,:)
@@ -86,8 +83,8 @@ contains
         real, allocatable   :: validinds(:)
         integer, parameter  :: NRESTARTS=10
         logical             :: done=.false.
-        p = params(cline,.false.)                         ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call init_params(cline,.false.)                         ! parameters generated
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         ! obtain similarity matrix
         allocate(smat(p%nptcls,p%nptcls), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: simple_cluster_smat, 1',alloc_stat)
@@ -157,15 +154,13 @@ contains
         use simple_atoms,  only: atoms
         class(intgpeaks_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(build)       :: b
-        type(params)      :: p
         type(atoms)       :: mol
         real, allocatable :: attribute(:)
         character(len=STDLEN) :: fbody, csv_name
         real              :: xyz(3)
         integer           :: i, natoms, file_stat, fnr
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        call init_params(cline)                   ! parameters generated
+        call b%build_general_tbox( cline) ! general objects built
         call b%vol%read(p%vols(1))
         if(cline%defined('msk').and.cline%defined('inner'))then
             ! peak finding
@@ -202,12 +197,11 @@ contains
     end subroutine exec_intgpeaks
 
     !> centers base on centre of mass
-    subroutine exec_masscen( self, cline )
+     subroutine exec_masscen( self, cline )
         use simple_procimgfile, only: masscen_imgfile
         class(masscen_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params) :: p
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         p%cenlp = p%lp
         ! center of mass centering
         call masscen_imgfile(p%stk, p%outstk, p%smpd, p%lp, p%msk)
@@ -224,8 +218,7 @@ contains
         type(image)       :: dummy_img
         real              :: time_per_frame, current_time, acc_dose
         integer           :: iframe, find
-        type(params)      :: p
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         call dummy_img%new([p%box,p%box,1], p%smpd)
         time_per_frame = p%exp_time/real(p%nframes)
         do iframe=1,p%nframes
@@ -245,12 +238,11 @@ contains
     subroutine exec_print_fsc( self, cline )
         class(print_fsc_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(params)      :: p
         type(image)       :: img
         real, allocatable :: res(:), fsc(:)
         integer           :: k
         real              :: res0143, res05
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         call img%new([p%box,p%box,1], p%smpd)
         res = img%get_res()
         fsc = file2rarr(p%fsc)
@@ -269,8 +261,7 @@ contains
     subroutine exec_print_magic_boxes( self, cline )
         class(print_magic_boxes_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        type(params) :: p
-        p = params(cline) ! parameters generated
+        call init_params(cline) ! parameters generated
         call print_magic_box_range(p%smpd, p%moldiam )
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
@@ -280,9 +271,8 @@ contains
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
-        type(params) :: p
         real         :: lp
-        p  = params(cline)
+        call init_params(cline)
         lp = (real(p%box-1)*p%smpd)/real(p%find)
         write(*,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')
@@ -293,10 +283,8 @@ contains
         use simple_procimgfile, only: shift_imgfile
         class(shift_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
-        p = params(cline)                                 ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call init_params(cline)                                 ! parameters generated
+        call b%build_general_tbox(cline, do3d=.false.) ! general objects built
         call shift_imgfile(p%stk, p%outstk, b%a, p%smpd, p%mul)
         call b%a%zero_shifts
         call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), b%spproj, b%a, [1,p%nptcls])
@@ -308,9 +296,9 @@ contains
     subroutine exec_sym_aggregate( self, cline )
         class(sym_aggregate_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)        :: cline_c1
-        type(params)         :: p, p_c1
-        type(build)          :: b
+        !type(cmdline)        :: cline_c1
+        !type(params)         :: p, p_c1
+        !type(build)          :: b
         type(oris)           :: sym_peaks, sym_axes
         type(ori)            :: symaxis, o
         type(image)          :: symvol, asym_vol, mskvol
@@ -320,13 +308,13 @@ contains
         integer              :: i
         integer, parameter   :: MAXLABELS = 9    !< maximum numbers symmetry peaks
         real,    parameter   :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
-        p = params(cline, spproj_a_seg=PTCL3D_SEG) ! parameters generated
-        call b%build_general_tbox(p, cline)        ! general objects built
+        call init_params(cline, spproj_a_seg=PTCL3D_SEG) ! parameters generated
+        call b%build_general_tbox(cline)        ! general objects built
         ! init
         sym_axes = b%spproj%os_cls3D ! that is where they are stored
-        cline_c1 = cline
-        call cline_c1%set('pgrp', 'c1')
-        p_c1 = params(cline_c1)
+        ! cline_c1 = cline
+        ! call cline_c1%set('pgrp', 'c1')
+        ! p_c1 = params(cline_c1)
         call se_c1%new('c1')
         call asym_vol%new([p%box,p%box,p%box], p%smpd)
         call asym_vol%read(p%vols(1))
@@ -344,13 +332,13 @@ contains
             b%e = b%a ! here b%a are the reference orientations
             call b%e%rot(symaxis)
             ! symmetry
-            call rec_vol(p, b%se)
+            call rec_vol( b%se)
             call symvol%copy( b%vol )
             call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
             ! c1
             rotmat = symaxis%get_mat()
             call o%ori_from_rotmat(transpose(rotmat))
-            call b%vol%copy( rotvol(asym_vol, o, p) )
+            call b%vol%copy( rotvol(asym_vol, o) )
             call b%vol%bp(p%hp, p%lp)
             call b%vol%mask(p%msk, 'soft')
             call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
@@ -367,11 +355,14 @@ contains
 
         contains
 
-            subroutine rec_vol( p, se )
-                type(params) :: p
+            subroutine rec_vol(  se )
+            !subroutine rec_vol( p, se )
+                !type(params) :: p
                 type(sym)    :: se
-                call b%build_rec_tbox(p)
-                call b%recvol%rec(p, b%spproj, b%e, se, 1)
+               ! call b%build_rec_tbox(p)
+               ! call b%recvol%rec(p, b%spproj, b%e, se, 1)
+                call b%build_rec_tbox()
+                call b%recvol%rec( b%spproj, b%e, se, 1)
                 call b%recvol%clip(b%vol)
                 call b%vol%bp(p%hp, p%lp)
                 call b%vol%mask(p%msk, 'soft')
@@ -433,11 +424,9 @@ contains
         use simple_symsrcher, only: dsym_cylinder
         class(dsymsrch_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(build)  :: b
-        type(params) :: p
-        p = params(cline, spproj_a_seg=CLS3D_SEG) ! parameters generated
-        call b%build_general_tbox(p, cline)       ! general objects built
-        call dsym_cylinder(p, b%a, b%vol)
+        call init_params(cline, spproj_a_seg=CLS3D_SEG) ! parameters generated
+        call b%build_general_tbox( cline)       ! general objects built
+        call dsym_cylinder( b%a, b%vol)
         call binwrite_oritab(p%outfile, b%spproj, b%a, [1,p%nptcls])
         call b%vol%write(p%outvol)
     end subroutine exec_dsymsrch

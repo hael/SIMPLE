@@ -2,12 +2,11 @@
 module simple_commander_stream_wflows
 include 'simple_lib.f08'
 use simple_cmdline,              only: cmdline
-use simple_params,               only: params
 use simple_commander_base,       only: commander_base
 use simple_sp_project,           only: sp_project
 use simple_qsys_env,             only: qsys_env
 use simple_qsys_funs,            only: qsys_cleanup
-
+use simple_singletons
 implicit none
 
 public :: preprocess_stream_commander
@@ -38,7 +37,6 @@ contains
         integer,               parameter   :: LONGTIME  = 10  ! 30secs
         class(cmdline),       allocatable  :: completed_jobs_clines(:)
         type(qsys_env)                     :: qenv
-        type(params)                       :: p_master
         type(moviewatcher)                 :: movie_buff
         type(sp_project)                   :: spproj, stream_spproj
         character(len=LONGSTRLEN), allocatable :: movies(:), prev_movies(:)
@@ -50,18 +48,19 @@ contains
         logical                            :: l_pick
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+
         ! make master parameters & defaults
-        p_master            = params(cline)
-        p_master%stream     = 'yes'
-        p_master%split_mode = 'stream'
-        p_master%numlen     = 5
-        p_master%ncunits    = p_master%nparts
-        call cline%set('numlen', real(p_master%numlen))
+        call init_params(cline)
+        p%stream     = 'yes'
+        p%split_mode = 'stream'
+        p%numlen     = 5
+        p%ncunits    = p%nparts
+        call cline%set('numlen', real(p%numlen))
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
         l_pick = cline%defined('refs')
         ! read in movies
-        call spproj%read( p_master%projfile )
+        call spproj%read( p%projfile )
         ! check for previously processed movies
         call spproj%get_movies_table(prev_movies)
         ! output directories
@@ -78,9 +77,9 @@ contains
             call simple_mkdir(output_dir_extract)
         endif
         ! setup the environment for distributed execution
-        call qenv%new(p_master, stream=.true.)
+        call qenv%new( stream=.true. )
         ! movie watcher init
-        movie_buff = moviewatcher(p_master, longtime, prev_movies)
+        movie_buff = moviewatcher(longtime, prev_movies)
         ! start watching
         prev_stacksz = 0
         nmovies      = 0
@@ -146,7 +145,7 @@ contains
         call spproj%write
         call spproj%kill
         ! cleanup
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
@@ -197,11 +196,11 @@ contains
                 spproj_here%compenv  = spproj%compenv
                 spproj_here%jobproc  = spproj%jobproc
                 ctfvars%ctfflag      = CTFFLAG_YES
-                ctfvars%smpd         = p_master%smpd
-                ctfvars%cs           = p_master%cs
-                ctfvars%kv           = p_master%kv
-                ctfvars%fraca        = p_master%fraca
-                ctfvars%l_phaseplate = p_master%phaseplate.eq.'yes'
+                ctfvars%smpd         = p%smpd
+                ctfvars%cs           = p%cs
+                ctfvars%kv           = p%kv
+                ctfvars%fraca        = p%fraca
+                ctfvars%l_phaseplate = p%phaseplate.eq.'yes'
                 call spproj_here%add_single_movie(trim(movie), ctfvars)
                 call spproj_here%write()
                 call spproj_here%kill()
@@ -229,7 +228,6 @@ contains
         type(make_cavgs_distr_commander)    :: xmake_cavgs
         type(scale_project_distr_commander) :: xscale_distr
         type(cmdline)                       :: cline_cluster2D, cline_scale, cline_make_cavgs
-        type(params)                        :: p_master
         type(sp_project)                    :: orig_proj, work_proj
         character(len=:),       allocatable :: orig_projfile
         character(len=STDLEN)               :: str_iter, refs_glob
@@ -247,10 +245,10 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! make master parameters
         call cline%set('stream','yes') ! only for parameters determination
-        p_master      = params(cline)
-        if( .not.file_exists(p_master%projfile) )stop 'Project does not exist!'
+        call init_params(cline)
+        if( .not.file_exists(p%projfile) )stop 'Project does not exist!'
         call cline%set('stream','no') ! was only for parameters determination
-        orig_projfile = p_master%projfile
+        orig_projfile = p%projfile
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
         ! init command-lines
         cline_cluster2D  = cline
@@ -264,17 +262,17 @@ contains
         call cline_cluster2D%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
         cline_make_cavgs = cline
         call cline_make_cavgs%set('prg',    'make_cavgs')
-        call cline_make_cavgs%set('refs',   'cavgs_final'//p_master%ext)
+        call cline_make_cavgs%set('refs',   'cavgs_final'//p%ext)
         call cline_make_cavgs%delete('autoscale')
         call cline_make_cavgs%set('projfile', trim(WORK_PROJFILE)) ! TO WORK OUT
         ! wait for the first stacks to trickle in...
         do
-            if( .not.is_file_open(p_master%projfile_target) )then
-                call orig_proj%read(p_master%projfile_target)
+            if( .not.is_file_open(p%projfile_target) )then
+                call orig_proj%read(p%projfile_target)
                 n_stk = orig_proj%os_stk%get_noris()
                 if( n_stk > 0)then
                     nptcls_glob = orig_proj%get_nptcls()
-                    if( nptcls_glob > p_master%ncls_start * p_master%nptcls_per_cls )then
+                    if( nptcls_glob > p%ncls_start * p%nptcls_per_cls )then
                         ! Enough particles to start 2D clustering...
                         exit
                     endif
@@ -283,7 +281,7 @@ contains
             call simple_sleep(WAIT_WATCHER) ! parameter instead
         enddo
         ! transfer of general info
-        call work_proj%read(p_master%projfile)
+        call work_proj%read(p%projfile)
         orig_proj%projinfo = work_proj%projinfo
         orig_proj%compenv  = work_proj%compenv
         if( orig_proj%jobproc%get_noris()>0 ) orig_proj%jobproc = work_proj%jobproc
@@ -297,12 +295,12 @@ contains
         call work_proj%read(trim(WORK_PROJFILE))
         orig_box  = work_proj%get_box()
         orig_smpd = work_proj%get_smpd()
-        orig_msk  = p_master%msk
-        p_master%smpd_targets2D(1) = max(orig_smpd, p_master%lp*LP2SMPDFAC2D)
-        do_autoscale = p_master%autoscale.eq.'yes' .and. p_master%smpd_targets2D(1) > orig_smpd
+        orig_msk  = p%msk
+        p%smpd_targets2D(1) = max(orig_smpd, p%lp*LP2SMPDFAC2D)
+        do_autoscale = p%autoscale.eq.'yes' .and. p%smpd_targets2D(1) > orig_smpd
         if( do_autoscale )then
             deallocate(WORK_PROJFILE)
-            call work_proj%scale_projfile(p_master%smpd_targets2D(1), WORK_PROJFILE, cline_cluster2D, cline_scale)
+            call work_proj%scale_projfile(p%smpd_targets2D(1), WORK_PROJFILE, cline_cluster2D, cline_scale)
             scale_factor = cline_scale%get_rarg('scale')
             box          = nint(cline_scale%get_rarg('newbox'))
             msk          = cline_cluster2D%get_rarg('msk')
@@ -317,12 +315,12 @@ contains
         call cline_cluster2D%set('msk',      real(msk))
         call work_proj%kill()
         ! Main loop
-        ncls_glob      = nint(real(nptcls_glob) / real(p_master%nptcls_per_cls))
+        ncls_glob      = nint(real(nptcls_glob) / real(p%nptcls_per_cls))
         last_injection = simple_gettime()
         do iter = 1, 999
             str_iter = int2str_pad(iter,3)
             tnow     = simple_gettime()
-            if(tnow-last_injection > p_master%time_inactive)then
+            if(tnow-last_injection > p%time_inactive)then
                 write(*,*)'>>> TIME LIMIT WITHOUT NEW PARTICLES ADDITION REACHED'
                 exit
             endif
@@ -334,7 +332,7 @@ contains
             call cline_cluster2D%set('startit', real(iter))
             call cline_cluster2D%set('maxits',  real(iter))
             call cline_cluster2D%set('ncls',    real(ncls_glob))
-            call cline_cluster2D%set('nparts',  real(min(ncls_glob,p_master%nparts)))
+            call cline_cluster2D%set('nparts',  real(min(ncls_glob,p%nparts)))
             if( nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM )then
                 call cline_cluster2D%set('trs', MINSHIFT)
             endif
@@ -350,7 +348,7 @@ contains
             call work_proj%kill
             call work_proj%read(trim(WORK_PROJFILE))
             ! current refernce file name
-            refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p_master%ext)
+            refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p%ext)
             ! remap zero-population classes
             call remap_empty_classes
             ! user termination
@@ -359,18 +357,18 @@ contains
                     exit
                 endif
             ! detects whether new images have been added to the original project
-            if( .not.is_file_open(p_master%projfile_target) )then
-                call orig_proj%read_segment('stk', p_master%projfile_target)
+            if( .not.is_file_open(p%projfile_target) )then
+                call orig_proj%read_segment('stk', p%projfile_target)
                 n_stk     = orig_proj%os_stk%get_noris()
                 n_newstks = n_stk - n_stk_prev
             endif
             if(n_newstks > 0)then
                 call work_proj%kill
-                call work_proj%read(p_master%projfile)
+                call work_proj%read(p%projfile)
                 call append_newstacks( orig_proj%os_stk )
                 ! updates # of classes
                 ncls_glob_prev = ncls_glob
-                ncls_glob      = nint(real(nptcls_glob) / p_master%nptcls_per_cls)
+                ncls_glob      = nint(real(nptcls_glob) / p%nptcls_per_cls)
                 ncls_glob      = min(ncls_glob, MAXNCLS)
                 ! allocate new particles to previous references
                 call map_new_ptcls
@@ -391,7 +389,7 @@ contains
         call cline_make_cavgs%set('ncls', real(ncls_glob))
         call xmake_cavgs%execute(cline_make_cavgs) ! should be distributed
         ! cleanup
-        call qsys_cleanup(p_master)
+        call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
 
@@ -414,8 +412,8 @@ contains
                     new_stks(istk) = trim(stkname)
                 enddo
                 ! scale stacks to append
-                if( p_master%autoscale.eq.'yes' )then
-                    call qenv%new(p_master)
+                if( p%autoscale.eq.'yes' )then
+                    call qenv%new()
                     call cline_scale%delete('stk')
                     call cline_scale%delete('stktab')
                     call cline_scale%set('dir_target', trim(SCSTK_DIR))
@@ -424,10 +422,10 @@ contains
                     call cline_scale%set('numlen', 1.)
                     call write_filetable(SCALE_FILETAB, new_stks)
                     call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
-                    call qsys_cleanup(p_master)
+                    call qsys_cleanup
                     call del_file(SCALE_FILETAB)
                     do istk=1,n_newstks
-                        new_stks(istk) = SCSTK_DIR//add2fbody(new_stks(istk), p_master%ext, SCALE_SUFFIX)
+                        new_stks(istk) = SCSTK_DIR//add2fbody(new_stks(istk), p%ext, SCALE_SUFFIX)
                     enddo
                 endif
                 ! append to working project
@@ -482,20 +480,20 @@ contains
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                         ! even & odd
-                        stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                        stk = add2fbody(trim(refs_glob),p%ext,'_even')
                         call img_cavg%read(stk, fromtocls(icls, 1))
                         call img_cavg%write(stk, fromtocls(icls, 2))
-                        stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                        stk = add2fbody(trim(refs_glob),p%ext,'_odd')
                         call img_cavg%read(stk, fromtocls(icls, 1))
                         call img_cavg%write(stk, fromtocls(icls, 2))
                     enddo
                     ! stack size preservation
                     call img_cavg%read(trim(refs_glob), ncls_glob)
                     call img_cavg%write(trim(refs_glob), ncls_glob)
-                    stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                    stk = add2fbody(trim(refs_glob),p%ext,'_even')
                     call img_cavg%read(stk, ncls_glob)
                     call img_cavg%write(stk, ncls_glob)
-                    stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                    stk = add2fbody(trim(refs_glob),p%ext,'_odd')
                     call img_cavg%read(stk, ncls_glob)
                     call img_cavg%write(stk, ncls_glob)
                 endif
@@ -538,20 +536,20 @@ contains
                             call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                             call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                             ! even & odd
-                            stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                            stk = add2fbody(trim(refs_glob),p%ext,'_even')
                             call img_cavg%read(stk, fromtocls(icls, 1))
                             call img_cavg%write(stk, fromtocls(icls, 2))
-                            stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                            stk = add2fbody(trim(refs_glob),p%ext,'_odd')
                             call img_cavg%read(stk, fromtocls(icls, 1))
                             call img_cavg%write(stk, fromtocls(icls, 2))
                         enddo
                         ! stack size preservation
                         call img_cavg%read(trim(refs_glob), ncls_glob)
                         call img_cavg%write(trim(refs_glob), ncls_glob)
-                        stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                        stk = add2fbody(trim(refs_glob),p%ext,'_even')
                         call img_cavg%read(stk, ncls_glob)
                         call img_cavg%write(stk, ncls_glob)
-                        stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                        stk = add2fbody(trim(refs_glob),p%ext,'_odd')
                         call img_cavg%read(stk, ncls_glob)
                         call img_cavg%write(stk, ncls_glob)
                         ! FRCs

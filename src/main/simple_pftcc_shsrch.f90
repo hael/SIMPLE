@@ -3,7 +3,7 @@ module simple_pftcc_shsrch
 include 'simple_lib.f08'
 use simple_opt_spec,          only: opt_spec
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_opt_factory,       only: opt_factory
+!use simple_opt_factory,       only: opt_factory
 use simple_optimizer,         only: optimizer
 implicit none
 
@@ -31,7 +31,9 @@ end type pftcc_shsrch
 contains
 
     !> Shift search constructor
+    !subroutine new( self,  lims, lims_init, shbarrier, nrestarts, maxits )
     subroutine new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
+        use simple_opt_factory,       only: opt_factory
         class(pftcc_shsrch),             intent(inout) :: self           !< instance
         class(polarft_corrcalc), target, intent(in)    :: pftcc          !< correlator
         real,                            intent(in)    :: lims(:,:)      !< limits for barrier constraint
@@ -110,6 +112,7 @@ contains
             endif
         endif
         call self%pftcc_ptr%gencorrs(self%reference, self%particle, vec, corrs)
+        !call pftcc%gencorrs(self%reference, self%particle, vec, corrs)
         cost = -maxval(corrs)
     end function costfun
 
@@ -128,6 +131,7 @@ contains
         if( cost <= cost_init )then
             ! get rotation index
             call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+            !call pftcc%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
             loc   = maxloc(corrs)
             irot  = loc(1)
             ! set output corr & shift
@@ -135,6 +139,7 @@ contains
             cxy(2:) = self%ospec%x ! shift
             ! rotate the shift vector to the frame of reference
             cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(irot)))
+            !cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc%get_rot(irot)))
         else
             irot    = 0
             cxy(1)  = -cost_init ! correlation

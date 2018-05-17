@@ -1,7 +1,7 @@
 ! concrete strategy3D: stochastic neighbourhood hill-climbing
 module simple_strategy3D_snhc_single
 include 'simple_lib.f08'
-use simple_strategy3D_alloc  ! use all in there
+use simple_strategy3D_alloc  ! singleton s3D
 use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
@@ -42,16 +42,16 @@ contains
             call self%s%prep4srch
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
-            proj_space_corrs(self%s%iptcl_map,:) = -1.
+            s3D%proj_space_corrs(self%s%iptcl_map,:) = -1.
             ! search
             do isample=1,self%spec%szsn
-                iref = srch_order(self%s%iptcl_map,isample) ! set the stochastic reference index
+                iref = s3D%srch_order(self%s%iptcl_map,isample) ! set the stochastic reference index
                 call per_ref_srch                           ! actual search
             end do
             self%s%nrefs_eval = self%spec%szsn
             ! sort in correlation projection direction space
-            corrs = proj_space_corrs(self%s%iptcl_map,:)
-            call hpsort(corrs, proj_space_inds(self%s%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:)
+            call hpsort(corrs, s3D%proj_space_inds(self%s%iptcl_map,:))
             ! output
             call self%oris_assign
         else
@@ -78,20 +78,20 @@ contains
         real       :: dist_inpl, corr, frac, euldist, bfac
         integer    :: ref, roind
         ! orientation parameters
-        ref = proj_space_inds(self%s%iptcl_map, self%s%nrefs)
+        ref = s3D%proj_space_inds(self%s%iptcl_map, self%s%nrefs)
         if( ref < 1 .or. ref > self%s%nrefs )then
             print *, 'ref: ', ref
             stop 'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
         endif
-        roind = self%s%pftcc_ptr%get_roind(360. - proj_space_euls(self%s%iptcl_map, ref, 3))
+        roind = self%s%pftcc_ptr%get_roind(360. - s3D%proj_space_euls(self%s%iptcl_map, ref, 3))
         ! transfer to solution set
-        corr = max(0., proj_space_corrs(self%s%iptcl_map,ref))
-        call o_peaks(self%s%iptcl)%set(1, 'state', 1.)
-        call o_peaks(self%s%iptcl)%set(1, 'proj',  real(proj_space_proj(self%s%iptcl_map,ref)))
-        call o_peaks(self%s%iptcl)%set(1, 'corr',  corr)
-        call o_peaks(self%s%iptcl)%set_euler(1, proj_space_euls(self%s%iptcl_map,ref,1:3))
-        call o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
-        call o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
+        corr = max(0., s3D%proj_space_corrs(self%s%iptcl_map,ref))
+        call s3D%o_peaks(self%s%iptcl)%set(1, 'state', 1.)
+        call s3D%o_peaks(self%s%iptcl)%set(1, 'proj',  real(s3D%proj_space_proj(self%s%iptcl_map,ref)))
+        call s3D%o_peaks(self%s%iptcl)%set(1, 'corr',  corr)
+        call s3D%o_peaks(self%s%iptcl)%set_euler(1, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call s3D%o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
+        call s3D%o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
         ! B factor
         if( self%s%pftcc_ptr%objfun_is_ccres() )then
             bfac  = self%s%pftcc_ptr%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
@@ -99,7 +99,7 @@ contains
         endif
         ! angular distances
         call self%s%se_ptr%sym_dists( self%s%a_ptr%get_ori(self%s%iptcl),&
-            &o_peaks(self%s%iptcl)%get_ori(1), osym, euldist, dist_inpl)
+            &s3D%o_peaks(self%s%iptcl)%get_ori(1), osym, euldist, dist_inpl)
         ! fraction search space
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
         ! set the overlaps
@@ -118,10 +118,10 @@ contains
         call self%s%a_ptr%set(self%s%iptcl, 'frac',      frac)
         call self%s%a_ptr%set(self%s%iptcl, 'corr',      corr)
         call self%s%a_ptr%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call self%s%a_ptr%set(self%s%iptcl, 'proj',      o_peaks(self%s%iptcl)%get(1,'proj'))
+        call self%s%a_ptr%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
         call self%s%a_ptr%set(self%s%iptcl, 'sdev',      0.)
         call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    1.)
-        call self%s%a_ptr%set_euler(self%s%iptcl, proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call self%s%a_ptr%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
         call self%s%a_ptr%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single

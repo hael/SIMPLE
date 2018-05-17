@@ -1,9 +1,11 @@
 module simple_pftcc_orisrch
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_build,             only: build
+use simple_params,            only: p ! singleton
+use simple_build,             only: b ! singleton
+!use simple_singletons
 use simple_ori,               only: ori
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_opt_spec,          only: opt_spec
@@ -17,7 +19,7 @@ integer, parameter :: MAXITS = 60
 
 type :: pftcc_orisrch
     private
-    class(build),            pointer     :: bp          => null()  !< pointer to build
+    ! class(build),            pointer     :: bp          => null()  !< pointer to build
     class(polarft_corrcalc), pointer     :: pftcc_ptr   => null()  !< pointer to pftcc object
     class(optimizer),        pointer     :: nlopt                  !< optimizer object
     type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj        !< origin shift search objects, L-BFGS with gradient
@@ -41,14 +43,15 @@ end type pftcc_orisrch
 contains
 
     !> constructor
-    subroutine new( self, pftcc, b, p, nrestarts )
+    subroutine new( self, pftcc, nrestarts )
+    ! subroutine new( self, pftcc, b, p, nrestarts )
         use simple_projector,   only: projector
-        use simple_params,      only: params
+        !use simple_params,      only: params
         use simple_opt_factory, only: opt_factory
         class(pftcc_orisrch),            intent(inout) :: self      !< instance
         class(polarft_corrcalc), target, intent(in)    :: pftcc     !< correlator
-        class(build),            target, intent(in)    :: b         !< builder
-        class(params),                   intent(in)    :: p         !< parameters
+        ! class(build),            target, intent(in)    :: b         !< builder
+        ! class(params),                   intent(in)    :: p         !< parameters
         integer,               optional, intent(in)    :: nrestarts !< simplex restarts (randomized bounds)
         type(opt_factory) :: opt_fact
         integer :: ithr, i
@@ -59,9 +62,9 @@ contains
         self%nrestarts = 3
         if( present(nrestarts) ) self%nrestarts = nrestarts
         ! set pointer to corrcalc object
-        self%pftcc_ptr => pftcc
-        ! set pointer to build
-        self%bp => b
+         self%pftcc_ptr => pftcc
+        ! ! set pointer to build
+        ! self%bp => b
         ! get # rotations
         self%nrots = pftcc%get_nrots()
         ! create trial orientation
@@ -71,8 +74,11 @@ contains
         lims_sh(:,2)      =  p%trs
         lims_sh_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_sh_init(:,2) =  SHC_INPL_TRSHWDTH
-        call self%grad_shsrch_obj%new(self%pftcc_ptr, lims_sh, lims_init=lims_sh_init,&
-            &shbarrier=p%shbarrier, maxits=MAXITS)
+         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims_sh, lims_init=lims_sh_init,&
+             &shbarrier=p%shbarrier, maxits=MAXITS)
+        !call self%grad_shsrch_obj%new( lims_sh, lims_init=lims_sh_init,&
+        !    &shbarrier=p%shbarrier, maxits=MAXITS)
+
         ! make optimizer spec
         lims = 0.
         lims(1,2) = 359.99
@@ -109,6 +115,8 @@ contains
         do ithr=1,nthr_glob
             pftcc_refs(ithr)%pft_ref_even = self%pftcc_ptr%get_ref_pft(ithr, iseven=.true.)
             pftcc_refs(ithr)%pft_ref_odd  = self%pftcc_ptr%get_ref_pft(ithr, iseven=.false.)
+            !pftcc_refs(ithr)%pft_ref_even = pftcc%get_ref_pft(ithr, iseven=.true.)
+            !pftcc_refs(ithr)%pft_ref_odd  = pftcc%get_ref_pft(ithr, iseven=.false.)
         end do
 
         ! PREPARATION
@@ -133,6 +141,7 @@ contains
             cxy(1)  = -cost ! correlation
             ! set Euler
             call o_inout%set_euler([self%ospec%x(1),self%ospec%x(2),360. - self%pftcc_ptr%get_rot(self%inpl_best)])
+            !call o_inout%set_euler([self%ospec%x(1),self%ospec%x(2),360. - pftcc%get_rot(self%inpl_best)])
             ! set shift (shift vector already rotated to the frame of reference in pftcc_shsrch_grad)
             cxy(2:) = self%sh_best
             call o_inout%set_shift(self%sh_best)
@@ -146,6 +155,8 @@ contains
         do ithr=1,nthr_glob
             call self%pftcc_ptr%set_ref_pft(ithr, pftcc_refs(ithr)%pft_ref_even, iseven=.true.)
             call self%pftcc_ptr%set_ref_pft(ithr, pftcc_refs(ithr)%pft_ref_odd,  iseven=.false.)
+            !call pftcc%set_ref_pft(ithr, pftcc_refs(ithr)%pft_ref_even, iseven=.true.)
+            !call pftcc%set_ref_pft(ithr, pftcc_refs(ithr)%pft_ref_odd,  iseven=.false.)
             deallocate(pftcc_refs(ithr)%pft_ref_even, pftcc_refs(ithr)%pft_ref_odd)
         end do
         deallocate(pftcc_refs)
@@ -178,10 +189,15 @@ contains
         call self%e_trial%set_euler([vec(1),vec(2),0.])
         ! thread-safe extraction of projection (because pftcc is an OpenMP shared data structure)
         ithr = omp_get_thread_num() + 1
+        ! if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
+        !     call self%bp%vol%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.true.)
+        ! else
+        !     call self%bp%vol_odd%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.false.)
+        ! endif
         if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-            call self%bp%vol%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.true.)
+            call b%vol%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.true.)
         else
-            call self%bp%vol_odd%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.false.)
+            call b%vol_odd%fproject_polar(ithr, self%e_trial, self%pftcc_ptr, iseven=.false.)
         endif
         ! in-plane search with L-BFGS-B and callback for exhaustive in-plane rotation search
         call self%grad_shsrch_obj%set_indices(ithr, self%particle)

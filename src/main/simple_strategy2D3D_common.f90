@@ -3,8 +3,8 @@ module simple_strategy2D3D_common
 include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_cmdline,  only: cmdline
-use simple_build,    only: build
-use simple_params,   only: params
+use simple_build,    only: b
+use simple_params,   only: p
 implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
@@ -29,9 +29,7 @@ real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg cen
 
 contains
 
-    subroutine read_img( b, p, iptcl )
-        class(build),  intent(inout)  :: b
-        class(params), intent(inout)  :: p
+    subroutine read_img( iptcl )
         integer,       intent(in)     :: iptcl
         character(len=:), allocatable :: stkname
         integer :: ind_in_stk
@@ -39,17 +37,13 @@ contains
         call b%img%read(stkname, ind_in_stk)
     end subroutine read_img
 
-    subroutine read_img_and_norm( b, p, iptcl )
-        class(build),  intent(inout)  :: b
-        class(params), intent(inout)  :: p
+    subroutine read_img_and_norm( iptcl )
         integer,       intent(in)     :: iptcl
-        call read_img( b, p, iptcl )
+        call read_img( iptcl )
         call b%img%norm()
-    end subroutine read_img_and_norm
+     end subroutine read_img_and_norm
 
-    subroutine read_imgbatch_1( b, p, fromptop, ptcl_mask )
-        class(build),      intent(inout)  :: b
-        class(params),     intent(inout)  :: p
+    subroutine read_imgbatch_1( fromptop, ptcl_mask )
         integer,           intent(in)     :: fromptop(2)
         logical, optional, intent(in)     :: ptcl_mask(p%fromp:p%top)
         character(len=:), allocatable :: stkname
@@ -71,9 +65,7 @@ contains
         endif
     end subroutine read_imgbatch_1
 
-    subroutine read_imgbatch_2( b, p, n, pinds, batchlims )
-        class(build),  intent(inout)  :: b
-        class(params), intent(inout)  :: p
+    subroutine read_imgbatch_2( n, pinds, batchlims )
         integer,       intent(in)     :: n, pinds(n), batchlims(2)
         character(len=:), allocatable :: stkname
         integer :: ind_in_stk, i, ii
@@ -84,9 +76,7 @@ contains
         end do
     end subroutine read_imgbatch_2
 
-    subroutine set_bp_range( b, p, cline )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
+    subroutine set_bp_range( cline )
         class(cmdline), intent(inout) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
@@ -194,10 +184,11 @@ contains
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
-    subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
-        use simple_estimate_ssnr, only: fsc2ssnr
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
+    subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
+    ! subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
+         use simple_estimate_ssnr, only: fsc2ssnr
+    !     class(build),   intent(inout) :: b
+    !     class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space
@@ -231,11 +222,9 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl_1( b, p, img, se, o, ctfvars )
+    subroutine grid_ptcl_1( img, se, o, ctfvars )
         use simple_sym, only: sym
         use simple_ori,      only: ori
-        class(build),    intent(inout) :: b
-        class(params),   intent(inout) :: p
         class(image),    intent(inout) :: img
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
@@ -278,12 +267,10 @@ contains
     end subroutine grid_ptcl_1
 
     !>  \brief  grids one particle image to the volume (distribution of weigted oris)
-    subroutine grid_ptcl_2( b, p, img, se, o, os, ctfvars )
+    subroutine grid_ptcl_2( img, se, o, os, ctfvars )
         use simple_sym,  only: sym
         use simple_ori,  only: ori
         use simple_oris, only: oris
-        class(build),    intent(inout) :: b
-        class(params),   intent(inout) :: p
         class(image),    intent(inout) :: img
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
@@ -350,11 +337,9 @@ contains
     end subroutine grid_ptcl_2
 
     !>  \brief  prepares all particle images for alignment
-    subroutine build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, is3D, ptcl_mask )
+    subroutine build_pftcc_particles( pftcc, batchsz_max, match_imgs, is3D,  ptcl_mask )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_polarizer,        only: polarizer
-        class(build),            intent(inout) :: b
-        class(params),           intent(inout) :: p
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: batchsz_max
         class(polarizer),        intent(inout) :: match_imgs(batchsz_max)
@@ -368,16 +353,18 @@ contains
             mask_here = .true.
         endif
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-        call prepimgbatch(b, p, batchsz_max)
+        call prepimgbatch( batchsz_max )
         do iptcl_batch=p%fromp,p%top,batchsz_max
             batchlims = [iptcl_batch,min(p%top,iptcl_batch + batchsz_max - 1)]
-            call read_imgbatch( b, p, batchlims, mask_here )
+            ! call read_imgbatch( b, p, batchlims, mask_here )
+            call read_imgbatch( batchlims, mask_here )
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
                 if( .not. mask_here(iptcl) ) cycle
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
+                call prepimg4align( iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
+                ! call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
@@ -386,12 +373,10 @@ contains
     end subroutine build_pftcc_particles
 
     !>  \brief  prepares one particle image for alignment
-    subroutine prepimg4align( b, p, iptcl, img_in, img_out, is3D )
+    subroutine prepimg4align( iptcl, img_in, img_out, is3D )
         use simple_polarizer,     only: polarizer
         use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_ctf,           only: ctf
-        class(build),     intent(inout) :: b
-        class(params),    intent(inout) :: p
         integer,          intent(in)    :: iptcl
         class(image),     intent(inout) :: img_in
         class(polarizer), intent(inout) :: img_out
@@ -465,11 +450,9 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( b, p, img_in, img_out, icls, center, xyz_in, xyz_out )
+    subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
         use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_polarizer,     only: polarizer
-        class(build),      intent(inout) :: b
-        class(params),     intent(in)    :: p
         class(image),      intent(inout) :: img_in
         class(polarizer),  intent(inout) :: img_out
         integer,           intent(in)    :: icls
@@ -529,9 +512,7 @@ contains
 
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         poulation, average correlation and weight
-    subroutine gen2Dclassdoc( b, p )
-        class(build), target, intent(inout) :: b
-        class(params),        intent(inout) :: p
+    subroutine gen2Dclassdoc(  )
         integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143
@@ -555,9 +536,7 @@ contains
     end subroutine gen2Dclassdoc
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine preprecvols( b, p, wcluster )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
+    subroutine preprecvols( wcluster )
         real, optional, intent(in)    :: wcluster
         character(len=:), allocatable :: recname, rhoname, part_str
         integer :: istate
@@ -566,7 +545,7 @@ contains
             case('yes','aniso')
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
-                        call b%eorecvols(istate)%new(p, b%spproj)
+                        call b%eorecvols(istate)%new( b%spproj)
                         call b%eorecvols(istate)%reset_all
                         if( p%l_frac_update )then
                             call b%eorecvols(istate)%read_eos(trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str)
@@ -579,7 +558,7 @@ contains
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
                         call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
-                        call b%recvols(istate)%alloc_rho(p, b%spproj)
+                        call b%recvols(istate)%alloc_rho( b%spproj)
                         call b%recvols(istate)%reset
                         call b%recvols(istate)%reset_exp
                         if( p%l_frac_update )then
@@ -599,9 +578,7 @@ contains
     end subroutine preprecvols
 
     !>  \brief  destructs all volumes for reconstruction
-    subroutine killrecvols( b, p )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
+    subroutine killrecvols
         integer :: istate
         if( p%eo .ne. 'no' )then
             do istate = 1, p%nstates
@@ -615,10 +592,8 @@ contains
         endif
     end subroutine killrecvols
 
-    !>  \brief  prepares a batch of images
-    subroutine prepimgbatch( b, p, batchsz )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
+    !>  \brief  prepares a batch of image
+    subroutine prepimgbatch( batchsz )
         integer,        intent(in)    :: batchsz
         integer :: currsz, ibatch
         logical :: doprep
@@ -645,9 +620,7 @@ contains
     end subroutine prepimgbatch
 
     !>  \brief  center the reference volume and map shifts back to particles
-    subroutine cenrefvol_and_mapshifts2ptcls( b, p, cline, s, volfname, do_center, xyz )
-        class(build),     intent(inout) :: b
-        class(params),    intent(inout) :: p
+    subroutine cenrefvol_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz )
         class(cmdline),   intent(inout) :: cline
         integer,          intent(in)    :: s
         character(len=*), intent(in)    :: volfname
@@ -679,10 +652,8 @@ contains
     end subroutine cenrefvol_and_mapshifts2ptcls
 
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol( b, p, cline, s, volfname, do_center, xyz )
+    subroutine preprefvol( cline, s, volfname, do_center, xyz )
         use simple_estimate_ssnr, only: fsc2optlp
-        class(build),     intent(inout) :: b
-        class(params),    intent(inout) :: p
         class(cmdline),   intent(inout) :: cline
         integer,          intent(in)    :: s
         character(len=*), intent(in)    :: volfname
@@ -748,9 +719,7 @@ contains
         call b%vol%expand_cmat(p%alpha)
     end subroutine preprefvol
 
-    subroutine norm_struct_facts( b, p, which_iter )
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
+    subroutine norm_struct_facts( which_iter )
         integer, optional, intent(in)    :: which_iter
         integer :: s
         character(len=:), allocatable :: fbody
@@ -799,10 +768,8 @@ contains
         call b%vol%kill
     end subroutine norm_struct_facts
 
-    subroutine eonorm_struct_facts( b, p, cline, which_iter )
+    subroutine eonorm_struct_facts( cline, which_iter )
         use simple_filterer, only: gen_anisotropic_optlp
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer, optional, intent(in)    :: which_iter
         integer               :: s, find4eoavg
@@ -835,7 +802,7 @@ contains
                 resmskname         = 'resmask'//p%ext
                 call b%eorecvols(s)%sum_eos
                 call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
-                call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)
+                call gen_projection_frcs(cline,  p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                 call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%l_phaseplate)
                 call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
@@ -880,12 +847,10 @@ contains
     end subroutine eonorm_struct_facts
 
     !>  \brief generate projection FRCs from even/odd pairs
-    subroutine gen_projection_frcs( b, p, cline, ename, oname, resmskname, state, projfrcs )
+    subroutine gen_projection_frcs( cline, ename, oname, resmskname, state, projfrcs )
         use simple_oris,            only: oris
         use simple_projector_hlev,  only: reproject
         use simple_projection_frcs, only: projection_frcs
-        class(build),           intent(inout) :: b
-        class(params),          intent(inout) :: p
         class(cmdline),         intent(inout) :: cline
         character(len=*),       intent(in)    :: ename, oname, resmskname
         integer,                intent(in)    :: state
@@ -907,8 +872,8 @@ contains
         call e_space%new(NSPACE_BALANCE)
         call e_space%spiral(p%nsym, p%eullims)
         ! generate even/odd projections
-        even_imgs = reproject(b%vol,  e_space, p)
-        odd_imgs  = reproject(b%vol2, e_space, p)
+        even_imgs = reproject(b%vol,  e_space)
+        odd_imgs  = reproject(b%vol2, e_space)
         ! calculate FRCs and fill-in projfrcs object
         allocate(frc(even_imgs(1)%get_filtsz()))
         !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)

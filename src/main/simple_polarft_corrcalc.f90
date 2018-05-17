@@ -2,11 +2,7 @@
 module simple_polarft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
-!include 'simple_lib.f08'
-use simple_defs
-use simple_error, only: simple_stop, allocchk
-use simple_math
-use simple_strings, only: int2str_pad
+include 'simple_lib.f08'
 use simple_fftw3
 use simple_params, only: p
 implicit none
@@ -205,7 +201,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, nrefs, ptcl_mask, eoarr )
-        
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs
         logical, optional,       intent(in)    :: ptcl_mask(p%fromp:p%top)

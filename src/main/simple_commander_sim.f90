@@ -1,9 +1,8 @@
 ! concrete commander: simulation routines
 module simple_commander_sim
 include 'simple_lib.f08'
+use simple_singletons
 use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
 use simple_image,          only: image
 use simple_ori,            only: ori
 use simple_ctf,            only: ctf
@@ -40,12 +39,10 @@ contains
     subroutine exec_simulate_noise( self, cline )
         class(simulate_noise_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
         integer :: i, cnt, ntot
-        p = params(cline, .false.) ! parameters generated
+        call init_params(cline, .false.) ! parameters generated
         if( .not. cline%defined('outstk') ) p%outstk = 'simulated_noise'//p%ext
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         cnt  = 0
         ntot = p%top-p%fromp+1
         do i=p%fromp,p%top
@@ -67,8 +64,6 @@ contains
         use simple_gridding,   only: prep4_cgrid
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params)       :: p
-        type(build)        :: b
         type(ori)          :: orientation
         type(ctf)          :: tfun
         type(kbinterpol)   :: kbwin
@@ -76,8 +71,8 @@ contains
         real               :: snr_pink, snr_detector, bfac, bfacerr
         integer            :: i, cnt, ntot
         debug=.false. ! declared in local flags
-        p = params(cline, .false.)          ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        call init_params(cline, .false.)          ! parameters generated
+        call b%build_general_tbox( cline) ! general objects built
         kbwin = kbinterpol(KBWINSZ, p%alpha)
         tfun  = ctf(p%smpd, p%kv, p%cs, p%fraca)
         if( .not. cline%defined('outstk') ) p%outstk = 'simulated_particles'//p%ext
@@ -157,14 +152,12 @@ contains
         end do
         call vol_pad%kill_expanded
         ! end gracefully
-        call simple_end('**** SIMPLE_SIMULATE_PARTICLES NORMAL STOP ****')
+        call simple_end('**** SIMLE_SIMULATE_PARTICLES NORMAL STOP ****')
     end subroutine exec_simulate_particles
 
     subroutine exec_simulate_movie( self, cline )
         class(simulate_movie_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
         type(image)          :: base_image, shifted_base_image
         type(ctf)            :: tfun
         real                 :: snr_pink, snr_detector, fracarea, x, y, sherr, dfx, dfy, deferr, angast
@@ -172,9 +165,9 @@ contains
         integer, allocatable :: ptcl_positions(:,:)
         real,    allocatable :: shifts(:,:)
         debug=.false.                           ! declared in local flags
-        p = params(cline, spproj_a_seg=STK_SEG) ! parameters generated
+        call init_params(cline, spproj_a_seg=STK_SEG) ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
         tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
         ! set fixed frame
         fixed_frame = nint(real(p%nframes)/2.)
@@ -349,13 +342,13 @@ contains
         use simple_projector_hlev, only: rotvol
         class(simulate_subtomogram_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
+        ! type(params) :: p
+        ! type(build)  :: b
         type(image)  :: vol_rot
         type(ori)    :: o
         integer      :: iptcl, numlen
-        p = params(cline) ! constants & derived constants produced, mode=2
-        call b%build_general_tbox(p, cline)   ! general objects built
+        call init_params(cline) ! constants & derived constants produced, mode=2
+        call b%build_general_tbox( cline)   ! general objects built
         call vol_rot%new([p%box,p%box,p%box], p%smpd)
         call b%vol%new([p%box,p%box,p%box],   p%smpd)
         call b%vol%read(p%vols(1))
@@ -364,7 +357,7 @@ contains
         numlen = len(int2str(p%nptcls))
         do iptcl=1,p%nptcls
             call o%rnd_ori
-            vol_rot = rotvol(b%vol, o, p)
+            vol_rot = rotvol(b%vol, o)
             call vol_rot%write('subtomo'//int2str_pad(iptcl,numlen)//p%ext)
         end do
         ! end gracefully

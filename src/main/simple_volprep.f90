@@ -1,13 +1,16 @@
 module simple_volprep
 include 'simple_lib.f08'
+use simple_singletons
+
 implicit none
 
 contains
 
-    subroutine read_and_prep_vol( p, volfname, volprojobj )
-        use simple_params,      only: params
+    subroutine read_and_prep_vol( volfname, volprojobj )
+    !subroutine read_and_prep_vol( p, volfname, volprojobj )
+         !use simple_params,      only: params
         use simple_projector,   only: projector
-        class(params),    intent(in)    :: p
+       ! class(params),    intent(in)    :: p
         class(projector), intent(inout) :: volprojobj
         character(len=*), intent(in)    :: volfname
         real    :: smpd_target, smpd_sc, scale

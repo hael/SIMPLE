@@ -2,7 +2,7 @@
 module simple_build
 include 'simple_lib.f08'
 use simple_cmdline,          only: cmdline
-use simple_params,           only: params
+use simple_params,           only: p              ! singleton
 use simple_comlin,           only: comlin
 use simple_image,            only: image
 use simple_sp_project,       only: sp_project
@@ -17,7 +17,7 @@ use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
 implicit none
 
-public :: build
+public :: b
 private
 #include "simple_local_flags.inc"
 
@@ -76,18 +76,19 @@ type :: build
     procedure, private                  :: kill_strategy3D_tbox
     procedure                           :: build_strategy2D_tbox
     procedure                           :: kill_strategy2D_tbox
-    !procedure                           :: build_extremal3D_tbox
-    !procedure                           :: kill_extremal3D_tbox
+    procedure                           :: build_extremal3D_tbox
+    procedure                           :: kill_extremal3D_tbox
 end type build
+
+type(build) :: b
 
 contains
 
     !> \brief  constructs the sp project (part of general builder)
-    subroutine build_spproj( self, p, cline, nooritab )
+    subroutine build_spproj( self,  cline, nooritab )
         use simple_binoris_io, only: binread_ctfparams_state_eo, binread_oritab
         use simple_user_interface,   only: get_prg_ptr
         class(build), target, intent(inout) :: self
-        class(params),        intent(inout) :: p
         class(cmdline),       intent(inout) :: cline
         logical, optional,    intent(in)    :: nooritab
         logical ::  metadata_read
@@ -147,9 +148,8 @@ contains
     end subroutine build_spproj
 
     !> \brief  constructs the general toolbox
-    subroutine build_general_tbox( self, p, cline, do3d, nooritab, force_ctf )
+    subroutine build_general_tbox( self,  cline, do3d, nooritab, force_ctf )
         class(build), target, intent(inout) :: self
-        class(params),        intent(inout) :: p
         class(cmdline),       intent(inout) :: cline
         logical, optional,    intent(in)    :: do3d, nooritab, force_ctf
         integer :: lfny,  lfny_match, cyc_lims(3,2)
@@ -168,7 +168,7 @@ contains
         p%eullims = self%se%srchrange()
         DebugPrint   'did setup symmetry functionality'
         ! build spproj
-        call self%build_spproj(p, cline, nooritab)
+        call self%build_spproj( cline, nooritab)
         ! states exception
         if( self%a%get_n('state') > 1 )then
             if( .not. cline%defined('nstates') )then
@@ -217,7 +217,7 @@ contains
             endif
             DebugPrint   'did set default values'
         endif
-        self%conv = convergence(self%a, p, cline)
+        self%conv = convergence(self%a, cline)
         if( p%projstats .eq. 'yes' )then
             if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         endif
@@ -250,9 +250,8 @@ contains
     end subroutine kill_general_tbox
 
     !> \brief  constructs the common lines toolbox
-    subroutine build_comlin_tbox( self, p )
+    subroutine build_comlin_tbox( self )
         class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
         integer :: i
         call self%kill_comlin_tbox
         if( p%pgrp /= 'c1' )then ! set up symmetry functionality
@@ -317,12 +316,11 @@ contains
     end subroutine kill_comlin_tbox
 
     !> \brief  constructs the reconstruction toolbox
-    subroutine build_rec_tbox( self, p )
+    subroutine build_rec_tbox( self )
         class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
         call self%kill_rec_tbox
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-        call self%recvol%alloc_rho(p, self%spproj)
+        call self%recvol%alloc_rho( self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
@@ -339,11 +337,20 @@ contains
     end subroutine kill_rec_tbox
 
     !> \brief  constructs the eo reconstruction toolbox
-    subroutine build_rec_eo_tbox( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
+    subroutine build_rec_eo_tbox( self )
+        !subroutine build_rec_eo_tbox( self, p )
+            class(build),  intent(inout) :: self
+        !class(params), intent(in)    :: p
         call self%kill_rec_eo_tbox
+<<<<<<< variant A
         call self%eorecvol%new(p, self%spproj)
+>>>>>>> variant B
+        call self%raise_hard_ctf_exception()
+        call self%eorecvol%new( self%spproj)
+####### Ancestor
+        call self%raise_hard_ctf_exception(p)
+        call self%eorecvol%new(p, self%spproj)
+======= end
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
@@ -360,11 +367,30 @@ contains
         endif
     end subroutine kill_rec_eo_tbox
 
+<<<<<<< variant A
     !> \brief  constructs the strategy2D toolbox
     subroutine build_strategy2D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
+>>>>>>> variant B
+    !> \brief  constructs the prime2D toolbox
+    subroutine build_strategy2D_tbox( self )
+        !subroutine build_strategy2D_tbox( self, p )
+            class(build),  intent(inout) :: self
+        !class(params), intent(inout) :: p
+####### Ancestor
+    !> \brief  constructs the prime2D toolbox
+    subroutine build_strategy2D_tbox( self, p )
+        class(build),  intent(inout) :: self
+        class(params), intent(inout) :: p
+======= end
         call self%kill_strategy2D_tbox
+<<<<<<< variant A
+>>>>>>> variant B
+        call self%raise_hard_ctf_exception()
+####### Ancestor
+        call self%raise_hard_ctf_exception(p)
+======= end
         if( p%neigh.eq.'yes' )then
             if( self%spproj%os_cls3D%get_noris() == p%ncls )then
                 call self%spproj%os_cls3D%nearest_proj_neighbors(p%nnn, self%nnmat)
@@ -386,10 +412,9 @@ contains
         endif
     end subroutine kill_strategy2D_tbox
 
-    !> \brief  constructs the strategy3D toolbox
-    subroutine build_strategy3D_tbox( self, p )
+    !> \brief  constructs the prime3D toolbox
+    subroutine build_strategy3D_tbox( self )
         class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
         integer :: nnn
         call self%kill_strategy3D_tbox
         if( p%eo .ne. 'no' )then
@@ -434,48 +459,17 @@ contains
     end subroutine kill_strategy3D_tbox
 
     !> \brief  constructs the extremal3D toolbox
-<<<<<<< variant A
-    subroutine build_extremal3D_tbox( self, p )
+    subroutine build_extremal3D_tbox( self )
         class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
         call self%kill_extremal3D_tbox
         allocate( self%recvols(1), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-        call self%recvols(1)%alloc_rho(p, self%spproj)
+        call self%recvols(1)%alloc_rho(self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.
     end subroutine build_extremal3D_tbox
->>>>>>> variant B
-    ! subroutine build_extremal3D_tbox( self, p )
-    !     class(build),  intent(inout) :: self
-    !     class(params), intent(in)    :: p
-    !     call self%kill_extremal3D_tbox
-    !     call self%raise_hard_ctf_exception(p)
-    !     allocate( self%recvols(1), stat=alloc_stat )
-    !     if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
-    !     call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-    !     call self%recvols(1)%alloc_rho(p, self%spproj)
-    !     if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-    !     write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
-    !     self%extremal3D_tbox_exists = .true.
-    ! end subroutine build_extremal3D_tbox
-####### Ancestor
-    subroutine build_extremal3D_tbox( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
-        call self%kill_extremal3D_tbox
-        call self%raise_hard_ctf_exception(p)
-        allocate( self%recvols(1), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_build, 2', alloc_stat)
-        call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-        call self%recvols(1)%alloc_rho(p, self%spproj)
-        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
-        self%extremal3D_tbox_exists = .true.
-    end subroutine build_extremal3D_tbox
-======= end
 
     !> \brief  destructs the toolbox for continuous refinement
     subroutine kill_extremal3D_tbox( self )

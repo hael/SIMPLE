@@ -1,14 +1,15 @@
 program simple_test_shiftsrch
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_cmdline,          only: cmdline
-use simple_build,            only: build
+! use simple_build,            only: build
 use simple_image,            only: image
-use simple_params,           only: params
+!use simple_params,           only: params
 use simple_polarizer,        only: polarizer
+use simple_singletons
 implicit none
 type(cmdline)          :: cline
-type(build)            :: b
-type(params)           :: p
+!type(build)            :: b
+!type(params)           :: p
 type(polarft_corrcalc) :: pftcc
 type(polarizer)        :: img_copy
 logical                :: be_verbose=.false.
@@ -32,11 +33,11 @@ if( cline%defined('verbose') )then
         be_verbose = .true.
     endif
 endif
-p = params(cline)
+call init_params(cline)
 p%kfromto(1) = 2
 p%kfromto(2) = 40
-call b%build_general_tbox(p, cline)
-call pftcc%new(8, p)
+call b%build_general_tbox( cline)
+call pftcc%new(8)
 allocate(corrs(pftcc%get_nrots()))
 call img_copy%init_polarizer(pftcc, p%alpha)
 call b%img%read(p%stk, 1)

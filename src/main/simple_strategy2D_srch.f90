@@ -4,8 +4,10 @@ include 'simple_lib.f08'
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_oris,              only: oris
-use simple_params,            only: params
-use simple_strategy2D_alloc,  only: cls_pops ! use all in there
+!use simple_params,            only: params
+use simple_strategy2D_alloc  ! s2D singleton
+use simple_singletons        ! p and b singletons
+
 implicit none
 
 public :: strategy2D_srch, strategy2D_spec
@@ -14,10 +16,9 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
-    class(params),           pointer :: pp         => null()
     class(polarft_corrcalc), pointer :: ppftcc     => null()
     class(oris),             pointer :: pa         => null()
-    integer,                 pointer :: nnmat(:,:) => null()
+!    integer,                 pointer :: nnmat(:,:) => null()
     real    :: extr_bound = 0.
     integer :: iptcl      = 0
     integer :: iptcl_map  = 0
@@ -61,7 +62,6 @@ end type strategy2D_srch
 contains
 
     subroutine new( self, spec )
-        use simple_params, only: params
         class(strategy2D_srch), intent(inout) :: self
         class(strategy2D_spec), intent(in)    :: spec
         integer, parameter :: MAXITS = 60
@@ -71,19 +71,19 @@ contains
         self%a_ptr      => spec%pa
         self%iptcl      =  spec%iptcl
         self%iptcl_map  =  spec%iptcl_map
-        self%nrefs      =  spec%pp%ncls
-        self%nrots      =  round2even(twopi*real(spec%pp%ring2))
+        self%nrefs      =  p%ncls
+        self%nrots      =  round2even(twopi*real(p%ring2))
         self%nrefs_eval =  0
-        self%trs        =  spec%pp%trs
-        self%doshift    =  spec%pp%l_doshift
-        self%nthr       =  spec%pp%nthr
-        self%fromp      =  spec%pp%fromp
-        self%top        =  spec%pp%top
-        self%nnn        =  spec%pp%nnn
-        self%dyncls     =  (spec%pp%dyncls.eq.'yes')
+        self%trs        =  p%trs
+        self%doshift    =  p%l_doshift
+        self%nthr       =  p%nthr
+        self%fromp      =  p%fromp
+        self%top        =  p%top
+        self%nnn        =  p%nnn
+        self%dyncls     =  (p%dyncls.eq.'yes')
         ! construct composites
-        lims(:,1)       = -spec%pp%trs
-        lims(:,2)       =  spec%pp%trs
+        lims(:,1)       = -p%trs
+        lims(:,2)       =  p%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, maxits=MAXITS)
@@ -93,17 +93,19 @@ contains
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
         real :: corrs(self%pftcc_ptr%get_nrots())
+        !real :: corrs(pftcc%get_nrots())
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index
         if( self%dyncls )then
             if( self%prev_class > 0 )then
                 ! reassignement to a class with higher population
-                do while( cls_pops(self%prev_class) <= MINCLSPOPLIM )
+                do while( s2D%cls_pops(self%prev_class) <= MINCLSPOPLIM )
                    self%prev_class = irnd_uni(self%nrefs)
                 enddo
             endif
         endif
         self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))  ! in-plane angle index
+        !self%prev_rot   = pftcc%get_roind(360.-self%a_ptr%e3get(self%iptcl))  ! in-plane angle index
         self%prev_shvec = self%a_ptr%get_2Dshift(self%iptcl)                           ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class
@@ -132,6 +134,7 @@ contains
         call self%a_ptr%set(self%iptcl, 'bfac', self%prev_bfac)
         ! calculate spectral score
         self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
+        !self%specscore = pftcc%specscore(self%prev_class, self%iptcl, self%prev_rot)
         if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
 

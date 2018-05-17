@@ -1,8 +1,7 @@
 module simple_cluster_cavgs
 include 'simple_lib.f08'
+use simple_singletons
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_build,            only: build
-use simple_params,           only: params
 use simple_aff_prop,         only: aff_prop
 use simple_strategy2D3D_common ! use all in there
 use simple_oris,             only: oris
@@ -19,9 +18,10 @@ integer, allocatable   :: centers(:), labels(:)
 
 contains
 
-    subroutine cluster_cavgs_exec( b, p )
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
+    subroutine cluster_cavgs_exec
+    ! subroutine cluster_cavgs_exec( b, p )
+        ! class(build),  intent(inout) :: b
+        ! class(params), intent(inout) :: p
         character(len=:), allocatable :: fname
         real,             allocatable :: tmp(:), clspops(:), clsres(:), pops(:), mempops(:), memres(:)
         logical,          allocatable :: mask(:), included(:)
@@ -45,7 +45,8 @@ contains
         p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
         p%lp_dyn     = p%lp
         ! prep pftcc
-        call preppftcc4cluster( b, p )
+        !call preppftcc4cluster( b, p )
+        call preppftcc4cluster
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! calculate similarity matrix in parallel
@@ -130,7 +131,8 @@ contains
             do iptcl=1,p%nptcls
                 if( labels(iptcl) == icen )then
                     cnt = cnt + 1
-                    call read_img( b, p, iptcl )
+                   ! call read_img( b, p, iptcl )
+                    call read_img( iptcl )
                     call b%img%write(fname, cnt)
                 endif
             enddo
@@ -215,7 +217,8 @@ contains
             do iptcl=1,p%nptcls
                 if( included(iptcl) )then
                     cnt = cnt + 1
-                    call read_img( b, p, iptcl )
+                   ! call read_img( b, p, iptcl )
+                    call read_img( iptcl )
                     call b%img%write('aff_prop_selected_imgs'//p%ext, cnt)
                 endif
             enddo
@@ -226,14 +229,15 @@ contains
     end subroutine cluster_cavgs_exec
 
     !>  \brief  prepares the polarft corrcalc object for clustering
-    subroutine preppftcc4cluster( b, p )
+     subroutine preppftcc4cluster
+         !subroutine preppftcc4cluster( b, p )
         use simple_polarizer, only: polarizer
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
+        ! class(build),      intent(inout) :: b
+        ! class(params),     intent(inout) :: p
         type(polarizer), allocatable :: match_imgs(:), mirr_match_imgs(:)
         integer :: iptcl
         ! create the polarft_corrcalc object
-        call pftcc%new(p%nptcls, p)
+        call pftcc%new(p%nptcls)
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)
         allocate(match_imgs(p%nptcls), mirr_match_imgs(p%nptcls))
@@ -244,8 +248,10 @@ contains
             call mirr_match_imgs(iptcl)%copy_polarizer(b%img_match)
         end do
         ! prepare image batch
-        call prepimgbatch(b, p, p%nptcls)
-        call read_imgbatch( b, p, [1,p%nptcls])
+        !call prepimgbatch(b, p, p%nptcls)
+        !call read_imgbatch( b, p, [1,p%nptcls])
+        call prepimgbatch( p%nptcls)
+        call read_imgbatch( [1,p%nptcls])
         ! PREPARATION OF PFTS IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(iptcl)&
