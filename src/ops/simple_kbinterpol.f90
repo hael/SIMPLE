@@ -74,12 +74,12 @@ contains
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: r, arg
-        if( abs(x) > self%Whalf )then
-            r = 0.
-            return
-        endif
         arg = self%twooW * x
         arg = 1. - arg * arg
+        if (arg < 0.) then
+            r = 0.
+            return
+        end if
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
@@ -88,12 +88,12 @@ contains
         class(kbinterpol), intent(in) :: self
         real(dp),          intent(in) :: x
         real(dp) :: r, arg
-        if( abs(x) > self%Whalf )then
-            r = 0._dp
-            return
-        endif
         arg = self%twooW * x
         arg = 1._dp - arg * arg
+        if (arg < 0._dp) then
+            r = 0._dp
+            return
+        end if
         r = self%oneoW * bessi0_dp(self%beta * sqrt(arg))
     end function apod_dp
 
