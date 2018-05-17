@@ -1,8 +1,10 @@
 ! concrete strategy3D: stochastic state quantization (3D clustering)
 module simple_strategy3D_cluster
+include 'simple_lib.f08'
 use simple_strategy3D_alloc ! use all in there
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
+
 implicit none
 
 public :: strategy3D_cluster

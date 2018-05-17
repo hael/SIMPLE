@@ -1,10 +1,12 @@
 ! concrete strategy3D: greedy multi-state refinement
 module simple_strategy3D_greedy_multi
+include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! use all in there
 use simple_strategy3D_utils  ! use all in there
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_params, only: p
+use simple_build,  only: b
 implicit none
 
 public :: strategy3D_greedy_multi

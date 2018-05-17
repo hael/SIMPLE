@@ -1,5 +1,6 @@
 ! concrete strategy3D: continuous single-state refinement
 module simple_strategy3D_cont_single
+include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! singleton
 use simple_strategy3D_utils, only: fit_bfactors
 use simple_strategy3D,       only: strategy3D

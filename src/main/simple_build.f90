@@ -342,15 +342,7 @@ contains
             class(build),  intent(inout) :: self
         !class(params), intent(in)    :: p
         call self%kill_rec_eo_tbox
-<<<<<<< variant A
-        call self%eorecvol%new(p, self%spproj)
->>>>>>> variant B
-        call self%raise_hard_ctf_exception()
-        call self%eorecvol%new( self%spproj)
-####### Ancestor
-        call self%raise_hard_ctf_exception(p)
-        call self%eorecvol%new(p, self%spproj)
-======= end
+        call self%eorecvol%new(self%spproj)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
@@ -367,30 +359,10 @@ contains
         endif
     end subroutine kill_rec_eo_tbox
 
-<<<<<<< variant A
     !> \brief  constructs the strategy2D toolbox
-    subroutine build_strategy2D_tbox( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(inout) :: p
->>>>>>> variant B
-    !> \brief  constructs the prime2D toolbox
     subroutine build_strategy2D_tbox( self )
-        !subroutine build_strategy2D_tbox( self, p )
-            class(build),  intent(inout) :: self
-        !class(params), intent(inout) :: p
-####### Ancestor
-    !> \brief  constructs the prime2D toolbox
-    subroutine build_strategy2D_tbox( self, p )
         class(build),  intent(inout) :: self
-        class(params), intent(inout) :: p
-======= end
         call self%kill_strategy2D_tbox
-<<<<<<< variant A
->>>>>>> variant B
-        call self%raise_hard_ctf_exception()
-####### Ancestor
-        call self%raise_hard_ctf_exception(p)
-======= end
         if( p%neigh.eq.'yes' )then
             if( self%spproj%os_cls3D%get_noris() == p%ncls )then
                 call self%spproj%os_cls3D%nearest_proj_neighbors(p%nnn, self%nnmat)

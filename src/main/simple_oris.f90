@@ -2559,49 +2559,49 @@ contains
     !     skewness = real(self%n - count(included))/real(self%n)
     ! end subroutine balance_2
 
-    ! !>  \brief  calculates spectral particle weights
-    ! subroutine calc_spectral_weights( self, frac )
-    !     class(oris), intent(inout) :: self
-    !     real,        intent(in)    :: frac
-    !     integer           :: i, nstates, istate, cnt, mystate
-    !     real, allocatable :: weights(:), specscores(:)
-    !     call self%calc_hard_weights( frac )
-    !     if( self%isthere('specscore') )then
-    !         nstates = self%get_n('state')
-    !         if( nstates > 1 )then
-    !             do istate=1,nstates
-    !                 specscores = self%get_arr('specscore', state=istate)
-    !                 weights    = self%get_arr('w',         state=istate)
-    !                 where( weights < 0.5 )
-    !                     specscores = 0.
-    !                 end where
-    !                 weights = corrs2weights(specscores)
-    !                 cnt = 0
-    !                 do i=1,self%n
-    !                     mystate = nint(self%o(i)%get('state'))
-    !                     if( mystate == istate )then
-    !                         cnt = cnt + 1
-    !                         call self%o(i)%set('w', weights(cnt))
-    !                     else if( mystate == 0 )then
-    !                         call self%o(i)%set('w', 0.0)
-    !                     endif
-    !                 enddo
-    !                 deallocate(specscores,weights)
-    !             enddo
-    !         else
-    !             specscores = self%get_all('specscore')
-    !             weights    = self%get_all('w')
-    !             where( weights < 0.5 )
-    !                 specscores = 0.
-    !             end where
-    !             weights = corrs2weights(specscores)
-    !             do i=1,self%n
-    !                 call self%o(i)%set('w', weights(i))
-    !             end do
-    !             deallocate(specscores,weights)
-    !         endif
-    !     endif
-    ! end subroutine calc_spectral_weights
+    !>  \brief  calculates spectral particle weights
+    subroutine calc_spectral_weights( self, frac )
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
+        integer           :: i, nstates, istate, cnt, mystate
+        real, allocatable :: weights(:), specscores(:)
+        call self%calc_hard_weights( frac )
+        if( self%isthere('specscore') )then
+            nstates = self%get_n('state')
+            if( nstates > 1 )then
+                do istate=1,nstates
+                    specscores = self%get_arr('specscore', state=istate)
+                    weights    = self%get_arr('w',         state=istate)
+                    where( weights < 0.5 )
+                        specscores = 0.
+                    end where
+                    weights = corrs2weights(specscores)
+                    cnt = 0
+                    do i=1,self%n
+                        mystate = nint(self%o(i)%get('state'))
+                        if( mystate == istate )then
+                            cnt = cnt + 1
+                            call self%o(i)%set('w', weights(cnt))
+                        else if( mystate == 0 )then
+                            call self%o(i)%set('w', 0.0)
+                        endif
+                    enddo
+                    deallocate(specscores,weights)
+                enddo
+            else
+                specscores = self%get_all('specscore')
+                weights    = self%get_all('w')
+                where( weights < 0.5 )
+                    specscores = 0.
+                end where
+                weights = corrs2weights(specscores)
+                do i=1,self%n
+                    call self%o(i)%set('w', weights(i))
+                end do
+                deallocate(specscores,weights)
+            endif
+        endif
+    end subroutine calc_spectral_weights
 
     ! subroutine adjust_score_for_defocus( self, which, minmax )
     !     class(oris),      intent(inout) :: self

@@ -29,17 +29,20 @@ echo " ## sys 0m0.345s                                                          
 echo "                                                                                  "
 
 #time simple_distr_exec prg=reconstruct3D ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
-[ ! -d reconstruct3D_test ] && mkdir reconstruct3D_test
-cd reconstruct3D_test
-[ -f recvol_state01.mrc ] &&  rm -f recvol_state01.mrc
-[ -f recvol.simple ] &&  rm -f recvol.simple
-simple_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projfile=recvol.simple
+[ -d reconstruct3D_test ] && rm -rf reconstruct3D_test
+simple_exec prg=new_project projname=reconstruct3D_test
+if [ ! -d reconstruct3D_test ]; then
+    echo "new_project could not create folder"
+else
+    cd reconstruct3D_test
+    nice simple_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projname=reconstruct3D_test
 # cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc smpd=1.275 projfile=recvol.simple
-time simple_private_exec prg=reconstruct3D ctf=no msk=50 oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projfile=recvol.simple
+    time simple_distr_exec prg=reconstruct3D msk=50 nthr=10
 
-echo " ## >>> TESTING AGAINST REFERENCE IMAGE                                           "
-#[ -f recvol_diff.mrc ] &&  rm -f recvol_diff.mrc
-#simple_exec prg=image_diff stk=recvol_state01.mrc stk2=reference/recvol_state01.mrc outstk=recvol_diff.mrc
-#if [ -z "${DISPLAY+defined}" ];then
-#   chimera recvol_state01.mrc reference/recvol_state01.mrc
-#fi
+    echo " ## >>> TESTING AGAINST REFERENCE IMAGE                                           "
+    #[ -f recvol_diff.mrc ] &&  rm -f recvol_diff.mrc
+    #simple_exec prg=image_diff stk=recvol_state01.mrc stk2=reference/recvol_state01.mrc outstk=recvol_diff.mrc
+    if [ -x chimera ]; then
+        chimera recvol_state01.mrc ../reference/recvol_state01.mrc
+    fi
+fi

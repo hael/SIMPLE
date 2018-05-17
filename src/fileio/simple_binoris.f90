@@ -13,6 +13,7 @@ private
 integer(kind=8), parameter :: MAX_N_SEGEMENTS = 20
 integer(kind=8), parameter :: N_VARS_HEAD_SEG = 5
 integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGEMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
+
 #include "simple_local_flags.inc"
 
 type file_header_segment
@@ -35,7 +36,7 @@ type binoris
     procedure          :: close
     procedure, private :: read_header
     procedure          :: write_header
-   ! procedure          :: print_header
+    procedure          :: print_header
     procedure, private :: write_segment_1
     procedure, private :: write_segment_2
     generic            :: write_segment => write_segment_1, write_segment_2
@@ -152,18 +153,18 @@ contains
         DebugPrint  'wrote: ', sizeof(self%header), ' header bytes'
     end subroutine write_header
 
-    ! subroutine print_header( self )
-    !     class(binoris), intent(in) :: self
-    !     integer :: isegment
-    !     do isegment=1,MAX_N_SEGEMENTS
-    !         write(*,*) '*****  HEADER, segment: ', isegment
-    !         write(*,*) 'fromto(1)         : ', self%header(isegment)%fromto(1)
-    !         write(*,*) 'fromto(2)         : ', self%header(isegment)%fromto(2)
-    !         write(*,*) 'n_bytes_per_record: ', self%header(isegment)%n_bytes_per_record
-    !         write(*,*) 'n_records         : ', self%header(isegment)%n_records
-    !         write(*,*) 'first_data_byte   : ', self%header(isegment)%first_data_byte
-    !     end do
-    ! end subroutine print_header
+    subroutine print_header( self )
+        class(binoris), intent(in) :: self
+        integer :: isegment
+        do isegment=1,MAX_N_SEGEMENTS
+            write(*,*) '*****  HEADER, segment: ', isegment
+            write(*,*) 'fromto(1)         : ', self%header(isegment)%fromto(1)
+            write(*,*) 'fromto(2)         : ', self%header(isegment)%fromto(2)
+            write(*,*) 'n_bytes_per_record: ', self%header(isegment)%n_bytes_per_record
+            write(*,*) 'n_records         : ', self%header(isegment)%n_records
+            write(*,*) 'first_data_byte   : ', self%header(isegment)%first_data_byte
+        end do
+    end subroutine print_header
 
     subroutine write_segment_inside( self, isegment, os, fromto )
         use simple_oris,   only: oris

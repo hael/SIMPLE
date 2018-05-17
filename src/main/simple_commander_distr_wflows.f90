@@ -6,7 +6,7 @@ use simple_qsys_funs,           only: qsys_cleanup, qsys_watcher
 use simple_commander_base,      only: commander_base
 use simple_sp_project,          only: sp_project
 use simple_cmdline,             only: cmdline
-use simple_singletons  ! build and params singletons
+use simple_singletons  ! build and param singletons
 implicit none
 
 public :: preprocess_distr_commander
@@ -853,21 +853,21 @@ contains
             converged = .false.
             if( p%refine.eq.'cluster' ) call cline_check_3Dconv%delete('update_res')
             call xcheck_3Dconv%execute(cline_check_3Dconv)
-            if( iter >= p_master%startit + 2 )then
+            if( iter >= p%startit + 2 )then
                 ! after a minimum of 2 iterations
                 if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
             endif
-            if( iter >= p_master%maxits ) converged = .true.
+            if( iter >= p%maxits ) converged = .true.
             if( converged )then
                 ! update sp_project with the final volume(s)
-                if( trim(p_master%refine) .eq. 'snhc' )then
+                if( trim(p%refine) .eq. 'snhc' )then
                     str_state = int2str_pad(1,2)
-                    call b%spproj%add_vol2os_out(trim(SNHCVOL)//trim(str_state)//p_master%ext,&
+                    call b%spproj%add_vol2os_out(trim(SNHCVOL)//trim(str_state)//p%ext,&
                         &b%spproj%get_smpd(), 1, 'vol')
                 else
-                    do state = 1,p_master%nstates
+                    do state = 1,p%nstates
                         str_state = int2str_pad(state,2)
-                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p%ext
                         call b%spproj%add_vol2os_out(vol_iter, b%spproj%get_smpd(), state, 'vol')
                     enddo
                 endif
@@ -897,7 +897,6 @@ contains
         type(cmdline)                      :: cline_volassemble
         character(len=STDLEN)              :: volassemble_output, str_state
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
-       ! type(build)                        :: b
         type(chash)                        :: job_descr
         integer                            :: state
         ! seed the random number generator
