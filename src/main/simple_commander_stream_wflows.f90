@@ -32,13 +32,15 @@ contains
         class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
-        integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
-        class(cmdline),       allocatable  :: completed_jobs(:)
+        ! integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
+        ! 4 testing
+        integer,               parameter   :: LONGTIME  = 30  ! 30secs
+        class(cmdline),       allocatable  :: completed_jobs_clines(:)
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
         type(moviewatcher)                 :: movie_buff
         type(sp_project)                   :: spproj, stream_spproj
-        character(len=STDLEN), allocatable :: movies(:)
+        character(len=LONGSTRLEN), allocatable :: movies(:), prev_movies(:)
         character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)          :: movie
@@ -46,18 +48,14 @@ contains
         logical                            :: l_pick
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-        call cline%set('prg', 'preprocess')
         ! make master parameters
+        call cline%set('prg', 'preprocess')
         p_master        = params(cline)
         p_master%stream = 'yes'
         l_pick          = cline%defined('refs')
         call cline%set('mkdir', 'no')
         ! output directories
-        if( cline%defined('dir') )then
-            output_dir = trim(p_master%dir)//'/'
-        else
-            output_dir = trim(DIR_PREPROC)
-        endif
+        output_dir = './'
         output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
         output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
         call simple_mkdir(output_dir)
@@ -71,6 +69,8 @@ contains
         endif
         ! read in movies
         call spproj%read( p_master%projfile )
+        ! check for previously processed movies
+        call spproj%get_movies_table(prev_movies)
         ! set defaults
         p_master%numlen     = 5
         call cline%set('numlen', real(p_master%numlen))
@@ -79,7 +79,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(p_master, stream=.true.)
         ! movie watcher init
-        movie_buff = moviewatcher(p_master, longtime, print=.true.)
+        movie_buff = moviewatcher(p_master, longtime, prev_movies)
         ! start watching
         prev_stacksz = 0
         nmovies      = 0
@@ -108,19 +108,18 @@ contains
             endif
             ! completed jobs update the current project
             if( qenv%qscripts%get_done_stacksz() > 0 )then
-                call qenv%qscripts%get_stream_done_stack( completed_jobs )
-                do icline=1,size(completed_jobs)
-                    stream_spprojfile = completed_jobs(icline)%get_carg('projfile')
+                call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
+                do icline=1,size(completed_jobs_clines)
+                    stream_spprojfile = completed_jobs_clines(icline)%get_carg('projfile')
                     call stream_spproj%read( stream_spprojfile )
                     call spproj%append_project( stream_spproj, 'mic' )
                     if( l_pick )call spproj%append_project( stream_spproj, 'stk' )
                     call stream_spproj%kill()
-                    call del_file(stream_spprojfile)
                     deallocate(stream_spprojfile)
                 enddo
                 call spproj%write()
-                call spproj%os_stk%write('ptcls_for_2dstream.txt')
-                deallocate(completed_jobs)
+                call update_projects_list
+                deallocate(completed_jobs_clines)
             endif
             ! wait
             call simple_sleep(SHORTTIME)
@@ -130,6 +129,40 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
+
+            subroutine update_projects_list
+                type(cmdline) :: cline_mov
+                character(len=:), allocatable :: fname
+                character(len=LONGSTRLEN), allocatable :: old_fnames(:), fnames(:)
+                integer :: i, n_spprojs, n_old
+                n_spprojs = size(completed_jobs_clines)
+                if( n_spprojs == 0 )return
+                if( file_exists(STREAM_SPPROJFILES) )then
+                    ! append
+                    call read_filetable(STREAM_SPPROJFILES, old_fnames)
+                    n_old = size(old_fnames)
+                    allocate(fnames(n_spprojs+n_old))
+                    fnames(1:n_old) = old_fnames(:)
+                    do i=1,n_spprojs
+                        cline_mov       = completed_jobs_clines(i)
+                        fname           = trim(cline_mov%get_carg('projfile'))
+                        fnames(n_old+i) = trim(fname)
+                    enddo
+                else
+                    ! first write
+                    allocate(fnames(n_spprojs))
+                    do i=1,n_spprojs
+                        cline_mov = completed_jobs_clines(i)
+                        fname     = trim(cline_mov%get_carg('projfile'))
+                        fnames(i) = trim(fname)
+                    enddo
+                endif
+                call write_filetable(STREAM_SPPROJFILES, fnames)
+                print *,'rcfrecfrcwr'
+                call flush(6)
+                print *,'rcfrecfrcwr         2'
+                call flush(6)
+            end subroutine update_projects_list
 
             subroutine create_individual_project
                 type(sp_project)              :: spproj_here
@@ -355,8 +388,8 @@ contains
                 type(ori)                          :: o_stk
                 type(ctfparams)                    :: ctfvars
                 type(qsys_env)                     :: qenv
-                character(len=STDLEN), allocatable :: new_stks(:)
-                character(len=:),      allocatable :: stkname, ctfstr, phaseplate
+                character(len=LONGSTRLEN), allocatable :: new_stks(:)
+                character(len=:),      allocatable     :: stkname, ctfstr, phaseplate
                 integer :: istk, nptcls, iptcl
                 allocate(new_stks(n_newstks))
                 do istk=1,n_newstks

@@ -14,6 +14,7 @@ character(len=*), parameter :: JPG_EXT              = '.jpg'
 character(len=*), parameter :: SCALE_SUFFIX         = '_sc'
 character(len=*), parameter :: THUMBNAIL_SUFFIX     = '_thumb'
 character(len=*), parameter :: INTGMOV_SUFFIX       = '_intg'
+character(len=*), parameter :: FORCTF_SUFFIX        = '_forctf'
 character(len=*), parameter :: POWSPEC_SUFFIX       = '_pspec'
 character(len=*), parameter :: PPROC_SUFFIX         = '_pproc'
 ! stack part related and file format constants
@@ -58,8 +59,8 @@ character(len=*), parameter :: DIR_EXTRACT          = 'extract/'
 character(len=*), parameter :: DIR_UNIDOC           = 'unidocs/'
 character(len=*), parameter :: DIR_PICKER           = 'picker/'
 character(len=*), parameter :: DIR_PREPROC          = './'
-character(len=*), parameter :: DIR_PREPROC_STREAM   = './'
 ! STREAMING
+character(len=*), parameter :: STREAM_SPPROJFILES   = './stream_spprojfiles.txt'
 character(len=*), parameter :: TERM_STREAM          = './SIMPLE_TERM_STREAM'
 ! MISCELLANEOUS
 character(len=3), parameter :: NIL                  = 'nil'

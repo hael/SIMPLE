@@ -331,8 +331,8 @@ contains
         real         :: ave, sdev, var, med, smpd_new, smpds_new(2), scale
         integer      :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer      :: ldims_scaled(2,3)
-        character(len=:), allocatable      :: fname
-        character(len=STDLEN), allocatable :: filenames(:)
+        character(len=:),          allocatable :: fname
+        character(len=LONGSTRLEN), allocatable :: filenames(:)
         p = params(cline)                     ! parameters generated
         call img%new([p%box,p%box,1],p%smpd)  ! image created
         call img2%new([p%box,p%box,1],p%smpd) ! image created
@@ -464,15 +464,15 @@ contains
     !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
         use simple_image,  only: image
-        class(stack_commander), intent(inout) :: self
-        class(cmdline),         intent(inout) :: cline
-        type(params)                          :: p
-        type(build)                           :: b
-        integer                               :: nfiles, ldim(3), ifile, ifoo, cnt
-        integer                               :: lfoo(3), nimgs, iimg
-        character(len=STDLEN), allocatable    :: filenames(:)
-        type(image)                           :: tmp
-        real                                  :: mm(2)
+        class(stack_commander),  intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(params)                           :: p
+        type(build)                            :: b
+        integer                                :: nfiles, ldim(3), ifile, ifoo, cnt
+        integer                                :: lfoo(3), nimgs, iimg
+        character(len=LONGSTRLEN), allocatable :: filenames(:)
+        type(image)                            :: tmp
+        real                                   :: mm(2)
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
         endif

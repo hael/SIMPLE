@@ -279,8 +279,8 @@ contains
         logical          :: inputted_boxtab
         integer          :: nmovf, nboxf, i
         type(ctfparams)  :: ctfvars
-        character(len=:),      allocatable :: phaseplate, boxf_abspath
-        character(len=STDLEN), allocatable :: boxfnames(:)
+        character(len=:),          allocatable :: phaseplate, boxf_abspath
+        character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         p = params(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
@@ -345,7 +345,7 @@ contains
         type(params)     :: p
         integer          :: nos_mic, nboxf, i
         character(len=:),      allocatable :: boxf_abspath
-        character(len=STDLEN), allocatable :: boxfnames(:)
+        character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         p = params(cline)
         ! project file management
         if( .not. file_exists(trim(p%projfile)) )then

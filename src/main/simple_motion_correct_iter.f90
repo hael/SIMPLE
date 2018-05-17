@@ -29,14 +29,14 @@ end type motion_correct_iter
 
 contains
 
-    subroutine iterate( self, cline, p, orientation, fbody, frame_counter, moviename, smpd_out, dir_out )
+    subroutine iterate( self, cline, p, ctfvars, orientation, fbody, frame_counter, moviename, dir_out )
         class(motion_correct_iter), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(params),              intent(inout) :: p
+        type(ctfparams),            intent(inout) :: ctfvars
         class(ori),                 intent(inout) :: orientation
         integer,                    intent(inout) :: frame_counter
         character(len=*),           intent(in)    :: moviename, fbody
-        real,                       intent(out)   :: smpd_out
         character(len=*),           intent(in)    :: dir_out
         character(len=:), allocatable :: fbody_here, ext, fname
         real,             allocatable :: shifts(:,:)
@@ -56,24 +56,24 @@ contains
         else
             fbody_here = get_fbody(trim(fbody_here), trim(ext))
         endif
-        self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//'_intg'//trim(p%ext)
-        self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//'_forctf'//trim(p%ext)
-        self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//'_thumb'//trim(JPG_EXT)
+        self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(p%ext)
+        self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(p%ext)
+        self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
         if( cline%defined('tof') )then
             self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(p%fromf)//'-'&
-            &//int2str(p%tof)//'_intg'//p%ext
+            &//int2str(p%tof)//INTGMOV_SUFFIX//p%ext
         endif
         ! check, increment counter & print
         write(*,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( p%nframesgrp > 0 )then
             self%moviename = 'tmpnframesgrpmovie'//p%ext
-            call frameavg_stack(trim(moviename), trim(self%moviename), p%nframesgrp, p%smpd)
+            call frameavg_stack(trim(moviename), trim(self%moviename), p%nframesgrp, ctfvars%smpd)
         else
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        call motion_correct_movie(self%moviename, p, corr, smpd_out, shifts, err)
+        call motion_correct_movie(self%moviename, p, ctfvars, corr, shifts, err)
         if( err ) return
         ! generate sums
         if( p%tomo .eq. 'yes' )then
@@ -106,7 +106,7 @@ contains
         ldim_thumb(1) = round2even(real(ldim(1))*scale)
         ldim_thumb(2) = round2even(real(ldim(2))*scale)
         ldim_thumb(3) = 1
-        call self%thumbnail%new(ldim_thumb, p%smpd)
+        call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
         call self%moviesum_corrected%fft()
         call self%moviesum_corrected%clip(self%thumbnail)
         call self%thumbnail%ifft()
@@ -114,7 +114,7 @@ contains
         call self%pspec_half_n_half%collage(self%thumbnail, img_jpg)
         call img_jpg%write_jpg(self%moviename_thumb, quality=90)
         ! report to ori object
-        call orientation%set('smpd',   smpd_out)
+        call orientation%set('smpd',   ctfvars%smpd)
         call simple_full_path(moviename, fname, 'simple_motion_correct_iter::iterate')
         call orientation%set('movie',  trim(fname))
         call simple_full_path(self%moviename_intg, fname,'simple_motion_correct_iter::iterate' )

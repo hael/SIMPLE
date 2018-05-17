@@ -446,14 +446,14 @@ contains
     !     allocate(newname, source=fname(:pos-1)//trim(str)//trim(new_ext))
     ! end function add2fbody_and_new_ext
 
-    !> \brief  is for deleting from fbody
-    ! function del_from_fbody( fname, suffix, str ) result( newname )
-    !     character(len=*), intent(in)  :: fname, suffix, str
-    !     character(len=:), allocatable :: newname
-    !     integer :: pos
-    !     pos = index(fname, str) ! position of str
-    !     allocate(newname, source=fname(:pos-1)//trim(suffix))
-    ! end function del_from_fbody
+    !> \brief  is for substituting suffices
+    function swap_suffix( fname, suffix, old_suffix ) result( newname )
+        character(len=*), intent(in)  :: fname, suffix, old_suffix
+        character(len=:), allocatable :: newname
+        integer :: pos
+        pos = index(fname, old_suffix) ! position of old_suffix
+        allocate(newname, source=fname(:pos-1)//trim(suffix))
+    end function swap_suffix
 
     !> \brief  is for extracting the body of a file
     function get_fbody( fname, suffix, separator ) result( fbody )
@@ -659,8 +659,8 @@ contains
 
     !>  \brief  reads a filetable into an array
     subroutine read_filetable( filetable, filenames )
-        character(len=*),                   intent(in)  :: filetable    !< input table filename
-        character(len=STDLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
+        character(len=*),                       intent(in)  :: filetable    !< input table filename
+        character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
         integer :: nl, funit, iline,io_stat
         nl = nlines(filetable)
         call fopen(funit,filetable,'old','unknown',io_stat)
@@ -676,8 +676,8 @@ contains
 
     !>  \brief  writes a filetable array to a text file
     subroutine write_filetable( filetable, filenames )
-        character(len=*),      intent(in)  :: filetable  !< output table filename
-        character(len=STDLEN), intent(in)  :: filenames(:)!< array of filenames
+        character(len=*),          intent(in)  :: filetable  !< output table filename
+        character(len=LONGSTRLEN), intent(in)  :: filenames(:)!< array of filenames
         integer :: nl, funit, iline, io_stat
         nl = size(filenames)
         call fopen(funit,filetable, 'replace', 'unknown', io_stat)
@@ -983,17 +983,6 @@ contains
         cmd = 'cp '//trim(fname1)//'  '//trim(fname2)
         call exec_cmdline(cmd)
     end subroutine simple_copy_file
-
-    subroutine ls_mrcfiletab( dir, filetabname )
-        character(len=*),intent(in)  :: dir, filetabname
-         character(len=STDLEN) :: cmd
-         cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
-         call exec_cmdline(cmd)
-
-        ! integer :: stat
-        ! stat = simple_glob_list_tofile(glob=trim(dir//'/*.mrc*'), outfile=trim(filetabname), tr=.true.)
-        ! if(stat/=0) call fileiochk("ls_mrcfiletab failed "//trim(dir))
-    end subroutine ls_mrcfiletab
 
     ! subroutine ls_fbody_mrcfiletab( fbody, filetabname )
     !     character(len=*),intent(in)  :: fbody, filetabname

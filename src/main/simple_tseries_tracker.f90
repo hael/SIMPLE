@@ -9,11 +9,11 @@ implicit none
 public :: init_tracker, track_particle, write_tracked_series, kill_tracker
 private
 
-integer,               allocatable :: particle_locations(:,:)
-character(len=STDLEN), allocatable :: framenames(:)
-real,                  parameter   :: EPS=0.1
-logical,               parameter   :: DOPRINT=.true.
-integer,               parameter   :: CENRATE=15, NNN=8
+integer,                   allocatable :: particle_locations(:,:)
+character(len=LONGSTRLEN), allocatable :: framenames(:)
+real,                      parameter   :: EPS=0.1
+logical,                   parameter   :: DOPRINT=.true.
+integer,                   parameter   :: CENRATE=15, NNN=8
 type(image)           :: frame_img, reference, tmp_img, ptcl_target
 type(image)           :: neigh_imgs_mean(NNN), diff_img
 integer               :: ldim(3), nframes, box, nx, ny, offset

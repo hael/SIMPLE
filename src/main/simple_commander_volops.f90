@@ -448,10 +448,10 @@ contains
         real                 :: furthest_from_spat_med_corr
         type(projector)      :: vol1, vol2
         type(ori)            :: o
-        real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
-        integer,               allocatable :: pairs(:,:)
-        character(len=STDLEN), allocatable :: vollist(:)
-        character(len=:),      allocatable :: fname
+        real,                      allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
+        integer,                   allocatable :: pairs(:,:)
+        character(len=LONGSTRLEN), allocatable :: vollist(:)
+        character(len=:),          allocatable :: fname
         p = params(cline, .false.)              ! constants & derived constants produced
         call read_filetable(p%vollist, vollist) ! reads in list of volumes
         nvols  = size(vollist)

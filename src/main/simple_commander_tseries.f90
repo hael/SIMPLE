@@ -38,8 +38,8 @@ contains
         class(tseries_extract_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(params) :: p
-        character(len=STDLEN), allocatable :: filenames(:)
-        character(len=STDLEN)              :: outfname
+        character(len=LONGSTRLEN), allocatable :: filenames(:)
+        character(len=LONGSTRLEN)              :: outfname
         integer      :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
         integer      :: iframe, jframe, nfiles, endit
         type(image)  :: frame_img

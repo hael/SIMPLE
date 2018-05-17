@@ -1730,11 +1730,10 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &2,13, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &1,13, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
-        call preprocess_stream%set_input('img_ios', 2, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. preprocess/', .false., 'preprocess')
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -1747,9 +1746,13 @@ contains
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess_stream%set_input('parm_ios', 8, pspecsz)
         call preprocess_stream%set_input('parm_ios', 9, kv)
+        preprocess_stream%parm_ios(9)%required = .true.
         call preprocess_stream%set_input('parm_ios', 10, cs)
+        preprocess_stream%parm_ios(10)%required = .true.
         call preprocess_stream%set_input('parm_ios', 11, fraca)
+        preprocess_stream%parm_ios(11)%required = .true.
         call preprocess_stream%set_input('parm_ios', 12, smpd)
+        preprocess_stream%parm_ios(12)%required = .true.
         call preprocess_stream%set_input('parm_ios', 13, mkdir_)
         ! alternative inputs
         ! <empty>

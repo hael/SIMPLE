@@ -43,6 +43,8 @@ contains
     ! os_mic related methods
     procedure          :: add_single_movie
     procedure          :: add_movies
+    procedure          :: get_movies_table
+    procedure          :: get_micparams
     ! os_stk related methods
     procedure          :: add_stk
     procedure          :: add_stktab
@@ -465,8 +467,8 @@ contains
         character(len=*),          intent(in)    :: filetab
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),           pointer     :: os_ptr
-        character(len=STDLEN), allocatable :: movienames(:)
-        character(len=:),      allocatable :: name, moviename, prev_imgfmt
+        character(len=LONGSTRLEN), allocatable :: movienames(:)
+        character(len=:),          allocatable :: name, moviename, prev_imgfmt
         character(len=STDLEN) :: str
         character(len=3)      :: imgfmt
         integer               :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
@@ -550,6 +552,70 @@ contains
         write(*,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
         write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
     end subroutine add_movies
+
+    subroutine get_movies_table( self, moviestab )
+        class(sp_project),                      intent(inout) :: self
+        character(len=LONGSTRLEN), allocatable, intent(out)   :: moviestab(:)
+        character(len=:), allocatable :: imgkind, mov
+        integer :: i,n,cnt
+        if(allocated(moviestab))deallocate(moviestab)
+        n = self%get_nmovies()
+        if( n==0 )return
+        allocate(moviestab(n),source='')
+        cnt = 0
+        do i=1,self%os_mic%get_noris()
+            if(self%os_mic%isthere('imgkind'))then
+                call self%os_mic%getter(i,'imgkind',imgkind)
+                if( trim(imgkind).eq.'movie' )then
+                    cnt = cnt + 1
+                    call self%os_mic%getter(i,'movie',mov)
+                    moviestab(cnt) = trim(mov)
+                endif
+            endif
+        enddo
+    end subroutine get_movies_table
+
+    function get_micparams( self, imic ) result( ctfvars )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: imic
+        character(len=:), allocatable :: phaseplate
+        type(ctfparams) :: ctfvars
+        ! sampling distance
+        if( self%os_mic%isthere(imic, 'smpd') )then
+            ctfvars%smpd = self%os_mic%get(imic, 'smpd')
+        else
+            write(*,*) 'ERROR! smpd (sampling distance) lacking in os_mic field'
+            stop 'sp_project :: get_micparams'
+        endif
+        ! acceleration voltage
+        if( self%os_mic%isthere(imic, 'kv') )then
+            ctfvars%kv = self%os_mic%get(imic, 'kv')
+        else
+            write(*,*) 'ERROR! kv (acceleration voltage) lacking in os_mic_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! spherical aberration constant
+        if( self%os_mic%isthere(imic, 'cs') )then
+            ctfvars%cs = self%os_mic%get(imic, 'cs')
+        else
+            write(*,*) 'ERROR! cs (spherical aberration constant) lacking in os_mic_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! fraction of amplitude contrast
+        if( self%os_mic%isthere(imic, 'fraca') )then
+            ctfvars%fraca = self%os_mic%get(imic, 'fraca')
+        else
+            write(*,*) 'ERROR! fraca (fraction of amplitude contrast) lacking in os_mic_field'
+            stop 'sp_project :: get_ctfparams'
+        endif
+        ! phaseplate
+        if( self%os_mic%isthere(imic, 'phaseplate') )then
+            call self%os_mic%getter(imic, 'phaseplate', phaseplate)
+        else
+            allocate(phaseplate, source='no')
+        endif
+        ctfvars%l_phaseplate = phaseplate .eq. 'yes'
+    end function get_micparams
 
     ! os_stk related methods
 
@@ -712,8 +778,8 @@ contains
         type(ctfparams)                    :: ctfvars
         type(ori)                          :: o_stk
         type(oris)                         :: os_ptcls
-        character(len=:), allocatable      :: phplate, ctfstr
-        character(len=STDLEN), allocatable :: stknames(:)
+        character(len=:),          allocatable :: phplate, ctfstr
+        character(len=LONGSTRLEN), allocatable :: stknames(:)
         integer :: istk, ldim(3), ldim_here(3), nptcls, n_os, iptcl, nstks
         ! file exists?
         if( .not. file_exists(stktab) )then
@@ -1328,8 +1394,6 @@ contains
                 ptcl_field => self%os_ptcl2D
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
-            case('cls3D')
-                ptcl_field => self%os_cls3D
             case DEFAULT
                 write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
                 stop 'sp_project :: get_ctfparams'
@@ -1343,23 +1407,10 @@ contains
         else if( ptcl_field%isthere(iptcl, 'smpd') )then
             ctfvars%smpd = ptcl_field%get(iptcl, 'smpd')
         else
-            write(*,*) 'ERROR! smpd (sampling distance) lacking in os_stk_field'
+            write(*,*) 'ERROR! smpd (sampling distance) lacking in os_stk and ptcl fields'
             stop 'sp_project :: get_ctfparams'
         endif
         ! CTF flag
-        if( trim(oritype).eq.'cls3D' )then
-            ! parameters left to defaults for class averages
-            ctfvars%ctfflag = CTFFLAG_NO
-            ctfvars%dfx     = 0.
-            ctfvars%dfy     = 0.
-            ctfvars%angast  = 0.
-            ctfvars%phshift = 0.
-            ctfvars%kv      = 0.
-            ctfvars%cs      = 0.
-            ctfvars%fraca   = 0.
-            ctfvars%l_phaseplate = .false.
-            return
-        endif
         if( self%os_stk%isthere(stkind, 'ctf') )then
             ctfflag = trim(self%os_stk%get_static(stkind, 'ctf'))
         else if( ptcl_field%isthere(iptcl, 'ctf') )then

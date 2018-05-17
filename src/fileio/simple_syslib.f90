@@ -1292,8 +1292,9 @@ contains
         use simple_strings, only: int2str
         character(len=*),  intent(in) :: pattern
         integer, optional, intent(in) :: id
-        character(len=STDLEN) :: cmd, tmpfile
-        character(len=STDLEN), allocatable, intent(inout) :: list(:)
+        character(len=STDLEN)     :: cmd
+        character(len=LONGSTRLEN) :: tmpfile
+        character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
         character(len=1) :: junk
         integer :: sz, funit, ios, i, nlines
         if( present(id) )then

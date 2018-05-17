@@ -73,6 +73,7 @@ contains
             endif
         endif
         if( .not. file_exists(trim(fname)) )then
+            call self%clear_segments
             call open_local
             return
         endif

@@ -421,16 +421,16 @@ contains
         class(cmdline),    intent(inout)   :: cline
         logical, optional, intent(in)      :: allow_mix, del_scaled
         integer, optional, intent(in)      :: spproj_a_seg
-        character(len=STDLEN), allocatable :: sp_files(:)
-        character(len=:),      allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt, debug_local, verbose_local
-        logical                   :: vol_defined(MAXS)
-        character(len=STDLEN)     :: stk_part_fname
-        character(len=1)          :: checkupfile(50)
-        type(binoris)             :: bos
-        type(ori)                 :: o
-        integer                   :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        integer                   :: spproj_a_seg_inputted, idir, nsp_files
-        logical                   :: nparts_set, aamix, ddel_scaled, sp_required
+        character(len=LONGSTRLEN), allocatable :: sp_files(:)
+        character(len=:),          allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt, debug_local, verbose_local
+        logical               :: vol_defined(MAXS)
+        character(len=STDLEN) :: stk_part_fname
+        character(len=1)      :: checkupfile(50)
+        type(binoris)         :: bos
+        type(ori)             :: o
+        integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
+        integer               :: spproj_a_seg_inputted, idir, nsp_files
+        logical               :: nparts_set, aamix, ddel_scaled, sp_required
         nparts_set    = .false.
         debug_local   = 'no'
         verbose_local = 'no'
@@ -588,8 +588,6 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
-        call check_file('refs_even',      self%refs_even,    notAllowed='T')
-        call check_file('refs_odd',       self%refs_odd,     notAllowed='T')
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')

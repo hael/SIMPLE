@@ -41,7 +41,7 @@ integer, parameter :: IARES = 10, NSTEPS = 100
 contains
 
     subroutine ctf_estimate_init( pspec_all, pspec_lower, pspec_upper, smpd, kV, Cs,&
-        &amp_contr, dfrange, resrange, astigtol_in, phaseplate )
+        &amp_contr, dfrange, resrange, astigtol_in, l_phplate )
         class(image), target, intent(inout) :: pspec_all   !< all micrograph powerspec
         class(image), target, intent(inout) :: pspec_lower !< lower half of micrograph powerspec
         class(image), target, intent(inout) :: pspec_upper !< upper half of micrograph powerspec
@@ -52,9 +52,10 @@ contains
         real,                 intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
         real,                 intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
         real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
-        character(len=*),     intent(in)    :: phaseplate  !< Volta phase-plate images (yes|no)
+        logical,              intent(in)    :: l_phplate   !< Volta phase-plate images (yes|no)
         integer :: ldim(3)
         ! set constants
+        l_phaseplate = l_phplate
         ppspec_all   => pspec_all
         ppspec_lower => pspec_lower
         ppspec_upper => pspec_upper
@@ -72,14 +73,11 @@ contains
             stop 'invalid resolution range; simple_ctf_estimate :: new'
         endif
         astigtol = astigtol_in
-        select case(trim(phaseplate))
-            case('yes')
-                l_phaseplate = .true.
-                ndim = 4
-            case DEFAULT
-                l_phaseplate = .false.
-                ndim = 3
-        end select
+        if(l_phaseplate)then
+            ndim = 4
+        else
+            ndim = 3
+        endif
         ! construct CTF objects
         tfun       = ctf(smpd, kV, Cs, amp_contr)
         tfun_roavg = ctf(smpd, kV, Cs, amp_contr)

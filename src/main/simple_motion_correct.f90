@@ -56,12 +56,12 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 contains
 
     !> motion_correct DDD movie
-    subroutine motion_correct_movie( movie_stack_fname, p, corr, smpd_out, shifts, err, nsig )
+    subroutine motion_correct_movie( movie_stack_fname, p, ctfvars, corr, shifts, err, nsig )
         use simple_ftexp_shsrch
         character(len=*),  intent(in)    :: movie_stack_fname !< filename
         class(params),     intent(inout) :: p                 !< param object
+        type(ctfparams),   intent(inout) :: ctfvars
         real,              intent(out)   :: corr              !< ave correlation per frame
-        real,              intent(out)   :: smpd_out          !< sampling distance of the possibly scaled movies
         real, allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
         logical,           intent(out)   :: err               !< error flag
         real, optional,    intent(in)    :: nsig              !< # sigmas (for outlier removal)
@@ -72,7 +72,7 @@ contains
         ! initialise
         nsig_here = 6.0
         if( present(nsig) ) nsig_here = nsig
-        call motion_correct_init(movie_stack_fname, p)
+        call motion_correct_init(movie_stack_fname, p, ctfvars)
         err = .false.
         if( nframes < 2 )then
             err = .true.
@@ -167,7 +167,7 @@ contains
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT         :', minw
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT         :', maxw
         ! report the sampling distance of the possibly scaled movies
-        smpd_out = smpd_scaled
+        ctfvars%smpd = smpd_scaled
 
     contains
 
@@ -206,9 +206,10 @@ contains
     end subroutine motion_correct_movie
 
     !> Initialise motion_correct
-    subroutine motion_correct_init( movie_stack_fname, p )
+    subroutine motion_correct_init( movie_stack_fname, p, ctfvars )
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
         class(params),    intent(inout) :: p                  !< params object
+        type(ctfparams),  intent(in)    :: ctfvars
         type(image)          :: tmpmovsum
         real                 :: moldiam, dimo4
         integer              :: iframe, ncured, deadhot(2), i, j, winsz
@@ -232,8 +233,8 @@ contains
             doscale     = .false.
         endif
         ! SET SAMPLING DISTANCE
-        smpd        = p%smpd
-        smpd_scaled = p%smpd/p%scale
+        smpd        = ctfvars%smpd
+        smpd_scaled = ctfvars%smpd/p%scale
         DebugPrint 'logical dimension of frame: ',        ldim
         DebugPrint 'scaled logical dimension of frame: ', ldim_scaled
         DebugPrint 'number of frames: ',                  nframes
@@ -311,7 +312,7 @@ contains
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct, acc_doses')
-            kV = p%kv
+            kV = ctfvars%kv
             time_per_frame = p%exp_time/real(nframes)           ! unit: s
             dose_rate      = p%dose_rate
             do iframe=1,nframes

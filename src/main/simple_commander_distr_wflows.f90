@@ -177,7 +177,7 @@ contains
         use simple_oris, only: oris
         class(motion_correct_tomo_distr_commander), intent(inout) :: self
         class(cmdline),                             intent(inout) :: cline
-        character(len=STDLEN), allocatable :: tomonames(:)
+        character(len=LONGSTRLEN), allocatable :: tomonames(:)
         type(oris)               :: exp_doc
         integer                  :: nseries, ipart
         type(qsys_env)           :: qenv
@@ -1219,13 +1219,13 @@ contains
     subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(qsys_env)                     :: qenv
-        type(params)                       :: p_master
-        type(build)                        :: b
-        type(chash)                        :: job_descr
-        type(cmdline)                      :: cline_scale
-        type(chash),           allocatable :: part_params(:)
-        character(len=STDLEN), allocatable :: part_stks(:)
+        type(qsys_env)                         :: qenv
+        type(params)                           :: p_master
+        type(build)                            :: b
+        type(chash)                            :: job_descr
+        type(cmdline)                          :: cline_scale
+        type(chash),               allocatable :: part_params(:)
+        character(len=LONGSTRLEN), allocatable :: part_stks(:)
         character(len=STDLEN) :: filetab
         integer, allocatable  :: parts(:,:)
         real                  :: smpd

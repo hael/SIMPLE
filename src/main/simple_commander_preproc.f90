@@ -53,10 +53,11 @@ contains
 
     subroutine exec_preprocess( self, cline )
         use simple_ori,                 only: ori
+        use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         use simple_picker_iter,         only: picker_iter
-        use simple_binoris_io,  only: binwrite_oritab
+        use simple_binoris_io,          only: binwrite_oritab
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)                  :: p
@@ -67,11 +68,11 @@ contains
         type(extract_commander)       :: xextract
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
+        type(ctfparams)               :: ctfvars
         character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
-        character(len=:), allocatable :: output_dir, output_dir_ctf_estimate, output_dir_extract
+        character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
-        real    :: smpd_original, smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
         logical :: l_pick
         ! constants & derived constants
@@ -87,28 +88,33 @@ contains
         else
             l_pick = .false.
         endif
-        ! output directories & name
-        if( p%stream.eq.'yes' )then
-            output_dir = trim(DIR_PREPROC_STREAM)
-            call simple_mkdir(output_dir)
-        else
-            output_dir = './'
+        ! read in movies
+        call spproj%read( p%projfile )
+        if( spproj%get_nmovies() == 0 )then
+            stop 'No movie to process!'
         endif
-        output_dir_ctf_estimate   = trim(output_dir)
-        output_dir_motion_correct = trim(output_dir)
+        ! output directories & naming
+        output_dir_ctf_estimate   = './'
+        output_dir_motion_correct = './'
         if( l_pick )then
-            output_dir_picker  = trim(output_dir)
-            if( p%stream.eq.'yes' )output_dir_extract = trim(output_dir)
+            output_dir_picker  = './'
+        endif
+        if( p%stream.eq.'yes' )then
+            output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
+            output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
+            call simple_mkdir(output_dir_ctf_estimate)
+            call simple_mkdir(output_dir_motion_correct)
+            if( l_pick )then
+                output_dir_picker  = trim(DIR_PICKER)
+                output_dir_extract = trim(DIR_EXTRACT)
+                call simple_mkdir(output_dir_picker)
+                call simple_mkdir(output_dir_extract)
+            endif
         endif
         if( cline%defined('fbody') )then
             fbody = trim(p%fbody)
         else
             fbody = ''
-        endif
-        ! read in movies
-        call spproj%read( p%projfile )
-        if( spproj%get_nmovies() == 0 )then
-            stop 'No movie to process!'
         endif
         ! range
         if( p%stream.eq.'yes' )then
@@ -132,7 +138,6 @@ contains
         endif
         !
         frame_counter = 0
-        smpd_original = p%smpd
         ! loop over exposures (movies)
         do imovie = fromto(1),fromto(2)
             ! fetch movie orientation
@@ -144,17 +149,15 @@ contains
             if( trim(imgkind).ne.'movie' )cycle
             call o_mov%getter('movie', moviename)
             if( .not.file_exists(moviename)) cycle
-            !
-            p%smpd    = smpd_original
             ! motion_correct
-            call mciter%iterate(cline, p, o_mov, fbody, frame_counter, moviename,&
-                &smpd_scaled, output_dir_motion_correct)
-            p%smpd = smpd_scaled
+            ctfvars = spproj%get_micparams(imovie)
+            call mciter%iterate(cline, p, ctfvars, o_mov, fbody, frame_counter, moviename,&
+                &output_dir_motion_correct)
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')
             p%hp             = p%hp_ctf_estimate
             p%lp             = max(p%fny, p%lp_ctf_estimate) ! should be in params?
-            call cfiter%iterate(p, moviename_forctf, o_mov, output_dir_ctf_estimate)
+            call cfiter%iterate(p, ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
@@ -196,7 +199,7 @@ contains
         type(params)                       :: p
         type(build)                        :: b
         type(image)                        :: powspec, tmp, mask
-        character(len=STDLEN), allocatable :: imgnames(:)
+        character(len=LONGSTRLEN), allocatable :: imgnames(:)
         integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
@@ -279,19 +282,25 @@ contains
     end subroutine exec_powerspecs
 
     subroutine exec_motion_correct( self, cline )
-        use simple_binoris_io,  only: binwrite_oritab
+        use simple_sp_project,          only: sp_project
+        use simple_binoris_io,          only: binwrite_oritab
         use simple_ori,                 only: ori
         use simple_motion_correct_iter, only: motion_correct_iter
         class(motion_correct_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
         type(params)                  :: p
         type(motion_correct_iter)     :: mciter
+        type(ctfparams)               :: ctfvars
         type(sp_project)              :: spproj
         type(ori)                     :: o
         character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
-        real    :: smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
+        call spproj%read(p%projfile)
+        ! sanity check
+        if( spproj%get_nmovies() == 0 )then
+            stop 'No movie to process!'
+        endif
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
         endif
@@ -316,18 +325,12 @@ contains
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_motion_correct'
             endif
-            call spproj%read_segment( 'mic', p%projfile, fromto )
         else
             ! all movies
-            call spproj%read_segment( 'mic', p%projfile)
             fromto(1) = 1
             fromto(2) = spproj%os_mic%get_noris()
         endif
         ntot = fromto(2) - fromto(1) + 1
-        ! sanity check
-        if( spproj%get_nmovies() == 0 )then
-            stop 'No movie to process!'
-        endif
         ! for series of tomographic movies we need to calculate the time_per_frame
         if( p%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
@@ -346,7 +349,8 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'movie' )cycle
                 call o%getter('movie', moviename)
-                call mciter%iterate(cline, p, o, fbody, frame_counter, moviename, smpd_scaled, trim(output_dir))
+                ctfvars = spproj%get_micparams(imovie)
+                call mciter%iterate(cline, p, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
                 call spproj%os_mic%set_ori(imovie, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
             endif
@@ -359,25 +363,31 @@ contains
     end subroutine exec_motion_correct
 
     subroutine exec_ctf_estimate( self, cline )
+        use simple_sp_project,          only: sp_project
         use simple_binoris_io,  only: binwrite_oritab
         use simple_ori,                 only: ori
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
         type(params)                  :: p
-        type(ctf_estimate_iter)       :: cfiter
         type(sp_project)              :: spproj
+        type(ctf_estimate_iter)       :: cfiter
+        type(ctfparams)               :: ctfvars
         type(ori)                     :: o
         character(len=:), allocatable :: intg_forctf, output_dir, imgkind
         integer                       :: fromto(2), imic, ntot, cnt
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
+        call spproj%read(p%projfile)
+        ! read in integrated movies
+        if( spproj%get_nintgs() == 0 )then
+            stop 'No integrated micrograph to process!'
+        endif
         ! output directory
         output_dir = './'
         ! parameters & loop range
         if( p%stream .eq. 'yes' )then
             ! determine loop range
             fromto(:) = 1
-            call spproj%os_mic%getter(1, 'intg', intg_forctf)
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -387,11 +397,6 @@ contains
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
-        ! read in integrated movies
-        call spproj%read_segment( 'mic', p%projfile, fromto )
-        if( spproj%get_nintgs() == 0 )then
-            stop 'No integrated micrograph to process!'
-        endif
         ! loop over exposures (movies)
         cnt= 0
         do imic = fromto(1),fromto(2)
@@ -400,8 +405,9 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 cnt = cnt + 1
-                call o%getter('intg', intg_forctf)
-                call cfiter%iterate(p, intg_forctf, o, trim(output_dir))
+                call o%getter('forctf', intg_forctf)
+                ctfvars = spproj%get_micparams(imic)
+                call cfiter%iterate(p, ctfvars, intg_forctf, o, trim(output_dir))
                 call spproj%os_mic%set_ori(imic, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
             endif
@@ -538,6 +544,7 @@ contains
         call cline%printline
         ! output directory
         output_dir = './'
+        if( p%stream.eq.'yes' )output_dir = DIR_EXTRACT
         ! read in integrated movies
         call spproj%read_segment('mic', p%projfile)
         if( spproj%get_nintgs() == 0 )then
@@ -644,11 +651,11 @@ contains
                 ctfparms%ctfflag = 1
                 select case( trim(ctfstr) )
                     case('no')
-                        ctfparms%ctfflag = 0
+                        ctfparms%ctfflag = CTFFLAG_NO
                     case('yes')
-                        ctfparms%ctfflag = 1
+                        ctfparms%ctfflag = CTFFLAG_YES
                     case('flip')
-                        ctfparms%ctfflag = 2
+                        ctfparms%ctfflag = CTFFLAG_FLIP
                 end select
                 ctfparms%kv           = o_mic%get('kv')
                 ctfparms%cs           = o_mic%get('cs')
