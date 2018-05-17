@@ -53,7 +53,7 @@ if(Fortran_COMPILER_NAME MATCHES "gfortran*")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file (
       CMAKE_Fortran_COMPILER
-      NAMES gfortran- gfortran-4.9 gfortran-5 gfortran-6 gfortran-7 gfortran-8 gfortran5 gfortran6 gfortran7 gfortran8
+      NAMES gfortran- gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran8 gfortran7 gfortran6 gfortran5
       PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
@@ -491,6 +491,7 @@ if(USE_LINK_TIME_OPTIMISATION)
     "-Mpfo "# PGI
     )
 endif(USE_LINK_TIME_OPTIMISATION)
+
 #if(USE_AUTOMATIC_VECTORIZATION)
 #   # Interprocedural (link-time) optimizations
 #   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
@@ -526,26 +527,46 @@ if (USE_FAST_MATH_OPTIMISATION)
 endif(USE_FAST_MATH_OPTIMISATION)
 
 if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-# Auto parallelize
- if (USE_AUTO_PARALLELISE)
-   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-     Fortran
-     "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
-     "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
-     "-Mconcur=bind,allcores,cncall"                            # PGI
-     "-floop-parallelize-all -ftree-parallelize-loops=4"        # GNU
-     )
- endif()
+  # Auto parallelize
+  if (USE_AUTO_PARALLELISE)
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+      Fortran
+      "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
+      "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
+      "-Mconcur=bind,allcores,cncall"                            # PGI
+      "-floop-parallelize-all -ftree-parallelize-loops=4"        # GNU
+      )
+  endif()
 endif()
 # Auto parallelize with OpenACC
-if (USE_OPENACC)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-acc"                 # PGI
-    "-fopenacc"            # GNU
-    "/acc"
-    )
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+else()
+  if (USE_OPENACC)
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+      Fortran
+      "-fopenacc"            # GNU
+      "-acc"
+      "/acc"
+      )
+  endif()
 endif()
+# if(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+# else()
+#   if (USE_OPENMP)
+#     SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+#       Fortran
+#       "-fopenmp"            # GNU
+#       "-qopenmp"            # Intel
+#       "-openmp"             # depreciated Intel Open MP flag
+#       "/mp"
+#       )
+#   endif()
+# endif()
+if(USE_OPENMP)
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DOPENMP -fopenmp")
+  #add_definitions("-DOPENMP -fopenmp")  ## FIXME above
+endif()
+
 
 # # Instrumentation
 # if (USE_INSTRUMENTATION)
@@ -607,10 +628,6 @@ endif()
 # SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
 # SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 # SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
-
-if(USE_OPENMP)
-  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DOPENMP -fopenmp")
-endif()
 
 if(USE_MPI)
   find_package(MPI REQUIRED)
@@ -779,7 +796,7 @@ endif()
  else()
    # #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
     set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> ")
-#  set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||(TIME='PTIME %C %E' time <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> 2>&1 | awk '/PTIME/ {cmd=\"basename -- \" \$\$\(NF-1\)\;cmd|getline out\;print \$\$\(NF-1\),\$\$NF\;close(cmd)\;}')")
+  #set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||(TIME='PTIME %C %E' time <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> 2>&1 | awk '/PTIME/ {cmd=\"basename -- \" \$\$\(NF-1\)\;cmd|getline out\;print \$\$\(NF-1\),\$\$NF\;close(cmd)\;}')")
  endif()
 
 
@@ -847,3 +864,17 @@ elseif(UNIX)
   SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 endif()
+
+
+set (GRAPHVIZ_GRAPH_TYPE "digraph")
+set (GRAPHVIZ_GRAPH_NAME "GG")
+set (GRAPHVIZ_GRAPH_HEADER "node [n fontsize = \"8.0\"];")
+set (GRAPHVIZ_NODE_PREFIX  "n")
+set (GRAPHVIZ_EXECUTABLES TRUE)
+set (GRAPHVIZ_STATIC_LIBS TRUE)
+set (GRAPHVIZ_SHARED_LIBS TRUE)
+set (GRAPHVIZ_MODULE_LIBS TRUE)
+set (GRAPHVIZ_EXTERNAL_LIBS FALSE )
+set (GRAPHVIZ_IGNORE_TARGETS ".*(.build|.required|.proxy)")
+set (GRAPHVIZ_GENERATE_PER_TARGET FALSE)
+set (GRAPHVIZ_GENERATE_DEPENDERS FALSE)
