@@ -102,12 +102,12 @@ contains
         class(kbinterpol), intent(in) :: self
         real(dp),          intent(in) :: x
         real(dp) :: r, arg, sqrtarg
-        if( abs(x) > self%Whalf )then
-            r = 0._dp
-            return
-        endif
         arg  = self%twooW * x
         arg  = 1._dp - arg * arg
+        if (arg < 0._dp) then
+            r = 0._dp
+            return
+        end if
         sqrtarg = sqrt(arg)
         r    = - 4._dp * self%beta * x * bessi1(self%beta * sqrtarg) / &
                 sqrtarg / self%W**3
