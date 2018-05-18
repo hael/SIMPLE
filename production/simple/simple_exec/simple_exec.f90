@@ -18,6 +18,7 @@ use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_tseries
+use simple_projection_frcs
 implicit none
 
 ! PROJECT MANAGEMENT
@@ -73,6 +74,7 @@ type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
+type(projection_frcs) :: pfrcs
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
@@ -203,6 +205,8 @@ select case(prg)
     case( 'print_fsc' )
         call cline%parse()
         call xprint_fsc%execute(cline)
+    case( 'print_frcs' )
+        call pfrcs%print_frcs('frcs.bin')
     case( 'print_magic_boxes' )
         call cline%parse()
         call xprint_magic_boxes%execute(cline)

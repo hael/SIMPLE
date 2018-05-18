@@ -39,8 +39,7 @@ type(rank_cavgs_commander)           :: xrank_cavgs
 type(npeaks_commander)               :: xnpeaks
 type(nspace_commander)               :: xnspace
 type(refine3D_init_commander)        :: xrefine3D_init
-! type(multiptcl_init_commander)       :: xmultiptcl_init
-type(refine3D_commander)              :: xprime3D
+type(refine3D_commander)             :: xprime3D
 type(check_3Dconv_commander)         :: xcheck_3Dconv
 
 ! COMMON-LINES PROGRAMS

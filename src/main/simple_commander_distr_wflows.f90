@@ -462,6 +462,7 @@ contains
             else
                 call b%a%partition_eo
             endif
+            call b%spproj%write_segment_inside(p_master%oritype)
         endif
 
         ! main loop

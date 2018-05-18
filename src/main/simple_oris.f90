@@ -1148,8 +1148,13 @@ contains
     integer function get_neven( self )
         class(oris), intent(inout) :: self
         integer, allocatable :: eopart(:)
-        eopart = nint(self%get_all('eo'))
-        get_neven = count(eopart == 0)
+        integer :: i
+        get_neven = 0
+        do i=1,self%n
+            if(self%o(i)%isthere('eo'))then
+                if( nint(self%o(i)%get('eo'))==0) get_neven = get_neven + 1
+            endif
+        enddo
     end function get_neven
 
     !>  \brief  is getting the number of oris assigned to the odd partion
