@@ -1,12 +1,12 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
 include 'simple_lib.f08'
-use simple_qsys_env,            only: qsys_env
-use simple_qsys_funs,           only: qsys_cleanup, qsys_watcher
-use simple_commander_base,      only: commander_base
-use simple_sp_project,          only: sp_project
-use simple_cmdline,             only: cmdline
-use simple_singletons  ! build and params singletons
+use simple_qsys_env,       only: qsys_env
+use simple_qsys_funs,      only: qsys_cleanup, qsys_watcher
+use simple_commander_base, only: commander_base
+use simple_sp_project,     only: sp_project
+use simple_cmdline,        only: cmdline
+use simple_singletons
 implicit none
 
 public :: preprocess_distr_commander

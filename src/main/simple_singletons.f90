@@ -1,28 +1,13 @@
 module simple_singletons
 use simple_defs
-!include 'simple_lib.f08'
-!use simple_cmdline,          only: cmdline => cmdline_class
-!use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_build,            only: b
-use simple_params,           only: p
+use simple_build,  only: b
+use simple_params, only: p
 implicit none
+
+public b, p, init_params
 private
-!public :: pftcc, init_pftcc
-public :: b, p
-public :: init_params
 
-!type(polarft_corrcalc) :: pftcc
-!type(build) ::  b
-!type(params_class) :: p
-!type(cmdline_class) :: cline
 contains
-
-    ! subroutine init_pftcc( nrefs, ptcl_mask, eoarr )
-    !     integer,                 intent(in)    :: nrefs
-    !     logical, optional,       intent(in)    :: ptcl_mask(:)
-    !     integer, optional,       intent(in)    :: eoarr(:)
-    !     call pftcc%new(nrefs, ptcl_mask, eoarr)
-    ! end subroutine init_pftcc
 
     subroutine init_params(cline, allow_mix, del_scaled, spproj_a_seg )
         use simple_cmdline,          only: cmdline
@@ -48,7 +33,6 @@ contains
             p%singleton_initiated = .true.
         else
             print *, 'WARNING: attempting to re-initialize param singleton '
-
         endif
     end subroutine init_params
 

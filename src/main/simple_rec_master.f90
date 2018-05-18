@@ -1,9 +1,7 @@
 ! 3D reconstruction - master module
 module simple_rec_master
 include 'simple_lib.f08'
-! use simple_singletons
-use simple_build,     only: b ! singleton
-use simple_params,    only: p
+use simple_singletons
 use simple_qsys_funs, only: qsys_job_finished
 implicit none
 
@@ -18,10 +16,8 @@ contains
         select case(p%eo)
             case( 'yes', 'aniso' )
                 call exec_eorec_distr( fbody_in )
-                !call exec_eorec_distr( b, p, fbody_in )
             case( 'no' )
                 call exec_rec( fbody_in )
-               !call exec_rec( b, p, fbody_in )
             case DEFAULT
                 call simple_stop('unknonw eo flag; simple_rec_master :: exec_rec_master')
         end select

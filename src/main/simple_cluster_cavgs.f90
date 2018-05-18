@@ -1,11 +1,10 @@
 module simple_cluster_cavgs
 include 'simple_lib.f08'
 use simple_singletons
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_aff_prop,         only: aff_prop
-use simple_strategy2D3D_common ! use all in there
-use simple_oris,             only: oris
-
+use simple_strategy2D3D_common
+use simple_polarft_corrcalc,   only: polarft_corrcalc
+use simple_aff_prop,           only: aff_prop
+use simple_oris,               only: oris
 implicit none
 
 public :: cluster_cavgs_exec
@@ -19,9 +18,6 @@ integer, allocatable   :: centers(:), labels(:)
 contains
 
     subroutine cluster_cavgs_exec
-    ! subroutine cluster_cavgs_exec( b, p )
-        ! class(build),  intent(inout) :: b
-        ! class(params), intent(inout) :: p
         character(len=:), allocatable :: fname
         real,             allocatable :: tmp(:), clspops(:), clsres(:), pops(:), mempops(:), memres(:)
         logical,          allocatable :: mask(:), included(:)
@@ -230,10 +226,7 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for clustering
      subroutine preppftcc4cluster
-         !subroutine preppftcc4cluster( b, p )
         use simple_polarizer, only: polarizer
-        ! class(build),      intent(inout) :: b
-        ! class(params),     intent(inout) :: p
         type(polarizer), allocatable :: match_imgs(:), mirr_match_imgs(:)
         integer :: iptcl
         ! create the polarft_corrcalc object

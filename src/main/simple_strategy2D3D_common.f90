@@ -185,10 +185,7 @@ contains
     end subroutine set_bp_range
 
     subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
-    ! subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
          use simple_estimate_ssnr, only: fsc2ssnr
-    !     class(build),   intent(inout) :: b
-    !     class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space

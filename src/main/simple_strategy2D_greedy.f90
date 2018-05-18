@@ -1,6 +1,6 @@
 module simple_strategy2D_greedy
 include 'simple_lib.f08'
-use simple_strategy2D_alloc  ! use all in there
+use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 implicit none
@@ -38,7 +38,6 @@ contains
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle
                 call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs)
-                !call pftcc%gencorrs(iref, self%s%iptcl, corrs)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)

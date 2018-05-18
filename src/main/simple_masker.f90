@@ -3,7 +3,6 @@ module simple_masker
 include 'simple_lib.f08'
 use simple_image,  only: image
 use simple_params, only: p
-!use simple_singletons
 implicit none
 
 public :: masker
@@ -38,9 +37,7 @@ contains
     !>  \brief  is for 3D automasking. On output the parent volume is the envelope mask
     !!          The returned volume is envelope masked.
     subroutine automask3D( self, vol_inout )
-    !subroutine automask3D( self, p, vol_inout )
         class(masker), intent(inout) :: self
-     !   class(params), intent(in)    :: p
         class(image),  intent(inout) :: vol_inout
         logical :: was_ft
         if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker::automask3D'
@@ -71,9 +68,7 @@ contains
     !>  \brief  envelope mask for resolution estimation
     !!          it is assumed that the envelope mask (auotmask) is set from the start
     subroutine resmask( self )
-    !subroutine resmask( self, p )
         class(masker), intent(inout) :: self
-        !class(params), intent(in)    :: p
         type(image) :: distimg
         integer     :: winsz
         real        :: ave, sdev, maxv, minv, med
@@ -108,11 +103,9 @@ contains
 
     !>  \brief  is for
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)
-    !subroutine mask_from_pdb( self, p, pdb, vol_inout, os, pdbout)
         use simple_oris,  only: oris
         use simple_atoms, only: atoms
         class(masker),              intent(inout) :: self
-     !   class(params),              intent(in)    :: p
         type(atoms),                intent(inout) :: pdb
         class(image),               intent(inout) :: vol_inout
         class(oris),      optional, intent(inout) :: os

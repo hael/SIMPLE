@@ -1,9 +1,9 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
 include 'simple_lib.f08'
-use simple_commander_base,        only: commander_base
-use simple_cmdline,               only: cmdline
-use simple_sp_project,            only: sp_project
+use simple_commander_base, only: commander_base
+use simple_cmdline,        only: cmdline
+use simple_sp_project,     only: sp_project
 use simple_singletons
 implicit none
 

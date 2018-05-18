@@ -1,8 +1,7 @@
 ! array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
 module simple_strategy2D_alloc
 include 'simple_lib.f08'
-use simple_params, only: p ! singleton
-use simple_build,  only: b ! singleton
+use simple_singletons
 implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D
@@ -21,7 +20,6 @@ contains
         if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
     end subroutine clean_strategy2D
 
-    !subroutine prep_strategy2D( b, p, ptcl_mask, which_iter )
     subroutine prep_strategy2D( ptcl_mask, which_iter )
         logical,        intent(in)    :: ptcl_mask(p%fromp:p%top)
         integer,        intent(in)    :: which_iter

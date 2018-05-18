@@ -2,9 +2,9 @@
 module simple_commander_cluster2D
 include 'simple_lib.f08'
 use simple_singletons
-use simple_cmdline,             only: cmdline
-use simple_commander_base,      only: commander_base
-use simple_qsys_funs,           only: qsys_job_finished
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_qsys_funs,      only: qsys_job_finished
 implicit none
 
 public :: make_cavgs_commander

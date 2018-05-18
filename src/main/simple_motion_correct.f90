@@ -320,10 +320,6 @@ contains
         DebugPrint  'motion_correct_init, done'
     end subroutine motion_correct_init
 
-    !> Calulate stack sums
-    !! \param movie_sum movie stack sums
-    !! \param movie_sum_corrected corrected movie stack sums
-    !! \param movie_sum_ctf CTF sum
     subroutine motion_correct_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
         type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         ! calculate the sum for CTF estimation
@@ -340,9 +336,6 @@ contains
         call movie_sum%ifft()
     end subroutine motion_correct_calc_sums_1
 
-    !> Calulate stack sums in range
-    !! \param fromto ranges to calc sum
-    !! \param movie_sum_corrected corrected movie stack sums
     subroutine motion_correct_calc_sums_2( movie_sum_corrected, fromto )
         type(image), intent(out) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
@@ -356,10 +349,6 @@ contains
         do_dose_weight = l_tmp
     end subroutine motion_correct_calc_sums_2
 
-    !> Calulate stack sums per time frame
-    !! \param movie_sum movie stack sums
-    !! \param movie_sum_corrected corrected movie stack sums
-    !! \param movie_sum_ctf CTF sum
     subroutine motion_correct_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
         integer,     intent(inout) :: frame_counter  !< frame counter
         real,        intent(in)    :: time_per_frame !< time resolution
@@ -378,9 +367,6 @@ contains
         call movie_sum%ifft()
     end subroutine motion_correct_calc_sums_tomo
 
-    !> center_shifts
-    !! \param shifts  2D origin shifts
-    !!
     subroutine center_shifts( shifts )
         real, intent(inout) :: shifts(nframes,2)
         real    :: xsh, ysh
@@ -395,9 +381,6 @@ contains
         end do
     end subroutine center_shifts
 
-    !> shift_frames
-    !! \param shifts  2D origin shifts
-    !!
     subroutine shift_frames( shifts )
         real, intent(in) :: shifts(nframes,2)
         integer :: iframe
@@ -434,8 +417,6 @@ contains
         end do
     end subroutine calc_corrs
 
-    !> corrmat2weight
-    !!
     subroutine corrmat2weights()
         integer :: iframe, jframe
         corrs = 0.
@@ -451,8 +432,6 @@ contains
         frameweights = corrs2weights(corrs)
     end subroutine corrmat2weights
 
-    !> sum_movie_frames_ftexp
-    !!
     subroutine sum_movie_frames_ftexp()
         integer :: iframe
         real    :: w
@@ -463,9 +442,6 @@ contains
         end do
     end subroutine sum_movie_frames_ftexp
 
-    !> sum_movie_frames
-    !! \param shifts 2D array of shifts for each frame
-    !!
     subroutine sum_movie_frames( shifts )
         real, intent(in), optional :: shifts(nframes,2)
         integer :: iframe
@@ -488,8 +464,6 @@ contains
         call frame_tmp%kill
     end subroutine sum_movie_frames
 
-    !> wsum_movie_frames_ftexp
-    !!
     subroutine wsum_movie_frames_ftexp()
         integer :: iframe
         call movie_sum_global_ftexp%new(movie_frames_ftexp_sh(1))
@@ -499,10 +473,6 @@ contains
         end do
     end subroutine wsum_movie_frames_ftexp
 
-    !> wsum_movie_frames
-    !! \param shifts
-    !! \param fromto
-    !!
     subroutine wsum_movie_frames( shifts, fromto )
         real,              intent(in) :: shifts(nframes,2)
         integer, optional, intent(in) :: fromto(2)
@@ -528,11 +498,6 @@ contains
         end do
     end subroutine wsum_movie_frames
 
-    !> wsum movie frames tomo
-    !! \param shifts
-    !! \param frame_counter
-    !! \param time_per_frame
-    !!
     subroutine wsum_movie_frames_tomo( shifts, frame_counter, time_per_frame )
         real,    intent(in)    :: shifts(nframes,2)
         integer, intent(inout) :: frame_counter
@@ -558,10 +523,6 @@ contains
         end do
     end subroutine wsum_movie_frames_tomo
 
-    !> add movie frame
-    !! \param iframe frame index to insert
-    !! \param w frame weight
-    !!
     subroutine add_movie_frame( iframe, w )
         integer,        intent(in) :: iframe
         real, optional, intent(in) :: w
@@ -572,17 +533,12 @@ contains
         &call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=ww)
     end subroutine add_movie_frame
 
-    !> subtract_movie_frame
-    !! \param iframe frame index to remove
-    !!
     subroutine subtract_movie_frame( iframe )
         integer, intent(in) :: iframe
         if( frameweights(iframe) > 0. )&
         &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
     end subroutine subtract_movie_frame
 
-    !> motion_correct_kill class destructor
-    !!
     subroutine motion_correct_kill
         integer :: iframe
         if( existence )then

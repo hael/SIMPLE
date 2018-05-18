@@ -68,7 +68,7 @@ contains
         if( cline%defined('thres') .and. cline%defined('npix') )then
             stop 'ERROR! either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise'
         endif
-        call init_params(cline)                                     ! parameters generated
+        call init_params(cline)                            ! parameters generated
         if( cline%defined('stk') )then
             call b%build_general_tbox(cline, do3d=.false.) ! general objects built
             do iptcl=1,p%nptcls

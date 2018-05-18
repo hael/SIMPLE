@@ -2,11 +2,10 @@
 module simple_commander_rec
 include 'simple_lib.f08'
 use simple_singletons
-use simple_cmdline,         only: cmdline
-use simple_commander_base,  only: commander_base
-use simple_projection_frcs, only: projection_frcs
+use simple_cmdline,             only: cmdline
+use simple_commander_base,      only: commander_base
+use simple_projection_frcs,     only: projection_frcs
 use simple_strategy2D3D_common, only:  gen_projection_frcs
-
 implicit none
 
 public :: reconstruct3D_commander
@@ -29,9 +28,6 @@ type, extends(commander_base) :: volassemble_commander
 end type volassemble_commander
 
 contains
-
-
-
 
     !> for reconstructing volumes from image stacks and their estimated orientations
     subroutine exec_reconstruct3D( self, cline )

@@ -37,6 +37,7 @@ type ctf
     procedure, private :: evalPhSh
     procedure, private :: eval_df
     procedure          :: apply
+    procedure          :: ctf2img
     procedure          :: apply_serial
     procedure          :: phaseflip_and_shift_serial
     procedure          :: apply_and_shift
@@ -220,6 +221,38 @@ contains
             call img_pd%kill()
         endif
     end subroutine apply
+
+    !>  \brief  is for generating an imacge of CTF
+    subroutine ctf2img( self, img, dfx, dfy, angast, phshift )
+        use simple_image, only: image
+        class(ctf),       intent(inout) :: self  !< instance
+        class(image),     intent(inout) :: img   !< image (output)
+        real,             intent(in)    :: dfx, dfy, angast
+        real,   optional, intent(in)    :: phshift
+        integer :: lims(3,2),h,k,phys(3),ldim(3)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift
+        pphshift = 0.
+        if( present(phshift) ) pphshift = phshift
+        ! flag image as FT
+        call img%set_ft(.true.)
+        ! init object
+        call self%init(dfx, dfy, angast)
+        ! initialize
+        lims     = img%loop_lims(2)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                hinv      = real(h) * inv_ldim(1)
+                kinv      = real(k) * inv_ldim(2)
+                spaFreqSq = hinv * hinv + kinv * kinv
+                ang       = atan2(real(k),real(h))
+                tval      = self%eval(spaFreqSq, ang, pphshift)
+                phys      = img%comp_addr_phys([h,k,0])
+                call img%set_cmat_at(phys(1),phys(2),phys(3), cmplx(tval,0.))
+            end do
+        end do
+    end subroutine ctf2img
 
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square

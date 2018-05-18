@@ -4,10 +4,9 @@ module simple_strategy2D_matcher
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_build,            only: b     ! singleton
-use simple_params,           only: p     ! singleton
 use simple_cmdline,          only: cmdline
-use simple_classaverager          ! use all in there
+use simple_singletons
+use simple_classaverager
 implicit none
 
 public :: cluster2D_exec, preppftcc4align, pftcc
@@ -85,7 +84,6 @@ contains
             ! factorial decay, -2 because first step is always greedy
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-2)
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
-            ! extr_bound = b%a%extremal_bound(extr_thresh, 'corr')
             select case(trim(p%objfun))
                 case('cc')
                     extr_bound = b%a%extremal_bound(extr_thresh, 'corr')
@@ -200,7 +198,6 @@ contains
         if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
 
         ! SET FOURIER INDEX RANGE
-        !call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
         call set_bp_range2D(cline, which_iter, frac_srch_space )
         if( L_BENCH ) rt_init = toc(t_init)
 
@@ -246,7 +243,6 @@ contains
                 strategy2Dspec%extr_bound =  extr_bound
                 strategy2Dspec%ppftcc     => pftcc
                 strategy2Dspec%pa         => b%a
-                ! if( allocated(b%nnmat) ) strategy2Dspec%nnmat => b%nnmat
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif

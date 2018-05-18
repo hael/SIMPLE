@@ -1,14 +1,13 @@
 module simple_strategy2D_neigh
 use simple_defs
-use simple_strategy2D_alloc  ! use all in there
-use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
-use simple_build, only: b ! singleton
+use simple_strategy2D_alloc
+use simple_strategy2D,      only: strategy2D
+use simple_strategy2D_srch, only: strategy2D_srch, strategy2D_spec
+use simple_build,           only: b ! singleton
 implicit none
 
 public :: strategy2D_neigh
 private
-
 #include "simple_local_flags.inc"
 
 type, extends(strategy2D) :: strategy2D_neigh

@@ -1,8 +1,7 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 include 'simple_lib.f08'
-use simple_build,             only: b
-use simple_params,            only: p
+use simple_singletons
 use simple_oris,              only: oris
 use simple_ori,               only: ori
 use simple_sym,               only: sym
@@ -20,7 +19,6 @@ type strategy3D_spec
     class(polarft_corrcalc), pointer :: ppftcc        => null()
     class(oris),             pointer :: pa            => null()
     class(sym),              pointer :: pse           => null()
-    !integer,                 pointer :: nnmat(:,:)    => null()
     integer,                 pointer :: grid_projs(:) => null()
     integer,                 pointer :: symmat(:,:)   => null()
     integer :: iptcl=0, iptcl_map=0, szsn=0
@@ -80,8 +78,7 @@ contains
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        ! self%pftcc_ptr  => pftcc
-        self%pftcc_ptr  =>  spec%ppftcc
+        self%pftcc_ptr  => spec%ppftcc
         self%a_ptr      => spec%pa
         self%se_ptr     => spec%pse
         self%iptcl      =  spec%iptcl

@@ -38,7 +38,6 @@ contains
             cc_glob       = -1.
             glob_best_set = .false.
             call self%s%prep4srch
-            ! do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_corr > self%spec%extr_bound)
             ! objective function based logics for performing extremal search
             if( self%spec%ppftcc%objfun_is_ccres() )then
                 ! based on b-factor for objfun=ccres (the lower the better)

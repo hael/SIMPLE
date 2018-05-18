@@ -1,9 +1,7 @@
 ! for common-lines-based search
 module simple_comlin_srch
 include 'simple_lib.f08'
-!use simple_singletons
-use simple_build,       only: b ! singleton
-use simple_params,      only: p ! singleton
+use simple_singletons
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
@@ -43,16 +41,9 @@ contains
 
     !> common-line mode search constructor
     subroutine comlin_srch_init( opt_str, mode )
-  !  subroutine comlin_srch_init( b, p, opt_str, mode )
-        ! class(build),  target, intent(in) :: b           !< build object
-        ! class(params), target, intent(in) :: p           !< Parameters
-        character(len=*),      intent(in) :: opt_str     !< 'simplex', 'de' or 'oasis' search type
-        character(len=*),      intent(in) :: mode        !< 'sym' or 'pair' mode
+        character(len=*),      intent(in) :: opt_str !< 'simplex', 'de' or 'oasis' search type
+        character(len=*),      intent(in) :: mode    !< 'sym' or 'pair' mode
         character(len=8) :: str_opt= 'simplex'
-        ! bp        => b
-        ! pp        => p
-!        iptcl     => p%iptcl
-!        jptcl     => p%jptcl
         nptcls    =  p%nptcls
         hp        =  p%hp
         lp        =  p%lp

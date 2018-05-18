@@ -4,9 +4,8 @@ include 'simple_lib.f08'
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_oris,              only: oris
-!use simple_params,            only: params
 use simple_strategy2D_alloc  ! s2D singleton
-use simple_singletons        ! p and b singletons
+use simple_singletons
 
 implicit none
 
@@ -16,9 +15,8 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
-    class(polarft_corrcalc), pointer :: ppftcc     => null()
-    class(oris),             pointer :: pa         => null()
-!    integer,                 pointer :: nnmat(:,:) => null()
+    class(polarft_corrcalc), pointer :: ppftcc => null()
+    class(oris),             pointer :: pa     => null()
     real    :: extr_bound = 0.
     integer :: iptcl      = 0
     integer :: iptcl_map  = 0
@@ -93,7 +91,6 @@ contains
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
         real :: corrs(self%pftcc_ptr%get_nrots())
-        !real :: corrs(pftcc%get_nrots())
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index
         if( self%dyncls )then
@@ -105,7 +102,6 @@ contains
             endif
         endif
         self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))  ! in-plane angle index
-        !self%prev_rot   = pftcc%get_roind(360.-self%a_ptr%e3get(self%iptcl))  ! in-plane angle index
         self%prev_shvec = self%a_ptr%get_2Dshift(self%iptcl)                           ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class
