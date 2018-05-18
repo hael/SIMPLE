@@ -104,7 +104,7 @@ contains
         real(dp) :: r, arg, sqrtarg
         arg  = self%twooW * x
         arg  = 1._dp - arg * arg
-        if (arg < 0._dp) then
+        if (arg <= 0._dp) then
             r = 0._dp
             return
         end if
