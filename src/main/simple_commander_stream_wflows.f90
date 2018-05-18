@@ -31,10 +31,11 @@ contains
         use simple_commander_preprocess, only: preprocess_commander
         class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
+        integer,               parameter   :: SHORTTIME = 30   ! folder watched every minute
         ! integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
         ! 4 testing
-        integer,               parameter   :: LONGTIME  = 30  ! 30secs
+        ! integer,               parameter   :: LONGTIME  = 60  ! 30secs
+        integer,               parameter   :: LONGTIME  = 10  ! 30secs
         class(cmdline),       allocatable  :: completed_jobs_clines(:)
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
@@ -45,15 +46,24 @@ contains
         character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)          :: movie
         integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
+        integer                            :: nptcls, nptcls_prev, nmovs, nmovs_prev
         logical                            :: l_pick
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-        ! make master parameters
-        call cline%set('prg', 'preprocess')
-        p_master        = params(cline)
-        p_master%stream = 'yes'
-        l_pick          = cline%defined('refs')
+        ! make master parameters & defaults
+        p_master            = params(cline)
+        p_master%stream     = 'yes'
+        p_master%split_mode = 'stream'
+        p_master%numlen     = 5
+        p_master%ncunits    = p_master%nparts
+        call cline%set('numlen', real(p_master%numlen))
         call cline%set('mkdir', 'no')
+        call cline%set('prg',   'preprocess')
+        l_pick = cline%defined('refs')
+        ! read in movies
+        call spproj%read( p_master%projfile )
+        ! check for previously processed movies
+        call spproj%get_movies_table(prev_movies)
         ! output directories
         output_dir = './'
         output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
@@ -67,15 +77,6 @@ contains
             call simple_mkdir(output_dir_picker)
             call simple_mkdir(output_dir_extract)
         endif
-        ! read in movies
-        call spproj%read( p_master%projfile )
-        ! check for previously processed movies
-        call spproj%get_movies_table(prev_movies)
-        ! set defaults
-        p_master%numlen     = 5
-        call cline%set('numlen', real(p_master%numlen))
-        p_master%split_mode = 'stream'
-        p_master%ncunits    = p_master%nparts
         ! setup the environment for distributed execution
         call qenv%new(p_master, stream=.true.)
         ! movie watcher init
@@ -95,7 +96,7 @@ contains
             if( nmovies > 0 )then
                 do imovie = 1, nmovies
                     movie = trim(adjustl(movies(imovie)))
-                    call create_individual_project()
+                    call create_individual_project
                     call qenv%qscripts%add_to_streaming( cline )
                 enddo
             endif
@@ -108,23 +109,42 @@ contains
             endif
             ! completed jobs update the current project
             if( qenv%qscripts%get_done_stacksz() > 0 )then
+                ! append new processed movies to project
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
+                nptcls_prev = spproj%get_nptcls()
+                nmovs_prev  = spproj%get_nmovies()
                 do icline=1,size(completed_jobs_clines)
                     stream_spprojfile = completed_jobs_clines(icline)%get_carg('projfile')
                     call stream_spproj%read( stream_spprojfile )
-                    call spproj%append_project( stream_spproj, 'mic' )
-                    if( l_pick )call spproj%append_project( stream_spproj, 'stk' )
+                    call spproj%append_project(stream_spproj, 'mic')
+                    if( l_pick )call spproj%append_project(stream_spproj, 'stk')
                     call stream_spproj%kill()
                     deallocate(stream_spprojfile)
                 enddo
-                ! we do a full write here as multiple fields have been updated
-                call spproj%write()
+                nptcls = spproj%get_nptcls()
+                nmovs  = spproj%get_nmovies()
+                ! write
+                if( nmovs == 0 )then
+                    ! first write
+                    call spproj%write
+                else
+                    ! write inside
+                    call spproj%write_segment_inside('mic', fromto=[nmovs_prev+1, nmovs])
+                    if( l_pick )then
+                        call spproj%write_segment_inside('stk',    fromto=[nmovs_prev+1, nmovs])
+                        call spproj%write_segment_inside('ptcl2D', fromto=[nptcls_prev+1, nptcls])
+                        call spproj%write_segment_inside('ptcl3D', fromto=[nptcls_prev+1, nptcls])
+                    endif
+                endif
                 call update_projects_list
                 deallocate(completed_jobs_clines)
             endif
             ! wait
             call simple_sleep(SHORTTIME)
         end do
+        ! termination
+        call spproj%write
+        call spproj%kill
         ! cleanup
         call qsys_cleanup(p_master)
         ! end gracefully
@@ -159,10 +179,6 @@ contains
                     enddo
                 endif
                 call write_filetable(STREAM_SPPROJFILES, fnames)
-                print *,'rcfrecfrcwr'
-                call flush(6)
-                print *,'rcfrecfrcwr         2'
-                call flush(6)
             end subroutine update_projects_list
 
             subroutine create_individual_project

@@ -1218,6 +1218,7 @@ contains
         integer :: i, nos
         get_nptcls = 0
         nos        = self%os_stk%get_noris()
+        if( nos == 0 )return
         do i=1,nos
             get_nptcls = get_nptcls + nint(self%os_stk%get(i,'nptcls'))
         enddo

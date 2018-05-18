@@ -1411,10 +1411,9 @@ contains
                 character(len=1)              :: file_descr
                 logical                       :: raise_exception
                 if( cline%defined(file) )then
-                    var             = cline%get_carg(file)
+                    var             = trim(cline%get_carg(file))
                     file_descr      = fname2format(var)
                     raise_exception = .false.
-                    DebugPrint 'var; file_descr: '//trim(var)//' = '//trim(file_descr)
                     if( present(allowed1) )then
                         if( present(allowed2) )then
                             if( allowed1 == file_descr .or. allowed2 == file_descr )then

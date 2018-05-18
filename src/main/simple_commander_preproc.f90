@@ -320,8 +320,7 @@ contains
         ! determine loop range & fetch movies oris object
         if( p%tomo .eq. 'no' )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = p%fromp
-                fromto(2) = p%top
+                fromto = [p%fromp, p%top]
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_motion_correct'
             endif
@@ -350,6 +349,8 @@ contains
                 if( imgkind.ne.'movie' )cycle
                 call o%getter('movie', moviename)
                 ctfvars = spproj%get_micparams(imovie)
+                print *,imovie,trim(moviename)
+                call o%print_ori
                 call mciter%iterate(cline, p, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
                 call spproj%os_mic%set_ori(imovie, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
