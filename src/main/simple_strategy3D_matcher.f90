@@ -3,8 +3,8 @@ module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_polarft_corrcalc,         only: polarft_corrcalc
-use simple_strategy3D_alloc          ! singleton s3D
+use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_strategy3D_alloc  ! singleton s3D
 use simple_singletons
 use simple_timer
 implicit none
@@ -276,10 +276,6 @@ contains
                 strategy3Dspec%szsn        =  p%szsn
                 strategy3Dspec%corr_thresh =  corr_thresh
                 strategy3Dspec%ppftcc      => pftcc
-                strategy3Dspec%pa          => b%a
- !               strategy3Dspec%pse         => b%se
-               ! if( allocated(b%nnmat) )      strategy3Dspec%nnmat      => b%nnmat
-               ! if( allocated(b%grid_projs) ) strategy3Dspec%grid_projs => b%grid_projs
                 if( allocated(het_mask) )     strategy3Dspec%do_extr    =  het_mask(iptcl)
                 if( allocated(symmat) )       strategy3Dspec%symmat     => symmat
                 ! search object

@@ -16,6 +16,8 @@ public :: projector
 private
 
 integer, parameter :: iwinsz = ceiling(KBWINSZ - 0.5) !< half-window size
+logical, parameter :: MEMOIZEKB = .true.
+integer, parameter :: NKBPOINTS = 10
 
 type, extends(image) :: projector
     private
@@ -30,22 +32,22 @@ type, extends(image) :: projector
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
-    procedure :: expand_cmat
+    procedure          :: expand_cmat
     ! SETTERS
-    procedure :: reset_expanded
+    procedure          :: reset_expanded
     ! FOURIER PROJECTORS
-    procedure :: fproject
-    procedure :: fproject_serial
-    procedure :: fproject_polar
-    procedure :: fproject_polar_memo    
-    procedure :: dfproject_polar
-    procedure :: fdf_project_polar
-    procedure :: fdf_project_polar_memo    
-    procedure :: interp_fcomp
-    procedure :: interp_fcomp_memo    
-    procedure :: dinterp_fcomp
-    procedure :: fdf_interp_fcomp
-    procedure :: fdf_interp_fcomp_memo    
+    procedure          :: fproject
+    procedure          :: fproject_serial
+    procedure          :: fproject_polar
+    procedure, private :: fproject_polar_memo
+    procedure          :: dfproject_polar
+    procedure          :: fdf_project_polar
+    procedure, private :: fdf_project_polar_memo
+    procedure          :: interp_fcomp
+    procedure, private :: interp_fcomp_memo
+    procedure, private :: dinterp_fcomp
+    procedure, private :: fdf_interp_fcomp
+    procedure, private :: fdf_interp_fcomp_memo
     ! DESTRUCTOR
     procedure :: kill_expanded
 end type projector
@@ -66,6 +68,7 @@ contains
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_projector'
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_projector'
         self%kbwin         = kbinterpol(KBWINSZ, alpha)
+        if( MEMOIZEKB ) call self%kbwin%memoize(NKBPOINTS)
         self%wdim          = self%kbwin%get_wdim()
         lims               = self%loop_lims(3)
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(KBWINSZ)
@@ -199,6 +202,10 @@ contains
         logical,                 intent(in)    :: iseven !< eo flag
         integer :: irot, k, pdim(3)
         real    :: vec(3), loc(3)
+        if( MEMOIZEKB )then
+            call self%fproject_polar_memo(iref, e, pftcc, iseven)
+            return
+        endif
         pdim = pftcc%get_pdim()
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
@@ -238,12 +245,12 @@ contains
         integer,                 intent(in)    :: iref    !< which reference
         real(dp),                intent(inout) :: euls(3) !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
-        logical,                 intent(in)    :: iseven  !< eo flag        
+        logical,                 intent(in)    :: iseven  !< eo flag
         integer         :: irot, k, pdim(3)
         real(dp)        :: vec(3), loc(3)
         complex         :: dfcomp(3)
         type(ori_light) :: or
-        pdim = pftcc%get_pdim()        
+        pdim = pftcc%get_pdim()
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
                 vec(:2)            = real(pftcc%get_coord(irot,k),kind=dp)
@@ -254,7 +261,7 @@ contains
             end do
         end do
     end subroutine dfproject_polar
-    
+
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fdf_project_polar( self, iref, euls, pftcc, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -262,11 +269,15 @@ contains
         integer,                 intent(in)    :: iref    !< which reference
         real(dp),                intent(in)    :: euls(3) !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
-        logical,                 intent(in)    :: iseven  !< eo flag        
+        logical,                 intent(in)    :: iseven  !< eo flag
         integer         :: irot, k, pdim(3)
         real(dp)        :: vec(3), loc(3)
         complex         :: fcomp, dfcomp(3)
         type(ori_light) :: or
+        if( MEMOIZEKB )then
+            call self%fdf_project_polar_memo(iref, euls, pftcc, iseven)
+            return
+        endif
         pdim = pftcc%get_pdim()
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
@@ -274,7 +285,7 @@ contains
                 vec(3)  = 0._dp
                 loc     = matmul(vec,or%euler2m(euls))
                 dfcomp  = self%fdf_interp_fcomp(euls, loc, vec, fcomp)
-                call pftcc%set_ref_fcomp( iref, irot, k, fcomp, iseven )                
+                call pftcc%set_ref_fcomp( iref, irot, k, fcomp, iseven )
                 call pftcc%set_dref_fcomp( iref, irot, k, dfcomp, iseven )
             end do
         end do
@@ -287,7 +298,7 @@ contains
         integer,                 intent(in)    :: iref    !< which reference
         real(dp),                intent(in)    :: euls(3) !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
-        logical,                 intent(in)    :: iseven  !< eo flag        
+        logical,                 intent(in)    :: iseven  !< eo flag
         integer         :: irot, k, pdim(3)
         real(dp)        :: vec(3), loc(3)
         complex         :: fcomp, dfcomp(3)
@@ -299,33 +310,11 @@ contains
                 vec(3)  = 0._dp
                 loc     = matmul(vec,or%euler2m(euls))
                 dfcomp  = self%fdf_interp_fcomp_memo(euls, loc, vec, fcomp)
-                call pftcc%set_ref_fcomp( iref, irot, k, fcomp, iseven )                
+                call pftcc%set_ref_fcomp( iref, irot, k, fcomp, iseven )
                 call pftcc%set_dref_fcomp( iref, irot, k, dfcomp, iseven )
             end do
         end do
     end subroutine fdf_project_polar_memo
-
-    
-    ! INTERPOLATORS
-    !>  \brief is to interpolate from the expanded complex matrix
-    ! function interp_fcomp( self, loc )result( comp )
-    !     class(projector), intent(inout) :: self
-    !     real,             intent(in)    :: loc(3)
-    !     complex :: comp
-    !     real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
-    !     integer :: i, win(3,2)
-    !     ! interpolation kernel window
-    !     call sqwin_3d(loc(1), loc(2), loc(3), KBWINSZ, win)
-    !     ! interpolation kernel matrix
-    !     w = 1.
-    !     do i=1,self%wdim
-    !         w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
-    !         w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(2,1)+i-1)-loc(2) )
-    !         w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(3,1)+i-1)-loc(3) )
-    !     end do
-    !     ! SUM( kernel x components )
-    !     comp = sum( w * self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2),win(3,1):win(3,2)) )
-    ! end function interp_fcomp
 
     !>  \brief is to interpolate from the expanded complex matrix
     function interp_fcomp( self, loc )result( comp )
@@ -387,14 +376,14 @@ contains
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_p, dw2_p, dw3_p    !psi
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_ph, dw2_ph, dw3_ph !phi
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph
-        real(dp)                                                 :: dRdangle(3,3) 
+        real(dp)                                                 :: dRdangle(3,3)
         real(dp)                                                 :: dapod_tmp(3)
         integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
         type(ori_light)                                          :: or
         ! interpolation kernel window
         win(1,:) = nint(loc)
         win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz               
+        win(1,:) = win(1,:) - iwinsz
         call or%euler2dm(euls, drotmat)
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))
@@ -405,7 +394,7 @@ contains
         ! psi
         dw1_p = 1.0_dp ; dw2_p = 1.0_dp ; dw3_p = 1.0_dp
         ! phi
-        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp            
+        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp
         do i=1,self%wdim
             w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
             w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
@@ -414,16 +403,16 @@ contains
             dapod_tmp(2) = self%kbwin%dapod( real( win(1,2)+i-1,kind=dp) - loc(2) )
             dapod_tmp(3) = self%kbwin%dapod( real( win(1,3)+i-1,kind=dp) - loc(3) )
             dw1_t (i,:,:) = - dapod_tmp(1) * dRdangle(1,1)
-            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1) 
+            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1)
             dw3_t (:,:,i) = - dapod_tmp(3) * dRdangle(3,1)
             dw1_p (i,:,:) = - dapod_tmp(1) * dRdangle(1,2)
             dw2_p (:,i,:) = - dapod_tmp(2) * dRdangle(2,2)
             dw3_p (:,:,i) = - dapod_tmp(3) * dRdangle(3,2)
             dw1_ph(i,:,:) = - dapod_tmp(1) * dRdangle(1,3)
             dw2_ph(:,i,:) = - dapod_tmp(2) * dRdangle(2,3)
-            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)            
-        end do        
-        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t 
+            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)
+        end do
+        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t
         wp  = dw1_p  * w2 * w3  + w1 * dw2_p  * w3  + w1 * w2 * dw3_p
         wph = dw1_ph * w2 * w3  + w1 * dw2_ph * w3  + w1 * w2 * dw3_ph
         res(1) = cmplx( sum( wt  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) )
@@ -440,7 +429,7 @@ contains
         real(dp),         intent(in)                             :: euls(3)
         real(dp),         intent(in)                             :: loc(3)
         real(dp),         intent(in)                             :: q(3)
-        complex(sp),      intent(out)                            :: fcomp        
+        complex(sp),      intent(out)                            :: fcomp
         complex(sp)                                              :: res(3)
         real(dp)                                                 :: drotmat(3,3,3)
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1, w2, w3
@@ -448,14 +437,14 @@ contains
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_p, dw2_p, dw3_p    !psi
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_ph, dw2_ph, dw3_ph !phi
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph, w
-        real(dp)                                                 :: dRdangle(3,3) 
+        real(dp)                                                 :: dRdangle(3,3)
         real(dp)                                                 :: dapod_tmp(3)
         integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
         type(ori_light)                                          :: or
         ! interpolation kernel window
         win(1,:) = nint(loc)
         win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz               
+        win(1,:) = win(1,:) - iwinsz
         call or%euler2dm(euls, drotmat)
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))
@@ -466,7 +455,7 @@ contains
         ! psi
         dw1_p = 1.0_dp ; dw2_p = 1.0_dp ; dw3_p = 1.0_dp
         ! phi
-        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp            
+        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp
         do i=1,self%wdim
             w1(i,:,:) = self%kbwin%apod_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
             w2(:,i,:) = self%kbwin%apod_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
@@ -475,16 +464,16 @@ contains
             dapod_tmp(2) = self%kbwin%dapod( real( win(1,2)+i-1,kind=dp) - loc(2) )
             dapod_tmp(3) = self%kbwin%dapod( real( win(1,3)+i-1,kind=dp) - loc(3) )
             dw1_t (i,:,:) = - dapod_tmp(1) * dRdangle(1,1)
-            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1) 
+            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1)
             dw3_t (:,:,i) = - dapod_tmp(3) * dRdangle(3,1)
             dw1_p (i,:,:) = - dapod_tmp(1) * dRdangle(1,2)
             dw2_p (:,i,:) = - dapod_tmp(2) * dRdangle(2,2)
             dw3_p (:,:,i) = - dapod_tmp(3) * dRdangle(3,2)
             dw1_ph(i,:,:) = - dapod_tmp(1) * dRdangle(1,3)
             dw2_ph(:,i,:) = - dapod_tmp(2) * dRdangle(2,3)
-            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)            
-        end do        
-        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t 
+            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)
+        end do
+        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t
         wp  = dw1_p  * w2 * w3  + w1 * dw2_p  * w3  + w1 * w2 * dw3_p
         wph = dw1_ph * w2 * w3  + w1 * dw2_ph * w3  + w1 * w2 * dw3_ph
         w   = w1 * w2 * w3
@@ -494,7 +483,7 @@ contains
         fcomp  = cmplx( sum( w  *  self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) )
     end function fdf_interp_fcomp
 
-        !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
+    !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
     !! \param loc 3-dimensional location in the volume
     !! \param q 2-dimensional location on the plane (h,k,0)
     !! \param e orientation class
@@ -503,7 +492,7 @@ contains
         real(dp),         intent(in)                             :: euls(3)
         real(dp),         intent(in)                             :: loc(3)
         real(dp),         intent(in)                             :: q(3)
-        complex(sp),      intent(out)                            :: fcomp        
+        complex(sp),      intent(out)                            :: fcomp
         complex(sp)                                              :: res(3)
         real(dp)                                                 :: drotmat(3,3,3)
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: w1, w2, w3
@@ -511,14 +500,14 @@ contains
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_p, dw2_p, dw3_p    !psi
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: dw1_ph, dw2_ph, dw3_ph !phi
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph, w
-        real(dp)                                                 :: dRdangle(3,3) 
+        real(dp)                                                 :: dRdangle(3,3)
         real(dp)                                                 :: dapod_tmp(3)
         integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
         type(ori_light)                                          :: or
         ! interpolation kernel window
         win(1,:) = nint(loc)
         win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz               
+        win(1,:) = win(1,:) - iwinsz
         call or%euler2dm(euls, drotmat)
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))
@@ -529,7 +518,7 @@ contains
         ! psi
         dw1_p = 1.0_dp ; dw2_p = 1.0_dp ; dw3_p = 1.0_dp
         ! phi
-        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp            
+        dw1_ph = 1.0_dp ; dw2_ph = 1.0_dp ; dw3_ph = 1.0_dp
         do i=1,self%wdim
             w1(i,:,:) = self%kbwin%apod_memo_dp( real( win(1,1)+i-1,kind=dp) - loc(1) )
             w2(:,i,:) = self%kbwin%apod_memo_dp( real( win(1,2)+i-1,kind=dp) - loc(2) )
@@ -538,16 +527,16 @@ contains
             dapod_tmp(2) = self%kbwin%dapod_memo( real( win(1,2)+i-1,kind=dp) - loc(2) )
             dapod_tmp(3) = self%kbwin%dapod_memo( real( win(1,3)+i-1,kind=dp) - loc(3) )
             dw1_t (i,:,:) = - dapod_tmp(1) * dRdangle(1,1)
-            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1) 
+            dw2_t (:,i,:) = - dapod_tmp(2) * dRdangle(2,1)
             dw3_t (:,:,i) = - dapod_tmp(3) * dRdangle(3,1)
             dw1_p (i,:,:) = - dapod_tmp(1) * dRdangle(1,2)
             dw2_p (:,i,:) = - dapod_tmp(2) * dRdangle(2,2)
             dw3_p (:,:,i) = - dapod_tmp(3) * dRdangle(3,2)
             dw1_ph(i,:,:) = - dapod_tmp(1) * dRdangle(1,3)
             dw2_ph(:,i,:) = - dapod_tmp(2) * dRdangle(2,3)
-            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)            
-        end do        
-        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t 
+            dw3_ph(:,:,i) = - dapod_tmp(3) * dRdangle(3,3)
+        end do
+        wt  = dw1_t  * w2 * w3  + w1 * dw2_t  * w3  + w1 * w2 * dw3_t
         wp  = dw1_p  * w2 * w3  + w1 * dw2_p  * w3  + w1 * w2 * dw3_p
         wph = dw1_ph * w2 * w3  + w1 * dw2_ph * w3  + w1 * w2 * dw3_ph
         w   = w1 * w2 * w3
@@ -556,7 +545,7 @@ contains
         res(3) = cmplx( sum( wph * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) )
         fcomp  = cmplx( sum( w  *  self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) )
     end function fdf_interp_fcomp_memo
-    
+
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
     subroutine kill_expanded( self )
         class(projector), intent(inout) :: self !< projector instance

@@ -1,13 +1,13 @@
 ! concrete strategy3D: continuous single-state refinement
 module simple_strategy3D_cont_single
 include 'simple_lib.f08'
-use simple_strategy3D_alloc  ! singleton
-use simple_strategy3D_utils, only: fit_bfactors
-use simple_strategy3D,       only: strategy3D
-use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
-use simple_pftcc_orisrch_grad,  only: pftcc_orisrch_grad
+use simple_strategy3D_alloc    ! singleton
+use simple_strategy3D_utils,   only: fit_bfactors
+use simple_strategy3D,         only: strategy3D
+use simple_strategy3D_srch,    only: strategy3D_srch, strategy3D_spec
+use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad
 use simple_ori,              only: ori
-use simple_params, only: p ! singleton
+use simple_singletons
 implicit none
 
 public :: strategy3D_cont_single
@@ -44,17 +44,17 @@ contains
         class(strategy3D_cont_single), intent(inout) :: self
         real, allocatable :: cxy(:)
         ! execute search
-        if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
+        if( b%a%get_state(self%s%iptcl) > 0 )then
             ! initialize
             call self%s%prep4srch()
             call self%cont_srch%set_particle(self%s%iptcl)
-            self%o    = self%s%a_ptr%get_ori(self%s%iptcl)
+            self%o    = b%a%get_ori(self%s%iptcl)
             cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, p%trs)
             self%corr = cxy(1)
             ! prepare weights and orientations
             call self%oris_assign
         else
-            call self%s%a_ptr%reject(self%s%iptcl)
+            call b%a%reject(self%s%iptcl)
         endif
         DebugPrint  '>>> STRATEGY3D_CONT_SINGLE :: FINISHED CONTINUOUS SEARCH'
     end subroutine srch_cont_single
@@ -71,7 +71,7 @@ contains
         ! angular standard deviation
         ang_sdev = 0.
         ! angular distances
-        call self%s%se_ptr%sym_dists(self%s%a_ptr%get_ori(self%s%iptcl), self%o, osym, euldist, dist_inpl)
+        call b%se%sym_dists(b%a%get_ori(self%s%iptcl), self%o, osym, euldist, dist_inpl)
         ! generate convergence stats
         mi_proj  = 0.
         mi_inpl  = 0.
@@ -85,30 +85,30 @@ contains
             mi_joint = mi_joint + 1.
         endif
         mi_joint = mi_joint / 2.
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_proj',   mi_proj)
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_inpl',   mi_inpl)
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_state',  1.)
-        call self%s%a_ptr%set(self%s%iptcl, 'mi_joint',  mi_joint)
+        call b%a%set(self%s%iptcl, 'mi_proj',   mi_proj)
+        call b%a%set(self%s%iptcl, 'mi_inpl',   mi_inpl)
+        call b%a%set(self%s%iptcl, 'mi_state',  1.)
+        call b%a%set(self%s%iptcl, 'mi_joint',  mi_joint)
         ! fraction of search space scanned
         frac = 100.
         ! set the distances before we update the orientation
-        if( self%s%a_ptr%isthere(self%s%iptcl,'dist') )then
-            call self%s%a_ptr%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
+        if( b%a%isthere(self%s%iptcl,'dist') )then
+            call b%a%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*b%a%get(self%s%iptcl,'dist'))
         else
-            call self%s%a_ptr%set(self%s%iptcl, 'dist', euldist)
+            call b%a%set(self%s%iptcl, 'dist', euldist)
         endif
-        call self%s%a_ptr%set(self%s%iptcl, 'dist_inpl', dist_inpl)
-        call self%s%a_ptr%set_euler(self%s%iptcl, self%o%get_euler())
-        call self%s%a_ptr%set_shift(self%s%iptcl, self%o%get_2Dshift())
-        call self%s%a_ptr%set(self%s%iptcl, 'frac',      frac)
-        call self%s%a_ptr%set(self%s%iptcl, 'state',     1.)
-        call self%s%a_ptr%set(self%s%iptcl, 'corr',      self%corr)
-        call self%s%a_ptr%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call self%s%a_ptr%set(self%s%iptcl, 'ow',        1.0)
-        call self%s%a_ptr%set(self%s%iptcl, 'sdev',      0.)
-        call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    1.)
+        call b%a%set(self%s%iptcl, 'dist_inpl', dist_inpl)
+        call b%a%set_euler(self%s%iptcl, self%o%get_euler())
+        call b%a%set_shift(self%s%iptcl, self%o%get_2Dshift())
+        call b%a%set(self%s%iptcl, 'frac',      frac)
+        call b%a%set(self%s%iptcl, 'state',     1.)
+        call b%a%set(self%s%iptcl, 'corr',      self%corr)
+        call b%a%set(self%s%iptcl, 'specscore', self%s%specscore)
+        call b%a%set(self%s%iptcl, 'ow',        1.0)
+        call b%a%set(self%s%iptcl, 'sdev',      0.)
+        call b%a%set(self%s%iptcl, 'npeaks',    1.)
         ! transfer data to o_peaks
-        call s3D%o_peaks(self%s%iptcl)%set_ori(1,self%s%a_ptr%get_ori(self%s%iptcl))
+        call s3D%o_peaks(self%s%iptcl)%set_ori(1,b%a%get_ori(self%s%iptcl))
     end subroutine oris_assign_cont_single
 
     subroutine kill_cont_single( self )

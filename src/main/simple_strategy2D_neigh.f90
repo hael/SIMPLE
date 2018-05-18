@@ -34,7 +34,7 @@ contains
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( .not. allocated(b%nnmat) )&
         &stop 'nnmat need to be associated in self%spec; strategy2D_neigh :: srch_neigh'
-        if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
+        if( b%a%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = -1.
             ! evaluate neighbors (greedy selection)
@@ -56,7 +56,7 @@ contains
             call self%s%inpl_srch
             call self%s%store_solution
         else
-            call self%s%a_ptr%reject(self%s%iptcl)
+            call b%a%reject(self%s%iptcl)
         endif
         DebugPrint '>>> STRATEGY2D_NEIGH :: SRCH_NEIGH; FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine srch_neigh

@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
+use simple_singletons
 implicit none
 
 public :: strategy2D_stochastic
@@ -33,7 +34,7 @@ contains
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set, do_shc
-        if( self%s%a_ptr%get_state(self%s%iptcl) > 0 )then
+        if( b%a%get_state(self%s%iptcl) > 0 )then
             do_inplsrch   = .true.
             cc_glob       = -1.
             glob_best_set = .false.
@@ -102,10 +103,10 @@ contains
                     ! empty class
                     do_inplsrch = .false.               ! no in-plane search
                     inpl_ind    = irnd_uni(self%s%nrots)  ! random in-plane
-                    nptcls      = self%s%a_ptr%get_noris()
+                    nptcls      = b%a%get_noris()
                     inpl_corr   = -1.
                     do while( inpl_corr < TINY )
-                        inpl_corr = self%s%a_ptr%get(irnd_uni(nptcls), 'corr') ! random correlation
+                        inpl_corr = b%a%get(irnd_uni(nptcls), 'corr') ! random correlation
                     enddo
                 else
                     ! populated class
@@ -144,7 +145,7 @@ contains
             endif
             call self%s%store_solution
         else
-            call self%s%a_ptr%reject(self%s%iptcl)
+            call b%a%reject(self%s%iptcl)
         endif
         if( DEBUG ) print *, '>>> strategy2D_srch::FINISHED STOCHASTIC SEARCH'
     end subroutine srch_stochastic

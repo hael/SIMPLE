@@ -2,6 +2,7 @@ module simple_strategy3D_utils
 include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! singleton class s3D
 use simple_strategy3D_srch,  only: strategy3D_srch
+use simple_singletons
 implicit none
 
 contains
@@ -67,17 +68,17 @@ contains
         else
             best_loc = maxloc(corrs)
             ! reweighting according to angular distance to best peak
-            ang_lim = deg2rad( s%se_ptr%srchrange_theta()/2. )
+            ang_lim = deg2rad( b%se%srchrange_theta()/2. )
             o_best  = s3D%o_peaks(s%iptcl)%get_ori(best_loc(1))
             do ipeak = 1,s%npeaks
                 if( ipeak == best_loc(1) )then
                     ang_weights(ipeak) = 1.0
                     cycle
                 endif
-                if( trim(s%se_ptr%get_pgrp()).eq.'c1' )then
+                if( trim(b%se%get_pgrp()).eq.'c1' )then
                     ang_dist = s3D%o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
                 else
-                    call s%se_ptr%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
+                    call b%se%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
                     ang_dist = deg2rad( ang_dist )
                 endif
                 if( ang_dist > ang_lim )then
@@ -162,7 +163,7 @@ contains
                 call s3D%o_peaks(s%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
             enddo
             bfac = sum(ws * bfacs, mask=(ws>TINY))
-            call s%a_ptr%set(s%iptcl, 'bfac',  bfac )
+            call b%a%set(s%iptcl, 'bfac',  bfac )
         endif
     end subroutine fit_bfactors
 
@@ -176,14 +177,14 @@ contains
         type(ori)  :: osym
         type(oris) :: sym_os
         ang_sdev = 0.
-        if( trim(s%se_ptr%get_pgrp()).eq.'c1' )then
+        if( trim(b%se%get_pgrp()).eq.'c1' )then
             ang_sdev = s3D%o_peaks(s%iptcl)%ang_sdev(s%nstates, s%npeaks)
         else
             if( s%npeaks > 2 )then
                 sym_os = s3D%o_peaks(s%iptcl)
                 do ipeak = 1, s%npeaks
                     if( ipeak == best_loc(1) )cycle
-                    call s%se_ptr%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(best_loc(1)),&
+                    call b%se%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(best_loc(1)),&
                         &s3D%o_peaks(s%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
                     call sym_os%set_ori(ipeak, osym)
                 enddo
@@ -211,10 +212,10 @@ contains
             mi_joint = mi_joint + 1.
         endif
         mi_joint = mi_joint/2.
-        call s%a_ptr%set(s%iptcl, 'mi_proj',   mi_proj)
-        call s%a_ptr%set(s%iptcl, 'mi_inpl',   mi_inpl)
-        call s%a_ptr%set(s%iptcl, 'mi_state',  1.)
-        call s%a_ptr%set(s%iptcl, 'mi_joint',  mi_joint)
+        call b%a%set(s%iptcl, 'mi_proj',   mi_proj)
+        call b%a%set(s%iptcl, 'mi_inpl',   mi_inpl)
+        call b%a%set(s%iptcl, 'mi_state',  1.)
+        call b%a%set(s%iptcl, 'mi_joint',  mi_joint)
     end subroutine convergence_stats_single
 
     subroutine convergence_stats_multi( s, best_loc, euldist )
@@ -247,10 +248,10 @@ contains
         endif
         mi_joint = mi_joint/3.
         ! set the overlaps
-        call s%a_ptr%set(s%iptcl, 'mi_proj',   mi_proj)
-        call s%a_ptr%set(s%iptcl, 'mi_inpl',   mi_inpl)
-        call s%a_ptr%set(s%iptcl, 'mi_state',  mi_state)
-        call s%a_ptr%set(s%iptcl, 'mi_joint',  mi_joint)
+        call b%a%set(s%iptcl, 'mi_proj',   mi_proj)
+        call b%a%set(s%iptcl, 'mi_inpl',   mi_inpl)
+        call b%a%set(s%iptcl, 'mi_state',  mi_state)
+        call b%a%set(s%iptcl, 'mi_joint',  mi_joint)
     end subroutine convergence_stats_multi
 
 end module simple_strategy3D_utils

@@ -11,6 +11,8 @@ implicit none
 public :: pftcc_orisrch_grad
 private
 
+logical :: MEMOIZEKB = .false.
+
 type :: pftcc_orisrch_grad
     private
     class(polarft_corrcalc), pointer     :: pftcc_ptr   => null()  !< pointer to pftcc object

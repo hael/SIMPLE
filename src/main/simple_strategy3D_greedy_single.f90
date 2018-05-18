@@ -37,7 +37,7 @@ contains
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances
-        call self%s%se_ptr%sym_dists( self%s%a_ptr%get_ori(self%s%iptcl),&
+        call b%se%sym_dists( b%a%get_ori(self%s%iptcl),&
             & s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! generate convergence stats
         call convergence_stats_single( self%s, best_loc, euldist )
@@ -48,23 +48,23 @@ contains
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
         endif
         ! set the distances before we update the orientation
-        if( self%s%a_ptr%isthere(self%s%iptcl,'dist') )then
-            call self%s%a_ptr%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*self%s%a_ptr%get(self%s%iptcl,'dist'))
+        if( b%a%isthere(self%s%iptcl,'dist') )then
+            call b%a%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*b%a%get(self%s%iptcl,'dist'))
         else
-            call self%s%a_ptr%set(self%s%iptcl, 'dist', euldist)
+            call b%a%set(self%s%iptcl, 'dist', euldist)
         endif
-        call self%s%a_ptr%set(self%s%iptcl, 'dist_inpl', dist_inpl)
+        call b%a%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call self%s%a_ptr%set_euler(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
-        call self%s%a_ptr%set_shift(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
-        call self%s%a_ptr%set(self%s%iptcl, 'state',     1.)
-        call self%s%a_ptr%set(self%s%iptcl, 'frac',      frac)
-        call self%s%a_ptr%set(self%s%iptcl, 'corr',      wcorr)
-        call self%s%a_ptr%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call self%s%a_ptr%set(self%s%iptcl, 'ow',         s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
-        call self%s%a_ptr%set(self%s%iptcl, 'proj',       s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
-        call self%s%a_ptr%set(self%s%iptcl, 'sdev',      ang_sdev)
-        call self%s%a_ptr%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
+        call b%a%set_euler(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
+        call b%a%set_shift(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
+        call b%a%set(self%s%iptcl, 'state',     1.)
+        call b%a%set(self%s%iptcl, 'frac',      frac)
+        call b%a%set(self%s%iptcl, 'corr',      wcorr)
+        call b%a%set(self%s%iptcl, 'specscore', self%s%specscore)
+        call b%a%set(self%s%iptcl, 'ow',         s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
+        call b%a%set(self%s%iptcl, 'proj',       s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
+        call b%a%set(self%s%iptcl, 'sdev',      ang_sdev)
+        call b%a%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint   '>>> STRATEGY3D_GREEDY_SINGLE :: EXECUTED ORIS_ASSIGN_GREEDY_SINGLE'
     end subroutine oris_assign_greedy_single
 

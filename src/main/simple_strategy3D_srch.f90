@@ -1,13 +1,13 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 include 'simple_lib.f08'
-use simple_singletons
 use simple_oris,              only: oris
 use simple_ori,               only: ori
 use simple_sym,               only: sym
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based angle and shift search
 use simple_strategy3D_alloc   ! singleton s3D
 use simple_polarft_corrcalc
+use simple_singletons
 implicit none
 
 public :: strategy3D_srch, strategy3D_spec
@@ -28,8 +28,6 @@ end type strategy3D_spec
 
 type strategy3D_srch
     class(polarft_corrcalc), pointer :: pftcc_ptr => null()       !< corrcalc object
-    class(oris),             pointer :: a_ptr     => null()       !< b%a (primary particle orientation table)
-    class(sym),              pointer :: se_ptr    => null()       !< b%se (symmetry elements)
     type(pftcc_shsrch_grad)          :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     integer, allocatable             :: nnvec(:)                  !< nearest neighbours indices
     integer                          :: iptcl         = 0         !< global particle index
@@ -79,8 +77,6 @@ contains
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
         self%pftcc_ptr  => spec%ppftcc
-        self%a_ptr      => spec%pa
-        self%se_ptr     => spec%pse
         self%iptcl      =  spec%iptcl
         self%iptcl_map  =  spec%iptcl_map
         self%nstates    =  p%nstates
@@ -90,7 +86,7 @@ contains
         self%npeaks     =  npeaks
         self%nbetter    =  0
         self%nrefs_eval =  0
-        self%nsym       =  self%se_ptr%get_nsym()
+        self%nsym       =  b%se%get_nsym()
         self%doshift    =  p%l_doshift
         self%neigh      =  p%neigh == 'yes'
         self%nnn_static =  p%nnn
@@ -140,7 +136,7 @@ contains
             if( .not. present(target_projs) )&
             &stop 'need optional target_projs to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
         endif
-        o_prev          = self%a_ptr%get_ori(self%iptcl)
+        o_prev          = b%a%get_ori(self%iptcl)
         self%prev_state = o_prev%get_state()                                          ! state index
         self%prev_roind = self%pftcc_ptr%get_roind(360.-o_prev%e3get())               ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                                        ! shift vector
@@ -157,7 +153,7 @@ contains
         if( self%pftcc_ptr%objfun_is_ccres() )then
             bfac = self%pftcc_ptr%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
             call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
-            call self%a_ptr%set(self%iptcl, 'bfac', bfac)
+            call b%a%set(self%iptcl, 'bfac', bfac)
         endif
         ! calc specscore
         self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
@@ -183,7 +179,7 @@ contains
         real      :: inpl_corrs(self%nrots), corrs(self%nrefs), inpl_corr
         integer   :: iref, isample, nrefs, ntargets, cnt, istate
         integer   :: state_cnt(self%nstates), iref_state, inpl_ind(1)
-        if( self%a_ptr%get_state(self%iptcl) > 0 )then
+        if( b%a%get_state(self%iptcl) > 0 )then
             ! initialize
             target_projs = 0
             s3D%proj_space_corrs(self%iptcl_map,:) = -1.
@@ -231,7 +227,7 @@ contains
                 end do
             endif
         else
-            call self%a_ptr%reject(self%iptcl)
+            call b%a%reject(self%iptcl)
         endif
         DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED GREEDY SUBSPACE SEARCH'
 
@@ -274,14 +270,14 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         integer :: iref
         real    :: cc
-        self%prev_state = self%a_ptr%get_state(self%iptcl)
+        self%prev_state = b%a%get_state(self%iptcl)
         if( self%prev_state > 0 )then
-            self%prev_roind = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))
+            self%prev_roind = self%pftcc_ptr%get_roind(360.-b%a%e3get(self%iptcl))
             iref = (self%prev_state-1) * self%nprojs + s3D%prev_proj(self%iptcl_map)
             cc = self%pftcc_ptr%gencorr_cc_for_rot(iref, self%iptcl, [0.,0.], self%prev_roind)
-            call self%a_ptr%set(self%iptcl,'corr', cc)
+            call b%a%set(self%iptcl,'corr', cc)
         else
-            call self%a_ptr%reject(self%iptcl)
+            call b%a%reject(self%iptcl)
         endif
         DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED CALC_CORR'
     end subroutine calc_corr
