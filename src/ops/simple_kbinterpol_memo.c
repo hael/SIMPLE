@@ -65,10 +65,6 @@ kbinterp_memo_memoize()
     for (i = 0; i < Nx; ++i)
     {
 	x = dx * i;
-	if (i == Nx - 1)
-	  {
-	    printf("breakpoint here\n");
-	  }
 	apod_mem[i]  = apod(x);
 	dapod_mem[i] = dapod(x);
     }

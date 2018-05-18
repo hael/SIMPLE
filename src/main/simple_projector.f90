@@ -16,7 +16,7 @@ public :: projector
 private
 
 integer, parameter :: iwinsz = ceiling(KBWINSZ - 0.5) !< half-window size
-logical, parameter :: MEMOIZEKB = .true.
+logical, parameter :: MEMOIZEKB = .false.
 integer, parameter :: NKBPOINTS = 10
 
 type, extends(image) :: projector
