@@ -2984,6 +2984,7 @@ contains
         real    :: dists(self%n), res, x
         integer :: i, j
         res = 0.
+        !$omp parallel do default(shared) private(i,j,x,dists) reduction(+:res) proc_bind(close) schedule(static)
         do j=1,self%n
             do i=1,self%n
                 if( i == j )then
@@ -2995,6 +2996,7 @@ contains
             call hpsort(dists)
             res = res + sum(dists(:3))/3. ! average of three nearest neighbors
         end do
+        !$omp end parallel do
         res = rad2deg(res/real(self%n))
     end function find_angres
 
@@ -3004,6 +3006,7 @@ contains
         real                    :: dists(self%n), res, x
         integer                 :: i, j
         res = 0.
+        !$omp parallel do default(shared) private(i,j,x,dists) reduction(+:res) proc_bind(close) schedule(static)
         do j=1,self%n
             do i=1,self%n
                 if( i == j )then
@@ -3013,8 +3016,9 @@ contains
                 endif
             end do
             call hpsort(dists)
-            res = res+sum(dists(:3))/3. ! average of three nearest neighbors
+            res = res + sum(dists(:3))/3. ! average of three nearest neighbors
         end do
+        !$omp end parallel do
         res = rad2deg(res/real(self%n))
     end function find_angres_geod
 

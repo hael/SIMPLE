@@ -117,6 +117,7 @@ contains
                     call stream_spproj%kill()
                     deallocate(stream_spprojfile)
                 enddo
+                ! we do a full write here as multiple fields have been updated
                 call spproj%write()
                 call update_projects_list
                 deallocate(completed_jobs_clines)

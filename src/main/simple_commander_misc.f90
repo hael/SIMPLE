@@ -360,7 +360,7 @@ contains
         enddo
         ! output
         b%spproj%os_cls3D = sym_peaks
-        call b%spproj%write
+        call b%spproj%write_segment_inside('cls3D')
         ! the end
         call simple_touch('SYM_AGGREGATE_FINISHED', errmsg='commander_misc; sym_aggregate ')
         call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')

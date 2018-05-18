@@ -1,7 +1,5 @@
 module simple_projection_frcs
 include 'simple_lib.f08'
-!use simple_estimate_ssnr, only: resample_filter
-!use simple_oris,          only: oris
 implicit none
 
 public :: projection_frcs
@@ -40,11 +38,33 @@ contains
     ! I/O
     procedure          :: read
     procedure          :: write
+    ! procedure          :: print_frcs
     ! destructor
     procedure          :: kill
 end type projection_frcs
 
 contains
+
+    ! subroutine print_frcs( self, fname, state )
+    !     class(projection_frcs), intent(inout) :: self
+    !     character(len=*),       intent(in)    :: fname
+    !     integer,      optional, intent(in)    :: state
+    !     real, allocatable :: res(:)
+    !     integer :: j, sstate
+    !     sstate = 1
+    !     if( present(state) ) sstate = state
+    !     call self%read(fname)
+    !     res = get_resarr(self%box4frc_calc, self%smpd)
+    !
+    !
+    !
+    !     write(*,'(A,1X,I4)') '>>> FRC FOR PROJECTION INDEX:', iproj
+    !     write(*,*) ''
+    !     do j=1,size(res)
+    !        write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', self%frcs(state,iproj,j)
+    !     end do
+    !     write(*,*) ''
+    ! end subroutine print_frcs
 
     ! constructor
 

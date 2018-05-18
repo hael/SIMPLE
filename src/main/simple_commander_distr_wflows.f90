@@ -381,7 +381,7 @@ contains
 
     subroutine exec_cluster2D_distr( self, cline )
         use simple_procimgfile,         only: random_selection_from_imgfile, copy_imgfile
-        use simple_commander_cluster2D, only:   check_2Dconv_commander
+        use simple_commander_cluster2D, only: check_2Dconv_commander
         class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
@@ -561,7 +561,7 @@ contains
                         enddo
                         ! need to be re-written for distributed apps!
                         call frcs%write(trim(FRCS_FILE))
-                        call b%spproj%write()
+                        call b%spproj%write_segment_inside(p_master%oritype)
                     endif
                 endif
             end subroutine remap_empty_cavgs
@@ -744,7 +744,7 @@ contains
                 else
                     call b%a%partition_eo
                 endif
-                call b%spproj%write()
+                call b%spproj%write_segment_inside(p_master%oritype)
             endif
         endif
         ! prepare job description
@@ -883,7 +883,7 @@ contains
                         call b%spproj%add_vol2os_out(vol_iter, b%spproj%get_smpd(), state, 'vol')
                     enddo
                 endif
-                call b%spproj%write()
+                call b%spproj%write_segment_inside(p_master%oritype)
                 exit ! main loop
             endif
             ! ITERATION DEPENDENT UPDATES
@@ -940,7 +940,7 @@ contains
                 else
                     call b%a%partition_eo
                 endif
-                call b%spproj%write()
+                call b%spproj%write_segment_inside(p_master%oritype)
             endif
         endif
         ! schedule

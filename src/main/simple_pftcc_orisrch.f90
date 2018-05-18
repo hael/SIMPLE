@@ -53,9 +53,6 @@ contains
         type(opt_factory) :: opt_fact
         integer :: ithr, i
         real    :: lims(2,2), lims_sh(2,2), lims_sh_init(2,2)
-        ! kill allocatables
-        ! call self%e_trial%kill
-        ! call self%grad_shsrch_obj%kill
         ! set nrestarts
         call self%kill
         allocate(self%grad_shsrch_obj)

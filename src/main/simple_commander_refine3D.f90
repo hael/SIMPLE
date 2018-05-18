@@ -12,7 +12,6 @@ implicit none
 public :: npeaks_commander
 public :: nspace_commander
 public :: refine3D_init_commander
-! public :: multiptcl_init_commander
 public :: refine3D_commander
 public :: check_3Dconv_commander
 private
@@ -30,10 +29,6 @@ type, extends(commander_base) :: refine3D_init_commander
   contains
     procedure :: execute      => exec_refine3D_init
 end type refine3D_init_commander
-! type, extends(commander_base) :: multiptcl_init_commander
-!   contains
-!     procedure :: execute      => exec_multiptcl_init
-! end type multiptcl_init_commander
 type, extends(commander_base) :: refine3D_commander
   contains
     procedure :: execute      => exec_refine3D
@@ -153,54 +148,11 @@ contains
                     ! so random oris only written once in distributed mode
                 else
                     ! update the spproj on disk
-                    call b%spproj%write()
+                    call b%spproj%write_segment_inside(p%oritype)
                 endif
             end subroutine gen_random_model
 
     end subroutine exec_refine3D_init
-
-    ! subroutine exec_multiptcl_init( self, cline )
-    !     use simple_rec_master, only: exec_rec_master
-    !     use simple_binoris_io, only: binwrite_oritab
-    !     class(multiptcl_init_commander), intent(inout) :: self
-    !     class(cmdline),                  intent(inout) :: cline
-    !     type(params) :: p
-    !     type(build)  :: b
-    !     p = params(cline) ! constants & derived constants produced
-    !     call b%build_general_tbox(p, cline)
-    !     if( .not. cline%defined('oritab') )then
-    !         call b%a%rnd_oris
-    !         call b%a%zero_shifts
-    !     endif
-    !     if( cline%defined('state2split') )then
-    !         if( cline%defined('oritab') )then
-    !             p%nstates = b%a%get_n('state')
-    !             call b%a%split_state(p%state2split)
-    !             p%nstates = p%nstates + 1
-    !         else
-    !             stop 'Need oritab to be defined when state2split is defined on command line; simple_multiptcl_init'
-    !         endif
-    !     else if( p%tseries .eq. 'yes' )then
-    !         call b%a%ini_tseries(p%nstates, 'state')
-    !     else
-    !         call b%a%rnd_states(p%nstates)
-    !         if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
-    !     endif
-    !     if( p%norec .ne. 'yes' )then
-    !         if( cline%defined('lp') )then
-    !             call b%build_rec_tbox(p)
-    !             p%eo = 'no'
-    !         else
-    !             call b%build_rec_eo_tbox(p)
-    !             p%eo = 'yes'
-    !         endif
-    !         call exec_rec_master(b, p, cline, 'startvol')
-    !     endif
-    !     if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
-    !     call binwrite_oritab('multiptcl_startdoc'//trim(METADATA_EXT), b%spproj, b%a, [1,b%a%get_noris()])
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
-    ! end subroutine exec_multiptcl_init
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec

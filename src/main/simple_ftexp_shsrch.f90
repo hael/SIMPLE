@@ -8,7 +8,7 @@ use simple_ft_expanded, only: ft_expanded, ft_exp_reset_tmp_pointers
 use simple_image,       only: image
 implicit none
 
-public :: ftexp_shsrch_init, ftexp_shsrch_reset_ptrs, ftexp_shsrch_minimize, test_ftexp_shsrch
+public :: ftexp_shsrch_init, ftexp_shsrch_set_ptrs, ftexp_shsrch_minimize, test_ftexp_shsrch
 private
 
 type(opt_factory)             :: ofac              !< optimizer factory
@@ -44,11 +44,11 @@ contains
         maxHWshift =  trs
     end subroutine ftexp_shsrch_init
 
-    subroutine ftexp_shsrch_reset_ptrs( ref, ptcl )
+    subroutine ftexp_shsrch_set_ptrs( ref, ptcl )
         class(ft_expanded), intent(in), target :: ref, ptcl
         reference => ref
         particle  => ptcl
-    end subroutine ftexp_shsrch_reset_ptrs
+    end subroutine ftexp_shsrch_set_ptrs
 
     !> Cost function, double precision
     function ftexp_shsrch_cost_8( fun_self, vec, D ) result(cost)

@@ -235,7 +235,7 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self    !< projector object
         integer,                 intent(in)    :: iref    !< which reference
-        real(dp),                intent(inout) :: euls(3) !< orientation
+        real(dp),                intent(in)    :: euls(3) !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
         logical,                 intent(in)    :: iseven  !< eo flag        
         integer         :: irot, k, pdim(3)

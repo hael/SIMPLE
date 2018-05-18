@@ -183,8 +183,6 @@ contains
         call self%e_bal%spiral( p%nsym, p%eullims )
         ! create angular subspace
         self%grid_projs = self%e%create_proj_subspace(NPDIRS_SUBSPACE, p%nsym, p%eullims)
-        ! store angular resolution of search space (ares)
-        p%ares = self%e%find_angres()
         DebugPrint 'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects

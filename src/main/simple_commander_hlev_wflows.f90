@@ -118,7 +118,7 @@ contains
                 call spproj_sc%os_ptcl2D%mul_shifts( 1./scale_stage1 )
                 call spproj%read( p_master%projfile )
                 spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                call spproj%write()
+                call spproj%write_segment_inside('ptcl2D')
                 call spproj%kill()
                 ! clean stacks
                 call spproj_sc%read_segment( 'stk', projfile_sc )
@@ -161,7 +161,7 @@ contains
                 call spproj_sc%os_ptcl2D%mul_shifts( 1./scale_stage2 )
                 call spproj%read( p_master%projfile )
                 spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                call spproj%write()
+                call spproj%write_segment_inside('ptcl2D')
                 call spproj%kill()
                 ! clean stacks
                 call spproj_sc%read_segment( 'stk', projfile_sc )
@@ -195,7 +195,7 @@ contains
         call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_even')
         stk = add2fbody(trim(finalcavgs),p_master%ext,'_odd')
         call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_odd')
-        call spproj%write()
+        call spproj%write_segment_inside('out')
         call spproj%kill()
         ! ranking
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
@@ -520,7 +520,7 @@ contains
         call spproj%map2ptcls
         ! add rec_final to os_out
         call spproj%add_vol2os_out('rec_final'//p_master%ext, spproj%get_smpd(), 1, 'vol_cavg')
-        ! write results
+        ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! reprojections
         call spproj%os_cls3D%write('final_oris.txt')

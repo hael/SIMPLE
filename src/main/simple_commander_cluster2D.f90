@@ -6,7 +6,6 @@ use simple_params,              only: params
 use simple_build,               only: build
 use simple_commander_base,      only: commander_base
 use simple_qsys_funs,           only: qsys_job_finished
-
 implicit none
 
 public :: make_cavgs_commander
@@ -89,12 +88,14 @@ contains
             endif
         else
             call b%a%set_all2single('w', 1.0)
-            if( p%shellw.eq.'yes' )call b%a%calc_bfac_rec
+            if( p%shellw.eq.'yes' ) call b%a%calc_bfac_rec
         endif
         ! even/odd partitioning
         if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
         ! write
-        if( nint(cline%get_rarg('part')) .eq. 1 ) call b%spproj%write()
+        if( nint(cline%get_rarg('part')) .eq. 1 )then
+            call b%spproj%write_segment_inside(p%oritype)
+        endif
         ! create class averager
         call cavger_new(b, p, 'class')
         ! transfer ori data to object
@@ -167,7 +168,7 @@ contains
         call cavger_write(trim(p%refs_odd),  'odd'   )
         call cavger_kill()
         ! write project
-        call b%spproj%write(p%projfile)
+        call b%spproj%write_segment_inside(p%oritype, p%projfile)
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)

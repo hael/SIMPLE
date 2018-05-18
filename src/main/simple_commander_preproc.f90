@@ -172,7 +172,7 @@ contains
                 ! extract particles
                 if( p%stream .eq. 'yes' )then
                     ! needs to write and re-read project at the end as extract overwrites it
-                    call spproj%write()
+                    call spproj%write_segment_inside(p%oritype)
                     cline_extract = cline
                     call cline_extract%set('dir', trim(output_dir_extract))
                     call cline_extract%set('pcontrast', p%pcontrast)
@@ -183,7 +183,7 @@ contains
             endif
         end do
         if( p%stream .eq. 'yes' )then
-            if( .not.l_pick )call spproj%write()
+            if( .not.l_pick ) call spproj%write_segment_inside(p%oritype)
         else
             call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
@@ -457,6 +457,7 @@ contains
         end do
         ! communicate selection to project
         call b%spproj%map_cavgs_selection(states)
+        ! this needs to be a full write as many segments are updated
         call b%spproj%write()
         ! end gracefully
         call simple_end('**** SIMPLE_MAP_SELECTION NORMAL STOP ****')
@@ -541,7 +542,6 @@ contains
         integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff
         real                          :: particle_position(2)
         p = params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
-        call cline%printline
         ! output directory
         output_dir = './'
         if( p%stream.eq.'yes' )output_dir = DIR_EXTRACT
@@ -557,9 +557,9 @@ contains
         nptcls = 0
         do imic = 1, ntot
             o_mic = spproj%os_mic%get_ori(imic)
-            if( .not.o_mic%isthere('imgkind') )cycle
-            if( .not.o_mic%isthere('intg')    )cycle
-            if( .not.o_mic%isthere('boxfile') )cycle
+            if( .not. o_mic%isthere('imgkind') )cycle
+            if( .not. o_mic%isthere('intg')    )cycle
+            if( .not. o_mic%isthere('boxfile') )cycle
             call o_mic%getter('imgkind', imgkind)
             if( trim(imgkind).ne.'mic') cycle
             call o_mic%getter('intg', mic_name)
@@ -711,6 +711,7 @@ contains
             ! clean
             call boxfile%kill()
         enddo
+        ! we do a full write here as multiple fields are updated
         call b%spproj%write()
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 

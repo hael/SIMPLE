@@ -174,7 +174,7 @@ contains
         character(len=:), allocatable :: str_dyn
         integer         :: i, nspaces, noris, iseg
         integer(kind=8) :: end_part1, start_part3, end_part3
-        integer(kind=8) :: n_bytes_part3, n_bytes_part3_orig, ibytes
+        integer(kind=8) :: n_bytes_part3, n_bytes_part3_orig, ibytes, first_data_byte
         character(len=1), allocatable :: bytearr_part1(:), bytearr_part3(:)
         noris = os%get_noris()
         if( noris == 0 ) return
@@ -263,7 +263,21 @@ contains
         end do
         ! 3d part
         if( allocated(bytearr_part3) )then
-            write(unit=self%funit,pos=self%header(isegment + 1)%first_data_byte) bytearr_part3
+
+            ! find next nonzero first_data_byte
+            do iseg=isegment + 1,self%n_segments
+                if( self%header(iseg)%first_data_byte > 0 )then
+                    first_data_byte = self%header(iseg)%first_data_byte
+                    exit
+                endif
+            end do
+            if( first_data_byte > 0 )then
+                write(unit=self%funit,pos=first_data_byte) bytearr_part3
+            else
+                write(*,*) 'first_data_byte: ', first_data_byte
+                write(*,*) 'ERROR! first_data_byte must be > 0 for non-empty 3d segment'
+                stop 'simple_binoris :: write_segment_inside'
+            endif
         endif
         ! write updated header
         write(unit=self%funit,pos=1) self%header

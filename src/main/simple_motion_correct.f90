@@ -107,7 +107,7 @@ contains
             do iframe=1,nframes
                 ! subtract the movie frame being aligned to reduce bias
                 call subtract_movie_frame( iframe )
-                call ftexp_shsrch_reset_ptrs(movie_sum_global_ftexp, movie_frames_ftexp(iframe))
+                call ftexp_shsrch_set_ptrs(movie_sum_global_ftexp, movie_frames_ftexp(iframe))
                 cxy = ftexp_shsrch_minimize(corrs(iframe), opt_shifts(iframe,:))
                 if( cxy(1) > corrs(iframe) ) nimproved = nimproved + 1
                 opt_shifts(iframe,:) = cxy(2:3)
