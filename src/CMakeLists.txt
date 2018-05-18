@@ -44,6 +44,9 @@ list(APPEND FILEIO_src
     "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_posix.c"
     )
 file(GLOB OPERATORS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
+list(APPEND OPERATORS_src
+    "${CMAKE_CURRENT_SOURCE_DIR}/ops/simple_kbinterpol_memo.c"
+    )
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
 file(GLOB STAR_src "${CMAKE_CURRENT_SOURCE_DIR}/star_export/*.f90" PARENT_SCOPE)
 file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.[Ff][90][08]" PARENT_SCOPE)

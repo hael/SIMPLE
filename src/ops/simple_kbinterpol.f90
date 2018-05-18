@@ -1,6 +1,7 @@
 ! Kaiser-Bessel interpolation kernel
 module simple_kbinterpol
 use simple_defs
+use iso_c_binding
 implicit none
 
 public :: kbinterpol
@@ -17,12 +18,68 @@ type :: kbinterpol
     procedure :: apod
     procedure :: apod_dp
     procedure :: dapod
+    procedure :: apod_memo
+    procedure :: apod_memo_dp
+    procedure :: dapod_memo
     procedure :: instr
+    procedure :: memoize
 end type kbinterpol
 
 interface kbinterpol
    module procedure constructor
 end interface kbinterpol
+
+interface
+    subroutine kbinterp_memo_set(Whalf_in, alpha_in, Nx_in) bind(c)
+        use iso_c_binding
+        real(c_double), value :: Whalf_in, alpha_in
+        integer(c_int), value :: Nx_in
+    end subroutine kbinterp_memo_set
+    subroutine kbinterp_memo_memoize() bind(c)
+    end subroutine kbinterp_memo_memoize
+    subroutine kbinterp_memo_kill() bind(c)
+    end subroutine kbinterp_memo_kill
+    function apod_nointerp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_double), value :: x
+        real(c_double)        :: r
+    end function apod_nointerp
+    function apod_lininterp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_double), value :: x
+        real(c_double)        :: r        
+    end function apod_lininterp
+    function dapod_nointerp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_double), value :: x
+        real(c_double)        :: r
+    end function dapod_nointerp
+    function dapod_lininterp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_double), value :: x
+        real(c_double)        :: r
+    end function dapod_lininterp
+    function apod_nointerp_sp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_float), value :: x
+        real(c_float)        :: r
+    end function apod_nointerp_sp
+    function apod_lininterp_sp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_float), value :: x
+        real(c_float)        :: r        
+    end function apod_lininterp_sp
+    function dapod_nointerp_sp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_float), value :: x
+        real(c_float)        :: r        
+    end function dapod_nointerp_sp
+    function dapod_lininterp_sp(x) result(r) bind(c)
+        use iso_c_binding
+        real(c_float), value :: x
+        real(c_float)        :: r        
+    end function dapod_lininterp_sp
+end interface
 
 contains
 
@@ -83,6 +140,15 @@ contains
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
+    function apod_memo( self, x ) result( r )
+        class(kbinterpol), intent(in) :: self
+        real,              intent(in) :: x
+        real                          :: r
+        !r = apod_nointerp_sp(x)
+        r = apod_lininterp_sp(x)
+    end function apod_memo
+
+
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
     pure function apod_dp( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
@@ -96,6 +162,15 @@ contains
         end if
         r = self%oneoW * bessi0_dp(self%beta * sqrt(arg))
     end function apod_dp
+
+    !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
+    function apod_memo_dp( self, x ) result( r )
+        class(kbinterpol), intent(in) :: self
+        real(dp),          intent(in) :: x
+        real(dp)                      :: r
+        !r = apod_nointerp(x)
+        r = apod_lininterp(x)
+    end function apod_memo_dp
 
     !>  \brief  is the derivative of the Kaiser-Bessel apodization function, abs(x) <= Whalf
     pure function dapod( self, x ) result(r)
@@ -113,6 +188,22 @@ contains
                 sqrtarg / self%W**3
     end function dapod
 
+    !>  \brief  is the derivative of the Kaiser-Bessel apodization function, abs(x) <= Whalf
+    function dapod_memo( self, x ) result(r)
+        class(kbinterpol), intent(in) :: self
+        real(dp),          intent(in) :: x
+        real(dp)                      :: r
+        !r = dapod_nointerp(x)
+        r = dapod_lininterp(x)        
+    end function dapod_memo
+    
+    subroutine memoize( self, N_in )
+        class(kbinterpol), intent(in) :: self
+        integer,           intent(in) :: N_in
+        call kbinterp_memo_set( real(self%Whalf, kind=dp), real(self%alpha, kind=dp), N_in )
+        call kbinterp_memo_memoize()
+    end subroutine memoize
+    
     !>  \brief  is the Kaiser-Bessel instrument function
     elemental function instr( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
