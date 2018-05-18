@@ -180,14 +180,14 @@ type :: polarft_corrcalc
     procedure          :: gencorr_grad_only_for_rot_8
     procedure          :: gencorr_cc_for_rot
     procedure          :: gencorr_cc_for_rot_8
-    procedure          :: gencorr_fdf_cc_for_rot_8
-    procedure          :: gencorr_fdf_incshift_cc_for_rot_8
+    procedure          :: gencorr_cont_grad_cc_for_rot_8
+    procedure          :: gencorr_cont_shift_grad_cc_for_rot_8
     procedure          :: gencorr_cc_grad_for_rot_8
     procedure          :: gencorr_cc_grad_only_for_rot_8
     procedure          :: gencorr_resnorm_for_rot_8
     procedure          :: gencorr_resnorm_grad_for_rot_8
-    procedure          :: gencorr_fdf_resnorm_for_rot_8
-    procedure          :: gencorr_fdf_incshift_resnorm_for_rot_8
+    procedure          :: gencorr_cont_grad_resnorm_for_rot_8
+    procedure          :: gencorr_cont_shift_grad_resnorm_for_rot_8
     procedure          :: gencorr_resnorm_grad_only_for_rot_8
     procedure, private :: genfrc
     procedure          :: calc_frc
@@ -1469,7 +1469,7 @@ contains
     end function gencorr_cc_for_rot_8
 
     !< brief  generates correlation and derivative for one specific rotation angle, double precision
-    function gencorr_fdf_cc_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
+    function gencorr_cont_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1523,10 +1523,10 @@ contains
         do j = 1,3
             dcc(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom 
         end do
-    end function gencorr_fdf_cc_for_rot_8
+    end function gencorr_cont_grad_cc_for_rot_8
 
     !< brief  generates correlation and derivative for one specific rotation angle, double precision
-    subroutine gencorr_fdf_incshift_cc_for_rot_8( self, iref, iptcl, shvec, irot, f, grad ) 
+    subroutine gencorr_cont_shift_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, f, grad ) 
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1588,7 +1588,7 @@ contains
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
         grad(5)     = corr / denom        
-    end subroutine gencorr_fdf_incshift_cc_for_rot_8
+    end subroutine gencorr_cont_shift_grad_cc_for_rot_8
 
     !< brief  generates correlation for one specific rotation angle, double precision
     function gencorr_resnorm_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
@@ -1738,7 +1738,7 @@ contains
     end subroutine gencorr_resnorm_grad_for_rot_8
 
     !< brief  generates correlation and derivative for one specific rotation angle, double precision
-    function gencorr_fdf_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
+    function gencorr_cont_grad_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1800,10 +1800,10 @@ contains
         end do
         cc  = cc  / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         dcc = dcc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-    end function gencorr_fdf_resnorm_for_rot_8
+    end function gencorr_cont_grad_resnorm_for_rot_8
 
         !< brief  generates correlation and derivative for one specific rotation angle, double precision
-    subroutine gencorr_fdf_incshift_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, f, grad)
+    subroutine gencorr_cont_shift_grad_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, f, grad)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1872,7 +1872,7 @@ contains
         end do
         f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-    end subroutine gencorr_fdf_incshift_resnorm_for_rot_8
+    end subroutine gencorr_cont_shift_grad_resnorm_for_rot_8
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )

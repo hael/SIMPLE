@@ -147,7 +147,7 @@ contains
                 else
                     call self%bp%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
                 endif
-                call self%pftcc_ptr%gencorr_fdf_incshift_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
+                call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 grad = - corr_grad
             class default
                 write (*,*) 'error in pftcc_orisrch_grad :: gcostfun: unknown type'
@@ -157,25 +157,30 @@ contains
     end subroutine gcostfun
 
     function costfun( self, vec, D ) result( cost )
+        use simple_ori, only: ori
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: corr, cost
         real(dp)                :: corr_grad(5)
-        integer :: ithr, irot
+        integer   :: ithr, irot
+        type(ori) :: e
         ! thread-safe extraction of projection and derivatives (because pftcc is an OpenMP shared data structure)
         ithr = omp_get_thread_num() + 1
         ! because we start from a continous solution
         irot = 1
         select type(self)
             class is (pftcc_orisrch_grad)
+                call e%new()
+                call e%set_euler(real(vec(1:3)))
                 if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call self%bp%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
+                    call self%bp%vol%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.true.)
                 else
-                    call self%bp%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
+                    call self%bp%vol_odd%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.false.)
                 endif
-                call self%pftcc_ptr%gencorr_fdf_incshift_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
+                corr = self%pftcc_ptr%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
                 cost = -corr
+                call e%kill()
             class default
                 write (*,*) 'error in pftcc_orisrch_grad :: costfun: unknown type'
                 cost = 0.
@@ -202,7 +207,7 @@ contains
                 else
                     call self%bp%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
                 endif
-                call self%pftcc_ptr%gencorr_fdf_incshift_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
+                call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 f    = - corr
                 grad = - corr_grad
             class default

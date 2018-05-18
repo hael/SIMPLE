@@ -417,7 +417,7 @@ contains
         real                           :: f_4
         if   ( ((.not. associated(self%costfun  )) .or. (.not. associated(self%gcostfun))) .and.  &
             &  ((.not. associated(self%costfun_8)) .or. (.not. associated(self%gcostfun_8)))         ) then
-            write (*,*) 'error : simple_opt_spec: no costfun or gcostfun associate'
+            write (*,*) 'error : simple_opt_spec: no costfun or gcostfun associated'
             return
         end if
 
