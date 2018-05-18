@@ -6,7 +6,7 @@ use simple_qsys_funs,           only: qsys_cleanup, qsys_watcher
 use simple_commander_base,      only: commander_base
 use simple_sp_project,          only: sp_project
 use simple_cmdline,             only: cmdline
-use simple_singletons  ! build and param singletons
+use simple_singletons  ! build and params singletons
 implicit none
 
 public :: preprocess_distr_commander
@@ -82,6 +82,7 @@ type, extends(commander_base) :: scale_project_distr_commander
     procedure :: execute      => exec_scale_project_distr
 end type scale_project_distr_commander
 
+#include "simple_local_flags.inc"
 contains
 
     subroutine exec_preprocess_distr( self, cline )
@@ -374,7 +375,7 @@ contains
 
     subroutine exec_cluster2D_distr( self, cline )
         use simple_procimgfile,         only: random_selection_from_imgfile, copy_imgfile
-        use simple_commander_cluster2D, only: check_2Dconv_commander
+        use simple_commander_cluster2D, only:   check_2Dconv_commander
         class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
@@ -453,7 +454,6 @@ contains
             else
                 call b%a%partition_eo
             endif
-            call b%spproj%write_segment_inside(p_master%oritype)
         endif
 
         ! main loop
@@ -553,7 +553,7 @@ contains
                         enddo
                         ! need to be re-written for distributed apps!
                         call frcs%write(trim(FRCS_FILE))
-                        call b%spproj%write_segment_inside(p_master%oritype)
+                        call b%spproj%write()
                     endif
                 endif
             end subroutine remap_empty_cavgs
@@ -638,12 +638,15 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
+        DebugPrint ' In  exec_refine3D_distr; init_params'
         call init_params(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! make builder
+        DebugPrint ' In  exec_refine3D_distr; make builder'
         call b%build_spproj( cline)
         ! setup the environment for distributed execution
+        DebugPrint ' In  exec_refine3D_distr; make qenv'
         call qenv%new()
 
         ! prepare command lines from prototype master
@@ -674,9 +677,11 @@ contains
             call cline_volassemble%delete( trim(vol) )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
+        DebugPrint ' In exec_refine3D_distr; begin splitting'
 
         ! splitting
         call b%spproj%split_stk(p%nparts)
+        DebugPrint ' In exec_refine3D_distr; begin starting models'
 
         ! GENERATE STARTING MODELS & ORIENTATIONS
         vol_defined = .false.
@@ -725,6 +730,7 @@ contains
             p%extr_iter = p%startit - 1
         endif
         ! EO PARTITIONING
+        DebugPrint ' In exec_refine3D_distr; begin partition_eo'
         if( p%eo .ne. 'no' )then
             if( b%a%get_nevenodd() == 0 )then
                 if( p%tseries .eq. 'yes' )then
@@ -732,7 +738,7 @@ contains
                 else
                     call b%a%partition_eo
                 endif
-                call b%spproj%write_segment_inside(p_master%oritype)
+                call b%spproj%write()
             endif
         endif
         ! prepare job description
@@ -871,7 +877,7 @@ contains
                         call b%spproj%add_vol2os_out(vol_iter, b%spproj%get_smpd(), state, 'vol')
                     enddo
                 endif
-                call b%spproj%write_segment_inside(p_master%oritype)
+                call b%spproj%write()
                 exit ! main loop
             endif
             ! ITERATION DEPENDENT UPDATES
@@ -926,7 +932,7 @@ contains
                 else
                     call b%a%partition_eo
                 endif
-                call b%spproj%write_segment_inside(p_master%oritype)
+                call b%spproj%write()
             endif
         endif
         ! schedule

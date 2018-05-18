@@ -5,7 +5,7 @@ use simple_strategy3D_alloc  ! singleton
 use simple_strategy3D_utils, only: fit_bfactors
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
-use simple_pftcc_orisrch,    only: pftcc_orisrch_grad
+use simple_pftcc_orisrch_grad,  only: pftcc_orisrch_grad
 use simple_ori,              only: ori
 use simple_params, only: p ! singleton
 implicit none

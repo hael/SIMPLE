@@ -1,9 +1,9 @@
 module simple_pftcc_orisrch_grad
-#include "simple_lib.f08"
+include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_build,             only: build
+use simple_build,             only: b
 use simple_optimizer,         only: optimizer
 use simple_opt_spec,          only: opt_spec
 implicit none
@@ -13,7 +13,6 @@ private
 
 type :: pftcc_orisrch_grad
     private
-    class(build),            pointer     :: bp          => null()  !< pointer to build
     class(polarft_corrcalc), pointer     :: pftcc_ptr   => null()  !< pointer to pftcc object
     class(optimizer),        pointer     :: nlopt                  !< optimizer object
     type(opt_spec)                       :: ospec                  !< optimizer spec
@@ -30,19 +29,17 @@ end type pftcc_orisrch_grad
 contains
 
     !> constructor
-    subroutine new( self, pftcc, b )
+    subroutine new( self, pftcc )
         use simple_projector,   only: projector
         use simple_opt_factory, only: opt_factory
         class(pftcc_orisrch_grad), intent(inout)    :: self  !< instance
         class(polarft_corrcalc), target, intent(in) :: pftcc !< correlator
-        class(build),            target, intent(in) :: b     !< builder
+
         type(opt_factory) :: ofac
         real              :: lims(5,2)
         call self%kill
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
-        ! set pointer to build
-        self%bp => b
         ! get # rotations
         self%nrots = pftcc%get_nrots()
         ! just dummy limits for construction, these will be updated before minimization
@@ -143,9 +140,9 @@ contains
         select type(self)
             class is (pftcc_orisrch_grad)
                 if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call self%bp%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
+                    call b%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
                 else
-                    call self%bp%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
+                    call b%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
                 endif
                 call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 grad = - corr_grad
@@ -174,9 +171,9 @@ contains
                 call e%new()
                 call e%set_euler(real(vec(1:3)))
                 if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call self%bp%vol%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.true.)
+                    call b%vol%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.true.)
                 else
-                    call self%bp%vol_odd%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.false.)
+                    call b%vol_odd%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.false.)
                 endif
                 corr = self%pftcc_ptr%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
                 cost = -corr
@@ -203,9 +200,9 @@ contains
         select type(self)
             class is (pftcc_orisrch_grad)
                 if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call self%bp%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
+                    call b%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
                 else
-                    call self%bp%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
+                    call b%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
                 endif
                 call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 f    = - corr
@@ -227,7 +224,6 @@ contains
                 deallocate(self%nlopt)
             end if
             call self%ospec%kill
-            self%bp        => null()
             self%pftcc_ptr => null()
             self%exists = .false.
         endif
