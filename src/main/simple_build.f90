@@ -10,7 +10,6 @@ use simple_oris,             only: oris
 use simple_reconstructor,    only: reconstructor
 use simple_reconstructor_eo, only: reconstructor_eo
 use simple_sym,              only: sym
-use simple_convergence,      only: convergence
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
@@ -27,7 +26,6 @@ type :: build
     class(oris), pointer                :: a => null()        !< pointer to field in spproj
     type(oris)                          :: e, e_bal           !< discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
-    type(convergence)                   :: conv               !< object for convergence checking of the 2D/3D approaches
     type(image)                         :: img                !< individual image/projector objects
     type(polarizer)                     :: img_match          !< -"-
     type(image)                         :: img_pad            !< -"-
@@ -217,7 +215,6 @@ contains
             endif
             DebugPrint   'did set default values'
         endif
-        self%conv = convergence(self%a, cline)
         if( p%projstats .eq. 'yes' )then
             if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         endif
@@ -229,7 +226,6 @@ contains
     subroutine kill_general_tbox( self )
         class(build), intent(inout)  :: self
         if( self%general_tbox_exists )then
-            call self%conv%kill
             call self%se%kill
             call self%a%kill
             call self%e%kill

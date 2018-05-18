@@ -45,6 +45,7 @@ contains
         use simple_strategy3D_cont_single,   only: strategy3D_cont_single
         use simple_strategy3D,               only: strategy3D
         use simple_strategy3D_srch,          only: strategy3D_spec
+        use simple_convergence,              only: convergence
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         logical,               intent(inout) :: converged
@@ -64,6 +65,7 @@ contains
         type(sym)             :: c1_symop
         type(prep4cgrid)      :: gridprep
         type(ctfparams)       :: ctfvars
+        type(convergence)     :: conv
         real    :: frac_srch_space, extr_thresh, corr_thresh, bfac_rec, specscore_avg
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch
         integer :: ibatch, npeaks, batchlims(2), updatecnt
@@ -399,7 +401,7 @@ contains
 
         ! REPORT CONVERGENCE
         call qsys_job_finished( 'simple_strategy3D_matcher :: refine3D_exec')
-        if( .not. p%l_distr_exec ) converged = b%conv%check_conv3D()
+        if( .not. p%l_distr_exec ) converged = conv%check_conv3D(cline)
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.

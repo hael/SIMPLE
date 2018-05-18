@@ -117,25 +117,15 @@ type :: polarft_corrcalc
     procedure          :: set_ref_fcomp
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
-!   procedure          :: zero_ref
     procedure          :: cp_even2odd_ref
     procedure          :: cp_even_ref2ptcl
     procedure          :: swap_ptclsevenodd
     ! GETTERS
-!   procedure          :: get_pfromto
-!   procedure          :: get_nptcls
-!   procedure          :: get_nrefs
     procedure          :: get_nrots
-!   procedure          :: get_ring2
-!   procedure          :: get_pftsz
-!   procedure          :: get_ldim
-!   procedure          :: get_kfromto
     procedure          :: get_pdim
     procedure          :: get_rot
-!   procedure          :: get_rots_for_applic
     procedure          :: get_roind
     procedure          :: get_coord
-!   procedure          :: get_ptcl_pft
     procedure          :: get_ref_pft
     procedure          :: objfun_is_ccres
     procedure          :: exists
@@ -434,7 +424,6 @@ contains
         endif
     end subroutine set_ref_pft
 
-    !>  \brief  sets particle pft iptcl
     subroutine set_ptcl_pft( self, iptcl, pft )
         class(polarft_corrcalc), intent(inout) :: self     !< this object
         integer,                 intent(in)    :: iptcl    !< particle index
@@ -444,11 +433,6 @@ contains
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine set_ptcl_pft
 
-    !>  \brief set_ref_fcomp sets a reference Fourier component
-    !! \param iref reference index
-    !! \param irot rotation index
-    !! \param k  index (third dim ptfs_refs)
-    !! \param comp Fourier component
     subroutine set_ref_fcomp( self, iref, irot, k, comp, iseven )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, irot, k
@@ -461,11 +445,6 @@ contains
         endif
     end subroutine set_ref_fcomp
 
-    !>  \brief set_dref_fcomp sets a reference derivative Fourier component
-    !! \param iref reference index
-    !! \param irot rotation index
-    !! \param k  index (third dim ptfs_refs)
-    !! \param scomp derivative Fourier component
     subroutine set_dref_fcomp( self, iref, irot, k, dcomp, iseven )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, irot, k
@@ -478,19 +457,13 @@ contains
         endif
     end subroutine set_dref_fcomp
 
-    !>  \brief  sets a particle Fourier component
-    !! \param iptcl particle index
-    !! \param irot rotation index
-    !! \param k  index (third dim ptfs_ptcls)
-    !! \param comp Fourier component
     subroutine set_ptcl_fcomp( self, iptcl, irot, k, comp )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, irot, k
         complex(sp),             intent(in)    :: comp
         self%pfts_ptcls(irot,k,self%pinds(iptcl)) = comp
     end subroutine set_ptcl_fcomp
-    !>  \brief  zeroes the iref reference
-     !! \param iref reference index
+
     subroutine zero_ref( self, iref )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
@@ -511,7 +484,6 @@ contains
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine cp_even_ref2ptcl
 
-    !>  \brief  swaps particles even/odd labels
     subroutine swap_ptclsevenodd( self )
         class(polarft_corrcalc), intent(inout) :: self
         self%iseven = .not.self%iseven
@@ -519,61 +491,12 @@ contains
 
     ! GETTERS
 
-    ! !>  \brief  for getting the logical particle range
-    ! function get_pfromto( self ) result( lim )
-    !     class(polarft_corrcalc), intent(inout) :: self
-    !     integer :: lim(2)
-    !     lim = self%pfromto
-    ! end function get_pfromto
-
-    ! !>  \brief  for getting the number of particles
-    ! pure function get_nptcls( self ) result( nptcls )
-    !     class(polarft_corrcalc), intent(in) :: self
-    !     integer :: nptcls
-    !     nptcls = self%nptcls
-    ! end function get_nptcls
-
-    ! !>  \brief  for getting the number of references
-    ! pure function get_nrefs( self ) result( nrefs )
-    !     class(polarft_corrcalc), intent(in) :: self
-    !     integer :: nrefs
-    !     nrefs = self%nrefs
-    ! end function get_nrefs
-
     !>  \brief  for getting the number of in-plane rotations
     pure function get_nrots( self ) result( nrots )
         class(polarft_corrcalc), intent(in) :: self
         integer :: nrots
         nrots = self%nrots
     end function get_nrots
-
-    ! !>  \brief  for getting the particle radius (ring2)
-    ! function get_ring2( self ) result( ring2 )
-    !     class(polarft_corrcalc), intent(in) :: self
-    !     integer :: ring2
-    !     ring2 = self%ring2
-    ! end function get_ring2
-
-    ! !>  \brief  for getting the number of reference rotations (size of second dim of self%pfts_refs_even)
-    ! function get_pftsz( self ) result( pftsz )
-    !     class(polarft_corrcalc), intent(in) :: self
-    !     integer :: pftsz
-    !     pftsz = self%pftsz
-    ! end function get_pftsz
-
-    ! !>  \brief  for getting the logical dimension of the original Cartesian image
-    ! function get_ldim( self ) result( ldim )
-    !     class(polarft_corrcalc), intent(in) :: self
-    !     integer :: ldim(3)
-    !     ldim = self%ldim
-    ! end function get_ldim
-
-    ! !>  \brief  for getting the Fourier index range (hp/lp)
-    ! function get_kfromto( self ) result( lim )
-    !     class(polarft_corrcalc), intent(inout) :: self
-    !     integer :: lim(2)
-    !     lim = self%kfromto
-    ! end function get_kfromto
 
     ! !>  \brief  for getting the dimensions of the reference polar FT
     function get_pdim( self ) result( pdim )
@@ -595,14 +518,6 @@ contains
         endif
         rot = self%angtab(roind)
     end function get_rot
-
-    ! !>  \brief is for getting the (sign inversed) rotations for application in
-    ! !!         classaverager/reconstructor
-    ! function get_rots_for_applic( self ) result( inplrots )
-    !     class(polarft_corrcalc), intent(in) :: self
-    !     real, allocatable :: inplrots(:)
-    !     allocate(inplrots(self%nrots), source=360. - self%angtab)
-    ! end function get_rots_for_applic
 
     !>  \brief is for getting the discrete in-plane rotational
     !!         index corresponding to continuous rotation rot
@@ -677,8 +592,6 @@ contains
 
     ! PRINTERS/VISUALISERS
 
-    !>  \brief  is for plotting a particle polar FT
-    !! \param iptcl particle index
     subroutine vis_ptcl( self, iptcl )
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
@@ -687,8 +600,6 @@ contains
         call gnufor_image(aimag(self%pfts_ptcls(:,:,self%pinds(iptcl))), palette='gray')
     end subroutine vis_ptcl
 
-    !>  \brief  is for plotting a particle polar FT
-    !! \param iref reference index
     subroutine vis_ref( self, iref, iseven )
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
@@ -719,15 +630,12 @@ contains
 
     ! MEMOIZERS
 
-    !>  \brief  is for memoization of the complex square sums required for correlation calculation
-    !! \param iptcl particle index
     subroutine memoize_sqsum_ptcl( self, i )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i
         self%sqsums_ptcls(i) = sum(csq(self%pfts_ptcls(:,:,i)))
     end subroutine memoize_sqsum_ptcl
 
-    !>  \brief  is for memoization of the ffts used in gencorrs
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
         type(fftw_carr) :: carray(self%nthr)
@@ -776,13 +684,6 @@ contains
 
     ! CALCULATORS
 
-    !>  \brief create_polar_ctfmat  is for generating a matrix of CTF values
-    !! \param tfun transfer function object
-    !! \param dfx,dfy resolution along Fourier axes
-    !! \param angast astigmatic angle (degrees)
-    !! \param add_phshift additional phase shift (radians) introduced by the Volta
-    !! \param endrot number of rotations
-    !! \return ctfmat matrix with CTF values
     function create_polar_absctfmat( self, ctfparms, endrot ) result( ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -816,7 +717,6 @@ contains
         !$omp end parallel do
     end function create_polar_absctfmat
 
-    !>  \brief  is for generating all matrices of CTF values
     subroutine create_polar_absctfmats( self, spproj, oritype )
         use simple_sp_project,  only: sp_project
         class(polarft_corrcalc),   intent(inout) :: self
@@ -1142,7 +1042,6 @@ contains
         euclid = abs(tmp)
     end function calc_euclidk_for_rot_8
 
-    !>  \brief  is for generating resolution dependent correlations
     subroutine genfrc( self, iref, i, irot, frc )
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, i, irot
@@ -1163,7 +1062,6 @@ contains
         end do
     end subroutine genfrc
 
-    !>  \brief  is for generating resolution dependent correlations with shift
     subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, iptcl, irot
@@ -1386,7 +1284,6 @@ contains
         endif
     end subroutine gencorrs_3
 
-    !< brief  generates correlation for one specific rotation angle, double precision
     function gencorr_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1400,7 +1297,6 @@ contains
         endif
     end function gencorr_for_rot_8
 
-    !< brief  generates correlation for one specific rotation angle
     function gencorr_cc_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1434,7 +1330,6 @@ contains
         cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
     end function gencorr_cc_for_rot
 
-    !< brief  generates correlation for one specific rotation angle, double precision
     function gencorr_cc_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1468,7 +1363,6 @@ contains
         cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
     end function gencorr_cc_for_rot_8
 
-    !< brief  generates correlation and derivative for one specific rotation angle, double precision
     function gencorr_cont_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1518,15 +1412,14 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             fdf_y(k) = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
         end do
-        call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)        
+        call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)
         cc = sum(fdf_y) / denom
         do j = 1,3
-            dcc(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom 
+            dcc(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom
         end do
     end function gencorr_cont_grad_cc_for_rot_8
 
-    !< brief  generates correlation and derivative for one specific rotation angle, double precision
-    subroutine gencorr_cont_shift_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, f, grad ) 
+    subroutine gencorr_cont_shift_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
@@ -1541,7 +1434,7 @@ contains
         ithr        =  omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
-        pft_dref    => self%heap_vars(ithr)%pft_dref_8        
+        pft_dref    => self%heap_vars(ithr)%pft_dref_8
         shmat       => self%heap_vars(ithr)%shmat_8
         argmat      => self%heap_vars(ithr)%argmat_8
         fdf_y       => self%heap_vars(ithr)%fdf_y_8
@@ -1577,20 +1470,19 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             fdf_y(k) = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
         end do
-        call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)        
+        call self%calc_T1_T2_for_rot_8( pft_ref, pft_dref, iref, self%kfromto(2), irot, 3, fdf_T1, fdf_T2)
         f = sum(fdf_y) / denom
         do j = 1,3
-            grad(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom 
+            grad(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom
         end do
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
         grad(4)     = corr / denom
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
-        grad(5)     = corr / denom        
+        grad(5)     = corr / denom
     end subroutine gencorr_cont_shift_grad_cc_for_rot_8
 
-    !< brief  generates correlation for one specific rotation angle, double precision
     function gencorr_resnorm_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1630,7 +1522,6 @@ contains
         cc = cc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end function gencorr_resnorm_for_rot_8
 
-    !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1644,7 +1535,6 @@ contains
         endif
     end subroutine gencorr_grad_for_rot_8
 
-    !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
     subroutine gencorr_cc_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1686,7 +1576,6 @@ contains
         grad(2)     = corr / denom
     end subroutine gencorr_cc_grad_for_rot_8
 
-    !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
     subroutine gencorr_resnorm_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1737,7 +1626,6 @@ contains
         grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_resnorm_grad_for_rot_8
 
-    !< brief  generates correlation and derivative for one specific rotation angle, double precision
     function gencorr_cont_grad_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1746,7 +1634,7 @@ contains
         real(dp),                intent(out)   :: dcc(3)
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:), pft_dref(:,:,:)
         real(dp),    pointer :: argmat(:,:)
-        real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)        
+        real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)
         real(dp) :: cc, corrk, sqsumk_ref, sqsumk_ptcl, fdf_yk
         real(dp) :: bfac_weight, denomk
         integer  :: ithr, k, j
@@ -1796,13 +1684,12 @@ contains
             do j = 1,3
                 dcc(j) = dcc(j) + bfac_weight * &
                     &( fdf_T1(k,j) - fdf_yk * fdf_T2(k,j) / sqsumk_ref) / denomk
-            end do            
+            end do
         end do
         cc  = cc  / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         dcc = dcc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end function gencorr_cont_grad_resnorm_for_rot_8
 
-        !< brief  generates correlation and derivative for one specific rotation angle, double precision
     subroutine gencorr_cont_shift_grad_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, f, grad)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1812,7 +1699,7 @@ contains
         real(dp),                intent(out)   :: grad(5) ! 3 orientation angles, 2 shifts
         complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp1(:,:), pft_ref_tmp2(:,:), shmat(:,:), pft_dref(:,:,:)
         real(dp),    pointer :: argmat(:,:)
-        real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)        
+        real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)
         real(dp) :: corrk, sqsumk_ref, sqsumk_ptcl, fdf_yk
         real(dp) :: bfac_weight, denomk
         integer  :: ithr, k, j
@@ -1852,7 +1739,7 @@ contains
         f    = 0.0_dp
         grad = 0.0_dp
         pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,    :)
-        pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)        
+        pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         ! with B-factor weighting
         do k = self%kfromto(1),self%kfromto(2)
             sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -1874,7 +1761,6 @@ contains
         grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_cont_shift_grad_resnorm_for_rot_8
 
-    !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1888,7 +1774,6 @@ contains
         endif
     end subroutine gencorr_grad_only_for_rot_8
 
-    !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
     subroutine gencorr_cc_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1928,7 +1813,6 @@ contains
         grad(2)     = corr / denom
     end subroutine gencorr_cc_grad_only_for_rot_8
 
-    !< brief  calculates only gradient for correlation, for one specific rotation angle
     subroutine gencorr_resnorm_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1975,7 +1859,6 @@ contains
         grad = grad / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_resnorm_grad_only_for_rot_8
 
-    !>  \brief  is for generating resolution dependent correlations
     real function specscore( self, iref, iptcl, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
@@ -1984,7 +1867,6 @@ contains
         specscore = max(0.,median_nocopy(frc))
     end function specscore
 
-    !>  \brief  is for fitting a bfactor to ptcl vs. ref FRC
     real function fit_bfac( self, iref, iptcl, irot, shvec )
         ! Fitting to Y = A * exp( -B/(4s2) )
         ! from mathworld.wolfram.com/LeastSquaresFittingExponential.html
@@ -2019,10 +1901,8 @@ contains
         fit_bfac = max(0., fit_bfac)
     end function fit_bfac
 
-
-   function calc_roinv_corrmat( self) result(corrmat )
+    function calc_roinv_corrmat( self) result(corrmat )
         ! assumes particles/references in pftcc identical sets
-
         class(polarft_corrcalc), intent(inout) :: self
         real, allocatable   :: corrmat(:,:)
         real    :: corrs(self%nrots)
@@ -2046,11 +1926,8 @@ contains
         !$omp end parallel do
     end function calc_roinv_corrmat
 
-
-
     ! DESTRUCTOR
 
-    !>  \brief  is a destructor
     subroutine kill( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: ithr, i, ik

@@ -206,8 +206,10 @@ contains
     end subroutine exec_refine3D
 
     subroutine exec_check_3Dconv( self, cline )
+        use simple_convergence, only: convergence
         class(check_3Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
+        type(convergence) :: conv
         real, allocatable :: maplp(:)
         integer           :: istate, loc(1)
         logical           :: limset, converged, update_res
@@ -255,16 +257,16 @@ contains
             update_res = .false.
             if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
             if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(p%refine,'cluster') )then
-                converged = b%conv%check_conv_cluster()
+                converged = conv%check_conv_cluster(cline)
             else
-                converged = b%conv%check_conv3D()
+                converged = conv%check_conv3D(cline)
             endif
         else
             select case(p%refine)
             case('cluster','clustersym')
-                    converged = b%conv%check_conv_cluster()
+                    converged = conv%check_conv_cluster(cline)
                 case DEFAULT
-                    converged = b%conv%check_conv3D()
+                    converged = conv%check_conv3D(cline)
             end select
         endif
         ! reports convergence, shift activation, resolution update and
@@ -282,7 +284,7 @@ contains
         else
             call cline%set('update_res', 'no')
         endif
-        call cline%set('frac', b%conv%get('frac'))
+        call cline%set('frac', conv%get('frac'))
         ! end gracefully
         call b%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK_3DCONV NORMAL STOP ****', print_simple=.false.)

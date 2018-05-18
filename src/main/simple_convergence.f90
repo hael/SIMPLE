@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_oris,     only: oris
 use simple_params,   only: p
 use simple_cmdline,  only: cmdline
+use simple_build,    only: b
 
 implicit none
 
@@ -12,9 +13,7 @@ private
 
 type convergence
     private
-    class(oris),    pointer :: bap    => null() !< pointer to alignment oris object (a) part of build (b)
-    class(cmdline), pointer :: pcline => null() !< pointer to command line object
-    real :: corr      = 0.                      !< average correlation
+    real :: corr      = 0. !< average correlation
     real :: dist      = 0.                      !< average angular distance
     real :: dist_inpl = 0.                      !< average in-plane angular distance
     real :: npeaks    = 0.                      !< average # peaks
@@ -31,25 +30,13 @@ type convergence
     procedure :: check_conv3D
     procedure :: check_conv_cluster
     procedure :: get
-    procedure :: kill
 end type convergence
-
-interface convergence
-    module procedure constructor
-end interface convergence
 
 contains
 
-    function constructor( ba, cline ) result( self )
-        class(oris),    target, intent(in) :: ba    !< alignment oris object (a) part of build (b)
-        class(cmdline), target, intent(in) :: cline !< command line object
-        type(convergence) :: self
-        self%bap    => ba
-        self%pcline => cline
-    end function constructor
-
-    function check_conv2D( self, ncls ) result( converged )
+    function check_conv2D( self, cline, ncls ) result( converged )
         class(convergence), intent(inout) :: self
+        class(cmdline),     intent(inout) :: cline
         integer, optional,  intent(in)    :: ncls
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
@@ -62,23 +49,23 @@ contains
         endif
         if( p%l_frac_update )then
             ! fractional particle update
-            updatecnts     = self%bap%get_all('updatecnt')
+            updatecnts     = b%a%get_all('updatecnt')
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-            self%corr      = self%bap%get_avg('corr',      mask=mask)
-            self%dist_inpl = self%bap%get_avg('dist_inpl', mask=mask)
-            self%frac      = self%bap%get_avg('frac',      mask=mask)
-            self%bfac      = self%bap%get_avg('bfac',      mask=mask)
-            self%mi_joint  = self%bap%get_avg('mi_joint',  mask=mask)
-            self%mi_inpl   = self%bap%get_avg('mi_inpl',   mask=mask)
-            self%mi_class  = self%bap%get_avg('mi_class',  mask=mask)
+            self%corr      = b%a%get_avg('corr',      mask=mask)
+            self%dist_inpl = b%a%get_avg('dist_inpl', mask=mask)
+            self%frac      = b%a%get_avg('frac',      mask=mask)
+            self%bfac      = b%a%get_avg('bfac',      mask=mask)
+            self%mi_joint  = b%a%get_avg('mi_joint',  mask=mask)
+            self%mi_inpl   = b%a%get_avg('mi_inpl',   mask=mask)
+            self%mi_class  = b%a%get_avg('mi_class',  mask=mask)
         else
-            self%corr      = self%bap%get_avg('corr')
-            self%dist_inpl = self%bap%get_avg('dist_inpl')
-            self%frac      = self%bap%get_avg('frac')
-            self%bfac      = self%bap%get_avg('bfac')
-            self%mi_joint  = self%bap%get_avg('mi_joint')
-            self%mi_class  = self%bap%get_avg('mi_class')
-            self%mi_inpl   = self%bap%get_avg('mi_inpl')
+            self%corr      = b%a%get_avg('corr')
+            self%dist_inpl = b%a%get_avg('dist_inpl')
+            self%frac      = b%a%get_avg('frac')
+            self%bfac      = b%a%get_avg('bfac')
+            self%mi_joint  = b%a%get_avg('mi_joint')
+            self%mi_class  = b%a%get_avg('mi_class')
+            self%mi_inpl   = b%a%get_avg('mi_inpl')
         endif
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> CLASS    DISTRIBUTION OVERLAP:     ', self%mi_class
@@ -89,7 +76,7 @@ contains
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
-            if( .not. self%pcline%defined('trs') .or. p%trs <  MINSHIFT )then
+            if( .not. cline%defined('trs') .or. p%trs <  MINSHIFT )then
                 ! determine shift bounds
                 p%trs = MSK_FRAC*real(p%msk)
                 p%trs = max(MINSHIFT,p%trs)
@@ -123,40 +110,41 @@ contains
         endif
     end function check_conv2D
 
-    function check_conv3D( self ) result( converged )
+    function check_conv3D( self, cline ) result( converged )
         class(convergence), intent(inout) :: self
+        class(cmdline),     intent(inout) :: cline
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint
         logical :: converged
         integer :: iptcl, istate
-        if( self%bap%isthere('updatecnt') )then
+        if( b%a%isthere('updatecnt') )then
             ! fractional particle update
-            updatecnts     = self%bap%get_all('updatecnt')
+            updatecnts     = b%a%get_all('updatecnt')
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-            self%corr      = self%bap%get_avg('corr',      mask=mask)
-            self%dist      = self%bap%get_avg('dist',      mask=mask)
-            self%dist_inpl = self%bap%get_avg('dist_inpl', mask=mask)
-            self%npeaks    = self%bap%get_avg('npeaks',    mask=mask)
-            self%frac      = self%bap%get_avg('frac',      mask=mask)
-            self%mi_joint  = self%bap%get_avg('mi_joint',  mask=mask)
-            self%mi_proj   = self%bap%get_avg('mi_proj',   mask=mask)
-            self%mi_inpl   = self%bap%get_avg('mi_inpl',   mask=mask)
-            self%mi_state  = self%bap%get_avg('mi_state',  mask=mask)
-            self%sdev      = self%bap%get_avg('sdev',      mask=mask)
-            self%bfac      = self%bap%get_avg('bfac',      mask=mask)
+            self%corr      = b%a%get_avg('corr',      mask=mask)
+            self%dist      = b%a%get_avg('dist',      mask=mask)
+            self%dist_inpl = b%a%get_avg('dist_inpl', mask=mask)
+            self%npeaks    = b%a%get_avg('npeaks',    mask=mask)
+            self%frac      = b%a%get_avg('frac',      mask=mask)
+            self%mi_joint  = b%a%get_avg('mi_joint',  mask=mask)
+            self%mi_proj   = b%a%get_avg('mi_proj',   mask=mask)
+            self%mi_inpl   = b%a%get_avg('mi_inpl',   mask=mask)
+            self%mi_state  = b%a%get_avg('mi_state',  mask=mask)
+            self%sdev      = b%a%get_avg('sdev',      mask=mask)
+            self%bfac      = b%a%get_avg('bfac',      mask=mask)
         else
-            self%corr      = self%bap%get_avg('corr')
-            self%dist      = self%bap%get_avg('dist')
-            self%dist_inpl = self%bap%get_avg('dist_inpl')
-            self%npeaks    = self%bap%get_avg('npeaks')
-            self%frac      = self%bap%get_avg('frac')
-            self%mi_joint  = self%bap%get_avg('mi_joint')
-            self%mi_proj   = self%bap%get_avg('mi_proj')
-            self%mi_inpl   = self%bap%get_avg('mi_inpl')
-            self%mi_state  = self%bap%get_avg('mi_state')
-            self%sdev      = self%bap%get_avg('sdev')
-            self%bfac      = self%bap%get_avg('bfac')
+            self%corr      = b%a%get_avg('corr')
+            self%dist      = b%a%get_avg('dist')
+            self%dist_inpl = b%a%get_avg('dist_inpl')
+            self%npeaks    = b%a%get_avg('npeaks')
+            self%frac      = b%a%get_avg('frac')
+            self%mi_joint  = b%a%get_avg('mi_joint')
+            self%mi_proj   = b%a%get_avg('mi_proj')
+            self%mi_inpl   = b%a%get_avg('mi_inpl')
+            self%mi_state  = b%a%get_avg('mi_state')
+            self%sdev      = b%a%get_avg('sdev')
+            self%bfac      = b%a%get_avg('bfac')
         endif
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
@@ -174,7 +162,7 @@ contains
         write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
-            if( .not. self%pcline%defined('trs') .or. &
+            if( .not. cline%defined('trs') .or. &
                 & p%trs <  MINSHIFT )then
                 !! determine shift bounds
                 p%trs = MSK_FRAC*real(p%msk)
@@ -200,13 +188,13 @@ contains
             allocate( state_mi_joint(p%nstates), statepops(p%nstates) )
             state_mi_joint = 0.
             statepops      = 0.
-            do iptcl=1,self%bap%get_noris()
-                istate = nint(self%bap%get(iptcl,'state'))
+            do iptcl=1,b%a%get_noris()
+                istate = nint(b%a%get(iptcl,'state'))
                 if( istate==0 )cycle
                 ! it doesn't make sense to include the state overlap here
                 ! as the overall state overlap is already provided above
-                state_mi_joint(istate) = state_mi_joint(istate) + self%bap%get(iptcl,'mi_proj')
-                state_mi_joint(istate) = state_mi_joint(istate) + self%bap%get(iptcl,'mi_inpl')
+                state_mi_joint(istate) = state_mi_joint(istate) + b%a%get(iptcl,'mi_proj')
+                state_mi_joint(istate) = state_mi_joint(istate) + b%a%get(iptcl,'mi_inpl')
                 ! 2.0 because we include two mi-values
                 statepops(istate)      = statepops(istate) + 2.0
             end do
@@ -235,29 +223,30 @@ contains
         endif
     end function check_conv3D
 
-    function check_conv_cluster( self ) result( converged )
+    function check_conv_cluster( self, cline ) result( converged )
         class(convergence), intent(inout) :: self
+        class(cmdline),     intent(inout) :: cline
         real, allocatable :: statepops(:)
         logical           :: converged
         integer           :: iptcl, istate
-        self%frac      = self%bap%get_avg('frac')
-        self%mi_state  = self%bap%get_avg('mi_state')
+        self%frac      = b%a%get_avg('frac')
+        self%mi_state  = b%a%get_avg('mi_state')
         write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         allocate( statepops(p%nstates) )
         statepops = 0.
-        do iptcl=1,self%bap%get_noris()
-            istate = nint(self%bap%get(iptcl,'state'))
+        do iptcl=1,b%a%get_noris()
+            istate = nint(b%a%get(iptcl,'state'))
             if( istate==0 )cycle
             statepops(istate) = statepops(istate) + 1.0
         end do
-        if( self%bap%isthere('bfac') )then
-            self%bfac = self%bap%get_avg('bfac')
+        if( b%a%isthere('bfac') )then
+            self%bfac = b%a%get_avg('bfac')
             write(*,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR: ', self%bfac
         endif
-        self%corr = self%bap%get_avg('corr')
+        self%corr = b%a%get_avg('corr')
         write(*,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
         ! print the overlaps and pops for the different states
         do istate=1,p%nstates
@@ -304,12 +293,5 @@ contains
             case DEFAULT
         end select
     end function get
-
-    subroutine kill( self )
-        class(convergence), intent(inout) :: self
-        self%bap    => null()
-     !   self%pp     => null()
-        self%pcline => null()
-    end subroutine kill
 
 end module simple_convergence

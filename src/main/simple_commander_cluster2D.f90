@@ -169,14 +169,16 @@ contains
     end subroutine exec_cavgassemble
 
     subroutine exec_check_2Dconv( self, cline )
+        use simple_convergence, only: convergence
         class(check_2Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        logical      :: converged
+        type(convergence) :: conv
+        logical :: converged
         call init_params(cline, spproj_a_seg=PTCL2D_SEG)        ! parameters generated
         call b%build_general_tbox(cline, do3d=.false.) ! general objects built
         p%ncls    = b%a%get_n('class')
-        converged = b%conv%check_conv2D() ! convergence check
-        call cline%set('frac', b%conv%get('frac'))
+        converged = conv%check_conv2D(cline) ! convergence check
+        call cline%set('frac', conv%get('frac'))
         if( p%l_doshift )then
             ! activates shift search
             call cline%set('trs', p%trs)

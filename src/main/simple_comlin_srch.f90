@@ -20,8 +20,6 @@ integer, parameter :: NBEST      = 30
 integer, parameter :: NBEST_PAIR = 10
 integer, parameter :: ANGSTEP    = 10
 
-!integer,          pointer :: iptcl=>null()    !< ptcl index
-!integer,          pointer :: jptcl=>null()    !< ptcl index
 type(opt_factory)         :: ofac             !< optimizer factory
 type(opt_spec)            :: ospec            !< optimizer specification object
 class(optimizer), pointer :: nlopt=>null()    !< pointer to nonlinear optimizer
