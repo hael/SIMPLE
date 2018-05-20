@@ -1,7 +1,7 @@
 ! deals with text files of numbers
 module simple_nrtxtfile
 use simple_defs
-use simple_strings, only: striscomment, cntrecsperline, strisblank ! use all in there
+use simple_strings, only: striscomment, cntrecsperline, strisblank
 use simple_fileio,  only: fopen, fclose, fileiochk
 use simple_syslib,  only: is_open, simple_stop
 implicit none

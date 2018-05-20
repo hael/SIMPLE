@@ -2,7 +2,6 @@
 program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline, only: cmdline, cmdline_err
-use simple_gen_doc
 use simple_commander_project
 use simple_commander_checks
 use simple_commander_comlin

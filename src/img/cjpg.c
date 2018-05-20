@@ -9,9 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-
 #include "jpeglib.h"
-
 
 struct jpeg_compress_struct  encInfo;
 struct jpeg_decompress_struct decInfo;
@@ -25,8 +23,6 @@ int* Jpeg_img_buffer;
 struct stat file_info;
 unsigned long jpg_size;
 unsigned char *jpg_buffer;
-
-
 
 int getNumComponents(J_COLOR_SPACE colorSpace)
 {

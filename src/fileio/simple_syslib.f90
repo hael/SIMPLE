@@ -16,285 +16,23 @@ use simple_defs
 use simple_error
 use iso_c_binding
 #if defined(GNU)
-use, intrinsic :: iso_fortran_env, only: &
-    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-    &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
-#elif defined(INTEL) || defined(PGI)
-use, intrinsic :: iso_fortran_env, only: &
-    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-    &IOSTAT_END, IOSTAT_EOR
+    use, intrinsic :: iso_fortran_env, only: &
+        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
+        &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
+#elif defined(INTEL)
+    use, intrinsic :: iso_fortran_env, only: &
+        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
+        &IOSTAT_END, IOSTAT_EOR
 #endif
 #if defined(INTEL)
-use ifport, killpid=>kill, intel_ran=>ran
-use ifcore
+    use ifport, killpid=>kill, intel_ran=>ran
+    use ifcore
 #endif
 use simple_error
 implicit none
 
 private :: raise_sys_error
 public
-
-#if defined(PGI)
-!! include lib3f.h without kill, bessel fns, etc
-
-!     Copyright (c) 2016, NVIDIA CORPORATION.  All rights reserved.
-!
-! NVIDIA CORPORATION and its licensors retain all intellectual property
-! and proprietary rights in and to this software, related documentation
-! and any modifications thereto.  Any use, reproduction, disclosure or
-! distribution of this software and related documentation without an express
-! license agreement from NVIDIA CORPORATION is strictly prohibited.
-!
-! Interfaces for lib3f routines.
-! Version 3.4
-interface
-
-    subroutine abort()
-    end subroutine abort
-
-    integer function access(fil,mod)
-        character*(*), intent(in) :: fil, mod
-    end function access
-
-    integer function chdir(path)
-        character*(*), intent(in) :: path
-    end function chdir
-
-    integer function chmod(nam,mode)
-        character*(*), intent(in) :: nam
-        integer, intent(in) :: mode
-    end function chmod
-
-    pure character*(24) function ctime(stime)
-        integer, intent(in) :: stime
-    end function ctime
-
-    pure subroutine date(str)
-        character*(*), intent(out) :: str
-    end subroutine date
-    pure real function etime(tarray)
-        real, intent(out) :: tarray(2)
-    end function etime
-
-    pure real function dtime(tarray)
-        real, intent(out) :: tarray(2)
-    end function dtime
-
-    subroutine exit(s)
-        integer, intent(in) :: s
-    end subroutine exit
-
-    pure subroutine fdate(str)
-        character*(*), intent(out) :: str
-    end subroutine fdate
-
-    integer function fgetc(lu,ch)
-        integer, intent(in) :: lu
-        character*(*), intent(out) :: ch
-    end function fgetc
-
-    subroutine flush(lu)
-        integer, intent(in) :: lu
-    end subroutine flush
-
-    integer function fork()
-    end function fork
-
-    integer function fputc(lu,ch)
-        integer, intent(in) :: lu
-        character*(*), intent(in) :: ch
-    end function fputc
-
-    subroutine free(p)
-        integer, intent(in) :: p
-    end subroutine free
-
-    integer function fseek(lu,offset,from)
-        integer, intent(in) :: lu, offset, from
-    end function fseek
-
-    integer function ftell(lu)
-        integer, intent(in) :: lu
-    end function ftell
-
-    subroutine getarg(i,c)
-        integer, intent(in) :: i
-        character*(*), intent(out) :: c
-    end subroutine getarg
-
-    integer function iargc()
-    end function iargc
-
-    integer function getc(ch)
-        character*(*), intent(out) :: ch
-    end function getc
-
-    integer function getcwd(dir)
-        character*(*), intent(out) :: dir
-    end function getcwd
-
-    subroutine getenv(en,ev)
-        character*(*), intent(in) :: en
-        character*(*), intent(out) :: ev
-    end subroutine getenv
-
-    integer function getfd(lu)
-        integer, intent(in) :: lu
-    end function getfd
-
-    integer function getgid()
-    end function getgid
-
-    subroutine getlog(name)
-        character*(*), intent(out) :: name
-    end subroutine getlog
-
-    integer function getpid()
-    end function getpid
-
-    integer function getuid()
-    end function getuid
-
-    pure subroutine gmtime(stime,tarray)
-        integer, intent(in) :: stime
-        integer, intent(out) :: tarray(9)
-    end subroutine gmtime
-
-    integer function hostnm(nm)
-        character*(*), intent(out) :: nm
-    end function hostnm
-
-    pure subroutine idate(date_array)
-        integer, intent(out) :: date_array(3)
-    end subroutine idate
-
-
-    logical function isatty(lu)
-        integer, intent(in) :: lu
-    end function isatty
-
-    pure subroutine itime(iarray)
-        integer, intent(out) :: iarray(3)
-    end subroutine itime
-
-    integer function link(n1,n2)
-        character*(*), intent(in) :: n1, n2
-    end function link
-
-    pure integer function lnblnk(a1)
-        character*(*), intent(in) :: a1
-    end function lnblnk
-
-    pure integer function loc(a)
-        integer, intent(in) :: a
-    end function loc
-
-    pure subroutine ltime(stime,tarray)
-        integer, intent(in) :: stime
-        integer, intent(out) :: tarray(9)
-    end subroutine ltime
-
-    integer function malloc(n)
-        integer, intent(in) :: n
-    end function malloc
-
-    pure integer function mclock()
-    end function mclock
-
-    integer function outstr(ch)
-        character*(*), intent(in) :: ch
-    end function outstr
-
-    integer function putc(ch)
-        character*(*), intent(in) :: ch
-    end function putc
-
-    integer function putenv(str)
-        character*(*), intent(in) :: str
-    end function putenv
-
-    pure double precision function dflmin()
-    end function dflmin
-
-    pure double precision function dflmax()
-    end function dflmax
-
-    pure double precision function dffrac()
-    end function dffrac
-
-    pure integer function inmax()
-    end function inmax
-
-    integer function rename(from,to)
-        character*(*), intent(in) :: from, to
-    end function rename
-
-    pure integer function rindex(a1,a2)
-        character*(*), intent(in) :: a1, a2
-    end function rindex
-
-    integer function signal(sig,proc,flag)
-        integer, intent(in) :: sig, flag
-        external proc
-    end function signal
-
-    subroutine sleep(itime)
-        integer, intent(in) :: itime
-    end subroutine sleep
-
-    integer function stat(nm,statb)
-        character*(*), intent(in) :: nm
-        integer, intent(out) :: statb(*)
-    end function stat
-
-    integer function lstat(nm,statb)
-        character*(*), intent(in) :: nm
-        integer, intent(out) :: statb(*)
-    end function lstat
-
-    integer function fstat(lu,statb)
-        integer, intent(in) :: lu
-        integer, intent(out) :: statb(*)
-    end function fstat
-
-    integer function stime(tp)
-        integer, intent(in) :: tp
-    end function stime
-
-    integer function symlnk(n1,n2)
-        character*(*), intent(in) :: n1, n2
-    end function symlnk
-
-    integer function system(str)
-        character*(*), intent(in) :: str
-    end function system
-
-    pure integer function time()
-    end function time
-
-    pure integer function times(buf)
-        integer, intent(out) :: buf(*)
-    end function times
-
-    character*(100) function ttynam(lu)
-        integer, intent(in) :: lu
-    end function ttynam
-
-    integer function unlink(fil)
-        character*(*), intent(in) :: fil
-    end function unlink
-
-    integer function wait(st)
-        integer, intent(out) :: st
-    end function wait
-
-    subroutine pxffileno(lu,fd,err)
-        integer, intent(in) :: lu
-        integer, intent(out) :: fd,err
-    end subroutine pxffileno
-
-end interface
-#endif
 
 !> libc interface
 interface
@@ -406,7 +144,6 @@ interface
         implicit none
         integer(c_int) :: subprocess                                  !> return PID of forked process
         character(kind=c_char,len=1),dimension(*),intent(in) :: cmd   !> executable path
-        !character(kind=c_char,len=1),dimension(*),intent(in) :: args  !> arguments
         integer(c_int), intent(in) :: cmdlen
     end function subprocess
 
@@ -426,6 +163,7 @@ interface
         character(kind=c_char,len=1),dimension(*),intent(in) :: file2
         integer(c_int), intent(in) :: len2
     end function fcopy
+
     function fcopy_mmap(file1, len1, file2, len2) bind(c,name="fcopy_mmap")
         use, intrinsic :: iso_c_binding
         implicit none
@@ -468,8 +206,6 @@ interface
         character(kind=c_char,len=1),dimension(*),intent(in) :: infile
         integer(c_int), intent(in) :: inlen  !> string lengths
         character(kind=c_char,len=1),dimension(*),intent(inout) :: outfile
-        ! type(c_ptr) :: outfile
-        ! character(kind=c_char,len=1),dimension(*),intent(in) :: outfile
         integer(c_int), intent(out) :: outlen  !> string lengths
     end function get_absolute_pathname
 
@@ -537,10 +273,9 @@ contains
             write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
-        ! if( err ) write(*,*) trim(adjustl(cmdmsg))
     end subroutine raise_sys_error
 
-!! ENVIRONMENT FUNCTIONS
+    !! ENVIRONMENT FUNCTIONS
 
     !> isenv; return 0 if environment variable is present
     logical function simple_isenv( name )
@@ -549,13 +284,7 @@ contains
         integer                      :: length, status
         simple_isenv=.false.
         status=1
-! #if defined(PGI)
-!         call getenv( trim(adjustl(name)), varval)
-!         if(len_trim(varval) /= 0)   status=0
-! #else
-        !! Intel and GNU F2003 included
         call get_environment_variable( trim(adjustl(name)), status=status)
-!#endif
         if(status==0) simple_isenv=.true.
     end function simple_isenv
 
@@ -565,10 +294,6 @@ contains
         character(len=STDLEN), intent(out) :: retval
         logical,     optional, intent(in)  :: allowfail
         integer                            :: length, status
-! #if defined(PGI)
-!         call getenv( trim(adjustl(name)), retval)
-! #else
-        !! Intel and GNU F2003 included
         call get_environment_variable( trim(name), value=retval, length=length, status=status)
         if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
         if( status ==  1 )then
@@ -581,7 +306,6 @@ contains
             retval = ""
             return
         end if
-!#endif
     end function simple_getenv
 
     subroutine simple_sleep( secs )
@@ -595,7 +319,6 @@ contains
         call sleep(INT(secs)) !! intrinsic
 #endif
     end subroutine simple_sleep
-
 
     !! SYSTEM FILE OPERATIONS
 
@@ -785,14 +508,6 @@ contains
 #if defined(INTEL)
         ! Function method
         status = chmod(pathname, mode)
-#elif defined(PGI)
-        ! integer :: imode
-         imode=0 ! convert symbolic to octal
-         if ( index(mode, 'x') /=0) imode=o'110'
-         if ( index(mode, 'w') /=0) imode=o'220'
-        if ( index(mode, 'r') /=0) imode=o'440'
-        !status = system("chmod "//trim(adjustl(mode))//" "//trim(adjustl(pathname)))
-        status = chmod(pathname, imode)
 #else
         imode = INT(o'000') ! convert symbolic to octal
         if ( index(mode, 'x') /=0) imode=IOR(imode,INT(o'111'))
@@ -816,16 +531,10 @@ contains
         logical :: l_print = .true., currently_opened=.false.
         integer :: funit
         character(len=STDLEN) :: io_message
-
 #if defined(GNU)
         allocate(buffer(13), source=0)
         status = stat(trim(adjustl(filename)), buffer)
-#elif defined(PGI)
-        status =  stat(trim(adjustl(filename)), buffer)
-        !        DebugPrint 'fileio       sys_stat PGI stato ', status
-        !        DebugPrint 'fileio       sys_stat PGI size of buffer ', size(statb)
 #elif defined(INTEL)
-
         inquire(file=trim(adjustl(filename)), opened=currently_opened, iostat=status)
         if(status /= 0)&
             call simple_error_check(status,"simple_syslib::simple_sys_stat inquire failed "//trim(filename))
@@ -837,7 +546,6 @@ contains
             print *, buffer
         end if
         if(.not.currently_opened) close(funit)
-
 #endif
         if( present(doprint) )l_print = doprint
         if( l_print )then
@@ -989,28 +697,17 @@ contains
         io_status=0
         inquire(file=trim(dir), exist=dir_e)
         if(.not. dir_e) then
-! #if defined(INTEL)
-!                 allocate(path, source=trim(dir))
-!                 qq =  makedirqq(path)
-!                 if(.not. qq) io_status = 1
-! #else
             allocate(path, source=trim(adjustl(dir))//c_null_char)
             io_status= makedir(path)
-! #elif defined(PGI)
-!                 allocate(path, source=trim(tmppath))
-!                 io_status = mkdir(path, int(o'777',c_int16_t))
-!#endif
-                inquire(file=trim(path), exist=dir_e)
-                if(.not. dir_e) then
-                    print *," syslib:: simple_mkdir failed to create "//trim(path)
-
-                endif
-
-                if(.not. ignore_here)then
-                    if(io_status /= 0) call simple_error_check(io_status, &
-                        "syslib:: simple_mkdir failed to create "//trim(path))
-                endif
-                deallocate(path)
+            inquire(file=trim(path), exist=dir_e)
+            if(.not. dir_e) then
+                print *," syslib:: simple_mkdir failed to create "//trim(path)
+            endif
+            if(.not. ignore_here)then
+                if(io_status /= 0) call simple_error_check(io_status, &
+                    "syslib:: simple_mkdir failed to create "//trim(path))
+            endif
+            deallocate(path)
         else
             if(global_verbose) print *," Directory ", trim(dir), " already exists, simple_mkdir ignoring request"
         end if
@@ -1031,77 +728,22 @@ contains
         io_status=0
         inquire(file=trim(adjustl(d)), exist=dir_e)
         if(dir_e) then
-           count=0
-! #if defined(INTEL)
-!             allocate(path, source=trim(d))
-!             qq =  deldirqq(d)
-!             if(.not. qq)io_status = 1
-! #elif defined(GNU)
+            count=0
             allocate(path, source=trim(adjustl(d))//c_null_char)
             length = len_trim(adjustl(path))
             io_status = removedir(trim(path), length, count)
             if(global_debug) print *,' simple_rmdir removed ', count, ' items'
-! #elif defined(PGI)
-!             allocate(path, source=trim(d))
-!             io_status = rmdir(d)
-! #endif
             deallocate(path)
             if(io_status /= 0)then
                 err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
                 call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
                 io_status=0
-             endif
-
+            endif
         else
             print *," Directory ", d, " does not exists, simple_rmdir ignoring request"
         end if
         if(present(status)) status = io_status
     end subroutine simple_rmdir
-
-    !> file list command based on flibs-0.9
-!     subroutine simple_filetmp_list( pattern, list )
-!         character(len=*), intent(in)           :: pattern
-!         character(len=*), intent(out), pointer :: list(:)
-!         character(len=STDLEN)                  :: tmpfile
-!         character(len=STDLEN)                  :: cmd
-!         character(len=1)                       :: line
-!         character(len=len(pattern))            :: prefix
-!         integer                                :: luntmp
-!         integer                                :: i, ierr, count
-! #if _DEBUG
-!         print*,"simple_filetmp_list creating tmp file __simple_filelist__"
-! #endif
-!
-!         tmpfile = '__simple_filelist__'
-!         cmd = trim(ls_command) // ' ' // trim(pattern) // ' ' // trim(redirect) // trim(tmpfile) &
-!             // ' ' // suppress_msg
-!         call exec_cmdline( cmd )
-! #if _DEBUG
-!         print*,"simple_filetmp_list reading __simple_filelist__"
-! #endif
-!         open(newunit = luntmp, file = tmpfile)
-!         !
-!         ! First count the number of files, then allocate and fill the array
-!         !
-!         count = 0
-!         do
-!             read( luntmp, '(a)', iostat = ierr ) line
-!             if ( ierr == 0 ) then
-!                 count = count + 1
-!             else
-!                 exit
-!             endif
-!         enddo
-!         rewind( luntmp )
-!         allocate( list(count) )
-!         do i = 1,count
-!             read( luntmp, '(a)' ) list(i)
-!         enddo
-!         close( luntmp, status = 'delete' )
-! #if _DEBUG
-!         print*,"simple_filetmp_list done "
-! #endif
-!     end subroutine simple_filetmp_list
 
     function simple_list_dirs(path, outfile, status) result(list)
         character(len=*),           intent(in)  :: path
@@ -1164,128 +806,6 @@ contains
         endif
     end function find_next_int_dir_prefix
 
-    !> File list -- wrapper for C functions get_file_list and glob_file_list
-    !!  Path method
-    !>    list = simple_list_files('./')
-    !!    list = simple_list_files('./', ext='mrc', outfile='filetab.txt', tr=.true.)
-    !!  Glob method:
-    !!    list = simple_list_file(glob='dir/tmp*.txt')
-    !! Glob function searches for all the pathnames matching pattern according to the rules
-    !! used by the shell (see man 7 glob.  No tilde expansion or parameter substitution is done
-    ! function simple_list_files(path, ext, glob, outfile, tr, status) result(list)
-    !     character(len=*), intent(in), optional               :: path
-    !     character(len=*), intent(in), optional               :: ext
-    !     character(len=*), intent(in), optional               :: glob
-    !     character(len=*), intent(in), optional               :: outfile
-    !     logical,          intent(in), optional               :: tr  !> "ls -tr " reverse time-modified flag
-    !     integer,          intent(out), optional              :: status
-    !    ! type(c_ptr)                                         :: file_list_ptr
-    !    ! character(kind=c_char,len=1), pointer, dimension(:) :: tmp
-    !     character(len=STDLEN), allocatable :: list(:)
-    !     character(len=STDLEN), pointer     :: plist(:)
-    !     character(len=STDLEN)              :: cur
-    !     character(len=1)                   :: sep='/'
-    !     character(kind=c_char,len=:),allocatable  :: pathhere, thisglob, thisext !> pass these to C routines
-    !     integer                            :: i,stat, luntmp
-    !     integer(c_int)                     :: time_sorted_flag,num_files
-    !     status=0
-    !     ! call simple_filetmp_list(trim(glob), plist)
-    !     ! num_files=size(plist)
-    !     ! allocate( list(num_files))
-    !     ! do i = 1,num_files
-    !     !      list(i) = plist(i)
-    !     !  enddo
-    !     !!rint *," in simple_list_files"
-    !      time_sorted_flag = 0
-    !      global_debug=.true.
-    !      pathhere= ""; thisglob=""; thisext=""
-    !      if(present(glob)) then
-    !          thisglob =trim(adjustl(glob))//achar(0)
-    !         if (global_debug) print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":"
-    !     else
-    !         thisglob =trim('*')//achar(0)
-    !     end if
-    !     if(present(path))then
-    !         if (global_debug) print *," In simple_syslib::simple_list_files path:", trim(path),":"
-    !         if (len_trim(path)==0)then
-    !             pathhere=trim("./")//achar(0)
-    !         elseif (index(trim(path),sep)==len_trim(path)) then
-    !             if (global_debug) &
-    !             print *," In simple_syslib::simple_list_files path is not empty and contains a slash"
-    !             pathhere =trim(adjustl(path))//achar(0)
-    !         else
-    !             if (global_debug) print *," In simple_syslib::simple_list_files appending a separator to path"
-    !             pathhere =trim(adjustl(path))//trim(sep)//achar(0)
-    !         end if
-    !         ! ext only has effect in path method
-    !         if(present(ext)) then
-    !             thisext=trim(ext)//achar(0)
-    !         else
-    !             thisext = ""//achar(0)
-    !         end if
-    !         if (global_debug) print *," In simple_syslib::simple_list_files pathhere:", trim(pathhere),":"
-    !     end if
-    !     !! Check both path and glob methods
-    !     if(present(path) .and. present(glob)) then
-    !         !deallocate(thisglob)
-    !         thisglob =trim(pathhere)//trim(thisglob)//achar(0)
-    !         if (global_debug) print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":"
-    !     else if(present(path) .and. (.not. present(glob))) then
-    !         ! path already set above
-    !     else if( (.not.present(path)) .and. present(glob)) then
-    !         ! glob already set above
-    !     else
-    !         call simple_stop("simple_syslib::simple_list_files Error must have either path or glob in args",&
-    !             __FILENAME__,__LINE__)
-    !     end if
-    !     time_sorted_flag = 0
-    !     if(present(tr)) then
-    !         if(tr) time_sorted_flag = 1 ! .eqv. .true.)
-    !     end if
-    !     print *," In simple_syslib::simple_list_files glob:", trim(thisglob),":", " path:", trim(pathhere)
-    !
-    !     !! Arguments all parsed -- Calling get_file_list or glob_file_list
-    !     if(present(glob)) then
-    !         !! GLOB takes precedence over get_file_list
-    !         if(global_debug) print *, ' Calling  glob_file_list thisglob:', trim(thisglob),":"
-    !         stat = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
-    !     else
-    !         if(global_debug) print *, ' Calling  get_file_list pathhere:', trim(pathhere),":  ext:",trim(thisext),":"
-    !         if(time_sorted_flag == 1) then
-    !             stat = get_file_list_modified(trim(pathhere),trim(thisext), num_files, 3)
-    !         else
-    !             stat = get_file_list_modified(trim(pathhere),trim(thisext), num_files, 0)
-    !         end if
-    !     end if
-    !     if(stat/=0)call simple_stop("simple_syslib::simple_list_files failed to process file list "//trim(pathhere),&
-    !         __FILENAME__,__LINE__)
-    !     if(global_debug) print *, ' In simple_syslib::simple_list_files  num_files : ',  num_files
-    !     if(.not.file_exists('__simple_filelist__'))&
-    !         call!         rewind( luntmp )
-!         allocate( list(count) )
-!         do i = 1,count
-!             read( luntmp, '(a)' ) list(i)
-!         enddo
-!         close( luntmp, status = 'delete' ) simple_stop('simple_syslib::simple_list_files tmp file not created.')
-    !     if(present(outfile))then
-    !         if(global_debug) print *, ' In simple_syslib::simple_list_files  outfile : ', outfile
-    !         if(file_exists(trim(outfile))) call del_file(trim(outfile))
-    !         call syslib_copy_file('__simple_filelist__', trim(outfile))
-    !     endif
-    !     if (num_files > 0)then
-    !         open(newunit = luntmp, file = '__simple_filelist__')
-    !         allocate( list(num_files) )
-    !         do i = 1,num_files
-    !             read( luntmp, '(a)' ) list(i)
-    !         enddo
-    !         close( luntmp, status = 'delete' )
-    !     endif
-    !     if(present(status)) status = stat
-    !     if(allocated(pathhere)) deallocate(pathhere)
-    !     if(allocated(thisglob)) deallocate(thisglob)
-    !     if(allocated(thisext)) deallocate(thisext)
-    ! end function simple_list_files
-
     subroutine simple_list_files( pattern, list, id )
         use simple_strings, only: int2str
         character(len=*),  intent(in) :: pattern
@@ -1332,17 +852,14 @@ contains
     function simple_glob_list_tofile(glob, outfile, tr) result(status)
         character(len=*), intent(in)           :: glob
         character(len=*), intent(in)           :: outfile
-        logical,          intent(in), optional :: tr                   !> "ls -tr " reverse time-modified flag
-        !character(len=STDLEN), allocatable                  :: list(:)
-        character(kind=c_char,len=:), allocatable                       :: thisglob
+        logical,          intent(in), optional :: tr !> "ls -tr " reverse time-modified flag
+        character(kind=c_char,len=:), allocatable :: thisglob
         character(1) :: sep='/'
         integer      :: status
         type(c_ptr)  :: file_list_ptr
         integer      :: i,num_files, luntmp, time_sorted_flag
-        time_sorted_flag = 0 !   call simple_chdir(path, cur)
+        time_sorted_flag = 0
         status=0
-        !call exec_cmdline(trim(ls_command)//' -tr '//trim(glob)//' > '//trim(outfile))
-        ! call simple_filetmp_list(trim(ls_command)//' --almost-all -1', list)
         if(len(glob)==0) then
             allocate(thisglob, source=trim(glob)//achar(0))
         else
@@ -1369,7 +886,6 @@ contains
         character(len=*), intent(in) :: file !< input filename
         integer :: fnr, file_status
         if( file_exists(file) )then
-            !call cpStr(file,tfile)
             open(newunit=fnr,file=file,STATUS='OLD',IOSTAT=file_status)
             if( file_status == 0 )then
                 close(fnr, status='delete',IOSTAT=file_status)
@@ -1389,7 +905,6 @@ contains
         character(len=STDLEN)                      :: cur
         character(kind=c_char,len=:), allocatable  :: thisglob
         integer                                    :: i, glob_elems,iostatus, luntmp
-
         if(present(glob))then
             thisglob=trim(glob)//c_null_char
         else
@@ -1408,7 +923,6 @@ contains
         !! delete and double check
         if ( glob_elems > 0) then
             do i=1,glob_elems
-               ! if(global_debug) print*, 'Deleting ', list(i)
                 call del_file(list(i))
             enddo
             do i=1,glob_elems
@@ -1424,7 +938,6 @@ contains
                 dlist(i)= list(i)
             end do
         end if
-
         if(present(status))status=iostatus
         deallocate(list)
         deallocate(thisglob)
@@ -1441,7 +954,6 @@ contains
         character(kind=c_char,len=:), allocatable  :: thisglob
         type(c_ptr)                                :: listptr
         integer                                    :: i, glob_elems,iostatus, luntmp
-
         if(present(glob))then
             allocate(thisglob, source=trim(glob)//c_null_char)
         else
@@ -1451,7 +963,6 @@ contains
         !! glob must be protected by c_null char
         iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
         if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force glob failed")
-
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
         do i = 1,glob_elems
@@ -1459,7 +970,6 @@ contains
             if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force reading temp file failed")
         enddo
         close( luntmp, status = 'delete' )
-
         if ( glob_elems > 0) then
             do i=1, glob_elems
                 if(file_exists(list(i))) then
@@ -1470,8 +980,6 @@ contains
         else
             print *,"simple_syslib::syslib_rm_rf no files matching ", trim(thisglob)
         endif
-       ! call simple_chdir(cur)
-
         if(present(status))status=iostatus
         deallocate(thisglob)
     end subroutine syslib_rm_rf
@@ -1487,7 +995,6 @@ contains
         character(kind=c_char,len=:), allocatable  :: thisglob
         type(c_ptr)                                :: listptr
         integer                                    :: i, glob_elems,iostatus, luntmp
-
         if(present(glob))then
             allocate(thisglob, source=trim(glob)//c_null_char)
         else
@@ -1497,7 +1004,6 @@ contains
         !! glob must be protected by c_null char
         iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
         if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force glob failed")
-
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
         do i = 1,glob_elems
@@ -1505,7 +1011,6 @@ contains
             if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force reading temp file failed")
         enddo
         close( luntmp, status = 'delete' )
-
         if ( glob_elems > 0) then
             do i=1, glob_elems
                 if(file_exists(list(i))) then
@@ -1516,31 +1021,14 @@ contains
         else
             print *,"simple_syslib::simple_rm_force no files matching ", trim(thisglob)
         endif
-       ! call simple_chdir(cur)
         if(present(dlist)) then
            allocate( dlist(glob_elems), source=list)
-!           dlist = list
         else
            deallocate(list)
         end if
         if(present(status))status=iostatus
         deallocate(thisglob)
     end function simple_rm_force
-
-
-    ! !>  \brief  get logical unit of file
-    ! integer function get_lunit( fname )
-    !     character(len=*), intent(in) :: fname
-
-    !     integer               :: io_status
-    !     character(len=STDLEN) :: io_message
-    !     io_status = 0
-    !     inquire(file=trim(adjustl(fname)),unit=get_lunit,iostat=io_status,iomsg=io_message)
-    !     if (io_status .ne. 0) then
-    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-    !         call simple_stop ('IO error; is_open; simple_fileio      ')
-    !     endif
-    ! end function get_lunit
 
     !> simple_timestamp prints time stamp (based on John Burkardt's website code)
     subroutine simple_timestamp ( )
@@ -1639,7 +1127,6 @@ contains
 #ifdef INTEL
         character*56  :: str
 #endif
-
 #ifdef GNU
         character(*), parameter :: compilation_cmd = compiler_options()
         character(*), parameter :: compiler_ver = compiler_version()
@@ -1667,7 +1154,6 @@ contains
         write( file_unit_op, '(A,A)' ) &
             ' Intel IFPORT version ', trim(adjustl(str))
 #endif
-
     end subroutine print_compiler_info
 
     subroutine simple_sysinfo_usage(valueRSS,valuePeak,valueSize,valueHWM)
@@ -1780,13 +1266,11 @@ contains
         character(len=STDLEN) :: command
         integer               :: pid,unit
         logical               :: ifxst
-
 #ifdef MACOSX
         print *," simple_dump_mem_usage cannot run on MacOSX"
         return
 #endif
         !--- get process ID --  make thread safe
-
         !  omp critical dump_mem
         pid=getpid()
         write(pid_char,'(I8)') pid
@@ -1797,7 +1281,6 @@ contains
         call exec_cmdline(trim(command))
         !  omp end critical
     end subroutine simple_dump_mem_usage
-
 
     subroutine simple_full_path (infile, absolute_name, errmsg, check_exists)
         character(len=*),              intent(in)  :: infile, errmsg
@@ -1834,6 +1317,5 @@ contains
             allocate(absolute_name, source=trim(infile))
         end if
     end subroutine simple_full_path
-
 
 end module simple_syslib

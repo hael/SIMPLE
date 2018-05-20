@@ -10,19 +10,17 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
-!include 'simple_lib.f08'
 use simple_defs
 use simple_error,  only: allocchk, simple_stop
 use simple_math,   only: is_odd, is_even
 use simple_syslib, only: is_open, file_exists, del_file
 use simple_fileio, only: fname2format, fopen, fileiochk, fclose
-use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead ! dataRbytes, dataRinteger, dataRfloat
+use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead
 use gnufor2
 implicit none
 
 public :: imgfile
 private
-! #include "simple_local_flags.inc"
 
 type imgfile
     private
@@ -42,10 +40,8 @@ contains
     procedure, private :: slice2bytepos
     procedure          :: rSlices
     procedure          :: wSlices
- !   procedure          :: print_header
     procedure          :: getDims
     procedure          :: getDim
-  !  procedure          :: getPixSz
     procedure          :: getIform
     procedure          :: getMode
     procedure          :: setIform
@@ -480,14 +476,6 @@ contains
         self%was_written_to = .true.
     end subroutine wSlices
 
-    !>  \brief  Print out basic information about the file
-    ! subroutine print_header( self )
-    !     class(imgfile), intent(in) :: self   !< Imagefile object
-    !     write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
-    !     call self%overall_head%print_imghead()
-    !     write(*,'(a)') ' '
-    ! end subroutine print_header
-
     !>  \brief  Return the dimension of the image stack
     function getDims( self )
         class(imgfile), intent(in) :: self   !< Imagefile object
@@ -502,12 +490,6 @@ contains
         integer :: getDim
         getDim = self%overall_head%getDim(which_dim)
     end function getDim
-
-    !>  \brief  Return the pixel size of the image data (in Angstroms)
-    ! real function getPixSz( self )
-    !     class(imgfile), intent(in) :: self
-    !     getPixSz = self%overall_head%getPixSz()
-    ! end function getPixSz
 
     !>  \brief  Return the format descriptor of the stack
     integer function getIform( self )

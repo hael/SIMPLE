@@ -315,7 +315,6 @@ contains
         integer::nx
         real,allocatable  :: tmp(:)
         integer::i,ii
-
         nx=size(fftimage)
         if(allocated(tmp))deallocate(tmp)
         allocate(tmp(nx),source=fftimage,stat=alloc_stat)
@@ -337,7 +336,6 @@ contains
         integer::nx
         complex,allocatable  :: tmp(:)
         integer::i,ii
-
         nx=size(fftimage)
         if(allocated(tmp))deallocate(tmp)
         allocate(tmp(nx),source=fftimage,stat=alloc_stat)
@@ -431,34 +429,6 @@ contains
         fftimage(lbx:nx-lbx+1,lby:ny-lby+1) = tmp
         if(allocated(tmp))deallocate(tmp)
     end subroutine ifftshift2cc
-
-    ! ! 2D (3D slices) double complex
-    ! subroutine ifftshift2cc_z(fftimage, fixed_axis)
-    !     implicit none
-    !     complex(kind=dp), intent(inout) :: fftimage(:,:,:)
-    !     integer, intent(in) :: fixed_axis
-    !     integer::nx,ny,lbx,lby
-    !     complex(kind=dp), allocatable  :: tmp(:,:)
-    !     integer::i,j,ii,jj
-    !     verbose=.true.
-    !     VerbosePrint "in ifftshift2cc_z "
-    !     nx=size(fftimage,1);lbx=lbound(fftimage,1)
-    !     ny=size(fftimage,2);lby=lbound(fftimage,2)
-    !     allocate(tmp(nx,ny),source=fftimage(:,:,1),stat=alloc_stat)
-    !     if(alloc_stat /= 0) call allocchk("simple_fftshifter::ifftshift 2D slice complex tmp failed")
-    !     do j=1, ny
-    !         jj = mod(j+(ny+1)/2,ny)
-    !         if(jj==0) jj = ny
-    !         do i=1, nx
-    !             ii = mod(i+(nx+1)/2,nx)
-    !             if(ii==0) ii = nx
-
-    !             tmp(i,j) = fftimage(ii-lbx+1,jj-lby+1,fixed_axis)
-    !         end do
-    !     end do
-    !     fftimage(lbx:nx-lbx+1,lby:ny-lby+1,fixed_axis) = tmp
-    !     deallocate(tmp)
-    ! end subroutine ifftshift2cc_z
 
     !! 3D INVERSE FFTSHIFTERS
     ! 3D double precision complex

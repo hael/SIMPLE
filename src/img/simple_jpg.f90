@@ -5,57 +5,56 @@
 
 module simple_jpg
 include 'simple_lib.f08'
-use,intrinsic                                        :: iso_c_binding
+use,intrinsic :: iso_c_binding
 implicit none
 
-public                                               :: jpg_img, test_jpg_export
+public :: jpg_img, test_jpg_export
 private
 #include "simple_local_flags.inc"
     !*** cptr should be have the same size as a c pointer
     !*** It doesn't matter whether it is an integer or a real
-integer, parameter                                   :: cptr          = kind(5)
-integer, parameter                                   :: numComponents = 3
-integer, public, parameter                           :: max_colors =  256
-integer, parameter                                   :: GREYSCALE  =  1
-
+integer, parameter         :: cptr          = kind(5)
+integer, parameter         :: numComponents = 3
+integer, parameter, public :: max_colors =  256
+integer, parameter         :: GREYSCALE  =  1
 
 type jpg_img
     private
-    integer                                          :: width      =  0
-    integer                                          :: height     =  0
-    integer                                          :: quality    =  90
-    integer                                          :: colorspace =  1
-    integer(cptr)                                    :: ptr        =  0
-    logical                                          :: fmode      = .false.
-    real                                             :: gamma      = 0.707
-    logical                                          :: normalised = .false.
-    integer(1), dimension(:), pointer                :: img_buffer => NULL()
+    integer                           :: width      =  0
+    integer                           :: height     =  0
+    integer                           :: quality    =  90
+    integer                           :: colorspace =  1
+    integer(cptr)                     :: ptr        =  0
+    logical                           :: fmode      = .false.
+    real                              :: gamma      = 0.707
+    logical                           :: normalised = .false.
+    integer(1), dimension(:), pointer :: img_buffer => NULL()
 contains
-    procedure :: destructor
-    procedure :: constructor
-    procedure                                        :: getWidth
-    procedure                                        :: getHeight
-    procedure                                        :: getQuality
-    procedure                                        :: getColorspace
-    procedure                                        :: setQuality
-    procedure                                        :: setColorspace
-    procedure                                        :: getGamma
-    procedure                                        :: getNormalised
-    procedure                                        :: setGamma
-    procedure                                        :: setNormalised
-    procedure :: montage
-    procedure, private                               :: save_jpeg_r4_3D
-    procedure, private                               :: save_jpeg_r4
-    procedure, private                               :: save_jpeg_i4
-    generic                                          :: writeJpg  => save_jpeg_r4_3D, save_jpeg_r4, save_jpeg_i4
-    procedure, private                               :: load_jpeg_r4
-    procedure, private                               :: load_jpeg_i4
-    generic                                          :: loadJpg  => load_jpeg_r4, load_jpeg_i4
-
+    procedure          :: destructor
+    procedure          :: constructor
+    procedure          :: getWidth
+    procedure          :: getHeight
+    procedure          :: getQuality
+    procedure          :: getColorspace
+    procedure          :: setQuality
+    procedure          :: setColorspace
+    procedure          :: getGamma
+    procedure          :: getNormalised
+    procedure          :: setGamma
+    procedure          :: setNormalised
+    procedure          :: montage
+    procedure, private :: save_jpeg_r4_3D
+    procedure, private :: save_jpeg_r4
+    procedure, private :: save_jpeg_i4
+    generic            :: writeJpg  => save_jpeg_r4_3D, save_jpeg_r4, save_jpeg_i4
+    procedure, private :: load_jpeg_r4
+    procedure, private :: load_jpeg_i4
+    generic            :: loadJpg  => load_jpeg_r4, load_jpeg_i4
 end type jpg_img
 
 interface
 #ifdef HAVE_LIBJPEG
+
     subroutine setup_jpeg ( width, height, in, out ) bind ( c, name="setup_jpeg" )
         import
         integer(C_INT), intent(in), value            :: width
@@ -63,6 +62,7 @@ interface
         integer(C_INT), dimension(*), intent(out)    :: in
         integer(C_INT), dimension(*), intent(out)    :: out
     end subroutine setup_jpeg
+
     subroutine read_jpeg (file_name, img, width, height, colorspec, status ) bind ( c, name="read_jpeg" )
         import
         character(c_char), dimension(*), intent(in)  :: file_name
@@ -83,6 +83,7 @@ interface
         integer(c_int), intent(in), VALUE            :: colorspec
         integer(c_int), intent(inout)                :: status
     end subroutine write_jpeg
+
 #endif
 
     integer function stbi_write_jpg (file_name, w, h, comp, data, quality ) bind ( c, name="stbi_write_jpg" )
@@ -95,6 +96,7 @@ interface
         type (C_PTR), VALUE             :: data ! (const void *)
         integer(c_int), intent(in), value            :: quality  ! 1 to 100. Higher quality looks better but results in a bigger image.
     end function stbi_write_jpg
+
     integer function stbi_write_png (file_name, w, h, comp, data ) bind ( c, name="stbi_write_jpg" )
         import
         character(c_char),dimension(*),intent(in)    :: file_name
@@ -103,8 +105,8 @@ interface
         integer(c_int), intent(in), VALUE            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
         !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
         type (C_PTR), VALUE             :: data ! (const void *)
-
     end function stbi_write_png
+
     integer function stbi_read_jpg (file_name, data, w, h, comp ) bind ( c, name="stbi_read_jpg" )
         use,intrinsic                                        :: iso_c_binding
         implicit none
@@ -114,8 +116,6 @@ interface
         integer(c_int), intent(inout)            :: h
         integer(c_int), intent(inout)            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
         !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
-
-
     end function stbi_read_jpg
 
 end interface
@@ -128,58 +128,68 @@ contains
     end subroutine constructor
 
     integer function getWidth(self)
-        class(jpg_img), intent(in)                       :: self
+        class(jpg_img), intent(in) :: self
         getWidth =self%width
     end function getWidth
+
     integer function getHeight(self)
-        class(jpg_img), intent(in)                       :: self
+        class(jpg_img), intent(in) :: self
         getHeight = self%height
     end function getHeight
+
     integer function getQuality(self)
-        class(jpg_img), intent(in)                       :: self
+        class(jpg_img), intent(in) :: self
         getQuality =self%quality
     end function getQuality
+
     integer function getColorspace(self)
-        class(jpg_img), intent(in)                       :: self
+        class(jpg_img), intent(in) :: self
         getColorspace = self%colorspace
     end function getColorspace
+
     real function getGamma(self)
-        class(jpg_img), intent(in)                       :: self
+        class(jpg_img), intent(in) :: self
         getGamma =self%gamma
     end function getGamma
+
     logical function getNormalised(self)
-        class(jpg_img), intent(in)                       :: self
+        class(jpg_img), intent(in) :: self
         getNormalised = self%normalised
     end function getNormalised
 
     subroutine setWidth(self, width)
-        class(jpg_img), intent(inout)                    :: self
-        integer, intent(in)                              :: width
+        class(jpg_img), intent(inout) :: self
+        integer, intent(in)           :: width
         self%width=width
     end subroutine setWidth
+
     subroutine setHeight(self,height)
-        class(jpg_img), intent(inout)                    :: self
+        class(jpg_img), intent(inout) :: self
         integer, intent(in) :: height
         self%height=height
     end subroutine setHeight
+
     subroutine setQuality(self,quality)
-        class(jpg_img), intent(inout)                    :: self
-        integer, intent(in)                              :: quality
+        class(jpg_img), intent(inout) :: self
+        integer, intent(in)           :: quality
         self%quality=quality
     end subroutine setQuality
+
     subroutine setColorspace(self,colorspace)
-        class(jpg_img), intent(inout)                    :: self
-        integer, intent(in)                              :: colorspace
+        class(jpg_img), intent(inout) :: self
+        integer, intent(in)           :: colorspace
         self%colorspace=colorspace
     end subroutine setColorspace
+
     subroutine setGamma(self,gamma)
-        class(jpg_img), intent(inout)                    :: self
-        real,intent(in)                                  :: gamma
+        class(jpg_img), intent(inout) :: self
+        real,intent(in)               :: gamma
         self%gamma=gamma
     end subroutine setGamma
+
     subroutine setNormalised(self,normalised)
-        class(jpg_img), intent(inout)                    :: self
-        logical, intent(in)                              :: normalised
+        class(jpg_img), intent(inout) :: self
+        logical, intent(in)           :: normalised
         self%normalised=normalised
     end subroutine setNormalised
 
@@ -197,7 +207,6 @@ contains
         status = 1
         fname  = trim(adjustl(fname))
         c      = 4
-        !if(fname(len_trim(fname)) == c_null_char) c=5
         w = size(in_buffer,1)
         h = size(in_buffer,2)
         d = size(in_buffer,3)
@@ -237,15 +246,8 @@ contains
         if(w == 0 .or. h == 0) return
         do slice=1, size(in_buffer,3)
             write(fstr, '(a,i4.4,a)') fname_here(1:(len_trim(fname_here)-c))//'_',slice,'.jpg'//c_null_char
-            !            fstr = trim(adjustl(fstr))
             status = self%save_jpeg_r4 (fstr, in_buffer(:,:,slice), quality, colorspec)
-            !    if(status /= 0 ) call simple_stop('save_jpeg_r4_3D call to save_jpeg_r4  failed' )
         end do
-        !call write_jpeg(img, fname, w, h, quality_here, c, status)
-        !if(status /= 0 ) call simple_stop('save_jpeg_r4 call to write_jpeg returned status==1' )
-        !self%width = w
-        !self%height = h
-        !        deallocate(fstr)
     end function save_jpeg_r4_3D
 
     function save_jpeg_r4(self, fname, in_buffer, quality, colorspec) result(status)
@@ -261,7 +263,6 @@ contains
         character(len=:), allocatable   :: fstr
         status = 1
         c      = 1
-        ! verbose=.true.
         VerbosePrint '>>> In save_jpeg_r4 '
         self%width  = 0
         self%height = 0
@@ -275,7 +276,7 @@ contains
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
         VerbosePrint '>>> In save_jpeg_r4 input lo hi ', lo, hi
-        allocate(self%img_buffer(w*h*3))!, source=0_c_char)
+        allocate(self%img_buffer(w*h*3))
         do j=0,h-1
             do i=0,w-1
                 if  (self%colorspace == 3) then
@@ -350,12 +351,8 @@ contains
             end do
         end do
         img=c_loc(self%img_buffer)
-        ! if(c_associated(img, c_loc(self%img_buffer))) &
-        !     stop 'save_jpeg_i4 img buffer and C pointer do not point to same target'
         allocate(fstr, source=trim(fname)//c_null_char)
-        !call write_jpeg(img, fname, w, h, self%quality, self%colorspace, status)
         status = stbi_write_jpg (fstr, self%width, self%height, self%colorspace, img, self%quality )
-        !STBI returns 0 on failure and non-0 on success.
         if( status == 0 ) call simple_stop('save_jpeg_i4 call to write_jpeg returned status ==1' )
         status = 0
         if(allocated(fstr)) deallocate(fstr)
@@ -373,7 +370,6 @@ contains
         status = 1
         verbose =.true.
         allocate(fstr, source=trim(fname)//c_null_char)
-        !        call read_jpeg(fstr, img, w, h, c, status)
         status = stbi_read_jpg(fstr, img, w, h, c )
         if(status ==0) call simple_stop ("simple_jpg::load_jpeg_r4 stbi_read_jpeg failed ")
         status=0
@@ -384,7 +380,6 @@ contains
         VerbosePrint 'load_jpeg_r4 img_buffer l/u bounds ', lbound(imgbuffer), ubound(imgbuffer)
         VerbosePrint 'load_jpeg_r4 img_buffer ', associated(imgbuffer)
         VerbosePrint 'load_jpeg_r4 img_buffer '
-        !        out_buffer = transfer(self%img_buffer,1.0)
         allocate(out_buffer(w,h))
         do i=0,w-1
             do j=0,h-1
@@ -401,7 +396,6 @@ contains
         self%height = h
         self%colorspace = c
         status=0
-        !  if(allocated(self%img_buffer)) deallocate(self%img_buffer)
         if(associated(imgbuffer)) nullify(imgbuffer)
         VerbosePrint 'load_jpeg_r4 done'
         if(allocated(fstr))deallocate(fstr)
@@ -423,14 +417,10 @@ contains
         verbose =.true.
         allocate(fstr, source=trim(fname)//c_null_char)
         VerbosePrint 'load_jpeg_i4 ', fstr
-        !call read_jpeg(fstr, img, w, h, c, status)
         status = stbi_read_jpg (fstr, img, w, h, c )
         if(status==0) call simple_stop ("simple_jpg::load_jpeg_i4 read_jpeg failed ")
         status=0
-        !   w = size(self%img_buffer,1)
-        !   h = size(self%img_buffer,2)
         VerbosePrint 'load_jpeg_i4 return values width, height, components', w, h, c
- !       VerbosePrint 'load_jpeg_i4 img_buffer l/u bounds ', lbound(img), ubound(img)
         if(associated(imgbuffer)) nullify(imgbuffer)
         bshape = (/ w * h /)
         call c_f_pointer(img,imgbuffer, bshape)
@@ -448,7 +438,6 @@ contains
         self%width = w
         self%height = h
         self%colorspace = c
-
         if(allocated(fstr)) deallocate(fstr)
         if(associated(imgbuffer)) nullify(imgbuffer)
         VerbosePrint 'load_jpeg_i4 done'
@@ -458,7 +447,6 @@ contains
     subroutine destructor(self)
         class(jpg_img) :: self
         DebugPrint 'Destructor of jpg_img object with address: ', loc(self)
-
         if(associated(self%img_buffer)) nullify(self%img_buffer)
     end subroutine destructor
 
@@ -481,7 +469,6 @@ contains
         height          = 149
         status          = 1
         bmp_size        = width * height * pixel_size
-        !        allocate(int32_buffer(bmp_size))
         status = simple_getenv('SIMPLE_PATH', simple_path_str)
         if(status/=0) call simple_stop(" SIMPLE_PATH not found in environment ")
         print *,"test_jpg_export: Starting"
@@ -495,7 +482,6 @@ contains
         deallocate(cmd)
         allocate(cmd, source="identify  test.jpg")
         call exec_cmdline(cmd)
-
         print *,"test_jpg_export: Testing load_jpeg_i4 "
         allocate(fstr, source="test.jpg")
         status = jpg%loadJpg(fstr, int32_buffer)
@@ -516,7 +502,6 @@ contains
             end if
         end if
         if(status==1) call simple_stop("test_jpg_export: FAILED: load_jpeg int32 failed")
-
         print *,"test_jpg_export: Testing load_jpeg_r4 "
         status = jpg%loadJpg(fstr, real32_buffer)
         if(status == 0) then
@@ -536,8 +521,6 @@ contains
             end if
         end if
         if(status==1) call simple_stop("test_jpg_export: FAILED: load_jpeg real32 failed")
-
-
         deallocate(fstr)
         allocate(fstr, source="test-i4.jpg")
         call del_file(fstr)
@@ -551,7 +534,6 @@ contains
             end if
         end if
         if(status==1) call simple_stop("test_jpg_export: FAILED: save_jpeg int32 failed")
-
         deallocate(fstr)
         allocate(fstr, source="test-r4.jpg")
         call del_file(fstr)
@@ -566,13 +548,6 @@ contains
             end if
         end if
         if(status==1) call simple_stop("test_jpg_export: FAILED: save_jpeg real32 failed")
-
-        ! Write the decompressed bitmap out to a ppm file, just to make sure
-        ! it worked.
-        ! call fopen(fd, "output.ppm", status='old')
-        ! write(fd, '("P6",1x,i0,1x,i0,1x,"255")') width, height
-        ! write(fd, *) bmp_buffer
-        ! call fclose(fd)
         if (allocated(int32_buffer)) deallocate(int32_buffer)
         if (allocated(real32_buffer)) deallocate(real32_buffer)
         if (allocated(simple_path_str)) deallocate( simple_path_str)
@@ -580,6 +555,5 @@ contains
         if (allocated(cmd)) deallocate(cmd)
         if (allocated(fstr))  deallocate(fstr)
     end subroutine test_jpg_export
-
 
 end module simple_jpg

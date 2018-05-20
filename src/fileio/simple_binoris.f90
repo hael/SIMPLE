@@ -48,10 +48,9 @@ type binoris
     procedure          :: read_segment_1
     procedure          :: read_segment_2
     generic            :: read_segment => read_segment_1, read_segment_2
-    ! procedure          :: read_segment_ctfparams_state_eo
     ! getters
     procedure          :: get_n_segments
-    !procedure          :: get_fromto
+    procedure          :: get_fromto
     procedure          :: get_n_records
     procedure          :: get_n_bytes_per_record
     procedure          :: get_n_bytes_tot
@@ -506,51 +505,6 @@ contains
         endif
     end subroutine read_segment_2
 
-    ! subroutine read_segment_ctfparams_state_eo( self, isegment, os )
-    !     use simple_ori,    only: ori
-    !     use simple_oris,   only: oris
-    !     class(binoris), intent(inout) :: self
-    !     integer,        intent(in)    :: isegment
-    !     class(oris),    intent(inout) :: os
-    !     integer, parameter :: NFLAGS = 11
-    !     character(len=32)  :: flags(NFLAGS)
-    !     type(ori)          :: o
-    !     character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-    !     integer(kind=8) :: ibytes
-    !     integer :: i, j
-    !     if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_ctfparams_state_eo'
-    !     if( isegment < 1 .or. isegment > self%n_segments )then
-    !         write(*,*) 'isegment: ', isegment
-    !         stop 'isegment out of bound; binoris :: read_segment_ctfparams_state_eo'
-    !     endif
-    !     if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
-    !         ! set flags for ctfparams, state & eo
-    !         flags(1)  = 'smpd'
-    !         flags(2)  = 'kv'
-    !         flags(3)  = 'cs'
-    !         flags(4)  = 'fraca'
-    !         flags(5)  = 'dfx'
-    !         flags(6)  = 'dfy'
-    !         flags(7)  = 'angast'
-    !         flags(8)  = 'bfac'
-    !         flags(9)  = 'state'
-    !         flags(10) = 'eo'
-    !         flags(11) = 'phshift'
-    !         ! read orientation data
-    !         ibytes = self%header(isegment)%first_data_byte
-    !         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-    !             read(unit=self%funit,pos=ibytes) str_os_line
-    !             call o%str2ori(str_os_line)
-    !             do j=1,NFLAGS
-    !                 if( o%isthere(trim(flags(j))) ) call os%set(i, trim(flags(j)), o%get(trim(flags(j))))
-    !             end do
-    !             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
-    !         end do
-    !     else
-    !         ! empty segment, nothing to do
-    !     endif
-    ! end subroutine read_segment_ctfparams_state_eo
-
     ! getters
 
     pure integer function get_n_segments( self )
@@ -558,12 +512,12 @@ contains
         get_n_segments = self%n_segments
     end function get_n_segments
 
-    ! pure function get_fromto( self, isegment ) result( fromto )
-    !     class(binoris), intent(in) :: self
-    !     integer,        intent(in) :: isegment
-    !     integer :: fromto(2)
-    !     fromto = self%header(isegment)%fromto
-    ! end function get_fromto
+    pure function get_fromto( self, isegment ) result( fromto )
+        class(binoris), intent(in) :: self
+        integer,        intent(in) :: isegment
+        integer :: fromto(2)
+        fromto = self%header(isegment)%fromto
+    end function get_fromto
 
     pure integer function get_n_records( self, isegment )
         class(binoris), intent(in) :: self

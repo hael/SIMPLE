@@ -36,7 +36,6 @@ contains
         use simple_opt_factory, only: opt_factory
         class(pftcc_orisrch_grad), intent(inout)    :: self  !< instance
         class(polarft_corrcalc), target, intent(in) :: pftcc !< correlator
-
         type(opt_factory) :: ofac
         real              :: lims(5,2)
         call self%kill

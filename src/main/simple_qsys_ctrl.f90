@@ -593,9 +593,7 @@ contains
             if(allocated(self%stream_cline_stack))     deallocate(self%stream_cline_stack)
             if(allocated(self%stream_cline_submitted)) deallocate(self%stream_cline_submitted)
             if(allocated(self%stream_cline_done_stack))deallocate(self%stream_cline_done_stack)
-
             self%existence = .false.
-
         endif
     end subroutine kill
 

@@ -6,8 +6,8 @@ stdout=>OUTPUT_UNIT,&
 stdin=>INPUT_UNIT
 use simple_defs_fname
 implicit none
-integer, parameter  :: ascii = selected_char_kind ("ascii")
-integer, parameter  :: ucs4  = selected_char_kind ('ISO_10646')
+integer,  parameter  :: ascii       = selected_char_kind ("ascii")
+integer,  parameter  :: ucs4        = selected_char_kind ('ISO_10646')
 integer,  parameter :: MAXS         = 99   !< maximum number of states
 integer,  parameter :: short        = selected_int_kind(4)
 integer,  parameter :: long         = selected_int_kind(9)
@@ -40,10 +40,10 @@ real(sp), parameter :: ATHRES_LIM   = 5.
 
 ! directory-based execution model
 character(len=:), allocatable :: CWD_GLOB_ORIGINAL, CWD_GLOB
-
-! character constants
-character(len=*), parameter :: NEWLINE = new_line('a')
-character(len=*), parameter :: SUPPRESS_MSG='2>/dev/null'
+! other global variables
+integer(kind=c_int)           :: nthr_glob         !< number of threads global variable
+logical                       :: l_distr_exec_glob !< global distributed execution flag
+character(len=:), allocatable :: cmdline_glob      !< global command line string
 
 ! plan for the CTF
 type :: ctfplan
@@ -76,6 +76,10 @@ type :: ctfparams
     logical :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfparams
 
+! character constants
+character(len=*), parameter :: NEWLINE = new_line('a')
+character(len=*), parameter :: SUPPRESS_MSG='2>/dev/null'
+
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
 real,    parameter :: PICKER_SHRINK_REFINE = 2.        !< picker shrink factor, peak refine step
@@ -96,11 +100,12 @@ real, parameter    :: EXTRTHRESH_CONST        = 0.2       !< threshold for facto
 real, parameter    :: LP2SMPDFAC              = 0.4125    !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D            = 0.4       !< low-pass limit scaling constant
 real, parameter    :: NPEAKSATHRES            = 12.0      !< angular threshold for determining npeaks (PRIME3D)
+real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0          !< shift search halfwidht (pixels)
 real, parameter    :: TAU_DEFAULT             = 0.005     !< controls the sharpeness of the orientation weight distribution
                                                           !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D           = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH         = 0.01      !< threshold for orientations softmax weights
-real,    parameter :: BSC                     = 20.      !< for shell reconstruction b-factor calculation
+real,    parameter :: BSC                     = 20.       !< for shell reconstruction b-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -116,23 +121,15 @@ integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for recon
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: NPDIRS_SUBSPACE      = 800       !< # projection directions in subspace search refine=neigh
 
-! constants for SHC inplane grid search
-real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
-
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-averaging in 3D
 real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D
 integer, parameter :: K4EOAVGLB   = 4                  !< Fourier index lower-bound
 
 ! SNHC-related global constants, PRIME3D, refine=snhc
-integer,           parameter :: SZSN_INIT  = 5
-integer,           parameter :: SZSN_STEP  = 3
-integer,           parameter :: SZSN_MAX   = 20
-
-! global  variables
-integer(kind=c_int)           :: nthr_glob                 !< number of threads global variable
-logical                       :: l_distr_exec_glob         !< global distributed execution flag
-character(len=:), allocatable :: cmdline_glob              !< global command line string
+integer, parameter :: SZSN_INIT  = 5
+integer, parameter :: SZSN_STEP  = 3
+integer, parameter :: SZSN_MAX   = 20
 
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000

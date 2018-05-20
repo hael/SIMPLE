@@ -582,6 +582,4 @@ contains
         endif
     end subroutine kill
 
-
-
 end module simple_ft_expanded

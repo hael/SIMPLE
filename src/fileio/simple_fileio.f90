@@ -7,11 +7,6 @@ use simple_syslib, only: file_exists, is_open, is_file_open, is_io,  &
     &exec_cmdline, del_file, simple_list_files, simple_glob_list_tofile
 implicit none
 
-interface arr2file
-    module procedure arr2file_1
-!    module procedure arr2file_2
-end interface arr2file
-
 interface fclose
     module procedure fclose_1
     module procedure fclose_2
@@ -294,7 +289,6 @@ contains
         end if
     end subroutine fclose_2
 
-
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
         character(len=*), intent(in)    :: fname !< input filename
@@ -386,48 +380,6 @@ contains
         enddo
     end subroutine get_open_funits
 
-
-    !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
-    ! subroutine make_filetable( tabname, n, body, ext, numlen, suffix )
-    !     character(len=*),           intent(in) :: tabname !< file-table (string)
-    !     integer,                    intent(in) :: n       !< total num of files
-    !     character(len=*),           intent(in) :: body    !< filename body
-    !     character(len=*),           intent(in) :: ext     !< filename extension
-    !     integer,          optional, intent(in) :: numlen  !< number length
-    !     character(len=*), optional, intent(in) :: suffix  !< file suffix
-    !     character(len=STDLEN), allocatable :: names(:)
-    !     integer :: ifile, fnr, ios
-    !     names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
-    !     call fopen(fnr, file=tabname, status='replace', action='write', iostat=ios)
-    !     call fileiochk('simple_fileio :: make_filetable '//trim(tabname), ios)
-    !     do ifile=1,n
-    !         write(fnr,'(a)') trim(names(ifile))
-    !     end do
-    !     call fclose_1( fnr, ios )
-    !     call fileiochk(" Error closing file in ::make_filetable ",ios)
-    ! end subroutine make_filetable
-
-    !> \brief  return file size in bytes
-    ! function file_size(fname) result(sz)
-    !     character(len=*), intent(in) :: fname !< input filename
-    !     integer(kind=8)              :: sz
-    !     inquire(file=trim(adjustl(fname)),size=sz)
-    ! end function file_size
-
-    !> \brief  is for checking file kind
-    !> \param fname,suffix string args to check suffix
-    ! function file_kind( fname, suffix ) result( yep )
-    !     character(len=*), intent(in) :: fname, suffix
-    !     integer :: pos
-    !     logical :: yep
-    !     pos = index(fname, suffix) ! position of suffix
-    !     if( pos == 0 )then
-    !         yep = .false.
-    !     else
-    !         yep = .true.
-    !     endif
-    ! end function file_kind
-
     !> \brief  is for adding to filebody
     function add2fbody( fname, suffix, str ) result( newname )
         character(len=*), intent(in)  :: fname, suffix, str
@@ -436,14 +388,6 @@ contains
         pos = index(fname, suffix) ! position of suffix
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
-
-    ! function add2fbody_and_new_ext( fname, suffix, str, new_ext ) result( newname )
-    !     character(len=*), intent(in)  :: fname, suffix, str, new_ext
-    !     character(len=:), allocatable :: newname
-    !     integer :: pos
-    !     pos = index(fname, suffix) ! position of suffix
-    !     allocate(newname, source=fname(:pos-1)//trim(str)//trim(new_ext))
-    ! end function add2fbody_and_new_ext
 
     !> \brief  is for substituting suffices
     function swap_suffix( fname, suffix, old_suffix ) result( newname )
@@ -471,7 +415,6 @@ contains
         fbody = fname(:pos-1)
     end function get_fbody
 
-    !! Used once in simple_picker
     !> \brief  is for putting a new extension on filename
     !! \param fname Input filename
     function fname_new_ext( fname, suffix ) result( new_fname )
@@ -510,49 +453,6 @@ contains
             allocate(new_fname, source=trim(fname(pos+1:length)))
         endif
     end function
-
-    !! Unused
-    !> strip last component from file name
-    pure function dirname( fname ) result( abspath )
-        character(len=*), intent(in)  :: fname !< abs filename
-        character(len=:), allocatable :: abspath !< abs file path
-        integer :: length, pos
-        length = len_trim(fname)
-        pos = scan(fname(1:length),'/',back=.true.)
-        allocate(abspath, source=trim(fname(1:pos)))
-    end function
-
-    !>  \brief  returns the integer number identifier of a filename
-    ! subroutine fname2ind( str, ivar )
-    !     use simple_strings, only: map_str_nrs, str2int
-    !     character(len=*), intent(in)  :: str    !< abs filename
-    !     integer,          intent(out) :: ivar   !< file index number
-    !     logical, allocatable          :: pos(:)
-    !     character(len=:), allocatable :: str_copy
-    !     integer :: j, lstr, io_stat, nrrange(2)
-    !     lstr = len(str);  nrrange = 0
-    !     pos = map_str_nrs(str)
-    !     if( any(pos) )then
-    !         do j=lstr,1,-1
-    !             if( pos(j) )then
-    !                 nrrange(1) = j
-    !                 nrrange(2) = j
-    !                 do while( pos(nrrange(1)) )
-    !                     nrrange(1) = nrrange(1)-1
-    !                 end do
-    !                 nrrange(1) = nrrange(1)+1
-    !                 exit
-    !             endif
-    !         end do
-    !         allocate(str_copy, source=str(nrrange(1):nrrange(2)))
-    !         call str2int(str_copy, io_stat, ivar)
-    !     else
-    !         allocate(str_copy, source='1')
-    !         call str2int(str_copy, io_stat, ivar)
-    !     endif
-    !     if( allocated(pos)      ) deallocate(pos)
-    !     if( allocated(str_copy) ) deallocate(str_copy)
-    ! end subroutine fname2ind
 
     !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
@@ -645,17 +545,6 @@ contains
         end select
     end function fname2format
 
-    !! Unused
-    !>  \brief  to check if same file format
-    !! \param fname1,fname2 input filenames
-    ! pure logical function same_format( fname1, fname2 )
-    !     character(len=*), intent(in) :: fname1, fname2
-    !     character(len=1) :: form1, form2
-    !     form1 = fname2format(fname1)
-    !     form2 = fname2format(fname2)
-    !     same_format = form1 == form2
-    ! end function same_format
-
     !>  \brief  reads a filetable into an array
     subroutine read_filetable( filetable, filenames )
         character(len=*),                       intent(in)  :: filetable    !< input table filename
@@ -688,102 +577,8 @@ contains
         call fileiochk("write_filetable failed to close",io_stat)
     end subroutine write_filetable
 
-    !!Unused
-    !> \brief  for converting a file generated by txtfile2arr back to an array
-    ! function txtfile2rarr( fnam ) result( arr )
-    !     character(len=*), intent(in) :: fnam    !< input table filename
-    !     real, allocatable :: arr(:)             !< array of filenames
-    !     integer :: i, n, funit, io_stat
-    !     if( file_exists(trim(fnam)) )then
-    !         n = nlines(fnam)
-    !         allocate( arr(n), stat=alloc_stat )
-    !         if(alloc_stat /= 0) call allocchk('In: txtfile2rarr; simple_fileio  ', alloc_stat)
-    !         call fopen(funit,fnam,'old','unknown',io_stat)
-    !         call fileiochk("txtfile2rarr failed to open  "//trim(fnam), io_stat)
-    !         do i=1,n
-    !             read(funit,*) arr(i)
-    !         end do
-    !         call fclose_1(funit,io_stat,errmsg="txtfile2rarr failed to close "//trim(fnam))
-    !     else
-    !         write(*,*) fnam
-    !         stop 'file does not exist; txtfile2rarr; simple_fileio      '
-    !     endif
-    ! end function txtfile2rarr
-
-    ! !! Unused
-    ! !> \brief  merging two text files into a single array
-    ! !! \param file1,file2 input filenames for merging
-    ! function merge_txtfiles( file1, file2 )  result( arr )
-    !     character(len=*),      intent(in)  :: file1, file2
-    !     character(len=STDLEN), allocatable :: arr(:)
-    !     integer :: n1, n2, cnt, funit, i, io_stat
-    !     logical :: here(2)
-    !     here(1) = file_exists(trim(file1))
-    !     here(2) = file_exists(trim(file2))
-    !     n1 = 0
-    !     n2 = 0
-    !     if( file_exists(trim(file1)) ) n1 = nlines(file1)
-    !     if( file_exists(trim(file2)) ) n2 = nlines(file2)
-    !     allocate( arr(n1+n2), stat=alloc_stat )
-    !     if(alloc_stat /= 0) call allocchk('In: merge_txtfiles; simple_fileio  ', alloc_stat)
-    !     if( here(1) )then
-    !         call fopen(funit,file1,'old','unknown',io_stat)
-    !         call fileiochk("merge_txtfiles failed "//trim(file1), io_stat)
-    !         cnt = 0
-    !         do i=1,n1
-    !             cnt = cnt+1
-    !             read(funit,*) arr(cnt)
-    !         end do
-    !         call fclose_1(funit,io_stat)
-    !         call fileiochk("merge_txtfiles failed to close "//trim(file1), io_stat)
-    !         if( .not. here(2) ) return
-    !     else
-    !         call fopen(funit,file2,'old','unknown',io_stat)
-    !         call fileiochk("merge_txtfiles failed to open "//trim(file2), io_stat)
-    !         cnt = 0
-    !         do i=1,n2
-    !             cnt = cnt+1
-    !             read(funit,*) arr(cnt)
-    !         end do
-    !         call fclose_1(funit,io_stat)
-    !         call fileiochk("merge_txtfiles failed to close "//trim(file2), io_stat)
-    !         return
-    !     endif
-    !     call fopen(funit,file2,'old','unknown',io_stat)
-    !     call fileiochk("merge_txtfiles failed to open "//trim(file2), io_stat)
-    !     do i=1,n2
-    !         cnt = cnt+1
-    !         read(funit,*, iostat=io_stat) arr(cnt)
-    !     end do
-    !     call fclose_1(funit,io_stat,errmsg="merge_txtfiles failed to close "//trim(file2))
-    ! end function merge_txtfiles
-
-    ! !! Unused
-    ! !> \brief  for converting a file generated by file2arr back to an array
-    ! function file2iarr( fnam ) result( arr )
-    !     character(len=*), intent(in)  :: fnam             !< input table filename
-    !     integer,          allocatable :: arr(:)           !< array of filenames
-    !     integer :: recsz, i, n, funit, ival, io_stat
-    !     if( file_exists(trim(fnam)) )then
-    !         inquire(iolength=recsz) ival
-    !         call fopen(funit,fnam,'OLD','unknown', io_stat,'direct','unformatted',recsz)
-    !         call fileiochk("file2iarr fopen failed "//trim(fnam),io_stat)
-    !         read(funit, rec=1) n
-    !         allocate( arr(n), stat=alloc_stat )
-    !         if(alloc_stat /= 0) call allocchk('In: file2iarr; simple_fileio  ', alloc_stat)
-    !         do i=1,n
-    !             read(funit, rec=i+1) arr(i)
-    !         end do
-    !         call fclose_1(funit,io_stat, errmsg="file2iarr failed to close "//trim(fnam))
-    !     else
-    !         write(*,*) fnam
-    !         call simple_stop('file does not exist; file2iarr; simple_fileio      ', __FILENAME__,__LINE__)
-    !     endif
-    ! end function file2iarr
-
-    !! Used once in reconstructor_eo
     !> \brief  for converting a real array 2 file
-    subroutine arr2file_1( arr, fnam )
+    subroutine arr2file( arr, fnam )
         real,             intent(in) :: arr(:)    !< array of filenames
         character(len=*), intent(in) :: fnam      !< input table filename
         real    :: rval
@@ -798,7 +593,7 @@ contains
             write(funit, rec=i+1) arr(i)
         end do
         call fclose_1(funit,io_stat, errmsg="arr2file_1 fclose_1 failed "//trim(fnam))
-    end subroutine arr2file_1
+    end subroutine arr2file
 
     !> \brief  for converting a file generated by arr2file back to an array
     function file2rarr( fnam ) result( arr )
@@ -823,157 +618,6 @@ contains
         endif
     end function file2rarr
 
-    !> \brief  for converting an integer array 2 file
-    ! subroutine arr2file_2( arr, fnam )
-    !     integer,          intent(in) :: arr(:) !< array of data
-    !     character(len=*), intent(in) :: fnam   !< output filename
-    !     integer :: recsz, i, funit, ival, io_stat
-    !     inquire(iolength=recsz) ival
-    !     ival = size(arr)
-    !     call fopen(funit,fnam,'replace','unknown', io_stat,'direct','unformatted',recl=recsz)
-    !     call fileiochk("arr2file_2 fopen failed "//trim(fnam),io_stat)
-    !     write(funit, rec=1) ival
-    !     do i=1,size(arr)
-    !         write(funit, rec=i+1) arr(i)
-    !     end do
-    !     call fclose_1(funit,io_stat, errmsg="arr2file_2 fclose failed "//trim(fnam))
-    ! end subroutine arr2file_2
-
-    !> \brief  for converting a real 2D array 2 file
-    ! subroutine arr2D2file( arr, fnam )
-    !     real,             intent(in) :: arr(:,:) !< array of data
-    !     character(len=*), intent(in) :: fnam     !< output filename
-    !     real    :: dim1, dim2
-    !     integer :: funit, io_stat
-    !     dim1 = real(size(arr,dim=1))
-    !     dim2 = real(size(arr,dim=2))
-    !     call fopen(funit,fnam,'replace','write', io_stat, 'STREAM')
-    !     call fileiochk("simple_fileio::arr2D2file fopen failed "//trim(fnam),io_stat)
-    !     write(unit=funit,pos=1,iostat=io_stat) dim1
-    !     call fileiochk('simple_fileio::arr2D2file: writing stream startbyte 1 to: '//trim(fnam), io_stat)
-    !     write(unit=funit,pos=5,iostat=io_stat) dim2
-    !     call fileiochk('simple_fileio::arr2D2file: writing stream startbyte 5 to: '//trim(fnam), io_stat)
-    !     write(unit=funit,pos=9,iostat=io_stat) arr(:,:)
-    !     call fileiochk('simple_fileio::arr2D2file: writing stream startbyte 9 to: '//trim(fnam), io_stat)
-    !     call fclose_1(funit,io_stat, errmsg=" arr2D2file Error closing file # "//int2str(funit))
-    ! end subroutine arr2D2file
-
-    !> \brief  for converting a real 2D array 2 file
-    ! function file2arr2D( fname ) result( arr )
-    !     character(len=*), intent(in) :: fname   !< input filename
-    !     real, allocatable :: arr(:,:)          !< array of data
-    !     real    :: dim1r, dim2r
-    !     integer :: dim1, dim2, funit, io_stat
-    !     call fopen(funit,fname,'old','read',io_stat,'STREAM')
-    !     call fileiochk("simple_fileio::file2arr2D fopen failed "//trim(fname),io_stat)
-    !     read(unit=funit,pos=1,iostat=io_stat) dim1r
-    !     call fileiochk("simple_fileio::file2arr2D  reading stream startbyte 1 from: "// trim(fname), io_stat)
-    !     read(unit=funit,pos=5,iostat=io_stat) dim2r
-    !     call fileiochk("simple_fileio::file2arr2D  reading stream startbyte 5 from: "// trim(fname), io_stat)
-    !     dim1 = nint(dim1r)
-    !     dim2 = nint(dim2r)
-    !     if( allocated(arr) ) deallocate(arr)
-    !     allocate( arr(dim1,dim2), stat=alloc_stat )
-    !     if(alloc_stat /= 0) call allocchk('In: simple_fileio:: file22Darr arr ', alloc_stat)
-    !     read(unit=funit,pos=9,iostat=io_stat) arr(:,:)
-    !     call fileiochk("simple_fileio::file2arr2D  reading stream startbyte 9 from: "// trim(fname), io_stat)
-    !     call fclose_1(funit,io_stat, errmsg="Error closing file "//trim(fname))
-    ! end function file2arr2D
-
-    !> \brief  for converting a real array 2 file
-    ! subroutine arr2txtfile( arr, fname )
-    !     real,             intent(in) :: arr(:) !< array of data
-    !     character(len=*), intent(in) :: fname !< output filename
-    !     integer :: i, funit, io_stat
-    !     call fopen(funit, fname,'REPLACE', 'write', io_stat)
-    !     call fileiochk("simple_fileio ::arr2txtfile, tried to open file "//trim(fname), io_stat )
-    !     do i=1,size(arr)
-    !         write(funit,*) arr(i)
-    !     end do
-    !     call fclose_1(funit,io_stat, errmsg="Error closing file "//trim(fname))
-    ! end subroutine arr2txtfile
-
-    ! FILE-HANDLING JIFFYS
-
-    !> \brief  for reading raw images using stream access
-    ! subroutine read_raw_image( fname, mat, first_byte )
-    !     character(len=*), intent(in)  :: fname
-    !     double precision, intent(out) :: mat(:,:,:)
-    !     integer,          intent(in)  :: first_byte
-    !     integer :: filnum, io_stat
-    !     character(len=100) :: io_message
-
-    !     call fopen(filnum, fname, 'OLD', 'READ', io_stat, 'STREAM', convert='NATIVE')
-    !     call fileiochk("Error opening file "//trim(fname) , io_stat)
-    !     read(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
-    !     ! Check the read was successful
-    !     call fileiochk('simple_fileio::read_raw_image; reading '//trim(fname)//&
-    !         ' IO error message was: '// trim(io_message),io_stat)
-    !     call fclose_1(filnum, io_stat,errmsg="Error closing file "//trim(fname))
-    ! end subroutine read_raw_image
-
-    !> \brief  for writing raw images using stream access
-    ! subroutine write_raw_image( fname, mat, first_byte )
-    !     character(len=*), intent(in) :: fname
-    !     real,             intent(in) :: mat(:,:,:)
-    !     integer,          intent(in) :: first_byte
-    !     integer :: filnum, io_stat
-    !     character(len=100) :: io_message
-    !     call fopen(filnum,fname, 'REPLACE', 'WRITE', io_stat, 'STREAM')
-    !     call fileiochk("Error opening file "//trim(fname), io_stat )
-    !     write(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
-    !     ! Check the write was successful
-    !     call fileiochk('simple_fileio::write_raw_image; writing '//trim(fname)//&
-    !         ' IO error message was: '// trim(io_message),io_stat)
-    !     call fclose_1(filnum, io_stat,errmsg="Error closing file "//trim(fname))
-    ! end subroutine write_raw_image
-
-    !! Unused
-    !> From flibs file_list
-    ! Copyright (c) 2008, Arjen Markus
-    ! subroutine file_list_old( dir, list , suppress_errors, outfile)
-    !     character(len=*), intent(in)            :: dir
-    !     character(len=*), pointer, dimension(:) :: list
-    !     logical, intent(in), optional           :: suppress_errors
-    !     character(len=*), intent(inout), optional  :: outfile
-    !     character(len=200)                      :: cmd,redirect,tmpfile
-    !     character(len=1)                        :: line
-    !     integer                                 :: luntmp
-    !     integer                                 :: i
-    !     integer                                 :: ierr
-    !     integer                                 :: count
-    !     redirect=" "
-    !     if (present(suppress_errors))redirect="2>/dev/null "
-    !     if (.not. present(outfile))then
-    !         open( newunit = luntmp, status = 'scratch' )
-    !         inquire( luntmp, name = tmpfile ) ! Hope this is okay
-    !         close( luntmp )
-    !     else
-    !         tmpfile = trim(adjustl(outfile))
-    !         if( file_exists(tmpfile) ) call del_file(tmpfile)
-    !     end if
-    !     cmd = 'ls -tr ' // ' ' // trim(dir) // ' ' // trim(redirect) // tmpfile
-    !     call exec_cmdline( cmd )
-    !     open( newunit = luntmp, file = tmpfile )
-    !     !
-    !     ! First count the number of files, then allocate and fill the array
-    !     !
-    !     do
-    !         read( luntmp, '(a)', iostat = ierr ) line
-    !         if ( ierr == 0 ) then
-    !             count = count + 1
-    !         else
-    !             exit
-    !         end if
-    !     end do
-    !     rewind( luntmp )
-    !     allocate( list(count) )
-    !     do i = 1,count
-    !         read( luntmp, '(a)' ) list(i)
-    !     end do
-    !     close( luntmp, status = 'delete' )
-    ! end subroutine file_list_old
-
     subroutine simple_copy_file(fname1, fname2, status)
         character(len=*), intent(in)           :: fname1, fname2 !< input filenames
         integer, intent(out), optional :: status
@@ -982,70 +626,5 @@ contains
         cmd = 'cp '//trim(fname1)//'  '//trim(fname2)
         call exec_cmdline(cmd)
     end subroutine simple_copy_file
-
-    ! subroutine ls_fbody_mrcfiletab( fbody, filetabname )
-    !     character(len=*),intent(in)  :: fbody, filetabname
-    !     character(len=STDLEN) :: cmd
-    !     cmd = 'ls -tr '//trim(fbody)//'*.mrc*'//' > '//trim(filetabname)
-    !     print *,trim(cmd)
-    !     call exec_cmdline(cmd)
-
-    !     ! integer :: stat
-    !     ! stat = simple_glob_list_tofile(glob=trim(fbody//'*.mrc*'), outfile=trim(filetabname), tr=.true.)
-    !     ! if(stat/=0) call fileiochk("ls_fbody_mrcfiletab failed "//trim(fbody))
-    ! end subroutine ls_fbody_mrcfiletab
-
-    ! subroutine ls_filetab( fbody, ext, filetabname )
-    !     character(len=*), intent(in)  :: fbody, ext, filetabname
-    !     character(len=STDLEN) :: cmd
-    !     cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
-    !     call exec_cmdline(cmd)
-
-    !     ! integer :: stat
-    !     ! stat = simple_glob_list_tofile(glob=trim(fbody)//'*.'//trim(ext), outfile=trim(filetabname), tr=.true.)
-    !     ! if(stat/=0) call fileiochk("ls_filetab failed "//trim(fbody))
-    ! end subroutine ls_filetab
-
-    ! subroutine sys_del_files( fbody, ext )
-    !     character(len=*),      intent(in)  :: fbody, ext
-    !     character(len=STDLEN), allocatable :: fnames(:)
-    !     character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_del_files.txt'
-    !     integer :: i, last
-    !     call ls_filetab(fbody, ext, ftab) ! filetable written to disc
-    !     call read_filetable(ftab, fnames) ! filetable read back in
-    !     last = size(fnames)
-    !     do i=1,last
-    !         call del_file(fnames(i))
-    !     end do
-    !     call del_file(ftab)
-    !     deallocate(fnames)
-    ! end subroutine sys_del_files
-
-    ! function get_last_fname( fbody, ext ) result( fname )
-    !     character(len=*),      intent(in)  :: fbody, ext
-    !     character(len=STDLEN), allocatable :: fnames(:)
-    !     character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_find_last_fname.txt'
-    !     character(len=STDLEN) :: fname
-    !     integer :: last
-    !     call ls_filetab(fbody, ext, ftab) ! filetable written to disc
-    !     call read_filetable(ftab, fnames) ! filetable read back in
-    !     last = size(fnames)
-    !     fname = fnames(last)
-    !     call del_file(ftab)
-    !     deallocate(fnames)
-    ! end function get_last_fname
-
-    ! subroutine merge_docs( docnames, fname_merged )
-    !     character(len=STDLEN), intent(in) :: docnames(:)
-    !     character(len=*),      intent(in) :: fname_merged
-    !     character(len=STDLEN) :: cmd
-    !     integer :: ndocs, idoc
-    !     call del_file(fname_merged)
-    !     ndocs = size(docnames)
-    !     do idoc=1,ndocs
-    !         cmd = 'cat '//trim(docnames(idoc))//' >> '//trim(fname_merged)
-    !         call exec_cmdline(cmd)
-    !     end do
-    ! end subroutine merge_docs
 
 end module simple_fileio

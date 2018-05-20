@@ -208,22 +208,8 @@ contains
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: r, arg2
-        ! arg1 = self%piW * x
-        ! arg1 = self%betasq - arg1 * arg1
-        ! if( arg1 > 0. )then
-        !     arg2 = sqrt(arg1)
-        !     ! if( abs(arg2) <= TINY ) then !! arg2 is already positive
-        !     if(arg2 < TINY)then
-        !         r = 1.0
-        !     else
-        !         r = sinhfme(arg2) / (arg2)
-        !     endif
-        ! else
-        !     r = 1.0
-        ! endif
         if ( abs(x) < self%threshInstr)then
             arg2 = sqrt(self%betasq - (self%piW * x)**2)
-            ! if( abs(arg2) <= TINY ) then !! arg2 is already positive
             if(arg2 < TINY) then
                 r = 1.0
             else
@@ -330,9 +316,6 @@ contains
                 y*(0.2659732 + y*(0.0360768 + y* 0.0045813)))))
         else
             y=3.75/ax
-           ! bessi0f=( 0.39894228 + y*(  0.01328592 + y*( 0.00225319 + y*( -0.00157565 + y*( 0.00916281 +&
-           !     y*(-0.02057706 + y*(  0.02635537 + y*(-0.01647633 + y*  0.00392377)))))))) * exp( ax ) / sqrt( ax )
-
             bessi0f=(exp(ax) *(y *(y *(y *(y *(y *(y *((0.00202623 *y - 0.00850834)* y + 0.0136099) &
                 - 0.0106259) + 0.00473165) - 0.000813662) + 0.00116354) + 0.00686082) + 0.206013))/sqrt(1/y)
         end if
@@ -348,17 +331,8 @@ contains
             Q0 = -0.6307673640497716991212077277d+06, &
             Q1 =  0.1521517378790019070696485176d+05, &
             Q2 = -0.1736789535582336995334509110d+03
-       ! logical ::sign
         real(dp) :: y,x,xsq
         x=xin
-       ! sign = .false. !! Assumption 1:  input is always positive
-        ! if (x < 0 ) then
-        !     x = -x
-        !     sign = .true.
-        ! end if
-        ! if (x > 21) then  !! Assumption 2:  input range is less than 12
-        !    y = exp(x) / 2
-        ! else
         if (x > 0.5) then
             y = (exp(x) - exp(-x)) / 2
         else
@@ -366,10 +340,6 @@ contains
             y = (((P3*xsq+P2)*xsq+P1)*xsq + P0)
             y = y / (((xsq+Q2)*xsq+Q1)*xsq + Q0)
         end if
-
-        ! if (sign) then
-        !     y = -y
-        ! end if
-
     end function sinhc
+    
 end module simple_kbinterpol

@@ -7,9 +7,7 @@ implicit none
 
 public :: atoms
 private
-! #include "simple_local_flags.inc"
 
-!character(len=74) :: pdbfmt = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,2A2)" ! v3.3
 character(len=74) :: pdbfmt      = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
 character(len=74) :: pdbfmt_long = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
 character(len=74) :: pdbfmt_read = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"   ! custom 3.3

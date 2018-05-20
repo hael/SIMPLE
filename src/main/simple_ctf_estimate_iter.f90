@@ -50,7 +50,8 @@ contains
         fname_diag = trim(dir_out)//'/'//trim(fname_diag)//trim(JPG_EXT)
         ! fitting
         call ctf_estimate_init(pspec_all, pspec_lower, pspec_upper, ctfvars%smpd, ctfvars%kv,&
-            &ctfvars%cs, ctfvars%fraca, [params_glob%dfmin,params_glob%dfmax], [params_glob%hp,params_glob%lp], params_glob%astigtol, ctfvars%l_phaseplate)
+            &ctfvars%cs, ctfvars%fraca, [params_glob%dfmin,params_glob%dfmax],&
+            &[params_glob%hp,params_glob%lp], params_glob%astigtol, ctfvars%l_phaseplate)
         call ctf_estimate_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
         call ctf_estimate_kill
         ! reporting
