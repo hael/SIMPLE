@@ -5,10 +5,8 @@ use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup,parse_env_file
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
 use simple_qsys_ctrl,    only: qsys_ctrl
-use simple_params ! singleton p
-
+use simple_parameters,   only: params_glob
 implicit none
-!#include "simple_local_flags.inc"
 
 type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)
@@ -44,28 +42,28 @@ contains
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream
-        nparts = p%nparts
-        select case(p%split_mode)
+        nparts = params_glob%nparts
+        select case(params_glob%split_mode)
             case('even')
-                self%parts = split_nobjs_even(p%nptcls, nparts)
+                self%parts = split_nobjs_even(params_glob%nptcls, nparts)
                 partsz     = self%parts(1,2) - self%parts(1,1) + 1
             case('singles')
-                allocate(self%parts(p%nptcls,2))
+                allocate(self%parts(params_glob%nptcls,2))
                 self%parts(:,:) = 1
                 partsz          = 1
             case('stream')
-                nparts = p%ncunits
-                allocate(self%parts(p%nptcls,2)) ! unused
-                self%parts(:,:) = 1                     ! unused
-                partsz          = 1                     ! unused
+                nparts = params_glob%ncunits
+                allocate(self%parts(params_glob%nptcls,2)) ! unused
+                self%parts(:,:) = 1              ! unused
+                partsz          = 1              ! unused
             case DEFAULT
-                write(*,*) 'split_mode: ', trim(p%split_mode)
+                write(*,*) 'split_mode: ', trim(params_glob%split_mode)
                 stop 'Unsupported split_mode'
         end select
         ! retrieve environment variables from file
         call self%qdescr%new(MAXENVKEYS)
-        if( trim(p%projfile) .ne. '' )then
-            call spproj%read_segment('compenv', p%projfile)
+        if( trim(params_glob%projfile) .ne. '' )then
+            call spproj%read_segment('compenv', params_glob%projfile)
             compenv_o   = spproj%compenv%get_ori(1)
             self%qdescr = compenv_o%ori2chash()
         else
@@ -94,13 +92,13 @@ contains
         self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_private_exec'
         if( present(numlen) )then
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-            &[1, nparts], p%ncunits, sstream, numlen)
+            &[1, nparts], params_glob%ncunits, sstream, numlen)
         else
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-            &[1, nparts], p%ncunits, sstream)
+            &[1, nparts], params_glob%ncunits, sstream)
         endif
-        call self%qdescr%set('job_cpus_per_task', int2str(p%nthr))   ! overrides env file
-        call self%qdescr%set('job_nparts',        int2str(p%nparts)) ! overrides env file
+        call self%qdescr%set('job_cpus_per_task', int2str(params_glob%nthr))   ! overrides env file
+        call self%qdescr%set('job_nparts',        int2str(params_glob%nparts)) ! overrides env file
         deallocate(qsnam)
         self%existence = .true.
     end subroutine new
@@ -114,10 +112,10 @@ contains
     subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody )
         class(qsys_env)            :: self
         class(chash)               :: job_descr
-        class(chash),     optional :: part_params(p%nparts)
+        class(chash),     optional :: part_params(params_glob%nparts)
         character(len=*), optional :: algnfbody
         call qsys_cleanup
-        call self%qscripts%generate_scripts(job_descr, p%ext, self%qdescr,&
+        call self%qscripts%generate_scripts(job_descr, params_glob%ext, self%qdescr,&
         outfile_body=algnfbody, part_params=part_params)
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs

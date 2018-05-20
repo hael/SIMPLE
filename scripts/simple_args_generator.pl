@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use File::Compare;
 
-# read the simple_params.f90 into an array
+# read the simple_parameters.f90 file into an array
 my @lines;
 my @vars;
 my $varlistfile;     my $tmp_varlist;
@@ -18,7 +18,7 @@ if ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
 }
 $tmp_varlist  = $ENV{'SIMPLE_PATH'}.'/simple_varlist.tmp';
 $tmp_argsfile = $ENV{'SIMPLE_PATH'}.'/simple_args.tmp';
-open(PARAMS, "< simple_params.f90") or die "Cannot open simple_params.f90\n";
+open(PARAMS, "< simple_parameters.f90") or die "Cannot open simple_parameters.f90\n";
 @lines = <PARAMS>;
 close(PARAMS);
 

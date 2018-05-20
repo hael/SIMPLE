@@ -1,8 +1,8 @@
 ! 2D/3D envelope and adaptive masking
 module simple_masker
 include 'simple_lib.f08'
-use simple_image,  only: image
-use simple_params, only: p
+use simple_image,      only: image
+use simple_parameters, only: params_glob
 implicit none
 
 public :: masker
@@ -11,7 +11,6 @@ private
 
 integer, parameter :: WINSZ = 3 !< real-space filter half-width window
 
-!> image child type
 type, extends(image) :: masker
     private
     real              :: msk           = 0.   !< maximum circular mask
@@ -41,12 +40,12 @@ contains
         class(image),  intent(inout) :: vol_inout
         logical :: was_ft
         if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker::automask3D'
-        self%msk       = p%msk
-        self%amsklp    = p%amsklp
-        self%mw        = p%mw
-        self%binwidth  = p%binwidth
-        self%edge      = p%edge
-        self%pix_thres = p%thres
+        self%msk       = params_glob%msk
+        self%amsklp    = params_glob%amsklp
+        self%mw        = params_glob%mw
+        self%binwidth  = params_glob%binwidth
+        self%edge      = params_glob%edge
+        self%pix_thres = params_glob%thres
         write(*,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
         write(*,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
         write(*,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
@@ -75,15 +74,15 @@ contains
         ! create edge-less envelope
         call self%remove_edge
         ! calculate distance stats
-        call distimg%new(self%get_ldim(), p%smpd)
+        call distimg%new(self%get_ldim(), params_glob%smpd)
         call distimg%cendist
         call distimg%stats(self, ave, sdev, maxv, minv, med)
-        winsz = max(8, nint((p%msk - maxv) / 2.))
+        winsz = max(8, nint((params_glob%msk - maxv) / 2.))
         ! soft edge mask
         call self%grow_bins(2) ! in addition to binwidth (4 safety)
         call self%cos_edge(winsz)
         ! mask with spherical sof mask
-        call self%mask(p%msk, 'soft')
+        call self%mask(params_glob%msk, 'soft')
     end subroutine resmask
 
     !>  \brief  is for envelope masking of the reference in prime2D
@@ -101,7 +100,6 @@ contains
         DebugPrint 'simple_masker::update_cls done'
     end subroutine apply_2Denvmask22Dref
 
-    !>  \brief  is for
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)
         use simple_oris,  only: oris
         use simple_atoms, only: atoms
@@ -124,12 +122,12 @@ contains
         pdb_center = pdb%get_geom_center()
         centre     = real(self%get_ldim()-1)/2. * smpd
         shift      = ( pdb_center - centre ) / smpd
-        if( p%binwidth == 0 ) then
+        if( params_glob%binwidth == 0 ) then
             radius = smpd
         else
-            radius = real(p%binwidth) * smpd
+            radius = real(params_glob%binwidth) * smpd
         endif
-        if( p%center.eq.'yes' )then
+        if( params_glob%center.eq.'yes' )then
             ! shift volume & oris
             call vol_inout%shift(shift)
             if(present(os)) call os%map3dshift22d(-shift)
@@ -149,14 +147,14 @@ contains
         endif
         call self%grow_bin()
         call distimg%mul(self) ! for suggested focusmsk
-        call self%cos_edge(p%edge)
+        call self%cos_edge(params_glob%edge)
         ! multiply with mask
         call vol_inout%ifft()
         call vol_inout%mul(self)
         if(was_ft) call vol_inout%fft()
         ! focusmsk
         minmax = distimg%minmax()
-        write(*,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+p%edge
+        write(*,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+params_glob%edge
         call distimg%kill
     end subroutine mask_from_pdb
 

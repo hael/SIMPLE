@@ -3,7 +3,8 @@ module simple_strategy3D_multi
 include 'simple_lib.f08'
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_singletons
+use simple_parameters,       only: params_glob
+use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 implicit none
@@ -38,14 +39,14 @@ contains
         integer :: iref,isample,nrefs,target_projs(self%s%npeaks_grid), loc(1), inpl_ind
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
         ! execute search
-        if( b%a%get_state(self%s%iptcl) > 0 )then
+        if( build_glob%a%get_state(self%s%iptcl) > 0 )then
             if( self%s%neigh )then
                 ! for neighbour modes we do a coarse grid search first
-                if( .not. allocated(b%grid_projs) )&
+                if( .not. allocated(build_glob%grid_projs) )&
                 stop 'need optional grid_projs 4 subspace srch; strategy3D_multi :: srch_multi'
-                call self%s%greedy_subspace_srch(b%grid_projs, target_projs)
+                call self%s%greedy_subspace_srch(build_glob%grid_projs, target_projs)
                 ! initialize
-                call self%s%prep4srch(b%nnmat, target_projs)
+                call self%s%prep4srch(build_glob%nnmat, target_projs)
                 nrefs = self%s%nnnrefs
             else
                 ! initialize
@@ -68,7 +69,7 @@ contains
             ! prepare weights and orientations
             call self%oris_assign
         else
-            call b%a%reject(self%s%iptcl)
+            call build_glob%a%reject(self%s%iptcl)
         endif
         DebugPrint  '>>> STRATEGY3D_MULTI :: FINISHED STOCHASTIC SEARCH'
 
@@ -107,7 +108,7 @@ contains
         ! extract peak info
         call extract_peaks( self%s, corrs, state )
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, p%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
         ! state reweighting
         call states_reweight( self%s, corrs, ws, state_ws, included, state, best_loc, wcorr )
         ! B factors
@@ -115,7 +116,7 @@ contains
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances
-        call b%se%sym_dists( b%a%get_ori(self%s%iptcl),&
+        call build_glob%se%sym_dists( build_glob%a%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! generate convergence stats
         call convergence_stats_multi( self%s, best_loc, euldist )
@@ -127,23 +128,23 @@ contains
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs * neff_states)
         endif
         ! set the distances before we update the orientation
-        if( b%a%isthere(self%s%iptcl,'dist') )then
-            call b%a%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*b%a%get(self%s%iptcl,'dist'))
+        if( build_glob%a%isthere(self%s%iptcl,'dist') )then
+            call build_glob%a%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%a%get(self%s%iptcl,'dist'))
         else
-            call b%a%set(self%s%iptcl, 'dist', euldist)
+            call build_glob%a%set(self%s%iptcl, 'dist', euldist)
         endif
-        call b%a%set(self%s%iptcl, 'dist_inpl', dist_inpl)
+        call build_glob%a%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call b%a%set_euler(self%s%iptcl, s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
-        call b%a%set_shift(self%s%iptcl, s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
-        call b%a%set(self%s%iptcl, 'state',     real(state))
-        call b%a%set(self%s%iptcl, 'frac',      frac)
-        call b%a%set(self%s%iptcl, 'corr',      wcorr)
-        call b%a%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call b%a%set(self%s%iptcl, 'ow',        s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
-        call b%a%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
-        call b%a%set(self%s%iptcl, 'sdev',      ang_sdev)
-        call b%a%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
+        call build_glob%a%set_euler(self%s%iptcl, s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
+        call build_glob%a%set_shift(self%s%iptcl, s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
+        call build_glob%a%set(self%s%iptcl, 'state',     real(state))
+        call build_glob%a%set(self%s%iptcl, 'frac',      frac)
+        call build_glob%a%set(self%s%iptcl, 'corr',      wcorr)
+        call build_glob%a%set(self%s%iptcl, 'specscore', self%s%specscore)
+        call build_glob%a%set(self%s%iptcl, 'ow',        s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
+        call build_glob%a%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
+        call build_glob%a%set(self%s%iptcl, 'sdev',      ang_sdev)
+        call build_glob%a%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint   '>>> STRATEGY3D_MULTI :: EXECUTED ORIS_ASSIGN_MULTI'
     end subroutine oris_assign_multi
 

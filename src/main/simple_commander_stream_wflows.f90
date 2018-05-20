@@ -1,12 +1,12 @@
 ! concrete commander: stream processing routines
 module simple_commander_stream_wflows
 include 'simple_lib.f08'
-use simple_cmdline,              only: cmdline
-use simple_commander_base,       only: commander_base
-use simple_sp_project,           only: sp_project
-use simple_qsys_env,             only: qsys_env
-use simple_qsys_funs,            only: qsys_cleanup
-use simple_singletons
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_sp_project,     only: sp_project
+use simple_qsys_env,       only: qsys_env
+use simple_qsys_funs,      only: qsys_cleanup
+use simple_parameters,     only: parameters
 implicit none
 
 public :: preprocess_stream_commander
@@ -30,37 +30,32 @@ contains
         use simple_commander_preprocess, only: preprocess_commander
         class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        integer,               parameter   :: SHORTTIME = 30   ! folder watched every minute
-        ! integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
-        ! 4 testing
-        ! integer,               parameter   :: LONGTIME  = 60  ! 30secs
-        integer,               parameter   :: LONGTIME  = 10  ! 30secs
-        class(cmdline),       allocatable  :: completed_jobs_clines(:)
-        type(qsys_env)                     :: qenv
-        type(moviewatcher)                 :: movie_buff
-        type(sp_project)                   :: spproj, stream_spproj
+        type(parameters)                       :: params
+        integer,                   parameter   :: SHORTTIME = 30   ! folder watched every minute
+        integer,                   parameter   :: LONGTIME  = 10
+        class(cmdline),            allocatable :: completed_jobs_clines(:)
+        type(qsys_env)                         :: qenv
+        type(moviewatcher)                     :: movie_buff
+        type(sp_project)                       :: spproj, stream_spproj
         character(len=LONGSTRLEN), allocatable :: movies(:), prev_movies(:)
-        character(len=:),      allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
-        character(len=:),      allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
-        character(len=LONGSTRLEN)          :: movie
-        integer                            :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                            :: nptcls, nptcls_prev, nmovs, nmovs_prev
-        logical                            :: l_pick
-        ! set oritype
+        character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
+        character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
+        character(len=LONGSTRLEN)              :: movie
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
+        logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-
-        ! make master parameters & defaults
-        call init_params(cline)
-        p%stream     = 'yes'
-        p%split_mode = 'stream'
-        p%numlen     = 5
-        p%ncunits    = p%nparts
-        call cline%set('numlen', real(p%numlen))
+        params = parameters(cline)
+        params%stream     = 'yes'
+        params%split_mode = 'stream'
+        params%numlen     = 5
+        params%ncunits    = params%nparts
+        call cline%set('numlen', real(params%numlen))
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
         l_pick = cline%defined('refs')
         ! read in movies
-        call spproj%read( p%projfile )
+        call spproj%read( params%projfile )
         ! check for previously processed movies
         call spproj%get_movies_table(prev_movies)
         ! output directories
@@ -196,11 +191,11 @@ contains
                 spproj_here%compenv  = spproj%compenv
                 spproj_here%jobproc  = spproj%jobproc
                 ctfvars%ctfflag      = CTFFLAG_YES
-                ctfvars%smpd         = p%smpd
-                ctfvars%cs           = p%cs
-                ctfvars%kv           = p%kv
-                ctfvars%fraca        = p%fraca
-                ctfvars%l_phaseplate = p%phaseplate.eq.'yes'
+                ctfvars%smpd         = params%smpd
+                ctfvars%cs           = params%cs
+                ctfvars%kv           = params%kv
+                ctfvars%fraca        = params%fraca
+                ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_single_movie(trim(movie), ctfvars)
                 call spproj_here%write()
                 call spproj_here%kill()
@@ -224,6 +219,7 @@ contains
         integer,          parameter   :: CCRES_NPTCLS_LIM   = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,          parameter   :: WAIT_WATCHER       = 60    ! seconds prior to new stack detection
         integer,          parameter   :: MAXNCLS            = 1000  ! maximum # of classes
+        type(parameters)                    :: params
         type(cluster2D_distr_commander)     :: xcluster2D_distr
         type(make_cavgs_distr_commander)    :: xmake_cavgs
         type(scale_project_distr_commander) :: xscale_distr
@@ -235,20 +231,12 @@ contains
         integer :: iter, n_newstks, orig_box, box, nptcls_glob, ncls_glob, tnow
         integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_stk, n_stk_prev
         logical :: do_autoscale
-
-        ! seed the random number generator
-        call seed_rnd
-        ! output command line executed
-        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-        write(*,*) trim(cmdline_glob)
-        ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        ! make master parameters
         call cline%set('stream','yes') ! only for parameters determination
-        call init_params(cline)
-        if( .not.file_exists(p%projfile) )stop 'Project does not exist!'
+        params = parameters(cline)
+        if( .not.file_exists(params%projfile) )stop 'Project does not exist!'
         call cline%set('stream','no') ! was only for parameters determination
-        orig_projfile = p%projfile
+        orig_projfile = params%projfile
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
         ! init command-lines
         cline_cluster2D  = cline
@@ -262,17 +250,17 @@ contains
         call cline_cluster2D%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
         cline_make_cavgs = cline
         call cline_make_cavgs%set('prg',    'make_cavgs')
-        call cline_make_cavgs%set('refs',   'cavgs_final'//p%ext)
+        call cline_make_cavgs%set('refs',   'cavgs_final'//params%ext)
         call cline_make_cavgs%delete('autoscale')
         call cline_make_cavgs%set('projfile', trim(WORK_PROJFILE)) ! TO WORK OUT
         ! wait for the first stacks to trickle in...
         do
-            if( .not.is_file_open(p%projfile_target) )then
-                call orig_proj%read(p%projfile_target)
+            if( .not.is_file_open(params%projfile_target) )then
+                call orig_proj%read(params%projfile_target)
                 n_stk = orig_proj%os_stk%get_noris()
                 if( n_stk > 0)then
                     nptcls_glob = orig_proj%get_nptcls()
-                    if( nptcls_glob > p%ncls_start * p%nptcls_per_cls )then
+                    if( nptcls_glob > params%ncls_start * params%nptcls_per_cls )then
                         ! Enough particles to start 2D clustering...
                         exit
                     endif
@@ -281,7 +269,7 @@ contains
             call simple_sleep(WAIT_WATCHER) ! parameter instead
         enddo
         ! transfer of general info
-        call work_proj%read(p%projfile)
+        call work_proj%read(params%projfile)
         orig_proj%projinfo = work_proj%projinfo
         orig_proj%compenv  = work_proj%compenv
         if( orig_proj%jobproc%get_noris()>0 ) orig_proj%jobproc = work_proj%jobproc
@@ -295,12 +283,12 @@ contains
         call work_proj%read(trim(WORK_PROJFILE))
         orig_box  = work_proj%get_box()
         orig_smpd = work_proj%get_smpd()
-        orig_msk  = p%msk
-        p%smpd_targets2D(1) = max(orig_smpd, p%lp*LP2SMPDFAC2D)
-        do_autoscale = p%autoscale.eq.'yes' .and. p%smpd_targets2D(1) > orig_smpd
+        orig_msk  = params%msk
+        params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC2D)
+        do_autoscale = params%autoscale.eq.'yes' .and. params%smpd_targets2D(1) > orig_smpd
         if( do_autoscale )then
             deallocate(WORK_PROJFILE)
-            call work_proj%scale_projfile(p%smpd_targets2D(1), WORK_PROJFILE, cline_cluster2D, cline_scale)
+            call work_proj%scale_projfile(params%smpd_targets2D(1), WORK_PROJFILE, cline_cluster2D, cline_scale)
             scale_factor = cline_scale%get_rarg('scale')
             box          = nint(cline_scale%get_rarg('newbox'))
             msk          = cline_cluster2D%get_rarg('msk')
@@ -315,12 +303,12 @@ contains
         call cline_cluster2D%set('msk',      real(msk))
         call work_proj%kill()
         ! Main loop
-        ncls_glob      = nint(real(nptcls_glob) / real(p%nptcls_per_cls))
+        ncls_glob      = nint(real(nptcls_glob) / real(params%nptcls_per_cls))
         last_injection = simple_gettime()
         do iter = 1, 999
             str_iter = int2str_pad(iter,3)
             tnow     = simple_gettime()
-            if(tnow-last_injection > p%time_inactive)then
+            if(tnow-last_injection > params%time_inactive)then
                 write(*,*)'>>> TIME LIMIT WITHOUT NEW PARTICLES ADDITION REACHED'
                 exit
             endif
@@ -332,7 +320,7 @@ contains
             call cline_cluster2D%set('startit', real(iter))
             call cline_cluster2D%set('maxits',  real(iter))
             call cline_cluster2D%set('ncls',    real(ncls_glob))
-            call cline_cluster2D%set('nparts',  real(min(ncls_glob,p%nparts)))
+            call cline_cluster2D%set('nparts',  real(min(ncls_glob,params%nparts)))
             if( nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM )then
                 call cline_cluster2D%set('trs', MINSHIFT)
             endif
@@ -348,7 +336,7 @@ contains
             call work_proj%kill
             call work_proj%read(trim(WORK_PROJFILE))
             ! current refernce file name
-            refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p%ext)
+            refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
             ! remap zero-population classes
             call remap_empty_classes
             ! user termination
@@ -357,18 +345,18 @@ contains
                     exit
                 endif
             ! detects whether new images have been added to the original project
-            if( .not.is_file_open(p%projfile_target) )then
-                call orig_proj%read_segment('stk', p%projfile_target)
+            if( .not.is_file_open(params%projfile_target) )then
+                call orig_proj%read_segment('stk', params%projfile_target)
                 n_stk     = orig_proj%os_stk%get_noris()
                 n_newstks = n_stk - n_stk_prev
             endif
             if(n_newstks > 0)then
                 call work_proj%kill
-                call work_proj%read(p%projfile)
+                call work_proj%read(params%projfile)
                 call append_newstacks( orig_proj%os_stk )
                 ! updates # of classes
                 ncls_glob_prev = ncls_glob
-                ncls_glob      = nint(real(nptcls_glob) / p%nptcls_per_cls)
+                ncls_glob      = nint(real(nptcls_glob) / params%nptcls_per_cls)
                 ncls_glob      = min(ncls_glob, MAXNCLS)
                 ! allocate new particles to previous references
                 call map_new_ptcls
@@ -412,7 +400,7 @@ contains
                     new_stks(istk) = trim(stkname)
                 enddo
                 ! scale stacks to append
-                if( p%autoscale.eq.'yes' )then
+                if( params%autoscale.eq.'yes' )then
                     call qenv%new()
                     call cline_scale%delete('stk')
                     call cline_scale%delete('stktab')
@@ -425,7 +413,7 @@ contains
                     call qsys_cleanup
                     call del_file(SCALE_FILETAB)
                     do istk=1,n_newstks
-                        new_stks(istk) = SCSTK_DIR//add2fbody(new_stks(istk), p%ext, SCALE_SUFFIX)
+                        new_stks(istk) = SCSTK_DIR//add2fbody(new_stks(istk), params%ext, SCALE_SUFFIX)
                     enddo
                 endif
                 ! append to working project
@@ -480,20 +468,20 @@ contains
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                         ! even & odd
-                        stk = add2fbody(trim(refs_glob),p%ext,'_even')
+                        stk = add2fbody(trim(refs_glob),params%ext,'_even')
                         call img_cavg%read(stk, fromtocls(icls, 1))
                         call img_cavg%write(stk, fromtocls(icls, 2))
-                        stk = add2fbody(trim(refs_glob),p%ext,'_odd')
+                        stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                         call img_cavg%read(stk, fromtocls(icls, 1))
                         call img_cavg%write(stk, fromtocls(icls, 2))
                     enddo
                     ! stack size preservation
                     call img_cavg%read(trim(refs_glob), ncls_glob)
                     call img_cavg%write(trim(refs_glob), ncls_glob)
-                    stk = add2fbody(trim(refs_glob),p%ext,'_even')
+                    stk = add2fbody(trim(refs_glob),params%ext,'_even')
                     call img_cavg%read(stk, ncls_glob)
                     call img_cavg%write(stk, ncls_glob)
-                    stk = add2fbody(trim(refs_glob),p%ext,'_odd')
+                    stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                     call img_cavg%read(stk, ncls_glob)
                     call img_cavg%write(stk, ncls_glob)
                 endif
@@ -536,20 +524,20 @@ contains
                             call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                             call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                             ! even & odd
-                            stk = add2fbody(trim(refs_glob),p%ext,'_even')
+                            stk = add2fbody(trim(refs_glob),params%ext,'_even')
                             call img_cavg%read(stk, fromtocls(icls, 1))
                             call img_cavg%write(stk, fromtocls(icls, 2))
-                            stk = add2fbody(trim(refs_glob),p%ext,'_odd')
+                            stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                             call img_cavg%read(stk, fromtocls(icls, 1))
                             call img_cavg%write(stk, fromtocls(icls, 2))
                         enddo
                         ! stack size preservation
                         call img_cavg%read(trim(refs_glob), ncls_glob)
                         call img_cavg%write(trim(refs_glob), ncls_glob)
-                        stk = add2fbody(trim(refs_glob),p%ext,'_even')
+                        stk = add2fbody(trim(refs_glob),params%ext,'_even')
                         call img_cavg%read(stk, ncls_glob)
                         call img_cavg%write(stk, ncls_glob)
-                        stk = add2fbody(trim(refs_glob),p%ext,'_odd')
+                        stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                         call img_cavg%read(stk, ncls_glob)
                         call img_cavg%write(stk, ncls_glob)
                         ! FRCs

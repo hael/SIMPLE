@@ -4,9 +4,8 @@ include 'simple_lib.f08'
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_oris,              only: oris
-use simple_strategy2D_alloc  ! s2D singleton
-use simple_singletons
-
+use simple_parameters,        only: params_glob
+use simple_strategy2D_alloc   ! s2D singleton
 implicit none
 
 public :: strategy2D_srch, strategy2D_spec
@@ -69,19 +68,19 @@ contains
         self%a_ptr      => spec%pa
         self%iptcl      =  spec%iptcl
         self%iptcl_map  =  spec%iptcl_map
-        self%nrefs      =  p%ncls
-        self%nrots      =  round2even(twopi*real(p%ring2))
+        self%nrefs      =  params_glob%ncls
+        self%nrots      =  round2even(twopi*real(params_glob%ring2))
         self%nrefs_eval =  0
-        self%trs        =  p%trs
-        self%doshift    =  p%l_doshift
-        self%nthr       =  p%nthr
-        self%fromp      =  p%fromp
-        self%top        =  p%top
-        self%nnn        =  p%nnn
-        self%dyncls     =  (p%dyncls.eq.'yes')
+        self%trs        =  params_glob%trs
+        self%doshift    =  params_glob%l_doshift
+        self%nthr       =  params_glob%nthr
+        self%fromp      =  params_glob%fromp
+        self%top        =  params_glob%top
+        self%nnn        =  params_glob%nnn
+        self%dyncls     =  (params_glob%dyncls.eq.'yes')
         ! construct composites
-        lims(:,1)       = -p%trs
-        lims(:,2)       =  p%trs
+        lims(:,1)       = -params_glob%trs
+        lims(:,2)       =  params_glob%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, maxits=MAXITS)

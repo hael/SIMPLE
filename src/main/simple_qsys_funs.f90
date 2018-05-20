@@ -1,7 +1,7 @@
 ! batch-processing manager - functions
 module simple_qsys_funs
 include 'simple_lib.f08'
-use simple_params, only: p ! singleton
+use simple_parameters, only: params_glob
 implicit none
 
 interface qsys_watcher
@@ -25,72 +25,15 @@ contains
         call del_file('SYMSRCH')
         call del_file(trim(TERM_STREAM))
         ! state numbered files
-        call del_files('VOLASSEMBLE_FINISHED_STATE', p%nstates, numlen=NUMLEN_STATE)
-        call del_files('simple_script_state',        p%nstates, numlen=NUMLEN_STATE)
+        call del_files('VOLASSEMBLE_FINISHED_STATE', params_glob%nstates, numlen=NUMLEN_STATE)
+        call del_files('simple_script_state',        params_glob%nstates, numlen=NUMLEN_STATE)
         ! part numbered files
-        call del_files('OUT',                        p%nparts)
-        call del_files('algndoc_',                   p%nparts, ext=trim(METADATA_EXT))
-        call del_files('unidoc_',                    p%nparts, ext=trim(METADATA_EXT))
-        !call del_files('cavgs_even_part',            p%nparts, ext=p%ext )
-        !call del_files('cavgs_odd_part',             p%nparts, ext=p%ext )
-        call del_files('JOB_FINISHED_',              p%nparts)
-        !call del_files('ctfsqsums_even_part',        p%nparts, ext=p%ext )
-        !call del_files('ctfsqsums_odd_part',         p%nparts, ext=p%ext )
-        call del_files('distr_simple_script_',       p%nparts)
-        ! state and part numbered files
-        do istate=1,MAXS
-            ! allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE))
-            ! allocate(rho_base_str, source='rho_'//rec_base_str)
-            ! allocate(rec_base_str_part, source=rec_base_str//'_part')
-            ! allocate(rho_base_str_part, source='rho_'//rec_base_str_part)
-            ! call del_files(rec_base_str_part, p%nparts, ext=p%ext)
-            ! call del_files(rho_base_str_part, p%nparts, ext=p%ext)
-            ! call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_even')
-            ! call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
-            ! call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_even')
-            ! call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
-            ! call del_file(rho_base_str//'_even'//p%ext)
-            ! call del_file(rho_base_str//'_odd'//p%ext)
-            ! deallocate(rec_base_str,rho_base_str,rec_base_str_part,rho_base_str_part)
-        end do
-        ! syscalls to del files
-        ! call sys_del_files('VOLASSEMBLE_STATE', '')
+        call del_files('OUT',                        params_glob%nparts)
+        call del_files('algndoc_',                   params_glob%nparts, ext=trim(METADATA_EXT))
+        call del_files('unidoc_',                    params_glob%nparts, ext=trim(METADATA_EXT))
+        call del_files('JOB_FINISHED_',              params_glob%nparts)
+        call del_files('distr_simple_script_',       params_glob%nparts)
     end subroutine qsys_cleanup
-
-    ! subroutine terminate_if_prg_in_cwd( prg )
-    !     character(len=*), intent(in) :: prg
-    !     integer                      :: file_stat, funit, status, file_rec, i, pos
-    !     character(len=STDLEN)        :: pid, pid_dir, pwd, cmd
-    !     cmd = 'pgrep '//trim(prg)//' > pid_from_fortran.txt'
-    !     call exec_cmdline(cmd)
-    !     ! read in the pid
-    !     call fopen(funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat)
-    !     call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
-    !     read(funit,'(a)') pid
-    !     call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
-    !     ! get a string that contains the directory it is running in with lsof -p
-    !     cmd = 'lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt'
-    !     call exec_cmdline(cmd)
-    !     call fopen(funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat)
-    !     call fileiochk("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
-    !     read(funit,'(a)', iostat=file_stat) pid_dir
-    !     if(file_stat/=0)call fileiochk("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
-    !     call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
-    !     ! get pwd
-    !     status = simple_getenv('PWD',pwd)
-    !     pwd = trim(adjustl( pwd ))
-    !     if (status /= 0 ) call simple_stop("In simple_qsys_funs::terminate_if_prg_in_cwd PWD not found")
-    !     ! assert
-    !     pos = index(pid_dir, '/') ! start of directory
-    !     if( trim(pid_dir(pos:)) .eq. trim(pwd) )then
-    !         write(*,*) 'Another process of your program: ', trim(prg)
-    !         write(*,*) 'is already running in the cwd: ', trim(pid_dir(pos:)), ' ABORTING...'
-    !         stop
-    !     endif
-    !     ! remove temporary files
-    !     call del_file('pid_from_fortran.txt')
-    !     call del_file('pid_dir_from_fortran.txt')
-    ! end subroutine terminate_if_prg_in_cwd
 
     subroutine parse_env_file( env )
         type(chash), intent(inout)    :: env
@@ -180,8 +123,8 @@ contains
         ! generation of this file marks completion of the partition
         ! this file is empty 4 now but may contain run stats etc.
         character(len=*), intent(in) :: source
-        if( p%l_distr_exec .or. p%stream.eq.'yes' )then
-            call simple_touch('JOB_FINISHED_'//int2str_pad(p%part,p%numlen), errmsg="qsys_job_finished")
+        if( params_glob%l_distr_exec .or. params_glob%stream.eq.'yes' )then
+            call simple_touch('JOB_FINISHED_'//int2str_pad(params_glob%part,params_glob%numlen), errmsg="qsys_job_finished")
         endif
     end subroutine qsys_job_finished
 

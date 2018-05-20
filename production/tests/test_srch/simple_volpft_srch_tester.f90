@@ -1,14 +1,12 @@
 module simple_volpft_srch_tester
 include 'simple_lib.f08'
-use simple_singletons
-! use simple_build,      only: build
-! use simple_params,     only: params
+use simple_builder,    only: builder
+use simple_parameters, only: parameters
 use simple_ori,        only: ori
 use simple_image,      only: image
- use simple_cmdline,    only: cmdline
+ use simple_cmdline,   only: cmdline
 use simple_projector,  only: projector
 use simple_volpft_srch ! singleton
-!use simple_gridding    ! singleton
 implicit none
 
 public :: exec_volpft_srch_test
@@ -20,10 +18,10 @@ integer, parameter :: NTESTS=10, NPEAKS=3
 real,    parameter :: SNR=0.5, LPLIM=20.0, ROERR_LIM=2.0
 
 ! module global variables
-! type(params)    :: p
-! type(build)     :: b
-type(projector) :: vol_ref
-type(cmdline)   :: cline_here
+type(parameters) :: p
+type(builder)    :: b
+type(projector)  :: vol_ref
+type(cmdline)    :: cline_here
 
 contains
 
@@ -50,8 +48,8 @@ contains
         call cline_here%set('snr', SNR  )
         call cline_here%set('lp',  LPLIM)
         ! create parameters and build
-        call init_params(cline) ! constants & derived constants produced, mode=2
-        call b%build_general_tbox(cline)   ! general objects built
+        p = parameters(cline) ! constants & derived constants produced, mode=2
+        call b%build_general_tbox(p, cline)   ! general objects built
         ! generate images
         ! deal with reference
         call vol_ref%new([p%box,p%box,p%box], p%smpd)

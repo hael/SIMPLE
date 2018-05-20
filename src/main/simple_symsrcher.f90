@@ -1,7 +1,7 @@
 ! symmetry search routines
 module simple_symsrcher
 include 'simple_lib.f08'
-use simple_params
+use simple_parameters, only: params_glob
 implicit none
 
 public :: dsym_cylinder
@@ -11,12 +11,9 @@ contains
 
     !>  dsym_cylinder search intended for symmetry of order D
     subroutine dsym_cylinder( dsym_os, cylinder)
-    !subroutine dsym_cylinder(p, dsym_os, cylinder)
-        !use simple_params,  only: params
         use simple_oris,    only: oris
         use simple_image,   only: image
         use simple_sym,     only: sym
-!        class(params), intent(in)    :: p
         class(oris),   intent(inout) :: dsym_os
         class(image),  intent(out)   :: cylinder
         type(image)          :: read_img, img_msk, dist_img, roavg_img, topview
@@ -27,7 +24,7 @@ contains
         integer  :: halfnoris, cnt1, cnt2, i, l, noris
         real     :: cen1, cen2, sum1, sum2, sumvals
         real     :: minmax(2), width, height, sh1(3), ang
-        if(p%pgrp(1:1).ne.'d' .and. p%pgrp(1:1).ne.'D')&
+        if(params_glob%pgrp(1:1).ne.'d' .and. params_glob%pgrp(1:1).ne.'D')&
         &call simple_stop('only intended for symmetry of order D; simple_symsrcher%dsym_cylinder')
         ! init
         noris = dsym_os%get_noris()
@@ -35,25 +32,25 @@ contains
         allocate(radii(noris),  source=0.)
         allocate(e2(noris),     source=0.)
         allocate(labels(noris), source=0)
-        call se%new(p%pgrp)
-        call cylinder%new( [p%box, p%box, p%box], p%smpd)
-        call read_img%new( [p%box, p%box, 1], p%smpd)
-        call topview%new( [p%box, p%box, 1], p%smpd)
-        call roavg_img%new([p%box, p%box, 1], p%smpd)
-        call dist_img%new( [p%box, p%box, 1], p%smpd)
+        call se%new(params_glob%pgrp)
+        call cylinder%new( [params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+        call read_img%new( [params_glob%box, params_glob%box, 1], params_glob%smpd)
+        call topview%new( [params_glob%box, params_glob%box, 1], params_glob%smpd)
+        call roavg_img%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
+        call dist_img%new( [params_glob%box, params_glob%box, 1], params_glob%smpd)
         call dist_img%cendist
         ang = 360. / real(se%get_nsym()/2)
         ! prep mask
-        call img_msk%new([p%box,p%box,1],p%smpd)
+        call img_msk%new([params_glob%box,params_glob%box,1],params_glob%smpd)
         img_msk = 1.
-        call img_msk%mask(p%msk, 'hard')
+        call img_msk%mask(params_glob%msk, 'hard')
         l_msk = img_msk%bin2logical()
         call img_msk%kill
         ! centers, calculates self to rotational averages images & radii
         do i = 1, noris
-            call read_img%read(p%stk,i)
+            call read_img%read(params_glob%stk,i)
             ! center image
-            sh1 = read_img%center(p%cenlp, p%msk)
+            sh1 = read_img%center(params_glob%cenlp, params_glob%msk)
             call dsym_os%set(i, 'x', -sh1(1))
             call dsym_os%set(i, 'y', -sh1(2))
             ! rotational image
@@ -62,13 +59,13 @@ contains
 
             corrs(i) = read_img%real_corr(roavg_img, l_msk)
             ! radii
-            call read_img%bp(0., p%cenlp)
-            call read_img%mask(p%msk, 'hard')
+            call read_img%bp(0., params_glob%cenlp)
+            call read_img%mask(params_glob%msk, 'hard')
             call read_img%bin_kmeans
             call read_img%write('bin.mrc',i)
             call read_img%mul(dist_img)
             minmax = read_img%minmax()
-            radii(i) = min(p%msk, minmax(2))
+            radii(i) = min(params_glob%msk, minmax(2))
         enddo
         call dsym_os%set_all('corr', corrs)
         ! indentify views along z and x-/y- axes
@@ -117,7 +114,7 @@ contains
         topview = 0.
         do i=1,noris
             if(labels(i)==1)then
-                call read_img%read(p%stk,i)
+                call read_img%read(params_glob%stk,i)
                 call read_img%rtsq(0., -dsym_os%get(i,'x'), -dsym_os%get(i,'y'))
                 call topview%add(read_img)
             endif
@@ -126,10 +123,10 @@ contains
         call topview%roavg(nint(ang), roavg_img)
         topview = roavg_img
         call topview%norm()
-        call topview%mask(p%msk, 'soft')
+        call topview%mask(params_glob%msk, 'soft')
         cylinder = 0.
-        do i=1,p%box
-            if( abs( real(i-1)-real(p%box)/2. ) < height/2.)then
+        do i=1,params_glob%box
+            if( abs( real(i-1)-real(params_glob%box)/2. ) < height/2.)then
                 call cylinder%set_slice( i, topview )
             endif
         enddo

@@ -1,20 +1,18 @@
 ! provides global distribution of constants and derived constants
-module simple_params
+module simple_parameters
 include 'simple_lib.f08'
-use simple_cmdline, only: cmdline
-use simple_binoris, only: binoris
+use simple_cmdline,        only: cmdline
 use simple_user_interface, only: simple_program, get_prg_ptr
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none
 
-public :: p, params
+public :: parameters, params_glob
 private
 #include "simple_local_flags.inc"
 
-!> global parameters
-type :: params
-    ! global objects
+type :: parameters
+    ! pointer 2 program UI
     class(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
@@ -106,7 +104,7 @@ type :: params
     character(len=LONGSTRLEN) :: exec_dir=''          !< auto-named execution directory
     character(len=LONGSTRLEN) :: filetab=''           !< list of files(.txt)
     character(len=LONGSTRLEN) :: fname=''             !< file name
-    character(len=LONGSTRLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin)
+    character(len=LONGSTRLEN) :: frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     character(len=LONGSTRLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt|.simple)
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
@@ -256,7 +254,7 @@ type :: params
     integer :: ring1=2
     integer :: ring2=0
     integer :: spec=0
-    integer :: spproj_a_seg=0      !< sp-project segments that b%a points to
+    integer :: spproj_a_seg=PTCL3D_SEG !< sp-project segments that b%a points to
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
     integer :: state2split=0       !< state group to split
@@ -382,48 +380,29 @@ type :: params
     logical :: l_dev          = .false.
     logical :: singleton_initiated = .false.
   contains
-    procedure, private :: set_img_format
     procedure          :: new
-end type params
+    procedure, private :: set_img_format
+end type parameters
 
-! interface params
-!     module procedure constructor
-! end interface
+interface parameters
+    module procedure constructor
+end interface
 
-type(params) :: p
+class(parameters), pointer :: params_glob => null()
 
 contains
 
-    subroutine set_img_format( self, ext )
-        class(params),    intent(inout) :: self
-        character(len=*), intent(in)    :: ext
-        select case(trim(ext))
-            case('M','D','B')
-                self%ext = '.mrc'
-            case('S')
-                self%ext = '.spi'
-            case DEFAULT
-                write(*,*)'format: ', trim(ext)
-                call simple_stop('This file format is not supported by SIMPLE; set_img_format; simple_params')
-        end select
-    end subroutine set_img_format
+    function constructor( cline ) result( self )
+        class(cmdline), intent(inout) :: cline
+        type(parameters) :: self
+        call self%new(cline)
+    end function constructor
 
-    ! !> \brief  is a constructor
-    ! function constructor( cline, allow_mix, del_scaled, spproj_a_seg ) result( self )
-    !     class(cmdline),    intent(inout) :: cline
-    !     logical, optional, intent(in)    :: allow_mix, del_scaled
-    !     integer, optional, intent(in)    :: spproj_a_seg
-    !     type(params) :: self
-    !     call self%new( cline, allow_mix, del_scaled, spproj_a_seg)
-    ! end function constructor
-
-    !> \brief  is a constructor
-    subroutine new( self, cline, allow_mix, del_scaled, spproj_a_seg )
-        use simple_ori, only: ori
-        class(params),     intent(inout)   :: self
-        class(cmdline),    intent(inout)   :: cline
-        logical, optional, intent(in)      :: allow_mix, del_scaled
-        integer, optional, intent(in)      :: spproj_a_seg
+    subroutine new( self, cline )
+        use simple_ori,     only: ori
+        use simple_binoris, only: binoris
+        class(parameters), target, intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: sp_files(:)
         character(len=:),          allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt, debug_local, verbose_local
         logical               :: vol_defined(MAXS)
@@ -432,24 +411,20 @@ contains
         type(binoris)         :: bos
         type(ori)             :: o
         integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        integer               :: spproj_a_seg_inputted, idir, nsp_files
-        logical               :: nparts_set, aamix, ddel_scaled, sp_required
+        integer               :: idir, nsp_files
+        logical               :: nparts_set, sp_required
+        ! seed random number generator
+        call seed_rnd
+        ! constants
         nparts_set    = .false.
         debug_local   = 'no'
         verbose_local = 'no'
-        aamix = .false.
-        if( present(allow_mix) ) aamix = allow_mix
-        ddel_scaled = .false.
-        if( present(del_scaled) ) ddel_scaled = del_scaled
-        ! sp_project field corresponding to b%a
-        self%spproj_a_seg = GENERIC_SEG
-        if( present(spproj_a_seg) ) self%spproj_a_seg = spproj_a_seg
         ! file counter
         cntfile = 0
         ! take care of debug/verbose flags
         call check_carg('debug', debug_local)
         if( debug_local == 'yes' )then
-            global_debug = .true. ! from simple_params
+            global_debug = .true. ! from simple_parameters
             debug        = .true. ! from simple_local_flags.inc
         end if
         call check_carg('verbose', verbose_local)
@@ -788,7 +763,7 @@ contains
                     do i=1,nsp_files
                         write(*,*) trim(sp_files(i))
                     end do
-                    stop 'ERROR! a unique *.simple project could NOT be identified; simple_params :: new'
+                    stop 'ERROR! a unique *.simple project could NOT be identified; simple_parameters :: new'
                 endif
             endif
         else
@@ -797,7 +772,7 @@ contains
         if( nsp_files == 0 .and. sp_required .and. .not. cline%defined('projfile') )then
             write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
             write(*,*) 'cwd:     ', trim(self%cwd)
-            stop 'ERROR! no *.simple project file identified; simple_params :: new'
+            stop 'ERROR! no *.simple project file identified; simple_parameters :: new'
         endif
         if( nsp_files == 1 .and. sp_required )then
             ! good, we found a single monolithic project file
@@ -872,9 +847,8 @@ contains
             if( self%dir_movies(1:1).ne.'/' )self%dir_movies = '../'//trim(self%dir_movies)
         endif
         ! project file segment
-        if( cline%defined('oritype') )then ! oritype overrides any other spproj_a_seg setter
+        if( cline%defined('oritype') )then
             ! this determines the spproj_a_seg
-            if( present(spproj_a_seg) ) spproj_a_seg_inputted = self%spproj_a_seg
             select case(trim(self%oritype))
                 case('mic')
                     self%spproj_a_seg = MIC_SEG
@@ -898,38 +872,10 @@ contains
                     self%spproj_a_seg = COMPENV_SEG
                 case DEFAULT
                     write(*,*) 'oritype: ', trim(self%oritype)
-                    stop 'unsupported oritype; simple_params :: new'
+                    stop 'unsupported oritype; simple_parameters :: new'
             end select
-            if( present(spproj_a_seg) )then
-                if( spproj_a_seg_inputted .ne. self%spproj_a_seg )then
-                    write(*,*) 'oritype: ', trim(self%oritype)
-                    write(*,*) 'inputted spproj_a_seg: ', spproj_a_seg_inputted
-                    stop 'ERROR! oritype and inputted spproj_a_seg inconsistent'
-                endif
-            endif
         else
-            select case(self%spproj_a_seg)
-                case(MIC_SEG)
-                    self%oritype = 'mic'
-                case(STK_SEG)
-                    self%oritype = 'stk'
-                case(PTCL2D_SEG)
-                    self%oritype = 'ptcl2D'
-                case(CLS2D_SEG)
-                    self%oritype = 'cls2D'
-                case(CLS3D_SEG)
-                    self%oritype = 'cls3D'
-                case(PTCL3D_SEG)
-                    self%oritype = 'ptcl3D'
-                case(PROJINFO_SEG)
-                    self%oritype = 'projinfo'
-                case(JOBPROC_SEG)
-                    self%oritype = 'jobproc'
-                case(COMPENV_SEG)
-                    self%oritype = 'compenv'
-                case DEFAULT
-                    stop 'unknown spproj_a_seg index; simple_params :: new'
-            end select
+            self%spproj_a_seg = PTCL3D_SEG
         endif
         ! take care of nptcls etc.
         ! project is in charge
@@ -1024,12 +970,12 @@ contains
             endif
         endif
         ! check file formats
-        call check_file_formats(aamix)
+        call check_file_formats
         call double_check_file_formats
         ! make file names
         call mkfnames
         ! check box
-        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
+        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_parameters'
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
@@ -1060,10 +1006,6 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
-        if( ddel_scaled )then
-            ! delete possibly pre-existing scaled stack parts
-            call del_files(trim(STKPARTFBODY), self%nparts, ext=self%ext, suffix='_sc')
-        endif
         ! set name of partial files in parallel execution
         stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
         stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
@@ -1081,15 +1023,15 @@ contains
                 if( self%box /= self%box_original )then
                     write(*,*) 'original box:                ', self%box_original
                     write(*,*) 'box read from partial stack: ', self%box
-                    call simple_stop('dim mismatch; simple_params :: new')
+                    call simple_stop('dim mismatch; simple_parameters :: new')
                 endif
             endif
         endif
         ! fractional search and volume update
         if( self%update_frac <= .99)then
-            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
+            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_parameters :: constructor'
             if( nint(self%update_frac*real(self%nptcls)) < 1 )&
-                &stop 'UPDATE_FRAC is too small 2; simple_params :: constructor'
+                &stop 'UPDATE_FRAC is too small 2; simple_parameters :: constructor'
             self%l_frac_update = .true.
         endif
         if( .not. cline%defined('ncunits') )then
@@ -1279,10 +1221,10 @@ contains
         self%l_dose_weight = .false.
         if( cline%defined('exp_time') .or. cline%defined('dose_rate') )then
             if( cline%defined('exp_time') .and. .not. cline%defined('dose_rate') )then
-                call simple_stop('need dose_rate to be part of the command line! simple_params :: new')
+                call simple_stop('need dose_rate to be part of the command line! simple_parameters :: new')
             endif
             if( .not. cline%defined('exp_time') .and. cline%defined('dose_rate') )then
-                call simple_stop('need exp_time to be part of the command line! simple_params :: new')
+                call simple_stop('need exp_time to be part of the command line! simple_parameters :: new')
             endif
             self%l_dose_weight = .true.
         endif
@@ -1298,7 +1240,7 @@ contains
                 self%l_cc_objfun = .false.
             case DEFAULT
                 write(*,*) 'objfun flag: ', trim(self%objfun)
-                stop 'unsupported objective function; params :: new'
+                stop 'unsupported objective function; parameters :: new'
         end select
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
@@ -1312,10 +1254,11 @@ contains
                 ! alles gut!
             case DEFAULT
                 write(*,*) 'imgkind: ', trim(self%imgkind)
-                stop 'unsupported imgkind; params :: new'
+                stop 'unsupported imgkind; parameters :: new'
         end select
 !>>> END, IMAGE-PROCESSING-RELATED
-
+        ! set global pointer to instance
+        params_glob => self
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
         contains
@@ -1347,10 +1290,10 @@ contains
                             write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
                             stop
                         else
-                            call simple_full_path(self%vols(i), abs_fname, 'params :: check_vol', check_exists=.false.)
+                            call simple_full_path(self%vols(i), abs_fname, 'parameters :: check_vol', check_exists=.false.)
                             if( len_trim( abs_fname) > LONGSTRLEN )then
                                 write(*,*)'Argument too long: ',trim( abs_fname)
-                                stop 'simple_params :: new :: check_vol'
+                                stop 'simple_parameters :: new :: check_vol'
                             endif
                             self%vols(i) = trim(abs_fname)
                             call cline%set(key, trim(self%vols(i)))
@@ -1370,17 +1313,17 @@ contains
                 endif
                 nl = nlines(filename)
                 call fopen(fnr, file=filename, iostat=io_stat)
-                if(io_stat /= 0) call fileiochk("params ; read_vols error opening "//trim(filename), io_stat)
+                if(io_stat /= 0) call fileiochk("parameters ; read_vols error opening "//trim(filename), io_stat)
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) name
-                    if(io_stat /= 0) call fileiochk("params ; read_vols error reading "//trim(filename), io_stat)
+                    if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call simple_full_path(name, abs_name, 'params :: read_vols', check_exists=.false.)
+                        call simple_full_path(name, abs_name, 'parameters :: read_vols', check_exists=.false.)
                         self%vols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
                 end do
-                call fclose(fnr,errmsg="params ; read_vols error closing "//trim(filename))
+                call fclose(fnr,errmsg="parameters ; read_vols error closing "//trim(filename))
             end subroutine read_vols
 
             subroutine read_masks
@@ -1393,17 +1336,17 @@ contains
                 endif
                 nl = nlines(filename)
                 call fopen(fnr, file=filename, iostat=io_stat)
-                if(io_stat /= 0) call fileiochk("params ; read_masks error opening "//trim(filename), io_stat)
+                if(io_stat /= 0) call fileiochk("parameters ; read_masks error opening "//trim(filename), io_stat)
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) name
-                    if(io_stat /= 0) call fileiochk("params ; read_masks error reading "//trim(filename), io_stat)
+                    if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call simple_full_path(name, abs_name, 'params :: read_masks', check_exists=.false.)
+                        call simple_full_path(name, abs_name, 'parameters :: read_masks', check_exists=.false.)
                         self%mskvols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
                 end do
-                call fclose(fnr,errmsg="params ; read_masks error closing "//trim(filename))
+                call fclose(fnr,errmsg="parameters ; read_masks error closing "//trim(filename))
             end subroutine read_masks
 
             subroutine check_file( file, var, allowed1, allowed2, notAllowed )
@@ -1449,7 +1392,7 @@ contains
                             checkupfile(cntfile) = 'S'
                         case ('N')
                             write(*,*) 'file: ', trim(file)
-                            call simple_stop('This file format is not supported by SIMPLE; simple_params::check_file')
+                            call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')
                         case ('T','B','P','O')
                             ! text files are supported
                             ! binary files are supported
@@ -1457,14 +1400,14 @@ contains
                             ! *.simple project files are supported
                         case DEFAULT
                             write(*,*) 'file: ', trim(file)
-                            call simple_stop('This file format is not supported by SIMPLE; simple_params::check_file')
+                            call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')
                     end select
                     if( file_exists(var) )then
                         ! updates name to include absolute path
-                        call simple_full_path(var, abspath_file, 'params :: check_file', check_exists=.false.)
+                        call simple_full_path(var, abspath_file, 'parameters :: check_file', check_exists=.false.)
                         if( len_trim(abspath_file) > LONGSTRLEN )then
                             write(*,*)'Argument too long: ',trim(abspath_file)
-                            stop 'simple_params :: new :: checkfile'
+                            stop 'simple_parameters :: new :: checkfile'
                         endif
                         var = trim(abspath_file)
                         call cline%set(file,trim(var))
@@ -1474,20 +1417,13 @@ contains
                 endif
             end subroutine check_file
 
-            subroutine check_file_formats( allow_mix )
-                logical, intent(in) :: allow_mix
+            subroutine check_file_formats
                 integer :: i, j
                 if( cntfile > 0 )then
                     do i=1,cntfile
                         do j=1,cntfile
                             if( i == j ) cycle
-                            if( checkupfile(i) == checkupfile(j) )then
-                                ! all ok
-                            else
-                                if( .not. allow_mix )then
-                                    call simple_stop('The input file names have nonconforming format (mixed formats not allowed)')
-                                endif
-                            endif
+                            if( checkupfile(i) == checkupfile(j) ) cycle ! all ok
                         end do
                     end do
                     call self%set_img_format(checkupfile(1))
@@ -1501,11 +1437,11 @@ contains
                 if( cntfile == 0 )then
                     if( cline%defined('filetab') )then
                         call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
-                        call fileiochk("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
+                        call fileiochk("In parameters:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
                         read(funit,'(a256)') fname
                         form = fname2format(fname)
                         call fclose(funit, &
-                            errmsg="In params:: double_check_file_formats fclose failed "//trim(self%filetab) )
+                            errmsg="In parameters:: double_check_file_formats fclose failed "//trim(self%filetab) )
                         call self%set_img_format(form)
                     endif
                 endif
@@ -1556,13 +1492,27 @@ contains
                             self%box     = self%ldim(1)
                         endif
                     else
-                        write(*,'(a)')      'simple_params :: set_ldim_box_from_stk'
+                        write(*,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
                         write(*,'(a,1x,a)') 'Stack file does not exist!', trim(stkfname)
-                        call simple_stop(" In simple_params set_ldim_box_from_stk")
+                        call simple_stop(" In simple_parameters set_ldim_box_from_stk")
                     endif
                 endif
             end subroutine set_ldim_box_from_stk
 
     end subroutine new
 
-end module simple_params
+    subroutine set_img_format( self, ext )
+        class(parameters), intent(inout) :: self
+        character(len=*),  intent(in)    :: ext
+        select case(trim(ext))
+            case('M','D','B')
+                self%ext = '.mrc'
+            case('S')
+                self%ext = '.spi'
+            case DEFAULT
+                write(*,*)'format: ', trim(ext)
+                call simple_stop('This file format is not supported by SIMPLE; set_img_format; simple_parameters')
+        end select
+    end subroutine set_img_format
+
+end module simple_parameters

@@ -3,7 +3,7 @@ module simple_reconstructor_eo
 include 'simple_lib.f08'
 use simple_reconstructor, only: reconstructor
 use simple_masker,        only: masker
-use simple_params,        only: p
+use simple_parameters,    only: params_glob
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 implicit none
@@ -56,8 +56,8 @@ type :: reconstructor_eo
     generic            :: grid_fplane => grid_fplane_1, grid_fplane_2
     procedure          :: compress_exp
     procedure          :: expand_exp
-    procedure          :: sum_eos !< for merging even and odd into sum
-    procedure          :: sum_reduce     !< for summing eo_recs obtained by parallel exec
+    procedure          :: sum_eos    !< for merging even and odd into sum
+    procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
@@ -73,43 +73,38 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self,  spproj )
-    !subroutine new( self, p, spproj )
         class(reconstructor_eo), intent(inout) :: self   !< instance
-       ! class(params), target,   intent(in)    :: p      !< parameters object (provides constants)
         class(sp_project),       intent(inout) :: spproj !< project description
         logical     :: neg
         call self%kill
         ! set constants
         neg = .false.
-        if( p%neg .eq. 'yes' ) neg = .true.
-        self%box        = p%box
-        self%smpd       = p%smpd
-        self%nstates    = p%nstates
-        self%inner      = p%inner
-        self%width      = p%width
-        self%fny        = p%fny
-        self%ext        = p%ext
-        self%numlen     = p%numlen
-        self%msk        = p%msk
-        self%automsk    = file_exists(p%mskfile)
-        self%phaseplate = p%l_phaseplate
-        self%hpind_fsc  = p%hpind_fsc
+        if( params_glob%neg .eq. 'yes' ) neg = .true.
+        self%box        = params_glob%box
+        self%smpd       = params_glob%smpd
+        self%nstates    = params_glob%nstates
+        self%inner      = params_glob%inner
+        self%width      = params_glob%width
+        self%fny        = params_glob%fny
+        self%ext        = params_glob%ext
+        self%numlen     = params_glob%numlen
+        self%msk        = params_glob%msk
+        self%automsk    = file_exists(params_glob%mskfile)
+        self%phaseplate = params_glob%l_phaseplate
+        self%hpind_fsc  = params_glob%hpind_fsc
         ! create composites
         if( self%automsk )then
-            call self%envmask%new([p%box,p%box,p%box], p%smpd)
-            call self%envmask%read(p%mskfile)
+            call self%envmask%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
+            call self%envmask%read(params_glob%mskfile)
             call self%envmask%resmask()
         endif
-        call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        !call self%even%alloc_rho(p, spproj)
+        call self%even%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
         call self%even%alloc_rho( spproj)
         call self%even%set_ft(.true.)
-        call self%odd%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        !call self%odd%alloc_rho(p, spproj)
+        call self%odd%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
         call self%odd%alloc_rho(spproj)
         call self%odd%set_ft(.true.)
-        call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        !call self%eosum%alloc_rho(p, spproj, expand=.false.)
+        call self%eosum%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
         call self%eosum%alloc_rho( spproj, expand=.false.)
         ! set redundant limits
         self%cyc_lims = self%even%loop_lims(3)
@@ -423,14 +418,11 @@ contains
 
     !> \brief  for distributed reconstruction of even/odd maps
     subroutine eorec_distr( self, spproj, o, se, state, fbody )
-    !subroutine eorec_distr( self, p, spproj, o, se, state, fbody )
         use simple_oris,       only: oris
         use simple_sym,        only: sym
-        !use simple_params,     only: params
         use simple_prep4cgrid, only: prep4cgrid
-        use simple_kbinterpol,    only: kbinterpol
+        use simple_kbinterpol, only: kbinterpol
         class(reconstructor_eo),    intent(inout) :: self   !< object
-        !class(params),              intent(in)    :: p      !< parameters
         class(sp_project),          intent(inout) :: spproj !< project description
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element
@@ -440,24 +432,24 @@ contains
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
         type(ctfparams)  :: ctfvars
-        integer          :: statecnt(p%nstates), i, cnt, state_here, state_glob
+        integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
         ! make the images
-        call img%new([p%box,p%box,1],p%smpd)
-        call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
+        call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
+        call img_pad%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd)
         ! make the gridding prepper
         wf = self%even%get_kbwin()
-        call gridprep%new(img, wf, [p%boxpd,p%boxpd,1])
+        call gridprep%new(img, wf, [params_glob%boxpd,params_glob%boxpd,1])
         ! zero the Fourier volumes and rhos
         call self%reset_all
         call self%reset_eoexp
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
         cnt      = 0
-        do i=1,p%nptcls
-            call progress(i, p%nptcls)
-            if( i <= p%top .and. i >= p%fromp )then
+        do i=1,params_glob%nptcls
+            call progress(i, params_glob%nptcls)
+            if( i <= params_glob%top .and. i >= params_glob%fromp )then
                 cnt = cnt + 1
                 state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state ) )then
@@ -469,17 +461,17 @@ contains
         ! undo fourier components expansion
         call self%compress_exp
         ! density correction & output
-        if( p%l_distr_exec )then
+        if( params_glob%l_distr_exec )then
             if( present(fbody) )then
-                call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
+                call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(params_glob%part,self%numlen))
             else
-                call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
+                call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(params_glob%part,self%numlen))
             endif
         endif
         call img%kill
         call img_pad%kill
         ! report how many particles were used to reconstruct each state
-        if( p%nstates > 1 )then
+        if( params_glob%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
 
@@ -494,27 +486,27 @@ contains
                 real      :: pw, bfac
                 state = nint(o%get(i, 'state'))
                 if( state == 0 ) return
-                if( p%shellw.eq.'yes' )then
+                if( params_glob%shellw.eq.'yes' )then
                     orientation = o%get_ori(i)
                     bfac = 0.
                     if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
                     eo = nint(orientation%get('eo'))
-                    call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                    call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
                     call gridprep%prep(img, img_pad)
-                    ctfvars = spproj%get_ctfparams(p%oritype, i)
+                    ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                     call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, 1., bfac=bfac)
                     deallocate(stkname)
                 else
                     pw = 1.
-                    if( p%frac < 0.99 ) pw = o%get(i, 'w')
+                    if( params_glob%frac < 0.99 ) pw = o%get(i, 'w')
                     if( pw > 0. )then
                         orientation = o%get_ori(i)
                         eo          = nint(orientation%get('eo'))
-                        call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                        call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                         call img%read(stkname, ind_in_stk)
                         call gridprep%prep(img, img_pad)
-                        ctfvars = spproj%get_ctfparams(p%oritype, i)
+                        ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                         call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
                         deallocate(stkname)
                      endif

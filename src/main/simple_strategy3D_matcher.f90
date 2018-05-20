@@ -3,14 +3,34 @@ module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_strategy3D_alloc  ! singleton s3D
-use simple_singletons
 use simple_timer
+use simple_qsys_funs,                only: qsys_job_finished
+use simple_binoris_io,               only: binwrite_oritab
+use simple_kbinterpol,               only: kbinterpol
+use simple_ori,                      only: ori
+use simple_sym,                      only: sym
+use simple_prep4cgrid,               only: prep4cgrid
+use simple_image,                    only: image
+use simple_cmdline,                  only: cmdline
+use simple_parameters,               only: params_glob
+use simple_builder,                  only: build_glob
+use simple_polarft_corrcalc,         only: polarft_corrcalc
+use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
+    prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
+use simple_strategy3D_cluster,       only: strategy3D_cluster
+use simple_strategy3D_single,        only: strategy3D_single
+use simple_strategy3D_multi,         only: strategy3D_multi
+use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
+use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
+use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
+use simple_strategy3D_cont_single,   only: strategy3D_cont_single
+use simple_strategy3D,               only: strategy3D
+use simple_strategy3D_srch,          only: strategy3D_spec
+use simple_convergence,              only: convergence
 implicit none
 
-public :: refine3D_exec
-public :: preppftcc4align, pftcc
+public :: refine3D_exec, preppftcc4align, pftcc
 private
 
 logical, parameter             :: L_BENCH = .false., DEBUG = .false.
@@ -26,26 +46,6 @@ character(len=STDLEN)          :: benchfname
 contains
 
     subroutine refine3D_exec( cline, which_iter, converged )
-        use simple_qsys_funs,  only: qsys_job_finished
-        use simple_binoris_io, only: binwrite_oritab
-        use simple_kbinterpol, only: kbinterpol
-        use simple_ori,        only: ori
-        use simple_sym,        only: sym
-        use simple_prep4cgrid, only: prep4cgrid
-        use simple_image,      only: image
-        use simple_cmdline,    only: cmdline
-        use simple_strategy2D3D_common,   only: killrecvols, set_bp_range, preprecvols,&
-            prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
-        use simple_strategy3D_cluster,       only: strategy3D_cluster
-        use simple_strategy3D_single,        only: strategy3D_single
-        use simple_strategy3D_multi,         only: strategy3D_multi
-        use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
-        use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
-        use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
-        use simple_strategy3D_cont_single,   only: strategy3D_cont_single
-        use simple_strategy3D,               only: strategy3D
-        use simple_strategy3D_srch,          only: strategy3D_spec
-        use simple_convergence,              only: convergence
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         logical,               intent(inout) :: converged
@@ -76,108 +76,109 @@ contains
             t_tot  = t_init
         endif
 
-        if( p%dryrun.eq.'yes' )then
+        if( params_glob%dryrun.eq.'yes' )then
             ! TBD
         endif
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
-        if( p%eo .ne. 'no' )then
-            if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec'
+        if( params_glob%eo .ne. 'no' )then
+            if( build_glob%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec'
         else
-            call b%a%set_all2single('eo', -1.)
+            call build_glob%a%set_all2single('eo', -1.)
         endif
 
         ! SET FOURIER INDEX RANGE
-                call set_bp_range(cline)
+        call set_bp_range(cline)
 
         ! DETERMINE THE NUMBER OF PEAKS
-        select case(p%refine)
+        select case(params_glob%refine)
             case('cluster', 'snhc', 'clustersym', 'clusterdev', 'cont_single')
                 npeaks = 1
             case DEFAULT
-                if( p%eo .ne. 'no' )then
-                    npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
+                if( params_glob%eo .ne. 'no' )then
+                    npeaks = min(build_glob%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                 else
-                    npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
+                    npeaks = min(10,build_glob%e%find_npeaks(params_glob%lp, params_glob%moldiam))
                 endif
         end select
         if( DEBUG ) print *, '*** strategy3D_matcher ***: determined the number of peaks'
 
         ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = b%a%get_avg('frac')
+        frac_srch_space = build_glob%a%get_avg('frac')
 
         ! SETUP WEIGHTS
-        if( p%weights3D.eq.'yes' )then
-            if( p%nptcls <= SPECWMINPOP )then
-                call b%a%calc_hard_weights(p%frac)
+        if( params_glob%weights3D.eq.'yes' )then
+            if( params_glob%nptcls <= SPECWMINPOP )then
+                call build_glob%a%calc_hard_weights(params_glob%frac)
             else
-                call b%a%calc_spectral_weights(p%frac)
+                call build_glob%a%calc_spectral_weights(params_glob%frac)
             endif
         else
-            call b%a%calc_hard_weights(p%frac)
+            call build_glob%a%calc_hard_weights(params_glob%frac)
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
+        if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        if( p%l_frac_update )then
-            allocate(ptcl_mask(p%fromp:p%top))
-            call b%a%sample4update_and_incrcnt([p%fromp,p%top], p%update_frac, nptcls2update, pinds, ptcl_mask)
+        if( params_glob%l_frac_update )then
+            allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+            call build_glob%a%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+            &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
             ! correct convergence stats
-            do iptcl=p%fromp,p%top
+            do iptcl=params_glob%fromp,params_glob%top
                 if( .not. ptcl_mask(iptcl) )then
                     ! these are not updated
-                    call b%a%set(iptcl, 'mi_proj',     1.0)
-                    call b%a%set(iptcl, 'mi_inpl',     1.0)
-                    call b%a%set(iptcl, 'mi_state',    1.0)
-                    call b%a%set(iptcl, 'mi_joint',    1.0)
-                    call b%a%set(iptcl, 'dist',        0.0)
-                    call b%a%set(iptcl, 'dist_inpl',   0.0)
-                    call b%a%set(iptcl, 'frac',      100.0)
+                    call build_glob%a%set(iptcl, 'mi_proj',     1.0)
+                    call build_glob%a%set(iptcl, 'mi_inpl',     1.0)
+                    call build_glob%a%set(iptcl, 'mi_state',    1.0)
+                    call build_glob%a%set(iptcl, 'mi_joint',    1.0)
+                    call build_glob%a%set(iptcl, 'dist',        0.0)
+                    call build_glob%a%set(iptcl, 'dist_inpl',   0.0)
+                    call build_glob%a%set(iptcl, 'frac',      100.0)
                 endif
             end do
         else
-            nptcls2update = p%top - p%fromp + 1
-            allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
-            pinds = (/(i,i=p%fromp,p%top)/)
+            nptcls2update = params_glob%top - params_glob%fromp + 1
+            allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
+            pinds = (/(i,i=params_glob%fromp,params_glob%top)/)
             ptcl_mask = .true.
         endif
 
         ! B-factor weighted reconstruction
-        if( p%shellw.eq.'yes' ) call b%a%calc_bfac_rec
+        if( params_glob%shellw.eq.'yes' ) call build_glob%a%calc_bfac_rec
 
         ! EXTREMAL LOGICS
         do_extr = .false.
-        select case(trim(p%refine))
+        select case(trim(params_glob%refine))
             case('cluster','clusterdev','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
-                allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
-                zero_pop    = count(.not.b%a%included(consider_w=.false.))
+                allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
+                zero_pop    = count(.not.build_glob%a%included(consider_w=.false.))
                 corr_thresh = -huge(corr_thresh)
-                if( p%l_frac_update )then
+                if( params_glob%l_frac_update )then
                     ptcl_mask = .true.
-                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)) * (2.-p%update_frac))
-                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. p%extr_iter <= iextr_lim) )&
+                    iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)) * (2.-params_glob%update_frac))
+                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. params_glob%extr_iter <= iextr_lim) )&
                         &do_extr = .true.
                 else
-                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
-                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )&
+                    iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)))
+                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim) )&
                         &do_extr = .true.
                 endif
                 if( do_extr )then
-                    extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))
-                    corr_thresh = b%a%extremal_bound(extr_thresh)
+                    extr_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
+                    corr_thresh = build_glob%a%extremal_bound(extr_thresh)
                 endif
-                if(trim(p%refine).eq.'clustersym')then
+                if(trim(params_glob%refine).eq.'clustersym')then
                    ! symmetry pairing matrix
                     c1_symop = sym('c1')
-                    p%nspace = min( p%nspace*b%se%get_nsym(), 3000 )
-                    call b%e%new( p%nspace )
-                    call b%e%spiral
-                    call b%se%nearest_sym_neighbors( b%e, symmat )
+                    params_glob%nspace = min( params_glob%nspace*build_glob%se%get_nsym(), 3000 )
+                    call build_glob%e%new( params_glob%nspace )
+                    call build_glob%e%spiral
+                    call build_glob%se%nearest_sym_neighbors( build_glob%e, symmat )
                 endif
             case DEFAULT
                 ! nothing to do
@@ -194,8 +195,8 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         if( L_BENCH ) t_prep_primesrch3D = tic()
         ! clean big objects before starting to allocate new big memory chunks
-        ! cannot kill b%vol since used in continuous search
-        call b%vol2%kill
+        ! cannot kill build_glob%vol since used in continuous search
+        call build_glob%vol2%kill
 
         ! array allocation for strategy3D
         if( DEBUG ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D'
@@ -203,22 +204,21 @@ contains
         if( DEBUG ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
         ! switch for per-particle polymorphic strategy3D construction
-        allocate(strategy3Dsrch(p%fromp:p%top), stat=alloc_stat)
+        allocate(strategy3Dsrch(params_glob%fromp:params_glob%top), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch",alloc_stat)
-        select case(trim(p%refine))
+        select case(trim(params_glob%refine))
             case('snhc')
-                do iptcl=p%fromp,p%top
+                do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) ) then
                         allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
             case('single')
-                ! polymorphic assignment based on is_virgin and updatecnt
-                do iptcl=p%fromp,p%top
+                do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(b%a%get(iptcl,'updatecnt'))
-                        if( .not.b%a%has_been_searched(iptcl) .or. updatecnt == 1 )then
+                        updatecnt = nint(build_glob%a%get(iptcl,'updatecnt'))
+                        if( .not.build_glob%a%has_been_searched(iptcl) .or. updatecnt == 1 )then
                             allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
                             allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
@@ -227,9 +227,9 @@ contains
                     endif
                 end do
             case('multi')
-                do iptcl=p%fromp,p%top
+                do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(b%a%get(iptcl,'updatecnt'))
+                        updatecnt = nint(build_glob%a%get(iptcl,'updatecnt'))
                         if( updatecnt == 1 )then
                             allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
@@ -239,43 +239,43 @@ contains
                     endif
                 end do
             case('cont_single')
-                do iptcl=p%fromp,p%top
+                do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
             case('greedy_single')
-                do iptcl=p%fromp,p%top
+                do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('greedy_multi')
-                do iptcl=p%fromp,p%top
+                do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_greedy_multi  :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
             case('cluster','clustersym','clusterdev')
-                do iptcl=p%fromp,p%top
+                do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_cluster       :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
             case DEFAULT
-                write(*,*) 'refine flag: ', trim(p%refine)
+                write(*,*) 'refine flag: ', trim(params_glob%refine)
                 stop 'Refinement mode unsupported'
         end select
         ! construct search objects
         cnt = 0
-        do iptcl=p%fromp,p%top
+        do iptcl=params_glob%fromp,params_glob%top
             if( ptcl_mask(iptcl) )then
                 cnt = cnt + 1
                 ! search spec
                 strategy3Dspec%iptcl       =  iptcl
                 strategy3Dspec%iptcl_map   =  cnt
-                strategy3Dspec%szsn        =  p%szsn
+                strategy3Dspec%szsn        =  params_glob%szsn
                 strategy3Dspec%corr_thresh =  corr_thresh
                 strategy3Dspec%ppftcc      => pftcc
                 if( allocated(het_mask) )     strategy3Dspec%do_extr    =  het_mask(iptcl)
@@ -286,8 +286,8 @@ contains
         end do
         if( DEBUG ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
         ! memoize CTF matrices
-        if( trim(p%oritype) .eq. 'ptcl3D' )then
-            if( b%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_absctfmats(b%spproj, 'ptcl3D')
+        if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
+            if( build_glob%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         else
             ! class averages have no CTF
         endif
@@ -295,7 +295,7 @@ contains
         call pftcc%memoize_ffts
 
         ! SEARCH
-        if( p%dryrun.eq.'yes' )then
+        if( params_glob%dryrun.eq.'yes' )then
             ! TBD
         else
             if( L_BENCH ) t_align = tic()
@@ -309,9 +309,9 @@ contains
         ! clean
         call clean_strategy3D  ! deallocate s3D singleton
         call pftcc%kill
-        call b%vol%kill
-        call b%vol_odd%kill
-        do iptcl = p%fromp,p%top
+        call build_glob%vol%kill
+        call build_glob%vol_odd%kill
+        do iptcl = params_glob%fromp,params_glob%top
             if( ptcl_mask(iptcl) )then
                 call strategy3Dsrch(iptcl)%ptr%kill
                 strategy3Dsrch(iptcl)%ptr => null()
@@ -323,36 +323,35 @@ contains
         if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
-        select case(trim(p%oritype))
+        select case(trim(params_glob%oritype))
             case('ptcl3D')
-                call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top], isegment=PTCL3D_SEG)
+                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%a, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
             case('cls3D')
-                call binwrite_oritab(p%outfile, b%spproj, b%a, [p%fromp,p%top], isegment=CLS3D_SEG)
+                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%a, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
             case DEFAULT
-                write(*,*) 'oritype: ', trim(p%oritype)
+                write(*,*) 'oritype: ', trim(params_glob%oritype)
                 stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
         end select
-        p%oritab = p%outfile
+        params_glob%oritab = params_glob%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         if( L_BENCH ) t_rec = tic()
         ! make the gridding prepper
-        if( p%eo .ne. 'no' )then
-            kbwin = b%eorecvols(1)%get_kbwin()
+        if( params_glob%eo .ne. 'no' )then
+            kbwin = build_glob%eorecvols(1)%get_kbwin()
         else
-            kbwin = b%recvols(1)%get_kbwin()
+            kbwin = build_glob%recvols(1)%get_kbwin()
         endif
-        call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+        call gridprep%new(build_glob%img, kbwin, [params_glob%boxpd,params_glob%boxpd,1])
         ! init volumes
         call preprecvols
         ! prep rec imgs
         allocate(rec_imgs(MAXIMGBATCHSZ))
         do i=1,MAXIMGBATCHSZ
-            call rec_imgs(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
+            call rec_imgs(i)%new([params_glob%boxpd, params_glob%boxpd, 1], params_glob%smpd)
         end do
         ! prep batch imgs
         call prepimgbatch( MAXIMGBATCHSZ)
-        !call prepimgbatch(b, p, MAXIMGBATCHSZ)
         ! gridding batch loop
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
@@ -362,28 +361,28 @@ contains
             do i=batchlims(1),batchlims(2)
                 ibatch = i - batchlims(1) + 1
                 ! normalise (read_imgbatch does not normalise)
-                call b%imgbatch(ibatch)%norm()
+                call build_glob%imgbatch(ibatch)%norm()
                 ! in dev=yes code, we filter before inserting into 3D vol
-                call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
+                call gridprep%prep_serial_no_fft(build_glob%imgbatch(ibatch), rec_imgs(ibatch))
             end do
             !$omp end parallel do
             ! gridding
             do i=batchlims(1),batchlims(2)
                 iptcl       = pinds(i)
                 ibatch      = i - batchlims(1) + 1
-                orientation = b%a%get_ori(iptcl)
-                ctfvars     = b%spproj%get_ctfparams(p%oritype, iptcl)
+                orientation = build_glob%a%get_ori(iptcl)
+                ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 if( orientation%isstatezero() ) cycle
-                if( trim(p%refine).eq.'clustersym' )then
+                if( trim(params_glob%refine).eq.'clustersym' )then
                     ! always C1 reconstruction
                     call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
                 else
-                    call grid_ptcl( rec_imgs(ibatch), b%se, orientation, s3D%o_peaks(iptcl), ctfvars)
+                    call grid_ptcl( rec_imgs(ibatch), build_glob%se, orientation, s3D%o_peaks(iptcl), ctfvars)
                 endif
             end do
         end do
         ! normalise structure factors
-        if( p%eo .ne. 'no' )then
+        if( params_glob%eo .ne. 'no' )then
             call eonorm_struct_facts( cline, which_iter)
         else
             call norm_struct_facts( which_iter)
@@ -393,19 +392,19 @@ contains
         call gridprep%kill
         do ibatch=1,MAXIMGBATCHSZ
             call rec_imgs(ibatch)%kill
-            call b%imgbatch(ibatch)%kill
+            call build_glob%imgbatch(ibatch)%kill
         end do
-        deallocate(rec_imgs, b%imgbatch)
+        deallocate(rec_imgs, build_glob%imgbatch)
         call gridprep%kill
         if( L_BENCH ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE
         call qsys_job_finished( 'simple_strategy3D_matcher :: refine3D_exec')
-        if( .not. p%l_distr_exec ) converged = conv%check_conv3D(cline)
+        if( .not. params_glob%l_distr_exec ) converged = conv%check_conv3D(cline)
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.
-            if( p%part /= 1 ) doprint = .false.
+            if( params_glob%part /= 1 ) doprint = .false.
             if( doprint )then
                 benchfname = 'HADAMARD3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
@@ -441,11 +440,11 @@ contains
         integer   :: imatch
         logical   :: do_center
         real      :: xyz(3)
-        nrefs  = p%nspace * p%nstates
-        ! must be done here since p%kfromto is dynamically set based on FSC from previous round
+        nrefs  = params_glob%nspace * params_glob%nstates
+        ! must be done here since params_glob%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
-        if( p%eo .ne. 'no' )then
-            call pftcc%new(nrefs,  ptcl_mask, nint(b%a%get_all('eo', [p%fromp,p%top])))
+        if( params_glob%eo .ne. 'no' )then
+            call pftcc%new(nrefs,  ptcl_mask, nint(build_glob%a%get_all('eo', [params_glob%fromp,params_glob%top])))
         else
             call pftcc%new(nrefs,  ptcl_mask)
         endif
@@ -453,52 +452,52 @@ contains
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         cnt = 0
-        do s=1,p%nstates
-            if( p%oritab .ne. '' )then
-                if( b%a%get_pop(s, 'state') == 0 )then
+        do s=1,params_glob%nstates
+            if( params_glob%oritab .ne. '' )then
+                if( build_glob%a%get_pop(s, 'state') == 0 )then
                     ! empty state
-                    cnt = cnt + p%nspace
+                    cnt = cnt + params_glob%nspace
                     call progress(cnt, nrefs)
                     cycle
                 endif
             endif
-            call cenrefvol_and_mapshifts2ptcls( cline, s, p%vols(s), do_center, xyz)
-            if( p%eo .ne. 'no' )then
-                if( p%nstates.eq.1 )then
+            call cenrefvol_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+            if( params_glob%eo .ne. 'no' )then
+                if( params_glob%nstates.eq.1 )then
                     ! PREPARE ODD REFERENCES
-                    call preprefvol(cline, s, p%vols_odd(s), do_center, xyz)
+                    call preprefvol(cline, s, params_glob%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-                    do iref=1,p%nspace
-                        call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.false.)
+                    do iref=1,params_glob%nspace
+                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%e%get_ori(iref), pftcc, iseven=.false.)
                     end do
                     !$omp end parallel do
                     ! copy odd volume
-                    b%vol_odd = b%vol
+                    build_glob%vol_odd = build_glob%vol
                     ! expand for fast interpolation
-                    call b%vol_odd%expand_cmat(p%alpha)
+                    call build_glob%vol_odd%expand_cmat(params_glob%alpha)
                     ! PREPARE EVEN REFERENCES
-                    call preprefvol( cline, s, p%vols_even(s), do_center, xyz)
+                    call preprefvol( cline, s, params_glob%vols_even(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-                    do iref=1,p%nspace
-                        call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
+                    do iref=1,params_glob%nspace
+                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%e%get_ori(iref), pftcc, iseven=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    call preprefvol( cline, s, p%vols(s), do_center, xyz)
+                    call preprefvol( cline, s, params_glob%vols(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
-                    do iref=1,p%nspace
-                        ind = (s - 1) * p%nspace + iref
-                        call b%vol%fproject_polar(ind, b%e%get_ori(iref), pftcc, iseven=.true.)
+                    do iref=1,params_glob%nspace
+                        ind = (s - 1) * params_glob%nspace + iref
+                        call build_glob%vol%fproject_polar(ind, build_glob%e%get_ori(iref), pftcc, iseven=.true.)
                         call pftcc%cp_even2odd_ref(ind)
                     end do
                     !$omp end parallel do
                 endif
             else
                 ! low-pass set or multiple states
-                call preprefvol( cline, s, p%vols(s), do_center, xyz)
+                call preprefvol( cline, s, params_glob%vols(s), do_center, xyz)
                 !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-                do iref=1,p%nspace
-                    call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
+                do iref=1,params_glob%nspace
+                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%e%get_ori(iref), pftcc, iseven=.true.)
                 end do
                 !$omp end parallel do
             endif
@@ -506,11 +505,11 @@ contains
 
         ! PREPARATION OF PARTICLES IN PFTCC
         ! prepare the polarizer images
-        call b%img_match%init_polarizer(pftcc, p%alpha)
+        call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(MAXIMGBATCHSZ))
         do imatch=1,MAXIMGBATCHSZ
-            call match_imgs(imatch)%new([p%boxmatch, p%boxmatch, 1], p%smpd)
-            call match_imgs(imatch)%copy_polarizer(b%img_match)
+            call match_imgs(imatch)%new([params_glob%boxmatch, params_glob%boxmatch, 1], params_glob%smpd)
+            call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
         call build_pftcc_particles(pftcc, MAXIMGBATCHSZ, match_imgs, .true., ptcl_mask)
 
@@ -518,9 +517,9 @@ contains
         do imatch=1,MAXIMGBATCHSZ
             call match_imgs(imatch)%kill_polarizer
             call match_imgs(imatch)%kill
-            call b%imgbatch(imatch)%kill
+            call build_glob%imgbatch(imatch)%kill
         end do
-        deallocate(match_imgs, b%imgbatch)
+        deallocate(match_imgs, build_glob%imgbatch)
         if( DEBUG ) print *, '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 

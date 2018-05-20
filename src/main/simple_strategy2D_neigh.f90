@@ -3,7 +3,7 @@ use simple_defs
 use simple_strategy2D_alloc
 use simple_strategy2D,      only: strategy2D
 use simple_strategy2D_srch, only: strategy2D_srch, strategy2D_spec
-use simple_build,           only: b ! singleton
+use simple_builder,         only: build_glob
 implicit none
 
 public :: strategy2D_neigh
@@ -32,14 +32,14 @@ contains
         class(strategy2D_neigh), intent(inout) :: self
         integer :: iref,loc(1),inpl_ind,inn
         real    :: corrs(self%s%nrots),inpl_corr,corr
-        if( .not. allocated(b%nnmat) )&
+        if( .not. allocated(build_glob%nnmat) )&
         &stop 'nnmat need to be associated in self%spec; strategy2D_neigh :: srch_neigh'
-        if( b%a%get_state(self%s%iptcl) > 0 )then
+        if( build_glob%a%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = -1.
             ! evaluate neighbors (greedy selection)
             do inn=1,self%s%nnn
-                iref      = b%nnmat(self%s%prev_class,inn)
+                iref      = build_glob%nnmat(self%s%prev_class,inn)
                 if( s2D%cls_pops(iref) == 0 )cycle
                 call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs)
                 loc       = maxloc(corrs)
@@ -56,7 +56,7 @@ contains
             call self%s%inpl_srch
             call self%s%store_solution
         else
-            call b%a%reject(self%s%iptcl)
+            call build_glob%a%reject(self%s%iptcl)
         endif
         DebugPrint '>>> STRATEGY2D_NEIGH :: SRCH_NEIGH; FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine srch_neigh

@@ -1,13 +1,14 @@
 ! for common-lines-based search
 module simple_comlin_srch
 include 'simple_lib.f08'
-use simple_singletons
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
 use simple_ori,         only: ori
 use simple_oris,        only: oris
 use simple_sym,         only: sym
+use simple_builder,     only: build_glob
+use simple_parameters,  only: params_glob
 implicit none
 
 public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest,&
@@ -42,12 +43,12 @@ contains
         character(len=*),      intent(in) :: opt_str !< 'simplex', 'de' or 'oasis' search type
         character(len=*),      intent(in) :: mode    !< 'sym' or 'pair' mode
         character(len=8) :: str_opt= 'simplex'
-        nptcls    =  p%nptcls
-        hp        =  p%hp
-        lp        =  p%lp
-        trs       =  p%trs
-        a_copy    =  b%a
-        nproj_sym = comlin_srch_get_nproj( pgrp=trim(p%pgrp) )
+        nptcls    =  params_glob%nptcls
+        hp        =  params_glob%hp
+        lp        =  params_glob%lp
+        trs       =  params_glob%trs
+        a_copy    =  build_glob%a
+        nproj_sym = comlin_srch_get_nproj( pgrp=trim(params_glob%pgrp) )
         write(*,'(A,I3)') '>>> NUMBER OF REFERENCE PROJECTIONS IN ASU: ', nproj_sym
         call resoris%new(nproj_sym)
         call espace%new(nproj_sym)
@@ -67,8 +68,8 @@ contains
             call espace%spiral
         endif
         optlims(:3,:) = eullims
-        optlims(4,:)  = [-p%trs,p%trs]
-        optlims(5,:)  = [-p%trs,p%trs]
+        optlims(4,:)  = [-params_glob%trs,params_glob%trs]
+        optlims(5,:)  = [-params_glob%trs,params_glob%trs]
         ! Optimizer init
         if( mode .eq. 'sym' )then
             call ospec%specify(str_opt, 3, ftol=1e-4, gtol=1e-4, limits=eullims, nrestarts=3)
@@ -125,10 +126,10 @@ contains
             corr_best   = -1.
             do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
-                b%a = a_copy
-                call b%a%rot(orientation)
-                call b%se%apply2all(b%a)
-                corr = b%clins%corr()
+                build_glob%a = a_copy
+                call build_glob%a%rot(orientation)
+                call build_glob%se%apply2all(build_glob%a)
+                corr = build_glob%clins%corr()
                 call orientation%print_ori
                 call orientation%set('corr',corr)
                 if( corr > corr_best )then
@@ -163,8 +164,8 @@ contains
             corr_best   = -1.
             do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
-                call b%a%set_ori(p%jptcl, orientation)
-                corr = b%clins%pcorr(p%iptcl, p%jptcl)
+                call build_glob%a%set_ori(params_glob%jptcl, orientation)
+                corr = build_glob%clins%pcorr(params_glob%iptcl, params_glob%jptcl)
                 call orientation%set('corr',corr)
                 if( corr > corr_best )then
                     corr_best = corr
@@ -241,10 +242,10 @@ contains
                 return
             endif
             !
-            call b%a%rot(o)
-            call b%se%apply2all(b%a)
-            cost = -b%clins%corr()
-            b%a = a_copy ! puts back unmodified oris
+            call build_glob%a%rot(o)
+            call build_glob%se%apply2all(build_glob%a)
+            cost = -build_glob%clins%corr()
+            build_glob%a = a_copy ! puts back unmodified oris
         endif
     end function comlin_srch_cost
 
@@ -264,9 +265,9 @@ contains
         elseif( vec(5) < -trs .or. vec(5) > trs )then
             cost = 1.
         else
-            call b%a%set_euler(p%jptcl, vec(1:3))
-            call b%a%set_shift(p%jptcl, vec(4:5))
-            cost = -b%clins%pcorr(p%iptcl, p%jptcl)
+            call build_glob%a%set_euler(params_glob%jptcl, vec(1:3))
+            call build_glob%a%set_shift(params_glob%jptcl, vec(4:5))
+            cost = -build_glob%clins%pcorr(params_glob%iptcl, params_glob%jptcl)
         endif
     end function comlin_pairsrch_cost
 

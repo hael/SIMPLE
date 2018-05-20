@@ -1,10 +1,11 @@
 module simple_cluster_cavgs
 include 'simple_lib.f08'
-use simple_singletons
 use simple_strategy2D3D_common
-use simple_polarft_corrcalc,   only: polarft_corrcalc
-use simple_aff_prop,           only: aff_prop
-use simple_oris,               only: oris
+use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_aff_prop,         only: aff_prop
+use simple_oris,             only: oris
+use simple_builder,          only: build_glob
+use simple_parameters,       only: params_glob
 implicit none
 
 public :: cluster_cavgs_exec
@@ -30,28 +31,27 @@ contains
         integer    :: iptcl, jptcl, icen, jcen, cnt, npairs, i, j, nmems, curr_pop
         type(oris) :: ceninfo, clsdoc
         ! read class doc
-        call clsdoc%new(p%nptcls)
-        call clsdoc%read(p%classdoc)
+        call clsdoc%new(params_glob%nptcls)
+        call clsdoc%read(params_glob%classdoc)
         ! xtract class populations
         clspops = clsdoc%get_all('pop')
         ! xtract class resolutions
         clsres  = clsdoc%get_all('res')
         ! set bp range
-        p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
-        p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
-        p%lp_dyn     = p%lp
+        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
+        params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
+        params_glob%lp_dyn     = params_glob%lp
         ! prep pftcc
-        !call preppftcc4cluster( b, p )
         call preppftcc4cluster
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! calculate similarity matrix in parallel
         corrmat = pftcc%calc_roinv_corrmat()
-        npairs = (p%nptcls * (p%nptcls - 1)) / 2
-        allocate(tmp(npairs), mask(p%nptcls), inds(p%nptcls), included(p%nptcls))
+        npairs = (params_glob%nptcls * (params_glob%nptcls - 1)) / 2
+        allocate(tmp(npairs), mask(params_glob%nptcls), inds(params_glob%nptcls), included(params_glob%nptcls))
         cnt = 0
-        do iptcl=1,p%nptcls - 1
-            do jptcl=iptcl + 1,p%nptcls
+        do iptcl=1,params_glob%nptcls - 1
+            do jptcl=iptcl + 1,params_glob%nptcls
                 cnt = cnt + 1
                 tmp(cnt) = corrmat(iptcl,jptcl)
             end do
@@ -60,30 +60,30 @@ contains
         call pftcc%swap_ptclsevenodd
         corrmat = pftcc%calc_roinv_corrmat()
         cnt = 0
-        do iptcl=1,p%nptcls - 1
-            do jptcl=iptcl + 1,p%nptcls
+        do iptcl=1,params_glob%nptcls - 1
+            do jptcl=iptcl + 1,params_glob%nptcls
                 cnt = cnt + 1
                 tmp(cnt) = max(corrmat(iptcl,jptcl), tmp(cnt))
             end do
         end do
         corr_med = median_nocopy(tmp)
         ! perform clustering with affinity propagation
-        call aprop%new(p%nptcls, corrmat, pref=corr_med/2.)
+        call aprop%new(params_glob%nptcls, corrmat, pref=corr_med/2.)
         call aprop%propagate(centers, labels, simsum)
         ! report clustering solution
-        p%ncls = size(centers)
-        call clsdoc%new(p%nptcls)
-        do iptcl=1,p%nptcls
+        params_glob%ncls = size(centers)
+        call clsdoc%new(params_glob%nptcls)
+        do iptcl=1,params_glob%nptcls
             call clsdoc%set(iptcl, 'class', real(labels(iptcl)))
         end do
-        call clsdoc%write('aff_prop_clustering'//trim(TXT_EXT), [1,p%nptcls])
+        call clsdoc%write('aff_prop_clustering'//trim(TXT_EXT), [1,params_glob%nptcls])
         ! calculate within cluster correlations
         corr_within_cls_avg =  0.
         corr_within_cls_min =  1.0
         corr_within_cls_max = -1.0
         cnt                 = 0
-        do iptcl=1,p%nptcls - 1
-            do jptcl=iptcl + 1,p%nptcls
+        do iptcl=1,params_glob%nptcls - 1
+            do jptcl=iptcl + 1,params_glob%nptcls
                 if( labels(iptcl) == labels(jptcl) )then
                     corr_within_cls_avg = corr_within_cls_avg + corrmat(iptcl,jptcl)
                     if( corrmat(iptcl,jptcl) < corr_within_cls_min ) corr_within_cls_min = corrmat(iptcl,jptcl)
@@ -97,8 +97,8 @@ contains
         corr_between_cls_avg =  0.
         corr_between_cls_min =  1.0
         corr_between_cls_max = -1.0
-        do icen=1,p%ncls - 1
-            do jcen=icen + 1, p%ncls
+        do icen=1,params_glob%ncls - 1
+            do jcen=icen + 1, params_glob%ncls
                 corr_between_cls_avg = corr_between_cls_avg + corrmat(centers(icen),centers(jcen))
                 if( corrmat(centers(icen),centers(jcen)) < corr_between_cls_min )&
                 &corr_between_cls_min = corrmat(centers(icen),centers(jcen))
@@ -106,13 +106,13 @@ contains
                 &corr_between_cls_max = corrmat(centers(icen),centers(jcen))
             end do
         end do
-        corr_between_cls_avg = corr_between_cls_avg / real((p%ncls * (p%ncls -1 )) / 2)
+        corr_between_cls_avg = corr_between_cls_avg / real((params_glob%ncls * (params_glob%ncls -1 )) / 2)
         write(*,'(a)') '>>> CLUSTERING STATISTICS'
-        write(*,'(a,1x,f8.4)') '>>> # CLUSTERS FOUND        ', real(p%ncls)
+        write(*,'(a,1x,f8.4)') '>>> # CLUSTERS FOUND        ', real(params_glob%ncls)
         write(*,'(a,1x,f8.4)') '>>> WITHIN  CLUSTER CORR    ', corr_within_cls_avg
         write(*,'(a,1x,f8.4)') '>>> BETWEEN CLUSTER CORR    ', corr_between_cls_avg
-        call ceninfo%new(p%ncls)
-        do icen=1,p%ncls
+        call ceninfo%new(params_glob%ncls)
+        do icen=1,params_glob%ncls
             where( labels == icen )
                 mask = .true.
             else where
@@ -122,14 +122,13 @@ contains
             call ceninfo%set(icen, 'class',  real(icen))
             call ceninfo%set(icen, 'center', real(centers(icen)))
             call ceninfo%set(icen, 'pop',    pop)
-            allocate(fname, source='cluster'//int2str_pad(icen,3)//'imgs'//p%ext)
+            allocate(fname, source='cluster'//int2str_pad(icen,3)//'imgs'//params_glob%ext)
             cnt = 0
-            do iptcl=1,p%nptcls
+            do iptcl=1,params_glob%nptcls
                 if( labels(iptcl) == icen )then
                     cnt = cnt + 1
-                   ! call read_img( b, p, iptcl )
                     call read_img( iptcl )
-                    call b%img%write(fname, cnt)
+                    call build_glob%img%write(fname, cnt)
                 endif
             enddo
             deallocate(fname)
@@ -144,11 +143,11 @@ contains
         write(*,'(a,1x,f8.2)') '>>> MEDIAN  POPULATION    ', popmed
         write(*,'(a,1x,f8.2)') '>>> AVERAGE POPULATION    ', popave
         write(*,'(a,1x,f8.2)') '>>> SDEV OF POPULATION    ', popsdev
-        if( p%balance > 0 )then
-            inds     = (/(i,i=1,p%nptcls)/)
+        if( params_glob%balance > 0 )then
+            inds     = (/(i,i=1,params_glob%nptcls)/)
             included = .true.
-            do icen=1,p%ncls
-                if( pops(icen) > p%balance )then
+            do icen=1,params_glob%ncls
+                if( pops(icen) > params_glob%balance )then
                     ! identify the members of the cluster
                     where( labels == icen )
                         mask = .true.
@@ -170,7 +169,7 @@ contains
                     curr_pop = 0
                     do i=1,nmems
                         curr_pop = curr_pop + nint(mempops(meminds(i)))
-                        if( curr_pop <= p%balance )then
+                        if( curr_pop <= params_glob%balance )then
                             ! update pops
                             pops(icen) = curr_pop
                         else
@@ -203,19 +202,18 @@ contains
         end do
         write(*,'(a)') '>>> HISTOGRAM OF CLUSTER POPULATIONS'
         call hpsort(pops)
-        do icen=1,p%ncls
+        do icen=1,params_glob%ncls
             write(*,*) nint(pops(icen)),"|",('*', j=1,nint(pops(icen)*scale))
         end do
-        call ceninfo%write('aff_prop_ceninfo'//trim(TXT_EXT), [1,p%ncls])
+        call ceninfo%write('aff_prop_ceninfo'//trim(TXT_EXT), [1,params_glob%ncls])
         ! write selected class averages
-        if( p%balance > 0 )then
+        if( params_glob%balance > 0 )then
             cnt = 0
-            do iptcl=1,p%nptcls
+            do iptcl=1,params_glob%nptcls
                 if( included(iptcl) )then
                     cnt = cnt + 1
-                   ! call read_img( b, p, iptcl )
                     call read_img( iptcl )
-                    call b%img%write('aff_prop_selected_imgs'//p%ext, cnt)
+                    call build_glob%img%write('aff_prop_selected_imgs'//params_glob%ext, cnt)
                 endif
             enddo
             write(*,'(i5,1x,a)') cnt, 'SELECTED CLASS AVERAGES WRITTEN TO FILE: aff_prop_selected_imgs.ext'
@@ -230,33 +228,31 @@ contains
         type(polarizer), allocatable :: match_imgs(:), mirr_match_imgs(:)
         integer :: iptcl
         ! create the polarft_corrcalc object
-        call pftcc%new(p%nptcls)
+        call pftcc%new(params_glob%nptcls)
         ! prepare the polarizer images
-        call b%img_match%init_polarizer(pftcc, p%alpha)
-        allocate(match_imgs(p%nptcls), mirr_match_imgs(p%nptcls))
-        do iptcl=1,p%nptcls
-            call match_imgs(iptcl)%new([p%boxmatch, p%boxmatch, 1], p%smpd, wthreads=.false.)
-            call match_imgs(iptcl)%copy_polarizer(b%img_match)
-            call mirr_match_imgs(iptcl)%new([p%boxmatch, p%boxmatch, 1], p%smpd, wthreads=.false.)
-            call mirr_match_imgs(iptcl)%copy_polarizer(b%img_match)
+        call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
+        allocate(match_imgs(params_glob%nptcls), mirr_match_imgs(params_glob%nptcls))
+        do iptcl=1,params_glob%nptcls
+            call match_imgs(iptcl)%new([params_glob%boxmatch, params_glob%boxmatch, 1], params_glob%smpd, wthreads=.false.)
+            call match_imgs(iptcl)%copy_polarizer(build_glob%img_match)
+            call mirr_match_imgs(iptcl)%new([params_glob%boxmatch, params_glob%boxmatch, 1], params_glob%smpd, wthreads=.false.)
+            call mirr_match_imgs(iptcl)%copy_polarizer(build_glob%img_match)
         end do
         ! prepare image batch
-        !call prepimgbatch(b, p, p%nptcls)
-        !call read_imgbatch( b, p, [1,p%nptcls])
-        call prepimgbatch( p%nptcls)
-        call read_imgbatch( [1,p%nptcls])
+        call prepimgbatch( params_glob%nptcls)
+        call read_imgbatch( [1,params_glob%nptcls])
         ! PREPARATION OF PFTS IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(iptcl)&
         !$omp schedule(static) proc_bind(close)
-        do iptcl=1,p%nptcls
+        do iptcl=1,params_glob%nptcls
             ! clip image if needed
-            call b%imgbatch(iptcl)%clip(match_imgs(iptcl))
+            call build_glob%imgbatch(iptcl)%clip(match_imgs(iptcl))
             ! apply mask
-            if( p%l_innermsk )then
-                call match_imgs(iptcl)%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            if( params_glob%l_innermsk )then
+                call match_imgs(iptcl)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
             else
-                call match_imgs(iptcl)%mask(p%msk, 'soft')
+                call match_imgs(iptcl)%mask(params_glob%msk, 'soft')
             endif
             ! mirror
             call mirr_match_imgs(iptcl)%set_rmat( match_imgs(iptcl)%get_rmat() )
@@ -274,14 +270,14 @@ contains
         !$omp end parallel do
 
         ! DESTRUCT
-        do iptcl=1,p%nptcls
+        do iptcl=1,params_glob%nptcls
             call mirr_match_imgs(iptcl)%kill_polarizer
             call mirr_match_imgs(iptcl)%kill
             call match_imgs(iptcl)%kill_polarizer
             call match_imgs(iptcl)%kill
-            call b%imgbatch(iptcl)%kill
+            call build_glob%imgbatch(iptcl)%kill
         end do
-        deallocate(match_imgs, mirr_match_imgs, b%imgbatch)
+        deallocate(match_imgs, mirr_match_imgs, build_glob%imgbatch)
 
     end subroutine preppftcc4cluster
 

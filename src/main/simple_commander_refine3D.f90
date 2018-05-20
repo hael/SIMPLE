@@ -1,7 +1,8 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_refine3D
 include 'simple_lib.f08'
-use simple_singletons
+use simple_parameters,     only: parameters
+use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_ori,            only: ori
 use simple_oris,           only: oris
@@ -42,10 +43,11 @@ contains
     subroutine exec_npeaks( self, cline )
         class(npeaks_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
         integer :: npeaks
-        call init_params(cline) ! parameters generated
-        call b%build_general_tbox( cline, do3d=.false.)
-        npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        npeaks = min(10,build%e%find_npeaks(params%lp, params%moldiam))
         write(*,'(A,1X,I4)') '>>> NPEAKS:', npeaks
         ! end gracefully
         call simple_end('**** SIMPLE_NPEAKS NORMAL STOP ****')
@@ -54,15 +56,16 @@ contains
     subroutine exec_nspace(self,cline)
         class(nspace_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(oris)   :: o
-        real         :: ares
-        integer      :: i
-        call init_params(cline) ! parameters generated
+        type(parameters) :: params
+        type(oris)       :: o
+        real             :: ares
+        integer          :: i
+        params = parameters(cline)
         do i=500,5000,500
             o = oris(i)
             call o%spiral
             ares = o%find_angres()
-            write(*,'(A,1X,I7,1X,A,1X,F5.2)') 'NR OF PROJDIRS:', i, 'RESOLUTION:', resang(ares, p%moldiam)
+            write(*,'(A,1X,I7,1X,A,1X,F5.2)') 'NR OF PROJDIRS:', i, 'RESOLUTION:', resang(ares, params%moldiam)
         end do
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
@@ -71,15 +74,15 @@ contains
         use simple_qsys_funs,      only: qsys_job_finished
         class(refine3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
+        type(parameters)   :: params
+        type(builder)      :: build
         integer, parameter :: MAXIMGS=1000
-        call init_params(cline)            ! parameters generated
-        call b%build_general_tbox( cline)  ! general objects built
-        call b%build_strategy3D_tbox()     ! strategy3D objects built
+        call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! generate the random model
         if( cline%defined('nran') )then
-            call gen_random_model( p%nran )
+            call gen_random_model( params%nran )
         else
-            if( p%nptcls > MAXIMGS )then
+            if( params%nptcls > MAXIMGS )then
                 call gen_random_model( MAXIMGS )
             else
                 call gen_random_model()
@@ -106,18 +109,18 @@ contains
 
                 ! init volumes
                 call preprecvols()
-                if( trim(p%refine).eq.'tseries' )then
-                    call b%a%spiral
+                if( trim(params%refine).eq.'tseries' )then
+                    call build%a%spiral
                 else
-                    call b%a%rnd_oris
-                    call b%a%zero_shifts
+                    call build%a%rnd_oris
+                    call build%a%zero_shifts
                 endif
-                p%vols(1) = 'startvol'//p%ext
-                nsamp = p%top - p%fromp + 1
+                params%vols(1) = 'startvol'//params%ext
+                nsamp = params%top - params%fromp + 1
                 if( present(nsamp_in) ) nsamp = nsamp_in
                 allocate( sample(nsamp) )
                 if( present(nsamp_in) )then
-                    rt = ran_tabu(p%top - p%fromp + 1)
+                    rt = ran_tabu(params%top - params%fromp + 1)
                     call rt%ne_ran_iarr(sample)
                     call rt%kill
                 else
@@ -125,24 +128,24 @@ contains
                 endif
                 write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
                 ! make the gridding prepper
-                kbwin = b%recvols(1)%get_kbwin()
-                call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+                kbwin = build%recvols(1)%get_kbwin()
+                call gridprep%new(build%img, kbwin, [params%boxpd,params%boxpd,1])
                 do i=1,nsamp
                     call progress(i, nsamp)
-                    orientation = b%a%get_ori(sample(i) + p%fromp - 1)
-                    ctfvars     = b%spproj%get_ctfparams(p%oritype, sample(i) + p%fromp - 1)
-                    call read_img_and_norm( sample(i) + p%fromp - 1 )
-                    call gridprep%prep(b%img, b%img_pad)
-                    call b%recvols(1)%insert_fplane(b%se, orientation, ctfvars, b%img_pad, pwght=1.0)
+                    orientation = build%a%get_ori(sample(i) + params%fromp - 1)
+                    ctfvars     = build%spproj%get_ctfparams(params%oritype, sample(i) + params%fromp - 1)
+                    call read_img_and_norm( sample(i) + params%fromp - 1 )
+                    call gridprep%prep(build%img, build%img_pad)
+                    call build%recvols(1)%insert_fplane(build%se, orientation, ctfvars, build%img_pad, pwght=1.0)
                 end do
                 deallocate(sample)
                 call norm_struct_facts()
                 call killrecvols()
-                if( p%part .ne. 1 )then
+                if( params%part .ne. 1 )then
                     ! so random oris only written once in distributed mode
                 else
                     ! update the spproj on disk
-                    call b%spproj%write_segment_inside(p%oritype)
+                    call build%spproj%write_segment_inside(params%oritype)
                 endif
             end subroutine gen_random_model
 
@@ -152,50 +155,43 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        integer                    :: i, startit
-        logical                    :: converged
-        real                       :: corr, corr_prev
-        converged  = .false.
-        call init_params(cline) ! parameters generated
-        if( p%neigh.eq.'yes' .and. .not. cline%defined('oritab') )then
-            stop 'need oritab input for execution of refine3D with this refine mode'
-        endif
-        call b%build_general_tbox(cline)   ! general objects built
-        if( .not. cline%defined('eo') ) p%eo = 'no' ! default
-        if( cline%defined('lp') .or. cline%defined('find').or. p%eo .ne. 'no')then
+        type(parameters) :: params
+        type(builder)    :: build
+        integer :: i, startit
+        logical :: converged
+        real    :: corr, corr_prev
+        call build%init_params_and_build_strategy3D_tbox(cline,params)
+        if( cline%defined('lp') .or. cline%defined('find').or. params%eo .ne. 'no')then
             ! alles ok!
         else
            stop 'need a starting low-pass limit (set lp or find)!'
         endif
-        call b%build_strategy3D_tbox() ! strategy3D objects built
         startit = 1
-        if( cline%defined('startit') )startit = p%startit
-        if( startit == 1 )call b%a%clean_updatecnt
-        if( p%l_distr_exec )then
+        if( cline%defined('startit') )startit = params%startit
+        if( startit == 1 ) call build%a%clean_updatecnt
+        converged  = .false.
+        if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            if( cline%defined('find') )then
-                p%lp = calc_lowpass_lim( p%find, p%boxmatch, p%smpd )
-            endif
             call refine3D_exec( cline, startit, converged) ! partition or not, depending on 'part'
         else
-            p%find = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
+            params%find = calc_fourier_index( params%lp, params%boxmatch, params%smpd )
             ! init extremal dynamics
             if( cline%defined('extr_iter') )then
                 ! all is well
             else
-                p%extr_iter = startit
+                params%extr_iter = startit
             endif
             corr = -1
-            do i=startit,p%maxits
+            do i=startit,params%maxits
                 call refine3D_exec( cline, i, converged)
                 ! updates extremal iteration
-                p%extr_iter = p%extr_iter + 1
-                if( .not. p%l_distr_exec .and. p%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
+                params%extr_iter = params%extr_iter + 1
+                if( .not. params%l_distr_exec .and. params%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
-                    corr      = b%a%get_avg('corr')
+                    corr      = build%a%get_avg('corr')
                     if( i > 1 .and. corr <= corr_prev )then
-                        p%szsn = min(SZSN_MAX,p%szsn + SZSN_STEP)
+                        params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
                     endif
                 endif
                 if( converged )exit
@@ -209,38 +205,39 @@ contains
         use simple_convergence, only: convergence
         class(check_3Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
+        type(parameters)  :: params
+        type(builder)     :: build
         type(convergence) :: conv
         real, allocatable :: maplp(:)
         integer           :: istate, loc(1)
         logical           :: limset, converged, update_res
-        call init_params(cline)                         ! parameters generated
-        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         limset = .false. ;  update_res = .false.
-        if( p%eo .ne. 'no' )then
-            allocate( maplp(p%nstates), stat=alloc_stat)
+        if( params%eo .ne. 'no' )then
+            allocate( maplp(params%nstates), stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In simple_commander_refine3D:: exec_check3D_conv", alloc_stat)
             maplp = 0.
-            do istate=1,p%nstates
-                if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state
-                p%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
-                if( file_exists(p%fsc) )then
-                    b%fsc(istate,:) = file2rarr(p%fsc)
-                    maplp(istate)   = max(b%img%get_lp(get_lplim_at_corr(b%fsc(istate,:),p%lplim_crit)),2.*p%smpd)
+            do istate=1,params%nstates
+                if( build%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state
+                params%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
+                if( file_exists(params%fsc) )then
+                    build%fsc(istate,:) = file2rarr(params%fsc)
+                    maplp(istate)   = max(build%img%get_lp(get_lplim_at_corr(build%fsc(istate,:),params%lplim_crit)),2.*params%smpd)
                 else
-                    write(*,*) 'Tried to check the fsc file: ', trim(p%fsc)
+                    write(*,*) 'Tried to check the fsc file: ', trim(params%fsc)
                     stop 'but it does not exist!'
                 endif
             enddo
             loc     = maxloc( maplp )
-            p%state = loc(1)            ! state with worst low-pass
-            p%lp    = maplp( p%state )  ! worst lp
-            p%fsc   = 'fsc_state'//int2str_pad(p%state,2)//'.bin'
+            params%state = loc(1)            ! state with worst low-pass
+            params%lp    = maplp( params%state )  ! worst lp
+            params%fsc   = 'fsc_state'//int2str_pad(params%state,2)//'.bin'
             deallocate(maplp)
             limset = .true.
         endif
         ! Let find override the command line input lp (if given)
         if( .not. limset .and. cline%defined('find') )then
-            p%lp = b%img%get_lp(p%find)
+            params%lp = build%img%get_lp(params%find)
             limset = .true.
         endif
         ! Method for setting lp with lowest priority is lp on the command line
@@ -256,13 +253,13 @@ contains
         if( cline%defined('update_res') )then
             update_res = .false.
             if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
-            if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(p%refine,'cluster') )then
+            if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(params%refine,'cluster') )then
                 converged = conv%check_conv_cluster(cline)
             else
                 converged = conv%check_conv3D(cline)
             endif
         else
-            select case(p%refine)
+            select case(params%refine)
             case('cluster','clustersym')
                     converged = conv%check_conv_cluster(cline)
                 case DEFAULT
@@ -271,8 +268,8 @@ contains
         endif
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
-        if( p%l_doshift )then
-            call cline%set('trs', p%trs)        ! activates shift search
+        if( params%l_doshift )then
+            call cline%set('trs', params%trs)        ! activates shift search
         endif
         if( converged )then
             call cline%set('converged', 'yes')
@@ -286,7 +283,7 @@ contains
         endif
         call cline%set('frac', conv%get('frac'))
         ! end gracefully
-        call b%kill_general_tbox
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK_3DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_3Dconv
 

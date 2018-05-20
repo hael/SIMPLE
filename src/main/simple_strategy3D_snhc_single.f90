@@ -3,7 +3,7 @@ module simple_strategy3D_snhc_single
 include 'simple_lib.f08'
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_singletons
+use simple_builder,         only: build_glob
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
 implicit none
@@ -38,7 +38,7 @@ contains
         class(strategy3D_snhc_single), intent(inout) :: self
         integer :: iref, isample, loc(1), inpl_ind
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
-        if( b%a%get_state(self%s%iptcl) > 0 )then
+        if( build_glob%a%get_state(self%s%iptcl) > 0 )then
             ! initialize
             call self%s%prep4srch
             self%s%nbetter    = 0
@@ -56,7 +56,7 @@ contains
             ! output
             call self%oris_assign
         else
-            call b%a%reject(self%s%iptcl)
+            call build_glob%a%reject(self%s%iptcl)
         endif
         DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: FINISHED SEARCH'
 
@@ -96,34 +96,34 @@ contains
         ! B factor
         if( self%s%pftcc_ptr%objfun_is_ccres() )then
             bfac  = self%s%pftcc_ptr%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
-            call b%a%set(self%s%iptcl, 'bfac',  bfac )
+            call build_glob%a%set(self%s%iptcl, 'bfac',  bfac )
         endif
         ! angular distances
-        call b%se%sym_dists( b%a%get_ori(self%s%iptcl),&
+        call build_glob%se%sym_dists( build_glob%a%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(1), osym, euldist, dist_inpl)
         ! fraction search space
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
         ! set the overlaps
-        call b%a%set(self%s%iptcl, 'mi_proj',   0.)
-        call b%a%set(self%s%iptcl, 'mi_inpl',   0.)
-        call b%a%set(self%s%iptcl, 'mi_state',  1.)
-        call b%a%set(self%s%iptcl, 'mi_joint',  0.)
-        if( b%a%isthere(self%s%iptcl,'dist') )then
-            call b%a%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*b%a%get(self%s%iptcl,'dist'))
+        call build_glob%a%set(self%s%iptcl, 'mi_proj',   0.)
+        call build_glob%a%set(self%s%iptcl, 'mi_inpl',   0.)
+        call build_glob%a%set(self%s%iptcl, 'mi_state',  1.)
+        call build_glob%a%set(self%s%iptcl, 'mi_joint',  0.)
+        if( build_glob%a%isthere(self%s%iptcl,'dist') )then
+            call build_glob%a%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%a%get(self%s%iptcl,'dist'))
         else
-            call b%a%set(self%s%iptcl, 'dist', euldist)
+            call build_glob%a%set(self%s%iptcl, 'dist', euldist)
         endif
-        call b%a%set(self%s%iptcl, 'dist_inpl', dist_inpl)
+        call build_glob%a%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call b%a%set(self%s%iptcl, 'state',     1.)
-        call b%a%set(self%s%iptcl, 'frac',      frac)
-        call b%a%set(self%s%iptcl, 'corr',      corr)
-        call b%a%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call b%a%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
-        call b%a%set(self%s%iptcl, 'sdev',      0.)
-        call b%a%set(self%s%iptcl, 'npeaks',    1.)
-        call b%a%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
-        call b%a%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
+        call build_glob%a%set(self%s%iptcl, 'state',     1.)
+        call build_glob%a%set(self%s%iptcl, 'frac',      frac)
+        call build_glob%a%set(self%s%iptcl, 'corr',      corr)
+        call build_glob%a%set(self%s%iptcl, 'specscore', self%s%specscore)
+        call build_glob%a%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
+        call build_glob%a%set(self%s%iptcl, 'sdev',      0.)
+        call build_glob%a%set(self%s%iptcl, 'npeaks',    1.)
+        call build_glob%a%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call build_glob%a%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single
 

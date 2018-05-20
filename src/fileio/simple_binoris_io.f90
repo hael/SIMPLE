@@ -1,9 +1,7 @@
 module simple_binoris_io
 include 'simple_lib.f08'
 use simple_oris,       only: oris
-!use simple_fileio,     only: file_exists, nlines,fname2format
 use simple_sp_project, only: sp_project
-use simple_params,  only: p
 implicit none
 
 contains
@@ -48,12 +46,9 @@ contains
         end select
     end subroutine binread_ctfparams_state_eo
 
-    !function binread_nlines(  fname ) result( nl )
     function binread_nlines( fname ) result( nl )
-
-       ! use simple_singletons, only: p
-        use simple_binoris, only: binoris
-        ! class(params),    intent(in) :: p
+        use simple_binoris,    only: binoris
+        use simple_parameters, only: params_glob
         character(len=*), intent(in) :: fname
         integer       :: nl
         type(binoris) :: bos
@@ -64,7 +59,7 @@ contains
         select case(fname2format(fname))
             case('O')
                 call bos%open(fname)
-                nl = bos%get_n_records(p%spproj_a_seg)
+                nl = bos%get_n_records(params_glob%spproj_a_seg)
                 call bos%close
             case('T')
                 nl = nlines(fname)

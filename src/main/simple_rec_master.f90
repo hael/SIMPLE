@@ -1,8 +1,9 @@
 ! 3D reconstruction - master module
 module simple_rec_master
 include 'simple_lib.f08'
-use simple_singletons
-use simple_qsys_funs, only: qsys_job_finished
+use simple_builder,    only: build_glob
+use simple_parameters, only: params_glob
+use simple_qsys_funs,  only: qsys_job_finished
 implicit none
 
 public :: exec_rec_master
@@ -12,8 +13,8 @@ private
 contains
 
     subroutine exec_rec_master(  fbody_in )
-        character(len=*), optional, intent(in)    :: fbody_in
-        select case(p%eo)
+        character(len=*), optional, intent(in) :: fbody_in
+        select case(params_glob%eo)
             case( 'yes', 'aniso' )
                 call exec_eorec_distr( fbody_in )
             case( 'no' )
@@ -24,38 +25,38 @@ contains
     end subroutine exec_rec_master
 
     subroutine exec_rec( fbody_in )
-        character(len=*), optional, intent(in)    :: fbody_in
+        character(len=*), optional, intent(in) :: fbody_in
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
         integer :: s
-        ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd)
-        do s=1,p%nstates
-            if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
-            if( p%l_distr_exec )then ! embarrasingly parallel rec
+        ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
+        do s=1,params_glob%nstates
+            if( build_glob%a%get_pop(s, 'state') == 0 ) cycle ! empty state
+            if( params_glob%l_distr_exec )then ! embarrasingly parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//&
-                    &'_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+                    &'_state'//int2str_pad(s,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen))
                 else
                     allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
-                    &'_part'//int2str_pad(p%part,p%numlen))
+                    &'_part'//int2str_pad(params_glob%part,params_glob%numlen))
                 endif
-                p%vols(s) = fbody//p%ext
-                rho_name      = 'rho_'//fbody//p%ext
-                call b%recvol%rec( b%spproj, b%a, b%se, s, part=p%part)
-                call b%recvol%compress_exp
-                call b%recvol%write(p%vols(s), del_if_exists=.true.)
-                call b%recvol%write_rho(trim(rho_name))
+                params_glob%vols(s) = fbody//params_glob%ext
+                rho_name      = 'rho_'//fbody//params_glob%ext
+                call build_glob%recvol%rec( build_glob%spproj, build_glob%a, build_glob%se, s, part=params_glob%part)
+                call build_glob%recvol%compress_exp
+                call build_glob%recvol%write(params_glob%vols(s), del_if_exists=.true.)
+                call build_glob%recvol%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
                 else
                     allocate(fbody, source='recvol_state')
                 endif
-                p%vols(s) = fbody//int2str_pad(s,2)//p%ext
-                call b%recvol%rec( b%spproj, b%a, b%se, s)
-                call b%recvol%clip(b%vol)
-                call b%vol%write(p%vols(s), del_if_exists=.true.)
+                params_glob%vols(s) = fbody//int2str_pad(s,2)//params_glob%ext
+                call build_glob%recvol%rec( build_glob%spproj, build_glob%a, build_glob%se, s)
+                call build_glob%recvol%clip(build_glob%vol)
+                call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
             endif
             deallocate(fbody)
         end do
@@ -67,18 +68,18 @@ contains
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody, fname
         integer :: s
-        if( .not. p%l_distr_exec ) stop 'eo .ne. no not supported here, use simple_distr_exec!'
-        ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd)
-        do s=1,p%nstates
+        if( .not. params_glob%l_distr_exec ) stop 'eo .ne. no not supported here, use simple_distr_exec!'
+        ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
+        do s=1,params_glob%nstates
             DebugPrint  'processing state: ', s
-            if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
+            if( build_glob%a%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( present(fbody_in) )then
                 allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
             else
                 allocate(fbody, source='recvol_state')
             endif
-            call b%eorecvol%eorec_distr( b%spproj, b%a, b%se, s, fbody=fbody)
+            call build_glob%eorecvol%eorec_distr( build_glob%spproj, build_glob%a, build_glob%se, s, fbody=fbody)
             deallocate(fbody)
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')

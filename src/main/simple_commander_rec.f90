@@ -1,11 +1,12 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 include 'simple_lib.f08'
-use simple_singletons
+use simple_parameters,          only: parameters
+use simple_builder,             only: builder
 use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base
 use simple_projection_frcs,     only: projection_frcs
-use simple_strategy2D3D_common, only:  gen_projection_frcs
+use simple_strategy2D3D_common, only: gen_projection_frcs
 implicit none
 
 public :: reconstruct3D_commander
@@ -34,13 +35,14 @@ contains
         use simple_rec_master, only: exec_rec_master
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        call init_params(cline)                   ! parameters generated
-        call b%build_general_tbox( cline) ! general objects built
-        select case(p%eo)
+        type(parameters) :: params
+        type(builder)    :: build
+        call build%init_params_and_build_general_tbox(cline, params)
+        select case(params%eo)
             case( 'yes', 'aniso' )
-                call b%build_rec_eo_tbox() ! eo_reconstruction objs built
+                call build%build_rec_eo_tbox(params) ! eo_reconstruction objs built
             case( 'no' )
-                call b%build_rec_tbox()    ! reconstruction objects built
+                call build%build_rec_tbox(params)    ! reconstruction objects built
             case DEFAULT
                 stop 'unknonw eo flag; simple_commander_rec :: exec_reconstruct3D'
         end select
@@ -55,6 +57,8 @@ contains
         use simple_filterer,         only: gen_anisotropic_optlp
         class(volassemble_eo_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
+        type(parameters)              :: params
+        type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
         character(len=:), allocatable :: finished_fname, recname, volname
         character(len=32)             :: eonames(2), resmskname, benchfname
@@ -72,19 +76,18 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
-        call init_params(cline)            ! parameters generated
-        call b%build_general_tbox(cline)   ! general objects built
-        call b%build_rec_eo_tbox()         ! reconstruction toolbox built
-        call b%eorecvol%kill_exp           ! reduced meory usage
-        allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
+        call build%init_params_and_build_general_tbox(cline,params)
+        call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
+        call build%eorecvol%kill_exp         ! reduced meory usage
+        allocate(res05s(params%nstates), res0143s(params%nstates), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_eo_volassemble res05s res0143s",alloc_stat)
         res0143s = 0.
         res05s   = 0.
-        ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call eorecvol_read%new( b%spproj)
+        ! rebuild build%vol according to box size (beacuse it is otherwise boxmatch)
+        call build%vol%new([params%box,params%box,params%box], params%smpd)
+        call eorecvol_read%new( build%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage
-        n = p%nstates*p%nparts
+        n = params%nstates*params%nparts
         if( L_BENCH )then
             ! end of init
             rt_init = toc(t_init)
@@ -97,76 +100,76 @@ contains
             rt_sampl_dens_correct_sum  = 0.
             rt_eoavg                   = 0.
         endif
-        do ss=1,p%nstates
+        do ss=1,params%nstates
             if( cline%defined('state') )then
                 s     = 1        ! index in reconstruct3D
-                state = p%state  ! actual state
+                state = params%state  ! actual state
             else
                 s     = ss
                 state = ss
             endif
             if( L_BENCH ) t_assemble = tic()
-            call b%eorecvol%reset_all
+            call build%eorecvol%reset_all
             ! assemble volumes
-            do part=1,p%nparts
-                call eorecvol_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
+            do part=1,params%nparts
+                call eorecvol_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
                 ! sum the Fourier coefficients
-                call b%eorecvol%sum_reduce(eorecvol_read)
+                call build%eorecvol%sum_reduce(eorecvol_read)
             end do
             if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
             allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
-            allocate(volname, source=recname//p%ext)
-            eonames(1) = trim(recname)//'_even'//p%ext
-            eonames(2) = trim(recname)//'_odd'//p%ext
-            resmskname = 'resmask'//p%ext
+            allocate(volname, source=recname//params%ext)
+            eonames(1) = trim(recname)//'_even'//params%ext
+            eonames(2) = trim(recname)//'_odd'//params%ext
+            resmskname = 'resmask'//params%ext
             if( L_BENCH ) t_sum_eos = tic()
-            call b%eorecvol%sum_eos
+            call build%eorecvol%sum_eos
             if( L_BENCH )then
                 rt_sum_eos               = rt_sum_eos + toc(t_sum_eos)
                 t_sampl_dens_correct_eos = tic()
             endif
-            call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
+            call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
             if( L_BENCH )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
                 t_gen_projection_frcs     = tic()
             endif
-            call gen_projection_frcs( cline, eonames(1), eonames(2), resmskname, s, b%projfrcs)
+            call gen_projection_frcs( cline, eonames(1), eonames(2), resmskname, s, build%projfrcs)
             if( L_BENCH ) rt_gen_projection_frcs = rt_gen_projection_frcs + toc(t_gen_projection_frcs)
-            call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
+            call build%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
             if( L_BENCH ) t_gen_anisotropic_optlp = tic()
-            call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%l_phaseplate)
+            call gen_anisotropic_optlp(build%vol2, build%projfrcs, build%e_bal, s, params%pgrp, params%hpind_fsc, params%l_phaseplate)
             if( L_BENCH ) rt_gen_anisotropic_optlp = rt_gen_anisotropic_optlp + toc(t_gen_anisotropic_optlp)
-            call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
-            call b%eorecvol%get_res(res05s(s), res0143s(s))
+            call build%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//params%ext)
+            call build%eorecvol%get_res(res05s(s), res0143s(s))
             if( L_BENCH ) t_sampl_dens_correct_sum = tic()
-            call b%eorecvol%sampl_dens_correct_sum( b%vol )
+            call build%eorecvol%sampl_dens_correct_sum( build%vol )
             if( L_BENCH ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
-            call b%vol%write( volname, del_if_exists=.true. )
+            call build%vol%write( volname, del_if_exists=.true. )
             call wait_for_closure( volname )
             ! need to put the sum back at lowres for the eo pairs
             if( L_BENCH ) t_eoavg = tic()
-            call b%vol%fft()
-            call b%vol2%zero_and_unflag_ft
-            call b%vol2%read(eonames(1))
-            call b%vol2%fft()
-            call b%vol2%insert_lowres(b%vol, find4eoavg)
-            call b%vol2%ifft()
-            call b%vol2%write(eonames(1), del_if_exists=.true.)
-            call b%vol2%zero_and_unflag_ft
-            call b%vol2%read(eonames(2))
-            call b%vol2%fft()
-            call b%vol2%insert_lowres(b%vol, find4eoavg)
-            call b%vol2%ifft()
-            call b%vol2%write(eonames(2), del_if_exists=.true.)
+            call build%vol%fft()
+            call build%vol2%zero_and_unflag_ft
+            call build%vol2%read(eonames(1))
+            call build%vol2%fft()
+            call build%vol2%insert_lowres(build%vol, find4eoavg)
+            call build%vol2%ifft()
+            call build%vol2%write(eonames(1), del_if_exists=.true.)
+            call build%vol2%zero_and_unflag_ft
+            call build%vol2%read(eonames(2))
+            call build%vol2%fft()
+            call build%vol2%insert_lowres(build%vol, find4eoavg)
+            call build%vol2%ifft()
+            call build%vol2%write(eonames(2), del_if_exists=.true.)
             if( L_BENCH ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             deallocate(recname, volname)
             if( cline%defined('state') )exit
         end do
         ! set the resolution limit according to the worst resolved model
         res  = maxval(res0143s)
-        p%lp = max( p%lpstop,res )
-        write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', p%lp
+        params%lp = max( params%lpstop,res )
+        write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', params%lp
         call eorecvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE_EO NORMAL STOP ****', print_simple=.false.)
@@ -214,36 +217,35 @@ contains
         class(volassemble_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fbody, finished_fname
+        type(parameters)              :: params
+        type(builder)                 :: build
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state
         type(reconstructor)           :: recvol_read
-        call init_params(cline)           ! parameters generated
-        call b%build_general_tbox( cline) ! general objects built
-        call b%build_rec_tbox()           ! reconstruction toolbox built
-        ! rebuild b%vol according to box size (because it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call recvol_read%alloc_rho( b%spproj)
-        do ss=1,p%nstates
+        call build%init_params_and_build_general_tbox(cline,params,boxmatch_off=.true.)
+        call build%build_rec_tbox(params) ! reconstruction toolbox built
+        call recvol_read%new([params%boxpd,params%boxpd,params%boxpd], params%smpd)
+        call recvol_read%alloc_rho( build%spproj)
+        do ss=1,params%nstates
             if( cline%defined('state') )then
                 s     = 1        ! index in reconstruct3D
-                state = p%state  ! actual state
+                state = params%state  ! actual state
             else
                 s     = ss
                 state = ss
             endif
-            call b%recvol%reset
-            do part=1,p%nparts
-                allocate(fbody, source=trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
-                p%vols(s) = fbody//p%ext
-                rho_name      = 'rho_'//fbody//p%ext
-                call assemble(p%vols(s), trim(rho_name))
+            call build%recvol%reset
+            do part=1,params%nparts
+                allocate(fbody, source=trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
+                params%vols(s) = fbody//params%ext
+                rho_name      = 'rho_'//fbody//params%ext
+                call assemble(params%vols(s), trim(rho_name))
                 deallocate(fbody)
             end do
-            if( p%nstates == 1 .and. cline%defined('outvol') )then
-                recvolname = trim(p%outvol)
+            if( params%nstates == 1 .and. cline%defined('outvol') )then
+                recvolname = trim(params%outvol)
             else
-                recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
+                recvolname = 'recvol_state'//int2str_pad(state,2)//params%ext
             endif
             call correct_for_sampling_density(trim(recvolname))
             if( cline%defined('state') )exit
@@ -271,7 +273,7 @@ contains
                 if( all(here) )then
                     call recvol_read%read(recnam)
                     call recvol_read%read_rho(kernam)
-                    call b%recvol%sum_reduce(recvol_read)
+                    call build%recvol%sum_reduce(recvol_read)
                 else
                     if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
                     if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
@@ -281,10 +283,10 @@ contains
 
             subroutine correct_for_sampling_density( recname )
                 character(len=*), intent(in) :: recname
-                call b%recvol%sampl_dens_correct()
-                call b%recvol%ifft()
-                call b%recvol%clip(b%vol)
-                call b%vol%write(recname, del_if_exists=.true.)
+                call build%recvol%sampl_dens_correct()
+                call build%recvol%ifft()
+                call build%recvol%clip(build%vol)
+                call build%vol%write(recname, del_if_exists=.true.)
             end subroutine correct_for_sampling_density
 
     end subroutine exec_volassemble

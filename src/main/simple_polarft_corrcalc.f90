@@ -4,7 +4,7 @@ module simple_polarft_corrcalc
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_fftw3
-use simple_params, only: p
+use simple_parameters, only: params_glob
 implicit none
 
 public :: polarft_corrcalc
@@ -193,8 +193,8 @@ contains
     subroutine new( self, nrefs, ptcl_mask, eoarr )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs
-        logical, optional,       intent(in)    :: ptcl_mask(p%fromp:p%top)
-        integer, optional,       intent(in)    :: eoarr(p%fromp:p%top)
+        logical, optional,       intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
+        integer, optional,       intent(in)    :: eoarr(params_glob%fromp:params_glob%top)
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer             :: local_stat,irot, k, ithr, i, ik, cnt
         logical             :: even_dims, test(2)
@@ -203,23 +203,23 @@ contains
         ! kill possibly pre-existing object
         call self%kill
         ! error check
-        if( p%kfromto(2) - p%kfromto(1) <= 2 )then
-            write(*,*) 'p%kfromto: ', p%kfromto(1), p%kfromto(2)
+        if( params_glob%kfromto(2) - params_glob%kfromto(1) <= 2 )then
+            write(*,*) 'params_glob%kfromto: ', params_glob%kfromto(1), params_glob%kfromto(2)
             call simple_stop( 'resolution range too narrow; new; simple_polarft_corrcalc')
         endif
-        if( p%ring2 < 1 )then
-            write(*,*) 'p%ring2: ', p%ring2
-            call simple_stop ( 'p%ring2 must be > 0; new; simple_polarft_corrcalc')
+        if( params_glob%ring2 < 1 )then
+            write(*,*) 'params_glob%ring2: ', params_glob%ring2
+            call simple_stop ( 'params_glob%ring2 must be > 0; new; simple_polarft_corrcalc')
         endif
-        if( p%top - p%fromp + 1 < 1 )then
-            write(*,*) 'pfromto: ', p%fromp, p%top
+        if( params_glob%top - params_glob%fromp + 1 < 1 )then
+            write(*,*) 'pfromto: ', params_glob%fromp, params_glob%top
             call simple_stop ('nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc')
         endif
         if( nrefs < 1 )then
             write(*,*) 'nrefs: ', nrefs
             call simple_stop ('nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc')
         endif
-        self%ldim = [p%boxmatch,p%boxmatch,1] !< logical dimensions of original cartesian image
+        self%ldim = [params_glob%boxmatch,params_glob%boxmatch,1] !< logical dimensions of original cartesian image
         test      = .false.
         test(1)   = is_even(self%ldim(1))
         test(2)   = is_even(self%ldim(2))
@@ -229,26 +229,26 @@ contains
             call simple_stop ('only even logical dims supported; new; simple_polarft_corrcalc')
         endif
         ! set constants
-        self%pfromto     = [p%fromp,p%top]                       !< from/to particle indices (in parallel execution)
+        self%pfromto     = [params_glob%fromp,params_glob%top]                       !< from/to particle indices (in parallel execution)
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
-            self%nptcls  = p%top - p%fromp + 1                   !< the total number of particles in partition
+            self%nptcls  = params_glob%top - params_glob%fromp + 1                   !< the total number of particles in partition
         endif
         self%nrefs       = nrefs                                 !< the number of references (logically indexded [1,nrefs])
-        self%ring2       = p%ring2                               !< radius of molecule
-        self%nrots       = round2even(twopi * real(p%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
+        self%ring2       = params_glob%ring2                               !< radius of molecule
+        self%nrots       = round2even(twopi * real(params_glob%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
         self%pftsz       = self%nrots / 2                        !< size of reference (nrots/2) (number of vectors used for matching)
-        self%smpd        = p%smpd                                !< sampling distance
-        self%kfromto     = p%kfromto                             !< Fourier index range
+        self%smpd        = params_glob%smpd                                !< sampling distance
+        self%kfromto     = params_glob%kfromto                             !< Fourier index range
         self%nk          = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
-        self%nthr        = p%nthr                                !< # OpenMP threads
+        self%nthr        = params_glob%nthr                                !< # OpenMP threads
         ! take care of objective function flags
         allocate(self%inv_resarrsq(self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
         if(alloc_stat/=0)call allocchk("Inv_resarrsq failed allocation; simple_polarft_corrcalc ; new")
         self%inv_resarrsq = self%smpd * real(self%ldim(1)) / real((/(k,k=self%kfromto(1),self%kfromto(2))/))
         self%inv_resarrsq = -1. / (4.*self%inv_resarrsq*self%inv_resarrsq)
-        select case(trim(p%objfun))
+        select case(trim(params_glob%objfun))
             case('cc')
                 self%l_cc_objfun = .true.
             case('ccres')
@@ -258,7 +258,7 @@ contains
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
             case DEFAULT
-                write(*,*) 'unsupported objective function: ', trim(p%objfun)
+                write(*,*) 'unsupported objective function: ', trim(params_glob%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'
         end select
         ! generate polar coordinates & eo assignment
@@ -275,11 +275,11 @@ contains
             self%angtab(irot) = rad2deg(self%angtab(irot)) ! angle (in degrees)
         end do
         ! index translation table
-        allocate( self%pinds(p%fromp:p%top), source=0, stat=alloc_stat)
+        allocate( self%pinds(params_glob%fromp:params_glob%top), source=0, stat=alloc_stat)
         if(alloc_stat/=0)call allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 2')
         if( present(ptcl_mask) )then
             cnt = 0
-            do i=p%fromp,p%top
+            do i=params_glob%fromp,params_glob%top
                 if( ptcl_mask(i) )then
                     cnt = cnt + 1
                     self%pinds(i) = cnt
@@ -293,7 +293,7 @@ contains
             if( all(eoarr == - 1) )then
                 self%iseven = .true.
             else
-                do i=p%fromp,p%top
+                do i=params_glob%fromp,params_glob%top
                     if( self%pinds(i) > 0 )then
                         if( eoarr(i) == 0 )then
                             self%iseven(self%pinds(i)) = .true.
@@ -356,7 +356,7 @@ contains
         self%sqsums_ptcls   = 0.
         ! set CTF flag
         self%with_ctf = .false.
-        if( p%ctf .ne. 'no' ) self%with_ctf = .true.
+        if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
         ! thread-safe c-style allocatables for gencorrs
         do ithr=1,self%nthr
             self%fftdat(ithr)%p_ref_re      = fftwf_alloc_real   (int(self%pftsz, c_size_t))
@@ -382,8 +382,8 @@ contains
             end do
         end do
         ! FFTW3 wisdoms file
-        if( p%l_distr_exec )then
-            allocate(fft_wisdoms_fname, source='fft_wisdoms_part'//int2str_pad(p%part,p%numlen)//'.dat'//c_null_char)
+        if( params_glob%l_distr_exec )then
+            allocate(fft_wisdoms_fname, source='fft_wisdoms_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'//c_null_char)
         else
             allocate(fft_wisdoms_fname, source='fft_wisdoms.dat'//c_null_char)
         endif

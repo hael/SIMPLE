@@ -3,7 +3,7 @@ module simple_commander_distr
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_singletons
+use simple_parameters,     only: parameters
 implicit none
 
 public :: merge_nnmat_commander
@@ -31,10 +31,11 @@ contains
         use simple_map_reduce, only: merge_nnmat_from_parts
         class(merge_nnmat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
+        type(parameters) :: params
         integer, allocatable :: nnmat(:,:)
         integer :: filnum, io_stat
-        call init_params(cline) ! parameters generated
-        nnmat  = merge_nnmat_from_parts(p%nptcls, p%nparts, p%nnn)            !! intel realloc warning
+        params = parameters(cline)
+        nnmat  = merge_nnmat_from_parts(params%nptcls, params%nparts, params%nnn) !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat)
         call fileiochk('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) nnmat
@@ -51,10 +52,11 @@ contains
         use simple_map_reduce, only: merge_similarities_from_parts
         class(merge_similarities_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
+        type(parameters)  :: params
         real, allocatable :: simmat(:,:)
         integer           :: filnum, io_stat
-        call init_params(cline) ! parameters generated
-        simmat = merge_similarities_from_parts(p%nptcls, p%nparts)           !! intel realloc warning
+        params = parameters(cline)
+        simmat = merge_similarities_from_parts(params%nptcls, params%nparts) !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
         call fileiochk('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
@@ -72,8 +74,9 @@ contains
         use simple_map_reduce, only: split_pairs_in_parts
         class(split_pairs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        call init_params(cline) ! parameters generated
-        call split_pairs_in_parts(p%nptcls, p%nparts)
+        type(parameters) :: params
+        params = parameters(cline)
+        call split_pairs_in_parts(params%nptcls, params%nparts)
         call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs
 

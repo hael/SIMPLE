@@ -2,7 +2,7 @@
 module simple_picker_iter
 include 'simple_lib.f08'
 use simple_picker
-use simple_params, only: p     ! singleton
+use simple_parameters, only: params_glob
 implicit none
 
 public :: picker_iter
@@ -28,10 +28,10 @@ contains
         endif
         write(*,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
         if( cline%defined('thres') )then
-            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp,&
-                &distthr_in=p%thres, ndev_in=p%ndev, dir_out=dir_out)
+            call init_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp,&
+                &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
         else
-            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp, ndev_in=p%ndev, dir_out=dir_out)
+            call init_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp, ndev_in=params_glob%ndev, dir_out=dir_out)
         endif
         call exec_picker(boxfile, nptcls_out)
         call kill_picker

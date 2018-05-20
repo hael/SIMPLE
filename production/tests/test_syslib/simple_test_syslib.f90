@@ -79,7 +79,7 @@ print *, '    SIMPLE build description: ',  trim(adjustl(build_descr))
 print *, '    SIMPLE VERSION: ', trim(adjustl(SIMPLE_LIB_VERSION))
 print *, '    SIMPLE_PATH  (installation directory): ', trim(adjustl(SIMPLE_PATH))
 print *, '    SIMPLE source  directory: ', trim(adjustl(SIMPLE_SOURCE_PATH))
-print *, '    SIMPLE build directory: ', trim(adjustl(SIMPLE_BUILD_PATH))
+! print *, '    SIMPLE build directory: ', trim(adjustl(SIMPLE_BUILDER_PATH))
 print *, '    COMPILER: ', trim(adjustl(FC_COMPILER))
 write(*,'(A,I0,A,I0,A,I0)') '     COMPILER VERSION: ', FC_COMPILER_VERSION(1), &
     '.',FC_COMPILER_VERSION(2), '.',FC_COMPILER_VERSION(3)

@@ -1,7 +1,8 @@
 ! concrete commander: simulation routines
 module simple_commander_sim
 include 'simple_lib.f08'
-use simple_singletons
+use simple_parameters,     only: parameters
+use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_image,          only: image
 use simple_ori,            only: ori
@@ -39,20 +40,21 @@ contains
     subroutine exec_simulate_noise( self, cline )
         class(simulate_noise_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
         integer :: i, cnt, ntot
-        call init_params(cline, .false.) ! parameters generated
-        if( .not. cline%defined('outstk') ) p%outstk = 'simulated_noise'//p%ext
-        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        if( .not. cline%defined('outstk') ) params%outstk = 'simulated_noise'//params%ext
         cnt  = 0
-        ntot = p%top-p%fromp+1
-        do i=p%fromp,p%top
+        ntot = params%top-params%fromp+1
+        do i=params%fromp,params%top
             cnt = cnt+1
             call progress(cnt,ntot)
-            call b%img%ran
+            call build%img%ran
             if( cline%defined('part') )then
-                call b%img%write('simulate_noise_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
+                call build%img%write('simulate_noise_part'//int2str_pad(params%part,params%numlen)//params%ext, cnt)
             else
-                call b%img%write(p%outstk, i)
+                call build%img%write(params%outstk, i)
             endif
         end do
         call simple_end('**** SIMPLE_SIMULATE_NOISE NORMAL STOP ****')
@@ -63,91 +65,81 @@ contains
         use simple_projector,  only: projector
         use simple_gridding,   only: prep4_cgrid
         class(simulate_particles_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(ori)          :: orientation
-        type(ctf)          :: tfun
-        type(kbinterpol)   :: kbwin
-        type(projector)    :: vol_pad
-        real               :: snr_pink, snr_detector, bfac, bfacerr
-        integer            :: i, cnt, ntot
-        debug=.false. ! declared in local flags
-        call init_params(cline, .false.)          ! parameters generated
-        call b%build_general_tbox( cline) ! general objects built
-        kbwin = kbinterpol(KBWINSZ, p%alpha)
-        tfun  = ctf(p%smpd, p%kv, p%cs, p%fraca)
-        if( .not. cline%defined('outstk') ) p%outstk = 'simulated_particles'//p%ext
+        class(cmdline),                      intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        type(ori)        :: orientation
+        type(ctf)        :: tfun
+        type(kbinterpol) :: kbwin
+        type(projector)  :: vol_pad
+        real             :: snr_pink, snr_detector, bfac, bfacerr
+        integer          :: i, cnt, ntot
+        call build%init_params_and_build_general_tbox(cline,params)
+        kbwin = kbinterpol(KBWINSZ, params%alpha)
+        tfun  = ctf(params%smpd, params%kv, params%cs, params%fraca)
+        if( .not. cline%defined('outstk') ) params%outstk = 'simulated_particles'//params%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         else
-            if( .not. cline%defined('outfile') ) p%outfile = 'simulated_oris'//trim(TXT_EXT)
+            if( .not. cline%defined('outfile') ) params%outfile = 'simulated_oris'//trim(TXT_EXT)
         endif
-        if( p%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
+        if( params%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
         ! generate orientation/CTF parameters
         if( cline%defined('ndiscrete') )then
-            if( p%ndiscrete > 0 )then
-                call b%a%rnd_oris_discrete(p%ndiscrete, p%nsym, p%eullims)
+            if( params%ndiscrete > 0 )then
+                call build%a%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
             endif
-            call b%a%rnd_inpls(p%trs)
+            call build%a%rnd_inpls(params%trs)
         else if( .not. cline%defined('oritab') )then
-            call b%a%rnd_oris(p%sherr, p%eullims)
+            call build%a%rnd_oris(params%sherr, params%eullims)
         endif
-        if( debug )then
-            write(*,*) 'CTF parameters used'
-            write(*,*) 'kv = ', p%kv
-            write(*,*) 'cs = ', p%cs
-            write(*,*) 'fraca = ', p%fraca
+        if( .not. build%a%isthere('dfx') )then
+            if( params%ctf .ne. 'no' ) call build%a%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
         endif
-        if( .not. b%a%isthere('dfx') )then
-            if( p%ctf .ne. 'no' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr, p%astigerr)
-        endif
-        DebugPrint  '>>> DONE GENERATING ORIENTATION/CTF PARAMETERS'
-        call b%a%write(p%outfile, [1,p%nptcls])
+        call build%a%write(params%outfile, [1,params%nptcls])
         ! calculate snr:s
-        snr_pink = p%snr/0.2
-        snr_detector = p%snr/0.8
-        DebugPrint  '>>> DONE CALCULATING SNR:S'
+        snr_pink = params%snr/0.2
+        snr_detector = params%snr/0.8
         ! prepare for image generation
-        call b%vol%read(p%vols(1))
-        call b%vol%mask(p%msk, 'soft')
-        call vol_pad%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
-        DebugPrint  '>>> DID READ VOL'
-        call prep4_cgrid(b%vol, vol_pad, kbwin)
-        call vol_pad%expand_cmat(p%alpha)
-        DebugPrint  '>>> DONE PREPARING FOR IMAGE GENERATION'
+        call build%vol%read(params%vols(1))
+        call build%vol%mask(params%msk, 'soft')
+        call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
+        call prep4_cgrid(build%vol, vol_pad, kbwin)
+        call vol_pad%expand_cmat(params%alpha)
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
-        ntot = p%top-p%fromp+1
-        do i=p%fromp,p%top
+        ntot = params%top-params%fromp+1
+        do i=params%fromp,params%top
             cnt = cnt+1
             call progress(cnt,ntot)
             ! zero images
-            b%img_pad = cmplx(0.,0.)
-            b%img = 0.
+            build%img_pad = cmplx(0.,0.)
+            build%img = 0.
             ! extract ori
-            orientation = b%a%get_ori(i)
+            orientation = build%a%get_ori(i)
             ! project vol
-            call vol_pad%fproject(orientation, b%img_pad)
+            call vol_pad%fproject(orientation, build%img_pad)
             ! shift
-            call b%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
+            call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
             if( cline%defined('bfac') )then
                 ! calculate bfactor
-                bfacerr = ran3()*p%bfacerr
+                bfacerr = ran3()*params%bfacerr
                 if( ran3() < 0.5 )then
-                    bfac = p%bfac-bfacerr
+                    bfac = params%bfac-bfacerr
                 else
-                    bfac = p%bfac+bfacerr
+                    bfac = params%bfac+bfacerr
                 endif
-                call simimg(b%img_pad, orientation, tfun, p%ctf, p%snr, snr_pink, snr_detector)
+                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector)
             else
-                call simimg(b%img_pad, orientation, tfun, p%ctf, p%snr, snr_pink, snr_detector, bfac)
+                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector, bfac)
             endif
             ! clip
-            call b%img_pad%clip(b%img)
+            call build%img_pad%clip(build%img)
             ! write to stack
             if( cline%defined('part') )then
-                call b%img%write('simulated_particles_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
+                call build%img%write('simulated_particles_part'//int2str_pad(params%part,params%numlen)//params%ext, cnt)
             else
-                call b%img%write(p%outstk, i)
+                call build%img%write(params%outstk, i)
             endif
         end do
         call vol_pad%kill_expanded
@@ -158,24 +150,24 @@ contains
     subroutine exec_simulate_movie( self, cline )
         class(simulate_movie_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
+        type(parameters)     :: params
+        type(builder)        :: build
         type(image)          :: base_image, shifted_base_image
         type(ctf)            :: tfun
         real                 :: snr_pink, snr_detector, fracarea, x, y, sherr, dfx, dfy, deferr, angast
         integer              :: i, ptclarea, mgrapharea, fixed_frame
         integer, allocatable :: ptcl_positions(:,:)
         real,    allocatable :: shifts(:,:)
-        debug=.false.                           ! declared in local flags
-        call init_params(cline, spproj_a_seg=STK_SEG) ! parameters generated
-        if( p%box == 0 ) stop 'box=0, something is fishy!'
-        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
-        tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
+        call cline%set('oritype', 'stk')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        tfun = ctf(params%smpd, params%kv, params%cs, params%fraca)
         ! set fixed frame
-        fixed_frame = nint(real(p%nframes)/2.)
+        fixed_frame = nint(real(params%nframes)/2.)
         ! remake the alignment doc
-        call b%a%new(1)
+        call build%a%new(1)
         ! check the fractional area occupied by particles & generate particle positions
-        ptclarea   = p%box*p%box*p%nptcls
-        mgrapharea = p%xdim*p%ydim
+        ptclarea   = params%box*params%box*params%nptcls
+        mgrapharea = params%xdim*params%ydim
         fracarea   = real(ptclarea)/real(mgrapharea)
         write(*,'(a,1x,f7.3)') 'Fraction of area occupied by ptcls:', fracarea
         if( fracarea > 0.55 )then
@@ -184,49 +176,45 @@ contains
             stop
         endif
         write(*,'(a)') '>>> GENERATING PARTICLE POSITIONS'
-        ptcl_positions = gen_ptcl_pos(p%nptcls, p%xdim, p%ydim, p%box)
+        ptcl_positions = gen_ptcl_pos(params%nptcls, params%xdim, params%ydim, params%box)
         ! make a base image by inserting the projections at ptcl_positions
-        call base_image%new([p%xdim,p%ydim,1], p%smpd)
-        do i=1,p%nptcls
-            call b%img%read(p%stk, i)
-            call b%img%insert(ptcl_positions(i,:), base_image)
+        call base_image%new([params%xdim,params%ydim,1], params%smpd)
+        do i=1,params%nptcls
+            call build%img%read(params%stk, i)
+            call build%img%insert(ptcl_positions(i,:), base_image)
         end do
-        if( p%vis .eq. 'yes' ) call base_image%vis()
-        DebugPrint  'inserted projections'
+        if( params%vis .eq. 'yes' ) call base_image%vis()
         ! calculate snr:s
-        snr_pink     = p%snr/0.2
-        snr_detector = p%snr/0.8
-        DebugPrint  'calculated SNR:s'
+        snr_pink     = params%snr/0.2
+        snr_detector = params%snr/0.8
         ! set CTF parameters
         deferr = ran3()*0.2
         if( ran3() < 0.5 )then
-            dfx = p%defocus-deferr
+            dfx = params%defocus-deferr
         else
-            dfx = p%defocus+deferr
+            dfx = params%defocus+deferr
         endif
         deferr = ran3()*0.2
         if( ran3() < 0.5 )then
-            dfy = p%defocus-deferr
+            dfy = params%defocus-deferr
         else
-            dfy = p%defocus+deferr
+            dfy = params%defocus+deferr
         endif
         angast = ran3()*360.
-        DebugPrint  'did set CTF parameters'
-        DebugPrint  'initialized shifts'
         ! generate shifts
-        allocate( shifts(p%nframes,2), stat=alloc_stat )
+        allocate( shifts(params%nframes,2), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('In: simple_simulate_movie; shifts')
         x = 0.
         y = 0.
-        do i=1,p%nframes
+        do i=1,params%nframes
             ! generate random shifts
-            sherr = ran3()*p%trs
+            sherr = ran3()*params%trs
             if( ran3() > 0.5 )then
                 x = x+sherr
             else
                 x = x-sherr
             endif
-            sherr = ran3()*p%trs
+            sherr = ran3()*params%trs
             if( ran3() > 0.5 )then
                 y = y+sherr
             else
@@ -235,18 +223,17 @@ contains
             shifts(i,1) = x
             shifts(i,2) = y
         end do
-        ! put the central frame in the series at x,y = (0,0) & fill-up b%a
-        do i=1,p%nframes
+        ! put the central frame in the series at x,y = (0,0) & fill-up build%a
+        do i=1,params%nframes
             shifts(i,:) = shifts(i,:)-shifts(fixed_frame,:)
-            call b%a%set(1, 'x'//int2str(i), shifts(i,1))
-            call b%a%set(1, 'y'//int2str(i), shifts(i,2))
+            call build%a%set(1, 'x'//int2str(i), shifts(i,1))
+            call build%a%set(1, 'y'//int2str(i), shifts(i,2))
         end do
         ! make and open a stack for the movie frames
-        DebugPrint  'made stack for output movie frames'
         write(*,'(a)') '>>> GENERATING MOVIE FRAMES'
         call base_image%fft()
-        do i=1,p%nframes
-            call progress(i,p%nframes)
+        do i=1,params%nframes
+            call progress(i,params%nframes)
             ! shift base image
             shifted_base_image = base_image
             call shifted_base_image%shift([shifts(i,1),shifts(i,2),0.])
@@ -255,40 +242,37 @@ contains
             call shifted_base_image%add_gauran(snr_pink)
             ! multiply with CTF
             call shifted_base_image%fft()
-            if( p%neg .eq. 'yes' )then
-                call tfun%apply(shifted_base_image, dfx, 'neg', dfy, angast, p%bfac)
+            if( params%neg .eq. 'yes' )then
+                call tfun%apply(shifted_base_image, dfx, 'neg', dfy, angast, params%bfac)
             else
-                call tfun%apply(shifted_base_image, dfx, 'ctf', dfy, angast, p%bfac)
+                call tfun%apply(shifted_base_image, dfx, 'ctf', dfy, angast, params%bfac)
             endif
             call shifted_base_image%ifft()
             ! add the detector noise
             call shifted_base_image%add_gauran(snr_detector)
-            if( p%vis .eq. 'yes' ) call shifted_base_image%vis()
-            call shifted_base_image%write('simulate_movie'//p%ext, i)
+            if( params%vis .eq. 'yes' ) call shifted_base_image%vis()
+            call shifted_base_image%write('simulate_movie'//params%ext, i)
             ! set orientation parameters in object
-            call b%a%set(1, 'dfx',    dfx)
-            call b%a%set(1, 'dfy',    dfy)
-            call b%a%set(1, 'angast', angast)
+            call build%a%set(1, 'dfx',    dfx)
+            call build%a%set(1, 'dfy',    dfy)
+            call build%a%set(1, 'angast', angast)
         end do
-        DebugPrint  'generated movie'
         ! generate the optimal average
         base_image = 0.
         write(*,'(a)') '>>> GENERATING OPTIMAL AVERAGE'
-        do i=1,p%nframes
-            call progress(i,p%nframes)
-            call shifted_base_image%read('simulate_movie'//p%ext, i)
-            x = b%a%get(1, 'x'//int2str(i))
-            y = b%a%get(1, 'y'//int2str(i))
+        do i=1,params%nframes
+            call progress(i,params%nframes)
+            call shifted_base_image%read('simulate_movie'//params%ext, i)
+            x = build%a%get(1, 'x'//int2str(i))
+            y = build%a%get(1, 'y'//int2str(i))
             call shifted_base_image%shift([-x,-y,0.])
             call base_image%add(shifted_base_image)
         end do
-        if( debug ) write(*,'(a,1x,f7.4)') 'constant 4 division:', real(p%nframes)
-        call base_image%div(real(p%nframes))
-        DebugPrint  'generated optimal average'
-        call base_image%write('optimal_movie_average'//p%ext, 1)
-        if( p%vis .eq. 'yes' ) call base_image%vis()
+        call base_image%div(real(params%nframes))
+        call base_image%write('optimal_movie_average'//params%ext, 1)
+        if( params%vis .eq. 'yes' ) call base_image%vis()
         ! output orientations
-        call b%a%write('simulate_movie_params'//trim(TXT_EXT), [1,b%a%get_noris()])
+        call build%a%write('simulate_movie_params'//trim(TXT_EXT), [1,build%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_MOVIE NORMAL STOP ****')
 
@@ -342,23 +326,22 @@ contains
         use simple_projector_hlev, only: rotvol
         class(simulate_subtomogram_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        ! type(params) :: p
-        ! type(build)  :: b
-        type(image)  :: vol_rot
-        type(ori)    :: o
-        integer      :: iptcl, numlen
-        call init_params(cline) ! constants & derived constants produced, mode=2
-        call b%build_general_tbox( cline)   ! general objects built
-        call vol_rot%new([p%box,p%box,p%box], p%smpd)
-        call b%vol%new([p%box,p%box,p%box],   p%smpd)
-        call b%vol%read(p%vols(1))
-        call b%vol%add_gauran(p%snr)
+        type(parameters) :: params
+        type(builder)    :: build
+        type(image)      :: vol_rot
+        type(ori)        :: o
+        integer          :: iptcl, numlen
+        call build%init_params_and_build_general_tbox(cline,params)
+        call vol_rot%new([params%box,params%box,params%box], params%smpd)
+        call build%vol%new([params%box,params%box,params%box],   params%smpd)
+        call build%vol%read(params%vols(1))
+        call build%vol%add_gauran(params%snr)
         call o%new
-        numlen = len(int2str(p%nptcls))
-        do iptcl=1,p%nptcls
+        numlen = len(int2str(params%nptcls))
+        do iptcl=1,params%nptcls
             call o%rnd_ori
-            vol_rot = rotvol(b%vol, o)
-            call vol_rot%write('subtomo'//int2str_pad(iptcl,numlen)//p%ext)
+            vol_rot = rotvol(build%vol, o)
+            call vol_rot%write('subtomo'//int2str_pad(iptcl,numlen)//params%ext)
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_SUBTOMOGRAM NORMAL STOP ****')

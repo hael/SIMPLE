@@ -1,7 +1,8 @@
 ! concrete commander: time-series analysis
 module simple_commander_tseries
 include 'simple_lib.f08'
-use simple_singletons
+use simple_parameters,     only: parameters
+use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 implicit none
@@ -38,12 +39,13 @@ contains
         class(cmdline),                   intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         character(len=LONGSTRLEN)              :: outfname
-        integer      :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
-        integer      :: iframe, jframe, nfiles, endit
-        type(image)  :: frame_img
-        call init_params(cline) ! parameters generated
+        type(parameters) :: params
+        integer          :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
+        integer          :: iframe, jframe, nfiles, endit
+        type(image)      :: frame_img
+        params = parameters(cline)
         if( cline%defined('filetab') )then
-            call read_filetable(p%filetab, filenames)
+            call read_filetable(params%filetab, filenames)
             nfiles = size(filenames)
             numlen = len(int2str(nfiles))
         else
@@ -53,14 +55,14 @@ contains
         call find_ldim_nptcls(filenames(1),ldim,nframes)
         if( nframes == 1 .and. ldim(3) == 1 )then
             ! all ok
-            call frame_img%new(ldim, p%smpd)
+            call frame_img%new(ldim, params%smpd)
         else
             write(*,*) 'ldim(3): ', ldim(3)
             write(*,*) 'nframes: ', nframes
             stop 'simple_commander_imgproc :: exec_tseries_extract assumes one frame per file'
         endif
         if( cline%defined('nframesgrp') )then
-            if( p%nframesgrp < 3 )then
+            if( params%nframesgrp < 3 )then
                 stop 'nframesgrp integer (nr of frames to average) needs to be >= 3; &
                 &simple_commander_imgproc :: exec_tseries_extract'
             endif
@@ -68,16 +70,16 @@ contains
             stop 'need nframesgrp integer input = nr of frames to average; &
             &simple_commander_imgproc :: exec_tseries_extract'
         endif
-        endit = nfiles - p%nframesgrp + 1
+        endit = nfiles - params%nframesgrp + 1
         do iframe=1,endit
             call progress(iframe, endit)
             if( cline%defined('fbody') )then
-                outfname = 'tseries_frames'//int2str_pad(iframe,numlen)//p%ext
+                outfname = 'tseries_frames'//int2str_pad(iframe,numlen)//params%ext
             else
-                outfname = trim(p%fbody)//'tseries_frames'//int2str_pad(iframe,numlen)//p%ext
+                outfname = trim(params%fbody)//'tseries_frames'//int2str_pad(iframe,numlen)//params%ext
             endif
             frame_from = iframe
-            frame_to   = iframe + p%nframesgrp - 1
+            frame_to   = iframe + params%nframesgrp - 1
             cnt = 0
             do jframe=frame_from,frame_to
                 cnt = cnt + 1
@@ -94,20 +96,20 @@ contains
         use simple_tseries_tracker
         use simple_qsys_funs, only: qsys_job_finished
         class(tseries_track_commander), intent(inout) :: self
-         class(cmdline),                 intent(inout) :: cline
-        ! type(params)      :: p
+        class(cmdline),                 intent(inout) :: cline
+        type(parameters)  :: params
         type(nrtxtfile)   :: boxfile
         integer           :: ndatlines, j, orig_box, numlen
         real, allocatable :: boxdata(:,:)
-        call init_params(cline) ! parameters generated
+        params = parameters(cline)
         numlen = 5 ! default value
-        orig_box = p%box
+        orig_box = params%box
         ! check file inout existence and read filetables
-        if( .not. file_exists(p%filetab)  ) stop 'inputted filetab does not exist in cwd'
+        if( .not. file_exists(params%filetab)  ) stop 'inputted filetab does not exist in cwd'
         if( cline%defined('boxfile') )then
-            if( .not. file_exists(p%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
-            if( nlines(p%boxfile) > 0 )then
-                call boxfile%new(p%boxfile, 1)
+            if( .not. file_exists(params%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
+            if( nlines(params%boxfile) > 0 )then
+                call boxfile%new(params%boxfile, 1)
                 ndatlines = boxfile%get_ndatalines()
                 numlen    = len(int2str(ndatlines))
                 allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
@@ -126,8 +128,8 @@ contains
             if( .not. cline%defined('box') ) stop 'need box to be part of command linefor this mode of&
             &execution; simple_commander_tseries :: exec_tseries_track'
             allocate( boxdata(1,2) )
-            boxdata(1,1) = real(p%xcoord)
-            boxdata(1,2) = real(p%ycoord)
+            boxdata(1,1) = real(params%xcoord)
+            boxdata(1,2) = real(params%ycoord)
             ndatlines = 1
         else
             stop 'need either boxfile or xcoord/ycoord to be part of command line&
@@ -139,13 +141,13 @@ contains
             if( cline%defined('ind') )then
                 if( .not. cline%defined('numlen') ) stop 'need numlen to be part of command line if ind is&
                 &; simple_commander_tseries :: exec_tseries_track'
-                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen))
+                call write_tracked_series(trim(params%fbody)//int2str_pad(params%ind,params%numlen))
             else
-                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen))
+                call write_tracked_series(trim(params%fbody)//int2str_pad(j,numlen))
             endif
             call kill_tracker
         end do
-        if( p%l_distr_exec ) call qsys_job_finished( 'simple_commander_tseries :: exec_tseries_track')
+        if( params%l_distr_exec ) call qsys_job_finished( 'simple_commander_tseries :: exec_tseries_track')
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
@@ -155,24 +157,23 @@ contains
         use simple_ctf,   only: ctf
         class(tseries_backgr_subtr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        ! type(params) :: p
-        ! type(build)  :: b
-        type(image)  :: img_backgr, img_backgr_wctf
-        type(ctf)    :: tfun
-        logical      :: params_present(4)
-        real         :: dfx, dfy, angast
-        integer      :: iptcl
-        call init_params(cline)             ! parameters generated
-        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
+        type(parameters) :: params
+        type(builder)    :: build
+        type(image)      :: img_backgr, img_backgr_wctf
+        type(ctf)        :: tfun
+        logical          :: params_present(4)
+        real             :: dfx, dfy, angast
+        integer          :: iptcl
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! get background image
-        call img_backgr%new([p%box,p%box,1], p%smpd)
-        call img_backgr_wctf%new([p%box,p%box,1], p%smpd)
-        call img_backgr%read(p%stk_backgr, 1)
+        call img_backgr%new([params%box,params%box,1], params%smpd)
+        call img_backgr_wctf%new([params%box,params%box,1], params%smpd)
+        call img_backgr%read(params%stk_backgr, 1)
         if( cline%defined('deftab') )then
-            params_present(1) = b%a%isthere('kv')
-            params_present(2) = b%a%isthere('cs')
-            params_present(3) = b%a%isthere('fraca')
-            params_present(4) = b%a%isthere('dfx')
+            params_present(1) = build%a%isthere('kv')
+            params_present(2) = build%a%isthere('cs')
+            params_present(3) = build%a%isthere('fraca')
+            params_present(4) = build%a%isthere('dfx')
             if( all(params_present) )then
                 ! alles ok
             else
@@ -183,34 +184,34 @@ contains
                 stop
             endif
         endif
-        do iptcl=1,p%nptcls
-            call progress(iptcl,p%nptcls)
+        do iptcl=1,params%nptcls
+            call progress(iptcl,params%nptcls)
             ! read particle image
-            call b%img%read(p%stk, iptcl)
+            call build%img%read(params%stk, iptcl)
             ! copy background image
             img_backgr_wctf = img_backgr
             ! CTF logics
             if( cline%defined('deftab') )then
-                tfun = ctf(p%smpd, b%a%get(iptcl,'kv'), b%a%get(iptcl,'cs'), b%a%get(iptcl,'fraca'))
-                dfx = b%a%get(iptcl, 'dfx')
-                dfy    = b%a%get(iptcl, 'dfy'   )
-                angast = b%a%get(iptcl, 'angast')
-                call tfun%apply(b%img, dfx, 'flip', dfy=dfy, angast=angast)
+                tfun = ctf(params%smpd, build%a%get(iptcl,'kv'), build%a%get(iptcl,'cs'), build%a%get(iptcl,'fraca'))
+                dfx = build%a%get(iptcl, 'dfx')
+                dfy    = build%a%get(iptcl, 'dfy'   )
+                angast = build%a%get(iptcl, 'angast')
+                call tfun%apply(build%img, dfx, 'flip', dfy=dfy, angast=angast)
                 call tfun%apply(img_backgr_wctf, dfx, 'flip', dfy=dfy, angast=angast)
             endif
             ! fwd ft
-            call b%img%fft()
+            call build%img%fft()
             call img_backgr_wctf%fft()
             ! filter background image
-            call img_backgr_wctf%bp(p%hp,p%lp,width=p%width)
+            call img_backgr_wctf%bp(params%hp,params%lp,width=params%width)
             ! subtract background
-            call b%img%subtr(img_backgr_wctf)
+            call build%img%subtr(img_backgr_wctf)
             ! bwd ft
-            call b%img%ifft()
+            call build%img%ifft()
             ! normalise
-            call b%img%norm()
+            call build%img%norm()
             ! output corrected image
-            call b%img%write(p%outstk, iptcl)
+            call build%img%write(params%outstk, iptcl)
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_BACKGR_SUBTR NORMAL STOP ****')
@@ -218,46 +219,43 @@ contains
 
     subroutine exec_tseries_split( self, cline )
         use simple_oris,     only: oris
-       ! use simple_ori,      only: ori
         class(tseries_split_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        ! type(params) :: p
-        ! type(build)  :: b
-        !type(ori)    :: o
-        type(oris)   :: os
+        type(parameters) :: params
+        type(builder)    :: build
+        type(oris)       :: os
         character(len=:), allocatable :: stkname, oriname
         integer :: i, iptcl, numlen, istart, istop, cnt, cnt2, ntot
-        call init_params(cline) ! parameters generated
-        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
-        numlen = len(int2str(p%nptcls))
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        numlen = len(int2str(params%nptcls))
         ! count the number of chunks
         ntot = 0
-        do i=1,p%nptcls,p%stepsz
+        do i=1,params%nptcls,params%stepsz
             istart = i
-            istop  = i + p%chunksz - 1
-            if( istop > p%nptcls ) exit
+            istop  = i + params%chunksz - 1
+            if( istop > params%nptcls ) exit
             ntot = ntot + 1
         end do
         ! split
-        do i=1,p%nptcls,p%stepsz
+        do i=1,params%nptcls,params%stepsz
             istart = i
-            istop  = i + p%chunksz - 1
-            if( istop > p%nptcls ) exit
+            istop  = i + params%chunksz - 1
+            if( istop > params%nptcls ) exit
             cnt    = cnt + 1
             call progress(cnt,ntot)
-            call os%new(p%chunksz)
+            call os%new(params%chunksz)
             call simple_mkdir('tseries_chunk'//int2str_pad(cnt,numlen))
-            allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//p%ext)
+            allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//params%ext)
             allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//trim(TXT_EXT))
             call del_file( stkname )
             call del_file( oriname )
             cnt2 = 0
             do iptcl=istart,istop
                 cnt2 = cnt2 + 1
-                !o = b%a%get_ori(iptcl)
-                call os%set_ori(cnt2, b%a%get_ori(iptcl) )
-                call b%img%read(p%stk, iptcl)
-                call b%img%write(stkname,cnt2)
+                !o = build%a%get_ori(iptcl)
+                call os%set_ori(cnt2, build%a%get_ori(iptcl) )
+                call build%img%read(params%stk, iptcl)
+                call build%img%write(stkname,cnt2)
             end do
             call os%write(oriname)
             call os%kill

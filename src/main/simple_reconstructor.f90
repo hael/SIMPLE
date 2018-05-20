@@ -4,12 +4,10 @@ module simple_reconstructor
 !$ use omp_lib_kinds
 use, intrinsic :: iso_c_binding
 include 'simple_lib.f08'
-!! import classes
-use simple_params,     only: p
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
+use simple_parameters, only: params_glob
 use simple_fftw3
-
 implicit none
 
 public :: reconstructor
@@ -74,10 +72,8 @@ contains
     ! CONSTRUCTORS
 
     subroutine alloc_rho( self, spproj, expand )
-    !subroutine alloc_rho( self, p, spproj, expand )
         use simple_sp_project, only: sp_project
         class(reconstructor), intent(inout) :: self   !< this instance
-        !class(params),        intent(in)    :: p      !< parameters object
         class(sp_project),    intent(inout) :: spproj !< project description
         logical, optional,    intent(in)    :: expand !< expand flag
         real    :: inv1, inv2
@@ -92,10 +88,10 @@ contains
         if( present(expand) ) l_expand = expand
         self%ldim_img    =  self%get_ldim()
         self%nyq         =  self%get_lfny(1)
-        self%winsz       =  p%winsz
-        self%alpha       =  p%alpha
-        self%ctfflag     =  spproj%get_ctfflag_type(p%oritype)
-        self%phaseplate  =  spproj%has_phaseplate(p%oritype)
+        self%winsz       =  params_glob%winsz
+        self%alpha       =  params_glob%alpha
+        self%ctfflag     =  spproj%get_ctfflag_type(params_glob%oritype)
+        self%phaseplate  =  spproj%has_phaseplate(params_glob%oritype)
         self%kbwin       =  kbinterpol(self%winsz,self%alpha)
         self%wdim        =  self%kbwin%get_wdim()
         self%lims        =  self%loop_lims(2)
@@ -677,15 +673,13 @@ contains
     ! RECONSTRUCTION
 
     !> reconstruction routine
-    subroutine rec( self,  spproj, o, se, state, part )
-    !subroutine rec( self, p, spproj, o, se, state, part )
+    subroutine rec( self, spproj, o, se, state, part )
         use simple_ori,        only: ori
         use simple_oris,       only: oris
         use simple_sym,        only: sym
         use simple_prep4cgrid, only: prep4cgrid
         use simple_sp_project, only: sp_project
         class(reconstructor), intent(inout) :: self   !< this object
-        !class(params),        intent(in)    :: p      !< parameters
         class(sp_project),    intent(inout) :: spproj !< project description
         class(oris),          intent(inout) :: o      !< orientations
         class(sym),           intent(inout) :: se     !< symmetry element
@@ -694,23 +688,23 @@ contains
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
         type(ctfparams)  :: ctfvars
-        integer          :: statecnt(p%nstates), i, cnt, state_here, state_glob
+        integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
         ! make the images
-        call img%new([p%box,p%box,1], self%get_smpd())
-        call img_pad%new([p%boxpd,p%boxpd,1], self%get_smpd())
+        call img%new([params_glob%box,params_glob%box,1], self%get_smpd())
+        call img_pad%new([params_glob%boxpd,params_glob%boxpd,1], self%get_smpd())
         ! make the gridding prepper
-        call gridprep%new(img, self%kbwin, [p%boxpd,p%boxpd,1])
+        call gridprep%new(img, self%kbwin, [params_glob%boxpd,params_glob%boxpd,1])
         ! zero the Fourier volume and rho
         call self%reset
         call self%reset_exp
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
         cnt      = 0
-        do i=1,p%nptcls
-            call progress(i, p%nptcls)
-            if( i <= p%top .and. i >= p%fromp )then
+        do i=1,params_glob%nptcls
+            call progress(i, params_glob%nptcls)
+            if( i <= params_glob%top .and. i >= params_glob%fromp )then
                 cnt = cnt + 1
                 state_here = o%get_state(i)
                 if( state_here > 0 .and. (state_here == state) )then
@@ -730,7 +724,7 @@ contains
         call img%kill
         call img_pad%kill
         ! report how many particles were used to reconstruct each state
-        if( p%nstates > 1 )then
+        if( params_glob%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
 
@@ -744,25 +738,25 @@ contains
                 real      :: pw, bfac
                 state = o%get_state(i)
                 if( state == 0 ) return
-                if( p%shellw.eq.'yes' )then
+                if( params_glob%shellw.eq.'yes' )then
                     orientation = o%get_ori(i)
                     bfac = 0.
                     if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
-                    call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                    call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
                     call gridprep%prep(img, img_pad)
-                    ctfvars = spproj%get_ctfparams(p%oritype, i)
+                    ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                     call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=1., bfac=o%get(i,'bfac'))
                     deallocate(stkname)
                 else
                     pw = 1.
-                    if( p%frac < 0.99 ) pw = o%get(i, 'w')
+                    if( params_glob%frac < 0.99 ) pw = o%get(i, 'w')
                     if( pw > 0. )then
                         orientation = o%get_ori(i)
-                        call spproj%get_stkname_and_ind(p%oritype, i, stkname, ind_in_stk)
+                        call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                         call img%read(stkname, ind_in_stk)
                         call gridprep%prep(img, img_pad)
-                        ctfvars = spproj%get_ctfparams(p%oritype, i)
+                        ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                         call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
                         deallocate(stkname)
                     endif

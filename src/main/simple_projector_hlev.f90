@@ -6,7 +6,7 @@ module simple_projector_hlev
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_image,      only: image
-use simple_params,     only: p     ! singleton
+use simple_parameters, only: params_glob
 use simple_gridding,   only: prep4_cgrid
 use simple_projector,  only: projector
 use simple_kbinterpol, only: kbinterpol
@@ -16,36 +16,34 @@ contains
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
     function reproject( vol, o, top ) result( imgs )
-    !function reproject( vol, o, p, top ) result( imgs )
-        use simple_oris,       only: oris
+        use simple_oris, only: oris
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
-        !class(params),     intent(inout) :: p       !< parameters
         integer, optional, intent(in)    :: top     !< stop index
         type(image),       allocatable :: imgs(:)   !< resulting images
         type(image),       allocatable :: imgs_pad(:)
         type(projector)  :: vol_pad
         type(kbinterpol) :: kbwin
         integer          :: n, i, ithr
-        kbwin = kbinterpol(KBWINSZ, p%alpha)
-        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
+        kbwin = kbinterpol(KBWINSZ, params_glob%alpha)
+        call vol_pad%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
         call prep4_cgrid(vol, vol_pad, kbwin)
         if( present(top) )then
             n = top
         else
             n = o%get_noris()
         endif
-        allocate( imgs(n), imgs_pad(p%nthr), stat=alloc_stat )
+        allocate( imgs(n), imgs_pad(params_glob%nthr), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('project; simple_projector')
         ! construct thread safe images
         do i=1,n
-            call imgs(i)%new([p%box,p%box,1], p%smpd, wthreads=.false.)
+            call imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd, wthreads=.false.)
         end do
-        do ithr=1,p%nthr
-            call imgs_pad(ithr)%new([p%boxpd,p%boxpd,1], p%smpd, wthreads=.false.)
+        do ithr=1,params_glob%nthr
+            call imgs_pad(ithr)%new([params_glob%boxpd,params_glob%boxpd,1], params_glob%smpd, wthreads=.false.)
         end do
         ! prepare for projection
-        call vol_pad%expand_cmat(p%alpha)
+        call vol_pad%expand_cmat(params_glob%alpha)
         write(*,'(A)') '>>> GENERATES PROJECTIONS'
         !$omp parallel do schedule(static) default(shared)&
         !$omp private(i,ithr) proc_bind(close)
@@ -63,7 +61,7 @@ contains
         end do
         !$omp end parallel do
         ! destruct
-        do ithr=1,p%nthr
+        do ithr=1,params_glob%nthr
             call imgs_pad(ithr)%kill
         end do
         deallocate(imgs_pad)
@@ -73,11 +71,9 @@ contains
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o,  shvec ) result( rovol )
-        !function rotvol( vol, o, p, shvec ) result( rovol )
-            use simple_ori,        only: ori
+        use simple_ori, only: ori
         class(image),   intent(inout) :: vol      !< volume to project
         class(ori),     intent(inout) :: o        !< orientation
-        !class(params),  intent(in)    :: p        !< parameters
         real, optional, intent(in)    :: shvec(3) !< 3D shift vector
         type(projector)  :: vol_pad
         type(image)      :: rovol_pad, rovol
@@ -85,16 +81,16 @@ contains
         integer          :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
         real             :: loc(3)
         logical          :: l_shvec_present
-        kbwin           = kbinterpol(KBWINSZ, p%alpha)
+        kbwin           = kbinterpol(KBWINSZ, params_glob%alpha)
         ldim            = vol%get_ldim()
-        ldim_pd         = [p%boxpd,p%boxpd,p%boxpd]
+        ldim_pd         = [params_glob%boxpd,params_glob%boxpd,params_glob%boxpd]
         l_shvec_present = present(shvec)
-        call vol_pad%new(ldim_pd, p%smpd)
-        call rovol_pad%new(ldim_pd, p%smpd)
+        call vol_pad%new(ldim_pd, params_glob%smpd)
+        call rovol_pad%new(ldim_pd, params_glob%smpd)
         call rovol_pad%set_ft(.true.)
-        call rovol%new(ldim, p%smpd)
+        call rovol%new(ldim, params_glob%smpd)
         call prep4_cgrid(vol, vol_pad, kbwin)
-        call vol_pad%expand_cmat(p%alpha)
+        call vol_pad%expand_cmat(params_glob%alpha)
         lims = vol_pad%loop_lims(2)
         nyq  = vol_pad%get_lfny(1)
         write(*,'(A)') '>>> ROTATING VOLUME'

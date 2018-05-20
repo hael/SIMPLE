@@ -1,5 +1,5 @@
 ! provides global distribution of constants and derived constants
-module simple_params
+module simple_parameters
 use simple_defs         ! use all in there
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
@@ -508,7 +508,7 @@ contains
     function constructor( cline, checkdistr, allow_mix ) result( self )
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
-        type(params) :: self
+        type(parameters) :: self
         call self%new( cline, checkdistr, allow_mix )
     end function constructor
 
@@ -518,7 +518,7 @@ contains
         !$ use omp_lib_kinds
         use simple_math, only: round2even
  !       use simple_map_reduce  ! use all in there
-        class(params),     intent(inout) :: self
+        class(parameters),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
         type(binoris)                    :: bos
@@ -550,7 +550,7 @@ contains
         call getarg(0,self%exec_abspath)
         call check_carg('debug',          debug_local)
         if (debug_local == 'yes')then
-            global_debug = .true.  ! from simple_params
+            global_debug = .true.  ! from simple_parameters
             debug = .true.         ! from simple_local_flags.inc
         end if
         call check_carg('verbose',        verbose_local)
@@ -867,7 +867,7 @@ contains
             self%nstates = nint(cline%get_rarg('nstates'))
             if( self%nstates > MAXS )then
                 write(*,'(a)') 'ERROR, the number of states is limited to 20!'
-                write(*,'(a)') 'In: constructor, module: simple_params.f90'
+                write(*,'(a)') 'In: constructor, module: simple_parameters.f90'
                 stop
             endif
         endif
@@ -942,7 +942,7 @@ contains
         ! make file names
         call mkfnames
         ! check box
-        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
+        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_parameters'
         ! set endconv in simple_defs
         if( allocated(endconv) ) deallocate(endconv)
         if( cline%defined('endian') )then
@@ -954,7 +954,7 @@ contains
                 case('native')
                     allocate(endconv, source='NATIVE')
                 case DEFAULT
-                    stop 'unsupported endianness flag; simple_params :: constructor'
+                    stop 'unsupported endianness flag; simple_parameters :: constructor'
             end select
         else if( allocated(conv) )then
             allocate(endconv, source=conv)
@@ -964,9 +964,9 @@ contains
         if( allocated(conv) ) deallocate(conv)
         ! fractional search and volume update
         if( self%update_frac <= .99)then
-            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
+            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_parameters :: constructor'
             if( nint(self%update_frac*real(self%nptcls)) < 1 )&
-                &stop 'UPDATE_FRAC is too small 2; simple_params :: constructor'
+                &stop 'UPDATE_FRAC is too small 2; simple_parameters :: constructor'
             self%l_frac_update = .true.
         endif
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
@@ -1184,10 +1184,10 @@ contains
         self%l_dose_weight = .false.
         if( cline%defined('exp_time') .or. cline%defined('dose_rate') )then
             if( cline%defined('exp_time') .and. .not. cline%defined('dose_rate') )then
-                stop 'need dose_rate to be part of the command line! simple_params :: new'
+                stop 'need dose_rate to be part of the command line! simple_parameters :: new'
             endif
             if( .not. cline%defined('exp_time') .and. cline%defined('dose_rate') )then
-                stop 'need exp_time to be part of the command line! simple_params :: new'
+                stop 'need exp_time to be part of the command line! simple_parameters :: new'
             endif
             self%l_dose_weight = .true.
         endif
@@ -1275,14 +1275,14 @@ contains
                             checkupfile(cntfile) = 'S'
                         case ('N')
                             write(*,*) 'file: ', trim(file)
-                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                            stop 'This file format is not supported by SIMPLE; simple_parameters::check_file'
                         case ('T')
                             ! text files are supported
                         case ('B')
                             ! binary files are supported
                         case DEFAULT
                             write(*,*) 'file: ', trim(file)
-                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                            stop 'This file format is not supported by SIMPLE; simple_parameters::check_file'
                     end select
                     DebugPrint file, '=', var
                 endif
@@ -1315,7 +1315,7 @@ contains
                         case('B')
                             self%ext = '.mrc'
                         case DEFAULT
-                            stop 'This file format is not supported by SIMPLE; check_file_formats; simple_params'
+                            stop 'This file format is not supported by SIMPLE; check_file_formats; simple_parameters'
                     end select
                 endif
             end subroutine check_file_formats
@@ -1343,7 +1343,7 @@ contains
                                 self%ext = '.mrc'
                             case DEFAULT
                                 write(*,*) 'format string is ', form
-                                stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_params'
+                                stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_parameters'
                         end select
                     endif
                 endif
@@ -1410,7 +1410,7 @@ contains
                             self%box     = self%ldim(1)
                         endif
                     else
-                        write(*,'(a)')      'simple_params :: set_ldim_box_from_stk'
+                        write(*,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
                         write(*,'(a,1x,a)') 'Stack file does not exist!', trim(stkfname)
                         stop
                     endif
@@ -1419,4 +1419,4 @@ contains
 
     end subroutine new
 
-end module simple_params
+end module simple_parameters

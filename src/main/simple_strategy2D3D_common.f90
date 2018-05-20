@@ -1,10 +1,10 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_strategy2D3D_common
 include 'simple_lib.f08'
-use simple_image,    only: image
-use simple_cmdline,  only: cmdline
-use simple_build,    only: b
-use simple_params,   only: p
+use simple_image,      only: image
+use simple_cmdline,    only: cmdline
+use simple_builder,    only: build_glob
+use simple_parameters, only: params_glob
 implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
@@ -33,34 +33,34 @@ contains
         integer,       intent(in)     :: iptcl
         character(len=:), allocatable :: stkname
         integer :: ind_in_stk
-        call b%spproj%get_stkname_and_ind(p%oritype, iptcl, stkname, ind_in_stk)
-        call b%img%read(stkname, ind_in_stk)
+        call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
+        call build_glob%img%read(stkname, ind_in_stk)
     end subroutine read_img
 
     subroutine read_img_and_norm( iptcl )
         integer,       intent(in)     :: iptcl
         call read_img( iptcl )
-        call b%img%norm()
+        call build_glob%img%norm()
      end subroutine read_img_and_norm
 
     subroutine read_imgbatch_1( fromptop, ptcl_mask )
-        integer,           intent(in)     :: fromptop(2)
-        logical, optional, intent(in)     :: ptcl_mask(p%fromp:p%top)
+        integer,           intent(in) :: fromptop(2)
+        logical, optional, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         character(len=:), allocatable :: stkname
         integer :: iptcl, ind_in_batch, ind_in_stk
         if( present(ptcl_mask) )then
             do iptcl=fromptop(1),fromptop(2)
                 if( ptcl_mask(iptcl) )then
                     ind_in_batch = iptcl - fromptop(1) + 1
-                    call b%spproj%get_stkname_and_ind(p%oritype, iptcl, stkname, ind_in_stk)
-                    call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+                    call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
+                    call build_glob%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
                 endif
             end do
         else
             do iptcl=fromptop(1),fromptop(2)
                 ind_in_batch = iptcl - fromptop(1) + 1
-                call b%spproj%get_stkname_and_ind(p%oritype, iptcl, stkname, ind_in_stk)
-                call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
+                call build_glob%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
             end do
         endif
     end subroutine read_imgbatch_1
@@ -71,116 +71,116 @@ contains
         integer :: ind_in_stk, i, ii
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
-            call b%spproj%get_stkname_and_ind(p%oritype, pinds(i), stkname, ind_in_stk)
-            call b%imgbatch(ii)%read(stkname, ind_in_stk)
+            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk)
+            call build_glob%imgbatch(ii)%read(stkname, ind_in_stk)
         end do
     end subroutine read_imgbatch_2
 
     subroutine set_bp_range( cline )
         class(cmdline), intent(inout) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
-        real                  :: fsc0143, fsc05, mapres(p%nstates)
+        real                  :: fsc0143, fsc05, mapres(params_glob%nstates)
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
-        logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
+        logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         logical               :: kstop_grid_set
         kstop_grid_set = .false.
-        select case(p%eo)
+        select case(params_glob%eo)
             case('yes','aniso')
                 ! check all fsc_state*.bin exist
                 all_fsc_bin_exist = .true.
                 fsc_bin_exists    = .false.
-                do s=1,p%nstates
-                    if( str_has_substr(p%refine,'cluster') )then
+                do s=1,params_glob%nstates
+                    if( str_has_substr(params_glob%refine,'cluster') )then
                         fsc_fname = trim(CLUSTER3D_FSC)
                     else
                         fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                     endif
                     fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
-                    if( b%a%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
+                    if( build_glob%a%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
-                if( p%oritab .eq. '' )all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
+                if( params_glob%oritab .eq. '' )all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
-                    resarr = b%img%get_res()
-                    do s=1,p%nstates
+                    resarr = build_glob%img%get_res()
+                    do s=1,params_glob%nstates
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
-                            if( str_has_substr(p%refine,'cluster') )then
+                            if( str_has_substr(params_glob%refine,'cluster') )then
                                 ! mixed model FSC
                                 fsc_fname = trim(CLUSTER3D_FSC)
                             else
                                 fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                             endif
                             fsc_arr    = file2rarr(trim(adjustl(fsc_fname)))
-                            b%fsc(s,:) = fsc_arr(:)
+                            build_glob%fsc(s,:) = fsc_arr(:)
                             deallocate(fsc_arr)
-                            call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
+                            call get_resolution(build_glob%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
                         else
                             ! empty state
                             mapres(s)   = 0.
-                            b%fsc(s,:)  = 0.
+                            build_glob%fsc(s,:)  = 0.
                         endif
                     end do
                     loc    = maxloc(mapres) ! worst resolved
                     ! get median updatecnt
-                    if( b%a%median('updatecnt') > 1.0 )then
-                        lp_ind = get_lplim_at_corr(b%fsc(loc(1),:), p%lplim_crit)
+                    if( build_glob%a%median('updatecnt') > 1.0 )then
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                     else
-                        lp_ind = get_lplim_at_corr(b%fsc(loc(1),:), 0.5)
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
                     endif
                     ! low pass limit
-                    p%kfromto(2) = calc_fourier_index(resarr(lp_ind), p%boxmatch, p%smpd)
-                    if( p%kfromto(2) == 1 )then
+                    params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), params_glob%boxmatch, params_glob%smpd)
+                    if( params_glob%kfromto(2) == 1 )then
                         call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
                     endif
                     ! set highest Fourier index for coarse grid search
-                    p%kstop_grid   = get_lplim_at_corr(b%fsc(loc(1),:), 0.5)
+                    params_glob%kstop_grid   = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
                     kstop_grid_set = .true.
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
-                    p%kfromto(2)     = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
-                else if( b%a%isthere(p%fromp,'lp') )then
-                    p%kfromto(2)     = calc_fourier_index(b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd)
+                    params_glob%kfromto(2)     = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
+                else if( build_glob%a%isthere(params_glob%fromp,'lp') )then
+                    params_glob%kfromto(2)     = calc_fourier_index(build_glob%a%get(params_glob%fromp,'lp'), params_glob%boxmatch, params_glob%smpd)
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_strategy2D3D_common'
                 endif
                 ! lpstop overrides any other method for setting the low-pass limit
                 if( cline%defined('lpstop') )then
-                    p%kfromto(2) = min(p%kfromto(2), calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
+                    params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
                 ! set high-pass Fourier index limit
-                p%kfromto(1) = max(2,calc_fourier_index( p%hp, p%boxmatch, p%smpd))
-                if( p%kfromto(2)-p%kfromto(1) <= 2 )then
-                    if( p%hpind_fsc > 0 )then
-                        p%kfromto(2) = p%kfromto(1) + 3
+                params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
+                if( params_glob%kfromto(2)-params_glob%kfromto(1) <= 2 )then
+                    if( params_glob%hpind_fsc > 0 )then
+                        params_glob%kfromto(2) = params_glob%kfromto(1) + 3
                     else
-                        write(*,*) 'fromto:', p%kfromto(1), p%kfromto(2)
+                        write(*,*) 'fromto:', params_glob%kfromto(1), params_glob%kfromto(2)
                         stop 'resolution range too narrow; set_bp_range; simple_strategy2D3D_common'
                     endif
                 endif
                 ! re-set the low-pass limit
-                p%lp = calc_lowpass_lim(p%kfromto(2), p%boxmatch, p%smpd)
-                p%lp_dyn = p%lp
-                call b%a%set_all2single('lp',p%lp)
+                params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%boxmatch, params_glob%smpd)
+                params_glob%lp_dyn = params_glob%lp
+                call build_glob%a%set_all2single('lp',params_glob%lp)
             case('no')
                 ! set Fourier index range
-                p%kfromto(1) = max(2, calc_fourier_index( p%hp, p%boxmatch, p%smpd))
-                p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
+                params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
+                params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
                 if( cline%defined('lpstop') )then
-                    p%kfromto(2) = min(p%kfromto(2), calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
+                    params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
-                p%lp_dyn = p%lp
-                call b%a%set_all2single('lp',p%lp)
+                params_glob%lp_dyn = params_glob%lp
+                call build_glob%a%set_all2single('lp',params_glob%lp)
             case DEFAULT
                 call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
         end select
         ! set highest Fourier index for coarse grid search
-        if( .not. kstop_grid_set )          p%kstop_grid = p%kfromto(2)
-        if( p%kstop_grid > p%kfromto(2) )   p%kstop_grid = p%kfromto(2)
+        if( .not. kstop_grid_set )          params_glob%kstop_grid = params_glob%kfromto(2)
+        if( params_glob%kstop_grid > params_glob%kfromto(2) )   params_glob%kstop_grid = params_glob%kfromto(2)
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
@@ -191,29 +191,29 @@ contains
         real,           intent(in)    :: frac_srch_space
         real    :: lplim
         integer :: lpstart_find
-        p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
+        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
         if( cline%defined('lp') )then
-            p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
-            p%lp_dyn     = p%lp
-            call b%a%set_all2single('lp',p%lp)
+            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
+            params_glob%lp_dyn     = params_glob%lp
+            call build_glob%a%set_all2single('lp',params_glob%lp)
         else
-            if( file_exists(p%frcs) .and. which_iter > LPLIM1ITERBOUND )then
-                lplim = b%projfrcs%estimate_lp_for_align()
+            if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
+                lplim = build_glob%projfrcs%estimate_lp_for_align()
             else
                 if( which_iter <= LPLIM1ITERBOUND )then
-                    lplim = p%lplims2D(1)
+                    lplim = params_glob%lplims2D(1)
                 else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
-                    lplim = p%lplims2D(3)
+                    lplim = params_glob%lplims2D(3)
                 else
-                    lplim = p%lplims2D(2)
+                    lplim = params_glob%lplims2D(2)
                 endif
             endif
-            p%kfromto(2) = calc_fourier_index(lplim, p%boxmatch, p%smpd)
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%boxmatch, params_glob%smpd)
             ! to avoid pathological cases, fall-back on lpstart
-            lpstart_find = calc_fourier_index(p%lpstart, p%boxmatch, p%smpd)
-            if( lpstart_find > p%kfromto(2) ) p%kfromto(2) = lpstart_find
-            p%lp_dyn = lplim
-            call b%a%set_all2single('lp',lplim)
+            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%boxmatch, params_glob%smpd)
+            if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
+            params_glob%lp_dyn = lplim
+            call build_glob%a%set_all2single('lp',lplim)
         endif
         DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
@@ -229,8 +229,8 @@ contains
         real      :: pw, bfac_rec
         integer   :: s, eo
         eo = 0
-        if( p%eo .ne. 'no' ) eo = nint(o%get('eo'))
-        if( p%shellw.eq.'yes' )then
+        if( params_glob%eo .ne. 'no' ) eo = nint(o%get('eo'))
+        if( params_glob%shellw .eq. 'yes' )then
             ! shell-weighted reconstruction
             bfac_rec = 0.
             if( o%isthere('bfac_rec') ) bfac_rec = max(0., o%get('bfac_rec'))
@@ -239,10 +239,10 @@ contains
             ! fwd ft
             call img%fft()
             ! gridding
-            if( p%eo .ne. 'no' )then
-                call b%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=1., bfac=bfac_rec)
+            if( params_glob%eo .ne. 'no' )then
+                call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=1., bfac=bfac_rec)
             else
-                call b%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=1., bfac=bfac_rec)
+                call build_glob%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=1., bfac=bfac_rec)
             endif
         else
             ! particle-weighted reconstruction
@@ -254,10 +254,10 @@ contains
                 ! fwd ft
                 call img%fft()
                 ! gridding
-                if( p%eo .ne. 'no' )then
-                    call b%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
+                if( params_glob%eo .ne. 'no' )then
+                    call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
                 else
-                    call b%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=pw)
+                    call build_glob%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=pw)
                 endif
             endif
         endif
@@ -277,28 +277,28 @@ contains
         real    :: pw, bfac_rec
         integer :: s, eo
         eo = 0
-        if( p%eo .ne. 'no' ) eo = nint(o%get('eo'))
-        if( p%shellw.eq.'yes' )then
+        if( params_glob%eo .ne. 'no' ) eo = nint(o%get('eo'))
+        if( params_glob%shellw.eq.'yes' )then
             ! shell-weighted reconstruction
             bfac_rec = 0.
             if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
             ! fwd ft
             call img%fft()
             ! gridding
-            if( p%nstates == 1 )then
-                if( p%eo .ne. 'no' )then
-                    call b%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=1., bfac=bfac_rec)
+            if( params_glob%nstates == 1 )then
+                if( params_glob%eo .ne. 'no' )then
+                    call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=1., bfac=bfac_rec)
                 else
-                    call b%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=1., bfac=bfac_rec)
+                    call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=1., bfac=bfac_rec)
                 endif
             else
                 states = os%get_all('state')
-                do s=1,p%nstates
+                do s=1,params_glob%nstates
                     if( count(nint(states) == s) > 0 )then
-                        if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=1., bfac=bfac_rec, state=s)
+                        if( params_glob%eo .ne. 'no' )then
+                            call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=1., bfac=bfac_rec, state=s)
                         else
-                            call b%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=1., bfac=bfac_rec, state=s)
+                            call build_glob%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=1., bfac=bfac_rec, state=s)
                         endif
                     endif
                 end do
@@ -311,20 +311,20 @@ contains
                 ! fwd ft
                 call img%fft()
                 ! gridding
-                if( p%nstates == 1 )then
-                    if( p%eo .ne. 'no' )then
-                        call b%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
+                if( params_glob%nstates == 1 )then
+                    if( params_glob%eo .ne. 'no' )then
+                        call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
                     else
-                        call b%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=pw)
+                        call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=pw)
                     endif
                 else
                     states = os%get_all('state')
-                    do s=1,p%nstates
+                    do s=1,params_glob%nstates
                         if( count(nint(states) == s) > 0 )then
-                            if( p%eo .ne. 'no' )then
-                                call b%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
+                            if( params_glob%eo .ne. 'no' )then
+                                call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
                             else
-                                call b%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=pw, state=s)
+                                call build_glob%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=pw, state=s)
                             endif
                         endif
                     end do
@@ -341,27 +341,25 @@ contains
         integer,                 intent(in)    :: batchsz_max
         class(polarizer),        intent(inout) :: match_imgs(batchsz_max)
         logical,                 intent(in)    :: is3D
-        logical, optional,       intent(in)    :: ptcl_mask(p%fromp:p%top)
-        logical :: mask_here(p%fromp:p%top)
+        logical, optional,       intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
+        logical :: mask_here(params_glob%fromp:params_glob%top)
         integer :: iptcl_batch, batchlims(2), imatch, iptcl
         if( present(ptcl_mask) )then
             mask_here = ptcl_mask
         else
             mask_here = .true.
         endif
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+        if( .not. params_glob%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
         call prepimgbatch( batchsz_max )
-        do iptcl_batch=p%fromp,p%top,batchsz_max
-            batchlims = [iptcl_batch,min(p%top,iptcl_batch + batchsz_max - 1)]
-            ! call read_imgbatch( b, p, batchlims, mask_here )
+        do iptcl_batch=params_glob%fromp,params_glob%top,batchsz_max
+            batchlims = [iptcl_batch,min(params_glob%top,iptcl_batch + batchsz_max - 1)]
             call read_imgbatch( batchlims, mask_here )
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
                 if( .not. mask_here(iptcl) ) cycle
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align( iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
-                ! call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
+                call prepimg4align( iptcl, build_glob%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
@@ -380,35 +378,35 @@ contains
         logical,          intent(in)    :: is3D
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz()), x, y
+        real            :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz()), x, y
         integer         :: ifrc
         ! shift
-        x = b%a%get(iptcl, 'x')
-        y = b%a%get(iptcl, 'y')
+        x = build_glob%a%get(iptcl, 'x')
+        y = build_glob%a%get(iptcl, 'y')
         ! CTF parameters
-        ctfparms = b%spproj%get_ctfparams(p%oritype, iptcl)
+        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         ! normalise
         call img_in%norm()
         ! move to Fourier space
         call img_in%fft()
         ! shell normalization & filter
         if( is3D )then
-            if( trim(p%eo) .ne. 'no' )then
-                ifrc = b%e_bal%find_closest_proj( b%a%get_ori(iptcl) )
+            if( trim(params_glob%eo) .ne. 'no' )then
+                ifrc = build_glob%e_bal%find_closest_proj( build_glob%a%get_ori(iptcl) )
             else
                 ifrc = 0 ! turns off the matched filter
             endif
         else
-            if( trim(p%match_filt) .eq. 'yes' )then
-                ifrc = nint(b%a%get(iptcl,'class'))
+            if( trim(params_glob%match_filt) .eq. 'yes' )then
+                ifrc = nint(build_glob%a%get(iptcl,'class'))
             else
                 ifrc = 0 ! turns off the matched filter
             endif
         endif
         if( ifrc > 0 )then
-            call b%projfrcs%frc_getter(ifrc, p%hpind_fsc, p%l_phaseplate, frc)
+            call build_glob%projfrcs%frc_getter(ifrc, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
+                call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
                 call img_in%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
@@ -432,13 +430,13 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! soft-edged mask
-        if( p%l_innermsk )then
-            call img_out%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+        if( params_glob%l_innermsk )then
+            call img_out%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
         else
-            if( p%l_focusmsk )then
-                call img_out%mask(p%focusmsk, 'soft')
+            if( params_glob%l_focusmsk )then
+                call img_out%mask(params_glob%focusmsk, 'soft')
             else
-                call img_out%mask(p%msk, 'soft')
+                call img_out%mask(params_glob%msk, 'soft')
             endif
         endif
         ! return in Fourier space
@@ -456,13 +454,13 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        real    :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
+        real    :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz())
         real    :: xyz(3), sharg
         logical :: do_center
         ! normalise
         call img_in%norm()
-        do_center = (p%center .eq. 'yes')
-        ! centering only performed if p%center.eq.'yes'
+        do_center = (params_glob%center .eq. 'yes')
+        ! centering only performed if params_glob%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
         if( do_center )then
             if( present(xyz_in) )then
@@ -473,23 +471,23 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = img_in%center_serial(p%cenlp, p%msk)
+                xyz = img_in%center_serial(params_glob%cenlp, params_glob%msk)
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
                     call img_in%fft()
                     call img_in%shift2Dserial(xyz(1:2))
-                    call b%a%add_shift2class(icls, -xyz(1:2))
+                    call build_glob%a%add_shift2class(icls, -xyz(1:2))
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        if( p%l_match_filt )then
+        if( params_glob%l_match_filt )then
             ! anisotropic matched filter
-            call b%projfrcs%frc_getter(icls, p%hpind_fsc, p%l_phaseplate, frc)
+            call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
+                call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
                 call img_in%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
@@ -498,10 +496,10 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
-        if( p%l_innermsk )then
-            call img_out%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+        if( params_glob%l_innermsk )then
+            call img_out%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
         else
-            call img_out%mask(p%msk, 'soft')
+            call img_out%mask(params_glob%msk, 'soft')
         endif
         ! move to Fourier space
         call img_out%fft()
@@ -513,20 +511,20 @@ contains
         integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143
-        call b%spproj%os_cls2D%new(p%ncls)
-        call b%a%get_pops(pops, 'class', maxn=p%ncls)
-        do icls=1,p%ncls
-            call b%projfrcs%estimate_res(icls, frc05, frc0143)
+        call build_glob%spproj%os_cls2D%new(params_glob%ncls)
+        call build_glob%a%get_pops(pops, 'class', maxn=params_glob%ncls)
+        do icls=1,params_glob%ncls
+            call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)
             pop = pops(icls)
-            call b%spproj%os_cls2D%set(icls, 'class', real(icls))
-            call b%spproj%os_cls2D%set(icls, 'pop',   real(pop))
-            call b%spproj%os_cls2D%set(icls, 'res',   frc0143)
+            call build_glob%spproj%os_cls2D%set(icls, 'class', real(icls))
+            call build_glob%spproj%os_cls2D%set(icls, 'pop',   real(pop))
+            call build_glob%spproj%os_cls2D%set(icls, 'res',   frc0143)
             if( pop > 1 )then
-                call b%spproj%os_cls2D%set(icls, 'corr',  b%a%get_avg('corr', class=icls))
-                call b%spproj%os_cls2D%set(icls, 'w',     b%a%get_avg('w',    class=icls))
+                call build_glob%spproj%os_cls2D%set(icls, 'corr',  build_glob%a%get_avg('corr', class=icls))
+                call build_glob%spproj%os_cls2D%set(icls, 'w',     build_glob%a%get_avg('w',    class=icls))
             else
-                call b%spproj%os_cls2D%set(icls, 'corr', -1.0)
-                call b%spproj%os_cls2D%set(icls, 'w',     0.0)
+                call build_glob%spproj%os_cls2D%set(icls, 'corr', -1.0)
+                call build_glob%spproj%os_cls2D%set(icls, 'w',     0.0)
             endif
         end do
         deallocate(pops)
@@ -537,35 +535,35 @@ contains
         real, optional, intent(in)    :: wcluster
         character(len=:), allocatable :: recname, rhoname, part_str
         integer :: istate
-        allocate(part_str, source=int2str_pad(p%part,p%numlen))
-        select case(p%eo)
+        allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
+        select case(params_glob%eo)
             case('yes','aniso')
-                do istate = 1, p%nstates
-                    if( b%a%get_pop(istate, 'state') > 0)then
-                        call b%eorecvols(istate)%new( b%spproj)
-                        call b%eorecvols(istate)%reset_all
-                        if( p%l_frac_update )then
-                            call b%eorecvols(istate)%read_eos(trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str)
-                            call b%eorecvols(istate)%expand_exp
-                            call b%eorecvols(istate)%apply_weight(1.0 - p%update_frac)
+                do istate = 1, params_glob%nstates
+                    if( build_glob%a%get_pop(istate, 'state') > 0)then
+                        call build_glob%eorecvols(istate)%new( build_glob%spproj)
+                        call build_glob%eorecvols(istate)%reset_all
+                        if( params_glob%l_frac_update )then
+                            call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str)
+                            call build_glob%eorecvols(istate)%expand_exp
+                            call build_glob%eorecvols(istate)%apply_weight(1.0 - params_glob%update_frac)
                         endif
                     endif
                 end do
             case DEFAULT
-                do istate = 1, p%nstates
-                    if( b%a%get_pop(istate, 'state') > 0)then
-                        call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
-                        call b%recvols(istate)%alloc_rho( b%spproj)
-                        call b%recvols(istate)%reset
-                        call b%recvols(istate)%reset_exp
-                        if( p%l_frac_update )then
-                            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//p%ext)
-                            allocate(rhoname, source='rho_'//trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//p%ext)
+                do istate = 1, params_glob%nstates
+                    if( build_glob%a%get_pop(istate, 'state') > 0)then
+                        call build_glob%recvols(istate)%new([params_glob%boxpd, params_glob%boxpd, params_glob%boxpd], params_glob%smpd)
+                        call build_glob%recvols(istate)%alloc_rho( build_glob%spproj)
+                        call build_glob%recvols(istate)%reset
+                        call build_glob%recvols(istate)%reset_exp
+                        if( params_glob%l_frac_update )then
+                            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//params_glob%ext)
+                            allocate(rhoname, source='rho_'//trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//params_glob%ext)
                             if( file_exists(recname) .and. file_exists(rhoname) )then
-                                call b%recvols(istate)%read(recname)
-                                call b%recvols(istate)%read_rho(rhoname)
-                                call b%recvols(istate)%expand_exp
-                                call b%recvols(istate)%apply_weight(1.0 - p%update_frac)
+                                call build_glob%recvols(istate)%read(recname)
+                                call build_glob%recvols(istate)%read_rho(rhoname)
+                                call build_glob%recvols(istate)%expand_exp
+                                call build_glob%recvols(istate)%apply_weight(1.0 - params_glob%update_frac)
                             endif
                             deallocate(recname, rhoname)
                         endif
@@ -577,14 +575,14 @@ contains
     !>  \brief  destructs all volumes for reconstruction
     subroutine killrecvols
         integer :: istate
-        if( p%eo .ne. 'no' )then
-            do istate = 1, p%nstates
-                call b%eorecvols(istate)%kill
+        if( params_glob%eo .ne. 'no' )then
+            do istate = 1, params_glob%nstates
+                call build_glob%eorecvols(istate)%kill
             end do
         else
-            do istate = 1, p%nstates
-                call b%recvols(istate)%dealloc_rho
-                call b%recvols(istate)%kill
+            do istate = 1, params_glob%nstates
+                call build_glob%recvols(istate)%dealloc_rho
+                call build_glob%recvols(istate)%kill
             end do
         endif
     end subroutine killrecvols
@@ -594,24 +592,24 @@ contains
         integer,        intent(in)    :: batchsz
         integer :: currsz, ibatch
         logical :: doprep
-        if( .not. allocated(b%imgbatch) )then
+        if( .not. allocated(build_glob%imgbatch) )then
             doprep = .true.
         else
-            currsz = size(b%imgbatch)
+            currsz = size(build_glob%imgbatch)
             if( batchsz > currsz )then
                 do ibatch=1,currsz
-                    call b%imgbatch(ibatch)%kill
+                    call build_glob%imgbatch(ibatch)%kill
                 end do
-                deallocate(b%imgbatch)
+                deallocate(build_glob%imgbatch)
                 doprep = .true.
             else
                 doprep = .false.
             endif
         endif
         if( doprep )then
-            allocate(b%imgbatch(batchsz))
+            allocate(build_glob%imgbatch(batchsz))
             do ibatch=1,batchsz
-                call b%imgbatch(ibatch)%new([p%box,p%box,1], p%smpd)
+                call build_glob%imgbatch(ibatch)%new([params_glob%box,params_glob%box,1], params_glob%smpd)
             end do
         endif
     end subroutine prepimgbatch
@@ -623,29 +621,29 @@ contains
         character(len=*), intent(in)    :: volfname
         logical,          intent(out)   :: do_center
         real,             intent(out)   :: xyz(3)
-        ! ensure correct b%vol dim
-        call b%vol%new([p%box,p%box,p%box],p%smpd)
+        ! ensure correct build_glob%vol dim
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         ! centering
         do_center = .true.
-        if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%l_doshift .or.&
-        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') .or. p%l_frac_update )then
+        if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. .not. params_glob%l_doshift .or.&
+        &params_glob%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') .or. params_glob%l_frac_update )then
             do_center = .false.
             xyz       = 0.
             return
         endif
-        call b%vol%read(volfname)
-        call b%vol%norm() ! because auto-normalisation on read is taken out
-        xyz = b%vol%center(p%cenlp,p%msk) ! find center of mass shift
+        call build_glob%vol%read(volfname)
+        call build_glob%vol%norm() ! because auto-normalisation on read is taken out
+        xyz = build_glob%vol%center(params_glob%cenlp,params_glob%msk) ! find center of mass shift
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
             xyz = 0.
             return
         endif
-        call b%vol%fft()
-        if( p%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
-        call b%vol%shift([xyz(1),xyz(2),xyz(3)]) ! performs shift
+        call build_glob%vol%fft()
+        if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
+        call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)]) ! performs shift
         ! map back to particle oritentations
-        if( cline%defined('oritab') ) call b%a%map3dshift22d(-xyz(:), state=s)
+        if( cline%defined('oritab') ) call build_glob%a%map3dshift22d(-xyz(:), state=s)
     end subroutine cenrefvol_and_mapshifts2ptcls
 
     !>  \brief  prepares one volume for references extraction
@@ -659,61 +657,61 @@ contains
         type(image)                     :: mskvol
         real,             allocatable   :: filter(:)
         character(len=:), allocatable   :: fname_vol_filter
-        ! ensure correct b%vol dim
-        call b%vol%new([p%box,p%box,p%box],p%smpd)
-        call b%vol%read(volfname)
-        call b%vol%norm() ! because auto-normalisation on read is taken out
+        ! ensure correct build_glob%vol dim
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        call build_glob%vol%read(volfname)
+        call build_glob%vol%norm() ! because auto-normalisation on read is taken out
         if( do_center )then
-            call b%vol%fft()
-            call b%vol%shift([xyz(1),xyz(2),xyz(3)])
+            call build_glob%vol%fft()
+            call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        if( p%eo.ne.'no' )then
+        if( params_glob%eo.ne.'no' )then
             ! anisotropic matched filter
-            if( p%nstates.eq.1 )then
-                allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(p%ext))
+            if( params_glob%nstates.eq.1 )then
+                allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
             else
-                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(p%ext))
+                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
             endif
             if( file_exists(fname_vol_filter) )then
-                call b%vol2%read(fname_vol_filter)
-                call b%vol%fft() ! needs to be here in case the shift was never applied (above)
-                call b%vol%shellnorm_and_apply_filter(b%vol2)
+                call build_glob%vol2%read(fname_vol_filter)
+                call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
+                call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
             else
                 ! matched filter based on Rosenthal & Henderson, 2003
-                if( any(b%fsc(s,:) > 0.143) )then
-                    call b%vol%fft() ! needs to be here in case the shift was never applied (above)
-                    filter = fsc2optlp(b%fsc(s,:))
-                    call b%vol%shellnorm_and_apply_filter(filter)
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
+                    filter = fsc2optlp(build_glob%fsc(s,:))
+                    call build_glob%vol%shellnorm_and_apply_filter(filter)
                 endif
             endif
             deallocate(fname_vol_filter)
         endif
         ! back to real space
-        call b%vol%ifft()
+        call build_glob%vol%ifft()
         ! clip
-        if( p%boxmatch < p%box ) call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+        if( params_glob%boxmatch < params_glob%box ) call build_glob%vol%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
         ! masking
         if( cline%defined('mskfile') )then
             ! mask provided
-            call mskvol%new([p%box, p%box, p%box], p%smpd)
-            call mskvol%read(p%mskfile)
-            if( p%boxmatch < p%box ) call mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-            call b%vol%zero_background
-            call b%vol%mul(mskvol)
+            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+            call mskvol%read(params_glob%mskfile)
+            if( params_glob%boxmatch < params_glob%box ) call mskvol%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
+            call build_glob%vol%zero_background
+            call build_glob%vol%mul(mskvol)
             call mskvol%kill
         else
             ! circular masking
-            if( p%l_innermsk )then
-                call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            if( params_glob%l_innermsk )then
+                call build_glob%vol%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
             else
-                call b%vol%mask(p%msk, 'soft')
+                call build_glob%vol%mask(params_glob%msk, 'soft')
             endif
         endif
         ! FT volume
-        call b%vol%fft()
+        call build_glob%vol%fft()
         ! expand for fast interpolation
-        call b%vol%expand_cmat(p%alpha)
+        call build_glob%vol%expand_cmat(params_glob%alpha)
     end subroutine preprefvol
 
     subroutine norm_struct_facts( which_iter )
@@ -721,48 +719,48 @@ contains
         integer :: s
         character(len=:), allocatable :: fbody
         character(len=STDLEN) :: pprocvol
-        call b%vol%new([p%box,p%box,p%box],p%smpd)
-        do s=1,p%nstates
-            if( b%a%get_pop(s, 'state') == 0 )then
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        do s=1,params_glob%nstates
+            if( build_glob%a%get_pop(s, 'state') == 0 )then
                 ! empty space
                 cycle
             endif
-            if( p%l_distr_exec )then
-                allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
-                p%vols(s) = trim(adjustl(fbody))//p%ext
-                call b%recvols(s)%compress_exp
-                call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
-                call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
+            if( params_glob%l_distr_exec )then
+                allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen))
+                params_glob%vols(s) = trim(adjustl(fbody))//params_glob%ext
+                call build_glob%recvols(s)%compress_exp
+                call build_glob%recvols(s)%write(params_glob%vols(s), del_if_exists=.true.)
+                call build_glob%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//params_glob%ext)
                 deallocate(fbody)
             else
-                if( p%refine .eq. 'snhc' )then
-                     p%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
+                if( params_glob%refine .eq. 'snhc' )then
+                     params_glob%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//params_glob%ext
                 else
                     if( present(which_iter) )then
-                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                        params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext
                     else
-                        p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                        params_glob%vols(s) = 'startvol_state'//int2str_pad(s,2)//params_glob%ext
                     endif
                 endif
-                call b%recvols(s)%compress_exp
-                call b%recvols(s)%sampl_dens_correct
-                call b%recvols(s)%ifft()
-                call b%recvols(s)%clip(b%vol)
-                call b%vol%write(p%vols(s), del_if_exists=.true.)
+                call build_glob%recvols(s)%compress_exp
+                call build_glob%recvols(s)%sampl_dens_correct
+                call build_glob%recvols(s)%ifft()
+                call build_glob%recvols(s)%clip(build_glob%vol)
+                call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, PPROC_SUFFIX)
-                    call b%vol%fft()
+                    pprocvol = add2fbody(trim(params_glob%vols(s)), params_glob%ext, PPROC_SUFFIX)
+                    call build_glob%vol%fft()
                     ! low-pass filter
-                    call b%vol%bp(0., p%lp)
-                    call b%vol%ifft()
+                    call build_glob%vol%bp(0., params_glob%lp)
+                    call build_glob%vol%ifft()
                     ! mask
-                    call b%vol%mask(p%msk, 'soft')
-                    call b%vol%write(pprocvol)
+                    call build_glob%vol%mask(params_glob%msk, 'soft')
+                    call build_glob%vol%write(pprocvol)
                 endif
             endif
         end do
-        call b%vol%kill
+        call build_glob%vol%kill
     end subroutine norm_struct_facts
 
     subroutine eonorm_struct_facts( cline, which_iter )
@@ -770,77 +768,77 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer, optional, intent(in)    :: which_iter
         integer               :: s, find4eoavg
-        real                  :: res05s(p%nstates), res0143s(p%nstates)
+        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
         character(len=STDLEN) :: pprocvol
         character(len=32)     :: resmskname
-        call b%vol%new([p%box,p%box,p%box],p%smpd)
-        call b%vol2%new([p%box,p%box,p%box],p%smpd)
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        call build_glob%vol2%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         ! init
         res0143s = 0.
         res05s   = 0.
         ! cycle through states
-        do s=1,p%nstates
-            if( b%a%get_pop(s, 'state') == 0 )then
+        do s=1,params_glob%nstates
+            if( build_glob%a%get_pop(s, 'state') == 0 )then
                 ! empty state
-                if( present(which_iter) ) b%fsc(s,:) = 0.
+                if( present(which_iter) ) build_glob%fsc(s,:) = 0.
                 cycle
             endif
-            call b%eorecvols(s)%compress_exp
-            if( p%l_distr_exec )then
-                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+            call build_glob%eorecvols(s)%compress_exp
+            if( params_glob%l_distr_exec )then
+                call build_glob%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen))
             else
                 if( present(which_iter) )then
-                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                    params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext
                 else
-                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                    params_glob%vols(s) = 'startvol_state'//int2str_pad(s,2)//params_glob%ext
                 endif
-                p%vols_even(s) = add2fbody(p%vols(s), p%ext, '_even')
-                p%vols_odd(s)  = add2fbody(p%vols(s), p%ext, '_odd')
-                resmskname         = 'resmask'//p%ext
-                call b%eorecvols(s)%sum_eos
-                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
-                call gen_projection_frcs(cline,  p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)
-                call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
-                call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%l_phaseplate)
-                call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
-                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
-                call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
-                call b%vol%write(p%vols(s), del_if_exists=.true.)
+                params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
+                params_glob%vols_odd(s)  = add2fbody(params_glob%vols(s), params_glob%ext, '_odd')
+                resmskname         = 'resmask'//params_glob%ext
+                call build_glob%eorecvols(s)%sum_eos
+                call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), params_glob%vols_odd(s), resmskname, find4eoavg)
+                call gen_projection_frcs(cline,  params_glob%vols_even(s), params_glob%vols_odd(s), resmskname, s, build_glob%projfrcs)
+                call build_glob%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
+                call gen_anisotropic_optlp(build_glob%vol2, build_glob%projfrcs, build_glob%e_bal, s, params_glob%pgrp, params_glob%hpind_fsc, params_glob%l_phaseplate)
+                call build_glob%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//params_glob%ext)
+                call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
+                call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
+                call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
                  ! need to put the sum back at lowres for the eo pairs
-                call b%vol%fft()
-                call b%vol2%zero_and_unflag_ft
-                call b%vol2%read(p%vols_even(s))
-                call b%vol2%fft()
-                call b%vol2%insert_lowres(b%vol, find4eoavg)
-                call b%vol2%ifft()
-                call b%vol2%write(p%vols_even(s), del_if_exists=.true.)
-                call b%vol2%zero_and_unflag_ft
-                call b%vol2%read(p%vols_odd(s))
-                call b%vol2%fft()
-                call b%vol2%insert_lowres(b%vol, find4eoavg)
-                call b%vol2%ifft()
-                call b%vol2%write(p%vols_odd(s), del_if_exists=.true.)
+                call build_glob%vol%fft()
+                call build_glob%vol2%zero_and_unflag_ft
+                call build_glob%vol2%read(params_glob%vols_even(s))
+                call build_glob%vol2%fft()
+                call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
+                call build_glob%vol2%ifft()
+                call build_glob%vol2%write(params_glob%vols_even(s), del_if_exists=.true.)
+                call build_glob%vol2%zero_and_unflag_ft
+                call build_glob%vol2%read(params_glob%vols_odd(s))
+                call build_glob%vol2%fft()
+                call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
+                call build_glob%vol2%ifft()
+                call build_glob%vol2%write(params_glob%vols_odd(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol   = add2fbody(trim(p%vols(s)), p%ext, PPROC_SUFFIX)
-                    b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
+                    pprocvol   = add2fbody(trim(params_glob%vols(s)), params_glob%ext, PPROC_SUFFIX)
+                    build_glob%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
                     ! low-pass filter
-                    call b%vol%bp(0., p%lp)
-                    call b%vol%ifft()
+                    call build_glob%vol%bp(0., params_glob%lp)
+                    call build_glob%vol%ifft()
                     ! mask
-                    call b%vol%mask(p%msk, 'soft')
-                    call b%vol%write(pprocvol)
+                    call build_glob%vol%mask(params_glob%msk, 'soft')
+                    call build_glob%vol%write(pprocvol)
                 else
-                    call b%vol%zero_and_unflag_ft
+                    call build_glob%vol%zero_and_unflag_ft
                 endif
             endif
         end do
-        if( .not. p%l_distr_exec )then
+        if( .not. params_glob%l_distr_exec )then
             ! set the resolution limit according to the worst resolved model
-            p%lp = min(p%lp,max(p%lpstop,maxval(res0143s)))
+            params_glob%lp = min(params_glob%lp,max(params_glob%lpstop,maxval(res0143s)))
         endif
-        call b%vol%kill
-        call b%vol2%kill
+        call build_glob%vol%kill
+        call build_glob%vol2%kill
     end subroutine eonorm_struct_facts
 
     !>  \brief generate projection FRCs from even/odd pairs
@@ -857,20 +855,20 @@ contains
         type(image), allocatable :: even_imgs(:), odd_imgs(:)
         real,        allocatable :: frc(:)
         integer :: iproj, find_plate
-        ! ensure correct b%vol dim
-        call b%vol%new([p%box,p%box,p%box],p%smpd)
+        ! ensure correct build_glob%vol dim
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         ! read & prep even/odd pair
-        call b%vol%read(ename)
-        call b%vol2%read(oname)
-        call mskvol%new([p%box, p%box, p%box], p%smpd)
-        call prepeovol(b%vol)
-        call prepeovol(b%vol2)
+        call build_glob%vol%read(ename)
+        call build_glob%vol2%read(oname)
+        call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+        call prepeovol(build_glob%vol)
+        call prepeovol(build_glob%vol2)
         ! create e_space
         call e_space%new(NSPACE_BALANCE)
-        call e_space%spiral(p%nsym, p%eullims)
+        call e_space%spiral(params_glob%nsym, params_glob%eullims)
         ! generate even/odd projections
-        even_imgs = reproject(b%vol,  e_space)
-        odd_imgs  = reproject(b%vol2, e_space)
+        even_imgs = reproject(build_glob%vol,  e_space)
+        odd_imgs  = reproject(build_glob%vol2, e_space)
         ! calculate FRCs and fill-in projfrcs object
         allocate(frc(even_imgs(1)%get_filtsz()))
         !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)
@@ -878,7 +876,7 @@ contains
             call even_imgs(iproj)%fft()
             call odd_imgs(iproj)%fft()
             call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)
-            if( p%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
+            if( params_glob%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
             call projfrcs%set_frc(iproj, frc, state)
             call even_imgs(iproj)%kill
             call odd_imgs(iproj)%kill
@@ -902,10 +900,10 @@ contains
                     call vol%mul(mskvol)
                 else
                     ! circular masking
-                    if( p%l_innermsk )then
-                        call vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+                    if( params_glob%l_innermsk )then
+                        call vol%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
                     else
-                        call vol%mask(p%msk, 'soft')
+                        call vol%mask(params_glob%msk, 'soft')
                     endif
                 endif
         end subroutine prepeovol

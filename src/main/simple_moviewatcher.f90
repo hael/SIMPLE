@@ -1,7 +1,7 @@
 ! movie watcher for stream processing
 module simple_moviewatcher
 include 'simple_lib.f08'
-use simple_params,        only: p  ! singleton
+use simple_parameters, only: params_glob
 implicit none
 
 public :: moviewatcher
@@ -9,7 +9,7 @@ private
 
 type moviewatcher
     private
-    character(len=LONGSTRLEN), allocatable :: history(:)             !< history of movies detected
+    character(len=LONGSTRLEN), allocatable :: history(:)         !< history of movies detected
     character(len=LONGSTRLEN)          :: cwd            = ''    !< CWD
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
@@ -21,7 +21,6 @@ type moviewatcher
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
     integer                            :: n_watch        = 0     !< number of times the folder has been watched
 contains
-
     ! doers
     procedure          :: watch
     procedure, private :: is_past
@@ -34,8 +33,8 @@ interface moviewatcher
     module procedure constructor
 end interface moviewatcher
 
-integer,          parameter :: FAIL_THRESH = 50
-integer,          parameter :: FAIL_TIME   = 7200 ! 2 hours
+integer, parameter :: FAIL_THRESH = 50
+integer, parameter :: FAIL_TIME   = 7200 ! 2 hours
 
 contains
 
@@ -46,15 +45,15 @@ contains
         type(moviewatcher) :: self
         integer            :: i,n
         call self%kill
-        if( .not. file_exists(trim(adjustl(p%dir_movies))) )then
-            print *, 'Directory does not exist: ', trim(adjustl(p%dir_movies))
+        if( .not. file_exists(trim(adjustl(params_glob%dir_movies))) )then
+            print *, 'Directory does not exist: ', trim(adjustl(params_glob%dir_movies))
             stop
         endif
-        self%cwd         = trim(p%cwd)
-        self%watch_dir   = trim(adjustl(p%dir_movies))
+        self%cwd         = trim(params_glob%cwd)
+        self%watch_dir   = trim(adjustl(params_glob%dir_movies))
         self%report_time = report_time
-        self%ext         = trim(adjustl(p%ext))
-        self%fbody       = trim(adjustl(p%fbody))
+        self%ext         = trim(adjustl(params_glob%ext))
+        self%fbody       = trim(adjustl(params_glob%fbody))
         if( allocated(prev_movies) )then
             do i=1,size(prev_movies)
                 call self%add2history( trim(prev_movies(i)) )

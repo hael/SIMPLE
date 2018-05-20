@@ -3,10 +3,10 @@ module simple_motion_correct_iter
 include 'simple_lib.f08'
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
-use simple_params,       only: p   ! singleton
+use simple_parameters,   only: params_glob
 use simple_ori,          only: ori
 use simple_stackops,     only: frameavg_stack
-use simple_motion_correct       ! use all in there
+use simple_motion_correct
 implicit none
 
 public :: motion_correct_iter
@@ -55,19 +55,19 @@ contains
         else
             fbody_here = get_fbody(trim(fbody_here), trim(ext))
         endif
-        self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(p%ext)
-        self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(p%ext)
+        self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
+        self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)
         self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
         if( cline%defined('tof') )then
-            self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(p%fromf)//'-'&
-            &//int2str(p%tof)//INTGMOV_SUFFIX//p%ext
+            self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(params_glob%fromf)//'-'&
+            &//int2str(params_glob%tof)//INTGMOV_SUFFIX//params_glob%ext
         endif
         ! check, increment counter & print
         write(*,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
-        if( p%nframesgrp > 0 )then
-            self%moviename = 'tmpnframesgrpmovie'//p%ext
-            call frameavg_stack(trim(moviename), trim(self%moviename), p%nframesgrp, ctfvars%smpd)
+        if( params_glob%nframesgrp > 0 )then
+            self%moviename = 'tmpnframesgrpmovie'//params_glob%ext
+            call frameavg_stack(trim(moviename), trim(self%moviename), params_glob%nframesgrp, ctfvars%smpd)
         else
             self%moviename = trim(moviename)
         endif
@@ -75,12 +75,12 @@ contains
         call motion_correct_movie(self%moviename, ctfvars, corr, shifts, err)
         if( err ) return
         ! generate sums
-        if( p%tomo .eq. 'yes' )then
-            call motion_correct_calc_sums_tomo(frame_counter, p%time_per_frame,&
+        if( params_glob%tomo .eq. 'yes' )then
+            call motion_correct_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         else
             if( cline%defined('tof') )then
-                call motion_correct_calc_sums(self%moviesum_corrected_frames, [p%fromf,p%tof])
+                call motion_correct_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
                 call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             else
                 call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
@@ -90,8 +90,8 @@ contains
             DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
         endif
         ! generate power-spectra and cleanup
-        self%pspec_sum         = self%moviesum%mic2spec(p%pspecsz, self%speckind)
-        self%pspec_ctf         = self%moviesum_ctf%mic2spec(p%pspecsz, self%speckind)
+        self%pspec_sum         = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind)
+        self%pspec_ctf         = self%moviesum_ctf%mic2spec(params_glob%pspecsz, self%speckind)
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
         call self%pspec_sum%kill
         call self%pspec_ctf%kill
@@ -101,7 +101,7 @@ contains
         call self%moviesum_ctf%write(self%moviename_forctf)
         ! generate thumbnail
         ldim          = self%moviesum_corrected%get_ldim()
-        scale         = real(p%pspecsz)/real(ldim(1))
+        scale         = real(params_glob%pspecsz)/real(ldim(1))
         ldim_thumb(1) = round2even(real(ldim(1))*scale)
         ldim_thumb(2) = round2even(real(ldim(2))*scale)
         ldim_thumb(3) = 1

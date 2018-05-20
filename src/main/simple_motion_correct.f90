@@ -3,11 +3,11 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,  only: ft_expanded
-use simple_image,        only: image
-use simple_params,       only: p    ! singleton
-use simple_estimate_ssnr,only: acc_dose2filter
-use simple_oris,         only: oris
+use simple_ft_expanded,   only: ft_expanded
+use simple_image,         only: image
+use simple_parameters,    only: params_glob
+use simple_estimate_ssnr, only: acc_dose2filter
+use simple_oris,          only: oris
 implicit none
 
 public :: motion_correct_movie, motion_correct_calc_sums, motion_correct_calc_sums_tomo
@@ -80,8 +80,8 @@ contains
             return
         endif
         ! make search object ready
-        call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), p%scale * p%trs, &
-            motion_correct_ftol = p%motion_correctftol, motion_correct_gtol = p%motion_correctgtol)
+        call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), params_glob%scale * params_glob%trs, &
+            motion_correct_ftol = params_glob%motion_correctftol, motion_correct_gtol = params_glob%motion_correctgtol)
         ! initialise with small random shifts (to average out dead/hot pixels)
         do iframe=1,nframes
             opt_shifts(iframe,1) = ran3()*2.*SMALLSHIFT-SMALLSHIFT
@@ -221,9 +221,9 @@ contains
         if( nframes < 2 ) return
         DebugPrint  'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
-        if( p%scale < 0.99 )then
-            ldim_scaled(1) = round2even(real(ldim(1))*p%scale)
-            ldim_scaled(2) = round2even(real(ldim(2))*p%scale)
+        if( params_glob%scale < 0.99 )then
+            ldim_scaled(1) = round2even(real(ldim(1))*params_glob%scale)
+            ldim_scaled(2) = round2even(real(ldim(2))*params_glob%scale)
             ldim_scaled(3) = 1
             doscale        = .true.
         else
@@ -232,7 +232,7 @@ contains
         endif
         ! SET SAMPLING DISTANCE
         smpd        = ctfvars%smpd
-        smpd_scaled = ctfvars%smpd/p%scale
+        smpd_scaled = ctfvars%smpd/params_glob%scale
         DebugPrint 'logical dimension of frame: ',        ldim
         DebugPrint 'scaled logical dimension of frame: ', ldim_scaled
         DebugPrint 'number of frames: ',                  nframes
@@ -240,10 +240,10 @@ contains
         fixed_frame = nint(real(nframes)/2.)
         ! set reslims
         dimo4     = (real(minval(ldim_scaled(1:2)))*smpd_scaled)/4.
-        moldiam   = 0.7*real(p%box)*smpd_scaled
+        moldiam   = 0.7*real(params_glob%box)*smpd_scaled
         hp        = min(dimo4,2000.)
-        lp        = p%lpstart
-        resstep   = (p%lpstart-p%lpstop)/3.
+        lp        = params_glob%lpstart
+        resstep   = (params_glob%lpstart-params_glob%lpstop)/3.
         ! ALLOCATE
         allocate( movie_frames_ftexp(nframes), movie_frames_scaled(nframes),&
             movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
@@ -304,13 +304,13 @@ contains
         endif
         call frame_tmp%kill
         ! check if we are doing dose weighting
-        if( p%l_dose_weight )then
+        if( params_glob%l_dose_weight )then
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct, acc_doses')
             kV = ctfvars%kv
-            time_per_frame = p%exp_time/real(nframes)           ! unit: s
-            dose_rate      = p%dose_rate
+            time_per_frame = params_glob%exp_time/real(nframes)           ! unit: s
+            dose_rate      = params_glob%dose_rate
             do iframe=1,nframes
                 current_time      = real(iframe)*time_per_frame ! unit: s
                 acc_doses(iframe) = dose_rate*current_time      ! unit: e/A2/s * s = e/A2

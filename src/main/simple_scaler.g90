@@ -33,9 +33,9 @@ logical, parameter :: DEBUG=.false.
 contains
 
     subroutine init( self, p_master, cline, box_original, smpd_target, stkscaledbody)
-        use simple_params, only: params
+        use simple_parameters, only: parameters
         class(scaler),              intent(inout) :: self
-        class(params),              intent(in)    :: p_master
+        class(parameters),              intent(in)    :: p_master
         class(cmdline),             intent(inout) :: cline
         integer,                    intent(in)    :: box_original
         real,                       intent(inout) :: smpd_target

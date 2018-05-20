@@ -1,7 +1,6 @@
 ! shared-memory parallelised programs executed by distributed commanders
 program simple_private_exec
 include 'simple_lib.f08'
-use simple_singletons
 use simple_cmdline, only: cmdline, cmdline_err
 use simple_gen_doc
 use simple_commander_project
@@ -65,7 +64,6 @@ type(check_nptcls_commander)         :: xcheck_nptcls
 ! VOLOPS PROGRAMS
 type(postprocess_commander)          :: xpostprocess   ! DUPLICATED
 type(reproject_commander)            :: xreproject     ! DUPLICATED
-type(volaverager_commander)          :: xvolaverager
 type(volume_smat_commander)          :: xvolume_smat
 type(dock_volpair_commander)         :: xdock_volpair
 
@@ -488,6 +486,7 @@ select case(prg)
                 if( .not. cline%defined('oritab')  ) stop 'refine=MULTI requires ORITAB input'
             endif
         endif
+        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xprime3D%execute(cline)
     case( 'check_3Dconv' )
         ! for convergence checking and run-time stats printing (3D)
@@ -670,14 +669,6 @@ select case(prg)
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
         if( .not. cline%defined('alpha') ) call cline%set('alpha', 2.)
         call xreproject%execute(cline)
-    case( 'volaverager' )
-        ! for averaging volumes according to state label in oritab
-        keys_required(1) = 'vollist'
-        keys_required(2) = 'oritab'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
-        call xvolaverager%execute(cline)
     case( 'volume_smat' )
         ! for creating a similarity matrix based on volume2volume correlation
         keys_required(1) = 'vollist'

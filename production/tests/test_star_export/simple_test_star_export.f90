@@ -1,15 +1,14 @@
 program simple_test_star_export
 include 'simple_lib.f08'
 use simple_star
-use simple_singletons
 use simple_cmdline,        only: cmdline
-!use simple_params,         only: params
-!use simple_build,          only: build
+!use simple_parameters,         only: parameters
+!use simple_builder,          only: builder
 use simple_sp_project,     only: sp_project
     implicit none
 
     type(starfile) :: s
-   ! type(params) :: p
+   ! type(parameters) :: p
     call s%export_motion_corrected_micrographs (trim('tmp_mc.star'))
     call exec_cmdline( 'relion_star_loopheader rlnMicrographNameNoDW rlnMicrographName > tmp_mc.star')
 

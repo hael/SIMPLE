@@ -940,7 +940,6 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ctfops%set_input('img_ios', 1, stk)
-        ctfops%img_ios(1)%required = .false.
         call ctfops%set_input('img_ios', 2, outstk)
         ! parameter input/output
         call ctfops%set_input('parm_ios', 1, smpd)
@@ -1375,7 +1374,7 @@ contains
         &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
         & falloff, set msk to the radius in pixels',&                         ! descr_long
         &'simple_exec',&                                                      ! executable
-        &0, 3, 2, 1, 1,11, 1, .false.)                                        ! # entries in each group, requires sp_project
+        &0, 3, 2, 1, 1,10, 1, .false.)                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1401,16 +1400,14 @@ contains
         call mask%set_input('mask_ctrls', 4, mskfile)
         call mask%set_input('mask_ctrls', 5, 'msktype', 'binary', 'Mask type',&
         &'Type of mask to use(soft|hard){soft}', '(soft|hard){soft}', .false., 'soft')
-        call mask%set_input('mask_ctrls', 6, 'automsk', 'multi', 'Perform 2D envelope masking',&
-        &'Whether to perform 2D envelope masking(cavg|no){no}', '(cavg|no){no}', .false., 'no')
-        call mask%set_input('mask_ctrls', 7, mw)
-        call mask%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
+        call mask%set_input('mask_ctrls', 6, mw)
+        call mask%set_input('mask_ctrls', 7, 'width', 'num', 'Inner mask falloff',&
         &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
-        call mask%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
+        call mask%set_input('mask_ctrls', 8, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
-        call mask%set_input('mask_ctrls',10, 'taper_edges', 'binary', 'Taper edges',&
+        call mask%set_input('mask_ctrls', 9, 'taper_edges', 'binary', 'Taper edges',&
         &'Whether to taper the edges of image/volume(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call mask%set_input('mask_ctrls',11, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
+        call mask%set_input('mask_ctrls',10, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
         &'PDB file used to determine the mask', 'e.g. molecule.pdb', .false., '')
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)

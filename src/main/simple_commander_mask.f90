@@ -1,7 +1,8 @@
 ! concrete commander: masking routines
 module simple_commander_mask
 include 'simple_lib.f08'
-use simple_singletons
+use simple_builder,        only: builder
+use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 implicit none
@@ -34,21 +35,19 @@ contains
         use simple_masker,      only: masker
         class(mask_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
+        type(parameters)           :: params
+        type(builder)              :: build
         type(automask2D_commander) :: automask2D
         type(image)                :: mskvol
         type(atoms)                :: pdb
         type(masker)               :: msker
         character(len=STDLEN)      :: pdbout_fname
         integer                    :: ldim(3)
-        call init_params(cline)  ! parameters generated
-        p%boxmatch = p%box ! turns off boxmatch logics
         if( cline%defined('stk') .and. cline%defined('vol1')   ) stop 'Cannot operate on images AND volume at once'
-        if( p%automsk.eq.'yes'   .and..not.cline%defined('mw') ) stop 'Missing mw argument for automasking'
-        if( p%msktype.ne.'soft'  .and. p%msktype.ne.'hard' .and. p%msktype.ne.'cavg' ) stop 'Invalid mask type'
         if( cline%defined('stk') )then
             ! 2D
-            call b%build_general_tbox( cline, do3d=.false.) ! general objects built
-            if( p%automsk.eq.'yes' )then
+            call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
+            if( params%automsk.eq.'yes' )then
                 ! auto
                 if( .not. cline%defined('amsklp') )call cline%set('amsklp', 25.)
                 if( .not. cline%defined('edge')   )call cline%set('edge', 10.)
@@ -57,60 +56,56 @@ contains
                 ! spherical
                 if( cline%defined('inner') )then
                     if( cline%defined('width') )then
-                        call mask_imgfile(p%stk, p%outstk, p%msk, p%smpd, inner=p%inner, width=p%width, which=p%msktype)
+                        call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, inner=params%inner, width=params%width, which=params%msktype)
                     else
-                        call mask_imgfile(p%stk, p%outstk, p%msk, p%smpd, inner=p%inner, which=p%msktype)
+                        call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, inner=params%inner, which=params%msktype)
                     endif
                 else
-                    call mask_imgfile(p%stk, p%outstk, p%msk, p%smpd, which=p%msktype)
+                    call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, which=params%msktype)
                 endif
-            else if( p%taper_edges.eq.'yes' )then
-                call taper_edges_imgfile(p%stk, p%outstk, p%smpd)
+            else if( params%taper_edges.eq.'yes' )then
+                call taper_edges_imgfile(params%stk, params%outstk, params%smpd)
             else
                 stop 'Nothing to do!'
             endif
         else if( cline%defined('vol1') )then
             ! 3D
-            call b%build_general_tbox( cline) ! general objects built
-            ! reallocate vol (boxmatch issue)
-            call b%vol%new([p%box, p%box, p%box], p%smpd)
-            if( .not. file_exists(p%vols(1)) ) stop 'Cannot find input volume'
-            call b%vol%read(p%vols(1))
+            call build%init_params_and_build_general_tbox(cline,params,do3d=.true.,boxmatch_off=.true.)
+            if( .not. file_exists(params%vols(1)) ) stop 'Cannot find input volume'
+            call build%vol%read(params%vols(1))
             if( cline%defined('mskfile') )then
                 ! from file
-                if( .not. file_exists(p%mskfile) ) stop 'Cannot find input mskfile'
-                ldim = b%vol%get_ldim()
-                call mskvol%new(ldim, p%smpd)
-                call mskvol%read(p%mskfile)
-                call b%vol%mul(mskvol)
+                if( .not. file_exists(params%mskfile) ) stop 'Cannot find input mskfile'
+                ldim = build%vol%get_ldim()
+                call mskvol%new(ldim, params%smpd)
+                call mskvol%read(params%mskfile)
+                call build%vol%mul(mskvol)
                 call mskvol%kill
-                if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
-            else if( p%automsk.eq.'yes' )then
-                stop '3D automasking now deferred to program: postprocess'
+                if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('msk') )then
                 ! spherical
                 if( cline%defined('inner') )then
                     if( cline%defined('width') )then
-                        call b%vol%mask(p%msk, p%msktype, inner=p%inner, width=p%width)
+                        call build%vol%mask(params%msk, params%msktype, inner=params%inner, width=params%width)
                     else
-                        call b%vol%mask(p%msk, p%msktype, inner=p%inner)
+                        call build%vol%mask(params%msk, params%msktype, inner=params%inner)
                     endif
                 else
-                    call b%vol%mask(p%msk, p%msktype)
+                    call build%vol%mask(params%msk, params%msktype)
                 endif
-                if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
+                if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('pdbfile') )then
                 ! focus masking
-                call pdb%new(p%pdbfile)
-                pdbout_fname = trim(get_fbody(p%pdbfile, 'pdb')) // '_centered'
-                if( p%center.eq.'yes' )then
-                    call msker%mask_from_pdb( pdb, b%vol, os=b%a, pdbout=pdbout_fname)
+                call pdb%new(params%pdbfile)
+                pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered'
+                if( params%center.eq.'yes' )then
+                    call msker%mask_from_pdb( pdb, build%vol, os=build%a, pdbout=pdbout_fname)
                 else
-                    call msker%mask_from_pdb( pdb, b%vol)
+                    call msker%mask_from_pdb( pdb, build%vol)
                 endif
-                call b%a%write(p%outfile)
-                call b%vol%write(p%outvol)
-                call msker%write('maskfile'//p%ext)
+                call build%a%write(params%outfile)
+                call build%vol%write(params%outvol)
+                call msker%write('maskfile'//params%ext)
             else
                 stop 'Nothing to do!'
             endif
@@ -125,17 +120,17 @@ contains
     subroutine exec_automask2D( self, cline )
         class(automask2D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        integer      :: iptcl
-        call init_params(cline)                                 ! parameters generated
-        p%boxmatch = p%box                                ! turns off boxmatch logics
-        call b%build_general_tbox( cline, do3d=.false.) ! general objects built
-        write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
-        write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
-        p%outstk = add2fbody(p%stk, p%ext, 'msk')
-        do iptcl=1,p%nptcls
-            call b%img%read(p%stk, iptcl)
-            call b%mskimg%apply_2Denvmask22Dref(b%img)
-            call b%img%write(p%outstk, iptcl)
+        type(parameters) :: params
+        type(builder)    :: build
+        integer          :: iptcl
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
+        write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        params%amsklp, ' ANGSTROMS'
+        write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', params%edge,   ' PIXELS'
+        params%outstk = add2fbody(params%stk, params%ext, 'msk')
+        do iptcl=1,params%nptcls
+            call build%img%read(params%stk, iptcl)
+            call build%mskimg%apply_2Denvmask22Dref(build%img)
+            call build%img%write(params%outstk, iptcl)
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
@@ -146,18 +141,18 @@ contains
         use simple_masker, only: masker
         class(resmask_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(masker)  :: mskvol
-        call init_params(cline)
-        p%boxmatch = p%box                  ! turns off boxmatch logics
-        ! call b%build_general_tbox( cline)   ! general objects built
-        call mskvol%new([p%box,p%box,p%box], p%smpd)
-        if( file_exists(p%mskfile) )then
-            call mskvol%read(p%mskfile)
+        type(parameters) :: params
+        type(builder)    :: build
+        type(masker)     :: mskvol
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.,boxmatch_off=.true.)
+        call mskvol%new([params%box,params%box,params%box], params%smpd)
+        if( file_exists(params%mskfile) )then
+            call mskvol%read(params%mskfile)
             call mskvol%resmask()
-            call mskvol%write('resmask'//p%ext)
+            call mskvol%write('resmask'//params%ext)
             call mskvol%kill
         else
-            write(*,*) 'the inputted mskfile: ', trim(p%mskfile)
+            write(*,*) 'the inputted mskfile: ', trim(params%mskfile)
             stop 'does not exists in cwd; commander_mask :: exec_resmask'
         endif
          ! end gracefully

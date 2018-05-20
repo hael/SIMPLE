@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_build,             only: b
+use simple_builder,           only: build_glob
 use simple_optimizer,         only: optimizer
 use simple_opt_spec,          only: opt_spec
 implicit none
@@ -142,9 +142,9 @@ contains
         select type(self)
             class is (pftcc_orisrch_grad)
                 if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call b%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
+                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
                 else
-                    call b%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
+                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
                 endif
                 call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 grad = - corr_grad
@@ -173,9 +173,9 @@ contains
                 call e%new()
                 call e%set_euler(real(vec(1:3)))
                 if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call b%vol%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.true.)
+                    call build_glob%vol%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.true.)
                 else
-                    call b%vol_odd%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.false.)
+                    call build_glob%vol_odd%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.false.)
                 endif
                 corr = self%pftcc_ptr%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
                 cost = -corr
@@ -202,9 +202,9 @@ contains
         select type(self)
             class is (pftcc_orisrch_grad)
                 if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call b%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
+                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
                 else
-                    call b%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
+                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
                 endif
                 call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 f    = - corr

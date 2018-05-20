@@ -6,7 +6,7 @@ use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project
 use simple_oris,           only: oris
 use simple_binoris_io,     only: binread_nlines, binread_oritab
-use simple_singletons
+use simple_parameters,     only: parameters
 implicit none
 
 public :: project2txt_commander
@@ -73,18 +73,19 @@ contains
     subroutine exec_txt2project( self, cline )
         class(txt2project_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
+        type(parameters) :: params
         type(oris)       :: os
         type(sp_project) :: spproj
         integer          :: noris
-        call init_params(cline)
-        noris = nlines(p%oritab)
+        params = parameters(cline)
+        noris = nlines(params%oritab)
         call os%new(noris)
-        call os%read(p%oritab)
-        if( file_exists(p%projfile) )then
-            call spproj%read(p%projfile)
+        call os%read(params%oritab)
+        if( file_exists(params%projfile) )then
+            call spproj%read(params%projfile)
         endif
-        call spproj%set_sp_oris(p%oritype, os)
-        call spproj%write(p%projfile)
+        call spproj%set_sp_oris(params%oritype, os)
+        call spproj%write(params%projfile)
         call spproj%kill
         call simple_end('**** TXT2PROJECT NORMAL STOP ****')
     end subroutine exec_txt2project
@@ -93,10 +94,11 @@ contains
     subroutine exec_project2txt( self, cline )
         class(project2txt_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: spproj
-        call init_params(cline)
-        call spproj%read(p%projfile)
-        call spproj%write_segment(p%oritype, p%outfile)
+        params = parameters(cline)
+        call spproj%read(params%projfile)
+        call spproj%write_segment(params%oritype, params%outfile)
         call spproj%kill
         call simple_end('**** PROJECT2TXT NORMAL STOP ****')
     end subroutine exec_project2txt
@@ -105,9 +107,10 @@ contains
     subroutine exec_print_project_info( self, cline )
         class(print_project_info_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: spproj
-        call init_params(cline)
-        call spproj%read(p%projfile)
+        params = parameters(cline)
+        call spproj%read(params%projfile)
         call spproj%print_info
         call spproj%kill
         call simple_end('**** PRINT_PROJECT_INFO NORMAL STOP ****')
@@ -215,17 +218,18 @@ contains
     subroutine exec_new_project( self, cline )
         class(new_project_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: spproj
-        call init_params(cline)
-        if( file_exists('./'//trim(p%projname)) )then
-            write(*,*) 'project directory: ', trim(p%projname), ' already exists in cwd: ', trim(p%cwd)
+        params = parameters(cline)
+        if( file_exists('./'//trim(params%projname)) )then
+            write(*,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
             write(*,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
             stop 'ABORTING... commander_project :: new_project'
         endif
         ! make project directory
-        call simple_mkdir('./'//trim(p%projname))
+        call simple_mkdir('./'//trim(params%projname))
         ! change to project directory
-        call simple_chdir('./'//trim(p%projname))
+        call simple_chdir('./'//trim(params%projname))
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
@@ -242,17 +246,18 @@ contains
     subroutine exec_update_project( self, cline )
         class(update_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: spproj
-        call init_params(cline)
-        if( .not. file_exists('./'//trim(p%projname)) )then
-            write(*,*) 'project directory: ', trim(p%projname), ' does not exist in cwd: ', trim(p%cwd)
+        params = parameters(cline)
+        if( .not. file_exists('./'//trim(params%projname)) )then
+            write(*,*) 'project directory: ', trim(params%projname), ' does not exist in cwd: ', trim(params%cwd)
             write(*,*) 'Use program new_project to create a new project from scratch'
             stop 'ABORTING... commander_project :: update_project'
         endif
         ! change to project directory
-        call simple_chdir('./'//trim(p%projname))
+        call simple_chdir('./'//trim(params%projname))
         ! read project
-        call spproj%read(trim(p%projfile))
+        call spproj%read(trim(params%projfile))
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
@@ -269,32 +274,33 @@ contains
     subroutine exec_import_movies( self, cline )
         class(import_movies_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: spproj
         logical          :: inputted_boxtab
         integer          :: nmovf, nboxf, i
         type(ctfparams)  :: ctfvars
         character(len=:),      allocatable :: phaseplate, boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        call init_params(cline)
+        params = parameters(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
-        if( .not. file_exists(trim(p%projfile)) )then
-            write(*,*) 'Project file: ', trim(p%projfile), ' does not exists!'
+        if( .not. file_exists(trim(params%projfile)) )then
+            write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
             stop 'ERROR! simple_commander_project :: exec_import_movies'
         endif
-        call spproj%read(p%projfile)
+        call spproj%read(params%projfile)
         ! CTF
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
         else
             allocate(phaseplate, source='no')
         endif
-        ctfvars%smpd  = p%smpd
-        ctfvars%kv    = p%kv
-        ctfvars%cs    = p%cs
-        ctfvars%fraca = p%fraca
-        select case(p%ctf)
+        ctfvars%smpd  = params%smpd
+        ctfvars%kv    = params%kv
+        ctfvars%cs    = params%cs
+        ctfvars%fraca = params%fraca
+        select case(params%ctf)
             case('yes')
                 ctfvars%ctfflag = 1
             case('no')
@@ -302,20 +308,20 @@ contains
             case('flip')
                 ctfvars%ctfflag = 2
             case DEFAULT
-                write(*,*) 'ctf flag p%ctf: ', p%ctf
+                write(*,*) 'ctf flag params%ctf: ', params%ctf
                 stop 'ERROR! ctf flag not supported; commander_project :: import_movies'
         end select
         ctfvars%l_phaseplate = .false.
-        if( trim(p%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
+        if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
         ! update project info
         call spproj%update_projinfo( cline )
         ! updates segment
-        call spproj%add_movies(p%filetab, ctfvars)
+        call spproj%add_movies(params%filetab, ctfvars)
         ! add boxtab
         if( inputted_boxtab )then
-            call read_filetable(p%boxtab, boxfnames)
+            call read_filetable(params%boxtab, boxfnames)
             nboxf = size(boxfnames)
-            nmovf = nlines(p%filetab)
+            nmovf = nlines(params%filetab)
             if( nboxf /= nmovf )then
                 write(*,*) '# boxfiles: ', nboxf
                 write(*,*) '# movies  : ', nmovf
@@ -335,19 +341,20 @@ contains
     subroutine exec_import_boxes( self, cline )
         class(import_boxes_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: spproj
         integer          :: nos_mic, nboxf, i
-        character(len=:),      allocatable :: boxf_abspath
+        character(len=:),          allocatable :: boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        call init_params(cline)
+        params = parameters(cline)
         ! project file management
-        if( .not. file_exists(trim(p%projfile)) )then
-            write(*,*) 'Project file: ', trim(p%projfile), ' does not exists!'
+        if( .not. file_exists(trim(params%projfile)) )then
+            write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
             stop 'ERROR! simple_commander_project :: exec_import_boxes'
         endif
-        call spproj%read(p%projfile)
+        call spproj%read(params%projfile)
         ! get boxfiles into os_mic
-        call read_filetable(p%boxtab, boxfnames)
+        call read_filetable(params%boxtab, boxfnames)
         nboxf   = size(boxfnames)
         nos_mic = spproj%os_mic%get_noris()
         if( nboxf /= nos_mic )then
@@ -374,13 +381,14 @@ contains
         character(len=STDLEN)         :: projfile
         character(len=:), allocatable :: phaseplate, ctfstr
         real,             allocatable :: line(:)
+        type(parameters) :: params
         type(sp_project) :: spproj
         type(oris)       :: os
         type(nrtxtfile)  :: paramfile
         logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
         integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
         type(ctfparams)  :: ctfvars
-        call init_params(cline)
+        params = parameters(cline)
         ! PARAMETER INPUT MANAGEMENT
         ! parameter input flags
         inputted_oritab       = cline%defined('oritab')
@@ -397,7 +405,7 @@ contains
             stop 'commander_project :: exec_import_particles'
         endif
         if( cline%defined('stk') .or. cline%defined('stktab') )then
-            if( trim(p%ctf) .ne. 'no' )then
+            if( trim(params%ctf) .ne. 'no' )then
                 ! there needs to be associated parameters of some form
                 if( n_ori_inputs < 1 )then
                     write(*,*) 'ERROR, stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)'
@@ -409,19 +417,19 @@ contains
         endif
         ! oris input
         if( inputted_oritab )then
-            ndatlines = binread_nlines(p%oritab)
+            ndatlines = binread_nlines(params%oritab)
             call os%new(ndatlines)
-            call binread_oritab(p%oritab, spproj, os, [1,ndatlines])
+            call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_deftab )then
-            ndatlines = binread_nlines(p%deftab)
+            ndatlines = binread_nlines(params%deftab)
             call os%new(ndatlines)
-            call binread_oritab(p%deftab, spproj, os, [1,ndatlines])
+            call binread_oritab(params%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_plaintexttab )then
-            call paramfile%new(p%plaintexttab, 1)
+            call paramfile%new(params%plaintexttab, 1)
             ndatlines = paramfile%get_ndatalines()
             nrecs     = paramfile%get_nrecs_per_line()
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
@@ -432,7 +440,7 @@ contains
             allocate( line(nrecs) )
             do i=1,ndatlines
                 call paramfile%readNextDataLine(line)
-                select case(p%dfunit)
+                select case(params%dfunit)
                     case( 'A' )
                         line(1) = line(1)/1.0e4
                         if( nrecs > 1 )  line(2) = line(2)/1.0e4
@@ -441,7 +449,7 @@ contains
                     case DEFAULT
                         stop 'unsupported dfunit; commander_project :: exec_extract_ptcls'
                 end select
-                select case(p%angastunit)
+                select case(params%angastunit)
                     case( 'radians' )
                         if( nrecs == 3 ) line(3) = rad2deg(line(3))
                     case( 'degrees' )
@@ -449,7 +457,7 @@ contains
                     case DEFAULT
                         stop 'unsupported angastunit; commander_project :: exec_extract_ptcls'
                 end select
-                select case(p%phshiftunit)
+                select case(params%phshiftunit)
                     case( 'radians' )
                         ! nothing to do
                     case( 'degrees' )
@@ -469,8 +477,8 @@ contains
         endif
         if( cline%defined('stk') )then
             if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing single stack of particles (stk); commander_project :: exec_import_particles'
-            ctfvars%smpd = p%smpd
-            select case(trim(p%ctf))
+            ctfvars%smpd = params%smpd
+            select case(trim(params%ctf))
                 case('yes')
                     ctfvars%ctfflag = CTFFLAG_YES
                 case('no')
@@ -478,7 +486,7 @@ contains
                 case('flip')
                     ctfvars%ctfflag = CTFFLAG_FLIP
                 case DEFAULT
-                    write(*,*) 'unsupported ctf flag: ', trim(p%ctf)
+                    write(*,*) 'unsupported ctf flag: ', trim(params%ctf)
                     stop 'ABORTING... commander_project :: exec_extract_ptcls'
             end select
             if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
@@ -491,9 +499,9 @@ contains
                 else
                     allocate(phaseplate, source='no')
                 endif
-                ctfvars%kv           = p%kv
-                ctfvars%cs           = p%cs
-                ctfvars%fraca        = p%fraca
+                ctfvars%kv           = params%kv
+                ctfvars%cs           = params%cs
+                ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = phaseplate .eq. 'yes'
             endif
         else
@@ -501,7 +509,7 @@ contains
             if( n_ori_inputs == 1 )then
                 ! sampling distance
                 if( cline%defined('smpd') )then
-                    call os%set_all2single('smpd', p%smpd)
+                    call os%set_all2single('smpd', params%smpd)
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'smpd') )then
@@ -513,7 +521,7 @@ contains
                 endif
                 ! acceleration voltage
                 if( cline%defined('kv') )then
-                    call os%set_all2single('kv', p%kv)
+                    call os%set_all2single('kv', params%kv)
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'kv') )then
@@ -525,7 +533,7 @@ contains
                 endif
                 ! spherical aberration
                 if( cline%defined('cs') )then
-                    call os%set_all2single('cs', p%cs)
+                    call os%set_all2single('cs', params%cs)
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'cs') )then
@@ -537,7 +545,7 @@ contains
                 endif
                 ! fraction of amplitude contrast
                 if( cline%defined('fraca') )then
-                    call os%set_all2single('fraca', p%fraca)
+                    call os%set_all2single('fraca', params%fraca)
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'fraca') )then
@@ -549,7 +557,7 @@ contains
                 endif
                 ! phase-plate
                 if( cline%defined('phaseplate') )then
-                    call os%set_all2single('phaseplate', trim(p%phaseplate))
+                    call os%set_all2single('phaseplate', trim(params%phaseplate))
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'phaseplate') )then
@@ -565,7 +573,7 @@ contains
                 endif
                 ! ctf flag
                 if( cline%defined('ctf') )then
-                    call os%set_all2single('ctf', trim(p%ctf))
+                    call os%set_all2single('ctf', trim(params%ctf))
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'ctf') )then
@@ -583,8 +591,8 @@ contains
         endif
 
         ! PROJECT FILE MANAGEMENT
-        if( file_exists(trim(p%projfile)) )then
-            call spproj%read(p%projfile)
+        if( file_exists(trim(params%projfile)) )then
+            call spproj%read(params%projfile)
         else
             ! update project info
             call spproj%update_projinfo( cline )
@@ -594,16 +602,16 @@ contains
         ! UPDATE FIELDS
         ! add stack if present
         if( cline%defined('stk') )then
-            if( n_ori_inputs == 0 .and. trim(p%ctf) .eq. 'no' )then
+            if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
                 ! get number of particles from stack
-                call find_ldim_nptcls(p%stk, lfoo, p%nptcls)
-                call os%new(p%nptcls)
+                call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
+                call os%new(params%nptcls)
                 call os%set_all2single('state', 1.0)
             endif
-            call spproj%add_single_stk(p%stk, ctfvars, os)
+            call spproj%add_single_stk(params%stk, ctfvars, os)
         endif
         ! add list of stacks (stktab) if present
-        if( cline%defined('stktab') ) call spproj%add_stktab(p%stktab, os)
+        if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
         ! WRITE PROJECT FILE
         call spproj%write
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
@@ -613,10 +621,11 @@ contains
     subroutine exec_import_cavgs( self, cline )
         class(import_cavgs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: spproj
-        call init_params(cline)
-        if( file_exists(trim(p%projfile)) ) call spproj%read(p%projfile)
-        call spproj%add_cavgs2os_out(p%stk, p%smpd, 'cavg')
+        params = parameters(cline)
+        if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
+        call spproj%add_cavgs2os_out(params%stk, params%smpd, 'cavg')
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment

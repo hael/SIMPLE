@@ -1,9 +1,9 @@
 module simple_classaverager
 include 'simple_lib.f08'
-use simple_ctf,     only: ctf
-use simple_build,   only: b     ! singletons
-use simple_params,  only: p
-use simple_image,   only: image
+use simple_builder,    only: build_glob
+use simple_parameters, only: params_glob
+use simple_ctf,        only: ctf
+use simple_image,      only: image
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_assemble_sums,&
@@ -65,60 +65,60 @@ contains
     !!          and hard clustering solutions
     subroutine cavger_new( which, ptcl_mask )
         character(len=*),      intent(in)    :: which !< class/proj
-        logical, optional,     intent(in)    :: ptcl_mask(p%fromp:p%top)
+        logical, optional,     intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer :: alloc_stat, icls
         ! destruct possibly pre-existing instance
         call cavger_kill
-        if(present(ptcl_mask))then
-            allocate(pptcl_mask(p%fromp:p%top), source=ptcl_mask)
+        if( present(ptcl_mask) )then
+            allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
         else
-            allocate(pptcl_mask(p%fromp:p%top), source=.true.)
+            allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
         endif
         ! class or proj
         select case(which)
             case('class')
                 l_is_class = .true.
-                ncls       = p%ncls
+                ncls       = params_glob%ncls
             case('proj')
                 l_is_class = .false.
                 ! possible reduction of # projection directions used
                 ! for the class average representation
-                ncls = min(NSPACE_BALANCE,p%nspace)
+                ncls = min(NSPACE_BALANCE,params_glob%nspace)
             case DEFAULT
                 call simple_stop('unsupported which flag; simple_classaverager :: new')
         end select
         ! work out range and partsz
-        if( p%l_distr_exec )then
-            istart = p%fromp
-            iend   = p%top
+        if( params_glob%l_distr_exec )then
+            istart = params_glob%fromp
+            iend   = params_glob%top
         else
             istart = 1
-            iend   = p%nptcls
+            iend   = params_glob%nptcls
         endif
         partsz = count(pptcl_mask)
         ! CTF logics
-        ctfflag = b%spproj%get_ctfflag_type('ptcl2D')
+        ctfflag = build_glob%spproj%get_ctfflag_type('ptcl2D')
         ! set phaseplate flag
-        phaseplate = b%spproj%has_phaseplate('ptcl2D')
+        phaseplate = build_glob%spproj%has_phaseplate('ptcl2D')
         ! smpd
-        smpd          = p%smpd
+        smpd          = params_glob%smpd
         ! set ldims
-        ldim          = [p%box,p%box,1]
-        ldim_pd       = [p%boxpd,p%boxpd,1]
+        ldim          = [params_glob%box,params_glob%box,1]
+        ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
         ldim_pd(3)    = 1
-        filtsz        = b%img%get_filtsz()
+        filtsz        = build_glob%img%get_filtsz()
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
         &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), stat=alloc_stat)
         if(alloc_stat .ne. 0)call allocchk('cavger_new; simple_classaverager', alloc_stat)
         do icls=1,ncls
-            call cavgs_even(icls)%new(ldim,p%smpd,wthreads=.false.)
-            call cavgs_odd(icls)%new(ldim,p%smpd,wthreads=.false.)
-            call cavgs_merged(icls)%new(ldim,p%smpd,wthreads=.false.)
-            call ctfsqsums_even(icls)%new(ldim,p%smpd,wthreads=.false.)
-            call ctfsqsums_odd(icls)%new(ldim,p%smpd,wthreads=.false.)
-            call ctfsqsums_merged(icls)%new(ldim,p%smpd,wthreads=.false.)
+            call cavgs_even(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
+            call cavgs_odd(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
+            call cavgs_merged(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
+            call ctfsqsums_even(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
+            call ctfsqsums_odd(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
+            call ctfsqsums_merged(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
         end do
         ! flag existence
         exists = .true.
@@ -145,7 +145,7 @@ contains
             ! parameter transfer
             precs(cnt)%pind  = iptcl
             precs(cnt)%eo    = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
-            if( p%shellw.eq.'yes' )then
+            if( params_glob%shellw.eq.'yes' )then
                 precs(cnt)%pw   = 1.
                 precs(cnt)%bfac = spproj%os_ptcl2D%get(iptcl,'bfac_rec')
             else
@@ -153,7 +153,7 @@ contains
                 precs(cnt)%bfac = 0.
             endif
             ctfvars            = spproj%get_ctfparams('ptcl2D',iptcl)
-            precs(cnt)%tfun    = ctf(p%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
+            precs(cnt)%tfun    = ctf(params_glob%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             precs(cnt)%dfx     = ctfvars%dfx
             precs(cnt)%dfy     = ctfvars%dfy
             precs(cnt)%angast  = ctfvars%angast
@@ -267,40 +267,6 @@ contains
         end do
     end function class_pop
 
-    ! !>  \brief  is for getting a class average
-    ! subroutine cavger_get_cavg( class, which, img )
-    !     integer,              intent(in)    :: class
-    !     character(len=*),     intent(in)    :: which
-    !     class(image),         intent(inout) :: img
-    !     select case(which)
-    !         case('even')
-    !             call img%copy(cavgs_even(class))
-    !         case('odd')
-    !             call img%copy(cavgs_odd(class))
-    !         case('merged')
-    !             call img%copy(cavgs_merged(class))
-    !         case DEFAULT
-    !             call simple_stop('unsupported which flag; simple_classaverager :: get_cavg')
-    !     end select
-    ! end subroutine cavger_get_cavg
-
-    !>  \brief  is for setting a class average
-    ! subroutine cavger_set_cavg( class, which, img )
-    !     integer,              intent(in)    :: class
-    !     character(len=*),     intent(in)    :: which
-    !     class(image),         intent(in)    :: img
-    !     select case(which)
-    !         case('even')
-    !             call cavgs_even(class)%copy(img)
-    !         case('odd')
-    !             call cavgs_odd(class)%copy(img)
-    !         case('merged')
-    !             call cavgs_merged(class)%copy(img)
-    !         case DEFAULT
-    !             call simple_stop('unsupported which flag; simple_classaverager :: set_cavg')
-    !     end select
-    ! end subroutine cavger_set_cavg
-
     ! calculators
 
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
@@ -323,15 +289,15 @@ contains
         integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz
         integer   :: lims(3,2), nyq, logi(3), phys(3), win(2,2), lims_small(3,2), phys_cmat(3)
         integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
-        if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( .not. params_glob%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( do_frac_update )then
             call cavger_readwrite_partial_sums( 'read' )
-            call cavger_apply_weights( 1. - p%update_frac )
+            call cavger_apply_weights( 1. - params_glob%update_frac )
         else
             call init_cavgs_sums
         endif
-        kbwin  = kbinterpol(KBWINSZ, p%alpha)
+        kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
         zero   = cmplx(0.,0.)
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
@@ -342,7 +308,7 @@ contains
             ! batch planning
             icls_pop = class_pop(icls)
             if( icls_pop < 2 ) cycle
-            nbatches = ceiling(real(icls_pop)/real(p%nthr*BATCHTHRSZ))
+            nbatches = ceiling(real(icls_pop)/real(params_glob%nthr*BATCHTHRSZ))
             batches  = split_nobjs_even(icls_pop, nbatches)
             ! batch loop
             do batch=1,nbatches
@@ -356,8 +322,8 @@ contains
         allocate(batch_imgs(batchsz_max), cgrid_imgs(batchsz_max),&
                 &cyc1(wdim), cyc2(wdim), w(wdim, wdim))
         do i=1,batchsz_max
-            call batch_imgs(i)%new(ldim, p%smpd,    wthreads=.false.)
-            call cgrid_imgs(i)%new(ldim_pd, p%smpd, wthreads=.false.)
+            call batch_imgs(i)%new(ldim, params_glob%smpd,    wthreads=.false.)
+            call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         end do
         lims_small = batch_imgs(1)%loop_lims(2)
         lims       = cgrid_imgs(1)%loop_lims(2)
@@ -368,7 +334,7 @@ contains
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                   rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                  &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)), stat=alloc_stat)
-        call gridprep%new(b%img, kbwin, ldim_pd)
+        call gridprep%new(build_glob%img, kbwin, ldim_pd)
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
@@ -390,7 +356,7 @@ contains
             rho_even  = 0.
             rho_odd   = 0.
             ! batch planning
-            nbatches = ceiling(real(icls_pop)/real(p%nthr*BATCHTHRSZ))
+            nbatches = ceiling(real(icls_pop)/real(params_glob%nthr*BATCHTHRSZ))
             !$ allocate(batches(icls_pop,2), stat=alloc_stat)
             !$ if(alloc_stat.ne.0)call allocchk("In simple_classaverager::assemble_sums prealloc batches",alloc_stat)
             batches  = split_nobjs_even(icls_pop, nbatches)
@@ -404,7 +370,7 @@ contains
                     iptcl = ptcls_inds(batches(batch,1) + i - 1)
                    ! call read_img( bp, pp, iptcl )
                     call read_img( iptcl )
-                    batch_imgs(i) = b%img
+                    batch_imgs(i) = build_glob%img
                 enddo
                 ! batch particles loop
                 if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
@@ -514,8 +480,8 @@ contains
                 if( L_BENCH ) rt_gridding = rt_gridding + toc(t_gridding)
             enddo ! batch loop
             ! put back cmats
-            call cls_imgsum_even%new(ldim_pd, p%smpd)
-            call cls_imgsum_odd%new(ldim_pd, p%smpd)
+            call cls_imgsum_even%new(ldim_pd, params_glob%smpd)
+            call cls_imgsum_odd%new(ldim_pd, params_glob%smpd)
             call cls_imgsum_even%set_cmat(cmat_even)
             call cls_imgsum_odd%set_cmat(cmat_odd)
             ! real space & clipping
@@ -547,7 +513,7 @@ contains
         if( allocated(cmat_even) ) deallocate(cmat_even)
         if( allocated(cmat_odd)  ) deallocate(cmat_odd)
         deallocate(rho, rho_even, rho_odd, batch_imgs, cgrid_imgs, cyc1, cyc2, w)
-        if( .not. p%l_distr_exec ) call cavger_merge_eos_and_norm
+        if( .not. params_glob%l_distr_exec ) call cavger_merge_eos_and_norm
         if( L_BENCH )then
             rt_tot = rt_tot + toc(t_tot)
             benchfname = 'CLASSAVERAGER_BENCH.txt'
@@ -606,21 +572,21 @@ contains
         do icls=1,ncls
             call even_imgs(icls)%norm()
             call odd_imgs(icls)%norm()
-            if( p%l_innermsk )then
-                call even_imgs(icls)%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-                call odd_imgs(icls)%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            if( params_glob%l_innermsk )then
+                call even_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+                call odd_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
             else
-                call even_imgs(icls)%mask(p%msk, 'soft')
-                call odd_imgs(icls)%mask(p%msk, 'soft')
+                call even_imgs(icls)%mask(params_glob%msk, 'soft')
+                call odd_imgs(icls)%mask(params_glob%msk, 'soft')
             endif
             call even_imgs(icls)%fft()
             call odd_imgs(icls)%fft()
             call even_imgs(icls)%fsc(odd_imgs(icls), frc)
             find_plate = 0
             if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
-            call b%projfrcs%set_frc(icls, frc, 1)
+            call build_glob%projfrcs%set_frc(icls, frc, 1)
             ! average low-resolution info between eo pairs to keep things in register
-            find = b%projfrcs%estimate_find_for_eoavg(icls, 1)
+            find = build_glob%projfrcs%estimate_find_for_eoavg(icls, 1)
             find = max(find, find_plate)
             call cavgs_merged(icls)%fft()
             call cavgs_even(icls)%fft()
@@ -636,7 +602,7 @@ contains
         end do
         !$omp end parallel do
         ! write FRCs
-        call b%projfrcs%write(fname)
+        call build_glob%projfrcs%write(fname)
         ! destruct
         deallocate(even_imgs, odd_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
@@ -699,10 +665,10 @@ contains
         character(len=*), intent(in)  :: which
         integer                       ::  icls
         character(len=:), allocatable :: cae, cao, cte, cto
-        allocate(cae, source='cavgs_even_part'//int2str_pad(p%part,p%numlen)//p%ext)
-        allocate(cao, source='cavgs_odd_part'//int2str_pad(p%part,p%numlen)//p%ext)
-        allocate(cte, source='ctfsqsums_even_part'//int2str_pad(p%part,p%numlen)//p%ext)
-        allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(p%part,p%numlen)//p%ext)
+        allocate(cae, source='cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        allocate(cao, source='cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        allocate(cte, source='ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         select case(trim(which))
             case('read')
                 if( .not. file_exists(cae) )then
@@ -758,11 +724,11 @@ contains
         call imgs4read(3)%set_ft(.true.)
         call imgs4read(4)%new(ldim, smpd)
         call imgs4read(4)%set_ft(.true.)
-        do ipart=1,p%nparts
-            allocate(cae, source='cavgs_even_part'//int2str_pad(ipart,p%numlen)//p%ext)
-            allocate(cao, source='cavgs_odd_part'//int2str_pad(ipart,p%numlen)//p%ext)
-            allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,p%numlen)//p%ext)
-            allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,p%numlen)//p%ext)
+        do ipart=1,params_glob%nparts
+            allocate(cae, source='cavgs_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+            allocate(cao, source='cavgs_odd_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+            allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+            allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             if( .not. file_exists(cae) )then
                 write(*,*) 'File does not exists: ', trim(cae)
                 stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'

@@ -1,12 +1,12 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preprocess
 include 'simple_lib.f08'
-use simple_singletons
-use simple_cmdline,             only: cmdline
-use simple_qsys_funs,           only: qsys_job_finished
-use simple_sp_project,          only: sp_project
-use simple_commander_base,      only: commander_base
-
+use simple_parameters,     only: parameters
+use simple_builder,        only: builder
+use simple_cmdline,        only: cmdline
+use simple_qsys_funs,      only: qsys_job_finished
+use simple_sp_project,     only: sp_project
+use simple_commander_base, only: commander_base
 implicit none
 
 public :: preprocess_commander
@@ -59,6 +59,7 @@ contains
         use simple_binoris_io,          only: binwrite_oritab
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
+        type(parameters)              :: params
         type(ori)                     :: o_mov
         type(ctf_estimate_iter)       :: cfiter
         type(motion_correct_iter)     :: mciter
@@ -73,12 +74,12 @@ contains
         character(len=LONGSTRLEN)     :: boxfile
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
         logical :: l_pick
-        ! constants & derived constants
-        call init_params(cline, spproj_a_seg=MIC_SEG)
-        if( p%scale > 1.05 )then
+        call cline%set('oritype', 'mic')
+        params = parameters(cline)
+        if( params%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
         endif
-        if( p%tomo .eq. 'yes' )then
+        if( params%tomo .eq. 'yes' )then
             stop 'tomography mode (tomo=yes) not yet supported!'
         endif
         if( cline%defined('refs') )then
@@ -87,7 +88,7 @@ contains
             l_pick = .false.
         endif
         ! read in movies
-        call spproj%read( p%projfile )
+        call spproj%read( params%projfile )
         if( spproj%get_nmovies() == 0 )then
             stop 'No movie to process!'
         endif
@@ -97,7 +98,7 @@ contains
         if( l_pick )then
             output_dir_picker  = './'
         endif
-        if( p%stream.eq.'yes' )then
+        if( params%stream.eq.'yes' )then
             output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
             output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
             call simple_mkdir(output_dir_ctf_estimate)
@@ -110,19 +111,19 @@ contains
             endif
         endif
         if( cline%defined('fbody') )then
-            fbody = trim(p%fbody)
+            fbody = trim(params%fbody)
         else
             fbody = ''
         endif
         ! range
-        if( p%stream.eq.'yes' )then
+        if( params%stream.eq.'yes' )then
             ! STREAMING MODE
             fromto(:) = 1
         else
             ! DISTRIBUTED MODE
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = p%fromp
-                fromto(2) = p%top
+                fromto(1) = params%fromp
+                fromto(2) = params%top
             else
                 stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
             endif
@@ -132,7 +133,7 @@ contains
         if( cline%defined('numlen') )then
             ! nothing to do
         else
-            p%numlen = len(int2str(nmovies))
+            params%numlen = len(int2str(nmovies))
         endif
         !
         frame_counter = 0
@@ -153,14 +154,14 @@ contains
                 &output_dir_motion_correct)
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')
-            p%hp             = p%hp_ctf_estimate
-            p%lp             = max(p%fny, p%lp_ctf_estimate) ! should be in params?
+            params%hp             = params%hp_ctf_estimate
+            params%lp             = max(params%fny, params%lp_ctf_estimate) ! should be in params?
             call cfiter%iterate( ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
             if( l_pick )then
-                p%lp = max(p%fny, p%lp_pick) ! should be in params?
+                params%lp = max(params%fny, params%lp_pick) ! should be in params?
                 moviename_intg = mciter%get_moviename('intg')
                 call piter%iterate(cline,  moviename_intg, boxfile, nptcls_out, output_dir_picker)
                 call o_mov%set('boxfile', trim(boxfile)   )
@@ -168,22 +169,22 @@ contains
                 ! update project
                 call spproj%os_mic%set_ori(imovie, o_mov)
                 ! extract particles
-                if( p%stream .eq. 'yes' )then
+                if( params%stream .eq. 'yes' )then
                     ! needs to write and re-read project at the end as extract overwrites it
-                    call spproj%write_segment_inside(p%oritype)
+                    call spproj%write_segment_inside(params%oritype)
                     cline_extract = cline
                     call cline_extract%set('dir', trim(output_dir_extract))
-                    call cline_extract%set('pcontrast', p%pcontrast)
-                    if( cline%defined('box_extract') )call cline_extract%set('box', real(p%box_extract))
+                    call cline_extract%set('pcontrast', params%pcontrast)
+                    if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
                     call xextract%execute(cline_extract)
                     call spproj%kill
                 endif
             endif
         end do
-        if( p%stream .eq. 'yes' )then
-            if( .not.l_pick ) call spproj%write_segment_inside(p%oritype)
+        if( params%stream .eq. 'yes' )then
+            if( .not.l_pick ) call spproj%write_segment_inside(params%oritype)
         else
-            call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+            call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_preprocess' )
@@ -194,63 +195,65 @@ contains
         use simple_image,               only: image
         class(powerspecs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(image)                        :: powspec, tmp, mask
         character(len=LONGSTRLEN), allocatable :: imgnames(:)
-        integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
+        type(parameters) :: params
+        type(builder)    :: build
+        type(image)      :: powspec, tmp, mask
+        integer          :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
         endif
         if( .not. cline%defined('stk') .and. .not. cline%defined('filetab') )then
             stop 'either stk or filetab need to be defined!'
         endif
-        call init_params(cline, spproj_a_seg=STK_SEG)         ! constants & derived constants produced
-        call b%build_general_tbox(cline,do3d=.false.) ! general toolbox built
+        call cline%set('oritype', 'stk')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! create mask
-        call tmp%new([p%clip,p%clip,1],  p%smpd)
-        call mask%new([p%clip,p%clip,1], p%smpd)
+        call tmp%new([params%clip,params%clip,1],  params%smpd)
+        call mask%new([params%clip,params%clip,1], params%smpd)
         tmp = cmplx(1.,0.)
-        call tmp%bp(0.,p%lp,0.)
+        call tmp%bp(0.,params%lp,0.)
         call tmp%ft2img('real', mask)
-        if( p%l_distr_exec )then
-            if( p%part == 1 ) call mask%write('resolution_mask.mrc', 1)
+        if( params%l_distr_exec )then
+            if( params%part == 1 ) call mask%write('resolution_mask.mrc', 1)
         else
             call mask%write('resolution_mask.mrc', 1)
         endif
         ! do the work
         if( cline%defined('stk') )then
-            if( p%l_distr_exec )then
+            if( params%l_distr_exec )then
                 stop 'stk input incompatible with distributed exection; commander_preprocess :: powerspecs'
             endif
-            call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
+            call build%img%new(params%ldim, params%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
-            do iimg=1,p%nptcls
-                call b%img%read(p%stk, iimg)
-                powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
+            do iimg=1,params%nptcls
+                call build%img%read(params%stk, iimg)
+                powspec = build%img%mic2spec(params%pspecsz, trim(adjustl(params%speckind)))
                 call powspec%clip(tmp)
-                call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
-                call progress(iimg, p%nptcls)
+                call tmp%write(trim(adjustl(params%fbody))//params%ext, iimg)
+                call progress(iimg, params%nptcls)
             end do
         else
-            call read_filetable(p%filetab, imgnames)
+            call read_filetable(params%filetab, imgnames)
             nimgs = size(imgnames)
             DebugPrint  'read the img filenames'
             if( cline%defined('numlen') )then
                 ! nothing to do
             else
-                p%numlen = len(int2str(nimgs))
+                params%numlen = len(int2str(nimgs))
             endif
             ! get logical dimension of micrographs
             call find_ldim_nptcls(imgnames(1), ldim, ifoo)
             ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
             DebugPrint  'logical dimension: ', ldim
-            call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
+            call build%img%new(ldim, params%smpd) ! img re-generated (to account for possible non-square)
             ! determine loop range
-            if( p%l_distr_exec )then
-                iimg_start = p%fromp
-                iimg_stop  = p%top
+            if( params%l_distr_exec )then
+                iimg_start = params%fromp
+                iimg_stop  = params%top
             else
                 iimg_start = 1
-                if( cline%defined('startit') ) iimg_start = p%startit
+                if( cline%defined('startit') ) iimg_start = params%startit
                 iimg_stop  = nimgs
             endif
             DebugPrint  'fromto: ', iimg_start, iimg_stop
@@ -260,14 +263,14 @@ contains
                 if( .not. file_exists(imgnames(iimg)) )then
                     write(*,*) 'inputted img file does not exist: ', trim(adjustl(imgnames(iimg)))
                 endif
-                call b%img%read(imgnames(iimg), 1)
-                powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
+                call build%img%read(imgnames(iimg), 1)
+                powspec = build%img%mic2spec(params%pspecsz, trim(adjustl(params%speckind)))
                 call powspec%clip(tmp)
-                if( p%l_distr_exec )then
-                    call tmp%write(trim(adjustl(p%fbody))//'_pspec'//int2str_pad(iimg,p%numlen)//p%ext)
+                if( params%l_distr_exec )then
+                    call tmp%write(trim(adjustl(params%fbody))//'_pspec'//int2str_pad(iimg,params%numlen)//params%ext)
                     call progress(iimg, nimgs)
                 else
-                    call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
+                    call tmp%write(trim(adjustl(params%fbody))//params%ext, iimg)
                     call progress(iimg, nimgs)
                 endif
             end do
@@ -284,23 +287,25 @@ contains
         use simple_motion_correct_iter, only: motion_correct_iter
         class(motion_correct_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
+        type(parameters)              :: params
         type(motion_correct_iter)     :: mciter
         type(ctfparams)               :: ctfvars
         type(sp_project)              :: spproj
         type(ori)                     :: o
         character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
-        call init_params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
-        call spproj%read(p%projfile)
+        call cline%set('oritype', 'mic')
+        params = parameters(cline)
+        call spproj%read(params%projfile)
         ! sanity check
         if( spproj%get_nmovies() == 0 )then
             stop 'No movie to process!'
         endif
-        if( p%scale > 1.05 )then
+        if( params%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
         endif
-        if( p%tomo .eq. 'yes' )then
-            if( .not. p%l_dose_weight )then
+        if( params%tomo .eq. 'yes' )then
+            if( .not. params%l_dose_weight )then
                 write(*,*) 'tomo=yes only supported with dose weighting!'
                 stop 'give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)'
             endif
@@ -308,14 +313,14 @@ contains
         ! output directory & names
         output_dir = './'
         if( cline%defined('fbody') )then
-            fbody = trim(p%fbody)
+            fbody = trim(params%fbody)
         else
             fbody = ''
         endif
         ! determine loop range & fetch movies oris object
-        if( p%tomo .eq. 'no' )then
+        if( params%tomo .eq. 'no' )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto = [p%fromp, p%top]
+                fromto = [params%fromp, params%top]
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_motion_correct'
             endif
@@ -326,12 +331,12 @@ contains
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! for series of tomographic movies we need to calculate the time_per_frame
-        if( p%tomo .eq. 'yes' )then
+        if( params%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
             call spproj%os_mic%getter(1, 'movie', moviename)
             call find_ldim_nptcls(moviename, lfoo, nframes)
             ! calculate time_per_frame
-            p%time_per_frame = p%exp_time/real(nframes*nmovies)
+            params%time_per_frame = params%exp_time/real(nframes*nmovies)
         endif
         ! align
         frame_counter = 0
@@ -350,7 +355,7 @@ contains
             endif
         end do
         ! output
-        call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
@@ -363,14 +368,16 @@ contains
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
+        type(parameters)              :: params
         type(sp_project)              :: spproj
         type(ctf_estimate_iter)       :: cfiter
         type(ctfparams)               :: ctfvars
         type(ori)                     :: o
         character(len=:), allocatable :: intg_forctf, output_dir, imgkind
         integer                       :: fromto(2), imic, ntot, cnt
-        call init_params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
-        call spproj%read(p%projfile)
+        call cline%set('oritype', 'mic')
+        params = parameters(cline)
+        call spproj%read(params%projfile)
         ! read in integrated movies
         if( spproj%get_nintgs() == 0 )then
             stop 'No integrated micrograph to process!'
@@ -378,13 +385,13 @@ contains
         ! output directory
         output_dir = './'
         ! parameters & loop range
-        if( p%stream .eq. 'yes' )then
+        if( params%stream .eq. 'yes' )then
             ! determine loop range
             fromto(:) = 1
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = p%fromp
-                fromto(2) = p%top
+                fromto(1) = params%fromp
+                fromto(2) = params%top
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_ctf_estimate'
             endif
@@ -406,7 +413,7 @@ contains
             endif
         end do
         ! output
-        call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_ctf_estimate' )
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
@@ -417,25 +424,26 @@ contains
         use simple_corrmat,             only: calc_cartesian_corrmat
         class(map_cavgs_selection_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
+        type(parameters)         :: params
+        type(builder)            :: build
         type(image), allocatable :: imgs_sel(:), imgs_all(:)
         integer,     allocatable :: states(:)
         real,        allocatable :: correlations(:,:)
         integer :: iimg, isel, nall, nsel, loc(1), lfoo(3)
-        call init_params(cline)             ! parameters generated
-        call b%build_spproj(cline)
+        call build%init_params_and_build_spproj(cline,params)
         ! find number of selected cavgs
-        call find_ldim_nptcls(p%stk2, lfoo, nsel)
+        call find_ldim_nptcls(params%stk2, lfoo, nsel)
         ! find number of original cavgs
-        call find_ldim_nptcls(p%stk, lfoo, nall)
+        call find_ldim_nptcls(params%stk, lfoo, nall)
         ! read images
         allocate(imgs_sel(nsel), imgs_all(nall))
         do isel=1,nsel
-            call imgs_sel(isel)%new([p%box,p%box,1], p%smpd)
-            call imgs_sel(isel)%read(p%stk2, isel)
+            call imgs_sel(isel)%new([params%box,params%box,1], params%smpd)
+            call imgs_sel(isel)%read(params%stk2, isel)
         end do
         do iimg=1,nall
-            call imgs_all(iimg)%new([p%box,p%box,1], p%smpd)
-            call imgs_all(iimg)%read(p%stk, iimg)
+            call imgs_all(iimg)%new([params%box,params%box,1], params%smpd)
+            call imgs_all(iimg)%read(params%stk, iimg)
         end do
         write(*,'(a)') '>>> CALCULATING CORRELATIONS'
         call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
@@ -447,43 +455,45 @@ contains
             states(loc(1)) = 1
         end do
         ! communicate selection to project
-        call b%spproj%map_cavgs_selection(states)
+        call build%spproj%map_cavgs_selection(states)
         ! this needs to be a full write as many segments are updated
-        call b%spproj%write()
+        call build%spproj%write()
         ! end gracefully
         call simple_end('**** SIMPLE_MAP_SELECTION NORMAL STOP ****')
     end subroutine exec_map_cavgs_selection
 
     subroutine exec_pick( self, cline)
         use simple_binoris_io,  only: binwrite_oritab
-        use simple_ori,                 only: ori
-        use simple_picker_iter,         only: picker_iter
+        use simple_ori,         only: ori
+        use simple_picker_iter, only: picker_iter
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
+        type(parameters)                     :: params
         type(sp_project)                     :: spproj
         type(picker_iter)                    :: piter
         type(ori)                            :: o
         character(len=:),        allocatable :: output_dir, intg_name, imgkind
         character(len=LONGSTRLEN)            :: boxfile
         integer :: fromto(2), imic, ntot, nptcls_out, cnt
-        call init_params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
+        call cline%set('oritype', 'mic')
+        params = parameters(cline)
         ! output directory
         output_dir = './'
         ! parameters & loop range
-        if( p%stream .eq. 'yes' )then
+        if( params%stream .eq. 'yes' )then
             ! determine loop range
             fromto(:) = 1
         else
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto(1) = p%fromp
-                fromto(2) = p%top
+                fromto(1) = params%fromp
+                fromto(2) = params%top
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_pick'
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! read in integrated movies
-        call spproj%read_segment('mic', p%projfile, fromto)
+        call spproj%read_segment('mic', params%projfile, fromto)
         if( spproj%get_nintgs() == 0 )then
             stop 'No integrated micrograph to process!'
         endif
@@ -503,7 +513,7 @@ contains
             endif
         end do
         ! output
-        call binwrite_oritab(p%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
@@ -511,11 +521,13 @@ contains
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )
-        use simple_image,               only: image
-        use simple_oris,                only: oris
-        use simple_ori,                 only: ori
+        use simple_image, only: image
+        use simple_oris,  only: oris
+        use simple_ori,   only: ori
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
+        type(builder)                 :: build
+        type(parameters)              :: params
         type(sp_project)              :: spproj
         type(nrtxtfile)               :: boxfile
         type(image)                   :: micrograph
@@ -529,12 +541,13 @@ contains
         integer                       :: nframes, imic, iptcl, ldim(3), nptcls, nmics, box, box_first
         integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff
         real                          :: particle_position(2)
-        call init_params(cline, spproj_a_seg=MIC_SEG) ! constants & derived constants produced
+        call cline%set('oritype', 'mic')
+        params = parameters(cline)
         ! output directory
         output_dir = './'
-        if( p%stream.eq.'yes' )output_dir = DIR_EXTRACT
+        if( params%stream.eq.'yes' )output_dir = DIR_EXTRACT
         ! read in integrated movies
-        call spproj%read_segment('mic', p%projfile)
+        call spproj%read_segment('mic', params%projfile)
         if( spproj%get_nintgs() == 0 )then
             stop 'No integrated micrograph to process!'
         endif
@@ -571,15 +584,15 @@ contains
                 allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
                 call boxfile%readNextDataLine(boxdata(1,:))
                 call boxfile%kill
-                p%box = nint(boxdata(1,3))
+                params%box = nint(boxdata(1,3))
             endif
         enddo
         call spproj%kill
         if( nmics == 0 ) stop 'No particles to extract! commander_preproc :: exec_extract'
-        if( p%box == 0 )stop 'ERROR! box cannot be zero; commander_preproc :: exec_extract'
+        if( params%box == 0 )stop 'ERROR! box cannot be zero; commander_preproc :: exec_extract'
         ! init
-        call b%build_general_tbox( cline, do3d=.false.)
-        call micrograph%new([ldim(1),ldim(2),1], p%smpd)
+        call build%build_general_tbox(params, cline, do3d=.false.)
+        call micrograph%new([ldim(1),ldim(2),1], params%smpd)
         niter     = 0
         noutside  = 0
         box_first = 0
@@ -587,7 +600,7 @@ contains
         do imic = 1, ntot
             if( .not.mics_mask(imic) )cycle
             ! fetch micrograph
-            o_mic = b%a%get_ori(imic)
+            o_mic = build%a%get_ori(imic)
             call o_mic%getter('imgkind', imgkind)
             call o_mic%getter('intg', mic_name)
             call o_mic%getter('boxfile', boxfile_name)
@@ -606,7 +619,6 @@ contains
             if(allocated(oris_mask))deallocate(oris_mask)
             allocate(oris_mask(nptcls), source=.false., stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In simple_extract oris_mask")
-
             ! read box data & update mask
             if(allocated(boxdata))deallocate(boxdata)
             allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
@@ -618,13 +630,13 @@ contains
                     stop 'ERROR! Only square windows are currently allowed; commander_preproc :: exec_extract'
                 endif
                 ! modify coordinates if change in box (shift by half the difference)
-                if( box /= p%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(p%box-box)/2.
-                if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= p%box )then
-                    write(*,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', p%box
+                if( box /= params%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(params%box-box)/2.
+                if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= params%box )then
+                    write(*,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', params%box
                     stop 'ERROR! inconsistent box sizes in box files; commander_preproc :: exec_extract'
                 endif
                 ! update particle mask & movie index
-                if( box_inside(ldim, nint(boxdata(iptcl,1:2)), p%box) )oris_mask(iptcl) = .true.
+                if( box_inside(ldim, nint(boxdata(iptcl,1:2)), params%box) )oris_mask(iptcl) = .true.
             end do
             nptcls_eff = count(oris_mask)
             call o_ptcls%new(nptcls)
@@ -633,7 +645,7 @@ contains
                 if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
                     stop 'ERROR! Input lacks at least cs, kv or fraca field; commander_preproc :: exec_extract'
                 endif
-                ctfparms%smpd = p%smpd
+                ctfparms%smpd = params%smpd
                 ! prepare CTF vars
                 call o_mic%getter('ctf', ctfstr)
                 ctfparms%ctfflag = 1
@@ -679,7 +691,7 @@ contains
             ! extract windows from integrated movie
             call micrograph%read(mic_name, 1)
             ! filter out frequencies lower than the box can express to avoid aliasing
-            call micrograph%bp(real(p%box) * p%smpd, 0.)
+            call micrograph%bp(real(params%box) * params%smpd, 0.)
             ! write new stack
             cnt = 0
             do iptcl=1,nptcls ! loop over boxes
@@ -687,20 +699,20 @@ contains
                     cnt = cnt + 1
                     ! extract the window
                     particle_position = boxdata(iptcl,1:2)
-                    call micrograph%window(nint(particle_position), p%box, b%img, noutside)
-                    if( p%pcontrast .eq. 'black' ) call b%img%neg()
-                    call b%img%norm()
-                    call b%img%edges_norm()
-                    call b%img%write(trim(adjustl(stack)), cnt)
+                    call micrograph%window(nint(particle_position), params%box, build%img, noutside)
+                    if( params%pcontrast .eq. 'black' ) call build%img%neg()
+                    call build%img%norm()
+                    call build%img%edges_norm()
+                    call build%img%write(trim(adjustl(stack)), cnt)
                 endif
             end do
             ! IMPORT INTO PROJECT
-            call b%spproj%add_stk(trim(adjustl(stack)), ctfparms, o_ptcls)
+            call build%spproj%add_stk(trim(adjustl(stack)), ctfparms, o_ptcls)
             ! clean
             call boxfile%kill()
         enddo
         ! we do a full write here as multiple fields are updated
-        call b%spproj%write()
+        call build%spproj%write()
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 
         contains
@@ -709,7 +721,7 @@ contains
                 integer, intent(in) :: ldim(3), coord(2), box
                 integer             :: fromc(2), toc(2)
                 logical             :: inside
-                if( p%outside .eq. 'yes' )then
+                if( params%outside .eq. 'yes' )then
                     inside = .true.
                     return
                 endif

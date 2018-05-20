@@ -1,10 +1,6 @@
 !! Importing and exporting Relion Star-formatted files to/from SIMPLE
 module simple_star
 include 'simple_lib.f08'
-! use simple_cmdline,        only: cmdline
-use simple_params,         only: p
-! use simple_build,          only: build
-use simple_sp_project,     only: sp_project
 implicit none
 
 type starfile

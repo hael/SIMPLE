@@ -7,7 +7,8 @@ use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base
 use simple_binoris_io,     only: binwrite_oritab, binread_nlines, binread_oritab
-use simple_singletons
+use simple_parameters,     only: parameters
+use simple_builder,        only: builder
 implicit none
 
 public :: cluster_oris_commander
@@ -50,27 +51,28 @@ contains
         use simple_clusterer,   only: cluster_shc_oris
         class(cluster_oris_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
+        type(parameters)     :: params
+        type(builder)        :: build
         type(oris)           :: os_class
         integer              :: icls, iptcl, numlen
         real                 :: avgd, sdevd, maxd, mind
         integer, allocatable :: clsarr(:)
-        call init_params(cline)
-        call b%build_general_tbox( cline, do3d=.false.)
-        call cluster_shc_oris(b%a, p%ncls)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        call cluster_shc_oris(build%a, params%ncls)
         ! calculate distance statistics
-        call b%a%cluster_diststat(avgd, sdevd, maxd, mind)
+        call build%a%cluster_diststat(avgd, sdevd, maxd, mind)
         write(*,'(a,1x,f15.6)') 'AVG      GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(avgd)
         write(*,'(a,1x,f15.6)') 'AVG SDEV GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(sdevd)
         write(*,'(a,1x,f15.6)') 'AVG MAX  GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(maxd)
         write(*,'(a,1x,f15.6)') 'AVG MIN  GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(mind)
         ! generate the class documents
-        numlen = len(int2str(p%ncls))
-        do icls=1,p%ncls
-            call b%a%get_pinds(icls, 'class', clsarr)
+        numlen = len(int2str(params%ncls))
+        do icls=1,params%ncls
+            call build%a%get_pinds(icls, 'class', clsarr)
             if( allocated(clsarr) )then
                 call os_class%new(size(clsarr))
                 do iptcl=1,size(clsarr)
-                    call os_class%set_ori(iptcl, b%a%get_ori(clsarr(iptcl)))
+                    call os_class%set_ori(iptcl, build%a%get_ori(clsarr(iptcl)))
                 end do
                 call os_class%write('oris_class'//int2str_pad(icls,numlen)//trim(TXT_EXT), [1,size(clsarr)])
                 deallocate(clsarr)
@@ -85,44 +87,45 @@ contains
     subroutine exec_make_oris( self, cline )
         class(make_oris_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(ori)    :: orientation
-        type(oris)   :: os_even
-        real         :: e3, x, y
-        integer      :: i, class
-        call init_params(cline)
-        call b%build_general_tbox(cline, do3d=.false.)
+        type(parameters) :: params
+        type(builder)    :: build
+        type(ori)        :: orientation
+        type(oris)       :: os_even
+        real             :: e3, x, y
+        integer          :: i, class
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( cline%defined('ncls') )then
-            os_even = oris(p%ncls)
-            call os_even%spiral(p%nsym, p%eullims)
-            call b%a%new(p%nptcls)
-            do i=1,p%nptcls
-                class = irnd_uni(p%ncls)
+            os_even = oris(params%ncls)
+            call os_even%spiral(params%nsym, params%eullims)
+            call build%a%new(params%nptcls)
+            do i=1,params%nptcls
+                class = irnd_uni(params%ncls)
                 orientation = os_even%get_ori(class)
-                call b%a%set_ori(i, orientation)
-                e3 = ran3()*2.*p%angerr-p%angerr
-                x  = ran3()*2.0*p%sherr-p%sherr
-                y  = ran3()*2.0*p%sherr-p%sherr
-                call b%a%set(i, 'x', x)
-                call b%a%set(i, 'y', y)
-                call b%a%e3set(i, e3)
-                call b%a%set(i, 'class', real(class))
+                call build%a%set_ori(i, orientation)
+                e3 = ran3()*2.*params%angerr-params%angerr
+                x  = ran3()*2.0*params%sherr-params%sherr
+                y  = ran3()*2.0*params%sherr-params%sherr
+                call build%a%set(i, 'x', x)
+                call build%a%set(i, 'y', y)
+                call build%a%e3set(i, e3)
+                call build%a%set(i, 'class', real(class))
             end do
         else if( cline%defined('ndiscrete') )then
-            if( p%ndiscrete > 0 )then
-                call b%a%rnd_oris_discrete(p%ndiscrete, p%nsym, p%eullims)
+            if( params%ndiscrete > 0 )then
+                call build%a%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
             endif
-            call b%a%rnd_inpls(p%sherr)
-        else if( p%even .eq. 'yes' )then
-            call b%a%spiral(p%nsym, p%eullims)
-            call b%a%rnd_inpls(p%sherr)
+            call build%a%rnd_inpls(params%sherr)
+        else if( params%even .eq. 'yes' )then
+            call build%a%spiral(params%nsym, params%eullims)
+            call build%a%rnd_inpls(params%sherr)
         else
-            call b%a%rnd_oris(p%sherr)
-            if( p%doprint .eq. 'yes' )then
-                call b%a%print_matrices
+            call build%a%rnd_oris(params%sherr)
+            if( params%doprint .eq. 'yes' )then
+                call build%a%print_matrices
             endif
         endif
-        if( p%nstates > 1 ) call b%a%rnd_states(p%nstates)
-        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
+        if( params%nstates > 1 ) call build%a%rnd_states(params%nstates)
+        call binwrite_oritab(params%outfile, build%spproj, build%a, [1,build%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_ORIS NORMAL STOP ****')
     end subroutine exec_make_oris
@@ -130,51 +133,52 @@ contains
     subroutine exec_orisops( self, cline )
         class(orisops_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(ori)    :: orientation
-        integer      :: s, i
-        call init_params(cline)
-        call b%build_general_tbox(cline, do3d=.false.)
-        if( p%errify .eq. 'yes' )then
+        type(parameters) :: params
+        type(builder)    :: build
+        type(ori)        :: orientation
+        integer          :: s, i
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        if( params%errify .eq. 'yes' )then
             ! introduce error in input orientations
-            call b%a%introd_alig_err(p%angerr, p%sherr)
-            if( p%ctf .ne. 'no' ) call b%a%introd_ctf_err(p%dferr)
+            call build%a%introd_alig_err(params%angerr, params%sherr)
+            if( params%ctf .ne. 'no' ) call build%a%introd_ctf_err(params%dferr)
         endif
         if( cline%defined('e1') .or.&
             cline%defined('e2') .or.&
             cline%defined('e3') )then
             ! rotate input Eulers
             call orientation%new
-            call orientation%set_euler([p%e1,p%e2,p%e3])
+            call orientation%set_euler([params%e1,params%e2,params%e3])
             if( cline%defined('state') )then
-                do i=1,b%a%get_noris()
-                    s = nint(b%a%get(i, 'state'))
-                    if( s == p%state )then
-                        call b%a%rot(i,orientation)
+                do i=1,build%a%get_noris()
+                    s = nint(build%a%get(i, 'state'))
+                    if( s == params%state )then
+                        call build%a%rot(i,orientation)
                     endif
                 end do
             else
-                call b%a%rot(orientation)
+                call build%a%rot(orientation)
             endif
         endif
-        if( cline%defined('mul') )       call b%a%mul_shifts(p%mul)
-        if( p%zero .eq. 'yes' )          call b%a%zero_shifts
-        if( cline%defined('ndiscrete') ) call b%a%discretize(p%ndiscrete)
-        if( p%symrnd .eq. 'yes' )        call b%se%symrandomize(b%a)
-        if( cline%defined('nstates') )   call b%a%rnd_states(p%nstates)
+        if( cline%defined('mul') )       call build%a%mul_shifts(params%mul)
+        if( params%zero .eq. 'yes' )          call build%a%zero_shifts
+        if( cline%defined('ndiscrete') ) call build%a%discretize(params%ndiscrete)
+        if( params%symrnd .eq. 'yes' )        call build%se%symrandomize(build%a)
+        if( cline%defined('nstates') )   call build%a%rnd_states(params%nstates)
         if( cline%defined('mirr') )then
-            select case(trim(p%mirr))
+            select case(trim(params%mirr))
                 case('2d')
-                    call b%a%mirror2d()
+                    call build%a%mirror2d()
                 case('3d')
-                    call b%a%mirror3d()
+                    call build%a%mirror3d()
                 case('no')
                     ! nothing to do
                 case DEFAULT
-                    write(*,*) 'mirr flag: ', trim(p%mirr)
+                    write(*,*) 'mirr flag: ', trim(params%mirr)
                     stop 'unsupported mirr flag; commander_oris :: exec_orisops'
             end select
         endif
-        call binwrite_oritab(p%outfile, b%spproj, b%a, [1,b%a%get_noris()])
+        call binwrite_oritab(params%outfile, build%spproj, build%a, [1,build%a%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
 
@@ -182,6 +186,8 @@ contains
     subroutine exec_oristats( self, cline )
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
+        type(parameters)     :: params
+        type(builder)        :: build
         type(sp_project)     :: spproj
         class(oris), pointer :: o => null()
         type(oris)           :: osubspace
@@ -196,58 +202,57 @@ contains
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
         logical              :: err
-        call init_params(cline)
-        call b%build_general_tbox(cline, do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( cline%defined('oritab2') )then
             ! Comparison
             if( .not. cline%defined('oritab') ) stop 'need oritab for comparison'
-            if( binread_nlines( p%oritab) .ne. binread_nlines( p%oritab2) )then
+            if( binread_nlines( params%oritab) .ne. binread_nlines( params%oritab2) )then
                 stop 'inconsistent number of lines in the two oritabs!'
             endif
-            call spproj%new_seg_with_ptr(p%nptcls, p%oritype, o)
-            call binread_oritab(p%oritab2, spproj, o, [1,p%nptcls])
-            call b%a%diststat(o, sumd, avgd, sdevd, mind, maxd)
+            call spproj%new_seg_with_ptr(params%nptcls, params%oritype, o)
+            call binread_oritab(params%oritab2, spproj, o, [1,params%nptcls])
+            call build%a%diststat(o, sumd, avgd, sdevd, mind, maxd)
             write(*,'(a,1x,f15.6)') 'SUM OF ANGULAR DISTANCE BETWEEN ORIENTATIONS  :', sumd
             write(*,'(a,1x,f15.6)') 'AVERAGE ANGULAR DISTANCE BETWEEN ORIENTATIONS :', avgd
             write(*,'(a,1x,f15.6)') 'STANDARD DEVIATION OF ANGULAR DISTANCES       :', sdevd
             write(*,'(a,1x,f15.6)') 'MINIMUM ANGULAR DISTANCE                      :', mind
             write(*,'(a,1x,f15.6)') 'MAXIMUM ANGULAR DISTANCE                      :', maxd
         else if( cline%defined('oritab') )then
-            if( p%ctfstats .eq. 'yes' )then
-                call b%a%stats('ctfres', avgd, sdevd, vard, err )
-                call b%a%minmax('ctfres', mind, maxd)
+            if( params%ctfstats .eq. 'yes' )then
+                call build%a%stats('ctfres', avgd, sdevd, vard, err )
+                call build%a%minmax('ctfres', mind, maxd)
                 write(*,'(a,1x,f8.2)') 'AVERAGE CTF RESOLUTION               :', avgd
                 write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF CTF RESOLUTION :', sdevd
                 write(*,'(a,1x,f8.2)') 'MINIMUM CTF RESOLUTION (BEST)        :', mind
                 write(*,'(a,1x,f8.2)') 'MAXIMUM CTF RESOLUTION (WORST)       :', maxd
-                call b%a%stats('dfx', avgd, sdevd, vard, err )
-                call b%a%minmax('dfx', mind, maxd)
-                call b%a%stats('dfy', avgd2, sdevd2, vard2, err )
-                call b%a%minmax('dfy', mind2, maxd2)
+                call build%a%stats('dfx', avgd, sdevd, vard, err )
+                call build%a%minmax('dfx', mind, maxd)
+                call build%a%stats('dfy', avgd2, sdevd2, vard2, err )
+                call build%a%minmax('dfy', mind2, maxd2)
                 write(*,'(a,1x,f8.2)') 'AVERAGE DF                           :', (avgd+avgd2)/2.
                 write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF DF             :', (sdevd+sdevd2)/2.
                 write(*,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
                 write(*,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
                 goto 999
             endif
-            if( p%classtats .eq. 'yes' )then
-                noris = b%a%get_noris()
-                ncls  = b%a%get_n('class')
+            if( params%classtats .eq. 'yes' )then
+                noris = build%a%get_noris()
+                ncls  = build%a%get_n('class')
                 ! setup weights
-                if( p%weights2D.eq.'yes' )then
+                if( params%weights2D.eq.'yes' )then
                     if( noris <= SPECWMINPOP )then
-                        call b%a%set_all2single('w', 1.0)
+                        call build%a%set_all2single('w', 1.0)
                     else
                         ! frac is one by default in prime2D (no option to set frac)
                         ! so spectral weighting is done over all images
-                        call b%a%calc_spectral_weights(1.0)
+                        call build%a%calc_spectral_weights(1.0)
                     endif
                 else
                     ! defaults to unitary weights
-                    call b%a%set_all2single('w', 1.0)
+                    call build%a%set_all2single('w', 1.0)
                 endif
                 ! generate class stats
-                call b%a%get_pops(pops, 'class', consider_w=.true.)
+                call build%a%get_pops(pops, 'class', consider_w=.true.)
                 popmin         = minval(pops)
                 popmax         = maxval(pops)
                 popmed         = median(real(pops))
@@ -269,24 +274,24 @@ contains
                     write(*,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))
                 end do
             endif
-            if( p%projstats .eq. 'yes' )then
+            if( params%projstats .eq. 'yes' )then
                 if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
-                noris = b%a%get_noris()
+                noris = build%a%get_noris()
                 ! setup weights
-                if( p%weights3D.eq.'yes' )then
+                if( params%weights3D.eq.'yes' )then
                     if( noris <= SPECWMINPOP )then
-                        call b%a%calc_hard_weights(p%frac)
+                        call build%a%calc_hard_weights(params%frac)
                     else
-                        call b%a%calc_spectral_weights(p%frac)
+                        call build%a%calc_spectral_weights(params%frac)
                     endif
                 else
-                    call b%a%calc_hard_weights(p%frac)
+                    call build%a%calc_hard_weights(params%frac)
                 endif
                 ! generate population stats
-                call b%a%get_pops(tmp, 'proj', consider_w=.true.)
+                call build%a%get_pops(tmp, 'proj', consider_w=.true.)
                 nprojs         = size(tmp)
                 pops           = pack(tmp, tmp > 0.5)                   !! realloc warning
-                frac_populated = real(size(pops))/real(p%nspace)
+                frac_populated = real(size(pops))/real(params%nspace)
                 popmin         = minval(pops)
                 popmax         = maxval(pops)
                 popmed         = median(real(pops))
@@ -300,14 +305,14 @@ contains
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! produce a histogram based on clustering into NSPACE_BALANCE even directions
                 ! first, generate a mask based on state flag and w
-                ptcl_mask = b%a%included(consider_w=.true.)
+                ptcl_mask = build%a%included(consider_w=.true.)
                 allocate(clustering(noris), clustszs(NSPACE_BALANCE))
                 call osubspace%new(NSPACE_BALANCE)
-                call osubspace%spiral(p%nsym, p%eullims)
+                call osubspace%spiral(params%nsym, params%eullims)
                 call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_BALANCE])
-                do iptcl=1,b%a%get_noris()
+                do iptcl=1,build%a%get_noris()
                     if( ptcl_mask(iptcl) )then
-                        o_single = b%a%get_ori(iptcl)
+                        o_single = build%a%get_ori(iptcl)
                         clustering(iptcl) = osubspace%find_closest_proj(o_single)
                     else
                         clustering(iptcl) = 0
@@ -339,11 +344,11 @@ contains
                     write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))
                 end do
             endif
-            if( p%trsstats .eq. 'yes' )then
-                call b%a%stats('x', avgd, sdevd, vard, err )
-                call b%a%minmax('x', mind, maxd)
-                call b%a%stats('y', avgd2, sdevd2, vard2, err )
-                call b%a%minmax('y', mind2, maxd2)
+            if( params%trsstats .eq. 'yes' )then
+                call build%a%stats('x', avgd, sdevd, vard, err )
+                call build%a%minmax('x', mind, maxd)
+                call build%a%stats('y', avgd2, sdevd2, vard2, err )
+                call build%a%minmax('y', mind2, maxd2)
                 write(*,'(a,1x,f8.2)') 'AVERAGE TRS               :', (avgd+avgd2)/2.
                 write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF TRS :', (sdevd+sdevd2)/2.
                 write(*,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
@@ -359,20 +364,21 @@ contains
         use simple_nrtxtfile, only: nrtxtfile
         class(rotmats2oris_commander),  intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        type(parameters) :: params
         type(nrtxtfile) :: rotmats
         type(ori)       :: o
         type(oris)      :: os_out
         integer         :: nrecs_per_line, iline, ndatlines
         real            :: rline(9), rmat(3,3)
-        call init_params(cline)
+        params = parameters(cline)
         if( cline%defined('infile') )then
-            call rotmats%new(p%infile, 1)
+            call rotmats%new(params%infile, 1)
             ndatlines = rotmats%get_ndatalines()
         else
             stop 'Need infile defined on command line: text file with 9 &
             &records per line defining a rotation matrix (11) (12) (13) (21) etc.'
         endif
-        if( fname2format(trim(p%outfile)) .eq. '.simple' )then
+        if( fname2format(trim(params%outfile)) .eq. '.simple' )then
             stop '*.simple outfile not supported; commander_oris :: rotmats2oris'
         endif
         nrecs_per_line = rotmats%get_nrecs_per_line()
@@ -395,7 +401,7 @@ contains
             call os_out%set_ori(iline,o)
         end do
         call os_out%swape1e3
-        call os_out%write(p%outfile, [1,ndatlines])
+        call os_out%write(params%outfile, [1,ndatlines])
         call rotmats%kill
         call simple_end('**** ROTMATS2ORIS NORMAL STOP ****')
     end subroutine exec_rotmats2oris
@@ -403,6 +409,8 @@ contains
     subroutine exec_vizoris( self, cline )
         class(vizoris_commander),  intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
+        type(parameters)      :: params
+        type(builder)         :: build
         type(ori)             :: o, o_prev
         real,    allocatable  :: euldists(:)
         integer, allocatable  :: pops(:)
@@ -410,45 +418,34 @@ contains
         integer               :: i, n, maxpop, funit, closest,io_stat
         real                  :: radius, maxradius, ang, scale, col, avg_geodist,avg_euldist,geodist
         real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3)
-        call init_params(cline)
-        call b%build_general_tbox( cline, do3d=.false.)
-        ! BELOW IS FOR TESTING ONLY
-        ! call b%a%spiral
-        ! call a%new(2*b%a%get_noris()-1)
-        ! do i = 1, b%a%get_noris()
-        !     call a%set_ori(i,b%a%get_ori(i))
-        ! enddo
-        ! do i = b%a%get_noris()+1, 2*b%a%get_noris()-1
-        !     call a%set_ori(i,b%a%get_ori(2*b%a%get_noris()-i))
-        ! enddo
-        ! b%a = a
-        n = b%a%get_noris()
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        n = build%a%get_noris()
         if( .not.cline%defined('fbody') )then
-            fname = basename(trim(adjustl(p%oritab)))
+            fname = basename(trim(adjustl(params%oritab)))
             ext   = trim(fname2ext(fname))
-            p%fbody = trim(get_fbody(trim(fname), trim(ext)))
+            params%fbody = trim(get_fbody(trim(fname), trim(ext)))
         endif
-        if( p%tseries.eq.'no' )then
+        if( params%tseries.eq.'no' )then
             ! Discretization of the projection directions
             ! init
-            allocate(pops(p%nspace), source=0,stat=alloc_stat)
+            allocate(pops(params%nspace), source=0,stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In commander_oris:: vizoris allocating pops ", alloc_stat)
-            ang = 3.6 / sqrt(real(p%nsym*p%nspace))
+            ang = 3.6 / sqrt(real(params%nsym*params%nspace))
             maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
             ! projection direction attribution
-            n = b%a%get_noris()
+            n = build%a%get_noris()
             do i = 1, n
-                o = b%a%get_ori(i)
+                o = build%a%get_ori(i)
                 if( o%isstatezero() )cycle
                 call progress(i, n)
-                closest = b%e%find_closest_proj(o)
+                closest = build%e%find_closest_proj(o)
                 pops(closest) = pops(closest) + 1
             enddo
             maxpop = maxval(pops)
             write(*,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
             write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
             ! output
-            fname = trim(p%fbody)//'.bild'
+            fname = trim(params%fbody)//'.bild'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname),iostat=io_stat)
              if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             ! header
@@ -474,10 +471,10 @@ contains
             ! body
             write(funit,'(A)')".comment -- projection firections --"
             write(funit,'(A)')".color 0.4 0.4 0.4"
-            do i = 1, p%nspace
+            do i = 1, params%nspace
                 if( pops(i) == 0 )cycle
                 scale     = real(pops(i)) / real(maxpop)
-                xyz_start = b%e%get_normal(i)
+                xyz_start = build%e%get_normal(i)
                 xyz_end   = (1.05 + scale/4.) * xyz_start
                 radius    = max(maxradius * scale, 0.002)
                 write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
@@ -487,14 +484,14 @@ contains
         else
             ! time series
             ! unit sphere tracking
-            fname  = trim(p%fbody)//'_motion.bild'
+            fname  = trim(params%fbody)//'_motion.bild'
             radius = 0.02
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
              if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
             do i = 1, n
-                o   = b%a%get_ori(i)
+                o   = build%a%get_ori(i)
                 xyz = o%get_normal()
                 col = real(i-1)/real(n-1)
                 write(funit,'(A,F6.2,F6.2)')".color 1.0 ", col, col
@@ -516,11 +513,11 @@ contains
             avg_geodist = 0.
             avg_euldist = 0.
             allocate(euldists(n), stat=alloc_stat)
-            fname  = trim(p%fbody)//'_motion.csv'
+            fname  = trim(params%fbody)//'_motion.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
-                o = b%a%get_ori(i)
+                o = build%a%get_ori(i)
                 if( i==1 )then
                     ang     = 0.
                     geodist = 0.
@@ -542,35 +539,6 @@ contains
             avg_euldist = avg_euldist / real(n-1)
             write(*,'(A,F8.3)')'>>> AVERAGE EULER    DISTANCE: ',avg_euldist
             write(*,'(A,F8.3)')'>>> AVERAGE GEODESIC DISTANCE: ',avg_geodist
-            ! movie output
-            ! setting Rprev to south pole as it where chimera opens
-            ! call o_prev%new
-            ! call o_prev%mirror3d
-            ! Rprev = o_prev%get_mat()
-            ! fname = trim(p%fbody)//'_movie.cmd'
-            ! call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            ! call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
-            ! do i = 1, n
-            !     o  = b%a%get_ori(i)
-            !     Ri = o%get_mat()
-            !     R  = matmul(Ri,transpose(Rprev))
-            !     call rotmat2axis(R, axis)
-            !     if( abs(euldists(i)) > 0.01 )then
-            !         if(i==1)then
-            !             euldists(1) = rad2deg(o.euldist.o_prev)
-            !             write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A2)')&
-            !             &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
-            !             &euldists(i), ' 1'
-            !         else
-            !             write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A)')&
-            !             &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
-            !             &euldists(i), ' 2; wait 2'
-            !         endif
-            !         o_prev = o
-            !         Rprev  = Ri
-            !     endif
-            ! enddo
-            ! call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
         endif
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris

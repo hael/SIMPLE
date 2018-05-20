@@ -2,8 +2,8 @@
 
 module simple_tseries_tracker
 include 'simple_lib.f08'
-use simple_singletons
-use simple_image,   only: image
+use simple_parameters, only: params_glob
+use simple_image,      only: image
 implicit none
 
 public :: init_tracker, track_particle, write_tracked_series, kill_tracker
@@ -24,29 +24,19 @@ logical               :: l_neg
 
 contains
 
-    !> initialise time series tracker
-    !! \param filetabname file table name
-    !! \param boxcoord box coordinates
-    !! \param box_in box input value
-    !! \param offset_in offset input value
-    !! \param smpd_in smpd input value
-    !! \param lp_in lp input value
     subroutine init_tracker(  boxcoord )
-    !subroutine init_tracker( p, boxcoord )
-        !use simple_params, only: params
-        !class(params), intent(in) :: p
-        integer,       intent(in) :: boxcoord(2)
+        integer, intent(in) :: boxcoord(2)
         integer :: n, i
         ! set constants
-        box    = p%box
-        offset = p%offset
-        smpd   = p%smpd
-        lp     = p%lp
-        cenlp  = p%cenlp
-        neg    = p%neg
+        box    = params_glob%box
+        offset = params_glob%offset
+        smpd   = params_glob%smpd
+        lp     = params_glob%lp
+        cenlp  = params_glob%cenlp
+        neg    = params_glob%neg
         l_neg  = .false.
-        if( p%neg .eq. 'yes' ) l_neg = .true.
-        call read_filetable(p%filetab, framenames)
+        if( params_glob%neg .eq. 'yes' ) l_neg = .true.
+        call read_filetable(params_glob%filetab, framenames)
         nframes = size(framenames)
         call find_ldim_nptcls(framenames(1),ldim,n)
         if( n == 1 .and. ldim(3) == 1 )then
@@ -74,7 +64,6 @@ contains
         particle_locations(:,2) = boxcoord(2)
     end subroutine init_tracker
 
-    !> time series particle tracker
     subroutine track_particle
         integer :: pos(2), pos_refined(2), iframe
         ! extract first reference
@@ -101,7 +90,6 @@ contains
         end do
     end subroutine track_particle
 
-    !> write results of time series tracker
     subroutine write_tracked_series( fbody )
         character(len=*), intent(in) :: fbody
         integer :: funit, io_stat, iframe, xind, yind, i

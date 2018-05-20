@@ -1,6 +1,5 @@
 program simple_test_srch
 include 'simple_lib.f08'
-! use simple_prime2D_srch_tester
 use simple_optimiser_tester
 use simple_volpft_srch_tester
 use simple_cmdline, only: cmdline
@@ -24,7 +23,6 @@ if( cline%defined('verbose') )then
         be_verbose = .true.
     endif
 endif
-! call exec_prime2D_srch_test( cline, be_verbose )
 call exec_optimiser_test   (        be_verbose )
 call exec_volpft_srch_test ( cline, be_verbose )
 end program simple_test_srch

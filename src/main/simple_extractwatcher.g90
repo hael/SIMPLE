@@ -1,7 +1,7 @@
 ! particles watcher for stream processing
 module simple_extractwatcher
 include 'simple_lib.f08'
-use simple_params, only: params
+use simple_parameters, only: parameters
 implicit none
 
 public :: extractwatcher
@@ -56,7 +56,7 @@ contains
 
     !>  \brief  is a constructor
     function constructor( p, report_time, print )result( self )
-        class(params),     intent(in) :: p
+        class(parameters),     intent(in) :: p
         integer,           intent(in) :: report_time  ! in seconds
         logical, optional, intent(in) :: print
         type(extractwatcher)      :: self

@@ -1,9 +1,9 @@
 ! concrete commander: checking routines
 module simple_commander_checks
 include 'simple_lib.f08'
-use simple_singletons
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
+use simple_parameters,     only: parameters
 implicit none
 
 public :: check_box_commander
@@ -32,17 +32,18 @@ end type info_stktab_commander
 contains
 
     !> for checking the image dimensions of MRC and SPIDER stacks and volumes
-   subroutine exec_check_box( self, cline )
+    subroutine exec_check_box( self, cline )
         class(check_box_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
+        type(parameters) :: params
         if( cline%defined('stk') .or. cline%defined('vol1') )then
             ! all ok
         else
             stop 'Either stack (stk) or volume (vol1) needs to be defined on command line!'
         endif
-        call init_params(cline) ! parameters generated
-        call cline%set('box', real(p%box))
-        write(*,'(A,1X,I7)') '>>> BOX:', p%box
+        params = parameters(cline)
+        call cline%set('box', real(params%box))
+        write(*,'(A,1X,I7)') '>>> BOX:', params%box
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_BOX NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_box
@@ -51,9 +52,10 @@ contains
     subroutine exec_check_nptcls( self, cline )
         class(check_nptcls_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        call init_params(cline) ! parameters generated
-        call cline%set('nptcls', real(p%nptcls))
-        write(*,'(A,1X,I7)') '>>> NPTCLS:', p%nptcls
+        type(parameters) :: params
+        params = parameters(cline)
+        call cline%set('nptcls', real(params%nptcls))
+        write(*,'(A,1X,I7)') '>>> NPTCLS:', params%nptcls
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_nptcls
@@ -63,21 +65,22 @@ contains
         use simple_image,   only: image
         class(info_image_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(image)       :: img
-        integer           :: ldim(3), maxim, i, n_nans
-        real              :: sdev, ave, minv, maxv
-        call init_params(cline) ! constants & derived constants produced
+        type(parameters) :: params
+        type(image)      :: img
+        integer          :: ldim(3), maxim, i, n_nans
+        real             :: sdev, ave, minv, maxv
+        params = parameters(cline)
         if( cline%defined('fname') )then
-            call find_ldim_nptcls(p%fname, ldim, maxim, doprint=.true.)
+            call find_ldim_nptcls(params%fname, ldim, maxim, doprint=.true.)
         endif
-        p%box = ldim(1)
-        call img%new([ldim(1),ldim(2),1],p%smpd)
-        if( p%vis .eq. 'yes' .or. p%stats .ne. 'no' )then
+        params%box = ldim(1)
+        call img%new([ldim(1),ldim(2),1],params%smpd)
+        if( params%vis .eq. 'yes' .or. params%stats .ne. 'no' )then
             do i=1,maxim
-                call img%read(p%fname, i)
-                if( p%stats .ne. 'no' )then
+                call img%read(params%fname, i)
+                if( params%stats .ne. 'no' )then
                     call img%cure(maxv, minv, ave, sdev, n_nans)
-                    if( p%stats .eq. 'print' .or. n_nans > 0 )then
+                    if( params%stats .eq. 'print' .or. n_nans > 0 )then
                         write(*,*) '*********IMAGE********', i, '*******'
                         write(*,*) 'maxv = ',   maxv
                         write(*,*) 'minv = ',   minv
@@ -86,7 +89,7 @@ contains
                         write(*,*) 'n_nans = ', n_nans
                     endif
                 endif
-                if( p%vis .eq. 'yes' )then
+                if( params%vis .eq. 'yes' )then
                     print *, 'calling img%vis'
                     call img%vis()
                 endif
@@ -98,16 +101,17 @@ contains
     !> for printing information about stktab
     subroutine exec_info_stktab( self, cline )
         class(info_stktab_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        call init_params(cline) ! constants & derived constants produced
-        if( .not. file_exists(p%stktab) )then
-            write(*,*) 'file: ', trim(p%stktab), ' not in cwd'
+        class(cmdline),               intent(inout) :: cline
+        type(parameters) :: params
+        params = parameters(cline)
+        if( .not. file_exists(params%stktab) )then
+            write(*,*) 'file: ', trim(params%stktab), ' not in cwd'
             stop 'commander_checks :: exec_info_stktab'
         endif
-        write(*,*) '# micrograps: ', p%nmics
-        write(*,*) '# particles : ', p%nptcls
-        write(*,*) 'ldim        : ', p%ldim
-        write(*,*) 'box size    : ', p%box
+        write(*,*) '# micrograps: ', params%nmics
+        write(*,*) '# particles : ', params%nptcls
+        write(*,*) 'ldim        : ', params%ldim
+        write(*,*) 'box size    : ', params%box
         call simple_end('**** SIMPLE_INFO_STKTAB NORMAL STOP ****')
     end subroutine exec_info_stktab
 
