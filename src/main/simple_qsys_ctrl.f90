@@ -3,7 +3,6 @@ module simple_qsys_ctrl
 include 'simple_lib.f08'
 use simple_qsys_base, only: qsys_base
 use simple_cmdline,   only: cmdline
-use simple_params,    only: p
 implicit none
 
 public :: qsys_ctrl
@@ -33,7 +32,7 @@ type qsys_ctrl
     integer                        :: cline_stacksz          = 0 !< size of stack of command lines, for streaming only
     logical                        :: stream    = .false.        !< stream flag
     logical                        :: existence = .false.        !< indicates existence
-
+    logical                        :: l_suppress_errors = .true.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -372,7 +371,7 @@ contains
                 !!!!!!!!!!!!
                 select type( pmyqsys => self%myqsys )
                 class is(qsys_local)
-                    if(p%l_suppress_errors)then
+                    if(self%l_suppress_errors)then
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
                     else
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//&
