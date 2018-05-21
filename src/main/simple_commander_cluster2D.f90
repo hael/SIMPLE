@@ -162,7 +162,7 @@ contains
         call cavger_write(trim(params%refs_odd),  'odd'   )
         call cavger_kill()
         ! write project
-        call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        call build%spproj%write_segment_inside('cls2D', params%projfile)
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)

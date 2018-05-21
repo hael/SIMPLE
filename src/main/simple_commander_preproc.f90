@@ -51,6 +51,7 @@ end type extract_commander
 contains
 
     subroutine exec_preprocess( self, cline )
+        use simple_parameters,          only: params_glob
         use simple_ori,                 only: ori
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
@@ -154,14 +155,14 @@ contains
                 &output_dir_motion_correct)
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')
-            params%hp             = params%hp_ctf_estimate
-            params%lp             = max(params%fny, params%lp_ctf_estimate) ! should be in params?
+            params_glob%hp   = params%hp_ctf_estimate
+            params_glob%lp   = max(params%fny, params%lp_ctf_estimate) ! should be in params?
             call cfiter%iterate( ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
             if( l_pick )then
-                params%lp = max(params%fny, params%lp_pick) ! should be in params?
+                params_glob%lp = max(params%fny, params%lp_pick) ! should be in params?
                 moviename_intg = mciter%get_moviename('intg')
                 call piter%iterate(cline,  moviename_intg, boxfile, nptcls_out, output_dir_picker)
                 call o_mov%set('boxfile', trim(boxfile)   )
@@ -349,7 +350,7 @@ contains
                 if( imgkind.ne.'movie' )cycle
                 call o%getter('movie', moviename)
                 ctfvars = spproj%get_micparams(imovie)
-                call mciter%iterate(cline,  ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
+                call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
                 call spproj%os_mic%set_ori(imovie, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
             endif
@@ -551,7 +552,7 @@ contains
         if( spproj%get_nintgs() == 0 )then
             stop 'No integrated micrograph to process!'
         endif
-        ntot  = spproj%os_mic%get_noris()
+        ntot = spproj%os_mic%get_noris()
         ! sanity checks
         allocate(mics_mask(ntot), source=.false.)
         nmics  = 0

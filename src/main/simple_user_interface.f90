@@ -693,8 +693,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call cluster2D_stream%set_input('parm_ios', 1, 'projfile_target', 'file', 'Target project',&
-        &'Project encapsulating new particles and parameters to be classified in 2D', 'e.g. mytargetprojfile.simple', .true., '')
+        call cluster2D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
         call cluster2D_stream%set_input('parm_ios', 2, mkdir_)
         ! alternative inputs
         ! <empty>

@@ -187,10 +187,6 @@ contains
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd(), 'cavg')
-        stk = add2fbody(trim(finalcavgs),params%ext,'_even')
-        call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_even')
-        stk = add2fbody(trim(finalcavgs),params%ext,'_odd')
-        call spproj%add_cavgs2os_out( trim(stk), spproj%get_smpd(), 'cavg_odd')
         call spproj%write_segment_inside('out')
         call spproj%kill()
         ! ranking

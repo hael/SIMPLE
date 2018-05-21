@@ -845,6 +845,7 @@ contains
         ! directories
         if( self%mkdir.eq.'yes' )then
             if( self%dir_movies(1:1).ne.'/' )self%dir_movies = '../'//trim(self%dir_movies)
+            if( self%dir_target(1:1).ne.'/' )self%dir_target = '../'//trim(self%dir_target)
         endif
         ! project file segment
         if( cline%defined('oritype') )then
@@ -1169,8 +1170,12 @@ contains
             call find_ldim_nptcls(self%refs, lfoo, ncls)
             DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
-                if( ncls /= self%ncls ) call simple_stop('inputtend number of clusters (ncls) not&
-                &consistent with the number of references in stack (p%refs)')
+                if( ncls /= self%ncls )then
+                    write(*,*)'ncls in ',trim(self%refs),' : ',ncls
+                    write(*,*)'self%ncls : ',self%ncls
+                    call simple_stop('input number of clusters (ncls) not&
+                        &consistent with the number of references in stack (p%refs)')
+                endif
             else
                 self%ncls = ncls
             endif

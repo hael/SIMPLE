@@ -387,6 +387,7 @@ contains
             endif
             if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
         else if( cline%defined('filetab') )then
+            call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
             call read_filetable(params%filetab, filenames)
             nfiles = size(filenames)
             call find_ldim_nptcls(filenames(1),ldim,nframes)
