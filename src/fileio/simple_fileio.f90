@@ -550,13 +550,19 @@ contains
         character(len=*),                       intent(in)  :: filetable    !< input table filename
         character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
         integer :: nl, funit, iline,io_stat
-        nl = nlines(filetable)
+
+        print *, 'filetab: ', trim(filetable)
+
+        nl = nlines(trim(filetable))
+
+        print *, 'nl: ', nl
+
         call fopen(funit,filetable,'old','unknown',io_stat)
         call fileiochk("read_filetable failed to open file "//trim(filetable),io_stat )
         allocate( filenames(nl), stat=alloc_stat )
         if(alloc_stat /= 0) call allocchk ('In: read_filetable; simple_fileio  ', alloc_stat)
         do iline=1,nl
-            read(funit,'(a256)') filenames(iline)
+            read(funit,'(a1024)') filenames(iline)
         end do
         call fclose_1(funit,io_stat)
         call fileiochk("read_filetable failed to close",io_stat)

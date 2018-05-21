@@ -319,7 +319,7 @@ contains
         real             :: ave, sdev, var, med, smpd_new, smpds_new(2), scale
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer          :: ldims_scaled(2,3)
-        character(len=:), allocatable      :: fname
+        character(len=:), allocatable :: fname
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         if( cline%defined('stk') .and. cline%defined('vol1') ) stop 'Cannot operate on images AND volume at once'
         if( cline%defined('stk') )then
@@ -387,7 +387,7 @@ contains
             endif
             if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
         else if( cline%defined('filetab') )then
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+            params = parameters(cline)
             call read_filetable(params%filetab, filenames)
             nfiles = size(filenames)
             call find_ldim_nptcls(filenames(1),ldim,nframes)
