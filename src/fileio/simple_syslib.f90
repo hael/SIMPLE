@@ -306,7 +306,6 @@ contains
             retval = ""
             return
         end if
-        retval = trim(adjustl(retvaltmp))
     end function simple_getenv
 
     subroutine simple_sleep( secs )
