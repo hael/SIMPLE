@@ -49,12 +49,12 @@ static int global_debug = 1;
 /* Name of this program */
 static char *global_progname = "simple_posix";
 #ifdef _DEBUG
-#define dprintf if (global_debug >= 3) \
+#define dgprintf if (global_debug >= 3) \
         fprintf (stderr, "%s: debug: (%d) ", global_progname, __LINE__), \
         fprintf
 #else
-void noprint(...){}
-#define dprintf noprint
+void noprint(FILE *f,...){}
+#define dgprintf noprint
 #endif
 #define eprintf if (global_debug >= 0) \
         fprintf (stderr, "%s: error: (%d) ", global_progname, __LINE__), \
@@ -152,20 +152,20 @@ int isdir(char* pathname, int* len, size_t ivf_pathname)
         perror("Failed : simple_posix.c::isdir ");
         return 0;
     }
-    dprintf(stderr, "DEBUG: In simple_posix.c::isdir pathname :%s:\n",  cpathname);
+    dgprintf(stderr, "DEBUG: In simple_posix.c::isdir pathname :%s:\n",  cpathname);
 
     struct stat ibuf;
     int i = stat(cpathname, &ibuf);
     free(cpathname);
     if(i != 0) {
 
-        dprintf(stderr, "DEBUG: In simple_posix.c::isdir pathname :%s: does not exist\n",  cpathname);
+        dgprintf(stderr, "DEBUG: In simple_posix.c::isdir pathname :%s: does not exist\n",  cpathname);
         //printf("%d %s\nisdir failed to create stat struct %s\n", errno, strerror(errno), cpathname);
         //perror("Failed : simple_posix.c::isdir ");
         return 0;
     }
-    dprintf(stderr, "DEBUG: In isdir stat mode %ud\t isdir %d\n", ibuf.st_mode, S_ISDIR(ibuf.st_mode));
-    dprintf(stderr, "DEBUG: In isdir stat mode s_ifdir %d\n" , (ibuf.st_mode & S_IFMT) == S_IFDIR);
+    dgprintf(stderr, "DEBUG: In isdir stat mode %ud\t isdir %d\n", ibuf.st_mode, S_ISDIR(ibuf.st_mode));
+    dgprintf(stderr, "DEBUG: In isdir stat mode s_ifdir %d\n" , (ibuf.st_mode & S_IFMT) == S_IFDIR);
 
     return S_ISDIR(ibuf.st_mode) ? 1 : 0;
 }
@@ -405,8 +405,8 @@ int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
         return -1;
     }
 
-    dprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "path", cpath);
-    dprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "ext", ext);
+    dgprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "path", cpath);
+    dgprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "ext", ext);
 
 
     DIR           *d;
@@ -425,7 +425,7 @@ int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
         rewinddir(d);
         /*option 1*/
         //results = malloc ( sizeof(char*) * fcount );
-        dprintf(stderr, " get_file_list size %d\n", fcount);
+        dgprintf(stderr, " get_file_list size %d\n", fcount);
         /*option 2*/
         FILE* f = fopen("__simple_filelist__", "w");
         fcount = 0;
@@ -485,7 +485,7 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
     mtime_alpha = (flag >> 1) & 1;
     reverse = (flag) & 1;
     ssize_t ri = strlen(path);
-    dprintf(stderr, "DEBUG:In get_file_list_modified %15s:%zd\n", "strlen(path)", ri);
+    dgprintf(stderr, "DEBUG:In get_file_list_modified %15s:%zd\n", "strlen(path)", ri);
     if(ri > 256) {
         ri = index(path, ' ') - path;
     }
@@ -496,11 +496,11 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
         return -1;
     }
 
-    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%s\n", "path", path);
-    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%zd\n", " strlen(path)", strlen(path));
-    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%d  %15s:%3s\n", "flag", flag, "ext", ext);
-    dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%zd\n", "strlen ext", strlen(ext));
-    // dprintf(stderr, "DEBUG: In get_file_list_modified %15s:%12lu\n", "ivf_pathLen", (unsigned long) ivf_path);
+    dgprintf(stderr, "DEBUG: In get_file_list_modified %15s:%s\n", "path", path);
+    dgprintf(stderr, "DEBUG: In get_file_list_modified %15s:%zd\n", " strlen(path)", strlen(path));
+    dgprintf(stderr, "DEBUG: In get_file_list_modified %15s:%d  %15s:%3s\n", "flag", flag, "ext", ext);
+    dgprintf(stderr, "DEBUG: In get_file_list_modified %15s:%zd\n", "strlen ext", strlen(ext));
+    // dgprintf(stderr, "DEBUG: In get_file_list_modified %15s:%12lu\n", "ivf_pathLen", (unsigned long) ivf_path);
 
     // Remove temp file if it exists
     if(access("./__simple_filelist__", F_OK) != -1) {
@@ -759,9 +759,9 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
     int err,n;
     err = 0;n=0;
 
-    dprintf(stderr, "DEBUG: In glob_file_list size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
-    dprintf(stderr, "DEBUG: In glob_file_list cmatch:%s\n", cmatch);
-    dprintf(stderr, "DEBUG: In glob_file_list flag:%d \n", *sort_by_time);
+    dgprintf(stderr, "DEBUG: In glob_file_list size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
+    dgprintf(stderr, "DEBUG: In glob_file_list cmatch:%s\n", cmatch);
+    dgprintf(stderr, "DEBUG: In glob_file_list flag:%d \n", *sort_by_time);
 
 
     int glob_val = glob(cmatch, 0, NULL, &globlist);
@@ -826,7 +826,7 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
             #endif
             */
         }
-        dprintf(stderr, " glob_file_list size after trimming %d \n", *count);
+        dgprintf(stderr, " glob_file_list size after trimming %d \n", *count);
     }
     globfree(&globlist);
     fclose(f);
@@ -846,8 +846,8 @@ int subprocess(char* args, int* arglen, size_t ivf_cmd)
 
     char * const argsC[] = { "-l", "-c", cargs, "\r", NULL };
 
-    dprintf(stderr, "DEBUG:In subprocess %30s:%s:\n", " args ", argsC[2]);
-    dprintf(stderr, "DEBUG:In subprocess %30s:%zd  %d\n", "strlen args", strlen(args), *arglen);
+    dgprintf(stderr, "DEBUG:In subprocess %30s:%s:\n", " args ", argsC[2]);
+    dgprintf(stderr, "DEBUG:In subprocess %30s:%zd  %d\n", "strlen args", strlen(args), *arglen);
 
     int pid = fork();
     if(pid == 0) {
@@ -893,9 +893,9 @@ int fcopy_mmap(char* file1,  int*len1, char* file2, int*len2)
 {
 
     int sfd, dfd;
-    dprintf(stderr, "MMAP FCOPY In fcopy mmap/memcpy\n");
-    dprintf(stderr, "DEBUG: In fcopy mmap file1:%s \n size :%zu\t%d\n", file1, strlen(file1), *len1);
-    dprintf(stderr, "DEBUG: In fcopy mmap file2:%s \n size :%zu\t%d\n", file2, strlen(file2), *len2);
+    dgprintf(stderr, "MMAP FCOPY In fcopy mmap/memcpy\n");
+    dgprintf(stderr, "DEBUG: In fcopy mmap file1:%s \n size :%zu\t%d\n", file1, strlen(file1), *len1);
+    dgprintf(stderr, "DEBUG: In fcopy mmap file2:%s \n size :%zu\t%d\n", file2, strlen(file2), *len2);
     size_t filesize;
     extern int errno;
     char *buffer1, *buffer2;
@@ -912,7 +912,7 @@ int fcopy_mmap(char* file1,  int*len1, char* file2, int*len2)
         free(buffer2);
         flag = 1;
     } else {
-        dprintf(stderr, "In fcopy opening files\n");
+        dgprintf(stderr, "In fcopy opening files\n");
         /* SOURCE */
         sfd = open(buffer1, O_RDONLY);
         if(sfd) {
@@ -977,7 +977,7 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_
         free(buffer2);
         flag = 1;
     } else {
-        dprintf(stderr, "In fcopy opening files\n");
+        dgprintf(stderr, "In fcopy opening files\n");
         FILE *f1, *f2;
         f1 = fopen(buffer1, "r");
         if(f1) {
@@ -1021,9 +1021,9 @@ int fcopy_sendfile(char* file1,  int*len1, char* file2, int*len2, size_t ivf_fil
 
 int fcopy_sendfile(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
 {
-    dprintf(stderr, "In fcopy2\n");
-    dprintf(stderr, "DEBUG: In fcopy2 file1:%s \n size :%zu\t%d\t%zu\n", file1, strlen(file1), *len1, ivf_file1);
-    dprintf(stderr, "DEBUG: In fcopy2 file2:%s \n size :%zu\t%d\t%zu\n", file2, strlen(file2), *len2, ivf_file2);
+    dgprintf(stderr, "In fcopy2\n");
+    dgprintf(stderr, "DEBUG: In fcopy2 file1:%s \n size :%zu\t%d\t%zu\n", file1, strlen(file1), *len1, ivf_file1);
+    dgprintf(stderr, "DEBUG: In fcopy2 file2:%s \n size :%zu\t%d\t%zu\n", file2, strlen(file2), *len2, ivf_file2);
     extern int errno;
     ssize_t sent = 0;
     char *buffer1, *buffer2;
@@ -1043,7 +1043,7 @@ int fcopy_sendfile(char* file1,  int*len1, char* file2, int*len2, size_t ivf_fil
         if(0 == stat(buffer1, &st)) {
             int INPUTsize = st.st_size;
 	    //            off_t OSX_INPUTsize = (off_t) INPUTsize;
-            dprintf(stderr, "In fcopy2 opening files\n");
+            dgprintf(stderr, "In fcopy2 opening files\n");
             FILE *fin = fopen(buffer1, "r");
             if(fin) {
                 FILE *fout = fopen(buffer2, "w");
@@ -1127,9 +1127,9 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 #else
     char *resolved = lrealpath(filein);
 #endif
-    dprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
-    dprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
-    dprintf(stderr, "DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
+    dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
+    dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
+    dgprintf(stderr, "DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
 
 
     if(resolved == NULL) {
@@ -1143,15 +1143,15 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
     }
     strncpy(out, resolved, *outlen); //for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
     out[*outlen] = '\0';
-    dprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
-    dprintf(stderr, "DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
+    dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
+    dgprintf(stderr, "DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
 
     c2fstr(resolved, out, *outlen, sizeof(resolved));
     out[0] = '/';
 
-    dprintf(stderr, "DEBUG: In get_absolute_pathname c2fstr: %s\n", out);
-    dprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%d\n", " out path addr", *out);
-    dprintf(stderr, "DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
+    dgprintf(stderr, "DEBUG: In get_absolute_pathname c2fstr: %s\n", out);
+    dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%d\n", " out path addr", *out);
+    dgprintf(stderr, "DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
 
     free(filein);
     free(resolved);
@@ -1462,8 +1462,8 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
     FILE* f;
     int err;
     err = 0;
-    dprintf(stderr, "DEBUG: In glob_rm_all size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
-    dprintf(stderr, "DEBUG: In glob_rm_all cmatch:%s\n", cmatch);
+    dgprintf(stderr, "DEBUG: In glob_rm_all size cmatch:%zd size match:%zd\n", strlen(cmatch), strlen(match));
+    dgprintf(stderr, "DEBUG: In glob_rm_all cmatch:%s\n", cmatch);
 
     int glob_val = glob(cmatch, 0, NULL, &globlist);
     free(cmatch);
@@ -1487,32 +1487,32 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
         err = -1;
     } else {
         *count = (int) globlist.gl_pathc; //account for __simple_filelist__
-        dprintf(stderr, " glob_rm_all size before trimming %d \n", *count);
+        dgprintf(stderr, " glob_rm_all size before trimming %d \n", *count);
 
         *count = 0;
         int i = 0;
         while(globlist.gl_pathv[i]) {
 
-            dprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
+            dgprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
             if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
                 if(strcmp(globlist.gl_pathv[i], ".") != 0 || strcmp(globlist.gl_pathv[i], "..") != 0) {
-                    dprintf(stderr, " for deletion\n");
+                    dgprintf(stderr, " for deletion\n");
 
                     //fprintf(f, "%s\n", globlist.gl_pathv[i]);
                     *count = *count + 1;
                 } else {
-                    dprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
+                    dgprintf(stderr, "dot dir found, CANNOT DELETE CWD, stepping over\n");
 
                 }
             } else {
 
-                dprintf(stderr, "temp file found, stepping over\n");
+                dgprintf(stderr, "temp file found, stepping over\n");
 
             }
             i++;
         }
 
-        dprintf(stderr, "Total glob items for deletion:  %d\n", *count);
+        dgprintf(stderr, "Total glob items for deletion:  %d\n", *count);
         *count = 0;
         i = 0;
         while(globlist.gl_pathv[i]) {
@@ -1536,7 +1536,7 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
                         // remove is a stdlib function that uses unlink for files and rmdir for directories
                         if(remove(globlist.gl_pathv[i]) == 0) {
 
-                            dprintf(stderr, " deleted\n");
+                            dgprintf(stderr, " deleted\n");
 
                             *count = *count + 1;
                             FILE* f = fopen("__simple_filelist__", "a");
@@ -1564,7 +1564,7 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
             i++;
         }
 
-        dprintf(stderr, " glob_rm_all size after trimming %d \n", *count);
+        dgprintf(stderr, " glob_rm_all size after trimming %d \n", *count);
 
     }
     globfree(&globlist);
