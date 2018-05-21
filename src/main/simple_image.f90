@@ -4464,7 +4464,8 @@ contains
                 end do
             end do
         else
-            do i=-winsz,winsz
+            if (which == 'bman')then
+ do i=-winsz,winsz
                 do j=-winsz,winsz
                     do k=-winsz,winsz
                         cnt = cnt + 1
@@ -4473,6 +4474,17 @@ contains
                     end do
                 end do
             end do
+            else
+            !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static) proc_bind(close) reduction(+:norm)
+                do i=-winsz,winsz
+                    do j=-winsz,winsz
+                        do k=-winsz,winsz
+                            norm = norm + wfun(i) * wfun(j) * wfun(k)
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+            endif
         endif
         ! make the output image
         call img_filt%new(self%ldim, self%smpd)
@@ -4829,12 +4841,23 @@ contains
         class(image), intent(inout) :: self
         real :: avg
         logical :: didft
+        integer :: i,j,k
         didft = .false.
         if( self%ft )then
             call self%ifft()
             didft = .true.
         endif
-        avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
+        !avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
+        !$omp parallel do default(shared) private(i,j,k) reduction(+:avg) collapse(3) proc_bind(close) schedule(static)
+        do j=1,self%ldim(2)
+            do i=1,self%ldim(1)
+                do k=1,self%ldim(3)
+                    avg = avg + self%rmat(i,j,k)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        avg  = avg/real(product(self%ldim))
         if( didft ) call self%ifft()
     end function mean
 
@@ -5101,17 +5124,31 @@ contains
     !!
     function real_corr_1( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
-        real :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        real :: diff2(self2%ldim(1),self2%ldim(2),self2%ldim(3))
+        real :: diff1!(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real :: diff2!(self2%ldim(1),self2%ldim(2),self2%ldim(3))
         real :: r, ax, ay, sxx, syy, sxy, npix
+        integer :: i,j,k
         npix  = real(product(self1%ldim))
-        ax    = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))) / npix
-        ay    = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))) / npix
-        diff1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
-        diff2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
-        sxx   = sum(diff1 * diff1)
-        syy   = sum(diff2 * diff2)
-        sxy   = sum(diff1 * diff2)
+        ax    = self1%mean() !sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))) / npix
+        ay    = self2%mean() !sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))) / npix
+        ! diff1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
+        ! diff2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
+        ! sxx   = sum(diff1 * diff1)
+        ! syy   = sum(diff2 * diff2)
+        ! sxy   = sum(diff1 * diff2)
+        !$omp parallel do default(shared) private(i,j,k,diff1,diff2) collapse(3) proc_bind(close) schedule(static) reduction(+:sxx,syy,sxy)
+        do i=1,self1%ldim(1)
+            do j=1,self1%ldim(2)
+                do k=1,self1%ldim(3)
+                    diff1 = self1%rmat(i,j,k) -ax
+                    diff2 = self2%rmat(i,j,k) -ay
+                    sxx   = sxx + diff1 * diff1
+                    syy   = syy + diff2 * diff2
+                    sxy   = sxy + diff1 * diff2
+                end do
+            end do
+        end do
+        !$omp end parallel do
         if( sxx > 0. .and. syy > 0. )then
             r = sxy / sqrt(sxx * syy)
         else

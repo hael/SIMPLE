@@ -74,10 +74,10 @@ end interface
 
 interface hpsort
     module procedure hpsort_1
-  !  module procedure hpsort_2
-  !  module procedure hpsort_3
+    module procedure hpsort_2
+    module procedure hpsort_3
     module procedure hpsort_4
-  !  module procedure hpsort_5
+    module procedure hpsort_5
 end interface
 
 ! interface hpsel
@@ -2493,88 +2493,88 @@ contains
     end subroutine hpsort_1
 
     !>   rheapsort from numerical recepies (largest last)
-    ! subroutine hpsort_2( iarr )
-    !     integer, intent(inout) :: iarr(:)
-    !     integer :: i, ir, j, l, ra, n
-    !     n = size(iarr)
-    !     if( n < 2) return
-    !     l  = n/2+1
-    !     ir = n
-    !     do
-    !         if(l > 1)then
-    !             l  = l-1
-    !             ra = iarr(l)
-    !         else
-    !             ra = iarr(ir)
-    !             iarr(ir) = iarr(1)
-    !             ir = ir-1
-    !             if(ir == 1)then
-    !                 iarr(1) = ra
-    !                 return
-    !             endif
-    !         endif
-    !         i = l
-    !         j = l+l
-    !         do while(j <= ir)
-    !             if(j < ir) then
-    !                 if(iarr(j) < iarr(j+1)) j = j+1
-    !             endif
-    !             if(ra < iarr(j))then
-    !                 iarr(i) = iarr(j)
-    !                 i = j
-    !                 j = j+j
-    !             else
-    !                 j = ir+1
-    !             endif
-    !             iarr(i) = ra
-    !         end do
-    !     end do
-    ! end subroutine hpsort_2
+    subroutine hpsort_2( iarr )
+        integer, intent(inout) :: iarr(:)
+        integer :: i, ir, j, l, ra, n
+        n = size(iarr)
+        if( n < 2) return
+        l  = n/2+1
+        ir = n
+        do
+            if(l > 1)then
+                l  = l-1
+                ra = iarr(l)
+            else
+                ra = iarr(ir)
+                iarr(ir) = iarr(1)
+                ir = ir-1
+                if(ir == 1)then
+                    iarr(1) = ra
+                    return
+                endif
+            endif
+            i = l
+            j = l+l
+            do while(j <= ir)
+                if(j < ir) then
+                    if(iarr(j) < iarr(j+1)) j = j+1
+                endif
+                if(ra < iarr(j))then
+                    iarr(i) = iarr(j)
+                    i = j
+                    j = j+j
+                else
+                    j = ir+1
+                endif
+                iarr(i) = ra
+            end do
+        end do
+    end subroutine hpsort_2
 
-    ! !>   rheapsort from numerical recepies (largest last)
-    ! subroutine hpsort_3( iarr, p1_lt_p2 )
-    !     integer, intent(inout) :: iarr(:)
-    !     interface
-    !         function p1_lt_p2( p1, p2 ) result( val )
-    !             integer, intent(in) :: p1, p2
-    !             logical :: val
-    !         end function p1_lt_p2
-    !     end interface
-    !     integer :: i, ir, j, l, ra, n
-    !     n = size(iarr)
-    !     if( n < 2) return
-    !     l  = n/2+1
-    !     ir = n
-    !     do
-    !         if(l > 1)then
-    !             l  = l-1
-    !             ra = iarr(l)
-    !         else
-    !             ra = iarr(ir)
-    !             iarr(ir) = iarr(1)
-    !             ir = ir-1
-    !             if(ir == 1)then
-    !                 iarr(1) = ra
-    !                 return
-    !             endif
-    !         endif
-    !         i = l
-    !         j = l+l
-    !         do while(j <= ir)
-    !             if(j < ir) then
-    !                 if(p1_lt_p2(iarr(j),iarr(j+1))) j = j+1
-    !             endif
-    !             if(p1_lt_p2(ra,iarr(j)))then
-    !                 iarr(i) = iarr(j)
-    !                 i = j
-    !                 j = j+j
-    !             else
-    !                 j = ir+1
-    !             endif
-    !             iarr(i) = ra
-    !         end do
-    !     end do
-    ! end subroutine hpsort_3
+    !>   rheapsort from numerical recepies (largest last)
+    subroutine hpsort_3( iarr, p1_lt_p2 )
+        integer, intent(inout) :: iarr(:)
+        interface
+            function p1_lt_p2( p1, p2 ) result( val )
+                integer, intent(in) :: p1, p2
+                logical :: val
+            end function p1_lt_p2
+        end interface
+        integer :: i, ir, j, l, ra, n
+        n = size(iarr)
+        if( n < 2) return
+        l  = n/2+1
+        ir = n
+        do
+            if(l > 1)then
+                l  = l-1
+                ra = iarr(l)
+            else
+                ra = iarr(ir)
+                iarr(ir) = iarr(1)
+                ir = ir-1
+                if(ir == 1)then
+                    iarr(1) = ra
+                    return
+                endif
+            endif
+            i = l
+            j = l+l
+            do while(j <= ir)
+                if(j < ir) then
+                    if(p1_lt_p2(iarr(j),iarr(j+1))) j = j+1
+                endif
+                if(p1_lt_p2(ra,iarr(j)))then
+                    iarr(i) = iarr(j)
+                    i = j
+                    j = j+j
+                else
+                    j = ir+1
+                endif
+                iarr(i) = ra
+            end do
+        end do
+    end subroutine hpsort_3
 
     !>   rheapsort from numerical recepies (largest last)
     subroutine hpsort_4( rarr )
@@ -2617,51 +2617,81 @@ contains
     end subroutine hpsort_4
 
     !>   rheapsort from numerical recepies (largest last)
-    ! subroutine hpsort_5( rarr, rarr2 )
-    !     real, intent(inout) :: rarr(:), rarr2(:)
-    !     integer :: i, ir, j, l, n
-    !     real    :: ra, ra2
-    !     n = size(rarr)
-    !     if( n /= size(rarr2) ) stop 'nonconforming array sizes; math :: hpsort_5'
-    !     if( n < 2) return
-    !     l  = n/2+1
-    !     ir = n
-    !     do
-    !         if(l > 1)then
-    !             l  = l-1
-    !             ra = rarr(l)
-    !             ra2 = rarr2(l)
-    !         else
-    !             ra = rarr(ir)
-    !             ra2 = rarr2(ir)
-    !             rarr(ir) = rarr(1)
-    !             rarr2(ir) = rarr2(1)
-    !             ir = ir-1
-    !             if(ir == 1)then
-    !                 rarr(1) = ra
-    !                 rarr2(1) = ra2
-    !                 return
-    !             endif
-    !         endif
-    !         i = l
-    !         j = l+l
-    !         do while(j <= ir)
-    !             if(j < ir) then
-    !                 if(rarr(j) < rarr(j+1)) j = j+1
-    !             endif
-    !             if(ra < rarr(j))then
-    !                 rarr(i) = rarr(j)
-    !                 rarr2(i) = rarr2(j)
-    !                 i = j
-    !                 j = j+j
-    !             else
-    !                 j = ir+1
-    !             endif
-    !             rarr(i) = ra
-    !             rarr2(i) = ra2
-    !         end do
-    !     end do
-    ! end subroutine hpsort_5
+    subroutine hpsort_5( rarr, rarr2 )
+        real, intent(inout) :: rarr(:), rarr2(:)
+        integer :: i, ir, j, l, n
+        real    :: ra, ra2
+        n = size(rarr)
+        if( n /= size(rarr2) ) stop 'nonconforming array sizes; math :: hpsort_5'
+        if( n < 2) return
+        l  = n/2+1
+        ir = n
+        do
+            if(l > 1)then
+                l  = l-1
+                ra = rarr(l)
+                ra2 = rarr2(l)
+            else
+                ra = rarr(ir)
+                ra2 = rarr2(ir)
+                rarr(ir) = rarr(1)
+                rarr2(ir) = rarr2(1)
+                ir = ir-1
+                if(ir == 1)then
+                    rarr(1) = ra
+                    rarr2(1) = ra2
+                    return
+                endif
+            endif
+            i = l
+            j = l+l
+            do while(j <= ir)
+                if(j < ir) then
+                    if(rarr(j) < rarr(j+1)) j = j+1
+                endif
+                if(ra < rarr(j))then
+                    rarr(i) = rarr(j)
+                    rarr2(i) = rarr2(j)
+                    i = j
+                    j = j+j
+                else
+                    j = ir+1
+                endif
+                rarr(i) = ra
+                rarr2(i) = ra2
+            end do
+        end do
+    end subroutine hpsort_5
+
+    !>
+    function min3( rarr ) result(min_3)
+        real, intent(inout) :: rarr(:)
+        real ::min_3(3)
+        integer :: i, ir, j, l, n
+        real    :: ra
+        n = size(rarr)
+        if( n < 4)then
+            min_3(:n) = rarr
+            return
+        end if
+        min_3 = rarr(:3)
+        call hpsort(min_3)
+
+        do j=4,n
+            if(rarr(j) < min_3(3))then
+                ra = rarr(j)
+                if(ra < min_3(2))then
+                    if(ra < min_3(1))then
+                        min_3 = (/ ra,  min_3(1), min_3(2) /)
+                    else
+                        min_3 = (/ min_3(1), ra, min_3(2) /)
+                    end if
+                else
+                    min_3 = (/ min_3(1), min_3(2), ra /)
+                end if
+            end if
+        end do
+    end function min3
 
     !>   selecting the size(rheap) largest
     ! subroutine hpsel_1( rarr, rheap )

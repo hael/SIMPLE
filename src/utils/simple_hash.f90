@@ -219,8 +219,8 @@ contains
     ! GETTERS
 
     !>  \brief  check for presence of key in the hash
-    function isthere( self, key ) result( found )
-        class(hash),      intent(inout) :: self
+    pure function isthere( self, key ) result( found )
+        class(hash),      intent(in) :: self
         character(len=*), intent(in)    :: key
         integer :: i
         logical :: found
@@ -236,8 +236,8 @@ contains
     end function isthere
 
     !>  \brief  gets the index to a key
-    integer function lookup( self, key )
-        class(hash),      intent(inout) :: self
+    pure integer function lookup( self, key )
+        class(hash),      intent(in) :: self
         character(len=*), intent(in)    :: key
         integer :: i
         do i=1,self%hash_index

@@ -154,6 +154,7 @@ type :: oris
     procedure          :: discretize
     procedure          :: nearest_proj_neighbors
     procedure          :: find_angres
+    procedure          :: find_angres_mp
     procedure          :: find_angres_geod
     procedure          :: extremal_bound
     procedure          :: find_npeaks
@@ -2325,8 +2326,12 @@ contains
                 if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).euldist.o_in
             end do
         else
-            forall( i=1:self%n )dists(i)=self%o(i).euldist.o_in
-        endif
+            !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
+             do i=1,self%n
+                 dists(i)=self%o(i).euldist.o_in
+             end do
+             !$omp end parallel do
+         endif
         loc     = minloc( dists )
         closest = loc(1)
     end function find_closest_proj
@@ -2393,14 +2398,20 @@ contains
         type(oris)           :: suboris
         integer, allocatable :: subspace_projs(:)
         integer :: isub
+        DebugPrint ' In oris; create_proj_subspace_2 nsub:', nsub, ' nsym:',nsym
         call suboris%new(nsub)
+        DebugPrint ' In oris; create_proj_subspace_2 created suboris'
         call suboris%spiral(nsym, eullims)
+        DebugPrint ' In oris; create_proj_subspace_2; spira'
         allocate( subspace_projs(nsub) , stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_2, module: simple_oris',alloc_stat)
+        DebugPrint ' In oris; create_proj_subspace_2 generating nsubspaces ', nsub
         do isub=1,nsub
             o = suboris%get_ori(isub)
             subspace_projs(isub) = self%find_closest_proj(o)
         end do
+        DebugPrint ' In oris; create_proj_subspace_2; done'
+
     end function create_proj_subspace_2
 
     !>  \brief  method for discretization of the projection directions
@@ -2473,6 +2484,32 @@ contains
         !$omp end parallel do
         res = rad2deg(res/real(self%n))
     end function find_angres
+
+    !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
+    function find_angres_mp( self ) result( res )
+        class(oris), intent(in) :: self
+        real    :: dists(self%n), res, x, avgnearest(3)
+        integer :: i, j
+        res = 0.
+        DebugPrint ' In oris; find_angres'
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(j,i,dists,avgnearest) reduction(+:res)
+        do j=1,self%n
+            do i=1,self%n
+                if( i == j )then
+                    dists(i) = huge(x)
+                else
+                    dists(i) = self%o(i).euldist.self%o(j)
+                endif
+            end do
+            !call hpsort(dists)
+            avgnearest = min3(dists)
+            res = res + sum(avgnearest)/3. ! average of three nearest neighbors
+        end do
+        !$omp end parallel do
+        DebugPrint ' In oris; find_angres; done'
+        res = rad2deg(res/real(self%n))
+    end function find_angres_mp
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres_geod( self ) result( res )
@@ -2911,6 +2948,7 @@ contains
         os = oris(1000)
         call os%spiral
         print *, 'angres:      ', os%find_angres()
+        print *, 'angres_mp:      ', os%find_angres_mp()
         print *, 'angres_geod: ', os%find_angres_geod()
         write(*,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_oris
