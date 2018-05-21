@@ -378,6 +378,7 @@ type :: parameters
     logical :: l_cc_bfac      = .true.
     logical :: l_phaseplate   = .false.
     logical :: l_dev          = .false.
+    logical :: l_suppress_errors   = .false.
     logical :: singleton_initiated = .false.
   contains
     procedure          :: new

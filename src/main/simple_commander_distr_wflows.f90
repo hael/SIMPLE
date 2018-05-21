@@ -830,6 +830,7 @@ contains
         type(cmdline)                      :: cline_volassemble
         character(len=STDLEN)              :: volassemble_output, str_state
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
+       ! type(build)                        :: b
         type(chash)                        :: job_descr
         integer                            :: state
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')

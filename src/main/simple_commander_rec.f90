@@ -46,6 +46,7 @@ contains
             case DEFAULT
                 stop 'unknonw eo flag; simple_commander_rec :: exec_reconstruct3D'
         end select
+        DebugPrint ' In exec_reconstructor; running rec_master'
         call exec_rec_master
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
@@ -76,7 +77,9 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
+        DebugPrint ' In exec_volassemble_eo; build_general_tbox'
         call build%init_params_and_build_general_tbox(cline,params)
+        DebugPrint ' In exec_volassemble_eo; build rec eo'
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced meory usage
         allocate(res05s(params%nstates), res0143s(params%nstates), stat=alloc_stat)
@@ -222,6 +225,7 @@ contains
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state
         type(reconstructor)           :: recvol_read
+        DebugPrint ' In exec_volassemble_eo; '
         call build%init_params_and_build_general_tbox(cline,params,boxmatch_off=.true.)
         call build%build_rec_tbox(params) ! reconstruction toolbox built
         call recvol_read%new([params%boxpd,params%boxpd,params%boxpd], params%smpd)

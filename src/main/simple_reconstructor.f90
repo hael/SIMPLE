@@ -691,6 +691,7 @@ contains
         integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
+        DebugPrint ' In reconstructor;rec'
         ! make the images
         call img%new([params_glob%box,params_glob%box,1], self%get_smpd())
         call img_pad%new([params_glob%boxpd,params_glob%boxpd,1], self%get_smpd())

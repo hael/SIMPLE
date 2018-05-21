@@ -70,7 +70,14 @@ contains
             w(i) = kbwin%instr(arg)
             ci   = ci + 1.
         end do
-        forall(i=1:self%ldim_pd(1), j=1:self%ldim_pd(1) ) self%instr_fun(i,j,1) = w(i)*w(j)
+!        forall(i=1:self%ldim_pd(1), j=1:self%ldim_pd(1) ) self%instr_fun(i,j,1) = w(i)*w(j)
+        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(static)
+        do i=1,self%ldim_pd(1)
+            do j=1,self%ldim_pd(1)
+                 self%instr_fun(i,j,1) = w(i)*w(j)
+             end do
+         end do
+         !$omp end parallel do
     end subroutine memoize_instr_fun
 
     !>  \brief  prepare image for gridding interpolation in Fourier space

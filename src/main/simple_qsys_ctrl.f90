@@ -3,6 +3,7 @@ module simple_qsys_ctrl
 include 'simple_lib.f08'
 use simple_qsys_base, only: qsys_base
 use simple_cmdline,   only: cmdline
+use simple_params,    only: p
 implicit none
 
 public :: qsys_ctrl
@@ -370,8 +371,14 @@ contains
                 endif
                 !!!!!!!!!!!!
                 select type( pmyqsys => self%myqsys )
-                    class is(qsys_local)
+                class is(qsys_local)
+                    if(p%l_suppress_errors)then
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
+                    else
+                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//&
+                            &' > JOB'//trim(adjustl(int2str(ipart)))//'.out 2> JOB'//&
+                            &trim(adjustl(int2str(ipart)))//'.err &'
+                    endif
                     class DEFAULT
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))
                 end select
