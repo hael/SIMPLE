@@ -44,15 +44,18 @@
 #ifdef _DEBUG
 static int global_debug = 3;
 #else
-static int global_debug = 2;
+static int global_debug = 1;
 #endif
 /* Name of this program */
 static char *global_progname = "simple_posix";
-
+#ifdef _DEBUG
 #define dprintf if (global_debug >= 3) \
-        fprintf (stdout, "%s: debug: (%d) ", global_progname, __LINE__), \
+        fprintf (stderr, "%s: debug: (%d) ", global_progname, __LINE__), \
         fprintf
-
+#else
+void noprint(...){}
+#define dprintf noprint
+#endif
 #define eprintf if (global_debug >= 0) \
         fprintf (stderr, "%s: error: (%d) ", global_progname, __LINE__), \
         fprintf
@@ -60,7 +63,7 @@ static char *global_progname = "simple_posix";
 
 // testing for non-GNU systems #undef versionsort
 
-#define MAX_CHAR_FILENAME 256
+#define LONGSTRLEN 1024
 #define MAKEDIR makedir_
 #define REMOVEDIR removedir_
 #define GET_FILE_LIST get_file_list_
@@ -91,7 +94,7 @@ static char *global_progname = "simple_posix";
 char *F90toCstring(char *str, int len)
 {
     char *res; /* C arrays are from 0:len-1 */
-    if(len > PATH_MAX) {
+    if(len > LONGSTRLEN) {
         fprintf(stderr, "Warning: simple_posix.c: possible strlen error in converting f90 string to c-string\n");
     }
     if((res = (char*)malloc(len + 1))) {
@@ -220,7 +223,7 @@ int makedir(char *path, size_t ivf_path)
     */
 
     const size_t len = strlen(path);
-    char _path[PATH_MAX];
+    char _path[LONGSTRLEN];
     char *p;
 
     errno = 0;
@@ -312,7 +315,7 @@ int removedir(char *path, int* len, int* count, size_t ivf_path)
         return -2;
     }
     //  const size_t len = strlen(cpath);
-    char _path[PATH_MAX];
+    char _path[LONGSTRLEN];
     char *p;
     errno = 0;
 
@@ -1130,11 +1133,14 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 
 
     if(resolved == NULL) {
-        printf("%d %s\nget_absolute_path failed to canonicalize  file %s\n", errno, strerror(errno), filein);
+      fprintf(stderr, "%d %s\nget_absolute_path failed to canonicalize  file %s\n", errno, strerror(errno), filein);
         perror("Failed : simple_posix.c::get_absolute_pathname ");
         return 1;
     }
     *outlen = strlen(resolved) ;
+    if (*outlen > LONGSTRLEN){
+      fprintf(stderr, "get_absolute_path: lrealpath returned string longer than str max (%d): \nstrlen %d  \npath:%s \n",LONGSTRLEN, *outlen, resolved);
+    }
     strncpy(out, resolved, *outlen); //for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
     out[*outlen] = '\0';
     dprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);

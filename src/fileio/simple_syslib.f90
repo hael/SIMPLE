@@ -16,17 +16,17 @@ use simple_defs
 use simple_error
 use iso_c_binding
 #if defined(GNU)
-    use, intrinsic :: iso_fortran_env, only: &
-        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-        &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
-#elif defined(INTEL)
-    use, intrinsic :: iso_fortran_env, only: &
-        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-        &IOSTAT_END, IOSTAT_EOR
+use, intrinsic :: iso_fortran_env, only: &
+    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
+    &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
+#elif defined(INTEL) || defined(PGI)
+use, intrinsic :: iso_fortran_env, only: &
+    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
+    &IOSTAT_END, IOSTAT_EOR
 #endif
 #if defined(INTEL)
-    use ifport, killpid=>kill, intel_ran=>ran
-    use ifcore
+use ifport, killpid=>kill, intel_ran=>ran
+use ifcore
 #endif
 use simple_error
 implicit none
@@ -236,7 +236,7 @@ contains
             allocate(tmp, source=cmsg//' '//SUPPRESS_MSG)
             cmsg = trim(tmp)
         endif
-        call execute_command_line(trim(cmsg), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmdmsg)
+        call execute_command_line(trim(adjustl(cmsg)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmdmsg)
         if( .not. l_suppress_errors ) call raise_sys_error( cmsg, exec_stat, cstat, cmdmsg )
         if( l_doprint )then
             write(*,*) 'command            : ', cmsg
@@ -291,7 +291,7 @@ contains
     !> simple_getenv gets the environment variable string and status
     function simple_getenv( name , retval, allowfail)  result( status )
         character(len=*),      intent(in)  :: name
-        character(len=STDLEN), intent(out) :: retval
+        character(len=*),      intent(out) :: retval
         logical,     optional, intent(in)  :: allowfail
         integer                            :: length, status
         call get_environment_variable( trim(name), value=retval, length=length, status=status)
@@ -306,6 +306,7 @@ contains
             retval = ""
             return
         end if
+        retval = trim(adjustl(retvaltmp))
     end function simple_getenv
 
     subroutine simple_sleep( secs )
