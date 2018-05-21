@@ -63,22 +63,22 @@ contains
         integer  :: istk, nparts, last_iter_stage1, last_iter_stage2
         logical  :: scaling
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
+        call cline%delete('automsk')
         nparts = params%nparts
+        ! SPLITTING
+        call spproj%read(params%projfile )
+        call spproj%split_stk(params%nparts)
         if( params%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function
-            ! SPLITTING
-            call spproj%read(params%projfile )
-            call spproj%split_stk(params%nparts)
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
             call cline_cluster2D_stage1%set('objfun', 'cc')
-            call cline_cluster2D_stage1%delete('automsk')
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -132,7 +132,6 @@ contains
             cline_cluster2D_stage2 = cline
             call cline_cluster2D_stage2%set('objfun', 'ccres')
             call cline_cluster2D_stage2%delete('refs')
-            if( params%automsk .eq. 'yes' )call cline_cluster2D_stage2%set('automsk', 'cavg')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then
                 call cline_cluster2D_stage2%set('update_frac', params%update_frac)
@@ -255,7 +254,7 @@ contains
         ! make master parameters
         do_eo = trim(cline%get_carg('eo')) .eq. 'yes'
         call cline%set('eo','no')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
@@ -607,7 +606,7 @@ contains
         if(nint(cline%get_rarg('nstates')) <= 1)&
             &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        params = parameters(cline)
+        call params%new(cline)
         if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; cluster3D'
         ! set mkdir to no (to avoid nested directory structure)
@@ -884,7 +883,7 @@ contains
         logical                  :: l_singlestate, error
         integer                  :: rename_stat
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        params = parameters(cline)
+        call params%new(cline)
         l_singlestate = cline%defined('state')
         error         = .false.
         ! set mkdir to no (to avoid nested directory structure)

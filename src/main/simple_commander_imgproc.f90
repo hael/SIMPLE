@@ -387,7 +387,7 @@ contains
             endif
             if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
         else if( cline%defined('filetab') )then
-            params = parameters(cline)
+            call params%new(cline)
             call read_filetable(params%filetab, filenames)
             nfiles = size(filenames)
             call find_ldim_nptcls(filenames(1),ldim,nframes)

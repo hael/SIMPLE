@@ -370,7 +370,7 @@ contains
         type(oris)      :: os_out
         integer         :: nrecs_per_line, iline, ndatlines
         real            :: rline(9), rmat(3,3)
-        params = parameters(cline)
+        call params%new(cline)
         if( cline%defined('infile') )then
             call rotmats%new(params%infile, 1)
             ndatlines = rotmats%get_ndatalines()

@@ -1,7 +1,7 @@
 ! concrete commander: operations on volumes
 module simple_commander_volops
 include 'simple_lib.f08'
-use simple_parameters,     only: parameters
+use simple_parameters,     only: parameters, params_glob
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
@@ -69,7 +69,7 @@ contains
         integer           :: j, find_plate
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
-        params = parameters(cline)
+        call params%new(cline)
         ! read even/odd pair
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd%new([params%box,params%box,params%box], params%smpd)
@@ -271,7 +271,7 @@ contains
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
-        params = parameters(cline)
+        call params%new(cline)
         if( cline%defined('oritab') )then
             params%nptcls = binread_nlines(params%oritab)
             call build%build_general_tbox(params, cline)
@@ -369,7 +369,7 @@ contains
         integer,                   allocatable :: pairs(:,:)
         character(len=LONGSTRLEN), allocatable :: vollist(:)
         character(len=:),          allocatable :: fname
-        params = parameters(cline)
+        call params%new(cline)
         call read_filetable(params%vollist, vollist) ! reads in list of volumes
         nvols  = size(vollist)
         npairs = (nvols*(nvols-1))/2
@@ -474,7 +474,7 @@ contains
         type(projector)  :: vol1, vol2
         type(image)      :: vol_out
         type(ori)        :: orientation
-        params = parameters(cline)
+        call params%new(cline)
         call read_and_prep_vol(  params%vols(1), vol1 )
         call read_and_prep_vol(  params%vols(2), vol2 )
         call volpft_srch_init(vol1, vol2, params%hp, params%lp, 0.)

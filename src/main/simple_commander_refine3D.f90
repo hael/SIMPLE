@@ -60,7 +60,7 @@ contains
         type(oris)       :: o
         real             :: ares
         integer          :: i
-        params = parameters(cline)
+        call params%new(cline)
         do i=500,5000,500
             o = oris(i)
             call o%spiral

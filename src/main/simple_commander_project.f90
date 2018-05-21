@@ -77,7 +77,7 @@ contains
         type(oris)       :: os
         type(sp_project) :: spproj
         integer          :: noris
-        params = parameters(cline)
+        call params%new(cline)
         noris = nlines(params%oritab)
         call os%new(noris)
         call os%read(params%oritab)
@@ -96,7 +96,7 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        params = parameters(cline)
+        call params%new(cline)
         call spproj%read(params%projfile)
         call spproj%write_segment(params%oritype, params%outfile)
         call spproj%kill
@@ -109,7 +109,7 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        params = parameters(cline)
+        call params%new(cline)
         call spproj%read(params%projfile)
         call spproj%print_info
         call spproj%kill
@@ -220,7 +220,7 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        params = parameters(cline)
+        call params%new(cline)
         if( file_exists('./'//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
             write(*,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
@@ -248,7 +248,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        params = parameters(cline)
+        call params%new(cline)
         if( .not. file_exists('./'//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' does not exist in cwd: ', trim(params%cwd)
             write(*,*) 'Use program new_project to create a new project from scratch'
@@ -281,7 +281,7 @@ contains
         type(ctfparams)  :: ctfvars
         character(len=:),      allocatable :: phaseplate, boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        params = parameters(cline)
+        call params%new(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
@@ -346,7 +346,7 @@ contains
         integer          :: nos_mic, nboxf, i
         character(len=:),          allocatable :: boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        params = parameters(cline)
+        call params%new(cline)
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
             write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
@@ -388,7 +388,7 @@ contains
         logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
         integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
         type(ctfparams)  :: ctfvars
-        params = parameters(cline)
+        call params%new(cline)
         ! PARAMETER INPUT MANAGEMENT
         ! parameter input flags
         inputted_oritab       = cline%defined('oritab')
@@ -623,7 +623,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        params = parameters(cline)
+        call params%new(cline)
         if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
         call spproj%add_cavgs2os_out(params%stk, params%smpd, 'cavg')
         ! update project info

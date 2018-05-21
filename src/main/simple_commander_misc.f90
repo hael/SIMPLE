@@ -204,7 +204,7 @@ contains
         class(masscen_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
-        params = parameters(cline)
+        call params%new(cline)
         params%cenlp = params%lp
         ! center of mass centering
         call masscen_imgfile(params%stk, params%outstk, params%smpd, params%lp, params%msk)
@@ -222,7 +222,7 @@ contains
         type(image)       :: dummy_img
         real              :: time_per_frame, current_time, acc_dose
         integer           :: iframe, find
-        params = parameters(cline)
+        call params%new(cline)
         call dummy_img%new([params%box,params%box,1], params%smpd)
         time_per_frame = params%exp_time/real(params%nframes)
         do iframe=1,params%nframes
@@ -247,7 +247,7 @@ contains
         real, allocatable :: res(:), fsc(:)
         integer           :: k
         real              :: res0143, res05
-        params = parameters(cline)
+        call params%new(cline)
         call img%new([params%box,params%box,1], params%smpd)
         res = img%get_res()
         fsc = file2rarr(params%fsc)
@@ -267,7 +267,7 @@ contains
         class(print_magic_boxes_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
-        params = parameters(cline)
+        call params%new(cline)
         call print_magic_box_range(params%smpd, params%moldiam )
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
@@ -279,7 +279,7 @@ contains
         class(cmdline),       intent(inout) :: cline
         type(parameters) :: params
         real :: lp
-        params = parameters(cline)
+        call params%new(cline)
         lp = (real(params%box-1)*params%smpd)/real(params%find)
         write(*,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')

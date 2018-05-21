@@ -98,7 +98,7 @@ contains
         character(len=:), allocatable :: output_dir_motion_correct
         logical                       :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! picking
@@ -142,7 +142,7 @@ contains
         type(chash)                   :: job_descr
         character(len=:), allocatable :: output_dir
         call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! output directory
@@ -177,7 +177,7 @@ contains
         type(chash), allocatable :: part_params(:)
         call cline%set('prg', 'motion_correct')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         if( cline%defined('tomoseries') )then
@@ -228,7 +228,7 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         params%nptcls = nlines(params%filetab)
@@ -254,7 +254,7 @@ contains
         type(qsys_env)                :: qenv
         character(len=:), allocatable :: output_dir
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         params%numlen = len(int2str(params%nparts))
@@ -285,7 +285,7 @@ contains
         type(chash)                   :: job_descr
         character(len=:), allocatable :: output_dir
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         params%numlen = len(int2str(params%nparts))
@@ -315,7 +315,7 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -897,7 +897,7 @@ contains
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
-        params = parameters(cline)
+        call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         if( .not. file_exists(params%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
@@ -976,7 +976,7 @@ contains
         character(len=*), parameter :: SYMPROJSTK   = 'sym_projs.mrc'               !< volume reference projections
         integer,          parameter :: NBEST = 30
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
-        params = parameters(cline)
+        call params%new(cline)
         ! constants
         symsrch_projname = 'symsrch_proj'
         call del_file(trim(symsrch_projname)//trim(METADATA_EXT))

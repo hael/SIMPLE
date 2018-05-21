@@ -41,7 +41,7 @@ contains
         else
             stop 'Either stack (stk) or volume (vol1) needs to be defined on command line!'
         endif
-        params = parameters(cline)
+        call params%new(cline)
         call cline%set('box', real(params%box))
         write(*,'(A,1X,I7)') '>>> BOX:', params%box
         ! end gracefully
@@ -53,7 +53,7 @@ contains
         class(check_nptcls_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
-        params = parameters(cline)
+        call params%new(cline)
         call cline%set('nptcls', real(params%nptcls))
         write(*,'(A,1X,I7)') '>>> NPTCLS:', params%nptcls
         ! end gracefully
@@ -69,7 +69,7 @@ contains
         type(image)      :: img
         integer          :: ldim(3), maxim, i, n_nans
         real             :: sdev, ave, minv, maxv
-        params = parameters(cline)
+        call params%new(cline)
         if( cline%defined('fname') )then
             call find_ldim_nptcls(params%fname, ldim, maxim, doprint=.true.)
         endif
@@ -103,7 +103,7 @@ contains
         class(info_stktab_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
-        params = parameters(cline)
+        call params%new(cline)
         if( .not. file_exists(params%stktab) )then
             write(*,*) 'file: ', trim(params%stktab), ' not in cwd'
             stop 'commander_checks :: exec_info_stktab'

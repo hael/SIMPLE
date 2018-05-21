@@ -43,7 +43,7 @@ contains
         integer          :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
         integer          :: iframe, jframe, nfiles, endit
         type(image)      :: frame_img
-        params = parameters(cline)
+        call params%new(cline)
         if( cline%defined('filetab') )then
             call read_filetable(params%filetab, filenames)
             nfiles = size(filenames)
@@ -101,7 +101,7 @@ contains
         type(nrtxtfile)   :: boxfile
         integer           :: ndatlines, j, orig_box, numlen
         real, allocatable :: boxdata(:,:)
-        params = parameters(cline)
+        call params%new(cline)
         numlen = 5 ! default value
         orig_box = params%box
         ! check file inout existence and read filetables

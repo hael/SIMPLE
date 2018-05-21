@@ -34,7 +34,7 @@ contains
         type(parameters) :: params
         integer, allocatable :: nnmat(:,:)
         integer :: filnum, io_stat
-        params = parameters(cline)
+        call params%new(cline)
         nnmat  = merge_nnmat_from_parts(params%nptcls, params%nparts, params%nnn) !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat)
         call fileiochk('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
@@ -55,7 +55,7 @@ contains
         type(parameters)  :: params
         real, allocatable :: simmat(:,:)
         integer           :: filnum, io_stat
-        params = parameters(cline)
+        call params%new(cline)
         simmat = merge_similarities_from_parts(params%nptcls, params%nparts) !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
         call fileiochk('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
@@ -75,7 +75,7 @@ contains
         class(split_pairs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
-        params = parameters(cline)
+        call params%new(cline)
         call split_pairs_in_parts(params%nptcls, params%nparts)
         call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs

@@ -1900,6 +1900,7 @@ contains
         ! <empty>
         ! mask controls
         call reproject%set_input('mask_ctrls', 1, msk)
+        reproject%mask_ctrls(1)%required = .false.
         ! computer controls
         call reproject%set_input('comp_ctrls', 1, nthr)
     end subroutine new_reproject

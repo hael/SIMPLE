@@ -21,6 +21,10 @@ type, extends(commander_base) :: cluster2D_stream_distr_commander
   contains
     procedure :: execute      => exec_cluster2D_stream_distr
 end type cluster2D_stream_distr_commander
+type, extends(commander_base) :: pick_extract_stream_distr_commander
+  contains
+    procedure :: execute      => exec_pick_extract_stream_distr
+end type pick_extract_stream_distr_commander
 
 contains
 
@@ -45,7 +49,7 @@ contains
         integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
         logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         params%stream     = 'yes'
         params%split_mode = 'stream'
         params%numlen     = 5
@@ -211,8 +215,6 @@ contains
 
     subroutine exec_cluster2D_stream_distr( self, cline )
         use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander,scale_project_distr_commander
-        use simple_ori,                    only: ori
-        use simple_oris,                   only: oris
         use simple_image,                  only: image
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
@@ -222,7 +224,7 @@ contains
         integer,          parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,          parameter   :: WAIT_WATCHER        = 10    ! seconds prior to new stack detection
         integer,          parameter   :: MAXNCLS             = 1000  ! maximum # of classes
-        integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 90    ! Frequency at which the original project file should be updated
+        integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         type(parameters)                    :: params
         type(cluster2D_distr_commander)     :: xcluster2D_distr
         type(make_cavgs_distr_commander)    :: xmake_cavgs
@@ -245,7 +247,7 @@ contains
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call cline%set('stream','yes') ! only for parameters determination
-        params = parameters(cline)
+        call params%new(cline)
         if( .not.file_exists(params%projfile) )stop 'Project does not exist!'
         call cline%set('stream','no') ! was only for parameters determination
         call cline%set('mkdir','no')
@@ -265,14 +267,15 @@ contains
         call cline_make_cavgs%set('prg',    'make_cavgs')
         call cline_make_cavgs%set('refs',   'cavgs_final'//params%ext)
         call cline_make_cavgs%delete('autoscale')
-        call cline_make_cavgs%set('projfile', trim(WORK_PROJFILE)) ! TO WORK OUT
+        call cline_make_cavgs%set('projfile', trim(WORK_PROJFILE))
         ! wait for the first stacks
         nptcls_glob = 0
         do
             if( file_exists(spproj_list_fname) )then
                 if( .not.is_file_open(spproj_list_fname) )then
                     call read_filetable(spproj_list_fname, spproj_list)
-                    nptcls_glob = 0
+                    nptcls_glob_prev = nptcls_glob
+                    nptcls_glob      = 0
                     if( allocated(spproj_list) )then
                         ! determine number of particles
                         n_spprojs = size(spproj_list)
@@ -282,7 +285,9 @@ contains
                             call stream_proj%kill
                         enddo
                     endif
-                    write(*,'(A,I8)')'>>> PARTICLES COUNT: ', nptcls_glob
+                    if( nptcls_glob > nptcls_glob_prev )then
+                        write(*,'(A,I8)')'>>> PARTICLES COUNT: ', nptcls_glob
+                    endif
                     if( nptcls_glob > params%ncls_start * params%nptcls_per_cls )then
                         exit ! Enough particles to initiate cluster2D
                     endif
@@ -586,5 +591,219 @@ contains
             end subroutine map_new_ptcls
 
     end subroutine exec_cluster2D_stream_distr
+
+    subroutine exec_pick_extract_stream_distr( self, cline )
+        use simple_ori,                    only: ori
+        use simple_oris,                   only: oris
+        use simple_image,                  only: image
+        class(pick_extract_stream_distr_commander), intent(inout) :: self
+        class(cmdline),                             intent(inout) :: cline
+        ! integer,          parameter   :: WAIT_WATCHER        = 10    ! seconds prior to new stack detection
+        ! integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
+        ! type(parameters)                    :: params
+        ! type(cmdline)                       :: cline_pick, cline_extract
+        ! type(sp_project)                    :: orig_proj, stream_proj
+        ! type(ctfparams)                     :: ctfvars
+        ! character(LONGSTRLEN),  allocatable :: spproj_list(:), stk_list(:)
+        ! character(len=:),       allocatable :: spproj_list_fname, stk, output_dir, output_dir_picker, output_dir_extract
+        ! character(len=STDLEN)               :: str_iter, refs_glob
+        ! integer :: iter, origproj_time, orig_box, box, tnow, iproj, n_new_spprojs
+        ! integer :: last_injection, n_spprojs, n_spprojs_prev
+        ! logical :: work_proj_has_changed
+        ! ! seed the random number generator
+        ! call seed_rnd
+        ! ! output command line executed
+        ! write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        ! write(*,*) trim(cmdline_glob)
+        ! ! set oritype
+        ! if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+        ! call cline%set('stream','yes') ! only for parameters determination
+        ! call params%new(cline)
+        ! if( .not.file_exists(params%projfile) )stop 'Project does not exist!'
+        ! call cline%set('stream','no') ! was only for parameters determination
+        ! call cline%set('mkdir','no')
+        ! allocate(spproj_list_fname, source=trim(params%dir_target)//trim(STREAM_SPPROJFILES))
+        ! ! read project info
+        ! call orig_proj%read(params%projfile)
+        ! ! output directories
+        ! output_dir = './'
+        ! output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
+        ! output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
+        ! call simple_mkdir(output_dir)
+        ! call simple_mkdir(output_dir_picker)
+        ! call simple_mkdir(output_dir_extract)
+        ! ! init command-lines
+        ! cline_pick = cline
+        ! cline_extract = cline
+        ! call cline_pick%set('nparts', 1.)
+        ! call cline_pick%delete('nparts')
+        !
+        ! ! wait for the first stacks
+        ! nmics_glob = 0
+        ! do
+        !     if( file_exists(spproj_list_fname) )then
+        !         if( .not.is_file_open(spproj_list_fname) )then
+        !             call read_filetable(spproj_list_fname, spproj_list)
+        !             nmics_glob_prev = nmics_glob
+        !             nmics_glob      = 0
+        !             if( allocated(spproj_list) )then
+        !                 ! determine number of particles
+        !                 n_spprojs = size(spproj_list)
+        !                 do iproj = 1,n_spprojs
+        !                     call stream_proj%read(spproj_list(iproj))
+        !                     nmics_glob = nmics_glob + stream_proj%get_nintgs()
+        !                     call stream_proj%kill
+        !                 enddo
+        !             endif
+        !             if( nmics_glob > nmics_glob_prev )then
+        !                 write(*,'(A,I8)')'>>> MICROGRAPHS COUNT: ', nmics_glob
+        !             endif
+        !             if( nmics_glob > 0 )then
+        !                 exit ! Enough to start picking
+        !             endif
+        !         endif
+        !     endif
+        !     call simple_sleep(WAIT_WATCHER)
+        ! enddo
+        ! ! MAIN LOOP
+        ! nmics_glob    = work_proj%get_nintgs()
+        ! last_injection = simple_gettime()
+        ! origproj_time  = last_injection
+        ! do iter = 1, 999
+        !     str_iter  = int2str_pad(iter,3)
+        !     tnow      = simple_gettime()
+        !     if(tnow-last_injection > params%time_inactive)then
+        !         write(*,*)'>>> TIME LIMIT WITHOUT NEW MICROGRAPHS REACHED'
+        !         exit
+        !     endif
+        !     ! PICKING
+        !     call cline_pick
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !
+        !     ! CLUSTER2D
+        !     call cline_cluster2D%delete('endit')
+        !     call cline_cluster2D%set('ncls',    real(ncls_glob))
+        !     call cline_cluster2D%set('startit', real(iter))
+        !     call cline_cluster2D%set('maxits',  real(iter))
+        !     call cline_cluster2D%set('ncls',    real(ncls_glob))
+        !     call cline_cluster2D%set('nparts',  real(min(ncls_glob,params%nparts)))
+        !     if( iter > 1 ) call cline_cluster2D%set('refs', trim(refs_glob))
+        !     if( nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM )then
+        !          call cline_cluster2D%set('trs', MINSHIFT)
+        !     endif
+        !     if( nptcls_glob > CCRES_NPTCLS_LIM )then
+        !          call cline_cluster2D%set('objfun', 'ccres')
+        !     endif
+        !     ! execute
+        !     call xcluster2D_distr%execute(cline_cluster2D)
+        !     work_proj_has_changed = .false.
+        !     ! update
+        !     call work_proj%kill
+        !     call work_proj%read(trim(WORK_PROJFILE))
+        !     ! current refernce file name
+        !     refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
+        !     ! remap zero-population classes
+        !     call remap_empty_classes
+        !     ! user termination
+        !     if( file_exists(trim(TERM_STREAM)) )then
+        !         write(*,'(A)')'>>> TERMINATING CLUSTER2D STREAM'
+        !         exit
+        !     endif
+        !     ! handles whether new individual project files have appeared
+        !     if( .not.is_file_open(spproj_list_fname) )then
+        !         n_spprojs_prev = n_spprojs
+        !         n_spprojs      = nlines(spproj_list_fname)
+        !         n_new_spprojs  = n_spprojs - n_spprojs_prev
+        !         if( n_new_spprojs > 0 )then
+        !             ! append and scale new stacks
+        !             if(allocated(spproj_list))deallocate(spproj_list)
+        !             if(allocated(stk_list))   deallocate(stk_list)
+        !             allocate(stk_list(n_new_spprojs))
+        !             call read_filetable(spproj_list_fname, spproj_list)
+        !             do iproj=n_spprojs_prev+1,n_spprojs
+        !                 call stream_proj%read(spproj_list(iproj))
+        !                 stk = stream_proj%get_stkname(1)
+        !                 stk_list(iproj-n_spprojs_prev) = trim(stk)
+        !             enddo
+        !             call scale_stks( stk_list )
+        !             do iproj=n_spprojs_prev+1,n_spprojs
+        !                 call stream_proj%read(spproj_list(iproj))
+        !                 ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
+        !                 if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
+        !                 call work_proj%add_stk(stk_list(iproj-n_spprojs_prev), ctfvars, stream_proj%os_ptcl2D)
+        !             enddo
+        !             ! updates counters
+        !             nptcls_glob_prev = nptcls_glob
+        !             nptcls_glob      = work_proj%get_nptcls()
+        !             ncls_glob_prev   = ncls_glob
+        !             ncls_glob        = min(MAXNCLS, nint(real(nptcls_glob) / params%nptcls_per_cls))
+        !             write(*,'(A,I8)')'>>> NEW PARTICLES COUNT: ', nptcls_glob
+        !             ! remap in case of increased number of classes
+        !             call map_new_ptcls
+        !             last_injection = simple_gettime()
+        !         endif
+        !     endif
+        !     ! updates document
+        !     if( work_proj_has_changed )call work_proj%write()
+        !     ! update original project
+        !     if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
+        !         write(*,*)'UPDATING PROJECT FILE: ', trim(params%projfile)
+        !         call update_orig_proj
+        !         origproj_time = simple_gettime()
+        !     endif
+        !     ! wait
+        !     call simple_sleep(WAIT_WATCHER)
+        ! enddo
+        ! ! cleanup
+        ! call qsys_cleanup()
+        ! ! updates original project
+        ! call update_orig_proj
+        ! ! class averages at original sampling
+        ! if ( do_autoscale )then
+        !     call cline_make_cavgs%set('ncls', real(ncls_glob))
+        !     call cline_make_cavgs%set('refs', refs_glob)
+        !     call xmake_cavgs%execute(cline_make_cavgs) ! need be distributed
+        ! endif
+        ! call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd, 'cavg')
+        ! call orig_proj%write_segment_inside('out',fromto=[1,1])
+        ! ! cleanup
+        ! call qsys_cleanup
+        ! ! end gracefully
+        ! call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
+        !
+        ! contains
+        !
+        !     subroutine update_orig_proj
+        !         call orig_proj%read(params%projfile)
+        !         do iproj=1,n_spprojs
+        !             call stream_proj%read(spproj_list(iproj))
+        !             stk     = stream_proj%get_stkname(1)
+        !             ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
+        !             call orig_proj%add_stk(stk, ctfvars, stream_proj%os_ptcl2D)
+        !         enddo
+        !         ! updates 2D & wipes 3D segment
+        !         if( do_autoscale )call work_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
+        !         orig_proj%os_ptcl2D = work_proj%os_ptcl2D
+        !         orig_proj%os_ptcl3D = work_proj%os_ptcl3D ! to wipe the 3d segment
+        !         call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd, 'cavg')
+        !         call orig_proj%write()
+        !     end subroutine update_orig_proj
+        !
+        !
+
+    end subroutine exec_pick_extract_stream_distr
+
 
 end module simple_commander_stream_wflows

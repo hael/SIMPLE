@@ -16,6 +16,7 @@ public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
 public :: pick_commander
 public :: extract_commander
+public :: pick_extract_commander
 private
 #include "simple_local_flags.inc"
 
@@ -47,6 +48,10 @@ type, extends(commander_base) :: extract_commander
   contains
     procedure :: execute      => exec_extract
 end type extract_commander
+type, extends(commander_base) :: pick_extract_commander
+  contains
+    procedure :: execute      => exec_pick_extract
+end type pick_extract_commander
 
 contains
 
@@ -76,7 +81,7 @@ contains
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
         logical :: l_pick
         call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         if( params%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
         endif
@@ -156,13 +161,13 @@ contains
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')
             params_glob%hp   = params%hp_ctf_estimate
-            params_glob%lp   = max(params%fny, params%lp_ctf_estimate) ! should be in params?
+            params_glob%lp   = max(params%fny, params%lp_ctf_estimate)
             call cfiter%iterate( ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
             if( l_pick )then
-                params_glob%lp = max(params%fny, params%lp_pick) ! should be in params?
+                params_glob%lp = max(params%fny, params%lp_pick)
                 moviename_intg = mciter%get_moviename('intg')
                 call piter%iterate(cline,  moviename_intg, boxfile, nptcls_out, output_dir_picker)
                 call o_mov%set('boxfile', trim(boxfile)   )
@@ -296,7 +301,7 @@ contains
         character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
         call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         call spproj%read(params%projfile)
         ! sanity check
         if( spproj%get_nmovies() == 0 )then
@@ -377,7 +382,7 @@ contains
         character(len=:), allocatable :: intg_forctf, output_dir, imgkind
         integer                       :: fromto(2), imic, ntot, cnt
         call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         call spproj%read(params%projfile)
         ! read in integrated movies
         if( spproj%get_nintgs() == 0 )then
@@ -477,7 +482,7 @@ contains
         character(len=LONGSTRLEN)            :: boxfile
         integer :: fromto(2), imic, ntot, nptcls_out, cnt
         call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         ! output directory
         output_dir = './'
         ! parameters & loop range
@@ -543,7 +548,7 @@ contains
         integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff
         real                          :: particle_position(2)
         call cline%set('oritype', 'mic')
-        params = parameters(cline)
+        call params%new(cline)
         ! output directory
         output_dir = './'
         if( params%stream.eq.'yes' )output_dir = DIR_EXTRACT
@@ -732,5 +737,109 @@ contains
                 if( any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
             end function box_inside
     end subroutine exec_extract
+
+    subroutine exec_pick_extract( self, cline )
+        use simple_parameters,          only: params_glob
+        use simple_ori,                 only: ori
+        use simple_sp_project,          only: sp_project
+        use simple_picker_iter,         only: picker_iter
+        use simple_binoris_io,          only: binwrite_oritab
+        class(pick_extract_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        ! type(parameters)              :: params
+        ! type(ori)                     :: o_mov
+        ! type(picker_iter)             :: piter
+        ! type(extract_commander)       :: xextract
+        ! type(cmdline)                 :: cline_extract
+        ! type(sp_project)              :: spproj
+        ! character(len=:), allocatable :: imgkind, micname, output_dir_picker, fbody
+        ! character(len=:), allocatable :: moviename_intg, output_dir_extract
+        ! character(len=:), allocatable :: output_dir_extract
+        ! character(len=LONGSTRLEN)     :: boxfile
+        ! integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
+        ! logical :: l_pick
+        ! call cline%set('oritype', 'mic')
+        ! call params%new(cline)
+        ! if( params%scale > 1.05 )then
+        !     stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
+        ! endif
+        ! if( params%tomo .eq. 'yes' )then
+        !     stop 'tomography mode (tomo=yes) not yet supported!'
+        ! endif
+        ! if( cline%defined('refs') )then
+        !     l_pick = .true.
+        ! else
+        !     l_pick = .false.
+        ! endif
+        ! ! read in movies
+        ! call spproj%read( params%projfile )
+        ! if( spproj%get_nintgs() == 0 )then
+        !     stop 'No micrograph to process!'
+        ! endif
+        ! ! output directories & naming
+        ! output_dir_picker  = './'
+        ! if( params%stream.eq.'yes' )then
+        !     output_dir_picker  = trim(DIR_PICKER)
+        !     output_dir_extract = trim(DIR_EXTRACT)
+        !     call simple_mkdir(output_dir_picker)
+        !     call simple_mkdir(output_dir_extract)
+        ! endif
+        ! if( cline%defined('fbody') )then
+        !     fbody = trim(params%fbody)
+        ! else
+        !     fbody = ''
+        ! endif
+        ! ! range
+        ! if( params%stream.eq.'yes' )then
+        !     ! STREAMING MODE
+        !     fromto(:) = 1
+        ! else
+        !     ! DISTRIBUTED MODE
+        !     if( cline%defined('fromp') .and. cline%defined('top') )then
+        !         fromto(1) = params%fromp
+        !         fromto(2) = params%top
+        !     else
+        !         stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
+        !     endif
+        ! endif
+        ! ntot = fromto(2) - fromto(1) + 1
+        ! ! numlen
+        ! if( cline%defined('numlen') )then
+        !     ! nothing to do
+        ! else
+        !     params%numlen = len(int2str(nmovies))
+        ! endif
+        ! !
+        ! frame_counter = 0
+        ! ! loop over exposures (movies)
+        ! do imovie = fromto(1),fromto(2)
+        !     ! fetch movie orientation
+        !     o_mov = spproj%os_mic%get_ori(imovie)
+        !     ! sanity check
+        !     if( .not.o_mov%isthere('imgkind') )cycle
+        !     if( .not.o_mov%isthere('intg')   )cycle
+        !     call o_mov%getter('intg', micname)
+        !     if( .not.file_exists(moviename)) cycle
+        !     ! picker
+        !     params_glob%lp = max(params%fny, params%lp_pick)
+        !     call piter%iterate(cline,  micname, boxfile, nptcls_out, output_dir_picker)
+        !     call o_mov%set('boxfile', trim(boxfile)   )
+        !     call o_mov%set('nptcls',  real(nptcls_out))
+        !     ! update project
+        !     call spproj%os_mic%set_ori(imovie, o_mov)
+        !     ! extract particles
+        !     call spproj%write_segment_inside(params%oritype)
+        !     call cline_extract%set('dir', trim(output_dir_extract))
+        !     call cline_extract%set('pcontrast', params%pcontrast)
+        !     if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
+        !     call xextract%execute(cline_extract)
+        !     call spproj%kill
+        ! end do
+        ! call spproj%write
+        ! ! end gracefully
+        ! call qsys_job_finished( 'simple_commander_preprocess :: exec_pick_extract' )
+        ! call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
+    end subroutine exec_pick_extract
+
 
 end module simple_commander_preprocess

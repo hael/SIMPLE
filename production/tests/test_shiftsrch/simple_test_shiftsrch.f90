@@ -32,7 +32,7 @@ if( cline%defined('verbose') )then
         be_verbose = .true.
     endif
 endif
-p = parameters(cline)
+call p%new(cline)
 p%kfromto(1) = 2
 p%kfromto(2) = 40
 call b%build_general_tbox(p, cline)

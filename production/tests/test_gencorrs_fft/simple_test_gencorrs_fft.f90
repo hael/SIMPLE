@@ -24,7 +24,7 @@ call cline%checkvar('stk',  1)
 call cline%checkvar('msk',  2)
 call cline%checkvar('smpd', 3)
 call cline%check
-p = parameters(cline)
+call p%new(cline)
 p%kfromto(1) = 2
 p%kfromto(2) = 100
 call b%build_general_tbox(p, cline)

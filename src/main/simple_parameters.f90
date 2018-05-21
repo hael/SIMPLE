@@ -283,6 +283,7 @@ type :: parameters
     real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
+    real    :: bfac_fixed=0.       !< bfactor for weighted cros-correlation objection function
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
@@ -370,6 +371,7 @@ type :: parameters
     logical :: l_doshift      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_autoscale    = .false.
+    logical :: l_bfac_fixed   = .false.
     logical :: l_dose_weight  = .false.
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
@@ -385,19 +387,9 @@ type :: parameters
     procedure, private :: set_img_format
 end type parameters
 
-interface parameters
-    module procedure constructor
-end interface
-
 class(parameters), pointer :: params_glob => null()
 
 contains
-
-    function constructor( cline ) result( self )
-        class(cmdline), intent(inout) :: cline
-        type(parameters) :: self
-        call self%new(cline)
-    end function constructor
 
     subroutine new( self, cline )
         use simple_ori,     only: ori
@@ -664,6 +656,7 @@ contains
         call check_rarg('athres',         self%athres)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
+        call check_rarg('bfac_fixed',     self%bfac_fixed)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
@@ -1071,6 +1064,8 @@ contains
         self%lplims2D(3)       = max(self%fny, self%lpstop)
         self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
         self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
+        ! bfactor for objective function
+        self%l_bfac_fixed = cline%defined('bfac_fixed')
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then

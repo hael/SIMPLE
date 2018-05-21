@@ -48,7 +48,7 @@ contains
         call cline_here%set('snr', SNR  )
         call cline_here%set('lp',  LPLIM)
         ! create parameters and build
-        p = parameters(cline) ! constants & derived constants produced, mode=2
+        call p%new(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built
         ! generate images
         ! deal with reference
