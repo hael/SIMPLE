@@ -225,7 +225,7 @@ int makedir(char *path, size_t ivf_path)
     const size_t len = strlen(path);
     char _path[LONGSTRLEN];
     char *p;
-
+    extern int errno;
     errno = 0;
 
     /* Copy string so its mutable */
@@ -248,7 +248,6 @@ int makedir(char *path, size_t ivf_path)
                     return -1;
                 }
             }
-
             *p = '/';
         }
     }
@@ -258,7 +257,6 @@ int makedir(char *path, size_t ivf_path)
             perror("Failed : rmdir in simple_posix::makedir");
             return -1;
         }
-
     }
     return 0;
 }

@@ -71,9 +71,11 @@ else()
 endif(USE_SYSTEM_JPEG_SQLite)
 
 if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
-  set(CPPSTANDARD "-std=gnu++11 -pthread")
+  set(CPPSTANDARD "-std=gnu++14 -pthread")
 elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "PGI")
- set(CPPSTANDARD "--c++11 -Mconcur")
+  set(CPPSTANDARD "--c++11 -Mconcur")
+else()
+ set(CPPSTANDARD "-std=c++14 -pthread")
 endif()
 
 

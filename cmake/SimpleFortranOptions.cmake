@@ -323,6 +323,9 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   #   message(STATUS "Could not find gold linker. Using the default")
   # endif()
 
+  set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE_INIT}")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE_INIT}")
+
 elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME MATCHES "ifort*")
   #############################################
   #
@@ -347,6 +350,9 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   #   set(CMAKE_SHARED_LINKER_FLAGS        "${CMAKE_SHARED_LINKER_FLAGS} -ip -ipo-separate -ipo-jobs=${NUM_JOBS}")
   #   set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS} -ip -ipo")
   # endif(LINK_TIME_OPTIMISATION)
+
+  set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE_INIT}")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE_INIT}")
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATCHES "pgfortran.*")
   #############################################
@@ -754,33 +760,7 @@ else()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
 endif()
 
-#
-#  JPEG, TIFF, PNG img support through LibGD
-#
-if(BUILD_WITH_LIBGD)
-  find_package(GD QUIET)
-  if (NOT GD_FOUND)
-    message(STATUS "Unable to find LibGD imaging library. Please install libgd-dev (https://libgd.github.io) which also depends on libjpeg, libpng and zlib.
-DEB:  sudo apt-get install libgd-dev
-FINK: fink install gd2-shlibs gd2
-BREW: brew install gd
-COMPILE FROM SOURCE: git clone https://github.com/libgd/libgd
-Warning -- libgd will pull latest stable libjpeg that may conflict with libjpeg9.
-")
-    set(BUILD_WITH_LIBGD OFF)
-  else()
-    message(STATUS "LibGD found")
-    message(STATUS "lib: ${GD_LIBRARIES}")
-    add_definitions(" -D_LIBGD ")
-    include_directories(" ${GD_INCLUDE_DIRS}")
-    set(EXTRA_LIBS ${EXTRA_LIBS} -ljpeg)
-    set(EXTRA_LIBS ${EXTRA_LIBS} ${GD_LIBRARIES} ${ZLIB_LIBRARY_RELEASE})
-  endif()
-endif()
 
-
-#set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}  ")\
-#set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
 # add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")

@@ -561,7 +561,7 @@ contains
         if(allocated(moviestab))deallocate(moviestab)
         n = self%get_nmovies()
         if( n==0 )return
-        allocate(moviestab(n),source='')
+        allocate(moviestab(n))
         cnt = 0
         do i=1,self%os_mic%get_noris()
             if(self%os_mic%isthere('imgkind'))then

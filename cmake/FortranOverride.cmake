@@ -264,10 +264,16 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 endif ()
 
 string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)
-set(CMAKE_C_FLAGS_RELEASE_INIT "-cpp ${cstd} -D${ID_STRING}"  CACHE STRING "Default C release flags -- this cannot be edited " FORCE)
-set(CMAKE_CXX_FLAGS_RELEASE_INIT "-cpp ${cppstd} -D${ID_STRING}"  CACHE STRING "Default CXX release flags -- this cannot be edited" FORCE)
-set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} -D${ID_STRING}"  CACHE STRING "Default release flags -- this cannot be edited (see cmake/FortranOverride.cmake) -- Use CMAKE_Fortran_FLAGS_RELEASE instead" FORCE)
-set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -D${ID_STRING}"  CACHE STRING "Default debug flags -- this cannot be edited (see cmake/FortranOverride.cmake -- Use CMAKE_Fortran_FLAGS_DEBUG instead)" FORCE)
+ message( STATUS "CMAKE_C_FLAGS_RELEASE_INIT: ${CMAKE_C_FLAGS_RELEASE_INIT} (Old version)")
+ message( STATUS "CMAKE_CXX_FLAGS_RELEASE_INIT: ${CMAKE_CXX_FLAGS_RELEASE_INIT} (Old version)")
+set(CMAKE_C_FLAGS_RELEASE_INIT " ${CMAKE_C_FLAGS_RELEASE_INIT} ${cstd} -D${ID_STRING}"  CACHE STRING "Default C release flags -- this cannot be edited " FORCE)
+set(CMAKE_CXX_FLAGS_RELEASE_INIT "${CMAKE_CXX_FLAGS_RELEASE_INIT} ${cppstd} -D${ID_STRING}"  CACHE STRING "Default CXX release flags -- this cannot be edited" FORCE)
+message( STATUS "CMAKE_C_FLAGS_RELEASE_INIT: ${CMAKE_C_FLAGS_RELEASE_INIT}")
+message( STATUS "CMAKE_CXX_FLAGS_RELEASE_INIT: ${CMAKE_CXX_FLAGS_RELEASE_INIT}")
+message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT} (Old version)")
+message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}  (Old version)")
+set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${common} ${forspeed} ${forpar} -D${ID_STRING}"  CACHE STRING "Default release flags -- this cannot be edited (see cmake/FortranOverride.cmake) -- Use CMAKE_Fortran_FLAGS_RELEASE instead" FORCE)
+set(CMAKE_Fortran_FLAGS_DEBUG_INIT  " ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${common} ${fordebug} ${forpar} -D${ID_STRING}"  CACHE STRING "Default debug flags -- this cannot be edited (see cmake/FortranOverride.cmake -- Use CMAKE_Fortran_FLAGS_DEBUG instead)" FORCE)
 message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
 message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
 #
@@ -279,7 +285,7 @@ if(POLICY CMP0004)
   cmake_policy(SET CMP0004 OLD)
 endif()
 
-message(STATUS Executing: ENV{PATH} $ENV{PATH})
+#message(STATUS Executing: ENV{PATH} $ENV{PATH})
 ## Remove EMAN bin and possible library paths from PATH
 # message(STATUS  "ENV{PATH} -- $ENV{PATH}")
 file(TO_CMAKE_PATH "$ENV{PATH}" TMPPATH)
@@ -291,7 +297,7 @@ string (REPLACE ";" ":" TMPPATH "${TMPPATH}")
 #file(TO_NATIVE_PATH "${TMPPATH}" TMPPATH)
 #message(STATUS " FortranOverride After TO_CMAKE_PATH: TMPPATH ${TMPPATH} ")
 set(ENV{PATH} "${TMPPATH}")
-message(STATUS " FortranOverride After TO_CMAKE_PATH: $ENV{PATH} ")
+#message(STATUS " FortranOverride After TO_CMAKE_PATH: $ENV{PATH} ")
 
 
 

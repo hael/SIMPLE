@@ -664,7 +664,11 @@ contains
         endif
         inquire(file=newd, exist=dir_e)
         if(dir_e) then
+#ifdef INTEL
+            io_status = changedirqq(trim(newd))
+#else
             io_status = chdir(newd)
+#endif
             if(io_status /= 0) call simple_error_check(io_status, &
                 "syslib:: simple_chdir failed to change path "//trim(newd))
         else
@@ -698,7 +702,13 @@ contains
         inquire(file=trim(dir), exist=dir_e)
         if(.not. dir_e) then
             allocate(path, source=trim(adjustl(dir))//c_null_char)
-            io_status= makedir(path)
+#ifdef INTEL
+            qq = makedirqq(trim(path))
+            io_status = transfer(qq,1)
+#else
+            io_status = makedir(trim(path))
+
+#endif
             inquire(file=trim(path), exist=dir_e)
             if(.not. dir_e) then
                 print *," syslib:: simple_mkdir failed to create "//trim(path)
@@ -731,7 +741,12 @@ contains
             count=0
             allocate(path, source=trim(adjustl(d))//c_null_char)
             length = len_trim(adjustl(path))
+#ifdef INTEL
+            qq = deldirqq(trim(path))
+            io_status = transfer(qq,1)
+#else
             io_status = removedir(trim(path), length, count)
+#endif
             if(global_debug) print *,' simple_rmdir removed ', count, ' items'
             deallocate(path)
             if(io_status /= 0)then
