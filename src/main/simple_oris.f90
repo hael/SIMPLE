@@ -147,7 +147,6 @@ type :: oris
     procedure          :: calc_bfac_rec
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
-    procedure          :: find_closest_oris
     procedure, private :: create_proj_subspace_1
     procedure, private :: create_proj_subspace_2
     generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
@@ -1351,11 +1350,11 @@ contains
         class(oris), intent(inout) :: self
         class(oris), intent(inout) :: e_space
         integer    :: i
-        type(ori)  :: o
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
-            o = self%get_ori(i)
-            call self%set(i, 'proj', real(e_space%find_closest_proj(o)))
+            call self%set(i, 'proj', real(e_space%find_closest_proj(self%o(i))))
         end do
+        !$omp end parallel do
     end subroutine set_projs
 
     !>  \brief  is a setter
@@ -2313,25 +2312,37 @@ contains
     end subroutine calc_hard_weights2D
 
     !>  \brief  to find the closest matching projection direction
-    function find_closest_proj( self, o_in, state ) result( closest )
-        class(oris),       intent(inout) :: self
-        class(ori),        intent(in) :: o_in
-        integer, optional, intent(in) :: state
-        real    :: dists(self%n), large
+    ! function find_closest_proj( self, o_in, state ) result( closest )
+    !     class(oris),       intent(inout) :: self
+    !     class(ori),        intent(in) :: o_in
+    !     integer, optional, intent(in) :: state
+    !     real    :: dists(self%n), large
+    !     integer :: loc(1), closest, i
+    !     if( present(state) )then
+    !         if( state<0 )call simple_stop('Invalid state in simple_oris%find_closest_proj')
+    !         dists(:) = huge(large)
+    !         do i=1,self%n
+    !             if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).euldist.o_in
+    !         end do
+    !     else
+    !          do i=1,self%n
+    !              dists(i)=self%o(i).euldist.o_in
+    !          end do
+    !      endif
+    !     loc     = minloc( dists )
+    !     closest = loc(1)
+    ! end function find_closest_proj
+
+    !>  \brief  to find the closest matching projection direction
+    !! keep this routine serial
+    function find_closest_proj( self, o_in ) result( closest )
+        class(oris), intent(inout) :: self
+        class(ori),  intent(in) :: o_in
+        real    :: dists(self%n)
         integer :: loc(1), closest, i
-        if( present(state) )then
-            if( state<0 )call simple_stop('Invalid state in simple_oris%find_closest_proj')
-            dists(:) = huge(large)
-            do i=1,self%n
-                if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).euldist.o_in
-            end do
-        else
-            !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
-             do i=1,self%n
-                 dists(i)=self%o(i).euldist.o_in
-             end do
-             !$omp end parallel do
-         endif
+        do i=1,self%n
+           dists(i)=self%o(i).euldist.o_in
+        end do
         loc     = minloc( dists )
         closest = loc(1)
     end function find_closest_proj
@@ -2343,49 +2354,35 @@ contains
         integer,     intent(out) :: pdirinds(:)
         real    :: dists(self%n)
         integer :: inds(self%n), i
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             dists(i) = self%o(i).euldist.o_in
             inds(i)  = i
         end do
+        !$omp end parallel do
         call hpsort(dists, inds)
         do i=1,size(pdirinds)
             pdirinds(i) = inds(i)
         end do
     end subroutine find_closest_projs
 
-    !>  \brief  to find the closest matching orientations
-    subroutine find_closest_oris( self, o_in, oriinds )
-        class(oris), intent(in)  :: self
-        class(ori),  intent(in)  :: o_in
-        integer,     intent(out) :: oriinds(:)
-        real    :: dists(self%n)
-        integer :: inds(self%n), i
-        do i=1,self%n
-            dists(i) = self%o(i).geod.o_in
-            inds(i)  = i
-        end do
-        call hpsort(dists, inds)
-        do i=1,size(oriinds)
-            oriinds(i) = inds(i)
-        end do
-    end subroutine find_closest_oris
-
     !>  \brief  to identify a subspace of projection directions
     function create_proj_subspace_1( self, nsub ) result( subspace_projs )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsub
-        type(ori)            :: o
         type(oris)           :: suboris
         integer, allocatable :: subspace_projs(:)
         integer :: isub
         call suboris%new(nsub)
         call suboris%spiral
-        allocate( subspace_projs(nsub) ,stat=alloc_stat)
+        allocate( subspace_projs(nsub), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_1, module: simple_oris',alloc_stat)
+        !$omp parallel do default(shared) private(isub) schedule(static) proc_bind(close)
         do isub=1,nsub
-            o = suboris%get_ori(isub)
-            subspace_projs(isub) = self%find_closest_proj(o)
+            subspace_projs(isub) = self%find_closest_proj(suboris%o(isub))
         end do
+        !$omp end parallel do
+        call suboris%kill
     end function create_proj_subspace_1
 
     !>  \brief  to identify a subspace of projection directions
@@ -2394,24 +2391,18 @@ contains
         integer,     intent(in)    :: nsub
         integer,     intent(in)    :: nsym
         real,        intent(in)    :: eullims(3,2)
-        type(ori)            :: o
         type(oris)           :: suboris
         integer, allocatable :: subspace_projs(:)
         integer :: isub
-        DebugPrint ' In oris; create_proj_subspace_2 nsub:', nsub, ' nsym:',nsym
         call suboris%new(nsub)
-        DebugPrint ' In oris; create_proj_subspace_2 created suboris'
         call suboris%spiral(nsym, eullims)
-        DebugPrint ' In oris; create_proj_subspace_2; spira'
         allocate( subspace_projs(nsub) , stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_2, module: simple_oris',alloc_stat)
-        DebugPrint ' In oris; create_proj_subspace_2 generating nsubspaces ', nsub
+        !$omp parallel do default(shared) private(isub) schedule(static) proc_bind(close)
         do isub=1,nsub
-            o = suboris%get_ori(isub)
-            subspace_projs(isub) = self%find_closest_proj(o)
+            subspace_projs(isub) = self%find_closest_proj(suboris%o(isub))
         end do
-        DebugPrint ' In oris; create_proj_subspace_2; done'
-
+        !$omp end parallel do
     end function create_proj_subspace_2
 
     !>  \brief  method for discretization of the projection directions
