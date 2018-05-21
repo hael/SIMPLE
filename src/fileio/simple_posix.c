@@ -484,6 +484,7 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
     reverse = (flag) & 1;
     ssize_t ri = strlen(path);
     dgprintf(stderr, "DEBUG:In get_file_list_modified %15s:%zd\n", "strlen(path)", ri);
+
     // if(ri > LONGSTRLEN) {
     //     ri = index(path, ' ') - path;
     // }

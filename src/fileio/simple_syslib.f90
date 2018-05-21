@@ -665,7 +665,8 @@ contains
         inquire(file=newd, exist=dir_e)
         if(dir_e) then
 #ifdef INTEL
-            io_status = changedirqq(trim(newd))
+            if( changedirqq(trim(newd)) .eqv. .false.) call simple_error_check(io_status, &
+                "syslib:: changedirqq failed  "//trim(newd))
 #else
             io_status = chdir(newd)
 #endif
@@ -703,8 +704,8 @@ contains
         if(.not. dir_e) then
             allocate(path, source=trim(adjustl(dir))//c_null_char)
 #ifdef INTEL
-            qq = makedirqq(trim(path))
-            io_status = transfer(qq,1)
+            if(makedirqq(trim(path)) .eqv. .false.) call simple_error_check(io_status, &
+                    "syslib:: makedirqq failed creating "//trim(path))
 #else
             io_status = makedir(trim(path))
 
@@ -742,8 +743,8 @@ contains
             allocate(path, source=trim(adjustl(d))//c_null_char)
             length = len_trim(adjustl(path))
 #ifdef INTEL
-            qq = deldirqq(trim(path))
-            io_status = transfer(qq,1)
+            if( deldirqq(trim(path)).eqv. .false.) call simple_error_check(io_status, &
+                    "syslib:: deldirqq failed  "//trim(path))
 #else
             io_status = removedir(trim(path), length, count)
 #endif
