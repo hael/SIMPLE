@@ -146,10 +146,10 @@ end function
 
 subroutine test_args()
     type(args) :: as
-    character(len=LONGSTRLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath
+    character(len=LONGSTRLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, cwd, bpath
     integer               :: funit, n, i,io_stat, status, length1, length2
     integer, allocatable  :: buff(:)
-    character(len=STDLEN) :: varlist = 'simple/simple_varlist.txt'
+    character(len=*),parameter :: varlist = 'simple_varlist.txt'
     write(*,'(a)') '**info(simple_args_unit_test): testing it all'
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
     as = args()
@@ -157,22 +157,34 @@ subroutine test_args()
     status = simple_getenv(\"SIMPLE_PATH\",spath)
     if (status /= 0) call simple_stop(\"In simple_args::test_args SIMPLE_PATH env variable not found\")
     spath = trim(adjustl(spath))
-    print *, 'get_environment_variable found SIMPLE_PATH ', trim(spath)
+    print *, 'get_environment_variable found SIMPLE_PATH ', trim(adjustl(spath))
+    write(*,'(a)') '**info(simple_args_unit_test): getting current working directory'
+    call simple_getcwd(cwd)
+    cwd = trim(adjustl(cwd))
+    print *, 'Current working directory ', trim(adjustl(cwd))
+    write(*,'(a)') '**info(simple_args_unit_test): getting directory that contains varlist'
+    if( .not. dir_exists(SIMPLE_BUILD_PATH) .and. (.not. dir_exists(trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'))) then
+    call simple_stop(\"In simple_args::test_args SIMPLE_BUILD_PATH  not found\")
+    else
+        bpath= trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'
+    endif
+    print *, 'Simple varlist directory ', trim(adjustl(bpath))
+
     print *, 'appending varlist '
-    vfilename = trim(adjustl(spath)) // '/lib/' // trim(adjustl(varlist))
+    vfilename = trim(adjustl(bpath))//trim(adjustl(varlist))
     vfilename = trim(adjustl(vfilename))
     print *, 'varlist: ', trim(adjustl(vfilename))
     write(*,'(a,a)') '**info(simple_args_unit_test): checking varlist file ',trim(adjustl(vfilename))
     if(.not. file_exists(vfilename))then
         print *,' varlist not in lib/simple/,  checking lib64/simple'
-        vfilename = trim(adjustl(spath)) // '/lib64/' // trim(adjustl(varlist))
+        vfilename = trim(adjustl(SIMPLE_BUILD_PATH))//'/lib64/simple'//trim(adjustl(varlist))
         vfilename = trim(adjustl(vfilename))
         print *, 'varlist: ', trim(adjustl(vfilename))
         write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
         call simple_file_stat(vfilename,status,buff)
         if(status /= 0)then
             print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
-            call exec_cmdline(\"simple_args_varlist.pl\")
+            call execute_command_line('cd '//trim(adjustl(spath))//'src/main &&'//'simple_args_varlist.p', wait=.true.)
             call simple_file_stat(vfilename,status,buff)
             if(status /= 0)then
                 print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
@@ -181,7 +193,7 @@ subroutine test_args()
     endif
     n = nlines(vfilename)
     call fopen(funit, status='old', action='read', file=trim(adjustl(vfilename)), iostat=io_stat)
-    if(io_stat /= 0) call fileiochk(\"simple_args::test  Unable to open \"//trim(vfilename),io_stat)
+    if(io_stat /= 0) call fileiochk(\"simple_args::test  Unable to open \"//trim(adjustl(vfilename)),io_stat)
     do i=1,n
         read(funit,*) arg
         if( as%is_present(arg) )then

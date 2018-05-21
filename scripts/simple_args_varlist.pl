@@ -3,6 +3,8 @@ use warnings;
 use strict;
 #use File::Basename;
 #use File::Grep qw( fgrep );
+use Cwd qw(cwd);
+my $dir = cwd;
 # read the simple_params.f90 into an array
 my @lines;
 my @vars;
@@ -13,6 +15,7 @@ my$Gitversionfile;
 my$simple_argsfile;
 my$source_dir="";
 my$sline="";
+print " In simple_args_varlist.pl Current dir: ", $dir, "\n";
 
 if ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
     $varlistfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_varlist.txt';
@@ -22,6 +25,7 @@ if ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
 $tmp_varlist=$ENV{'SIMPLE_PATH'}.'/simple_varlist.tmp';
 
 $Gitversionfile=$ENV{'SIMPLE_PATH'}."/lib/simple/SimpleGitVersion.h";
+print " Reading $Gitversionfile";
 # $source_dir = fgrep{ /SIMPLE_SOURCE_PATH/ } $Gitversionfile;
 open my $fh, '<', $Gitversionfile or die "Could not open file  $Gitversionfile:
 + $!";
@@ -29,19 +33,18 @@ open my $fh, '<', $Gitversionfile or die "Could not open file  $Gitversionfile:
 while ( my$line = <$fh> ) {
     print $line;
     if ( $line =~ m/SIMPLE_SOURCE_PATH/ ){
-        $sline = $line =~ s/SIMPLE_SOURCE_PATH=\"([^"]*)\"/$1/;
+        $sline = $line =~ s/.* = \"([^"]*)\".*/$1/gr;
         last;
     }
 }
-print  $sline, "\n";
-$source_dir= $sline ;
+print "SIMPLE SOURCE DIR LINE:", $sline, "\n";
+$source_dir = $sline;
 close $fh  or die "Could not close file $Gitversionfile: $!";
 #$source_dir =`sed 's/SIMPLE_SOURCE_PATH=\"\([^"]*\)\"/\1/'  $Gitversionfile`;
 
-print "SIMPLE SOURCE DIR", $source_dir, "\n";
+print "SIMPLE SOURCE DIR:", $source_dir, "\n";
 
-
-open(PARAMS, "< ".$source_dir."/src/main/simple_params.f90") or die "Cannot open simple_params.f90\n simple_args_varlist.pl must be called from <simple source directory>/src/main ";
+open(PARAMS, "<".$source_dir."/src/main/simple_params.f90") or die "Cannot open simple_params.f90\n simple_args_varlist.pl must be called from <simple source directory>/src/main ";
 @lines = <PARAMS>;
 close(PARAMS);
 # extract the relevant lines
