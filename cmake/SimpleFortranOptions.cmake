@@ -819,7 +819,8 @@ endif()
       set(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS}       -g -Og -pg -fprofile-arcs -ftest-coverage")
       set(CMAKE_CXX_FLAGS       "${CMAKE_CXX_FLAGS}     -g -Og -pg -fprofile-arcs -ftest-coverage")
      # set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
-      SET(CMAKE_EXE_LINKER_FLAGS      "${CMAKE_EXE_LINKER_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
+      SET(CMAKE_EXE_LINKER_FLAGS      "${CMAKE_EXE_LINKER_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage -lgcov --coverage")
+
       SET(CMAKE_SHARED_LINKER_FLAGS   "${CMAKE_SHARED_LINKER_FLAGS} -Og -g -pg -fprofile-arcs -ftest-coverage")
       # Ensure that CDash targets are always enabled if coverage is enabled.
       if (NOT CDASH_SUPPORT)

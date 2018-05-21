@@ -38,10 +38,11 @@ find_library(JPEG_LIBRARY NAMES ${JPEG_NAMES} )
 # handle the QUIETLY and REQUIRED arguments and set JPEG_FOUND to TRUE if
 # all listed variables are TRUE
 include(${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(JPEG DEFAULT_MSG JPEG_LIBRARY JPEG_INCLUDE_DIR)
+find_package_handle_standard_args(JPEG DEFAULT_MSG JPEG_LIBRARY JPEG_INCLUDE_DIR)
 
 file(STRINGS ${JPEG_CONFIG_DIR}/jconfig.h JPEGLIB_VERSION REGEX "^#define[ \t]+JPEG_LIB_VERSION")
-string(REGEX REPLACE "^#define[ ]*JPEG_LIB_VERSION[ \t]+\([0-9]\)\([0-9]\)" "\\1.\\2" JPEGLIB_VERSION ${JPEGLIB_VERSION})
+message(STATUS "JPEG_LIB_VERSION definition: ${JPEGLIB_VERSION}")
+string(REGEX REPLACE "^#define[ ]*JPEG_LIB_VERSION[ \t]+\([0-9]\)\([0-9]\)" "\\1.\\2" JPEGLIB_VERSION "${JPEGLIB_VERSION}")
 message(STATUS "JPEGlib version ${JPEGLIB_VERSION} FOUND")
  if ("${JPEGLIB_VERSION}" VERSION_GREATER "8.0")
    set(JPEG_FOUND OFF)
