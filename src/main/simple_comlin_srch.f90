@@ -47,7 +47,7 @@ contains
         hp        =  params_glob%hp
         lp        =  params_glob%lp
         trs       =  params_glob%trs
-        a_copy    =  build_glob%a
+        a_copy    =  build_glob%spproj_field
         nproj_sym = comlin_srch_get_nproj( pgrp=trim(params_glob%pgrp) )
         write(*,'(A,I3)') '>>> NUMBER OF REFERENCE PROJECTIONS IN ASU: ', nproj_sym
         call resoris%new(nproj_sym)
@@ -126,9 +126,9 @@ contains
             corr_best   = -1.
             do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
-                build_glob%a = a_copy
-                call build_glob%a%rot(orientation)
-                call build_glob%se%apply2all(build_glob%a)
+                build_glob%spproj_field = a_copy
+                call build_glob%spproj_field%rot(orientation)
+                call build_glob%pgrpsyms%apply2all(build_glob%spproj_field)
                 corr = build_glob%clins%corr()
                 call orientation%print_ori
                 call orientation%set('corr',corr)
@@ -164,7 +164,7 @@ contains
             corr_best   = -1.
             do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
-                call build_glob%a%set_ori(params_glob%jptcl, orientation)
+                call build_glob%spproj_field%set_ori(params_glob%jptcl, orientation)
                 corr = build_glob%clins%pcorr(params_glob%iptcl, params_glob%jptcl)
                 call orientation%set('corr',corr)
                 if( corr > corr_best )then
@@ -242,10 +242,10 @@ contains
                 return
             endif
             !
-            call build_glob%a%rot(o)
-            call build_glob%se%apply2all(build_glob%a)
+            call build_glob%spproj_field%rot(o)
+            call build_glob%pgrpsyms%apply2all(build_glob%spproj_field)
             cost = -build_glob%clins%corr()
-            build_glob%a = a_copy ! puts back unmodified oris
+            build_glob%spproj_field = a_copy ! puts back unmodified oris
         endif
     end function comlin_srch_cost
 
@@ -265,8 +265,8 @@ contains
         elseif( vec(5) < -trs .or. vec(5) > trs )then
             cost = 1.
         else
-            call build_glob%a%set_euler(params_glob%jptcl, vec(1:3))
-            call build_glob%a%set_shift(params_glob%jptcl, vec(4:5))
+            call build_glob%spproj_field%set_euler(params_glob%jptcl, vec(1:3))
+            call build_glob%spproj_field%set_shift(params_glob%jptcl, vec(4:5))
             cost = -build_glob%clins%pcorr(params_glob%iptcl, params_glob%jptcl)
         endif
     end function comlin_pairsrch_cost

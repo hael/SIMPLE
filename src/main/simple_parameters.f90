@@ -254,7 +254,7 @@ type :: parameters
     integer :: ring1=2
     integer :: ring2=0
     integer :: spec=0
-    integer :: spproj_a_seg=PTCL3D_SEG !< sp-project segments that b%a points to
+    integer :: spproj_iseg=PTCL3D_SEG !< sp-project segments that b%a points to
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
     integer :: state2split=0       !< state group to split
@@ -848,34 +848,34 @@ contains
         endif
         ! project file segment
         if( cline%defined('oritype') )then
-            ! this determines the spproj_a_seg
+            ! this determines the spproj_iseg
             select case(trim(self%oritype))
                 case('mic')
-                    self%spproj_a_seg = MIC_SEG
+                    self%spproj_iseg = MIC_SEG
                 case('stk')
-                    self%spproj_a_seg = STK_SEG
+                    self%spproj_iseg = STK_SEG
                 case('ptcl2D')
-                    self%spproj_a_seg = PTCL2D_SEG
+                    self%spproj_iseg = PTCL2D_SEG
                 case('cls2D')
-                    self%spproj_a_seg = CLS2D_SEG
+                    self%spproj_iseg = CLS2D_SEG
                 case('cls3D')
-                    self%spproj_a_seg = CLS3D_SEG
+                    self%spproj_iseg = CLS3D_SEG
                 case('ptcl3D')
-                    self%spproj_a_seg = PTCL3D_SEG
+                    self%spproj_iseg = PTCL3D_SEG
                 case('out')
-                    self%spproj_a_seg = OUT_SEG
+                    self%spproj_iseg = OUT_SEG
                 case('projinfo')
-                    self%spproj_a_seg = PROJINFO_SEG
+                    self%spproj_iseg = PROJINFO_SEG
                 case('jobproc')
-                    self%spproj_a_seg = JOBPROC_SEG
+                    self%spproj_iseg = JOBPROC_SEG
                 case('compenv')
-                    self%spproj_a_seg = COMPENV_SEG
+                    self%spproj_iseg = COMPENV_SEG
                 case DEFAULT
                     write(*,*) 'oritype: ', trim(self%oritype)
                     stop 'unsupported oritype; simple_parameters :: new'
             end select
         else
-            self%spproj_a_seg = PTCL3D_SEG
+            self%spproj_iseg = PTCL3D_SEG
         endif
         ! take care of nptcls etc.
         ! project is in charge
@@ -888,9 +888,9 @@ contains
             ! get nptcls/box/smpd from project file
             call bos%open(trim(self%projfile))
             if( self%stream.eq.'no' )then
-                if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_a_seg)
+                if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_iseg)
                 call o%new
-                select case(self%spproj_a_seg)
+                select case(self%spproj_iseg)
                     case(MIC_SEG)
                         call bos%read_first_segment_record(MIC_SEG, o)
                     case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG, CLS2D_SEG)
@@ -1178,11 +1178,11 @@ contains
         ! set remap_clusters flag
         self%l_remap_cls = .false.
         if( self%remap_cls .eq. 'yes' ) self%l_remap_cls = .true.
-        ! set nbest to 20% of ncls (if present) or 20% of NSPACE_BALANCE
+        ! set nbest to 20% of ncls (if present) or 20% of NSPACE_REDUCED
         if( cline%defined('ncls') )then
             self%nbest = max(1,nint(real(self%ncls)*0.2))
         else
-            self%nbest = max(1,nint(real(NSPACE_BALANCE)*0.2))
+            self%nbest = max(1,nint(real(NSPACE_REDUCED)*0.2))
         endif
         ! set to particle index if not defined in cmdlin
         if( .not. cline%defined('top') ) self%top = self%nptcls

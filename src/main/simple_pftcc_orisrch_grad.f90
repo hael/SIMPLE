@@ -2,7 +2,7 @@ module simple_pftcc_orisrch_grad
 include 'simple_lib.f08'
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_polarft_corrcalc,  only: pftcc_glob
 use simple_builder,           only: build_glob
 use simple_optimizer,         only: optimizer
 use simple_opt_spec,          only: opt_spec
@@ -11,16 +11,13 @@ implicit none
 public :: pftcc_orisrch_grad
 private
 
-logical :: MEMOIZEKB = .false.
-
 type :: pftcc_orisrch_grad
     private
-    class(polarft_corrcalc), pointer     :: pftcc_ptr   => null()  !< pointer to pftcc object
-    class(optimizer),        pointer     :: nlopt                  !< optimizer object
-    type(opt_spec)                       :: ospec                  !< optimizer spec
-    integer                              :: particle    = 0        !< particle pft index
-    integer                              :: nrots       = 0        !< # rotations
-    logical                              :: exists=.false.
+    class(optimizer), pointer :: nlopt             !< optimizer object
+    type(opt_spec)            :: ospec             !< optimizer spec
+    integer                   :: particle = 0      !< particle pft index
+    integer                   :: nrots    = 0      !< # rotations
+    logical                   :: exists   =.false.
   contains
     procedure :: new
     procedure :: set_particle
@@ -31,18 +28,15 @@ end type pftcc_orisrch_grad
 contains
 
     !> constructor
-    subroutine new( self, pftcc )
+    subroutine new( self )
         use simple_projector,   only: projector
         use simple_opt_factory, only: opt_factory
-        class(pftcc_orisrch_grad), intent(inout)    :: self  !< instance
-        class(polarft_corrcalc), target, intent(in) :: pftcc !< correlator
+        class(pftcc_orisrch_grad), intent(inout) :: self !< instance
         type(opt_factory) :: ofac
         real              :: lims(5,2)
         call self%kill
-        ! set pointer to corrcalc object
-        self%pftcc_ptr => pftcc
         ! get # rotations
-        self%nrots = pftcc%get_nrots()
+        self%nrots = pftcc_glob%get_nrots()
         ! just dummy limits for construction, these will be updated before minimization
         lims = 0.
         lims(:,2) = 360
@@ -77,8 +71,8 @@ contains
         integer  :: ithr
         ! copy the pftcc references so we can put them back after minimization is done
         ithr              = omp_get_thread_num() + 1
-        pft_ref_even = self%pftcc_ptr%get_ref_pft(ithr, iseven=.true.)
-        pft_ref_odd  = self%pftcc_ptr%get_ref_pft(ithr, iseven=.false.)
+        pft_ref_even = pftcc_glob%get_ref_pft(ithr, iseven=.true.)
+        pft_ref_odd  = pftcc_glob%get_ref_pft(ithr, iseven=.false.)
 
         ! PREPARATION
         ! initialize with input projection direction
@@ -122,8 +116,8 @@ contains
         endif
 
         ! put back references
-        call self%pftcc_ptr%set_ref_pft(ithr, pft_ref_even, iseven=.true.)
-        call self%pftcc_ptr%set_ref_pft(ithr, pft_ref_odd,  iseven=.false.)
+        call pftcc_glob%set_ref_pft(ithr, pft_ref_even, iseven=.true.)
+        call pftcc_glob%set_ref_pft(ithr, pft_ref_odd,  iseven=.false.)
     end function minimize
 
     subroutine gcostfun( self, vec, grad, D )
@@ -140,12 +134,12 @@ contains
         irot = 1
         select type(self)
             class is (pftcc_orisrch_grad)
-                if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
+                if( pftcc_glob%ptcl_iseven(self%particle) )then
+                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.true.)
                 else
-                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
+                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.false.)
                 endif
-                call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
+                call pftcc_glob%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 grad = - corr_grad
             class default
                 write (*,*) 'error in pftcc_orisrch_grad :: gcostfun: unknown type'
@@ -171,12 +165,12 @@ contains
             class is (pftcc_orisrch_grad)
                 call e%new()
                 call e%set_euler(real(vec(1:3)))
-                if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call build_glob%vol%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.true.)
+                if( pftcc_glob%ptcl_iseven(self%particle) )then
+                    call build_glob%vol%fproject_polar(ithr, e, pftcc_glob, iseven=.true.)
                 else
-                    call build_glob%vol_odd%fproject_polar(ithr, e, self%pftcc_ptr, iseven=.false.)
+                    call build_glob%vol_odd%fproject_polar(ithr, e, pftcc_glob, iseven=.false.)
                 endif
-                corr = self%pftcc_ptr%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
+                corr = pftcc_glob%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
                 cost = -corr
                 call e%kill()
             class default
@@ -200,12 +194,12 @@ contains
         irot = 1
         select type(self)
             class is (pftcc_orisrch_grad)
-                if( self%pftcc_ptr%ptcl_iseven(self%particle) )then
-                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.true.)
+                if( pftcc_glob%ptcl_iseven(self%particle) )then
+                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.true.)
                 else
-                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), self%pftcc_ptr, iseven=.false.)
+                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.false.)
                 endif
-                call self%pftcc_ptr%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
+                call pftcc_glob%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 f    = - corr
                 grad = - corr_grad
             class default
@@ -225,7 +219,7 @@ contains
                 deallocate(self%nlopt)
             end if
             call self%ospec%kill
-            self%pftcc_ptr => null()
+            pftcc_glob => null()
             self%exists = .false.
         endif
     end subroutine kill

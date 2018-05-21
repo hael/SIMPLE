@@ -28,11 +28,11 @@ contains
         type(ran_tabu) :: rt
         integer        :: iptcl, prev_class, cnt, nptcls
         ! gather class populations
-        if( build_glob%a%isthere('class') )then
+        if( build_glob%spproj_field%isthere('class') )then
             if( params_glob%weights2D .eq. 'yes' .and. which_iter > 3 )then
-                call build_glob%a%get_pops(s2D%cls_pops, 'class', consider_w=.true., maxn=params_glob%ncls)
+                call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.true., maxn=params_glob%ncls)
             else
-                call build_glob%a%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
+                call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
             endif
         else
             ! first iteration, no class assignment: all classes are up for grab
@@ -49,7 +49,7 @@ contains
                 cnt = cnt + 1
                 call rt%reset
                 call rt%ne_ran_iarr( s2D%srch_order(cnt,:) )
-                prev_class = nint(build_glob%a%get(iptcl,'class'))
+                prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
                 call put_last(prev_class, s2D%srch_order(cnt,:))
             endif
         end do

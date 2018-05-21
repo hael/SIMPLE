@@ -54,42 +54,42 @@ contains
         call build%init_params_and_build_strategy2D_tbox(cline, params)
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
-        ncls_here = build%a%get_n('class')
-        if( .not. cline%defined('ncls') ) params%ncls = build%a%get_n('class')
+        ncls_here = build%spproj_field%get_n('class')
+        if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
         if( params%l_remap_cls )then
-            call build%a%remap_cls()
+            call build%spproj_field%remap_cls()
             if( cline%defined('ncls') )then
                 if( params%ncls < ncls_here ) stop 'ERROR, inputted ncls < ncls_in_oritab; not allowed!'
                 if( params%ncls > ncls_here )then
-                    call build%a%expand_classes(params%ncls)
+                    call build%spproj_field%expand_classes(params%ncls)
                 endif
             endif
         else if( params%tseries .eq. 'yes' )then
             if( .not. cline%defined('ncls') )then
                 stop '# class averages (ncls) need to be part of command line when tseries=yes'
             endif
-            call build%a%ini_tseries(params%ncls, 'class')
-            call build%a%partition_eo(tseries=.true.)
+            call build%spproj_field%ini_tseries(params%ncls, 'class')
+            call build%spproj_field%partition_eo(tseries=.true.)
         endif
         ! shift multiplication
         if( params%mul > 1. )then
-            call build%a%mul_shifts(params%mul)
+            call build%spproj_field%mul_shifts(params%mul)
         endif
         ! setup weights in case the 2D was run without them (specscore will still be there)
         if( params%weights2D.eq.'yes' )then
             if( params%nptcls <= SPECWMINPOP )then
-                call build%a%set_all2single('w', 1.0)
+                call build%spproj_field%set_all2single('w', 1.0)
             else
                 ! frac is one by default in cluster2D (no option to set frac)
                 ! so spectral weighting is done over all images
-                call build%a%calc_spectral_weights(1.0)
+                call build%spproj_field%calc_spectral_weights(1.0)
             endif
         else
-            call build%a%set_all2single('w', 1.0)
-            if( params%shellw.eq.'yes' ) call build%a%calc_bfac_rec
+            call build%spproj_field%set_all2single('w', 1.0)
+            if( params%shellw.eq.'yes' ) call build%spproj_field%calc_bfac_rec
         endif
         ! even/odd partitioning
-        if( build%a%get_nevenodd() == 0 ) call build%a%partition_eo
+        if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write
         if( nint(cline%get_rarg('part')) .eq. 1 )then
             call build%spproj%write_segment_inside(params%oritype)
@@ -124,7 +124,7 @@ contains
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 )call build%a%clean_updatecnt
+        if( startit == 1 )call build%spproj_field%clean_updatecnt
         ! execute
         if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         call cluster2D_exec( cline, startit) ! partition or not, depending on 'part'
@@ -179,7 +179,7 @@ contains
         logical :: converged
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        params%ncls = build%a%get_n('class')
+        params%ncls = build%spproj_field%get_n('class')
         converged   = conv%check_conv2D(cline) ! convergence check
         call cline%set('frac', conv%get('frac'))
         if( params%l_doshift )then
@@ -209,7 +209,7 @@ contains
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call find_ldim_nptcls(params%stk, ldim, ncls)
         params%ncls = ncls
-        if( build%a%get_noris() == params%ncls )then
+        if( build%spproj_field%get_noris() == params%ncls )then
             ! all we need to do is fetch from classdoc in projfile &
             ! order according to resolution
             call clsdoc_ranked%new(params%ncls)
@@ -220,12 +220,12 @@ contains
             do iclass=1,params%ncls
                 call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
                 call clsdoc_ranked%set(iclass, 'rank',  real(iclass))
-                call clsdoc_ranked%set(iclass, 'pop',   build%a%get(order(iclass),  'pop'))
-                call clsdoc_ranked%set(iclass, 'res',   build%a%get(order(iclass),  'res'))
-                call clsdoc_ranked%set(iclass, 'corr',  build%a%get(order(iclass), 'corr'))
-                call clsdoc_ranked%set(iclass, 'w',     build%a%get(order(iclass),    'w'))
+                call clsdoc_ranked%set(iclass, 'pop',   build%spproj_field%get(order(iclass),  'pop'))
+                call clsdoc_ranked%set(iclass, 'res',   build%spproj_field%get(order(iclass),  'res'))
+                call clsdoc_ranked%set(iclass, 'corr',  build%spproj_field%get(order(iclass), 'corr'))
+                call clsdoc_ranked%set(iclass, 'w',     build%spproj_field%get(order(iclass),    'w'))
                 write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
-                &'RANK:', iclass ,'POP:', nint(build%a%get(order(iclass), 'pop')), 'RES:', build%a%get(order(iclass), 'res')
+                &'RANK:', iclass ,'POP:', nint(build%spproj_field%get(order(iclass), 'pop')), 'RES:', build%spproj_field%get(order(iclass), 'res')
                 call build%img%read(params%stk, order(iclass))
                 call build%img%write(params%outstk, iclass)
             end do

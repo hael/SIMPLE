@@ -155,15 +155,15 @@ contains
             select case( params%ctf )
                 case( 'flip' )
                     if( params%neg .eq. 'yes' )then
-                        call apply_ctf_imgfile(params%stk, params%outstk, build%a, params%smpd, 'flipneg')
+                        call apply_ctf_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, 'flipneg')
                     else
-                        call apply_ctf_imgfile(params%stk, params%outstk, build%a, params%smpd, 'flip')
+                        call apply_ctf_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, 'flip')
                     endif
                 case( 'yes' )
                     if( params%neg .eq. 'yes' )then
-                        call apply_ctf_imgfile(params%stk, params%outstk, build%a, params%smpd, 'neg')
+                        call apply_ctf_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, 'neg')
                     else
-                        call apply_ctf_imgfile(params%stk, params%outstk, build%a, params%smpd, 'ctf')
+                        call apply_ctf_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, 'ctf')
                     endif
                 case DEFAULT
                     stop 'Unknown ctf argument'
@@ -514,11 +514,11 @@ contains
                 call build%img%read(params%stk, pinds(i))
                 call build%img%write(params%outstk, i)
                 if( cline%defined('oritab') .or. cline%defined('deftab') )then
-                    call os_ran%set_ori(i, build%a%get_ori(pinds(i)))
+                    call os_ran%set_ori(i, build%spproj_field%get_ori(pinds(i)))
                 endif
             end do
             if( cline%defined('oritab') .or. cline%defined('deftab') )then
-                call build%a%write(params%outfile, [1,params%nran])
+                call build%spproj_field%write(params%outfile, [1,params%nran])
             endif
             goto 999
         endif
@@ -533,13 +533,13 @@ contains
                 nincl = params%nptcls
             endif
             ! order the particles
-            pinds = build%a%order()
+            pinds = build%spproj_field%order()
             ! fish the best ones out
             if( cline%defined('state') )then
                 cnt = 0
                 do i=1,nincl
                     call progress(i, nincl)
-                    s = nint(build%a%get(pinds(i), 'state'))
+                    s = nint(build%spproj_field%get(pinds(i), 'state'))
                     if( s == params%state )then
                         cnt = cnt+1
                         call build%img%read(params%stk, pinds(i))
@@ -551,10 +551,10 @@ contains
                 cnt = 0
                 do i=1,nincl
                     call progress(i, nincl)
-                    s = nint(build%a%get(pinds(i), 'state'))
+                    s = nint(build%spproj_field%get(pinds(i), 'state'))
                     if( s == params%state )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%a%get_ori(pinds(i)))
+                        call o_here%set_ori(cnt, build%spproj_field%get_ori(pinds(i)))
                     endif
                 end do
                 allocate(fname, source='extracted_oris_state'//int2str_pad(params%state,2)//trim(TXT_EXT))
@@ -562,7 +562,7 @@ contains
                 cnt = 0
                 do i=1,nincl
                     call progress(i, nincl)
-                    s = nint(build%a%get(pinds(i), 'class'))
+                    s = nint(build%spproj_field%get(pinds(i), 'class'))
                     if( s == params%class )then
                         cnt = cnt+1
                         call build%img%read(params%stk, pinds(i))
@@ -574,10 +574,10 @@ contains
                 cnt = 0
                 do i=1,nincl
                     call progress(i, nincl)
-                    s = nint(build%a%get(pinds(i), 'class'))
+                    s = nint(build%spproj_field%get(pinds(i), 'class'))
                     if( s == params%class )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%a%get_ori(pinds(i)))
+                        call o_here%set_ori(cnt, build%spproj_field%get_ori(pinds(i)))
                     endif
                 end do
                 allocate(fname, source='extracted_oris_class'//int2str_pad(params%class,5)//trim(TXT_EXT))
@@ -587,7 +587,7 @@ contains
                     call progress(i, nincl)
                     call build%img%read(params%stk, pinds(i))
                     call build%img%write(params%outstk, i)
-                    call o_here%set_ori(i, build%a%get_ori(pinds(i)))
+                    call o_here%set_ori(i, build%spproj_field%get_ori(pinds(i)))
                 end do
                 allocate(fname, source='extracted_oris'//trim(TXT_EXT))
             endif
@@ -605,7 +605,7 @@ contains
                 cnt = 0
                 do i=1,params%nptcls
                     call progress(i, params%nptcls)
-                    s = nint(build%a%get(i, 'state'))
+                    s = nint(build%spproj_field%get(i, 'state'))
                     if( s == params%state )then
                         cnt = cnt+1
                         call build%img%read(params%stk, i)
@@ -617,10 +617,10 @@ contains
                 cnt = 0
                 do i=1,params%nptcls
                     call progress(i, params%nptcls)
-                    s = nint(build%a%get(i, 'state'))
+                    s = nint(build%spproj_field%get(i, 'state'))
                     if( s == params%state )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%a%get_ori(i))
+                        call o_here%set_ori(cnt, build%spproj_field%get_ori(i))
                     endif
                 end do
                 allocate(fname, source='extracted_oris_state'//int2str_pad(params%state,2)//trim(TXT_EXT))
@@ -628,7 +628,7 @@ contains
                 cnt = 0
                 do i=1,params%nptcls
                     call progress(i, params%nptcls)
-                    s = nint(build%a%get(i, 'class'))
+                    s = nint(build%spproj_field%get(i, 'class'))
                     if( s == params%class )then
                         cnt = cnt+1
                         call build%img%read(params%stk, i)
@@ -640,10 +640,10 @@ contains
                 cnt = 0
                 do i=1,params%nptcls
                     call progress(i, params%nptcls)
-                    s = nint(build%a%get(i, 'class'))
+                    s = nint(build%spproj_field%get(i, 'class'))
                     if( s == params%class )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%a%get_ori(i))
+                        call o_here%set_ori(cnt, build%spproj_field%get_ori(i))
                     endif
                 end do
                 allocate(fname, source='extracted_oris_class'//int2str_pad(params%class,5)//trim(TXT_EXT))
@@ -667,8 +667,8 @@ contains
         endif
         ! produce image statistics
         if( params%stats .eq. 'yes' )then
-            call stats_imgfile(params%stk, build%a)
-            call build%a%write('image_statistics.txt')
+            call stats_imgfile(params%stk, build%spproj_field)
+            call build%spproj_field%write('image_statistics.txt')
             goto 999
         endif
         ! create frame averages

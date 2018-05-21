@@ -3,9 +3,10 @@ module simple_strategy3D_snhc_single
 include 'simple_lib.f08'
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
-use simple_builder,         only: build_glob
-use simple_strategy3D,      only: strategy3D
-use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
+use simple_builder,          only: build_glob
+use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
+use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: strategy3D_snhc_single
@@ -38,7 +39,7 @@ contains
         class(strategy3D_snhc_single), intent(inout) :: self
         integer :: iref, isample, loc(1), inpl_ind
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
-        if( build_glob%a%get_state(self%s%iptcl) > 0 )then
+        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! initialize
             call self%s%prep4srch
             self%s%nbetter    = 0
@@ -56,14 +57,14 @@ contains
             ! output
             call self%oris_assign
         else
-            call build_glob%a%reject(self%s%iptcl)
+            call build_glob%spproj_field%reject(self%s%iptcl)
         endif
         DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: FINISHED SEARCH'
 
         contains
 
             subroutine per_ref_srch
-                call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, inpl_corrs) ! In-plane correlations
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs) ! In-plane correlations
                 loc        = maxloc(inpl_corrs)               ! greedy in-plane
                 inpl_ind   = loc(1)                           ! in-plane angle index
                 inpl_corr  = inpl_corrs(inpl_ind)             ! max in plane correlation
@@ -84,7 +85,7 @@ contains
             print *, 'ref: ', ref
             stop 'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
         endif
-        roind = self%s%pftcc_ptr%get_roind(360. - s3D%proj_space_euls(self%s%iptcl_map, ref, 3))
+        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%iptcl_map, ref, 3))
         ! transfer to solution set
         corr = max(0., s3D%proj_space_corrs(self%s%iptcl_map,ref))
         call s3D%o_peaks(self%s%iptcl)%set(1, 'state', 1.)
@@ -94,36 +95,36 @@ contains
         call s3D%o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
         call s3D%o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
         ! B factor
-        if( self%s%pftcc_ptr%objfun_is_ccres() )then
-            bfac  = self%s%pftcc_ptr%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
-            call build_glob%a%set(self%s%iptcl, 'bfac',  bfac )
+        if( pftcc_glob%objfun_is_ccres() )then
+            bfac  = pftcc_glob%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
+            call build_glob%spproj_field%set(self%s%iptcl, 'bfac',  bfac )
         endif
         ! angular distances
-        call build_glob%se%sym_dists( build_glob%a%get_ori(self%s%iptcl),&
+        call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(1), osym, euldist, dist_inpl)
         ! fraction search space
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
         ! set the overlaps
-        call build_glob%a%set(self%s%iptcl, 'mi_proj',   0.)
-        call build_glob%a%set(self%s%iptcl, 'mi_inpl',   0.)
-        call build_glob%a%set(self%s%iptcl, 'mi_state',  1.)
-        call build_glob%a%set(self%s%iptcl, 'mi_joint',  0.)
-        if( build_glob%a%isthere(self%s%iptcl,'dist') )then
-            call build_glob%a%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%a%get(self%s%iptcl,'dist'))
+        call build_glob%spproj_field%set(self%s%iptcl, 'mi_proj',   0.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'mi_inpl',   0.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'mi_state',  1.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'mi_joint',  0.)
+        if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
+            call build_glob%spproj_field%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(self%s%iptcl,'dist'))
         else
-            call build_glob%a%set(self%s%iptcl, 'dist', euldist)
+            call build_glob%spproj_field%set(self%s%iptcl, 'dist', euldist)
         endif
-        call build_glob%a%set(self%s%iptcl, 'dist_inpl', dist_inpl)
+        call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call build_glob%a%set(self%s%iptcl, 'state',     1.)
-        call build_glob%a%set(self%s%iptcl, 'frac',      frac)
-        call build_glob%a%set(self%s%iptcl, 'corr',      corr)
-        call build_glob%a%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call build_glob%a%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
-        call build_glob%a%set(self%s%iptcl, 'sdev',      0.)
-        call build_glob%a%set(self%s%iptcl, 'npeaks',    1.)
-        call build_glob%a%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
-        call build_glob%a%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
+        call build_glob%spproj_field%set(self%s%iptcl, 'state',     1.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
+        call build_glob%spproj_field%set(self%s%iptcl, 'corr',      corr)
+        call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
+        call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
+        call build_glob%spproj_field%set(self%s%iptcl, 'sdev',      0.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
+        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single
 

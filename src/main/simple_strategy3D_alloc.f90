@@ -62,7 +62,7 @@ contains
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
         if( params_glob%oritab.ne.'' )then
-            s3D%state_exists = build_glob%a%states_exist(params_glob%nstates)
+            s3D%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
         else
             allocate(s3D%state_exists(params_glob%nstates), source=.true.)
         endif
@@ -85,14 +85,14 @@ contains
                     cnt = cnt + 1
                     s3D%proj_space_state(i,cnt)   = istate
                     s3D%proj_space_proj(i, cnt)   = iproj
-                    s3D%proj_space_euls(i, cnt,:) = build_glob%e%get_euler(iproj)
+                    s3D%proj_space_euls(i, cnt,:) = build_glob%eulspace%get_euler(iproj)
                 enddo
             enddo
         end do
         !$omp end do nowait
         !$omp do schedule(static)
         do iptcl = params_glob%fromp, params_glob%top
-            if( pinds(iptcl) > 0 )s3D%prev_proj(pinds(iptcl)) = build_glob%e%find_closest_proj(build_glob%a%get_ori(iptcl))
+            if( pinds(iptcl) > 0 )s3D%prev_proj(pinds(iptcl)) = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(iptcl))
         enddo
         !$omp end do nowait
         !$omp end parallel
@@ -104,18 +104,18 @@ contains
                 call s3D%o_peaks(iptcl)%new(npeaks)
                 ! transfer CTF params
                 if( params_glob%ctf.ne.'no' )then
-                    call s3D%o_peaks(iptcl)%set_all2single('kv',    build_glob%a%get(iptcl,'kv')   )
-                    call s3D%o_peaks(iptcl)%set_all2single('cs',    build_glob%a%get(iptcl,'cs')   )
-                    call s3D%o_peaks(iptcl)%set_all2single('fraca', build_glob%a%get(iptcl,'fraca'))
-                    call s3D%o_peaks(iptcl)%set_all2single('dfx',   build_glob%a%get(iptcl,'dfx')  )
-                    call s3D%o_peaks(iptcl)%set_all2single('dfy',    build_glob%a%get(iptcl,'dfy')   )
-                    call s3D%o_peaks(iptcl)%set_all2single('angast', build_glob%a%get(iptcl,'angast'))
+                    call s3D%o_peaks(iptcl)%set_all2single('kv',    build_glob%spproj_field%get(iptcl,'kv')   )
+                    call s3D%o_peaks(iptcl)%set_all2single('cs',    build_glob%spproj_field%get(iptcl,'cs')   )
+                    call s3D%o_peaks(iptcl)%set_all2single('fraca', build_glob%spproj_field%get(iptcl,'fraca'))
+                    call s3D%o_peaks(iptcl)%set_all2single('dfx',   build_glob%spproj_field%get(iptcl,'dfx')  )
+                    call s3D%o_peaks(iptcl)%set_all2single('dfy',    build_glob%spproj_field%get(iptcl,'dfy')   )
+                    call s3D%o_peaks(iptcl)%set_all2single('angast', build_glob%spproj_field%get(iptcl,'angast'))
                     if( params_glob%l_phaseplate )then
-                        call s3D%o_peaks(iptcl)%set_all2single('phshift', build_glob%a%get(iptcl,'phshift'))
+                        call s3D%o_peaks(iptcl)%set_all2single('phshift', build_glob%spproj_field%get(iptcl,'phshift'))
                     endif
                 endif
                 ! transfer eo flag
-                call s3D%o_peaks(iptcl)%set_all2single('eo', build_glob%a%get(iptcl,'eo'))
+                call s3D%o_peaks(iptcl)%set_all2single('eo', build_glob%spproj_field%get(iptcl,'eo'))
             endif
         enddo
         ! refine mode specific allocations and initialisations
@@ -132,7 +132,7 @@ contains
                     !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
                     do iptcl = params_glob%fromp, params_glob%top
                         if( pinds(iptcl) > 0 )then
-                            prev_state = build_glob%a%get_state(iptcl)
+                            prev_state = build_glob%spproj_field%get_state(iptcl)
                             prev_ref   = (prev_state - 1) * params_glob%nspace + s3D%prev_proj(pinds(iptcl))
                             do istate = 0, params_glob%nstates - 1
                                 i = istate * params_glob%nnn + 1
@@ -155,7 +155,7 @@ contains
                     do iptcl = params_glob%fromp, params_glob%top
                         if( pinds(iptcl) > 0 )then
                             call rts(pinds(iptcl))%ne_ran_iarr(s3D%srch_order(pinds(iptcl),:))
-                            prev_state = build_glob%a%get_state(iptcl)
+                            prev_state = build_glob%spproj_field%get_state(iptcl)
                             prev_ref   = (prev_state - 1) * params_glob%nspace + s3D%prev_proj(pinds(iptcl))
                             call put_last(prev_ref, s3D%srch_order(pinds(iptcl),:))
                         endif

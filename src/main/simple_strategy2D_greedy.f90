@@ -4,6 +4,7 @@ use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 use simple_builder,          only: build_glob
+use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: strategy2D_greedy
@@ -33,12 +34,12 @@ contains
         class(strategy2D_greedy), intent(inout) :: self
         integer :: iref,loc(1),inpl_ind
         real    :: corrs(self%s%nrots),inpl_corr,corr
-        if( build_glob%a%get_state(self%s%iptcl) > 0 )then
+        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = self%s%prev_corr
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle
-                call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs)
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)
@@ -53,7 +54,7 @@ contains
             call self%s%inpl_srch
             call self%s%store_solution
         else
-            call build_glob%a%reject(self%s%iptcl)
+            call build_glob%spproj_field%reject(self%s%iptcl)
         endif
         DebugPrint  '>>> STRATEGY2D_GREEDY :: FINISHED STOCHASTIC SEARCH'
     end subroutine srch_greedy

@@ -59,7 +59,7 @@ contains
         select case(fname2format(fname))
             case('O')
                 call bos%open(fname)
-                nl = bos%get_n_records(params_glob%spproj_a_seg)
+                nl = bos%get_n_records(params_glob%spproj_iseg)
                 call bos%close
             case('T')
                 nl = nlines(fname)

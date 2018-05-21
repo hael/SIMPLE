@@ -170,10 +170,10 @@ contains
         call img_backgr_wctf%new([params%box,params%box,1], params%smpd)
         call img_backgr%read(params%stk_backgr, 1)
         if( cline%defined('deftab') )then
-            params_present(1) = build%a%isthere('kv')
-            params_present(2) = build%a%isthere('cs')
-            params_present(3) = build%a%isthere('fraca')
-            params_present(4) = build%a%isthere('dfx')
+            params_present(1) = build%spproj_field%isthere('kv')
+            params_present(2) = build%spproj_field%isthere('cs')
+            params_present(3) = build%spproj_field%isthere('fraca')
+            params_present(4) = build%spproj_field%isthere('dfx')
             if( all(params_present) )then
                 ! alles ok
             else
@@ -192,10 +192,10 @@ contains
             img_backgr_wctf = img_backgr
             ! CTF logics
             if( cline%defined('deftab') )then
-                tfun = ctf(params%smpd, build%a%get(iptcl,'kv'), build%a%get(iptcl,'cs'), build%a%get(iptcl,'fraca'))
-                dfx = build%a%get(iptcl, 'dfx')
-                dfy    = build%a%get(iptcl, 'dfy'   )
-                angast = build%a%get(iptcl, 'angast')
+                tfun = ctf(params%smpd, build%spproj_field%get(iptcl,'kv'), build%spproj_field%get(iptcl,'cs'), build%spproj_field%get(iptcl,'fraca'))
+                dfx = build%spproj_field%get(iptcl, 'dfx')
+                dfy    = build%spproj_field%get(iptcl, 'dfy'   )
+                angast = build%spproj_field%get(iptcl, 'angast')
                 call tfun%apply(build%img, dfx, 'flip', dfy=dfy, angast=angast)
                 call tfun%apply(img_backgr_wctf, dfx, 'flip', dfy=dfy, angast=angast)
             endif
@@ -252,8 +252,8 @@ contains
             cnt2 = 0
             do iptcl=istart,istop
                 cnt2 = cnt2 + 1
-                !o = build%a%get_ori(iptcl)
-                call os%set_ori(cnt2, build%a%get_ori(iptcl) )
+                !o = build%spproj_field%get_ori(iptcl)
+                call os%set_ori(cnt2, build%spproj_field%get_ori(iptcl) )
                 call build%img%read(params%stk, iptcl)
                 call build%img%write(stkname,cnt2)
             end do

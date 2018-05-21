@@ -1,11 +1,9 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
 module simple_pftcc_shsrch_grad
 include 'simple_lib.f08'
-use simple_opt_spec,          only: opt_spec
-use simple_polarft_corrcalc,  only: polarft_corrcalc
-!use simple_opt_factory,       only: opt_factory
-use simple_optimizer,         only: optimizer
-
+use simple_opt_spec,         only: opt_spec
+use simple_polarft_corrcalc, only: pftcc_glob
+use simple_optimizer,        only: optimizer
 implicit none
 
 public :: pftcc_shsrch_grad
@@ -13,17 +11,16 @@ private
 
 type :: pftcc_shsrch_grad
     private
-    type(opt_spec)                   :: ospec                  !< optimizer specification object
-    class(optimizer), pointer        :: nlopt        =>null()  !< optimizer object
-    class(polarft_corrcalc), pointer :: pftcc_ptr    =>null()  !< pointer to pftcc object
-    integer                          :: reference    = 0       !< reference pft
-    integer                          :: particle     = 0       !< particle pft
-    integer                          :: nrots        = 0       !< # rotations
-    integer                          :: maxits       = 100     !< max # iterations
-    logical                          :: shbarr       = .true.  !< shift barrier constraint or not
-    integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search
-    real                             :: max_shift     = 0.      !< maximal shift
-    integer                          :: max_evals    = 5       !< max # inplrot/shsrch cycles
+    type(opt_spec)            :: ospec                  !< optimizer specification object
+    class(optimizer), pointer :: nlopt        =>null()  !< optimizer object
+    integer                   :: reference    = 0       !< reference pft
+    integer                   :: particle     = 0       !< particle pft
+    integer                   :: nrots        = 0       !< # rotations
+    integer                   :: maxits       = 100     !< max # iterations
+    logical                   :: shbarr       = .true.  !< shift barrier constraint or not
+    integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
+    real                      :: max_shift    = 0.      !< maximal shift
+    integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
   contains
     procedure          :: new         => grad_shsrch_new
     procedure          :: set_indices => grad_shsrch_set_indices
@@ -35,15 +32,13 @@ end type pftcc_shsrch_grad
 contains
 
     !> Shift search constructor
-    !subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits )
-    subroutine grad_shsrch_new( self, pftcc, lims, lims_init, shbarrier, maxits )
-        use simple_opt_factory,       only: opt_factory
-        class(pftcc_shsrch_grad),           intent(inout) :: self           !< instance
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc          !< correlator
-        real,                               intent(in)    :: lims(:,:)      !< limits for barrier constraint
-        real,             optional,         intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
-        character(len=*), optional,         intent(in)    :: shbarrier      !< shift barrier constraint or not
-        integer,          optional,         intent(in)    :: maxits         !< maximum iterations
+    subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits )
+        use simple_opt_factory, only: opt_factory
+        class(pftcc_shsrch_grad),   intent(inout) :: self           !< instance
+        real,                       intent(in)    :: lims(:,:)      !< limits for barrier constraint
+        real,             optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
+        character(len=*), optional, intent(in)    :: shbarrier      !< shift barrier constraint or not
+        integer,          optional, intent(in)    :: maxits         !< maximum iterations
         type(opt_factory) :: opt_fact
         ! flag the barrier constraint
         self%shbarr = .true.
@@ -57,10 +52,8 @@ contains
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%nlopt)
-        ! set pointer to corrcalc object
-        self%pftcc_ptr => pftcc
         ! get # rotations
-        self%nrots = pftcc%get_nrots()
+        self%nrots = pftcc_glob%get_nrots()
         call self%grad_shsrch_set_costfun
     end subroutine grad_shsrch_new
 
@@ -79,8 +72,7 @@ contains
         real(dp)                :: cost
         select type(self)
         class is (pftcc_shsrch_grad)
-            cost = - self%pftcc_ptr%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
-            !cost = - pftcc%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+            cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
         class default
             write (*,*) 'error in grad_shsrch_costfun: unknown type'
             stop
@@ -95,8 +87,7 @@ contains
         real(dp)                :: corrs_grad(2)
         select type(self)
         class is (pftcc_shsrch_grad)
-            call self%pftcc_ptr%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-            !call pftcc%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+            call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
             grad = - corrs_grad
         class default
             write (*,*) 'error in grad_shsrch_gcostfun: unknown type'
@@ -114,8 +105,7 @@ contains
         real(dp)                :: corrs_grad(2)
         select type(self)
         class is (pftcc_shsrch_grad)
-             call self%pftcc_ptr%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
-            !call pftcc%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+             call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
             f    = - corrs
             grad = - corrs_grad
         class default
@@ -130,8 +120,7 @@ contains
         class(pftcc_shsrch_grad), intent(inout) :: self
         real                                    :: corrs(self%nrots)
         integer                                 :: loc(1)
-        call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-        !call pftcc%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+        call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
         loc = maxloc(corrs)
         self%cur_inpl_idx = loc(1)
     end subroutine grad_shsrch_optimize_angle
@@ -166,19 +155,17 @@ contains
         integer,                  intent(out)   :: irot
         real    :: cost, corrs(self%nrots), cxy(3)
         real    :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
-        integer :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh!, nevals, ngevals
+        integer :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh
         logical :: found_better
         found_better      = .false.
-        call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-        !call pftcc%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+        call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
         loc               = maxloc(corrs)
         self%cur_inpl_idx = loc(1)
         lowest_cost_overall = -corrs(self%cur_inpl_idx)
         ! shift search / in-plane rot update
         do i = 1,self%max_evals
             call self%nlopt%minimize(self%ospec, self, lowest_cost)
-            call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-            !call pftcc%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+            call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
             loc = maxloc(corrs)
             if( loc(1) == self%cur_inpl_idx ) exit
             self%cur_inpl_idx = loc(1)
@@ -196,8 +183,7 @@ contains
             cxy(1)  = - lowest_cost_overall  ! correlation
             cxy(2:) =   lowest_shift         ! shift
             ! rotate the shift vector to the frame of reference
-            cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(irot)))
-            !cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc%get_rot(irot)))
+            cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc_glob%get_rot(irot)))
         else
             irot = 0 ! to communicate that a better solution was not found
         endif

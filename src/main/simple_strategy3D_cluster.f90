@@ -1,10 +1,11 @@
 ! concrete strategy3D: stochastic state quantization (3D clustering)
 module simple_strategy3D_cluster
 include 'simple_lib.f08'
-use simple_strategy3D_alloc ! use all in there
-use simple_strategy3D,      only: strategy3D
-use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
-use simple_builder,         only: build_glob
+use simple_strategy3D_alloc  ! use all in there
+use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
+use simple_builder,          only: build_glob
+use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: strategy3D_cluster
@@ -40,18 +41,18 @@ contains
         real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
         real    :: shvec(2), corr, mi_state, frac, mi_inpl, mi_proj, w, bfac
         logical :: hetsym
-        self%s%prev_state = build_glob%a%get_state(self%s%iptcl)
+        self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
             hetsym            = associated(self%spec%symmat)
-            self%s%prev_roind = self%s%pftcc_ptr%get_roind(360.-build_glob%a%e3get(self%s%iptcl))
-            self%s%prev_corr  = build_glob%a%get(self%s%iptcl, 'corr')
+            self%s%prev_roind = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%s%iptcl))
+            self%s%prev_corr  = build_glob%spproj_field%get(self%s%iptcl, 'corr')
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
             w = 1.
             ! B-factor memoization
-            if( self%s%pftcc_ptr%objfun_is_ccres() )then
-                bfac = self%s%pftcc_ptr%fit_bfac(self%s%prev_ref, self%s%iptcl, self%s%prev_roind, [0.,0.])
-                call self%s%pftcc_ptr%memoize_bfac(self%s%iptcl, bfac)
-                call build_glob%a%set(self%s%iptcl,'bfac', bfac)
+            if( pftcc_glob%objfun_is_ccres() )then
+                bfac = pftcc_glob%fit_bfac(self%s%prev_ref, self%s%iptcl, self%s%prev_roind, [0.,0.])
+                call pftcc_glob%memoize_bfac(self%s%iptcl, bfac)
+                call build_glob%spproj_field%set(self%s%iptcl,'bfac', bfac)
             endif
             ! evaluate all correlations
             corrs = -1.
@@ -62,7 +63,7 @@ contains
                     do isym = 1, self%s%nsym
                         iproj = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
                         iref  = (state-1) * self%s%nprojs + iproj
-                        call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs_inpl)
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                         corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
                     enddo
                     loc              = maxloc(corrs_sym)
@@ -71,7 +72,7 @@ contains
                     sym_projs(state) = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
                 else
                     iref = (state-1) * self%s%nprojs +s3D%prev_proj(self%s%iptcl_map)
-                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs_inpl)
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                     ! replaced:
                     ! corrs(state) = corrs_inpl(self%s%prev_roind)
                     ! with:
@@ -105,8 +106,8 @@ contains
                         if( sym_projs(state) .ne. s3D%prev_proj(self%s%iptcl_map) )then
                             mi_proj = 0.
                             iref    = (state-1)*self%s%nprojs + sym_projs(state)
-                            call build_glob%a%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1))
-                            call build_glob%a%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 2))
+                            call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1))
+                            call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 2))
                         endif
                     endif
                 else
@@ -118,8 +119,8 @@ contains
                             if( iproj .ne. s3D%prev_proj(self%s%iptcl_map) )then
                                 mi_proj = 0.
                                 iref    = (state-1) * self%s%nprojs + iproj
-                                call build_glob%a%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1))
-                                call build_glob%a%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 2))
+                                call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1))
+                                call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 2))
                             endif
                         else
                             ! greedy in plane
@@ -129,36 +130,36 @@ contains
                             call self%s%inpl_srch
                             if( s3D%proj_space_corrs(self%s%iptcl_map,iref) > corr )then
                                 corr  = s3D%proj_space_corrs(self%s%iptcl_map,iref)
-                                shvec = build_glob%a%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%iptcl_map,iref,:)
-                                call build_glob%a%set_shift(self%s%iptcl, shvec)
-                                call build_glob%a%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 3))
+                                shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%iptcl_map,iref,:)
+                                call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
+                                call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 3))
                             endif
-                            if( self%s%prev_roind .ne. self%s%pftcc_ptr%get_roind(360.-s3D%proj_space_euls(self%s%iptcl_map, iref, 3)) )then
+                            if( self%s%prev_roind .ne. pftcc_glob%get_roind(360.-s3D%proj_space_euls(self%s%iptcl_map, iref, 3)) )then
                                 mi_inpl = 0.
                             endif
                         endif
                     endif
-                    call build_glob%a%set(self%s%iptcl,'proj', real(s3D%proj_space_proj(self%s%iptcl_map,iref)))
+                    call build_glob%spproj_field%set(self%s%iptcl,'proj', real(s3D%proj_space_proj(self%s%iptcl_map,iref)))
                 endif
             endif
             ! updates peaks and orientation orientation
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
-            call build_glob%a%set(self%s%iptcl,'frac',     frac)
-            call build_glob%a%set(self%s%iptcl,'state',    real(state))
-            call build_glob%a%set(self%s%iptcl,'corr',     corr)
-            call build_glob%a%set(self%s%iptcl,'mi_proj',  mi_proj)
-            call build_glob%a%set(self%s%iptcl,'mi_inpl',  mi_inpl)
-            call build_glob%a%set(self%s%iptcl,'mi_state', mi_state)
-            call build_glob%a%set(self%s%iptcl,'mi_joint', (mi_state+mi_inpl)/2.)
-            call build_glob%a%set(self%s%iptcl,'w',        w)
+            call build_glob%spproj_field%set(self%s%iptcl,'frac',     frac)
+            call build_glob%spproj_field%set(self%s%iptcl,'state',    real(state))
+            call build_glob%spproj_field%set(self%s%iptcl,'corr',     corr)
+            call build_glob%spproj_field%set(self%s%iptcl,'mi_proj',  mi_proj)
+            call build_glob%spproj_field%set(self%s%iptcl,'mi_inpl',  mi_inpl)
+            call build_glob%spproj_field%set(self%s%iptcl,'mi_state', mi_state)
+            call build_glob%spproj_field%set(self%s%iptcl,'mi_joint', (mi_state+mi_inpl)/2.)
+            call build_glob%spproj_field%set(self%s%iptcl,'w',        w)
             call s3D%o_peaks(self%s%iptcl)%set(1,'state', real(state))
             call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  corr)
             call s3D%o_peaks(self%s%iptcl)%set(1,'w',     w)
             call s3D%o_peaks(self%s%iptcl)%set(1,'ow',    1.)
-            call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%a%get_euler(self%s%iptcl))
-            call s3D%o_peaks(self%s%iptcl)%set_shift(1, build_glob%a%get_2Dshift(self%s%iptcl))
+            call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(self%s%iptcl))
+            call s3D%o_peaks(self%s%iptcl)%set_shift(1, build_glob%spproj_field%get_2Dshift(self%s%iptcl))
         else
-            call build_glob%a%reject(self%s%iptcl)
+            call build_glob%spproj_field%reject(self%s%iptcl)
         endif
         DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
     end subroutine srch_cluster3D

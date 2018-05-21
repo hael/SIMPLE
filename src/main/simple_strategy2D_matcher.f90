@@ -10,19 +10,19 @@ use simple_parameters,       only: params_glob
 use simple_classaverager
 implicit none
 
-public :: cluster2D_exec, preppftcc4align, pftcc
+public :: cluster2D_exec!, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter             :: L_BENCH           = .false.
-logical, parameter             :: L_BENCH_CLUSTER2D = .false.
-type(polarft_corrcalc), target :: pftcc
-integer                        :: nptcls2update
-integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
-real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
-real(timer_int_kind)           :: rt_tot, rt_tot_sum, rt_refloop_sum
-real(timer_int_kind)           :: rt_inpl_sum
-character(len=STDLEN)          :: benchfname
+logical, parameter      :: L_BENCH           = .false.
+logical, parameter      :: L_BENCH_CLUSTER2D = .false.
+type(polarft_corrcalc)  :: pftcc
+integer                 :: nptcls2update
+integer(timer_int_kind) :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
+real(timer_int_kind)    :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
+real(timer_int_kind)    :: rt_tot, rt_tot_sum, rt_refloop_sum
+real(timer_int_kind)    :: rt_inpl_sum
+character(len=STDLEN)   :: benchfname
 
 contains
 
@@ -60,7 +60,7 @@ contains
         endif
 
         ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = build_glob%a%get_avg('frac')
+        frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
         if( params_glob%extr_iter == 1 )then
@@ -87,9 +87,9 @@ contains
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
             select case(trim(params_glob%objfun))
                 case('cc')
-                    extr_bound = build_glob%a%extremal_bound(extr_thresh, 'corr')
+                    extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
                 case('ccres')
-                    extr_bound = build_glob%a%extremal_bound(extr_thresh, 'bfac')
+                    extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'bfac')
             end select
             write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
             write(*,'(A,F8.2)') '>>> EXTREMAL THRESHOLD:    ', extr_bound
@@ -103,16 +103,16 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         if( l_frac_update )then
             allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-            call build_glob%a%sample4update_and_incrcnt2D(params_glob%ncls, [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+            call build_glob%spproj_field%sample4update_and_incrcnt2D(params_glob%ncls, [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
             ! correct convergence stats
             do iptcl=params_glob%fromp,params_glob%top
                 if( .not. ptcl_mask(iptcl) )then
                     ! these are not updated
-                    call build_glob%a%set(iptcl, 'mi_class',    1.0)
-                    call build_glob%a%set(iptcl, 'mi_inpl',     1.0)
-                    call build_glob%a%set(iptcl, 'mi_joint',    1.0)
-                    call build_glob%a%set(iptcl, 'dist_inpl',   0.0)
-                    call build_glob%a%set(iptcl, 'frac',      100.0)
+                    call build_glob%spproj_field%set(iptcl, 'mi_class',    1.0)
+                    call build_glob%spproj_field%set(iptcl, 'mi_inpl',     1.0)
+                    call build_glob%spproj_field%set(iptcl, 'mi_joint',    1.0)
+                    call build_glob%spproj_field%set(iptcl, 'dist_inpl',   0.0)
+                    call build_glob%spproj_field%set(iptcl, 'frac',      100.0)
                 endif
             end do
         else
@@ -121,18 +121,18 @@ contains
             pinds     = (/(i,i=params_glob%fromp,params_glob%top)/)
             ptcl_mask = .true.
             do iptcl=params_glob%fromp,params_glob%top
-                if( build_glob%a%isthere('update_cnt') )then
-                    update_cnt = nint(build_glob%a%get(iptcl,'update_cnt'))
-                    call build_glob%a%set(iptcl,'update_cnt', real(update_cnt+1))
+                if( build_glob%spproj_field%isthere('update_cnt') )then
+                    update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
+                    call build_glob%spproj_field%set(iptcl,'update_cnt', real(update_cnt+1))
                 else
-                    call build_glob%a%set(iptcl,'update_cnt', 1.)
+                    call build_glob%spproj_field%set(iptcl,'update_cnt', 1.)
                 endif
             enddo
         endif
 
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
-        if( build_glob%a%get_nevenodd() == 0 )then
+        if( build_glob%spproj_field%get_nevenodd() == 0 )then
             stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
         endif
         if( .not. cline%defined('refs') )call simple_stop('need refs to be part of command line for cluster2D execution')
@@ -154,25 +154,25 @@ contains
         ! sees the same information in distributed execution
         if( params_glob%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( params_glob%nptcls <= SPECWMINPOP )then
-                call build_glob%a%set_all2single('w', 1.0)
+                call build_glob%spproj_field%set_all2single('w', 1.0)
             else
                 if( params_glob%weights2D .eq. 'yes' .and. which_iter > 3 )then
-                    call build_glob%a%get_pops(prev_pops, 'class', consider_w=.true., maxn=params_glob%ncls)
+                    call build_glob%spproj_field%get_pops(prev_pops, 'class', consider_w=.true., maxn=params_glob%ncls)
                 else
-                    call build_glob%a%get_pops(prev_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
+                    call build_glob%spproj_field%get_pops(prev_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
                 endif
                 ! frac is one by default in cluster2D (no option to set frac)
                 ! so spectral weighting is done over all images
-                call build_glob%a%calc_spectral_weights(1.0)
+                call build_glob%spproj_field%calc_spectral_weights(1.0)
                 if( any(prev_pops == 0) )then
                     ! now ensuring the spectral re-ranking does not re-populates
                     ! zero-populated classes, for congruence with empty cavgs
                     do icls = 1, params_glob%ncls
                         if( prev_pops(icls) > 0 ) cycle
-                        call build_glob%a%get_pinds(icls, 'class', pinds, consider_w=.false.)
+                        call build_glob%spproj_field%get_pinds(icls, 'class', pinds, consider_w=.false.)
                         if( .not.allocated(pinds) )cycle
                         do iptcl = 1, size(pinds)
-                            call build_glob%a%set(pinds(iptcl), 'w', 0.)
+                            call build_glob%spproj_field%set(pinds(iptcl), 'w', 0.)
                         enddo
                         deallocate(pinds)
                     enddo
@@ -182,17 +182,17 @@ contains
         else
             ! defaults to frac, done by class
             if( which_iter > 3 )then
-                call build_glob%a%calc_hard_weights2D( params_glob%frac, params_glob%ncls )
+                call build_glob%spproj_field%calc_hard_weights2D( params_glob%frac, params_glob%ncls )
             else
-                call build_glob%a%set_all2single('w', 1.0)
+                call build_glob%spproj_field%set_all2single('w', 1.0)
             endif
         endif
 
         ! B-factor
         if( params_glob%shellw.eq.'yes' .and. which_iter >= 3 )then
-            call build_glob%a%calc_bfac_rec
+            call build_glob%spproj_field%calc_bfac_rec
         else
-            call build_glob%a%set_all2single('bfac_rec', 0.)
+            call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif
 
         ! READ FOURIER RING CORRELATIONS
@@ -223,8 +223,8 @@ contains
             case DEFAULT
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        update_cnt = nint(build_glob%a%get(iptcl,'update_cnt'))
-                        if( .not.build_glob%a%has_been_searched(iptcl) .or. update_cnt == 1 )then
+                        update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
+                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. update_cnt == 1 )then
                             allocate(strategy2D_greedy     :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
                             allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
@@ -242,8 +242,6 @@ contains
                 strategy2Dspec%iptcl      =  iptcl
                 strategy2Dspec%iptcl_map  =  cnt
                 strategy2Dspec%extr_bound =  extr_bound
-                strategy2Dspec%ppftcc     => pftcc
-                strategy2Dspec%pa         => build_glob%a
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif
@@ -280,7 +278,7 @@ contains
         DebugPrint ' strategy2D_matcher; completed alignment'
 
         ! OUTPUT ORIENTATIONS
-        call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%a, [params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
+        call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
         params_glob%oritab = params_glob%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES
@@ -348,7 +346,7 @@ contains
         logical   :: do_center
         real      :: xyz(3)
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%ncls,  eoarr=nint(build_glob%a%get_all('eo', [params_glob%fromp,params_glob%top])))
+        call pftcc%new(params_glob%ncls,  eoarr=nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         ! this is tro avoid excessive allocation, allocate what is the upper bound on the
@@ -368,9 +366,9 @@ contains
             pop_even = 0
             pop_odd  = 0
             if( params_glob%oritab /= '' )then
-                pop      = build_glob%a%get_pop(icls, 'class'      )
-                pop_even = build_glob%a%get_pop(icls, 'class', eo=0)
-                pop_odd  = build_glob%a%get_pop(icls, 'class', eo=1)
+                pop      = build_glob%spproj_field%get_pop(icls, 'class'      )
+                pop_even = build_glob%spproj_field%get_pop(icls, 'class', eo=0)
+                pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
                 ! prepare the references

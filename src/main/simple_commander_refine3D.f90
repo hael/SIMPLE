@@ -47,7 +47,7 @@ contains
         type(builder)    :: build
         integer :: npeaks
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        npeaks = min(10,build%e%find_npeaks(params%lp, params%moldiam))
+        npeaks = min(10,build%eulspace%find_npeaks(params%lp, params%moldiam))
         write(*,'(A,1X,I4)') '>>> NPEAKS:', npeaks
         ! end gracefully
         call simple_end('**** SIMPLE_NPEAKS NORMAL STOP ****')
@@ -110,10 +110,10 @@ contains
                 ! init volumes
                 call preprecvols()
                 if( trim(params%refine).eq.'tseries' )then
-                    call build%a%spiral
+                    call build%spproj_field%spiral
                 else
-                    call build%a%rnd_oris
-                    call build%a%zero_shifts
+                    call build%spproj_field%rnd_oris
+                    call build%spproj_field%zero_shifts
                 endif
                 params%vols(1) = 'startvol'//params%ext
                 nsamp = params%top - params%fromp + 1
@@ -132,11 +132,11 @@ contains
                 call gridprep%new(build%img, kbwin, [params%boxpd,params%boxpd,1])
                 do i=1,nsamp
                     call progress(i, nsamp)
-                    orientation = build%a%get_ori(sample(i) + params%fromp - 1)
+                    orientation = build%spproj_field%get_ori(sample(i) + params%fromp - 1)
                     ctfvars     = build%spproj%get_ctfparams(params%oritype, sample(i) + params%fromp - 1)
                     call read_img_and_norm( sample(i) + params%fromp - 1 )
                     call gridprep%prep(build%img, build%img_pad)
-                    call build%recvols(1)%insert_fplane(build%se, orientation, ctfvars, build%img_pad, pwght=1.0)
+                    call build%recvols(1)%insert_fplane(build%pgrpsyms, orientation, ctfvars, build%img_pad, pwght=1.0)
                 end do
                 deallocate(sample)
                 call norm_struct_facts()
@@ -168,7 +168,7 @@ contains
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 ) call build%a%clean_updatecnt
+        if( startit == 1 ) call build%spproj_field%clean_updatecnt
         converged  = .false.
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
@@ -189,7 +189,7 @@ contains
                 if( .not. params%l_distr_exec .and. params%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
-                    corr      = build%a%get_avg('corr')
+                    corr      = build%spproj_field%get_avg('corr')
                     if( i > 1 .and. corr <= corr_prev )then
                         params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
                     endif
@@ -218,7 +218,7 @@ contains
             if(alloc_stat.ne.0)call allocchk("In simple_commander_refine3D:: exec_check3D_conv", alloc_stat)
             maplp = 0.
             do istate=1,params%nstates
-                if( build%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state
+                if( build%spproj_field%get_pop( istate, 'state' ) == 0 )cycle ! empty state
                 params%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
                 if( file_exists(params%fsc) )then
                     build%fsc(istate,:) = file2rarr(params%fsc)

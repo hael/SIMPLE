@@ -32,7 +32,7 @@ contains
         ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         do s=1,params_glob%nstates
-            if( build_glob%a%get_pop(s, 'state') == 0 ) cycle ! empty state
+            if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( params_glob%l_distr_exec )then ! embarrasingly parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//&
@@ -43,7 +43,7 @@ contains
                 endif
                 params_glob%vols(s) = fbody//params_glob%ext
                 rho_name      = 'rho_'//fbody//params_glob%ext
-                call build_glob%recvol%rec( build_glob%spproj, build_glob%a, build_glob%se, s, part=params_glob%part)
+                call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, part=params_glob%part)
                 call build_glob%recvol%compress_exp
                 call build_glob%recvol%write(params_glob%vols(s), del_if_exists=.true.)
                 call build_glob%recvol%write_rho(trim(rho_name))
@@ -54,7 +54,7 @@ contains
                     allocate(fbody, source='recvol_state')
                 endif
                 params_glob%vols(s) = fbody//int2str_pad(s,2)//params_glob%ext
-                call build_glob%recvol%rec( build_glob%spproj, build_glob%a, build_glob%se, s)
+                call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s)
                 call build_glob%recvol%clip(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
             endif
@@ -73,13 +73,13 @@ contains
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         do s=1,params_glob%nstates
             DebugPrint  'processing state: ', s
-            if( build_glob%a%get_pop(s, 'state') == 0 ) cycle ! empty state
+            if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( present(fbody_in) )then
                 allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
             else
                 allocate(fbody, source='recvol_state')
             endif
-            call build_glob%eorecvol%eorec_distr( build_glob%spproj, build_glob%a, build_glob%se, s, fbody=fbody)
+            call build_glob%eorecvol%eorec_distr( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, fbody=fbody)
             deallocate(fbody)
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')

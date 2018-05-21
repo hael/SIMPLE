@@ -600,7 +600,7 @@ contains
         do imic = 1, ntot
             if( .not.mics_mask(imic) )cycle
             ! fetch micrograph
-            o_mic = build%a%get_ori(imic)
+            o_mic = build%spproj_field%get_ori(imic)
             call o_mic%getter('imgkind', imgkind)
             call o_mic%getter('intg', mic_name)
             call o_mic%getter('boxfile', boxfile_name)

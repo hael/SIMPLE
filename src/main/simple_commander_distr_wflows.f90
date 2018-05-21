@@ -396,11 +396,11 @@ contains
             params%extr_iter = params%startit - 1
         endif
         ! deal with eo partitioning
-        if( build%a%get_nevenodd() == 0 )then
+        if( build%spproj_field%get_nevenodd() == 0 )then
             if( params%tseries .eq. 'yes' )then
-                call build%a%partition_eo(tseries=.true.)
+                call build%spproj_field%partition_eo(tseries=.true.)
             else
-                call build%a%partition_eo
+                call build%spproj_field%partition_eo
             endif
             call build%spproj%write_segment_inside(params%oritype)
         endif
@@ -469,7 +469,7 @@ contains
                 integer               :: icls, state
                 if( params%dyncls.eq.'yes' )then
                     call build%spproj%read_segment('ptcl2D', params%projfile )
-                    call build%a%fill_empty_classes(params%ncls, fromtocls)
+                    call build%spproj_field%fill_empty_classes(params%ncls, fromtocls)
                     if( allocated(fromtocls) )then
                         ! updates refs
                         call img_cavg%new([params%box,params%box,1], params%smpd)
@@ -656,11 +656,11 @@ contains
         ! EO PARTITIONING
         DebugPrint ' In exec_refine3D_distr; begin partition_eo'
         if( params%eo .ne. 'no' )then
-            if( build%a%get_nevenodd() == 0 )then
+            if( build%spproj_field%get_nevenodd() == 0 )then
                 if( params%tseries .eq. 'yes' )then
-                    call build%a%partition_eo(tseries=.true.)
+                    call build%spproj_field%partition_eo(tseries=.true.)
                 else
-                    call build%a%partition_eo
+                    call build%spproj_field%partition_eo
                 endif
                 call build%spproj%write_segment_inside(params%oritype)
             endif
@@ -681,7 +681,7 @@ contains
                 if( params%refine .eq. 'snhc' )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
-                    corr      = build%a%get_avg('corr')
+                    corr      = build%spproj_field%get_avg('corr')
                     if( iter > 1 .and. corr <= corr_prev )then
                         params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
                     endif
@@ -727,7 +727,7 @@ contains
             ! rename volumes, postprocess & update job_descr
             do state = 1,params%nstates
                 str_state = int2str_pad(state,2)
-                if( build%a%get_pop( state, 'state' ) == 0 )then
+                if( build%spproj_field%get_pop( state, 'state' ) == 0 )then
                     ! cleanup for empty state
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )
@@ -844,11 +844,11 @@ contains
         call build%spproj%split_stk(params%nparts)
         ! eo partitioning
         if( params%eo .ne. 'no' )then
-            if( build%a%get_nevenodd() == 0 )then
+            if( build%spproj_field%get_nevenodd() == 0 )then
                 if( params%tseries .eq. 'yes' )then
-                    call build%a%partition_eo(tseries=.true.)
+                    call build%spproj_field%partition_eo(tseries=.true.)
                 else
-                    call build%a%partition_eo
+                    call build%spproj_field%partition_eo
                 endif
                 call build%spproj%write_segment_inside(params%oritype)
             endif

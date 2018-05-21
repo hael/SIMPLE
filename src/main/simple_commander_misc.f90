@@ -111,14 +111,14 @@ contains
             do irestart=1,NRESTARTS
                 cnt = cnt+1
                 call progress(cnt,ntot)
-                call shcc%new(params%nptcls, ncls, smat, build%a)
+                call shcc%new(params%nptcls, ncls, smat, build%spproj_field)
                 call shcc%shc(.false., params%label, sim)
-                call cvalid%new(build%a, ncls, params%label, smat)
+                call cvalid%new(build%spproj_field, ncls, params%label, smat)
                 ratio = cvalid%ratio_index()
                 avg_ratio = avg_ratio+ratio
                 if( ratio < min_ratio )then
                     min_ratio = ratio
-                    call build%a%write('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,params%nptcls])
+                    call build%spproj_field%write('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,params%nptcls])
                 endif
             end do
             validinds(ncls) = avg_ratio/real(NRESTARTS)
@@ -127,9 +127,9 @@ contains
         done = .false.
         do ncls=2,params%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call build%a%read('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,build%a%get_noris()])
+            call build%spproj_field%read('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,build%spproj_field%get_noris()])
             do icls=1,ncls
-                pop = build%a%get_pop(icls, params%label)
+                pop = build%spproj_field%get_pop(icls, params%label)
                 write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
             end do
             write(*,'(a)') '***************************************************'
@@ -293,9 +293,9 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        call shift_imgfile(params%stk, params%outstk, build%a, params%smpd, params%mul)
-        call build%a%zero_shifts
-        call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), build%spproj, build%a, [1,params%nptcls])
+        call shift_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, params%mul)
+        call build%spproj_field%zero_shifts
+        call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), build%spproj, build%spproj_field, [1,params%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
@@ -333,10 +333,10 @@ contains
         ! reconstruct & correlate volumes
         do i = 1, sym_peaks%get_noris()
             symaxis = sym_peaks%get_ori(i)
-            build%e = build%a ! here build%a are the reference orientations
-            call build%e%rot(symaxis)
+            build%eulspace = build%spproj_field ! here build%spproj_field are the reference orientations
+            call build%eulspace%rot(symaxis)
             ! symmetry
-            call rec_vol( build%se)
+            call rec_vol( build%pgrpsyms)
             call symvol%copy( build%vol )
             call symvol%write('sym_vol'//int2str_pad(i,2)//params%ext)
             ! c1
@@ -362,7 +362,7 @@ contains
             subroutine rec_vol(  se )
                 type(sym)    :: se
                 call build%build_rec_tbox(params)
-                call build%recvol%rec(build%spproj, build%e, se, 1)
+                call build%recvol%rec(build%spproj, build%eulspace, se, 1)
                 call build%recvol%clip(build%vol)
                 call build%vol%bp(params%hp, params%lp)
                 call build%vol%mask(params%msk, 'soft')
@@ -428,8 +428,8 @@ contains
         type(builder)    :: build
         call cline%set('oritype', 'cls3D')
         call build%init_params_and_build_general_tbox(cline,params)
-        call dsym_cylinder( build%a, build%vol)
-        call binwrite_oritab(params%outfile, build%spproj, build%a, [1,params%nptcls])
+        call dsym_cylinder( build%spproj_field, build%vol)
+        call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,params%nptcls])
         call build%vol%write(params%outvol)
     end subroutine exec_dsymsrch
 

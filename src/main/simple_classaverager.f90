@@ -83,7 +83,7 @@ contains
                 l_is_class = .false.
                 ! possible reduction of # projection directions used
                 ! for the class average representation
-                ncls = min(NSPACE_BALANCE,params_glob%nspace)
+                ncls = min(NSPACE_REDUCED,params_glob%nspace)
             case DEFAULT
                 call simple_stop('unsupported which flag; simple_classaverager :: new')
         end select

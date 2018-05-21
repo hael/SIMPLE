@@ -48,23 +48,23 @@ contains
         endif
         if( params_glob%l_frac_update )then
             ! fractional particle update
-            updatecnts     = build_glob%a%get_all('updatecnt')
+            updatecnts     = build_glob%spproj_field%get_all('updatecnt')
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-            self%corr      = build_glob%a%get_avg('corr',      mask=mask)
-            self%dist_inpl = build_glob%a%get_avg('dist_inpl', mask=mask)
-            self%frac      = build_glob%a%get_avg('frac',      mask=mask)
-            self%bfac      = build_glob%a%get_avg('bfac',      mask=mask)
-            self%mi_joint  = build_glob%a%get_avg('mi_joint',  mask=mask)
-            self%mi_inpl   = build_glob%a%get_avg('mi_inpl',   mask=mask)
-            self%mi_class  = build_glob%a%get_avg('mi_class',  mask=mask)
+            self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
+            self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
+            self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
+            self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
+            self%mi_joint  = build_glob%spproj_field%get_avg('mi_joint',  mask=mask)
+            self%mi_inpl   = build_glob%spproj_field%get_avg('mi_inpl',   mask=mask)
+            self%mi_class  = build_glob%spproj_field%get_avg('mi_class',  mask=mask)
         else
-            self%corr      = build_glob%a%get_avg('corr')
-            self%dist_inpl = build_glob%a%get_avg('dist_inpl')
-            self%frac      = build_glob%a%get_avg('frac')
-            self%bfac      = build_glob%a%get_avg('bfac')
-            self%mi_joint  = build_glob%a%get_avg('mi_joint')
-            self%mi_class  = build_glob%a%get_avg('mi_class')
-            self%mi_inpl   = build_glob%a%get_avg('mi_inpl')
+            self%corr      = build_glob%spproj_field%get_avg('corr')
+            self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl')
+            self%frac      = build_glob%spproj_field%get_avg('frac')
+            self%bfac      = build_glob%spproj_field%get_avg('bfac')
+            self%mi_joint  = build_glob%spproj_field%get_avg('mi_joint')
+            self%mi_class  = build_glob%spproj_field%get_avg('mi_class')
+            self%mi_inpl   = build_glob%spproj_field%get_avg('mi_inpl')
         endif
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> CLASS    DISTRIBUTION OVERLAP:     ', self%mi_class
@@ -117,33 +117,33 @@ contains
         real    :: min_state_mi_joint
         logical :: converged
         integer :: iptcl, istate
-        if( build_glob%a%isthere('updatecnt') )then
+        if( build_glob%spproj_field%isthere('updatecnt') )then
             ! fractional particle update
-            updatecnts     = build_glob%a%get_all('updatecnt')
+            updatecnts     = build_glob%spproj_field%get_all('updatecnt')
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-            self%corr      = build_glob%a%get_avg('corr',      mask=mask)
-            self%dist      = build_glob%a%get_avg('dist',      mask=mask)
-            self%dist_inpl = build_glob%a%get_avg('dist_inpl', mask=mask)
-            self%npeaks    = build_glob%a%get_avg('npeaks',    mask=mask)
-            self%frac      = build_glob%a%get_avg('frac',      mask=mask)
-            self%mi_joint  = build_glob%a%get_avg('mi_joint',  mask=mask)
-            self%mi_proj   = build_glob%a%get_avg('mi_proj',   mask=mask)
-            self%mi_inpl   = build_glob%a%get_avg('mi_inpl',   mask=mask)
-            self%mi_state  = build_glob%a%get_avg('mi_state',  mask=mask)
-            self%sdev      = build_glob%a%get_avg('sdev',      mask=mask)
-            self%bfac      = build_glob%a%get_avg('bfac',      mask=mask)
+            self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
+            self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
+            self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
+            self%npeaks    = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
+            self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
+            self%mi_joint  = build_glob%spproj_field%get_avg('mi_joint',  mask=mask)
+            self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
+            self%mi_inpl   = build_glob%spproj_field%get_avg('mi_inpl',   mask=mask)
+            self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+            self%sdev      = build_glob%spproj_field%get_avg('sdev',      mask=mask)
+            self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
         else
-            self%corr      = build_glob%a%get_avg('corr')
-            self%dist      = build_glob%a%get_avg('dist')
-            self%dist_inpl = build_glob%a%get_avg('dist_inpl')
-            self%npeaks    = build_glob%a%get_avg('npeaks')
-            self%frac      = build_glob%a%get_avg('frac')
-            self%mi_joint  = build_glob%a%get_avg('mi_joint')
-            self%mi_proj   = build_glob%a%get_avg('mi_proj')
-            self%mi_inpl   = build_glob%a%get_avg('mi_inpl')
-            self%mi_state  = build_glob%a%get_avg('mi_state')
-            self%sdev      = build_glob%a%get_avg('sdev')
-            self%bfac      = build_glob%a%get_avg('bfac')
+            self%corr      = build_glob%spproj_field%get_avg('corr')
+            self%dist      = build_glob%spproj_field%get_avg('dist')
+            self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl')
+            self%npeaks    = build_glob%spproj_field%get_avg('npeaks')
+            self%frac      = build_glob%spproj_field%get_avg('frac')
+            self%mi_joint  = build_glob%spproj_field%get_avg('mi_joint')
+            self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj')
+            self%mi_inpl   = build_glob%spproj_field%get_avg('mi_inpl')
+            self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
+            self%sdev      = build_glob%spproj_field%get_avg('sdev')
+            self%bfac      = build_glob%spproj_field%get_avg('bfac')
         endif
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
@@ -185,13 +185,13 @@ contains
             allocate( state_mi_joint(params_glob%nstates), statepops(params_glob%nstates) )
             state_mi_joint = 0.
             statepops      = 0.
-            do iptcl=1,build_glob%a%get_noris()
-                istate = nint(build_glob%a%get(iptcl,'state'))
+            do iptcl=1,build_glob%spproj_field%get_noris()
+                istate = nint(build_glob%spproj_field%get(iptcl,'state'))
                 if( istate==0 )cycle
                 ! it doesn't make sense to include the state overlap here
                 ! as the overall state overlap is already provided above
-                state_mi_joint(istate) = state_mi_joint(istate) + build_glob%a%get(iptcl,'mi_proj')
-                state_mi_joint(istate) = state_mi_joint(istate) + build_glob%a%get(iptcl,'mi_inpl')
+                state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_proj')
+                state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_inpl')
                 ! 2.0 because we include two mi-values
                 statepops(istate)      = statepops(istate) + 2.0
             end do
@@ -226,24 +226,24 @@ contains
         real, allocatable :: statepops(:)
         logical           :: converged
         integer           :: iptcl, istate
-        self%frac      = build_glob%a%get_avg('frac')
-        self%mi_state  = build_glob%a%get_avg('mi_state')
+        self%frac      = build_glob%spproj_field%get_avg('frac')
+        self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
         write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         allocate( statepops(params_glob%nstates) )
         statepops = 0.
-        do iptcl=1,build_glob%a%get_noris()
-            istate = nint(build_glob%a%get(iptcl,'state'))
+        do iptcl=1,build_glob%spproj_field%get_noris()
+            istate = nint(build_glob%spproj_field%get(iptcl,'state'))
             if( istate==0 )cycle
             statepops(istate) = statepops(istate) + 1.0
         end do
-        if( build_glob%a%isthere('bfac') )then
-            self%bfac = build_glob%a%get_avg('bfac')
+        if( build_glob%spproj_field%isthere('bfac') )then
+            self%bfac = build_glob%spproj_field%get_avg('bfac')
             write(*,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR: ', self%bfac
         endif
-        self%corr = build_glob%a%get_avg('corr')
+        self%corr = build_glob%spproj_field%get_avg('corr')
         write(*,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
         ! print the overlaps and pops for the different states
         do istate=1,params_glob%nstates

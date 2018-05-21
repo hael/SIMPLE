@@ -61,15 +61,15 @@ contains
             call build%vol%mask(params%msk, 'soft')
             call build%vol%fft()
             call build%vol%expand_cmat(params%alpha)
-            build%ref_imgs(1,:) = reproject(build%vol, build%e)
+            build%ref_imgs(1,:) = reproject(build%vol, build%eulspace)
             if( params%part == 1 )then
                 ! writes projections images and orientations for subsequent reconstruction
                 ! only in local and distributed (part=1) modes
-                noris = build%e%get_noris()
+                noris = build%eulspace%get_noris()
                 do i=1,noris
                     call build%ref_imgs(1,i)%write(SYMPROJSTK, i)
                 enddo
-                call build%e%write(SYMPROJTAB, [1,noris])
+                call build%eulspace%write(SYMPROJTAB, [1,noris])
             endif
             ! expand over symmetry group
             cnt = 0
@@ -93,13 +93,13 @@ contains
         if( params%refine.eq.'yes' )then
             ! fetch orientation to refine
             orientation = build%spproj%os_cls3D%get_ori(params%part)
-            ! build%a contained the coarse solutions, needs to be rebuilt for common line toolbox
-            call build%a%new(params%nptcls)
-            call build%a%spiral
+            ! build%spproj_field contained the coarse solutions, needs to be rebuilt for common line toolbox
+            call build%spproj_field%new(params%nptcls)
+            call build%spproj_field%spiral
             call build%build_comlin_tbox(params) ! objects for common lines based alignment built
             ! fetch reference orientations
-            call build%e%new(params%nspace)
-            call build%e%read(SYMPROJTAB, [1,params%nspace])
+            call build%eulspace%new(params%nspace)
+            call build%eulspace%read(SYMPROJTAB, [1,params%nspace])
             do i=1,params%nptcls
                 call build%ref_imgs(1,i)%new([params%box, params%box, 1], params%smpd)
                 call build%ref_imgs(1,i)%read(SYMPROJSTK, i)

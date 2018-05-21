@@ -97,7 +97,7 @@ contains
                         fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                     endif
                     fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
-                    if( build_glob%a%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
+                    if( build_glob%spproj_field%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
                 if( params_glob%oritab .eq. '' )all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
@@ -126,7 +126,7 @@ contains
                     end do
                     loc    = maxloc(mapres) ! worst resolved
                     ! get median updatecnt
-                    if( build_glob%a%median('updatecnt') > 1.0 )then
+                    if( build_glob%spproj_field%median('updatecnt') > 1.0 )then
                         lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                     else
                         lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
@@ -142,8 +142,8 @@ contains
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
                     params_glob%kfromto(2)     = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
-                else if( build_glob%a%isthere(params_glob%fromp,'lp') )then
-                    params_glob%kfromto(2)     = calc_fourier_index(build_glob%a%get(params_glob%fromp,'lp'), params_glob%boxmatch, params_glob%smpd)
+                else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
+                    params_glob%kfromto(2)     = calc_fourier_index(build_glob%spproj_field%get(params_glob%fromp,'lp'), params_glob%boxmatch, params_glob%smpd)
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_strategy2D3D_common'
@@ -165,7 +165,7 @@ contains
                 ! re-set the low-pass limit
                 params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%boxmatch, params_glob%smpd)
                 params_glob%lp_dyn = params_glob%lp
-                call build_glob%a%set_all2single('lp',params_glob%lp)
+                call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case('no')
                 ! set Fourier index range
                 params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
@@ -174,7 +174,7 @@ contains
                     params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
                 params_glob%lp_dyn = params_glob%lp
-                call build_glob%a%set_all2single('lp',params_glob%lp)
+                call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case DEFAULT
                 call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
         end select
@@ -195,7 +195,7 @@ contains
         if( cline%defined('lp') )then
             params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
             params_glob%lp_dyn     = params_glob%lp
-            call build_glob%a%set_all2single('lp',params_glob%lp)
+            call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
                 lplim = build_glob%projfrcs%estimate_lp_for_align()
@@ -213,7 +213,7 @@ contains
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%boxmatch, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
             params_glob%lp_dyn = lplim
-            call build_glob%a%set_all2single('lp',lplim)
+            call build_glob%spproj_field%set_all2single('lp',lplim)
         endif
         DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
@@ -381,8 +381,8 @@ contains
         real            :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz()), x, y
         integer         :: ifrc
         ! shift
-        x = build_glob%a%get(iptcl, 'x')
-        y = build_glob%a%get(iptcl, 'y')
+        x = build_glob%spproj_field%get(iptcl, 'x')
+        y = build_glob%spproj_field%get(iptcl, 'y')
         ! CTF parameters
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         ! normalise
@@ -392,13 +392,13 @@ contains
         ! shell normalization & filter
         if( is3D )then
             if( trim(params_glob%eo) .ne. 'no' )then
-                ifrc = build_glob%e_bal%find_closest_proj( build_glob%a%get_ori(iptcl) )
+                ifrc = build_glob%eulspace_red%find_closest_proj( build_glob%spproj_field%get_ori(iptcl) )
             else
                 ifrc = 0 ! turns off the matched filter
             endif
         else
             if( trim(params_glob%match_filt) .eq. 'yes' )then
-                ifrc = nint(build_glob%a%get(iptcl,'class'))
+                ifrc = nint(build_glob%spproj_field%get(iptcl,'class'))
             else
                 ifrc = 0 ! turns off the matched filter
             endif
@@ -477,7 +477,7 @@ contains
                     ! apply shift and update the corresponding class parameters
                     call img_in%fft()
                     call img_in%shift2Dserial(xyz(1:2))
-                    call build_glob%a%add_shift2class(icls, -xyz(1:2))
+                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2))
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
             endif
@@ -512,7 +512,7 @@ contains
         integer    :: icls, pop
         real       :: frc05, frc0143
         call build_glob%spproj%os_cls2D%new(params_glob%ncls)
-        call build_glob%a%get_pops(pops, 'class', maxn=params_glob%ncls)
+        call build_glob%spproj_field%get_pops(pops, 'class', maxn=params_glob%ncls)
         do icls=1,params_glob%ncls
             call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)
             pop = pops(icls)
@@ -520,8 +520,8 @@ contains
             call build_glob%spproj%os_cls2D%set(icls, 'pop',   real(pop))
             call build_glob%spproj%os_cls2D%set(icls, 'res',   frc0143)
             if( pop > 1 )then
-                call build_glob%spproj%os_cls2D%set(icls, 'corr',  build_glob%a%get_avg('corr', class=icls))
-                call build_glob%spproj%os_cls2D%set(icls, 'w',     build_glob%a%get_avg('w',    class=icls))
+                call build_glob%spproj%os_cls2D%set(icls, 'corr',  build_glob%spproj_field%get_avg('corr', class=icls))
+                call build_glob%spproj%os_cls2D%set(icls, 'w',     build_glob%spproj_field%get_avg('w',    class=icls))
             else
                 call build_glob%spproj%os_cls2D%set(icls, 'corr', -1.0)
                 call build_glob%spproj%os_cls2D%set(icls, 'w',     0.0)
@@ -539,7 +539,7 @@ contains
         select case(params_glob%eo)
             case('yes','aniso')
                 do istate = 1, params_glob%nstates
-                    if( build_glob%a%get_pop(istate, 'state') > 0)then
+                    if( build_glob%spproj_field%get_pop(istate, 'state') > 0)then
                         call build_glob%eorecvols(istate)%new( build_glob%spproj)
                         call build_glob%eorecvols(istate)%reset_all
                         if( params_glob%l_frac_update )then
@@ -551,7 +551,7 @@ contains
                 end do
             case DEFAULT
                 do istate = 1, params_glob%nstates
-                    if( build_glob%a%get_pop(istate, 'state') > 0)then
+                    if( build_glob%spproj_field%get_pop(istate, 'state') > 0)then
                         call build_glob%recvols(istate)%new([params_glob%boxpd, params_glob%boxpd, params_glob%boxpd], params_glob%smpd)
                         call build_glob%recvols(istate)%alloc_rho( build_glob%spproj)
                         call build_glob%recvols(istate)%reset
@@ -643,7 +643,7 @@ contains
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)]) ! performs shift
         ! map back to particle oritentations
-        if( cline%defined('oritab') ) call build_glob%a%map3dshift22d(-xyz(:), state=s)
+        if( cline%defined('oritab') ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
     end subroutine cenrefvol_and_mapshifts2ptcls
 
     !>  \brief  prepares one volume for references extraction
@@ -721,7 +721,7 @@ contains
         character(len=STDLEN) :: pprocvol
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         do s=1,params_glob%nstates
-            if( build_glob%a%get_pop(s, 'state') == 0 )then
+            if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
                 ! empty space
                 cycle
             endif
@@ -778,7 +778,7 @@ contains
         res05s   = 0.
         ! cycle through states
         do s=1,params_glob%nstates
-            if( build_glob%a%get_pop(s, 'state') == 0 )then
+            if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
                 ! empty state
                 if( present(which_iter) ) build_glob%fsc(s,:) = 0.
                 cycle
@@ -799,7 +799,7 @@ contains
                 call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), params_glob%vols_odd(s), resmskname, find4eoavg)
                 call gen_projection_frcs(cline,  params_glob%vols_even(s), params_glob%vols_odd(s), resmskname, s, build_glob%projfrcs)
                 call build_glob%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
-                call gen_anisotropic_optlp(build_glob%vol2, build_glob%projfrcs, build_glob%e_bal, s, params_glob%pgrp, params_glob%hpind_fsc, params_glob%l_phaseplate)
+                call gen_anisotropic_optlp(build_glob%vol2, build_glob%projfrcs, build_glob%eulspace_red, s, params_glob%pgrp, params_glob%hpind_fsc, params_glob%l_phaseplate)
                 call build_glob%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//params_glob%ext)
                 call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
@@ -864,7 +864,7 @@ contains
         call prepeovol(build_glob%vol)
         call prepeovol(build_glob%vol2)
         ! create e_space
-        call e_space%new(NSPACE_BALANCE)
+        call e_space%new(NSPACE_REDUCED)
         call e_space%spiral(params_glob%nsym, params_glob%eullims)
         ! generate even/odd projections
         even_imgs = reproject(build_glob%vol,  e_space)
@@ -872,7 +872,7 @@ contains
         ! calculate FRCs and fill-in projfrcs object
         allocate(frc(even_imgs(1)%get_filtsz()))
         !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)
-        do iproj=1,NSPACE_BALANCE
+        do iproj=1,NSPACE_REDUCED
             call even_imgs(iproj)%fft()
             call odd_imgs(iproj)%fft()
             call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)

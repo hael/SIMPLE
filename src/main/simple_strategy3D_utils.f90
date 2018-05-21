@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! singleton class s3D
 use simple_strategy3D_srch,  only: strategy3D_srch
 use simple_builder,          only: build_glob
+use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 contains
@@ -68,17 +69,17 @@ contains
         else
             best_loc = maxloc(corrs)
             ! reweighting according to angular distance to best peak
-            ang_lim = deg2rad( build_glob%se%srchrange_theta()/2. )
+            ang_lim = deg2rad( build_glob%pgrpsyms%srchrange_theta()/2. )
             o_best  = s3D%o_peaks(s%iptcl)%get_ori(best_loc(1))
             do ipeak = 1,s%npeaks
                 if( ipeak == best_loc(1) )then
                     ang_weights(ipeak) = 1.0
                     cycle
                 endif
-                if( trim(build_glob%se%get_pgrp()).eq.'c1' )then
+                if( trim(build_glob%pgrpsyms%get_pgrp()).eq.'c1' )then
                     ang_dist = s3D%o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
                 else
-                    call build_glob%se%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
+                    call build_glob%pgrpsyms%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
                     ang_dist = deg2rad( ang_dist )
                 endif
                 if( ang_dist > ang_lim )then
@@ -147,7 +148,7 @@ contains
         real,                   intent(in)    :: ws(s%npeaks)
         integer :: ipeak, cnt, ref, roind
         real    :: shvec(2), bfacs(s%npeaks), bfac
-        if( s%pftcc_ptr%objfun_is_ccres() )then
+        if( pftcc_glob%objfun_is_ccres() )then
             bfacs = 0.
             do ipeak = 1, s%npeaks
                 if( ws(ipeak) > TINY .or. s%npeaks == 1 )then
@@ -155,15 +156,15 @@ contains
                     ref   = s3D%proj_space_inds(s%iptcl_map, cnt)
                     shvec = 0.
                     if( s%doshift )shvec = s3D%proj_space_shift(s%iptcl_map, ref, 1:2)
-                    roind        = s%pftcc_ptr%get_roind(360. - s3D%proj_space_euls(s%iptcl_map, ref, 3))
-                    bfacs(ipeak) = s%pftcc_ptr%fit_bfac(ref, s%iptcl, roind, shvec)
+                    roind        = pftcc_glob%get_roind(360. - s3D%proj_space_euls(s%iptcl_map, ref, 3))
+                    bfacs(ipeak) = pftcc_glob%fit_bfac(ref, s%iptcl, roind, shvec)
                 else
                     bfacs(ipeak) = 0.
                 endif
                 call s3D%o_peaks(s%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
             enddo
             bfac = sum(ws * bfacs, mask=(ws>TINY))
-            call build_glob%a%set(s%iptcl, 'bfac',  bfac )
+            call build_glob%spproj_field%set(s%iptcl, 'bfac',  bfac )
         endif
     end subroutine fit_bfactors
 
@@ -177,14 +178,14 @@ contains
         type(ori)  :: osym
         type(oris) :: sym_os
         ang_sdev = 0.
-        if( trim(build_glob%se%get_pgrp()).eq.'c1' )then
+        if( trim(build_glob%pgrpsyms%get_pgrp()).eq.'c1' )then
             ang_sdev = s3D%o_peaks(s%iptcl)%ang_sdev(s%nstates, s%npeaks)
         else
             if( s%npeaks > 2 )then
                 sym_os = s3D%o_peaks(s%iptcl)
                 do ipeak = 1, s%npeaks
                     if( ipeak == best_loc(1) )cycle
-                    call build_glob%se%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(best_loc(1)),&
+                    call build_glob%pgrpsyms%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(best_loc(1)),&
                         &s3D%o_peaks(s%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
                     call sym_os%set_ori(ipeak, osym)
                 enddo
@@ -199,7 +200,7 @@ contains
         real,                   intent(in)    :: euldist
         integer :: roind
         real    :: mi_proj, mi_inpl, mi_joint
-        roind    = s%pftcc_ptr%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
+        roind    = pftcc_glob%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_joint = 0.
@@ -212,10 +213,10 @@ contains
             mi_joint = mi_joint + 1.
         endif
         mi_joint = mi_joint/2.
-        call build_glob%a%set(s%iptcl, 'mi_proj',   mi_proj)
-        call build_glob%a%set(s%iptcl, 'mi_inpl',   mi_inpl)
-        call build_glob%a%set(s%iptcl, 'mi_state',  1.)
-        call build_glob%a%set(s%iptcl, 'mi_joint',  mi_joint)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_proj',   mi_proj)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_inpl',   mi_inpl)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_state',  1.)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_joint',  mi_joint)
     end subroutine convergence_stats_single
 
     subroutine convergence_stats_multi( s, best_loc, euldist )
@@ -224,7 +225,7 @@ contains
         real,                   intent(in)    :: euldist
         integer :: roind, state
         real    :: mi_proj, mi_inpl, mi_joint, mi_state
-        roind    = s%pftcc_ptr%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
+        roind    = pftcc_glob%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_joint = 0.
@@ -248,10 +249,10 @@ contains
         endif
         mi_joint = mi_joint/3.
         ! set the overlaps
-        call build_glob%a%set(s%iptcl, 'mi_proj',   mi_proj)
-        call build_glob%a%set(s%iptcl, 'mi_inpl',   mi_inpl)
-        call build_glob%a%set(s%iptcl, 'mi_state',  mi_state)
-        call build_glob%a%set(s%iptcl, 'mi_joint',  mi_joint)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_proj',   mi_proj)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_inpl',   mi_inpl)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_state',  mi_state)
+        call build_glob%spproj_field%set(s%iptcl, 'mi_joint',  mi_joint)
     end subroutine convergence_stats_multi
 
 end module simple_strategy3D_utils

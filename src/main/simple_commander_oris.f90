@@ -58,9 +58,9 @@ contains
         real                 :: avgd, sdevd, maxd, mind
         integer, allocatable :: clsarr(:)
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        call cluster_shc_oris(build%a, params%ncls)
+        call cluster_shc_oris(build%spproj_field, params%ncls)
         ! calculate distance statistics
-        call build%a%cluster_diststat(avgd, sdevd, maxd, mind)
+        call build%spproj_field%cluster_diststat(avgd, sdevd, maxd, mind)
         write(*,'(a,1x,f15.6)') 'AVG      GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(avgd)
         write(*,'(a,1x,f15.6)') 'AVG SDEV GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(sdevd)
         write(*,'(a,1x,f15.6)') 'AVG MAX  GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(maxd)
@@ -68,11 +68,11 @@ contains
         ! generate the class documents
         numlen = len(int2str(params%ncls))
         do icls=1,params%ncls
-            call build%a%get_pinds(icls, 'class', clsarr)
+            call build%spproj_field%get_pinds(icls, 'class', clsarr)
             if( allocated(clsarr) )then
                 call os_class%new(size(clsarr))
                 do iptcl=1,size(clsarr)
-                    call os_class%set_ori(iptcl, build%a%get_ori(clsarr(iptcl)))
+                    call os_class%set_ori(iptcl, build%spproj_field%get_ori(clsarr(iptcl)))
                 end do
                 call os_class%write('oris_class'//int2str_pad(icls,numlen)//trim(TXT_EXT), [1,size(clsarr)])
                 deallocate(clsarr)
@@ -97,35 +97,35 @@ contains
         if( cline%defined('ncls') )then
             os_even = oris(params%ncls)
             call os_even%spiral(params%nsym, params%eullims)
-            call build%a%new(params%nptcls)
+            call build%spproj_field%new(params%nptcls)
             do i=1,params%nptcls
                 class = irnd_uni(params%ncls)
                 orientation = os_even%get_ori(class)
-                call build%a%set_ori(i, orientation)
+                call build%spproj_field%set_ori(i, orientation)
                 e3 = ran3()*2.*params%angerr-params%angerr
                 x  = ran3()*2.0*params%sherr-params%sherr
                 y  = ran3()*2.0*params%sherr-params%sherr
-                call build%a%set(i, 'x', x)
-                call build%a%set(i, 'y', y)
-                call build%a%e3set(i, e3)
-                call build%a%set(i, 'class', real(class))
+                call build%spproj_field%set(i, 'x', x)
+                call build%spproj_field%set(i, 'y', y)
+                call build%spproj_field%e3set(i, e3)
+                call build%spproj_field%set(i, 'class', real(class))
             end do
         else if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
-                call build%a%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
+                call build%spproj_field%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
             endif
-            call build%a%rnd_inpls(params%sherr)
+            call build%spproj_field%rnd_inpls(params%sherr)
         else if( params%even .eq. 'yes' )then
-            call build%a%spiral(params%nsym, params%eullims)
-            call build%a%rnd_inpls(params%sherr)
+            call build%spproj_field%spiral(params%nsym, params%eullims)
+            call build%spproj_field%rnd_inpls(params%sherr)
         else
-            call build%a%rnd_oris(params%sherr)
+            call build%spproj_field%rnd_oris(params%sherr)
             if( params%doprint .eq. 'yes' )then
-                call build%a%print_matrices
+                call build%spproj_field%print_matrices
             endif
         endif
-        if( params%nstates > 1 ) call build%a%rnd_states(params%nstates)
-        call binwrite_oritab(params%outfile, build%spproj, build%a, [1,build%a%get_noris()])
+        if( params%nstates > 1 ) call build%spproj_field%rnd_states(params%nstates)
+        call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_ORIS NORMAL STOP ****')
     end subroutine exec_make_oris
@@ -140,8 +140,8 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( params%errify .eq. 'yes' )then
             ! introduce error in input orientations
-            call build%a%introd_alig_err(params%angerr, params%sherr)
-            if( params%ctf .ne. 'no' ) call build%a%introd_ctf_err(params%dferr)
+            call build%spproj_field%introd_alig_err(params%angerr, params%sherr)
+            if( params%ctf .ne. 'no' ) call build%spproj_field%introd_ctf_err(params%dferr)
         endif
         if( cline%defined('e1') .or.&
             cline%defined('e2') .or.&
@@ -150,27 +150,27 @@ contains
             call orientation%new
             call orientation%set_euler([params%e1,params%e2,params%e3])
             if( cline%defined('state') )then
-                do i=1,build%a%get_noris()
-                    s = nint(build%a%get(i, 'state'))
+                do i=1,build%spproj_field%get_noris()
+                    s = nint(build%spproj_field%get(i, 'state'))
                     if( s == params%state )then
-                        call build%a%rot(i,orientation)
+                        call build%spproj_field%rot(i,orientation)
                     endif
                 end do
             else
-                call build%a%rot(orientation)
+                call build%spproj_field%rot(orientation)
             endif
         endif
-        if( cline%defined('mul') )       call build%a%mul_shifts(params%mul)
-        if( params%zero .eq. 'yes' )          call build%a%zero_shifts
-        if( cline%defined('ndiscrete') ) call build%a%discretize(params%ndiscrete)
-        if( params%symrnd .eq. 'yes' )        call build%se%symrandomize(build%a)
-        if( cline%defined('nstates') )   call build%a%rnd_states(params%nstates)
+        if( cline%defined('mul') )       call build%spproj_field%mul_shifts(params%mul)
+        if( params%zero .eq. 'yes' )          call build%spproj_field%zero_shifts
+        if( cline%defined('ndiscrete') ) call build%spproj_field%discretize(params%ndiscrete)
+        if( params%symrnd .eq. 'yes' )        call build%pgrpsyms%symrandomize(build%spproj_field)
+        if( cline%defined('nstates') )   call build%spproj_field%rnd_states(params%nstates)
         if( cline%defined('mirr') )then
             select case(trim(params%mirr))
                 case('2d')
-                    call build%a%mirror2d()
+                    call build%spproj_field%mirror2d()
                 case('3d')
-                    call build%a%mirror3d()
+                    call build%spproj_field%mirror3d()
                 case('no')
                     ! nothing to do
                 case DEFAULT
@@ -178,7 +178,7 @@ contains
                     stop 'unsupported mirr flag; commander_oris :: exec_orisops'
             end select
         endif
-        call binwrite_oritab(params%outfile, build%spproj, build%a, [1,build%a%get_noris()])
+        call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
 
@@ -211,7 +211,7 @@ contains
             endif
             call spproj%new_seg_with_ptr(params%nptcls, params%oritype, o)
             call binread_oritab(params%oritab2, spproj, o, [1,params%nptcls])
-            call build%a%diststat(o, sumd, avgd, sdevd, mind, maxd)
+            call build%spproj_field%diststat(o, sumd, avgd, sdevd, mind, maxd)
             write(*,'(a,1x,f15.6)') 'SUM OF ANGULAR DISTANCE BETWEEN ORIENTATIONS  :', sumd
             write(*,'(a,1x,f15.6)') 'AVERAGE ANGULAR DISTANCE BETWEEN ORIENTATIONS :', avgd
             write(*,'(a,1x,f15.6)') 'STANDARD DEVIATION OF ANGULAR DISTANCES       :', sdevd
@@ -219,16 +219,16 @@ contains
             write(*,'(a,1x,f15.6)') 'MAXIMUM ANGULAR DISTANCE                      :', maxd
         else if( cline%defined('oritab') )then
             if( params%ctfstats .eq. 'yes' )then
-                call build%a%stats('ctfres', avgd, sdevd, vard, err )
-                call build%a%minmax('ctfres', mind, maxd)
+                call build%spproj_field%stats('ctfres', avgd, sdevd, vard, err )
+                call build%spproj_field%minmax('ctfres', mind, maxd)
                 write(*,'(a,1x,f8.2)') 'AVERAGE CTF RESOLUTION               :', avgd
                 write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF CTF RESOLUTION :', sdevd
                 write(*,'(a,1x,f8.2)') 'MINIMUM CTF RESOLUTION (BEST)        :', mind
                 write(*,'(a,1x,f8.2)') 'MAXIMUM CTF RESOLUTION (WORST)       :', maxd
-                call build%a%stats('dfx', avgd, sdevd, vard, err )
-                call build%a%minmax('dfx', mind, maxd)
-                call build%a%stats('dfy', avgd2, sdevd2, vard2, err )
-                call build%a%minmax('dfy', mind2, maxd2)
+                call build%spproj_field%stats('dfx', avgd, sdevd, vard, err )
+                call build%spproj_field%minmax('dfx', mind, maxd)
+                call build%spproj_field%stats('dfy', avgd2, sdevd2, vard2, err )
+                call build%spproj_field%minmax('dfy', mind2, maxd2)
                 write(*,'(a,1x,f8.2)') 'AVERAGE DF                           :', (avgd+avgd2)/2.
                 write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF DF             :', (sdevd+sdevd2)/2.
                 write(*,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
@@ -236,23 +236,23 @@ contains
                 goto 999
             endif
             if( params%classtats .eq. 'yes' )then
-                noris = build%a%get_noris()
-                ncls  = build%a%get_n('class')
+                noris = build%spproj_field%get_noris()
+                ncls  = build%spproj_field%get_n('class')
                 ! setup weights
                 if( params%weights2D.eq.'yes' )then
                     if( noris <= SPECWMINPOP )then
-                        call build%a%set_all2single('w', 1.0)
+                        call build%spproj_field%set_all2single('w', 1.0)
                     else
                         ! frac is one by default in prime2D (no option to set frac)
                         ! so spectral weighting is done over all images
-                        call build%a%calc_spectral_weights(1.0)
+                        call build%spproj_field%calc_spectral_weights(1.0)
                     endif
                 else
                     ! defaults to unitary weights
-                    call build%a%set_all2single('w', 1.0)
+                    call build%spproj_field%set_all2single('w', 1.0)
                 endif
                 ! generate class stats
-                call build%a%get_pops(pops, 'class', consider_w=.true.)
+                call build%spproj_field%get_pops(pops, 'class', consider_w=.true.)
                 popmin         = minval(pops)
                 popmax         = maxval(pops)
                 popmed         = median(real(pops))
@@ -276,19 +276,19 @@ contains
             endif
             if( params%projstats .eq. 'yes' )then
                 if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
-                noris = build%a%get_noris()
+                noris = build%spproj_field%get_noris()
                 ! setup weights
                 if( params%weights3D.eq.'yes' )then
                     if( noris <= SPECWMINPOP )then
-                        call build%a%calc_hard_weights(params%frac)
+                        call build%spproj_field%calc_hard_weights(params%frac)
                     else
-                        call build%a%calc_spectral_weights(params%frac)
+                        call build%spproj_field%calc_spectral_weights(params%frac)
                     endif
                 else
-                    call build%a%calc_hard_weights(params%frac)
+                    call build%spproj_field%calc_hard_weights(params%frac)
                 endif
                 ! generate population stats
-                call build%a%get_pops(tmp, 'proj', consider_w=.true.)
+                call build%spproj_field%get_pops(tmp, 'proj', consider_w=.true.)
                 nprojs         = size(tmp)
                 pops           = pack(tmp, tmp > 0.5)                   !! realloc warning
                 frac_populated = real(size(pops))/real(params%nspace)
@@ -303,26 +303,26 @@ contains
                 write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
-                ! produce a histogram based on clustering into NSPACE_BALANCE even directions
+                ! produce a histogram based on clustering into NSPACE_REDUCED even directions
                 ! first, generate a mask based on state flag and w
-                ptcl_mask = build%a%included(consider_w=.true.)
-                allocate(clustering(noris), clustszs(NSPACE_BALANCE))
-                call osubspace%new(NSPACE_BALANCE)
+                ptcl_mask = build%spproj_field%included(consider_w=.true.)
+                allocate(clustering(noris), clustszs(NSPACE_REDUCED))
+                call osubspace%new(NSPACE_REDUCED)
                 call osubspace%spiral(params%nsym, params%eullims)
-                call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_BALANCE])
-                do iptcl=1,build%a%get_noris()
+                call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_REDUCED])
+                do iptcl=1,build%spproj_field%get_noris()
                     if( ptcl_mask(iptcl) )then
-                        o_single = build%a%get_ori(iptcl)
+                        o_single = build%spproj_field%get_ori(iptcl)
                         clustering(iptcl) = osubspace%find_closest_proj(o_single)
                     else
                         clustering(iptcl) = 0
                     endif
                 end do
                 ! determine cluster sizes
-                do icls=1,NSPACE_BALANCE
+                do icls=1,NSPACE_REDUCED
                     clustszs(icls) = real(count(clustering == icls))
                 end do
-                frac_populated = real(count(clustszs > 0.5))/real(NSPACE_BALANCE)
+                frac_populated = real(count(clustszs > 0.5))/real(NSPACE_REDUCED)
                 popmin         = minval(clustszs)
                 popmax         = maxval(clustszs)
                 popmed         = median_nocopy(clustszs)
@@ -340,15 +340,15 @@ contains
                     scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
-                do icls=1,NSPACE_BALANCE
+                do icls=1,NSPACE_REDUCED
                     write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))
                 end do
             endif
             if( params%trsstats .eq. 'yes' )then
-                call build%a%stats('x', avgd, sdevd, vard, err )
-                call build%a%minmax('x', mind, maxd)
-                call build%a%stats('y', avgd2, sdevd2, vard2, err )
-                call build%a%minmax('y', mind2, maxd2)
+                call build%spproj_field%stats('x', avgd, sdevd, vard, err )
+                call build%spproj_field%minmax('x', mind, maxd)
+                call build%spproj_field%stats('y', avgd2, sdevd2, vard2, err )
+                call build%spproj_field%minmax('y', mind2, maxd2)
                 write(*,'(a,1x,f8.2)') 'AVERAGE TRS               :', (avgd+avgd2)/2.
                 write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF TRS :', (sdevd+sdevd2)/2.
                 write(*,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
@@ -419,7 +419,7 @@ contains
         real                  :: radius, maxradius, ang, scale, col, avg_geodist,avg_euldist,geodist
         real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3)
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        n = build%a%get_noris()
+        n = build%spproj_field%get_noris()
         if( .not.cline%defined('fbody') )then
             fname = basename(trim(adjustl(params%oritab)))
             ext   = trim(fname2ext(fname))
@@ -433,12 +433,12 @@ contains
             ang = 3.6 / sqrt(real(params%nsym*params%nspace))
             maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
             ! projection direction attribution
-            n = build%a%get_noris()
+            n = build%spproj_field%get_noris()
             do i = 1, n
-                o = build%a%get_ori(i)
+                o = build%spproj_field%get_ori(i)
                 if( o%isstatezero() )cycle
                 call progress(i, n)
-                closest = build%e%find_closest_proj(o)
+                closest = build%eulspace%find_closest_proj(o)
                 pops(closest) = pops(closest) + 1
             enddo
             maxpop = maxval(pops)
@@ -474,7 +474,7 @@ contains
             do i = 1, params%nspace
                 if( pops(i) == 0 )cycle
                 scale     = real(pops(i)) / real(maxpop)
-                xyz_start = build%e%get_normal(i)
+                xyz_start = build%eulspace%get_normal(i)
                 xyz_end   = (1.05 + scale/4.) * xyz_start
                 radius    = max(maxradius * scale, 0.002)
                 write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
@@ -491,7 +491,7 @@ contains
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
             do i = 1, n
-                o   = build%a%get_ori(i)
+                o   = build%spproj_field%get_ori(i)
                 xyz = o%get_normal()
                 col = real(i-1)/real(n-1)
                 write(funit,'(A,F6.2,F6.2)')".color 1.0 ", col, col
@@ -517,7 +517,7 @@ contains
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
-                o = build%a%get_ori(i)
+                o = build%spproj_field%get_ori(i)
                 if( i==1 )then
                     ang     = 0.
                     geodist = 0.

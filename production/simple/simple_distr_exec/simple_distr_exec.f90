@@ -41,7 +41,6 @@ type(tseries_track_distr_commander)       :: xtseries_track_distr
 type(scale_project_distr_commander)       :: xscale_project
 
 ! OTHER DECLARATIONS
-character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: args, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
@@ -71,7 +70,6 @@ select case(prg)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
-        if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         call xpreprocess%execute(cline)
     case( 'preprocess_stream' )
@@ -86,7 +84,6 @@ select case(prg)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('stream')          ) call cline%set('stream',         'yes')
-        if( .not. cline%defined('opt')             ) call cline%set('opt',        'simplex')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         call xpreprocess_stream%execute(cline)
     case( 'motion_correct' )
@@ -94,7 +91,6 @@ select case(prg)
         if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     8.)
-        if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         call xmotion_correct_distr%execute(cline)
     case( 'motion_correct_tomo' )
@@ -103,7 +99,6 @@ select case(prg)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     8.)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',    'yes')
-        if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         call xmotion_correct_tomo_distr%execute(cline)
     case( 'powerspecs' )

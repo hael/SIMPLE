@@ -139,9 +139,9 @@ contains
             call build%vol%shift([shvec(istate,1),shvec(istate,2),shvec(istate,3)])
             call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)
             ! transfer the 3D shifts to 2D
-            if( cline%defined('oritab') ) call build%a%map3dshift22d(-shvec(istate,:), state=istate)
+            if( cline%defined('oritab') ) call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
         end do
-        if( cline%defined('oritab') ) call build%a%write(params%outfile, [1,build%a%get_noris()])
+        if( cline%defined('oritab') ) call build%spproj_field%write(params%outfile, [1,build%spproj_field%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_centervol
@@ -275,25 +275,25 @@ contains
         if( cline%defined('oritab') )then
             params%nptcls = binread_nlines(params%oritab)
             call build%build_general_tbox(params, cline)
-            params%nspace = build%a%get_noris()
+            params%nspace = build%spproj_field%get_noris()
         else
             params%nptcls = params%nspace
             call build%build_general_tbox(params, cline)
-            call build%a%spiral(params%nsym, params%eullims)
+            call build%spproj_field%spiral(params%nsym, params%eullims)
         endif
         ! fix volumes and stacks
         call build%vol%read(params%vols(1))
         ! masking
         if(cline%defined('msk')) call build%vol%mask(params%msk, 'soft')
         ! generate projections
-        imgs = reproject(build%vol, build%a)
+        imgs = reproject(build%vol, build%spproj_field)
         loop_end = params%nspace
         if( file_exists(params%outstk) ) call del_file(params%outstk)
         do i=1,loop_end
             if( params%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(params%outstk,i)
         end do
-        call build%a%write('project_oris'//trim(TXT_EXT), [1,params%nptcls])
+        call build%spproj_field%write('project_oris'//trim(TXT_EXT), [1,params%nptcls])
         call simple_end('**** SIMPLE_PROJECT NORMAL STOP ****')
     end subroutine exec_reproject
 
@@ -519,9 +519,9 @@ contains
         if( cline%defined('stk') .or. cline%defined('vol1') )then
             if( cline%defined('vol1') )then
                 params%nptcls = NPROJS
-                call build%a%new(NPROJS)
-                call build%a%spiral( params%nsym, params%eullims )
-                call build%a%write(trim(ORIFILE), [1,NPROJS])
+                call build%spproj_field%new(NPROJS)
+                call build%spproj_field%spiral( params%nsym, params%eullims )
+                call build%spproj_field%write(trim(ORIFILE), [1,NPROJS])
                 cline_project = cline
                 call cline_project%set('nspace', real(NPROJS))
                 params%stk = 'even_projs'//params%ext

@@ -82,9 +82,9 @@ contains
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( params_glob%eo .ne. 'no' )then
-            if( build_glob%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec'
+            if( build_glob%spproj_field%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec'
         else
-            call build_glob%a%set_all2single('eo', -1.)
+            call build_glob%spproj_field%set_all2single('eo', -1.)
         endif
 
         ! SET FOURIER INDEX RANGE
@@ -96,25 +96,25 @@ contains
                 npeaks = 1
             case DEFAULT
                 if( params_glob%eo .ne. 'no' )then
-                    npeaks = min(build_glob%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
+                    npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                 else
-                    npeaks = min(10,build_glob%e%find_npeaks(params_glob%lp, params_glob%moldiam))
+                    npeaks = min(10,build_glob%eulspace%find_npeaks(params_glob%lp, params_glob%moldiam))
                 endif
         end select
         if( DEBUG ) print *, '*** strategy3D_matcher ***: determined the number of peaks'
 
         ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = build_glob%a%get_avg('frac')
+        frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SETUP WEIGHTS
         if( params_glob%weights3D.eq.'yes' )then
             if( params_glob%nptcls <= SPECWMINPOP )then
-                call build_glob%a%calc_hard_weights(params_glob%frac)
+                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
             else
-                call build_glob%a%calc_spectral_weights(params_glob%frac)
+                call build_glob%spproj_field%calc_spectral_weights(params_glob%frac)
             endif
         else
-            call build_glob%a%calc_hard_weights(params_glob%frac)
+            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
 
         ! READ FOURIER RING CORRELATIONS
@@ -125,19 +125,19 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         if( params_glob%l_frac_update )then
             allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-            call build_glob%a%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+            call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
             &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
             ! correct convergence stats
             do iptcl=params_glob%fromp,params_glob%top
                 if( .not. ptcl_mask(iptcl) )then
                     ! these are not updated
-                    call build_glob%a%set(iptcl, 'mi_proj',     1.0)
-                    call build_glob%a%set(iptcl, 'mi_inpl',     1.0)
-                    call build_glob%a%set(iptcl, 'mi_state',    1.0)
-                    call build_glob%a%set(iptcl, 'mi_joint',    1.0)
-                    call build_glob%a%set(iptcl, 'dist',        0.0)
-                    call build_glob%a%set(iptcl, 'dist_inpl',   0.0)
-                    call build_glob%a%set(iptcl, 'frac',      100.0)
+                    call build_glob%spproj_field%set(iptcl, 'mi_proj',     1.0)
+                    call build_glob%spproj_field%set(iptcl, 'mi_inpl',     1.0)
+                    call build_glob%spproj_field%set(iptcl, 'mi_state',    1.0)
+                    call build_glob%spproj_field%set(iptcl, 'mi_joint',    1.0)
+                    call build_glob%spproj_field%set(iptcl, 'dist',        0.0)
+                    call build_glob%spproj_field%set(iptcl, 'dist_inpl',   0.0)
+                    call build_glob%spproj_field%set(iptcl, 'frac',      100.0)
                 endif
             end do
         else
@@ -148,7 +148,7 @@ contains
         endif
 
         ! B-factor weighted reconstruction
-        if( params_glob%shellw.eq.'yes' ) call build_glob%a%calc_bfac_rec
+        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec
 
         ! EXTREMAL LOGICS
         do_extr = .false.
@@ -156,7 +156,7 @@ contains
             case('cluster','clusterdev','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
-                zero_pop    = count(.not.build_glob%a%included(consider_w=.false.))
+                zero_pop    = count(.not.build_glob%spproj_field%included(consider_w=.false.))
                 corr_thresh = -huge(corr_thresh)
                 if( params_glob%l_frac_update )then
                     ptcl_mask = .true.
@@ -170,15 +170,15 @@ contains
                 endif
                 if( do_extr )then
                     extr_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
-                    corr_thresh = build_glob%a%extremal_bound(extr_thresh)
+                    corr_thresh = build_glob%spproj_field%extremal_bound(extr_thresh)
                 endif
                 if(trim(params_glob%refine).eq.'clustersym')then
                    ! symmetry pairing matrix
                     c1_symop = sym('c1')
-                    params_glob%nspace = min( params_glob%nspace*build_glob%se%get_nsym(), 3000 )
-                    call build_glob%e%new( params_glob%nspace )
-                    call build_glob%e%spiral
-                    call build_glob%se%nearest_sym_neighbors( build_glob%e, symmat )
+                    params_glob%nspace = min( params_glob%nspace*build_glob%pgrpsyms%get_nsym(), 3000 )
+                    call build_glob%eulspace%new( params_glob%nspace )
+                    call build_glob%eulspace%spiral
+                    call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
                 endif
             case DEFAULT
                 ! nothing to do
@@ -217,8 +217,8 @@ contains
             case('single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(build_glob%a%get(iptcl,'updatecnt'))
-                        if( .not.build_glob%a%has_been_searched(iptcl) .or. updatecnt == 1 )then
+                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
                             allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
                             allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
@@ -229,7 +229,7 @@ contains
             case('multi')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(build_glob%a%get(iptcl,'updatecnt'))
+                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if( updatecnt == 1 )then
                             allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
@@ -277,9 +277,8 @@ contains
                 strategy3Dspec%iptcl_map   =  cnt
                 strategy3Dspec%szsn        =  params_glob%szsn
                 strategy3Dspec%corr_thresh =  corr_thresh
-                strategy3Dspec%ppftcc      => pftcc
-                if( allocated(het_mask) )     strategy3Dspec%do_extr    =  het_mask(iptcl)
-                if( allocated(symmat) )       strategy3Dspec%symmat     => symmat
+                if( allocated(het_mask) )  strategy3Dspec%do_extr =  het_mask(iptcl)
+                if( allocated(symmat) )    strategy3Dspec%symmat  => symmat
                 ! search object
                 call strategy3Dsrch(iptcl)%ptr%new(strategy3Dspec, npeaks)
             endif
@@ -325,9 +324,9 @@ contains
         ! OUTPUT ORIENTATIONS
         select case(trim(params_glob%oritype))
             case('ptcl3D')
-                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%a, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
+                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
             case('cls3D')
-                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%a, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
+                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
             case DEFAULT
                 write(*,*) 'oritype: ', trim(params_glob%oritype)
                 stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
@@ -370,14 +369,14 @@ contains
             do i=batchlims(1),batchlims(2)
                 iptcl       = pinds(i)
                 ibatch      = i - batchlims(1) + 1
-                orientation = build_glob%a%get_ori(iptcl)
+                orientation = build_glob%spproj_field%get_ori(iptcl)
                 ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 if( orientation%isstatezero() ) cycle
                 if( trim(params_glob%refine).eq.'clustersym' )then
                     ! always C1 reconstruction
                     call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
                 else
-                    call grid_ptcl( rec_imgs(ibatch), build_glob%se, orientation, s3D%o_peaks(iptcl), ctfvars)
+                    call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
                 endif
             end do
         end do
@@ -444,7 +443,7 @@ contains
         ! must be done here since params_glob%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         if( params_glob%eo .ne. 'no' )then
-            call pftcc%new(nrefs,  ptcl_mask, nint(build_glob%a%get_all('eo', [params_glob%fromp,params_glob%top])))
+            call pftcc%new(nrefs,  ptcl_mask, nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
         else
             call pftcc%new(nrefs,  ptcl_mask)
         endif
@@ -454,7 +453,7 @@ contains
         cnt = 0
         do s=1,params_glob%nstates
             if( params_glob%oritab .ne. '' )then
-                if( build_glob%a%get_pop(s, 'state') == 0 )then
+                if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
                     ! empty state
                     cnt = cnt + params_glob%nspace
                     call progress(cnt, nrefs)
@@ -468,7 +467,7 @@ contains
                     call preprefvol(cline, s, params_glob%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
-                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%e%get_ori(iref), pftcc, iseven=.false.)
+                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%eulspace%get_ori(iref), pftcc, iseven=.false.)
                     end do
                     !$omp end parallel do
                     ! copy odd volume
@@ -479,7 +478,7 @@ contains
                     call preprefvol( cline, s, params_glob%vols_even(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
-                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%e%get_ori(iref), pftcc, iseven=.true.)
+                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
                     end do
                     !$omp end parallel do
                 else
@@ -487,7 +486,7 @@ contains
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         ind = (s - 1) * params_glob%nspace + iref
-                        call build_glob%vol%fproject_polar(ind, build_glob%e%get_ori(iref), pftcc, iseven=.true.)
+                        call build_glob%vol%fproject_polar(ind, build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
                         call pftcc%cp_even2odd_ref(ind)
                     end do
                     !$omp end parallel do
@@ -497,7 +496,7 @@ contains
                 call preprefvol( cline, s, params_glob%vols(s), do_center, xyz)
                 !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
-                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%e%get_ori(iref), pftcc, iseven=.true.)
+                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
                 end do
                 !$omp end parallel do
             endif

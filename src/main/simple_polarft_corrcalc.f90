@@ -7,13 +7,9 @@ use simple_fftw3
 use simple_parameters, only: params_glob
 implicit none
 
-public :: polarft_corrcalc
+public :: polarft_corrcalc, pftcc_glob
 private
 #include "simple_local_flags.inc"
-
-! CLASS PARAMETERS/VARIABLES
-complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
-integer,     parameter :: FFTW_USE_WISDOM=16
 
 ! the fftw_arrs data structures are needed for thread-safe FFTW exec. Letting OpenMP copy out the per-threads
 ! arrays leads to bugs because of inconsistency between data in memory and the fftw_plan
@@ -185,16 +181,21 @@ type :: polarft_corrcalc
     procedure          :: kill
 end type polarft_corrcalc
 
+! CLASS PARAMETERS/VARIABLES
+complex(sp), parameter           :: zero=cmplx(0.,0.) !< just a complex zero
+integer,     parameter           :: FFTW_USE_WISDOM=16
+class(polarft_corrcalc), pointer :: pftcc_glob
+
 contains
 
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
     subroutine new( self, nrefs, ptcl_mask, eoarr )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: nrefs
-        logical, optional,       intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer, optional,       intent(in)    :: eoarr(params_glob%fromp:params_glob%top)
+        class(polarft_corrcalc), target, intent(inout) :: self
+        integer,                         intent(in)    :: nrefs
+        logical, optional,               intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
+        integer, optional,               intent(in)    :: eoarr(params_glob%fromp:params_glob%top)
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer             :: local_stat,irot, k, ithr, i, ik, cnt
         logical             :: even_dims, test(2)
@@ -407,6 +408,8 @@ contains
         end do
         ! flag existence
         self%existence = .true.
+        ! set pointer to global instance
+        pftcc_glob => self
     end subroutine new
 
     ! SETTERS

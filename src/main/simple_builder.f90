@@ -22,35 +22,35 @@ private
 
 type :: builder
     ! GENERAL TOOLBOX
-    type(sp_project)                    :: spproj             !< centralised single-particle project meta-data handler
-    class(oris), pointer                :: a => null()        !< pointer to field in spproj
-    type(oris)                          :: e, e_bal           !< discrete spaces
-    type(sym)                           :: se                 !< symmetry elements object
-    type(image)                         :: img                !< individual image/projector objects
-    type(polarizer)                     :: img_match          !< -"-
-    type(image)                         :: img_pad            !< -"-
-    type(image)                         :: img_tmp            !< -"-
-    type(image)                         :: img_msk            !< -"-
-    type(image)                         :: img_copy           !< -"-
+    type(sp_project)                    :: spproj                 !< centralised single-particle project meta-data handler
+    class(oris), pointer                :: spproj_field => null() !< pointer to field in spproj
+    type(oris)                          :: eulspace, eulspace_red !< discrete spaces(red for reduced)
+    type(sym)                           :: pgrpsyms               !< symmetry elements object
+    type(image)                         :: img                    !< individual image/projector objects
+    type(polarizer)                     :: img_match              !< -"-
+    type(image)                         :: img_pad                !< -"-
+    type(image)                         :: img_tmp                !< -"-
+    type(image)                         :: img_msk                !< -"-
+    type(image)                         :: img_copy               !< -"-
     type(projector)                     :: vol, vol_odd
-    type(image)                         :: vol2               !< -"-
-    type(masker)                        :: mskimg             !< mask image
-    type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
-    type(image),            allocatable :: imgbatch(:)        !< batch of images
+    type(image)                         :: vol2                   !< -"-
+    type(masker)                        :: mskimg                 !< mask image
+    type(projection_frcs)               :: projfrcs               !< projection FRC's used in the anisotropic Wiener filter
+    type(image),            allocatable :: imgbatch(:)            !< batch of images
     ! COMMON LINES TOOLBOX
-    type(image),            allocatable :: imgs(:)            !< images (all should be read in)
-    type(image),            allocatable :: imgs_sym(:)        !< images (all should be read in)
-    type(comlin)                        :: clins              !< common lines data structure
-    type(image),            allocatable :: ref_imgs(:,:)      !< array of reference images
+    type(image),            allocatable :: imgs(:)                !< images (all should be read in)
+    type(image),            allocatable :: imgs_sym(:)            !< images (all should be read in)
+    type(comlin)                        :: clins                  !< common lines data structure
+    type(image),            allocatable :: ref_imgs(:,:)          !< array of reference images
     ! RECONSTRUCTION TOOLBOX
-    type(reconstructor_eo)              :: eorecvol           !< object for eo reconstruction
-    type(reconstructor)                 :: recvol             !< object for reconstruction
+    type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
+    type(reconstructor)                 :: recvol                 !< object for reconstruction
     ! STRATEGY3D TOOLBOX
-    type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
-    type(reconstructor_eo), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
-    real,                   allocatable :: fsc(:,:)           !< Fourier Shell Correlation
-    integer,                allocatable :: nnmat(:,:)         !< matrix with nearest neighbor indices
-    integer,                allocatable :: grid_projs(:)      !< projection directions for coarse grid search
+    type(reconstructor),    allocatable :: recvols(:)             !< array of volumes for reconstruction
+    type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction
+    real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
+    integer,                allocatable :: nnmat(:,:)             !< matrix with nearest neighbor indices
+    integer,                allocatable :: grid_projs(:)          !< projection directions for coarse grid search
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
     logical, private                    :: cluster_tbox_exists    = .false.
@@ -144,29 +144,29 @@ contains
         logical ::  metadata_read
         ! create object for orientations
         ! b%a is now a pointer to a field in b%spproj
-        select case(params%spproj_a_seg)
+        select case(params%spproj_iseg)
             case(MIC_SEG)
                 call self%spproj%os_mic%new(params%nptcls)
-                self%a => self%spproj%os_mic
+                self%spproj_field => self%spproj%os_mic
             case(STK_SEG)
                 call self%spproj%os_stk%new(params%nptcls)
-                self%a => self%spproj%os_stk
+                self%spproj_field => self%spproj%os_stk
             case(PTCL2D_SEG)
                 call self%spproj%os_ptcl2D%new(params%nptcls)
-                self%a => self%spproj%os_ptcl2D
+                self%spproj_field => self%spproj%os_ptcl2D
             case(CLS2D_SEG)
                 call self%spproj%os_cls2D%new(params%nptcls)
-                self%a => self%spproj%os_cls2D
+                self%spproj_field => self%spproj%os_cls2D
             case(CLS3D_SEG)
                 call self%spproj%os_cls3D%new(params%nptcls)
-                self%a => self%spproj%os_cls3D
+                self%spproj_field => self%spproj%os_cls3D
             case(PTCL3D_SEG)
                 call self%spproj%os_ptcl3D%new(params%nptcls)
-                self%a => self%spproj%os_ptcl3D
+                self%spproj_field => self%spproj%os_ptcl3D
             case DEFAULT
                 ! using ptcl3D as the generic segment
                 call self%spproj%os_ptcl3D%new(params%nptcls)
-                self%a => self%spproj%os_ptcl3D
+                self%spproj_field => self%spproj%os_ptcl3D
         end select
         ! read from project file
         metadata_read = .false.
@@ -185,8 +185,8 @@ contains
             call self%spproj%projinfo%set(1, 'cwd', trim(params%cwd))
         else
             ! we need the oritab to override the deftab in order not to loose parameters
-            if( params%deftab /= '' ) call binread_ctfparams_state_eo(params%deftab,  self%spproj, self%a, [1,params%nptcls])
-            if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%a, [1,params%nptcls])
+            if( params%deftab /= '' ) call binread_ctfparams_state_eo(params%deftab,  self%spproj, self%spproj_field, [1,params%nptcls])
+            if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%spproj_field, [1,params%nptcls])
             DebugPrint 'read deftab'
         endif
         write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
@@ -203,26 +203,26 @@ contains
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
         ! set up symmetry functionality
-        call self%se%new(trim(params%pgrp))
-        params%nsym    = self%se%get_nsym()
-        params%eullims = self%se%srchrange()
+        call self%pgrpsyms%new(trim(params%pgrp))
+        params%nsym    = self%pgrpsyms%get_nsym()
+        params%eullims = self%pgrpsyms%srchrange()
         DebugPrint   'did setup symmetry functionality'
         ! build spproj
         call self%build_spproj(params, cline)
         ! states exception
-        if( self%a%get_n('state') > 1 )then
+        if( self%spproj_field%get_n('state') > 1 )then
             if( .not. cline%defined('nstates') )then
                 write(*,'(a)') 'WARNING, your input doc has multiple states but NSTATES is not given'
             endif
         endif
         DebugPrint 'created & filled object for orientations'
         ! generate discrete projection direction spaces
-        call self%e%new( params%nspace )
-        call self%e%spiral( params%nsym, params%eullims )
-        call self%e_bal%new(NSPACE_BALANCE)
-        call self%e_bal%spiral( params%nsym, params%eullims )
+        call self%eulspace%new(params%nspace)
+        call self%eulspace%spiral(params%nsym, params%eullims)
+        call self%eulspace_red%new(NSPACE_REDUCED)
+        call self%eulspace_red%spiral(params%nsym, params%eullims)
         ! create angular subspace
-        self%grid_projs = self%e%create_proj_subspace(NPDIRS_SUBSPACE, params%nsym, params%eullims)
+        self%grid_projs = self%eulspace%create_proj_subspace(NPDIRS_SUBSPACE, params%nsym, params%eullims)
         DebugPrint 'generated discrete projection direction space'
         if( params%box > 0 )then
             ! build image objects
@@ -258,7 +258,7 @@ contains
             DebugPrint   'did set default values'
         endif
         if( params%projstats .eq. 'yes' )then
-            if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+            if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
         self%general_tbox_exists = .true.
@@ -267,9 +267,11 @@ contains
     subroutine kill_general_tbox( self )
         class(builder), intent(inout)  :: self
         if( self%general_tbox_exists )then
-            call self%se%kill
-            call self%a%kill
-            call self%e%kill
+            call self%pgrpsyms%kill
+            call self%spproj_field%kill
+            self%spproj_field => null()
+            call self%spproj%kill
+            call self%eulspace%kill
             call self%img%kill
             call self%img_match%kill_polarizer
             call self%img_match%kill
@@ -294,7 +296,7 @@ contains
         if( params%pgrp /= 'c1' )then ! set up symmetry functionality
             DebugPrint 'build_comlin_tbox:  set up symmetry functionality'
             ! make object for symmetrized orientations
-            call self%a%symmetrize(params%nsym)
+            call self%spproj_field%symmetrize(params%nsym)
             DebugPrint 'build_comlin_tbox:  symmetrized orientations obj made'
             allocate( self%imgs_sym(1:params%nsym*params%nptcls), self%ref_imgs(params%nstates,params%nspace), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk( 'build_comlin_tbox; simple_builder, 1', alloc_stat)
@@ -303,7 +305,7 @@ contains
                call self%imgs_sym(i)%new([params%box,params%box,1],params%smpd)
             end do
             DebugPrint 'build_comlin_tbox: sym ptcls created '
-            self%clins = comlin(self%a, self%imgs_sym, params%lp)
+            self%clins = comlin(self%spproj_field, self%imgs_sym, params%lp)
             DebugPrint 'build_comlin_tbox: comlin called '
         else ! set up assymetrical common lines-based alignment functionality
             DebugPrint 'build_comlin_tbox:  set up assymetrical common lines mode'
@@ -314,7 +316,7 @@ contains
                 call self%imgs(i)%new([params%box,params%box,1],params%smpd)
             end do
             DebugPrint 'build_comlin_tbox: sym ptcls created '
-            self%clins = comlin( self%a, self%imgs, params%lp )
+            self%clins = comlin( self%spproj_field, self%imgs, params%lp )
             DebugPrint 'build_comlin_tbox: comlin called '
         endif
         write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
@@ -325,7 +327,7 @@ contains
         class(builder), intent(inout) :: self
         integer :: i,j
         if( self%comlin_tbox_exists )then
-            call self%a%kill
+            call self%spproj_field%kill
             if( allocated(self%imgs_sym) )then
                 do i=1,size(self%imgs_sym)
                     call self%imgs_sym(i)%kill
@@ -357,7 +359,7 @@ contains
         call self%kill_rec_tbox
         call self%recvol%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
         call self%recvol%alloc_rho( self%spproj)
-        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
     end subroutine build_rec_tbox
@@ -376,8 +378,8 @@ contains
         class(parameters), intent(inout) :: params
         call self%kill_rec_eo_tbox
         call self%eorecvol%new(self%spproj)
-        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        call self%projfrcs%new(NSPACE_BALANCE, params%box, params%smpd, params%nstates)
+        if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
+        call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_rec_eo_tbox
@@ -429,10 +431,10 @@ contains
         endif
         if( params%neigh.eq.'yes' ) then
             nnn = params%nnn
-            call self%se%nearest_proj_neighbors(self%e, nnn, self%nnmat)
+            call self%pgrpsyms%nearest_proj_neighbors(self%eulspace, nnn, self%nnmat)
         endif
-        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        call self%projfrcs%new(NSPACE_BALANCE, params%box, params%smpd, params%nstates)
+        if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
+        call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
         write(*,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
         self%strategy3D_tbox_exists = .true.
     end subroutine build_strategy3D_tbox
@@ -468,7 +470,7 @@ contains
         if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 2', alloc_stat)
         call self%recvols(1)%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
         call self%recvols(1)%alloc_rho(self%spproj)
-        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.
     end subroutine build_extremal3D_tbox

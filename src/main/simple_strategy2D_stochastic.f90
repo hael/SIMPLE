@@ -4,6 +4,7 @@ use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 use simple_builder,          only: build_glob
+use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: strategy2D_stochastic
@@ -34,13 +35,13 @@ contains
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set, do_shc
-        if( build_glob%a%get_state(self%s%iptcl) > 0 )then
+        if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             do_inplsrch   = .true.
             cc_glob       = -1.
             glob_best_set = .false.
             call self%s%prep4srch
             ! objective function based logics for performing extremal search
-            if( self%spec%ppftcc%objfun_is_ccres() )then
+            if( pftcc_glob%objfun_is_ccres() )then
                 ! based on b-factor for objfun=ccres (the lower the better)
                 do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_bfac < self%spec%extr_bound)
             else
@@ -58,7 +59,7 @@ contains
                     ! passes empty classes
                     if( s2D%cls_pops(iref) == 0 )cycle
                     ! shc update
-                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs)
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                     inpl_ind  = shcloc(self%s%nrots, corrs, self%s%prev_corr)
                     if( inpl_ind == 0 )then
                         ! update inpl_ind & inpl_corr to greedy best
@@ -103,14 +104,14 @@ contains
                     ! empty class
                     do_inplsrch = .false.               ! no in-plane search
                     inpl_ind    = irnd_uni(self%s%nrots)  ! random in-plane
-                    nptcls      = build_glob%a%get_noris()
+                    nptcls      = build_glob%spproj_field%get_noris()
                     inpl_corr   = -1.
                     do while( inpl_corr < TINY )
-                        inpl_corr = build_glob%a%get(irnd_uni(nptcls), 'corr') ! random correlation
+                        inpl_corr = build_glob%spproj_field%get(irnd_uni(nptcls), 'corr') ! random correlation
                     enddo
                 else
                     ! populated class
-                    call self%s%pftcc_ptr%gencorrs(iref, self%s%iptcl, corrs)
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                     loc       = maxloc(corrs)
                     inpl_ind  = loc(1)
                     inpl_corr = corrs(inpl_ind)
@@ -145,7 +146,7 @@ contains
             endif
             call self%s%store_solution
         else
-            call build_glob%a%reject(self%s%iptcl)
+            call build_glob%spproj_field%reject(self%s%iptcl)
         endif
         if( DEBUG ) print *, '>>> strategy2D_srch::FINISHED STOCHASTIC SEARCH'
     end subroutine srch_stochastic

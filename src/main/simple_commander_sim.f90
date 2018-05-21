@@ -87,16 +87,16 @@ contains
         ! generate orientation/CTF parameters
         if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
-                call build%a%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
+                call build%spproj_field%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
             endif
-            call build%a%rnd_inpls(params%trs)
+            call build%spproj_field%rnd_inpls(params%trs)
         else if( .not. cline%defined('oritab') )then
-            call build%a%rnd_oris(params%sherr, params%eullims)
+            call build%spproj_field%rnd_oris(params%sherr, params%eullims)
         endif
-        if( .not. build%a%isthere('dfx') )then
-            if( params%ctf .ne. 'no' ) call build%a%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
+        if( .not. build%spproj_field%isthere('dfx') )then
+            if( params%ctf .ne. 'no' ) call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
         endif
-        call build%a%write(params%outfile, [1,params%nptcls])
+        call build%spproj_field%write(params%outfile, [1,params%nptcls])
         ! calculate snr:s
         snr_pink = params%snr/0.2
         snr_detector = params%snr/0.8
@@ -116,7 +116,7 @@ contains
             build%img_pad = cmplx(0.,0.)
             build%img = 0.
             ! extract ori
-            orientation = build%a%get_ori(i)
+            orientation = build%spproj_field%get_ori(i)
             ! project vol
             call vol_pad%fproject(orientation, build%img_pad)
             ! shift
@@ -164,7 +164,7 @@ contains
         ! set fixed frame
         fixed_frame = nint(real(params%nframes)/2.)
         ! remake the alignment doc
-        call build%a%new(1)
+        call build%spproj_field%new(1)
         ! check the fractional area occupied by particles & generate particle positions
         ptclarea   = params%box*params%box*params%nptcls
         mgrapharea = params%xdim*params%ydim
@@ -223,11 +223,11 @@ contains
             shifts(i,1) = x
             shifts(i,2) = y
         end do
-        ! put the central frame in the series at x,y = (0,0) & fill-up build%a
+        ! put the central frame in the series at x,y = (0,0) & fill-up build%spproj_field
         do i=1,params%nframes
             shifts(i,:) = shifts(i,:)-shifts(fixed_frame,:)
-            call build%a%set(1, 'x'//int2str(i), shifts(i,1))
-            call build%a%set(1, 'y'//int2str(i), shifts(i,2))
+            call build%spproj_field%set(1, 'x'//int2str(i), shifts(i,1))
+            call build%spproj_field%set(1, 'y'//int2str(i), shifts(i,2))
         end do
         ! make and open a stack for the movie frames
         write(*,'(a)') '>>> GENERATING MOVIE FRAMES'
@@ -253,9 +253,9 @@ contains
             if( params%vis .eq. 'yes' ) call shifted_base_image%vis()
             call shifted_base_image%write('simulate_movie'//params%ext, i)
             ! set orientation parameters in object
-            call build%a%set(1, 'dfx',    dfx)
-            call build%a%set(1, 'dfy',    dfy)
-            call build%a%set(1, 'angast', angast)
+            call build%spproj_field%set(1, 'dfx',    dfx)
+            call build%spproj_field%set(1, 'dfy',    dfy)
+            call build%spproj_field%set(1, 'angast', angast)
         end do
         ! generate the optimal average
         base_image = 0.
@@ -263,8 +263,8 @@ contains
         do i=1,params%nframes
             call progress(i,params%nframes)
             call shifted_base_image%read('simulate_movie'//params%ext, i)
-            x = build%a%get(1, 'x'//int2str(i))
-            y = build%a%get(1, 'y'//int2str(i))
+            x = build%spproj_field%get(1, 'x'//int2str(i))
+            y = build%spproj_field%get(1, 'y'//int2str(i))
             call shifted_base_image%shift([-x,-y,0.])
             call base_image%add(shifted_base_image)
         end do
@@ -272,7 +272,7 @@ contains
         call base_image%write('optimal_movie_average'//params%ext, 1)
         if( params%vis .eq. 'yes' ) call base_image%vis()
         ! output orientations
-        call build%a%write('simulate_movie_params'//trim(TXT_EXT), [1,build%a%get_noris()])
+        call build%spproj_field%write('simulate_movie_params'//trim(TXT_EXT), [1,build%spproj_field%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_MOVIE NORMAL STOP ****')
 

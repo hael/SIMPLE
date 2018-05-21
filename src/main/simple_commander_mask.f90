@@ -99,11 +99,11 @@ contains
                 call pdb%new(params%pdbfile)
                 pdbout_fname = trim(get_fbody(params%pdbfile, 'pdb')) // '_centered'
                 if( params%center.eq.'yes' )then
-                    call msker%mask_from_pdb( pdb, build%vol, os=build%a, pdbout=pdbout_fname)
+                    call msker%mask_from_pdb( pdb, build%vol, os=build%spproj_field, pdbout=pdbout_fname)
                 else
                     call msker%mask_from_pdb( pdb, build%vol)
                 endif
-                call build%a%write(params%outfile)
+                call build%spproj_field%write(params%outfile)
                 call build%vol%write(params%outvol)
                 call msker%write('maskfile'//params%ext)
             else
