@@ -1023,12 +1023,7 @@ contains
             endif
         endif
         ! fractional search and volume update
-        if( self%update_frac <= .99)then
-            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_parameters :: constructor'
-            if( nint(self%update_frac*real(self%nptcls)) < 1 )&
-                &stop 'UPDATE_FRAC is too small 2; simple_parameters :: constructor'
-            self%l_frac_update = .true.
-        endif
+        if( self%update_frac <= .99) self%l_frac_update = .true.
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

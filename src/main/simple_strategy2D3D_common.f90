@@ -553,7 +553,7 @@ contains
                 do istate = 1, params_glob%nstates
                     if( build_glob%spproj_field%get_pop(istate, 'state') > 0)then
                         call build_glob%recvols(istate)%new([params_glob%boxpd, params_glob%boxpd, params_glob%boxpd], params_glob%smpd)
-                        call build_glob%recvols(istate)%alloc_rho( build_glob%spproj)
+                        call build_glob%recvols(istate)%alloc_rho(build_glob%spproj)
                         call build_glob%recvols(istate)%reset
                         call build_glob%recvols(istate)%reset_exp
                         if( params_glob%l_frac_update )then

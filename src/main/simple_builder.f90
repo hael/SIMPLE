@@ -129,7 +129,7 @@ contains
         class(parameters), target,  intent(inout) :: params
         call params%new(cline)
         call self%build_general_tbox(params, cline, do3d=.true.)
-        call self%build_strategy2D_tbox(params)
+        call self%build_strategy3D_tbox(params)
         build_glob => self
     end subroutine init_params_and_build_strategy3D_tbox
 
