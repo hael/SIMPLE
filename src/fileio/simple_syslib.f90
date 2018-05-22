@@ -52,6 +52,16 @@ interface
         integer(c_int16_t), value :: mode
     end function mkdir
 
+    function symlink(target_path, link_path) bind(c,name="symlink")
+        use, intrinsic :: iso_c_binding
+        integer(c_int) :: symlink
+        character(kind=c_char,len=1),dimension(*),intent(in) :: target_path
+        character(kind=c_char,len=1),dimension(*),intent(in) :: link_path
+    end function symlink
+    function sync () bind(c,name="sync")
+        integer :: sync
+    end function sync
+
 end interface
 
 !> SIMPLE_POSIX.c commands
@@ -334,6 +344,20 @@ contains
         endif
         if(present(status))status=iostat
     end subroutine simple_touch
+
+    !> \brief Soft link file
+    subroutine syslib_symlink( f1, f2 , errmsg, status)
+        character(len=*), intent(in)           :: f1, f2 !< input filename
+        character(len=*), intent(in), optional :: errmsg
+        integer, intent(out), optional :: status
+        integer :: iostat
+        iostat  = symlink(trim(adjustl(f1))//achar(0), trim(adjustl(f2))//achar(0))
+        if(iostat/=0)then
+            call simple_error_check(iostat, "In syslib_symlink  msg:"//trim(errmsg))
+        endif
+        if(present(status))status=iostat
+    end subroutine syslib_symlink
+
 
     !> \brief Copy file1 to file1
     subroutine syslib_copy_file(fname1, fname2, status)
