@@ -51,11 +51,11 @@ contains
     subroutine parse( self )
         use simple_args, only: args
         use simple_user_interface ! use all in there
-        class(cmdline), intent(inout)  :: self
-        type(str4arr), allocatable     :: keys_required(:)
-        type(args)                     :: allowed_args
-        class(simple_program), pointer :: ptr2prg => null()
-        character(len=LONGSTRLEN)      :: arg
+        class(cmdline), intent(inout) :: self
+        type(str4arr), allocatable    :: keys_required(:)
+        type(args)                    :: allowed_args
+        type(simple_program), pointer :: ptr2prg => null()
+        character(len=LONGSTRLEN)     :: arg
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt  = command_argument_count()

@@ -13,7 +13,7 @@ private
 
 type :: parameters
     ! pointer 2 program UI
-    class(simple_program), pointer :: ptr2prg
+    type(simple_program), pointer :: ptr2prg
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}

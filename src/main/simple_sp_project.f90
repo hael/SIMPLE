@@ -592,21 +592,21 @@ contains
             ctfvars%kv = self%os_mic%get(imic, 'kv')
         else
             write(*,*) 'ERROR! kv (acceleration voltage) lacking in os_mic_field'
-            stop 'sp_project :: get_ctfparams'
+            stop 'sp_project :: get_micparam'
         endif
         ! spherical aberration constant
         if( self%os_mic%isthere(imic, 'cs') )then
             ctfvars%cs = self%os_mic%get(imic, 'cs')
         else
             write(*,*) 'ERROR! cs (spherical aberration constant) lacking in os_mic_field'
-            stop 'sp_project :: get_ctfparams'
+            stop 'sp_project :: get_micparam'
         endif
         ! fraction of amplitude contrast
         if( self%os_mic%isthere(imic, 'fraca') )then
             ctfvars%fraca = self%os_mic%get(imic, 'fraca')
         else
             write(*,*) 'ERROR! fraca (fraction of amplitude contrast) lacking in os_mic_field'
-            stop 'sp_project :: get_ctfparams'
+            stop 'sp_project :: get_micparam'
         endif
         ! phaseplate
         if( self%os_mic%isthere(imic, 'phaseplate') )then

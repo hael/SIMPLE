@@ -1,13 +1,14 @@
 program simple_test_ui
 use simple_user_interface ! use all in there
 implicit none
-class(simple_program), pointer :: ptr2prg
+type(simple_program), pointer :: ptr2prg
 
 call make_user_interface
+call write_ui_json
 
-call get_prg_ptr('cluster2D', ptr2prg)
-call ptr2prg%print_cmdline()
-call ptr2prg%write2json()
+! call get_prg_ptr('cluster2D', ptr2prg)
+! call ptr2prg%print_cmdline()
+! call ptr2prg%write2json(
 
 ! call get_prg_ptr('cluster2D_stream', ptr2prg)
 ! call ptr2prg%print_cmdline()

@@ -2,7 +2,7 @@ module simple_user_interface
 include 'simple_lib.f08'
 implicit none
 
-public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui
+public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui, write_ui_json
 private
 
 logical, parameter :: DEBUG = .false.
@@ -59,6 +59,13 @@ type :: simple_program
     procedure          :: requires_sp_project
     procedure, private :: kill
 end type simple_program
+
+type simple_prg_ptr
+    type(simple_program), pointer :: ptr2prg => null()
+end type simple_prg_ptr
+
+! array of pointers to all programs
+type(simple_prg_ptr) :: prg_ptr_array(56)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -203,6 +210,7 @@ contains
 
     subroutine make_user_interface
         call set_common_params
+        call set_prg_ptr_array
         call new_center
         call new_cluster2D
         call new_cluster2D_stream
@@ -263,9 +271,69 @@ contains
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
+    subroutine set_prg_ptr_array
+        prg_ptr_array(1)%ptr2prg  => center
+        prg_ptr_array(2)%ptr2prg  => cluster2D
+        prg_ptr_array(3)%ptr2prg  => cluster2D_stream
+        prg_ptr_array(4)%ptr2prg  => cluster3D
+        prg_ptr_array(5)%ptr2prg  => cluster3D_refine
+        prg_ptr_array(6)%ptr2prg  => cluster_cavgs
+        prg_ptr_array(7)%ptr2prg  => convert
+        prg_ptr_array(8)%ptr2prg  => ctf_estimate
+        prg_ptr_array(9)%ptr2prg  => ctfops
+        prg_ptr_array(10)%ptr2prg => extract
+        prg_ptr_array(11)%ptr2prg => filter
+        prg_ptr_array(12)%ptr2prg => fsc
+        prg_ptr_array(13)%ptr2prg => info_image
+        prg_ptr_array(14)%ptr2prg => info_stktab
+        prg_ptr_array(15)%ptr2prg => initial_3Dmodel
+        prg_ptr_array(16)%ptr2prg => import_boxes
+        prg_ptr_array(17)%ptr2prg => import_cavgs
+        prg_ptr_array(18)%ptr2prg => import_movies
+        prg_ptr_array(19)%ptr2prg => import_particles
+        prg_ptr_array(20)%ptr2prg => make_cavgs
+        prg_ptr_array(21)%ptr2prg => make_oris
+        prg_ptr_array(22)%ptr2prg => make_pickrefs
+        prg_ptr_array(23)%ptr2prg => mask
+        prg_ptr_array(24)%ptr2prg => motion_correct
+        prg_ptr_array(25)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(26)%ptr2prg => new_project
+        prg_ptr_array(27)%ptr2prg => normalize_
+        prg_ptr_array(28)%ptr2prg => orisops
+        prg_ptr_array(29)%ptr2prg => oristats
+        prg_ptr_array(30)%ptr2prg => pick
+        prg_ptr_array(31)%ptr2prg => postprocess
+        prg_ptr_array(32)%ptr2prg => powerspecs
+        prg_ptr_array(33)%ptr2prg => preprocess
+        prg_ptr_array(34)%ptr2prg => preprocess_stream
+        prg_ptr_array(35)%ptr2prg => print_fsc
+        prg_ptr_array(36)%ptr2prg => print_magic_boxes
+        prg_ptr_array(37)%ptr2prg => print_project_info
+        prg_ptr_array(38)%ptr2prg => reproject
+        prg_ptr_array(39)%ptr2prg => reconstruct3D
+        prg_ptr_array(40)%ptr2prg => refine3D
+        prg_ptr_array(41)%ptr2prg => refine3D_init
+        prg_ptr_array(42)%ptr2prg => scale
+        prg_ptr_array(43)%ptr2prg => scale_project
+        prg_ptr_array(44)%ptr2prg => select_
+        prg_ptr_array(45)%ptr2prg => shift
+        prg_ptr_array(46)%ptr2prg => simulate_movie
+        prg_ptr_array(47)%ptr2prg => simulate_noise
+        prg_ptr_array(48)%ptr2prg => simulate_particles
+        prg_ptr_array(49)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(50)%ptr2prg => stack
+        prg_ptr_array(51)%ptr2prg => stackops
+        prg_ptr_array(52)%ptr2prg => symsrch
+        prg_ptr_array(53)%ptr2prg => tseries_track
+        prg_ptr_array(54)%ptr2prg => update_project
+        prg_ptr_array(55)%ptr2prg => vizoris
+        prg_ptr_array(56)%ptr2prg => volops
+        if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
+    end subroutine set_prg_ptr_array
+
     subroutine get_prg_ptr( which_program, ptr2prg )
         character(len=*), intent(in)  :: which_program
-        class(simple_program), pointer :: ptr2prg
+        type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
             case('center')
                 ptr2prg => center
@@ -1554,7 +1622,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
-        &0, 2, 0, 2, 1, 0, 1, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 2, 0, 2, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1572,7 +1640,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call pick%set_input('comp_ctrls', 1, nthr)
+        call pick%set_input('comp_ctrls', 1, nparts)
+        call pick%set_input('comp_ctrls', 2, nthr)
     end subroutine new_pick
 
     subroutine new_postprocess
@@ -2978,16 +3047,103 @@ contains
         write(*,'(a)') self%descr_long
     end subroutine print_prg_descr_long
 
+    subroutine write_ui_json
+        use json_module
+        type(json_core)           :: json
+        type(json_value), pointer :: program_entry, program, all_programs
+        integer :: iprg
+        ! JSON init
+        call json%initialize()
+        ! create array of program entries
+        call json%create_array(all_programs, 'SIMPLE User Interface')
+        do iprg=1,size(prg_ptr_array)
+            call create_program_entry
+            call json%add(all_programs, program_entry)
+        end do
+        ! write & clean
+        call json%print(all_programs, 'simple_user_interface.json')
+        if( json%failed() )then
+            write(*,*) 'json input/output error for simple_user_interface'
+            stop
+        endif
+        call json%destroy(all_programs)
+
+        contains
+
+            subroutine create_program_entry
+                call json%create_object(program_entry,'')
+                call json%create_object(program, trim(prg_ptr_array(iprg)%ptr2prg%name))
+                call json%add(program_entry, program)
+                ! program section
+                call json%add(program, 'name',        prg_ptr_array(iprg)%ptr2prg%name)
+                call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short)
+                call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long)
+                call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable)
+                ! all sections
+                call create_section( 'image input/output',     prg_ptr_array(iprg)%ptr2prg%img_ios )
+                call create_section( 'parameter input/output', prg_ptr_array(iprg)%ptr2prg%parm_ios )
+                call create_section( 'alternative inputs',     prg_ptr_array(iprg)%ptr2prg%alt_ios )
+                call create_section( 'search controls',        prg_ptr_array(iprg)%ptr2prg%srch_ctrls )
+                call create_section( 'filter controls',        prg_ptr_array(iprg)%ptr2prg%filt_ctrls )
+                call create_section( 'mask controls',          prg_ptr_array(iprg)%ptr2prg%mask_ctrls )
+                call create_section( 'computer controls',      prg_ptr_array(iprg)%ptr2prg%comp_ctrls )
+            end subroutine create_program_entry
+
+            subroutine create_section( name, arr )
+                character(len=*),          intent(in) :: name
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                type(json_value), pointer :: entry, section
+                character(len=STDLEN)     :: options_str, before
+                character(len=KEYLEN)     :: args(8)
+                integer                   :: i, j, sz, nargs
+                logical :: found, param_is_multi, param_is_binary, exception
+                call json%create_array(section, trim(name))
+                if( allocated(arr) )then
+                    sz = size(arr)
+                    do i=1,sz
+                        call json%create_object(entry, trim(arr(i)%key))
+                        call json%add(entry, 'key', trim(arr(i)%key))
+                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
+                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
+                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
+                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
+                        call json%add(entry, 'required', arr(i)%required)
+                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
+                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
+                        if( param_is_multi .or. param_is_binary )then
+                            options_str = trim(arr(i)%descr_placeholder)
+                            call split( options_str, '(', before )
+                            call split( options_str, ')', before )
+                            call parsestr(before, '|', args, nargs)
+                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
+                            if( exception )then
+                                write(*,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
+                                write(*,*)trim(arr(i)%descr_placeholder)
+                                stop
+                            endif
+                            call json%add(entry, 'options', args(1:nargs))
+                            do j = 1, nargs
+                                call json%update(entry, 'options['//int2str(j)//']', trim(args(j)), found)
+                            enddo
+                        endif
+                        call json%add(section, entry)
+                    enddo
+                endif
+                call json%add(program_entry, section)
+            end subroutine create_section
+
+    end subroutine write_ui_json
+
     subroutine write2json( self )
         use json_module
         class(simple_program), intent(in) :: self
         type(json_core)           :: json
-        type(json_value), pointer :: pjson, program
+        type(json_value), pointer :: program_entry, program
         ! JSON init
         call json%initialize()
-        call json%create_object(pjson,'')
+        call json%create_object(program_entry,'')
         call json%create_object(program, trim(self%name))
-        call json%add(pjson, program)
+        call json%add(program_entry, program)
         ! program section
         call json%add(program, 'name',        self%name)
         call json%add(program, 'descr_short', self%descr_short)
@@ -3002,12 +3158,12 @@ contains
         call create_section( 'mask controls',          self%mask_ctrls )
         call create_section( 'computer controls',      self%comp_ctrls )
         ! write & clean
-        call json%print(pjson, trim(adjustl(self%name))//'.json')
+        call json%print(program_entry, trim(adjustl(self%name))//'.json')
         if( json%failed() )then
             write(*,*) 'json input/output error for program: ', trim(self%name)
             stop
         endif
-        call json%destroy(pjson)
+        call json%destroy(program_entry)
 
         contains
 
@@ -3051,7 +3207,7 @@ contains
                         call json%add(section, entry)
                     enddo
                 endif
-                call json%add(pjson, section)
+                call json%add(program_entry, section)
             end subroutine create_section
 
     end subroutine write2json
