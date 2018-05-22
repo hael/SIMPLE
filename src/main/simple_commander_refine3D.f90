@@ -203,6 +203,7 @@ contains
 
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
+        use simple_parameters,  only: params_glob
         class(check_3Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)  :: params
@@ -268,7 +269,7 @@ contains
         endif
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
-        if( params%l_doshift )then
+        if( params_glob%l_doshift )then
             call cline%set('trs', params%trs)        ! activates shift search
         endif
         if( converged )then

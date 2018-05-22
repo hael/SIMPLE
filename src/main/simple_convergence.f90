@@ -36,23 +36,17 @@ contains
     function check_conv2D( self, cline, ncls ) result( converged )
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
-        integer, optional,  intent(in)    :: ncls
+        integer,            intent(in)    :: ncls
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
         logical :: converged, update_frac
-        integer :: nncls
-        if( present(ncls) )then
-            nncls = ncls
-        else
-            nncls =  params_glob%ncls
-        endif
-        update_frac = params_glob%l_frac_update
-        if( params_glob%l_frac_update )then
-            ! fractional particle update
+        update_frac = .false.
+        if( build_glob%spproj_field%isthere('updatecnt') )then
             updatecnts  = build_glob%spproj_field%get_all('updatecnt')
             update_frac = count(updatecnts > 0.5) > 0 ! for the case of greedy step with frac_update on
         endif
         if( update_frac )then
+            ! fractional particle update
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
             self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
             self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
@@ -89,9 +83,8 @@ contains
             endif
         endif
         ! determine convergence
-        if( nncls > 1 )then
+        if( ncls > 1 )then
             converged = .false.
-            !if( self%pparams_glob%l_frac_update )then
             if( params_glob%l_frac_update )then
                 if( self%mi_joint > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
             else
@@ -119,11 +112,15 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint
-        logical :: converged
+        logical :: converged, update_frac
         integer :: iptcl, istate
+        update_frac = .false.
         if( build_glob%spproj_field%isthere('updatecnt') )then
+            updatecnts  = build_glob%spproj_field%get_all('updatecnt')
+            update_frac = count(updatecnts > 0.5) > 0
+        endif
+        if( update_frac )then
             ! fractional particle update
-            updatecnts     = build_glob%spproj_field%get_all('updatecnt')
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
             self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
             self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)

@@ -444,10 +444,6 @@ contains
                     str = real2str(cline_check_2Dconv%get_rarg('trs'))
                     call job_descr%set('trs', trim(str) )
                 endif
-                if( cline%defined('automsk') )then
-                    ! activates masking
-                    if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','cavg')
-                endif
             endif
             if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==params%maxits ) exit
         end do

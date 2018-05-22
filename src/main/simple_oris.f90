@@ -886,6 +886,12 @@ contains
         mask_present  = present(mask)
         cnt = 0
         sum = 0.
+        if( mask_present )then
+            if( count(mask)==0 )then
+                write(*,*)'Empty mask; simple_oris :: clac_sum'
+                return
+            endif
+        endif
         if( present(fromto) )then
             istart = fromto(1)
             istop  = fromto(2)

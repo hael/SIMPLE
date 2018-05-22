@@ -284,7 +284,7 @@ select case(prg)
         keys_optional(4) = 'ndev'
         keys_optional(5) = 'box_extract'
         keys_optional(6) = 'pcontrast'
-        keys_optional(7) = 'outstide'
+        keys_optional(7) = 'outside'
         call cline%parse_oldschool(keys_required(:2), keys_optional(:7))
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         call xpick_extract%execute(cline)

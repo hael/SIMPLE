@@ -171,6 +171,7 @@ contains
 
     subroutine exec_check_2Dconv( self, cline )
         use simple_convergence, only: convergence
+        use simple_parameters,  only: params_glob
         class(check_2Dconv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)  :: params
@@ -179,12 +180,12 @@ contains
         logical :: converged
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        params%ncls = build%spproj_field%get_n('class')
-        converged   = conv%check_conv2D(cline) ! convergence check
+        ! convergence check
+        converged = conv%check_conv2D(cline, ncls=build%spproj_field%get_n('class'))
         call cline%set('frac', conv%get('frac'))
-        if( params%l_doshift )then
+        if( params_glob%l_doshift )then
             ! activates shift search
-            call cline%set('trs', params%trs)
+            call cline%set('trs', params_glob%trs)
         endif
         if( converged )then
             call cline%set('converged', 'yes')

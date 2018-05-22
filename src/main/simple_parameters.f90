@@ -1023,7 +1023,12 @@ contains
             endif
         endif
         ! fractional search and volume update
-        if( self%update_frac <= .99) self%l_frac_update = .true.
+        if( self%update_frac <= .99)then
+            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_parameters :: constructor'
+            if( nint(self%update_frac*real(self%nptcls)) < 1 )&
+                &stop 'UPDATE_FRAC is too small 2; simple_parameters :: constructor'
+            self%l_frac_update = .true.
+        endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
@@ -1254,12 +1259,12 @@ contains
         end select
 !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
-        ! if(associated(params_glob))then
-        !     write(*,*)'WARNING: RESETING PARAMS_GLOB POINTER!!'
-        ! else
-        !     params_glob => self
-        ! endif
-        params_glob => self
+        if(associated(params_glob))then
+            write(*,*)'*** WARNING: TRYING TO RESET PARAMS_GLOB POINTER!!'
+        else
+            params_glob => self
+        endif
+        ! params_glob => self
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
         contains
