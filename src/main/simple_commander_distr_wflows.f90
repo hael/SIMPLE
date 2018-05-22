@@ -363,9 +363,9 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
-        cline_check_2Dconv   = cline
-        cline_cavgassemble   = cline
-        cline_make_cavgs     = cline
+        cline_check_2Dconv = cline
+        cline_cavgassemble = cline
+        cline_make_cavgs   = cline
         ! initialise static command line parameters and static job description parameters
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_make_cavgs%set('prg',   'make_cavgs')

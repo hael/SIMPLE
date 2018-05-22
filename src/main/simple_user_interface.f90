@@ -98,6 +98,7 @@ type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
 type(simple_program), target :: pick
+type(simple_program), target :: pick_extract_stream
 type(simple_program), target :: postprocess
 type(simple_program), target :: powerspecs
 type(simple_program), target :: preprocess
@@ -241,6 +242,7 @@ contains
         call new_orisops
         call new_oristats
         call new_pick
+        call new_pick_extract_stream
         call new_postprocess
         call new_powerspecs
         call new_preprocess
@@ -395,6 +397,8 @@ contains
                 ptr2prg => oristats
             case('pick')
                 ptr2prg => pick
+            case('pick_extract_stream')
+                ptr2prg => pick_extract_stream
             case('postprocess')
                 ptr2prg => postprocess
             case('powerspecs')
@@ -463,6 +467,7 @@ contains
         write(*,'(A)') motion_correct%name
         write(*,'(A)') motion_correct_tomo%name
         write(*,'(A)') pick%name
+        write(*,'(A)') pick_extract_stream%name
         write(*,'(A)') powerspecs%name
         write(*,'(A)') preprocess%name
         write(*,'(A)') preprocess_stream%name
@@ -1643,6 +1648,38 @@ contains
         call pick%set_input('comp_ctrls', 1, nparts)
         call pick%set_input('comp_ctrls', 2, nthr)
     end subroutine new_pick
+
+    subroutine new_pick_extract_stream
+        ! PROGRAM SPECIFICATION
+        call pick_extract_stream%new(&
+        &'pick_extract_stream', & ! name
+        &'Template-based particle picking and extraction in streaming mode',&                               ! descr_short
+        &'is a distributed workflow for template-based particle picking and extraction in streaming mode',& ! descr_long
+        &'simple_distr_exec',&                                             ! executable
+        &1, 4, 0, 2, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call pick_extract_stream%set_input('img_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
+        ! parameter input/output
+        call pick_extract_stream%set_input('parm_ios', 1, 'refs', 'file', 'picking 2D references',&
+        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
+        call pick_extract_stream%set_input('parm_ios', 2, 'box_extract', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call pick_extract_stream%set_input('parm_ios', 3, pcontrast)
+        call pick_extract_stream%set_input('parm_ios', 4, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call pick_extract_stream%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
+        call pick_extract_stream%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        ! filter controls
+        call pick_extract_stream%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call pick_extract_stream%set_input('comp_ctrls', 1, nparts)
+        call pick_extract_stream%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_pick_extract_stream
 
     subroutine new_postprocess
         ! PROGRAM SPECIFICATION

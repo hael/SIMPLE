@@ -1,7 +1,6 @@
 ! batch-processing manager - functions
 module simple_qsys_funs
 include 'simple_lib.f08'
-use simple_parameters, only: params_glob
 implicit none
 
 interface qsys_watcher
@@ -14,6 +13,7 @@ integer, parameter :: SHORTTIME = 3
 contains
 
     subroutine qsys_cleanup(  )
+        use simple_parameters, only: params_glob
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
         integer :: istate, iter
         ! single files
@@ -120,6 +120,7 @@ contains
 
     !>  Writes the JOB_FINISHED_* file to mark end of computing unit job
     subroutine qsys_job_finished(  source )
+        use simple_parameters, only: params_glob
         ! generation of this file marks completion of the partition
         ! this file is empty 4 now but may contain run stats etc.
         character(len=*), intent(in) :: source

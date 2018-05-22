@@ -25,6 +25,7 @@ type(powerspecs_commander)           :: xpowerspecs
 type(motion_correct_commander)       :: xmotion_correct
 type(ctf_estimate_commander)         :: xctf_estimate
 type(map_cavgs_selection_commander)  :: xmap_cavgs_selection
+type(pick_extract_commander)         :: xpick_extract
 type(pick_commander)                 :: xpick
 
 ! CLUSTER2D PROGRAMS
@@ -272,6 +273,21 @@ select case(prg)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
         if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         call xpreprocess%execute(cline)
+    case( 'pick_extract' )
+        ! for template-based particle picking
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'refs'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'lp'
+        keys_optional(3) = 'thres'
+        keys_optional(4) = 'ndev'
+        keys_optional(5) = 'box_extract'
+        keys_optional(6) = 'pcontrast'
+        keys_optional(7) = 'outstide'
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:7))
+        if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
+        call xpick_extract%execute(cline)
     case( 'pick' )
         ! for template-based particle picking
         keys_required(1) = 'projfile'

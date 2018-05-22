@@ -1,7 +1,7 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preprocess
 include 'simple_lib.f08'
-use simple_parameters,     only: parameters
+use simple_parameters,     only: parameters, params_glob
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_qsys_funs,      only: qsys_job_finished
@@ -56,7 +56,6 @@ end type pick_extract_commander
 contains
 
     subroutine exec_preprocess( self, cline )
-        use simple_parameters,          only: params_glob
         use simple_ori,                 only: ori
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
@@ -141,7 +140,6 @@ contains
         else
             params%numlen = len(int2str(nmovies))
         endif
-        !
         frame_counter = 0
         ! loop over exposures (movies)
         do imovie = fromto(1),fromto(2)
@@ -369,7 +367,7 @@ contains
 
     subroutine exec_ctf_estimate( self, cline )
         use simple_sp_project,          only: sp_project
-        use simple_binoris_io,  only: binwrite_oritab
+        use simple_binoris_io,          only: binwrite_oritab
         use simple_ori,                 only: ori
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(ctf_estimate_commander), intent(inout) :: self
@@ -553,7 +551,7 @@ contains
         output_dir = './'
         if( params%stream.eq.'yes' )output_dir = DIR_EXTRACT
         ! read in integrated movies
-        call spproj%read_segment('mic', params%projfile)
+        call spproj%read_segment(params%oritype, params_glob%projfile)
         if( spproj%get_nintgs() == 0 )then
             stop 'No integrated micrograph to process!'
         endif
@@ -739,107 +737,91 @@ contains
     end subroutine exec_extract
 
     subroutine exec_pick_extract( self, cline )
-        use simple_parameters,          only: params_glob
         use simple_ori,                 only: ori
         use simple_sp_project,          only: sp_project
         use simple_picker_iter,         only: picker_iter
         use simple_binoris_io,          only: binwrite_oritab
         class(pick_extract_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        ! type(parameters)              :: params
-        ! type(ori)                     :: o_mov
-        ! type(picker_iter)             :: piter
-        ! type(extract_commander)       :: xextract
-        ! type(cmdline)                 :: cline_extract
-        ! type(sp_project)              :: spproj
-        ! character(len=:), allocatable :: imgkind, micname, output_dir_picker, fbody
-        ! character(len=:), allocatable :: moviename_intg, output_dir_extract
-        ! character(len=:), allocatable :: output_dir_extract
-        ! character(len=LONGSTRLEN)     :: boxfile
-        ! integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
-        ! logical :: l_pick
-        ! call cline%set('oritype', 'mic')
-        ! call params%new(cline)
-        ! if( params%scale > 1.05 )then
-        !     stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
-        ! endif
-        ! if( params%tomo .eq. 'yes' )then
-        !     stop 'tomography mode (tomo=yes) not yet supported!'
-        ! endif
-        ! if( cline%defined('refs') )then
-        !     l_pick = .true.
-        ! else
-        !     l_pick = .false.
-        ! endif
-        ! ! read in movies
-        ! call spproj%read( params%projfile )
-        ! if( spproj%get_nintgs() == 0 )then
-        !     stop 'No micrograph to process!'
-        ! endif
-        ! ! output directories & naming
-        ! output_dir_picker  = './'
-        ! if( params%stream.eq.'yes' )then
-        !     output_dir_picker  = trim(DIR_PICKER)
-        !     output_dir_extract = trim(DIR_EXTRACT)
-        !     call simple_mkdir(output_dir_picker)
-        !     call simple_mkdir(output_dir_extract)
-        ! endif
-        ! if( cline%defined('fbody') )then
-        !     fbody = trim(params%fbody)
-        ! else
-        !     fbody = ''
-        ! endif
-        ! ! range
-        ! if( params%stream.eq.'yes' )then
-        !     ! STREAMING MODE
-        !     fromto(:) = 1
-        ! else
-        !     ! DISTRIBUTED MODE
-        !     if( cline%defined('fromp') .and. cline%defined('top') )then
-        !         fromto(1) = params%fromp
-        !         fromto(2) = params%top
-        !     else
-        !         stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
-        !     endif
-        ! endif
-        ! ntot = fromto(2) - fromto(1) + 1
-        ! ! numlen
-        ! if( cline%defined('numlen') )then
-        !     ! nothing to do
-        ! else
-        !     params%numlen = len(int2str(nmovies))
-        ! endif
-        ! !
-        ! frame_counter = 0
-        ! ! loop over exposures (movies)
-        ! do imovie = fromto(1),fromto(2)
-        !     ! fetch movie orientation
-        !     o_mov = spproj%os_mic%get_ori(imovie)
-        !     ! sanity check
-        !     if( .not.o_mov%isthere('imgkind') )cycle
-        !     if( .not.o_mov%isthere('intg')   )cycle
-        !     call o_mov%getter('intg', micname)
-        !     if( .not.file_exists(moviename)) cycle
-        !     ! picker
-        !     params_glob%lp = max(params%fny, params%lp_pick)
-        !     call piter%iterate(cline,  micname, boxfile, nptcls_out, output_dir_picker)
-        !     call o_mov%set('boxfile', trim(boxfile)   )
-        !     call o_mov%set('nptcls',  real(nptcls_out))
-        !     ! update project
-        !     call spproj%os_mic%set_ori(imovie, o_mov)
-        !     ! extract particles
-        !     call spproj%write_segment_inside(params%oritype)
-        !     call cline_extract%set('dir', trim(output_dir_extract))
-        !     call cline_extract%set('pcontrast', params%pcontrast)
-        !     if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
-        !     call xextract%execute(cline_extract)
-        !     call spproj%kill
-        ! end do
-        ! call spproj%write
-        ! ! end gracefully
-        ! call qsys_job_finished( 'simple_commander_preprocess :: exec_pick_extract' )
-        ! call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
+        class(cmdline),                intent(inout) :: cline
+        type(parameters)              :: params
+        type(ori)                     :: o_mic
+        type(picker_iter)             :: piter
+        type(extract_commander)       :: xextract
+        type(cmdline)                 :: cline_extract
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
+        character(len=LONGSTRLEN)     :: boxfile
+        integer :: fromto(2), imic, ntot, nptcls_out
+        ! set oritype
+        call cline%set('oritype', 'mic')
+        ! parse parameters
+        call params%new(cline)
+        if( params%scale > 1.01 )then
+            stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
+        endif
+        if( params%stream.ne.'yes' ) stop 'Streaming only application'
+        ! read in movies
+        call spproj%read( params%projfile )
+        if( spproj%get_nintgs() == 0 )then
+            stop 'No micrograph to process!'
+        endif
+        ! command lines
+        cline_extract = cline
+        call cline_extract%set('dir', trim(output_dir_extract))
+        call cline_extract%set('pcontrast', params%pcontrast)
+        if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
+        call cline%delete('box')
+        call cline_extract%delete('box_extract')
+        ! output directories & naming
+        if( params%stream.eq.'yes' )then
+            output_dir_picker  = trim(DIR_PICKER)
+            output_dir_extract = trim(DIR_EXTRACT)
+            call simple_mkdir(output_dir_picker)
+            call simple_mkdir(output_dir_extract)
+        else
+            output_dir_picker  = './'
+            output_dir_extract = './'
+        endif
+        if( cline%defined('fbody') )then
+            fbody = trim(params%fbody)
+        else
+            fbody = ''
+        endif
+        ! range
+        if( params%stream.eq.'yes' )then
+            fromto(:) = 1
+        else
+            fromto(:) = [params%fromp, params%top]
+        endif
+        ntot = fromto(2) - fromto(1) + 1
+        ! loop over exposures (movies)
+        do imic = fromto(1),fromto(2)
+            ! fetch movie orientation
+            o_mic = spproj%os_mic%get_ori(imic)
+            ! sanity check
+            if( .not.o_mic%isthere('intg')   )cycle
+            call o_mic%getter('intg', micname)
+            if( .not.file_exists(micname)) cycle
+            ! picker
+            params_glob%lp = max(params%fny, params%lp_pick)
+            call piter%iterate(cline, micname, boxfile, nptcls_out, output_dir_picker)
+            call o_mic%set('boxfile', trim(boxfile)   )
+            call o_mic%set('nptcls',  real(nptcls_out))
+            ! update project
+            call spproj%os_mic%set_ori(imic, o_mic)
+            call spproj%write_segment_inside(params%oritype)
+            ! extract particles
+            call xextract%execute(cline_extract)
+            call spproj%kill
+        end do
+        if( params%stream .eq. 'yes' )then
+            ! nothing to do, extract did it
+        else
+            call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        endif
+        ! end gracefully
+        call qsys_job_finished( 'simple_commander_preprocess :: exec_pick_extract' )
+        call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
     end subroutine exec_pick_extract
-
 
 end module simple_commander_preprocess

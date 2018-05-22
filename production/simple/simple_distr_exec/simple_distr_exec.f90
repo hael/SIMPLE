@@ -17,6 +17,7 @@ type(motion_correct_tomo_distr_commander) :: xmotion_correct_tomo_distr
 type(powerspecs_distr_commander)          :: xpowerspecs_distr
 type(ctf_estimate_distr_commander)        :: xctf_estimate_distr
 type(pick_distr_commander)                :: xpick_distr
+type(pick_extract_stream_distr_commander) :: xpick_extract_stream_distr
 
 ! CLUSTER2D
 type(make_cavgs_distr_commander)          :: xmake_cavgs_distr
@@ -120,6 +121,11 @@ select case(prg)
         call cline%parse()
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',    'yes')
         call xpick_distr%execute(cline)
+    case( 'pick_extract_stream' )
+        call cline%parse()
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
+        if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
+        call xpick_extract_stream_distr%execute(cline)
 
     ! CLUSTER2D
 

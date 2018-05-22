@@ -1282,10 +1282,7 @@ contains
         integer :: i
         get_nintgs = 0
         do i=1,self%os_mic%get_noris()
-            call self%os_mic%getter(i,'imgkind',imgkind)
-            if( trim(imgkind).eq.'mic' )then
-                if( self%os_mic%isthere(i,'intg') )get_nintgs = get_nintgs + 1
-            endif
+            if( self%os_mic%isthere(i,'intg') )get_nintgs = get_nintgs + 1
         enddo
     end function get_nintgs
 

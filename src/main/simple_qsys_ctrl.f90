@@ -59,7 +59,7 @@ type qsys_ctrl
     ! STREAMING
     procedure          :: schedule_streaming
     procedure          :: add_to_streaming
-    procedure          :: add_to_stream_done_stack
+    procedure, private :: add_to_stream_done_stack
     procedure          :: get_stream_done_stack
     procedure          :: get_stacksz
     procedure          :: get_done_stacksz

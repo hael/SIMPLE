@@ -1259,6 +1259,11 @@ contains
         end select
 !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
+        ! if(associated(params_glob))then
+        !     write(*,*)'WARNING: RESETING PARAMS_GLOB POINTER!!'
+        ! else
+        !     params_glob => self
+        ! endif
         params_glob => self
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 

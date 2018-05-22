@@ -39,16 +39,20 @@ contains
         integer, optional,  intent(in)    :: ncls
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
-        logical :: converged
+        logical :: converged, update_frac
         integer :: nncls
         if( present(ncls) )then
             nncls = ncls
         else
             nncls =  params_glob%ncls
         endif
+        update_frac = params_glob%l_frac_update
         if( params_glob%l_frac_update )then
             ! fractional particle update
-            updatecnts     = build_glob%spproj_field%get_all('updatecnt')
+            updatecnts  = build_glob%spproj_field%get_all('updatecnt')
+            update_frac = count(updatecnts > 0.5) > 0 ! for the case of greedy step with frac_update on
+        endif
+        if( update_frac )then
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
             self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
             self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
