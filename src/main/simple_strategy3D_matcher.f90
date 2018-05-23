@@ -95,10 +95,14 @@ contains
             case('cluster', 'snhc', 'clustersym', 'clusterdev', 'cont_single')
                 npeaks = 1
             case DEFAULT
-                if( params_glob%eo .ne. 'no' )then
-                    npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
-                else
-                    npeaks = min(10,build_glob%eulspace%find_npeaks(params_glob%lp, params_glob%moldiam))
+                if( cline%defined('npeaks') )then
+                    npeaks = params_glob%npeaks
+                else    
+                    if( params_glob%eo .ne. 'no' )then
+                        npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
+                    else
+                        npeaks = min(10,build_glob%eulspace%find_npeaks(params_glob%lp, params_glob%moldiam))
+                    endif
                 endif
         end select
         if( DEBUG ) print *, '*** strategy3D_matcher ***: determined the number of peaks'

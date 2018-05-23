@@ -227,6 +227,7 @@ type :: parameters
     integer :: nmics=0             !< # micographs
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed exection
+    integer :: npeaks=1
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
@@ -609,6 +610,7 @@ contains
         call check_iarg('nmembers',       self%nmembers)
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
+        call check_iarg('npeaks',         self%npeaks)
         call check_iarg('nran',           self%nran)
         call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrepeats',       self%nrepeats)
