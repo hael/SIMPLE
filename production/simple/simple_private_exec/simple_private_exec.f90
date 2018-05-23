@@ -345,7 +345,7 @@ select case(prg)
         keys_optional(18) = 'match_filt'
         keys_optional(19) = 'dyncls'
         keys_optional(20) = 'shellw'
-        keys_optional(21) = 'bfac_fixed'
+        keys_optional(21) = 'bfac_static'
         call cline%parse_oldschool(keys_required(:3), keys_optional(:21))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)

@@ -1674,7 +1674,7 @@ contains
                 call os_ptr%set_ori(iptcl, os_part%get_ori(cnt))
             enddo
         end do
-        call self%write()
+        call self%write_segment_inside(oritype)
     end subroutine merge_algndocs
 
     ! this map2ptcls routine assumes that any selection of class averages is done

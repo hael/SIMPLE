@@ -102,13 +102,13 @@ contains
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better) & b-factor
         if( self%prev_class > 0 )then
-            if( params_glob%l_bfac_fixed )then
-                self%prev_bfac = params_glob%bfac_fixed
+            if( params_glob%l_bfac_static )then
+                self%prev_bfac = params_glob%bfac_static
             else
                 self%prev_bfac = pftcc_glob%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
             endif
             if(pftcc_glob%objfun_is_ccres())then
-                 ! prior to correlation calculation
+                ! prior to correlation calculation
                 call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
             endif
             call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
@@ -119,7 +119,7 @@ contains
             self%prev_corr  = 0.
             self%best_corr  = 0.
             if( pftcc_glob%objfun_is_ccres() )then
-                self%prev_bfac  = params_glob%bfac_fixed
+                self%prev_bfac = params_glob%bfac_static
                 call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
             else
                 self%prev_bfac  = 0.
@@ -128,7 +128,6 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'bfac', self%prev_bfac)
         ! calculate spectral score
         self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, self%prev_rot)
-        !self%specscore = pftcc%specscore(self%prev_class, self%iptcl, self%prev_rot)
         if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
 

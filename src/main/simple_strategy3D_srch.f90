@@ -132,9 +132,9 @@ contains
             &stop 'need optional target_projs to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
         endif
         o_prev          = build_glob%spproj_field%get_ori(self%iptcl)
-        self%prev_state = o_prev%get_state()                                          ! state index
-        self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())               ! in-plane angle index
-        self%prev_shvec = o_prev%get_2Dshift()                                        ! shift vector
+        self%prev_state = o_prev%get_state()                                              ! state index
+        self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())                       ! in-plane angle index
+        self%prev_shvec = o_prev%get_2Dshift()                                            ! shift vector
         self%prev_ref   = (self%prev_state-1)*self%nprojs + s3D%prev_proj(self%iptcl_map) ! previous reference
         if( self%prev_state > 0 )then
             if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_strategy3D_srch'
@@ -146,7 +146,11 @@ contains
         endif
         ! B-factor memoization
         if( pftcc_glob%objfun_is_ccres() )then
-            bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
+            if( params_glob%l_bfac_static )then
+                bfac = params_glob%bfac_static
+            else
+                bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
+            endif
             call pftcc_glob%memoize_bfac(self%iptcl, bfac)
             call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)
         endif

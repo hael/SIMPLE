@@ -10,7 +10,7 @@ use simple_parameters,       only: params_glob
 use simple_classaverager
 implicit none
 
-public :: cluster2D_exec!, preppftcc4align, pftcc
+public :: cluster2D_exec
 private
 #include "simple_local_flags.inc"
 
@@ -48,7 +48,6 @@ contains
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy2D base class
-        !class(strategy2D), pointer :: strategy2Dsrch(:)
         type(strategy2D_spec) :: strategy2Dspec
         integer               :: iptcl, icls, i, fnr, cnt, update_cnt
         real                  :: extr_bound, frac_srch_space, extr_thresh

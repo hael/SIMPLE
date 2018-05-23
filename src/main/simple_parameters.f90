@@ -284,7 +284,7 @@ type :: parameters
     real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
-    real    :: bfac_fixed=0.       !< bfactor for weighted cros-correlation objection function
+    real    :: bfac_static=0.       !< bfactor for weighted cros-correlation objection function
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
@@ -372,7 +372,7 @@ type :: parameters
     logical :: l_doshift      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_autoscale    = .false.
-    logical :: l_bfac_fixed   = .false.
+    logical :: l_bfac_static   = .false.
     logical :: l_dose_weight  = .false.
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
@@ -658,7 +658,7 @@ contains
         call check_rarg('athres',         self%athres)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
-        call check_rarg('bfac_fixed',     self%bfac_fixed)
+        call check_rarg('bfac_static',     self%bfac_static)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
@@ -1025,12 +1025,7 @@ contains
             endif
         endif
         ! fractional search and volume update
-        if( self%update_frac <= .99)then
-            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_parameters :: constructor'
-            if( nint(self%update_frac*real(self%nptcls)) < 1 )&
-                &stop 'UPDATE_FRAC is too small 2; simple_parameters :: constructor'
-            self%l_frac_update = .true.
-        endif
+        if( self%update_frac <= .99) self%l_frac_update = .true.
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
@@ -1067,7 +1062,7 @@ contains
         self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
         self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
         ! bfactor for objective function
-        self%l_bfac_fixed = cline%defined('bfac_fixed')
+        self%l_bfac_static = cline%defined('bfac_static')
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then
@@ -1261,12 +1256,9 @@ contains
         end select
 !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
-        if(associated(params_glob))then
-            write(*,*)'*** WARNING: TRYING TO RESET PARAMS_GLOB POINTER!!'
-        else
+        if( .not. associated(params_glob) )then
             params_glob => self
         endif
-        ! params_glob => self
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
         contains

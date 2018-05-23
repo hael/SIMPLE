@@ -102,7 +102,7 @@ contains
                 endif
                 if( s2D%cls_pops(iref) == 0 )then
                     ! empty class
-                    do_inplsrch = .false.               ! no in-plane search
+                    do_inplsrch = .false.                 ! no in-plane search
                     inpl_ind    = irnd_uni(self%s%nrots)  ! random in-plane
                     nptcls      = build_glob%spproj_field%get_noris()
                     inpl_corr   = -1.
