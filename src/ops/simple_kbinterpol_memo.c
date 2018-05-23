@@ -8,9 +8,8 @@ static double dx = 0.;
 static int Nx = -1;
 
 static double* apod_mem         = NULL;
-static double* apod_deriv_mem   = NULL;
 static double* dapod_mem        = NULL;
-static double* dapod_deriv_mem  = NULL;
+static double* ddapod_mem       = NULL;
 
 #ifndef M_PI
 const double M_PI = 3.14159265358979323846;
@@ -29,10 +28,12 @@ float  apod_nointerp_sp(float x);
 float  apod_lininterp_sp(float x);
 static double apod( double x );
 static double dapod( double x ) ;
+static double ddapod( double x );
 static double bessi0( double x );
 static double bessi1( double x );
 static double deallocate();
-
+static double bessin( size_t n, double x );
+    
 void
 kbinterp_memo_set( double Whalf_in, double alpha_in, int Nx_in )
 {
@@ -63,34 +64,16 @@ kbinterp_memo_memoize()
     int i;
     double x;
     deallocate();
-    apod_mem        = (double*)malloc(sizeof(double)*Nx);
-    apod_deriv_mem  = (double*)malloc(sizeof(double)*Nx);
-    dapod_mem       = (double*)malloc(sizeof(double)*Nx);
-    dapod_deriv_mem = (double*)malloc(sizeof(double)*Nx);
+    apod_mem         = (double*)malloc(sizeof(double)*Nx);
+    dapod_mem        = (double*)malloc(sizeof(double)*Nx);
+    ddapod_mem       = (double*)malloc(sizeof(double)*Nx);
     for (i = 0; i < Nx; ++i)
     {
 	x = dx * i;
 	apod_mem[i]  = apod(x);
 	dapod_mem[i] = dapod(x);
-    }
-     apod_deriv_mem[0] = ( apod_mem[1]    -  apod_mem[0]   ) / dx; // forward deriv
-    dapod_deriv_mem[0] = (dapod_mem[1]    - dapod_mem[0]   ) / dx; // forward deriv
-     apod_deriv_mem[1] = 2.0 * ( apod_mem[3]    -  apod_mem[0]   ) / (2. * dx); // 3p stencil
-    dapod_deriv_mem[1] = 2.0 * (dapod_mem[3]    - dapod_mem[0]   ) / (2. * dx); // 3p stencil
-
-    for (i = 2; i < Nx-3; ++i)
-    {
-	/* 5p stencil */
-	 apod_deriv_mem[i] = (- apod_mem[i+2]+ 8. *  apod_mem[i+1] - 8. *  apod_mem[i-1] +  apod_mem[i-2]) / (12. * dx);
-	dapod_deriv_mem[i] = (-dapod_mem[i+2]+ 8. * dapod_mem[i+1] - 8. * dapod_mem[i-1] + dapod_mem[i-2]) / (12. * dx);
-    }
-
-     apod_deriv_mem[Nx-3] = ( apod_mem[Nx-3] -  apod_mem[Nx-4]) / dx; // forward deriv
-    dapod_deriv_mem[Nx-3] = (dapod_mem[Nx-3] - dapod_mem[Nx-4]) / dx; // forward deriv
-     apod_deriv_mem[Nx-2] = ( apod_mem[Nx-2] -  apod_mem[Nx-3]) / dx; // forward deriv
-    dapod_deriv_mem[Nx-2] = (dapod_mem[Nx-2] - dapod_mem[Nx-3]) / dx; // forward deriv
-     apod_deriv_mem[Nx-1] = 0.;
-    dapod_deriv_mem[Nx-1] = 0.;
+        ddapod_mem[i] = ddapod(x);
+    }    
 }
 
 void
@@ -130,7 +113,7 @@ apod_lininterp(double x)
 	return 0.;
     x0 = i * dx;
     delta = x - x0;
-    return apod_mem[i] + delta * apod_deriv_mem[i];
+    return apod_mem[i] + delta * dapod_mem[i];
 }
 
 double
@@ -154,7 +137,7 @@ dapod_lininterp(double x)
 	return 0.;
     x0 = i * dx;
     delta = x - x0;
-    return dapod_mem[i] + delta * dapod_deriv_mem[i];
+    return dapod_mem[i] + delta * ddapod_mem[i];
 }
 
 float
@@ -178,7 +161,7 @@ apod_lininterp_sp(float x)
 	return 0.;
     x0 = i * dx;
     delta = x - x0;
-    return (float)(apod_mem[i] + delta * apod_deriv_mem[i]);
+    return (float)(apod_mem[i] + delta * dapod_mem[i]);
 }
 
 float
@@ -202,7 +185,7 @@ dapod_lininterp_sp(float x)
 	return 0.;
     x0 = i * dx;
     delta = x - x0;
-    return (float)(dapod_mem[i] + delta * dapod_deriv_mem[i]);
+    return (float)(dapod_mem[i] + delta * ddapod_mem[i]);
 }
 
 static double
@@ -225,6 +208,23 @@ dapod( double x )
     sqrtarg = sqrt(arg);
     return - 4. * beta * x * bessi1(beta * sqrtarg) /
         sqrtarg / (W * W * W);
+}
+
+static double
+ddapod( double x)
+{
+  /* dd apod = -4*beta/(W^3*arg)*I1(beta*arg) + 8*beta^2*x^2/(W^5*arg^2)*(I0(beta*arg)+I2(beta*arg)) - 16*beta*x^2/(W^5*arg^3)*I2(beta*arg)
+   *         = -(4*W^2*beta*ar + 16*beta*x^2)/(W^5*arg^3)*I1 + 8*beta^2*x^2/(W^5*ar)*(I0 + I2)               
+   * where ar = 1 - (4*x/W)^2, arg = sqrt(ar), I0:=I0(beta*arg), ...
+   */
+  double r, arg, sqrtarg, T1, T2;
+  arg = twooW * x;
+  arg = 1. - arg * arg;
+  if (arg <= 0.) return 0.;
+  sqrtarg = sqrt(arg);
+  T1 = - (4. * W * W * beta * arg + 16. * beta * x * x) / (W*W*W*W*W*sqrtarg*sqrtarg*sqrtarg) * bessi1(beta*sqrtarg);
+  T2 = 8. * beta * beta * x * x / (W*W*W*W*W * arg) * (bessi0(beta*sqrtarg) + bessin(2, beta*sqrtarg));
+  return T1 + T2;
 }
 
 static double
@@ -276,14 +276,51 @@ bessi1( double x )
 }
 
 static double
+bessin( size_t n, double x )
+{
+    const int IACC = 40;
+    const double BIGNO = 1E10, BIGNI = 1E-10;
+    int j, m;
+    double bi, bim, bip, tox, bessi;
+    if (n < 2)
+    {
+	printf("bad argument n in bessi\n");
+	exit(1);
+    }
+    if ( x < 0. )
+    {
+	return 0.;
+    }
+    tox = 2. / fabs(x);
+    bip = 0.;
+    bi  = 1.;
+    bessi = 0.;
+    m = 2*( ( n + (int)(sqrt((double)(IACC*n)))));
+    for (j = m; j >= 1; --j)
+    {
+	bim = bip + (double)(j) * tox * bi;
+	bip = bi;
+	bi = bim;	
+	if (fabs(bi) > BIGNO)
+	{
+	    bessi = bessi * BIGNI;
+	    bi = bi * BIGNI;
+	    bip = bip * BIGNI;	    
+	}
+	if (j == n) bessi = bip;	
+    }
+    bessi = bessi * bessi0(x) / bi;
+    if ((x < 0.) && (n%2 == 1)) bessi = - bessi;
+    return bessi;
+}
+
+static double
 deallocate()
 {
     if (apod_mem != NULL)
 	free(apod_mem);
-    if (apod_deriv_mem != NULL)
-	free(apod_deriv_mem);
     if (dapod_mem != NULL)
 	free(dapod_mem);
-    if (dapod_deriv_mem != NULL)
-	free(dapod_deriv_mem);
+    if (ddapod_mem != NULL)
+	free(ddapod_mem);
 }
