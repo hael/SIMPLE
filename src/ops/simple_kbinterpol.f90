@@ -341,5 +341,5 @@ contains
             y = y / (((xsq+Q2)*xsq+Q1)*xsq + Q0)
         end if
     end function sinhc
-    
+
 end module simple_kbinterpol

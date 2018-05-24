@@ -270,7 +270,7 @@ contains
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
         if( params_glob%l_doshift )then
-            call cline%set('trs', params%trs)        ! activates shift search
+            call cline%set('trs', params_glob%trs)        ! activates shift search
         endif
         if( converged )then
             call cline%set('converged', 'yes')

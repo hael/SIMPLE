@@ -12,9 +12,10 @@ type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)
     type(qsys_ctrl),           public  :: qscripts
     type(chash),               public  :: qdescr
-    character(len=STDLEN),     private :: simple_exec_bin
+    character(len=STDLEN),     private :: simple_exec_bin, ext
     type(qsys_factory),        private :: qsys_fac
     class(qsys_base), pointer, private :: myqsys=>null()
+    integer,                   private :: nparts
     logical,                   private :: existence = .false.
   contains
     procedure :: new
@@ -29,30 +30,30 @@ contains
     subroutine new( self, stream, numlen )
         use simple_ori,        only: ori
         use simple_sp_project, only: sp_project
-        class(qsys_env), intent(inout) :: self
-        logical, optional,  intent(in) :: stream
-        integer, optional,  intent(in) :: numlen
+        class(qsys_env),             intent(inout) :: self
+        logical,           optional, intent(in)    :: stream
+        integer,           optional, intent(in)    :: numlen
         type(ori)                     :: compenv_o
         type(sp_project)              :: spproj
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
-        integer                       :: partsz, hrs, mins, secs, nparts
+        integer                       :: partsz, hrs, mins, secs
         real                          :: rtpi, tot_time_sec
         logical                       :: sstream
         integer, parameter            :: MAXENVKEYS = 30
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream
-        nparts = params_glob%nparts
-        select case(params_glob%split_mode)
+        self%nparts = params_glob%nparts
+        select case(trim(params_glob%split_mode))
             case('even')
-                self%parts = split_nobjs_even(params_glob%nptcls, nparts)
+                self%parts = split_nobjs_even(params_glob%nptcls, self%nparts)
                 partsz     = self%parts(1,2) - self%parts(1,1) + 1
             case('singles')
                 allocate(self%parts(params_glob%nptcls,2))
                 self%parts(:,:) = 1
                 partsz          = 1
             case('stream')
-                nparts = params_glob%ncunits
+                self%nparts = params_glob%ncunits
                 allocate(self%parts(params_glob%nptcls,2)) ! unused
                 self%parts(:,:) = 1              ! unused
                 partsz          = 1              ! unused
@@ -92,10 +93,10 @@ contains
         self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_private_exec'
         if( present(numlen) )then
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-            &[1, nparts], params_glob%ncunits, sstream, numlen)
+            &[1, self%nparts], params_glob%ncunits, sstream, numlen)
         else
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-            &[1, nparts], params_glob%ncunits, sstream)
+            &[1, self%nparts], params_glob%ncunits, sstream)
         endif
         call self%qdescr%set('job_cpus_per_task', int2str(params_glob%nthr))   ! overrides env file
         call self%qdescr%set('job_nparts',        int2str(params_glob%nparts)) ! overrides env file
@@ -112,10 +113,10 @@ contains
     subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody )
         class(qsys_env)            :: self
         class(chash)               :: job_descr
-        class(chash),     optional :: part_params(params_glob%nparts)
+        class(chash),     optional :: part_params(self%nparts)
         character(len=*), optional :: algnfbody
         call qsys_cleanup
-        call self%qscripts%generate_scripts(job_descr, params_glob%ext, self%qdescr,&
+        call self%qscripts%generate_scripts(job_descr, trim(params_glob%ext), self%qdescr,&
         outfile_body=algnfbody, part_params=part_params)
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs

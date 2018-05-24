@@ -440,7 +440,7 @@ contains
             call cline_make_cavgs%set('refs', refs_glob)
             call xmake_cavgs%execute(cline_make_cavgs) ! need be distributed
         endif
-        call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd, 'cavg')
+        call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
         call orig_proj%write_segment_inside('out',fromto=[1,1])
         ! cleanup
         call qsys_cleanup
@@ -461,7 +461,7 @@ contains
                 if( do_autoscale )call work_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
                 orig_proj%os_ptcl2D = work_proj%os_ptcl2D
                 orig_proj%os_ptcl3D = work_proj%os_ptcl3D ! to wipe the 3d segment
-                call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd, 'cavg')
+                call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
                 call orig_proj%write()
             end subroutine update_orig_proj
 
@@ -603,13 +603,13 @@ contains
         type(qsys_env)                      :: qenv
         class(cmdline),         allocatable :: completed_jobs_clines(:)
         character(LONGSTRLEN),  allocatable :: spproj_list(:)
-        character(len=:),       allocatable :: spproj_list_fname, stream_projfname, output_dir, output_dir_picker, output_dir_extract, projfname
+        character(len=:),       allocatable :: spproj_list_fname, output_dir, output_dir_picker, output_dir_extract, projfname
         integer :: iter, origproj_time, tnow, iproj, icline, nptcls, prev_stacksz, stacksz
-        integer :: last_injection, n_spprojs, n_spprojs_prev, nmics
+        integer :: last_injection, n_spprojs, n_spprojs_prev, n_newspprojs, nmics
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
-        ! set oritype
+        ! set oritype & defaults
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('stream','yes')
         call cline%set('numlen', real(5))
@@ -622,7 +622,7 @@ contains
         ! read project info
         call orig_proj%read(params%projfile)
         ! setup the environment for distributed execution
-        call qenv%new( stream=.true. )
+        call qenv%new(stream=.true.)
         ! output directories
         output_dir = './'
         output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
@@ -639,6 +639,7 @@ contains
         origproj_time   = last_injection
         prev_stacksz    = 0
         n_spprojs       = 0
+        n_spprojs_prev  = 0
         do iter = 1,999999
             tnow = simple_gettime()
             if(tnow-last_injection > params%time_inactive)then
@@ -648,48 +649,45 @@ contains
             if( file_exists(spproj_list_fname) )then
                 if( .not.is_file_open(spproj_list_fname) )then
                     call read_filetable(spproj_list_fname, spproj_list)
-                    if( allocated(spproj_list) )then
-                        ! determine number of micrographs
-                        n_spprojs_prev = n_spprojs
-                        n_spprojs      = size(spproj_list)
-                    endif
-                    if( n_spprojs > n_spprojs_prev )then
+                    if( allocated(spproj_list) )n_spprojs = size(spproj_list)
+                    n_newspprojs = n_spprojs - n_spprojs_prev
+                    if( n_newspprojs > 0 )then
                         ! copy projects and add to processing stack
-                        do iproj = 1,n_spprojs
+                        do iproj = n_spprojs_prev+1, n_spprojs
                             call stream_proj%read(spproj_list(iproj))
                             projfname  = './'//trim(basename(spproj_list(iproj)))
-                            print *,iproj,trim(projfname)
                             call stream_proj%write(projfname)
                             call cline_pick_extract%set('projfile', trim(projfname))
                             call qenv%qscripts%add_to_streaming( cline_pick_extract )
                             call stream_proj%kill
                             deallocate(projfname)
                         enddo
-                        ! streaming scheduling
-                        call qenv%qscripts%schedule_streaming( qenv%qdescr )
-                        stacksz = qenv%qscripts%get_stacksz()
-                        if( stacksz .ne. prev_stacksz )then
-                            prev_stacksz = stacksz
-                            write(*,'(A,I5)')'>>> MICROGRAPHS TO PROCESS: ', stacksz
-                        endif
-                        ! completed jobs update the current project
-                        if( qenv%qscripts%get_done_stacksz() > 0 )then
-                            call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                            do icline=1,size(completed_jobs_clines)
-                                stream_projfname = completed_jobs_clines(icline)%get_carg('projfile')
-                                call stream_proj%read( stream_projfname )
-                                call orig_proj%append_project(stream_proj, 'mic')
-                                call orig_proj%append_project(stream_proj, 'stk')
-                                call stream_proj%kill()
-                                deallocate(stream_projfname)
-                            enddo
-                            nptcls = orig_proj%get_nptcls()
-                            nmics  = orig_proj%get_nintgs()
-                            write(*,'(A,I8)')'>>> MICROGRAPHS COUNT: ', nmics
-                            write(*,'(A,I8)')'>>> PARTICLES   COUNT: ', nptcls
-                            call orig_proj%write
-                            deallocate(completed_jobs_clines)
-                        endif
+                        n_spprojs_prev = n_spprojs
+                    endif
+                    ! streaming scheduling
+                    call qenv%qscripts%schedule_streaming( qenv%qdescr )
+                    stacksz = qenv%qscripts%get_stacksz()
+                    if( stacksz .ne. prev_stacksz )then
+                        prev_stacksz = stacksz
+                        write(*,'(A,I5)')'>>> MICROGRAPHS TO PROCESS: ', stacksz
+                    endif
+                    ! completed jobs update the current project
+                    if( qenv%qscripts%get_done_stacksz() > 0 )then
+                        call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
+                        do icline=1,size(completed_jobs_clines)
+                            projfname = completed_jobs_clines(icline)%get_carg('projfile')
+                            call stream_proj%read( projfname )
+                            call orig_proj%append_project(stream_proj, 'mic')
+                            call orig_proj%append_project(stream_proj, 'stk')
+                            call stream_proj%kill()
+                            deallocate(projfname)
+                        enddo
+                        nptcls = orig_proj%get_nptcls()
+                        nmics  = orig_proj%get_nintgs()
+                        write(*,'(A,I8)')'>>> NEW MICROGRAPHS COUNT: ', nmics
+                        write(*,'(A,I8)')'>>> NEW PARTICLES   COUNT: ', nptcls
+                        call orig_proj%write
+                        deallocate(completed_jobs_clines)
                     endif
                 endif
             endif

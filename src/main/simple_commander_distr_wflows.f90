@@ -94,8 +94,7 @@ contains
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         type(sp_project)              :: spproj
-        character(len=:), allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
-        character(len=:), allocatable :: output_dir_motion_correct
+        character(len=:), allocatable :: output_dir
         logical                       :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -505,6 +504,7 @@ contains
     end subroutine exec_cluster2D_distr
 
     subroutine exec_refine3D_init_distr( self, cline )
+        use simple_parameters, only: params_glob
         class(refine3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)      :: params

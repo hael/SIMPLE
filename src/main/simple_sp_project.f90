@@ -59,6 +59,7 @@ contains
     procedure, private :: add_entry2os_out
     procedure          :: get_cavgs_stk
     procedure          :: get_frcs
+    procedure          :: get_nptcls_from_osout
     ! getters
     procedure          :: get_nptcls
     procedure          :: get_box
@@ -985,25 +986,18 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd, which_imgkind )
+    subroutine add_cavgs2os_out( self, stk, smpd)
         class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: stk, which_imgkind
+        character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
         character(len=:), allocatable :: stk_abspath
         integer :: ldim(3), nptcls, ind
-        select case(trim(which_imgkind))
-            case('cavg','cavg_even','cavg_odd')
-                ! all good
-            case DEFAULT
-                write(*,*)'Invalid CAVG kind: ', trim(which_imgkind)
-                stop 'sp_project :: add_cavgs2os_out'
-        end select
         ! full path and existence check
         call simple_full_path(stk, stk_abspath, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         ! add os_out entry
-        call self%add_entry2os_out(which_imgkind, ind)
+        call self%add_entry2os_out('cavg', ind)
         ! fill-in field
         call self%os_out%set(ind, 'stk',     trim(stk_abspath))
         call self%os_out%set(ind, 'box',     real(ldim(1)))
@@ -1012,7 +1006,7 @@ contains
         call self%os_out%set(ind, 'top',     real(nptcls))
         call self%os_out%set(ind, 'smpd',    real(smpd))
         call self%os_out%set(ind, 'stkkind', 'single')
-        call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
+        call self%os_out%set(ind, 'imgkind', 'cavg')
         call self%os_out%set(ind, 'ctf',     'no')
     end subroutine add_cavgs2os_out
 
@@ -1119,23 +1113,15 @@ contains
         endif
     end subroutine add_entry2os_out
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, which_imgkind, fail )
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, fail )
         class(sp_project),             intent(inout) :: self
         character(len=:), allocatable, intent(inout) :: stkname
         integer,                       intent(out)   :: ncls
         real,                          intent(out)   :: smpd
-        character(len=*),              intent(in)    :: which_imgkind
         logical,          optional,    intent(in)    :: fail
         character(len=:), allocatable :: imgkind
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
-        select case(trim(which_imgkind))
-            case('cavg','cavg_even','cavg_odd')
-                ! all good
-            case DEFAULT
-                write(*,*)'Invalid CAVG kind: ', trim(which_imgkind)
-                stop 'sp_project :: get_cavgs_stk'
-        end select
         fail_here = .true.
         if( present(fail) )fail_here = fail
         ! check if field is empty
@@ -1147,7 +1133,7 @@ contains
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
                 call self%os_out%getter(i,'imgkind',imgkind)
-                if(trim(imgkind).eq.trim(which_imgkind))then
+                if(trim(imgkind).eq.'cavg')then
                     ind = i
                     cnt = cnt + 1
                 endif
@@ -1210,6 +1196,30 @@ contains
             frcs = NIL
         endif
     end subroutine get_frcs
+
+    integer function get_nptcls_from_osout( self )
+        class(sp_project), target, intent(inout) :: self
+        character(len=LONGSTRLEN) :: imgkind
+        integer :: i, nos
+        get_nptcls_from_osout = 0
+        nos = self%os_out%get_noris()
+        if( nos == 0 )return
+        ! look for cavgs, defaults to zero for other entries (frcs, volumes)
+        do i=1,nos
+            if( self%os_out%isthere(i,'imgkind') )then
+                imgkind = self%os_out%get_static(i,'imgkind')
+                if(trim(imgkind).eq.'cavg')then
+                    if( self%os_out%isthere(i,'fromp').and.self%os_out%isthere(i,'top') )then
+                        get_nptcls_from_osout = get_nptcls_from_osout +&
+                            &nint(self%os_out%get(i,'top')) - nint(self%os_out%get(i,'fromp')) + 1
+                    else
+                        write(*,*) 'Missing fromp and top entries in cavg ', i
+                        stop 'Missing fromp and top entries in cavg ; sp_project :: get_nptcls_from_osout'
+                    endif
+                endif
+            endif
+        end do
+    end function get_nptcls_from_osout
 
     ! getters
 
@@ -1278,7 +1288,6 @@ contains
 
     integer function get_nintgs( self )
         class(sp_project), target, intent(inout) :: self
-        character(len=:), allocatable :: imgkind
         integer :: i
         get_nintgs = 0
         do i=1,self%os_mic%get_noris()

@@ -54,6 +54,7 @@ type binoris
     procedure          :: get_n_records
     procedure          :: get_n_bytes_per_record
     procedure          :: get_n_bytes_tot
+    procedure          :: is_opened
 end type binoris
 
 contains
@@ -542,5 +543,10 @@ contains
             endif
         end do
     end function get_n_bytes_tot
+
+    logical function is_opened( self )
+        class(binoris), intent(in) :: self
+        is_opened = self%l_open
+    end function is_opened
 
 end module simple_binoris

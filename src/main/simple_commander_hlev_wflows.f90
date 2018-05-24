@@ -185,7 +185,7 @@ contains
         ! adding cavgs & FRCs to project & perform match filtering
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-        call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd(), 'cavg')
+        call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd())
         call spproj%write_segment_inside('out')
         call spproj%kill()
         ! ranking
@@ -232,17 +232,16 @@ contains
         type(cmdline) :: cline_reproject
         type(cmdline) :: cline_scale
         ! other variables
-        character(len=:), allocatable :: projfile, stk, stk_even, stk_odd, stk_filt, ori_stk
-        character(len=:), allocatable :: imgkind, frcs_fname, WORK_PROJFILE
+        character(len=:), allocatable :: projfile, stk, stk_even, stk_odd, stk_filt, orig_stk
+        character(len=:), allocatable :: WORK_PROJFILE
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(sp_project)      :: spproj, work_proj
         type(oris)            :: os
-        real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd
-        integer               :: ncavgs, orig_box, box, istk
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter
-        integer               :: status
+        real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk
+        integer               :: ncavgs, orig_box, box, istk, status
         logical               :: srch4symaxis, do_autoscale, do_eo
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
@@ -273,7 +272,6 @@ contains
             endif
         endif
         ! set lplims
-        ! default
         lplims(1) = 20.
         lplims(2) = 10.
         ! passed
@@ -282,9 +280,9 @@ contains
         ! read project & update sampling distance
         call spproj%read(params%projfile)
         ! retrieve cavgs stack & FRCS info
-        call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd, 'cavg')
+        call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
         params%smpd = ctfvars%smpd
-        ori_stk       = stk
+        orig_stk    = stk
         if( do_eo )call gen_eo_stks
         ! prepare a temporary project file for the class average processing
         allocate(WORK_PROJFILE, source=trim(ORIG_WORK_PROJFILE))
@@ -320,7 +318,6 @@ contains
         if( do_autoscale )then
             deallocate(WORK_PROJFILE)
             call work_proj%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale)
-            call cline_scale%set('nparts',1.) ! shared memory
             scale_factor = cline_scale%get_rarg('scale')
             box          = nint(cline_scale%get_rarg('newbox'))
             msk          = cline%get_rarg('msk')
@@ -467,7 +464,7 @@ contains
         if( do_eo )then
             call work_proj%add_single_stk(trim(stk_filt), ctfvars, os)
         else
-            call work_proj%add_single_stk(trim(ori_stk), ctfvars, os)
+            call work_proj%add_single_stk(trim(orig_stk), ctfvars, os)
         endif
         call spproj%kill
         ! name change
@@ -479,13 +476,9 @@ contains
         ! split
         call work_proj%split_stk(params%nparts)
         call work_proj%kill()
-        ! reconstruct at original scale
+        ! refinement stage
         if( do_autoscale )then
-            ! write(*,'(A)') '>>>'
-            ! write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
-            ! write(*,'(A)') '>>>'
-            ! call xreconstruct3D%execute(cline_reconstruct3D)
-            ! status = simple_rename(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(vol_iter))
+            ! refine3d_init will take care of reconstruction at original scale
         else
             call cline_refine3D_refine%set('vol1', trim(vol_iter))
         endif
@@ -508,7 +501,7 @@ contains
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         ! add rec_final to os_out
-        call spproj%add_vol2os_out('rec_final'//params%ext, spproj%get_smpd(), 1, 'vol_cavg')
+        call spproj%add_vol2os_out('rec_final'//params%ext, params%smpd, 1, 'vol_cavg')
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! reprojections
@@ -537,17 +530,12 @@ contains
                 use simple_commander_imgproc, only: filter_commander
                 type(filter_commander) :: xfilter
                 type(cmdline)          :: cline_filter
-                character(len=:), allocatable :: frcs_fname, stk_filt_even, stk_filt_odd
-                character(len=:), allocatable :: stk_even, stk_odd, ext
-                real    :: smpd
-                integer :: n
+                character(len=:), allocatable :: frcs_fname, stk_filt_even, stk_filt_odd, ext
                 ext = '.'//fname2ext( stk )
                 call spproj%get_frcs(frcs_fname, 'frc2D')
-                call spproj%get_cavgs_stk(stk_odd, n, smpd, 'cavg_odd')
-                call spproj%get_cavgs_stk(stk_even, n, smpd, 'cavg_even')
                 stk_filt      = add2fbody(trim(stk), trim(ext), '_filt')
-                stk_filt_even = add2fbody(trim(stk_even), trim(ext), '_filt')
-                stk_filt_odd  = add2fbody(trim(stk_odd),  trim(ext), '_filt')
+                stk_filt_even = add2fbody(trim(stk), trim(ext), '_even_filt')
+                stk_filt_odd  = add2fbody(trim(stk), trim(ext), '_odd_filt')
                 call cline_filter%set('prg',  'filter')
                 call cline_filter%set('nthr', real(params%nthr))
                 call cline_filter%set('smpd', params%smpd)

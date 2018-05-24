@@ -393,16 +393,19 @@ class(parameters), pointer :: params_glob => null()
 contains
 
     subroutine new( self, cline )
-        use simple_ori,     only: ori
-        use simple_binoris, only: binoris
+        use simple_ori,        only: ori
+        use simple_sp_project, only: sp_project
+        use simple_binoris,    only: binoris
         class(parameters), target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: sp_files(:)
-        character(len=:),          allocatable :: stk_part_fname_sc, phaseplate, ctfflag, imgfmt, debug_local, verbose_local
+        character(len=:),          allocatable :: stk_part_fname_sc, phaseplate, ctfflag
+        character(len=:),          allocatable :: imgfmt, debug_local, verbose_local
         logical               :: vol_defined(MAXS)
         character(len=STDLEN) :: stk_part_fname
         character(len=1)      :: checkupfile(50)
         type(binoris)         :: bos
+        type(sp_project)      :: spproj
         type(ori)             :: o
         integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer               :: idir, nsp_files
@@ -883,9 +886,21 @@ contains
         if( file_exists(trim(self%projfile)) )then ! existence should be the only requirement here (not sp_required)
                                                    ! or the private_exec programs don't get what they need
             ! get nptcls/box/smpd from project file
-            call bos%open(trim(self%projfile))
             if( self%stream.eq.'no' )then
-                if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_iseg)
+                ! nptcls
+                if( .not. cline%defined('nptcls') )then
+                    select case(self%spproj_iseg)
+                        case(OUT_SEG)
+                            call spproj%read_segment('out', self%projfile) ! projfile opened here
+                            self%nptcls = spproj%get_nptcls_from_osout()
+                            call spproj%kill
+                            call bos%open(trim(self%projfile)) ! projfile opened here
+                        case DEFAULT
+                            call bos%open(trim(self%projfile)) ! projfile opened here
+                            self%nptcls = bos%get_n_records(self%spproj_iseg)
+                    end select
+                endif
+                ! smpd/box
                 call o%new
                 select case(self%spproj_iseg)
                     case(MIC_SEG)
@@ -902,6 +917,7 @@ contains
             else
                 ! nothing to do for streaming, values set at runtime
             endif
+            if( .not.bos%is_opened() )call bos%open(trim(self%projfile)) ! projfile opened here
             ! image format
             if( trim(self%ext).eq.'' )then
                 call bos%read_first_segment_record(PROJINFO_SEG, o)

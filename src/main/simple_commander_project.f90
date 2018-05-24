@@ -625,7 +625,7 @@ contains
         type(sp_project) :: spproj
         call params%new(cline)
         if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
-        call spproj%add_cavgs2os_out(params%stk, params%smpd, 'cavg')
+        call spproj%add_cavgs2os_out(params%stk, params%smpd)
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
