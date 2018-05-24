@@ -94,18 +94,22 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(params_glob%refine)
+
+
             case('cluster', 'snhc', 'clustersym', 'clusterdev', 'cont_single')
                 npeaks = 1
+            case('hard_single','hard_multi')
+                npeaks = MAXNPEAKS
+                ! command line overrides
+                if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
             case DEFAULT
-                if( cline%defined('npeaks') )then
-                    npeaks = params_glob%npeaks
+                if( params_glob%eo .ne. 'no' )then
+                    npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                 else
-                    if( params_glob%eo .ne. 'no' )then
-                        npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
-                    else
-                        npeaks = min(10,build_glob%eulspace%find_npeaks(params_glob%lp, params_glob%moldiam))
-                    endif
+                    npeaks = min(10,build_glob%eulspace%find_npeaks(params_glob%lp, params_glob%moldiam))
                 endif
+                ! command line overrides
+                if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
         end select
         if( DEBUG ) print *, '*** strategy3D_matcher ***: determined the number of peaks'
 

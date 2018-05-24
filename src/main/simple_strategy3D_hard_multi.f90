@@ -96,7 +96,7 @@ contains
         real      :: dist_inpl, euldist
         integer   :: best_loc(1)
         ! extract peak info
-        call prob_select_peak( self%s )
+        call prob_select_peak( self%s, params_glob%tau )
         best_loc(1) = 1 ! by definition
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&

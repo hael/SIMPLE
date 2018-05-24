@@ -145,12 +145,9 @@ contains
         allocate(pvec_sorted(n), source=pvec)
         inds = (/(i,i=1,n)/)
         call hpsort(pvec_sorted, inds)
-        if( sum(pvec_sorted) >= 1.001 )then
-            stop 'probability distribution does not sum up to 1.; multinomal; simple_rnd;'
-        endif
         rnd = ran3()
-        do which=1,n
-            bound = sum(pvec_sorted(1:which))
+        do which=n,1,-1
+            bound = sum(pvec_sorted(which:n))
             if( rnd <= bound )exit
         enddo
         which = inds(which)
