@@ -23,7 +23,9 @@ use simple_strategy3D_single,        only: strategy3D_single
 use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
 use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
+use simple_strategy3D_hard_single,   only: strategy3D_hard_single
 use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
+use simple_strategy3D_hard_multi,    only: strategy3D_hard_multi
 use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec
@@ -60,7 +62,7 @@ contains
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy3D base class
         type(strategy3D_spec) :: strategy3Dspec
-        type(ori)             :: orientation
+        type(ori)             :: orientation, orientation2
         type(kbinterpol)      :: kbwin
         type(sym)             :: c1_symop
         type(prep4cgrid)      :: gridprep
@@ -97,7 +99,7 @@ contains
             case DEFAULT
                 if( cline%defined('npeaks') )then
                     npeaks = params_glob%npeaks
-                else    
+                else
                     if( params_glob%eo .ne. 'no' )then
                         npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
@@ -230,6 +232,24 @@ contains
                         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch single",alloc_stat)
                     endif
                 end do
+            case('hard_single')
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        allocate(strategy3D_hard_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
+                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_single",alloc_stat)
+                    endif
+                end do
+            case('greedy_single')
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
+                end do
+            case('cont_single')
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
+                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                    endif
+                end do
             case('multi')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
@@ -242,16 +262,12 @@ contains
                         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch multi",alloc_stat)
                     endif
                 end do
-            case('cont_single')
+            case('hard_multi')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                        allocate(strategy3D_hard_multi :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
+                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_multi",alloc_stat)
                     endif
-                end do
-            case('greedy_single')
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('greedy_multi')
                 do iptcl=params_glob%fromp,params_glob%top
@@ -365,7 +381,7 @@ contains
                 ibatch = i - batchlims(1) + 1
                 ! normalise (read_imgbatch does not normalise)
                 call build_glob%imgbatch(ibatch)%norm()
-                ! in dev=yes code, we filter before inserting into 3D vol
+                ! prepare for gridding
                 call gridprep%prep_serial_no_fft(build_glob%imgbatch(ibatch), rec_imgs(ibatch))
             end do
             !$omp end parallel do
@@ -376,12 +392,16 @@ contains
                 orientation = build_glob%spproj_field%get_ori(iptcl)
                 ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 if( orientation%isstatezero() ) cycle
-                if( trim(params_glob%refine).eq.'clustersym' )then
-                    ! always C1 reconstruction
-                    call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
-                else
-                    call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
-                endif
+                select case(trim(params_glob%refine))
+                    case('clustersym')
+                        ! always C1 reconstruction
+                        call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
+                    case('hard_multi', 'hard_single')
+                        ! npeaks > 1 but only one is selected for reconstruction by probabilistic logic
+                        call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, ctfvars)
+                    case DEFAULT
+                        call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
+                end select
             end do
         end do
         ! normalise structure factors

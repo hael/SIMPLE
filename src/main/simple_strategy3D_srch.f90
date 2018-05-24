@@ -145,6 +145,7 @@ contains
             self%nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
         endif
         ! B-factor memoization
+        bfac = 0.
         if( pftcc_glob%objfun_is_ccres() )then
             if( params_glob%l_bfac_static )then
                 bfac = params_glob%bfac_static
@@ -152,8 +153,8 @@ contains
                 bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
             endif
             call pftcc_glob%memoize_bfac(self%iptcl, bfac)
-            call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)
         endif
+        call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)
         ! calc specscore
         self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr
@@ -235,8 +236,8 @@ contains
             subroutine per_ref_srch
                 if( s3D%state_exists(istate) )then
                     call pftcc_glob%gencorrs(iref, self%iptcl, self%kstop_grid, inpl_corrs) ! In-plane correlations
-                    inpl_ind   = maxloc(inpl_corrs)                   ! greedy in-plane
-                    inpl_corr  = inpl_corrs(inpl_ind(1))              ! max in plane correlation
+                    inpl_ind   = maxloc(inpl_corrs)                       ! greedy in-plane
+                    inpl_corr  = inpl_corrs(inpl_ind(1))                  ! max in plane correlation
                     s3D%proj_space_corrs(self%iptcl_map,iref) = inpl_corr ! stash in-plane correlation for sorting
                     s3D%proj_space_inds(self%iptcl_map,iref)  = iref      ! stash the index for sorting
                 endif
@@ -255,7 +256,7 @@ contains
                 call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
                 cxy = self%grad_shsrch_obj%minimize(irot=irot)
                 if( irot > 0 )then
-                    ! irot > 0 guarantees improvement found
+                    ! irot > 0 guarantees improvement found, update solution
                     s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
                     s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
                     s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)

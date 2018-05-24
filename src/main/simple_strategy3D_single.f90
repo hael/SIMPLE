@@ -21,8 +21,7 @@ contains
 
     subroutine oris_assign_single( self )
         use simple_ori,  only: ori
-        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_sdev,&
-            &fit_bfactors, convergence_stats_single
+        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_sdev, convergence_stats_single
         class(strategy3D_single), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
@@ -33,8 +32,6 @@ contains
         call extract_peaks( self%s, corrs )
         ! stochastic weights
         call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
-        ! B factors
-        call fit_bfactors( self%s, ws )
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances

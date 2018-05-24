@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! singleton class s3D
 use simple_strategy3D_srch,  only: strategy3D_srch
 use simple_builder,          only: build_glob
+use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
@@ -48,6 +49,62 @@ contains
             call s3D%o_peaks(s%iptcl)%set_shift(ipeak, shvec)
         enddo
     end subroutine extract_peaks
+
+    subroutine prob_select_peak( s )
+        class(strategy3D_srch), intent(inout) :: s
+        real    :: corrs(s%npeaks), shvecs(s%npeaks,2), euls(s%npeaks,3), pvec(s%npeaks)
+        integer :: cnt, inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
+        integer :: prob_peak, ipeak
+        real    :: bound, rnd
+        do ipeak = 1, s%npeaks
+            ! stash peak index
+            inds(ipeak) = ipeak
+            ! stash reference index
+            cnt = s%nrefs - s%npeaks + ipeak
+            refs(ipeak) = s3D%proj_space_inds(s%iptcl_map, cnt)
+            if( refs(ipeak) < 1 .or. refs(ipeak) > s%nrefs )then
+                print *, 'refs(ipeak): ', refs(ipeak)
+                stop 'refs(ipeak) index out of bound; strategy3D_utils :: prob_select_peak'
+            endif
+            ! stash state index
+            if( params_glob%nstates > 1 )then
+                states(ipeak) = s3D%proj_space_state(s%iptcl_map,refs(ipeak))
+                if( .not. s3D%state_exists(states(ipeak)) )then
+                    print *, 'empty states(ipeak): ', states(ipeak)
+                    stop 'strategy3D_utils :: prob_select_peak'
+                endif
+            else
+                states(ipeak) = 1
+            endif
+            ! stash shift (obtained with vector addition)
+            shvecs(ipeak,:) = s%prev_shvec
+            if( s%doshift ) shvecs(ipeak,:) = shvecs(ipeak,:) + s3D%proj_space_shift(s%iptcl_map,refs(ipeak),1:2)
+            where( abs(shvecs(ipeak,:)) < 1e-6 ) shvecs(ipeak,:) = 0.
+            ! stash corr
+            corrs(ipeak) = s3D%proj_space_corrs(s%iptcl_map,refs(ipeak))
+            if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
+            ! stash proj index
+            projs(ipeak) = s3D%proj_space_proj(s%iptcl_map,refs(ipeak))
+            ! stash Euler
+            euls(ipeak,:) = s3D%proj_space_euls(s%iptcl_map,refs(ipeak),1:3)
+        end do
+        ! multinomal peak selection
+        pvec = corrs / sum(corrs)
+        call hpsort(pvec, inds)
+        rnd = ran3()
+        do prob_peak=1,s%npeaks
+            bound = sum(pvec(1:prob_peak))
+            if( rnd <= bound )exit
+        enddo
+        prob_peak = inds(prob_peak) ! translate to unsorted
+        ! update o_peaks
+        call s3D%o_peaks(s%iptcl)%set(1, 'state', real(states(prob_peak)))
+        call s3D%o_peaks(s%iptcl)%set(1, 'proj',  real(projs(prob_peak)))
+        call s3D%o_peaks(s%iptcl)%set(1, 'corr',  corrs(prob_peak))
+        call s3D%o_peaks(s%iptcl)%set(1, 'ow',    1.0)
+        call s3D%o_peaks(s%iptcl)%set_euler(1,    euls(prob_peak,:))
+        call s3D%o_peaks(s%iptcl)%set_shift(1,    shvecs(prob_peak,:))
+    end subroutine prob_select_peak
 
     subroutine corrs2softmax_weights( s, corrs, tau, ws, included, best_loc, wcorr )
         use simple_ori, only: ori
@@ -143,30 +200,30 @@ contains
         endif
     end subroutine states_reweight
 
-    subroutine fit_bfactors( s, ws )
-        class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: ws(s%npeaks)
-        integer :: ipeak, cnt, ref, roind
-        real    :: shvec(2), bfacs(s%npeaks), bfac
-        if( pftcc_glob%objfun_is_ccres() )then
-            bfacs = 0.
-            do ipeak = 1, s%npeaks
-                if( ws(ipeak) > TINY .or. s%npeaks == 1 )then
-                    cnt   = s%nrefs - s%npeaks + ipeak
-                    ref   = s3D%proj_space_inds(s%iptcl_map, cnt)
-                    shvec = 0.
-                    if( s%doshift )shvec = s3D%proj_space_shift(s%iptcl_map, ref, 1:2)
-                    roind        = pftcc_glob%get_roind(360. - s3D%proj_space_euls(s%iptcl_map, ref, 3))
-                    bfacs(ipeak) = pftcc_glob%fit_bfac(ref, s%iptcl, roind, shvec)
-                else
-                    bfacs(ipeak) = 0.
-                endif
-                call s3D%o_peaks(s%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
-            enddo
-            bfac = sum(ws * bfacs, mask=(ws>TINY))
-            call build_glob%spproj_field%set(s%iptcl, 'bfac',  bfac )
-        endif
-    end subroutine fit_bfactors
+    ! subroutine fit_bfactors( s, ws )
+    !     class(strategy3D_srch), intent(inout) :: s
+    !     real,                   intent(in)    :: ws(s%npeaks)
+    !     integer :: ipeak, cnt, ref, roind
+    !     real    :: shvec(2), bfacs(s%npeaks), bfac
+    !     if( pftcc_glob%objfun_is_ccres() )then
+    !         bfacs = 0.
+    !         do ipeak = 1, s%npeaks
+    !             if( ws(ipeak) > TINY .or. s%npeaks == 1 )then
+    !                 cnt   = s%nrefs - s%npeaks + ipeak
+    !                 ref   = s3D%proj_space_inds(s%iptcl_map, cnt)
+    !                 shvec = 0.
+    !                 if( s%doshift )shvec = s3D%proj_space_shift(s%iptcl_map, ref, 1:2)
+    !                 roind        = pftcc_glob%get_roind(360. - s3D%proj_space_euls(s%iptcl_map, ref, 3))
+    !                 bfacs(ipeak) = pftcc_glob%fit_bfac(ref, s%iptcl, roind, shvec)
+    !             else
+    !                 bfacs(ipeak) = 0.
+    !             endif
+    !             call s3D%o_peaks(s%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
+    !         enddo
+    !         bfac = sum(ws * bfacs, mask=(ws>TINY))
+    !         call build_glob%spproj_field%set(s%iptcl, 'bfac',  bfac )
+    !     endif
+    ! end subroutine fit_bfactors
 
     function estimate_ang_sdev( s, best_loc ) result( ang_sdev )
         use simple_ori,  only: ori

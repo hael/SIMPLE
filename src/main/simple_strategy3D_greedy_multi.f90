@@ -53,13 +53,11 @@ contains
                 call self%s%prep4srch()
                 nrefs = self%s%nrefs
             endif
-            self%s%nbetter    = 0
-            self%s%nrefs_eval = 0
             s3D%proj_space_corrs(self%s%iptcl_map,:) = -1.
             ! search
             do isample=1,nrefs
                 iref =  s3D%srch_order(self%s%iptcl_map,isample) ! set the reference index
-                call per_ref_srch                         ! actual search
+                call per_ref_srch                                ! actual search
             end do
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = nrefs
@@ -81,8 +79,8 @@ contains
                 state = s3D%proj_space_state(self%s%iptcl_map,iref)
                 if(  s3D%state_exists(state) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs) ! In-plane correlations
-                    inpl_ind   = maxloc(inpl_corrs)                                ! greedy in-plane index
-                    inpl_corr  = inpl_corrs(inpl_ind(1))                           ! max in plane correlation
+                    inpl_ind   = maxloc(inpl_corrs)                          ! greedy in-plane index
+                    inpl_corr  = inpl_corrs(inpl_ind(1))                     ! max in plane correlation
                     call self%s%store_solution(iref, iref, inpl_ind(1), inpl_corr)
                 endif
             end subroutine per_ref_srch
@@ -104,8 +102,6 @@ contains
         call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
         ! state reweighting
         call states_reweight( self%s, corrs, ws, state_ws, included, state, best_loc, wcorr )
-        ! B factors
-        call fit_bfactors( self%s, ws )
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances

@@ -33,8 +33,6 @@ contains
         call extract_peaks( self%s, corrs )
         ! stochastic weights
         call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
-        ! B factors
-        call fit_bfactors( self%s, ws )
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances

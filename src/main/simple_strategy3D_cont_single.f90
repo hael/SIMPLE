@@ -2,7 +2,6 @@
 module simple_strategy3D_cont_single
 include 'simple_lib.f08'
 use simple_strategy3D_alloc    ! singleton
-use simple_strategy3D_utils,   only: fit_bfactors
 use simple_strategy3D,         only: strategy3D
 use simple_strategy3D_srch,    only: strategy3D_srch, strategy3D_spec
 use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad
@@ -65,10 +64,7 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_cont_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: ws(1), dist_inpl, euldist, mi_proj, mi_inpl, mi_joint, frac, ang_sdev
-        ! B factors
-        ws = 1.0
-        call fit_bfactors(self%s, ws)
+        real      :: dist_inpl, euldist, mi_proj, mi_inpl, mi_joint, frac, ang_sdev
         ! angular standard deviation
         ang_sdev = 0.
         ! angular distances
