@@ -89,6 +89,7 @@ contains
             integer :: pid
             pid = 53 !just a prime number, no special meaning
         end function my_getpid
+
     end subroutine seed_rnd
 
     !>  \brief  wrapper for the intrinsic Fortran random number generator
