@@ -39,11 +39,13 @@ contains
         integer,            intent(in)    :: ncls
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
+        real    :: avg_updatecnt
         logical :: converged, update_frac
         update_frac = .false.
         if( build_glob%spproj_field%isthere('updatecnt') )then
-            updatecnts  = build_glob%spproj_field%get_all('updatecnt')
-            update_frac = count(updatecnts > 0.5) > 0 ! for the case of greedy step with frac_update on
+            updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+            avg_updatecnt = sum(updatecnts) / real(size(updatecnts))
+            update_frac   = count(updatecnts > 0.5) > 0 ! for the case of greedy step with frac_update on
         endif
         if( update_frac )then
             ! fractional particle update
@@ -67,6 +69,7 @@ contains
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> CLASS    DISTRIBUTION OVERLAP:     ', self%mi_class
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
+        write(*,'(A,1X,F7.1)') '>>> AVERAGE # PARTICLE UPDATES:        ', avg_updatecnt
         write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
         write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:     ', self%bfac
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
@@ -111,13 +114,14 @@ contains
         class(cmdline),     intent(inout) :: cline
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint
+        real    :: min_state_mi_joint, avg_updatecnt
         logical :: converged, update_frac
         integer :: iptcl, istate
         update_frac = .false.
         if( build_glob%spproj_field%isthere('updatecnt') )then
-            updatecnts  = build_glob%spproj_field%get_all('updatecnt')
-            update_frac = count(updatecnts > 0.5) > 0
+            updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+            avg_updatecnt = sum(updatecnts) / real(size(updatecnts))
+            update_frac   = count(updatecnts > 0.5) > 0
         endif
         if( update_frac )then
             ! fractional particle update
@@ -149,6 +153,7 @@ contains
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
+        write(*,'(A,1X,F7.1)') '>>> AVERAGE # PARTICLE UPDATES:        ', avg_updatecnt
         if( params_glob%nstates > 1 )&
         &write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
         write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist

@@ -94,8 +94,6 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(params_glob%refine)
-
-
             case('cluster', 'snhc', 'clustersym', 'clusterdev', 'cont_single')
                 npeaks = 1
             case('hard_single','hard_multi')

@@ -50,12 +50,12 @@ contains
         enddo
     end subroutine extract_peaks
 
-    subroutine prob_select_peak( s, tau )
+    subroutine prob_select_peak( s, tau, updatecnt )
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: tau
+        real,                   intent(in)    :: tau, updatecnt
         real    :: corrs(s%npeaks), shvecs(s%npeaks,2), euls(s%npeaks,3), pvec(s%npeaks)
         integer :: cnt, inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
-        integer :: prob_peak, ipeak, rank
+        integer :: prob_peak, ipeak, rank, loc(1)
         real    :: bound, rnd, dists(s%npeaks), arg4softmax(s%npeaks)
         do ipeak = 1, s%npeaks
             ! stash peak index
@@ -89,29 +89,35 @@ contains
             ! stash Euler
             euls(ipeak,:) = s3D%proj_space_euls(s%iptcl_map,refs(ipeak),1:3)
         end do
-        ! multinomal peak selection
-        ! convert correlations to distances
-        dists = 1.0 - corrs
-        ! scale distances with TAU
-        dists = dists / tau
-        ! argument for softmax function is negative distances
-        arg4softmax = -dists
-        ! subtract maxval of negative distances for numerical stability
-        arg4softmax = arg4softmax - maxval(arg4softmax)
-        ! calculate probabilities
-        pvec = exp(arg4softmax)
-        ! normalise
-        pvec = pvec / sum(pvec)
-        ! sample
-        call hpsort(pvec, inds)
-        rank = 0
-        rnd  = ran3()
-        do prob_peak=s%npeaks,1,-1 ! we want to start in the high end
-            bound = sum(pvec(prob_peak:s%npeaks))
-            rank = rank + 1
-            if( rnd <= bound ) exit
-        enddo
-        prob_peak = inds(prob_peak) ! translate to unsorted
+        if( updatecnt < 5.0 )then
+            ! multinomal peak selection
+            ! convert correlations to distances
+            dists = 1.0 - corrs
+            ! scale distances with TAU
+            dists = dists / tau
+            ! argument for softmax function is negative distances
+            arg4softmax = -dists
+            ! subtract maxval of negative distances for numerical stability
+            arg4softmax = arg4softmax - maxval(arg4softmax)
+            ! calculate probabilities
+            pvec = exp(arg4softmax)
+            ! normalise
+            pvec = pvec / sum(pvec)
+            ! sample
+            call hpsort(pvec, inds)
+            rank = 0
+            rnd  = ran3()
+            do prob_peak=s%npeaks,1,-1 ! we want to start in the high end
+                bound = sum(pvec(prob_peak:s%npeaks))
+                rank = rank + 1
+                if( rnd <= bound ) exit
+            enddo
+            prob_peak = inds(prob_peak) ! translate to unsorted
+        else
+            ! greedy peak selection
+            loc = maxloc(corrs)
+            prob_peak = loc(1)
+        endif
         ! update o_peaks
         call s3D%o_peaks(s%iptcl)%set(1, 'state', real(states(prob_peak)))
         call s3D%o_peaks(s%iptcl)%set(1, 'proj',  real(projs(prob_peak)))
