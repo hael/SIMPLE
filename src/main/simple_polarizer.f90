@@ -117,7 +117,8 @@ contains
                         self%comps(l,m) = self%get_fcomp(logi,phys)
                     enddo
                 enddo
-                self%pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(self%comps,(/self%wlen/)))
+                self%pft(i,k) = dot_product(self%polweights_mat(i,k,:),&
+                &reshape(self%comps,(/self%wlen/))) / sum(self%polweights_mat(i,k,:))
             end do
         end do
         if( isptcl )then

@@ -336,7 +336,7 @@ contains
             w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
-        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
+        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) / sum( w )
     end function interp_fcomp
 
     !>  \brief is to interpolate from the expanded complex matrix
@@ -358,7 +358,7 @@ contains
             w(:,:,i) = w(:,:,i) * self%kbwin%apod_memo( real(win(1,3)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
-        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
+        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) / sum( w )
     end function interp_fcomp_memo
 
     !>  \brief is to compute the derivative of the interpolate from the expanded complex matrix
