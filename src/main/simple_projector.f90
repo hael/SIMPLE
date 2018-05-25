@@ -15,7 +15,6 @@ implicit none
 public :: projector
 private
 
-integer, parameter :: iwinsz = ceiling(KBWINSZ - 0.5) !< half-window size
 logical, parameter :: MEMOIZEKB = .false.
 integer, parameter :: NKBPOINTS = 10
 
@@ -28,7 +27,8 @@ type, extends(image) :: projector
     integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
     integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
     logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
-    integer               :: wdim = 0                !< dimension of K-B window
+    integer               :: wdim   = 0              !< dimension of K-B window
+    integer               :: iwinsz = 0              !< integer half-window size
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
@@ -61,17 +61,18 @@ contains
         class(projector), intent(inout) :: self
         real,             intent(in)    :: alpha !< oversampling factor
         integer, allocatable :: cyck(:), cycm(:), cych(:)
-        integer :: h, k, m, phys(3), logi(3)
-        integer :: lims(3,2), ldim(3)
+        integer :: h, k, m, phys(3), logi(3), lims(3,2), ldim(3)
+        real    :: winsz
         call self%kill_expanded
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_projector'
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_projector'
         self%kbwin         = kbinterpol(KBWINSZ, alpha)
+        self%iwinsz        = ceiling(self%kbwin%get_winsz() - 0.5)
         if( MEMOIZEKB ) call self%kbwin%memoize(NKBPOINTS)
         self%wdim          = self%kbwin%get_wdim()
         lims               = self%loop_lims(3)
-        self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(KBWINSZ)
+        self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
@@ -325,8 +326,8 @@ contains
         integer :: i, win(2,3) ! window boundary array in fortran contiguous format
         ! interpolation kernel window
         win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
         ! interpolation kernel matrix
         w = 1.
         do i=1,self%wdim
@@ -347,8 +348,8 @@ contains
         integer :: i, win(2,3) ! window boundary array in fortran contiguous format
         ! interpolation kernel window
         win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
         ! interpolation kernel matrix
         w = 1.
         do i=1,self%wdim
@@ -382,8 +383,8 @@ contains
         type(ori_light)                                          :: or
         ! interpolation kernel window
         win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
         call or%euler2dm(euls, drotmat)
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))
@@ -443,8 +444,8 @@ contains
         type(ori_light)                                          :: or
         ! interpolation kernel window
         win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
         call or%euler2dm(euls, drotmat)
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))
@@ -506,8 +507,8 @@ contains
         type(ori_light)                                          :: or
         ! interpolation kernel window
         win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
         call or%euler2dm(euls, drotmat)
         dRdangle(:,1) = matmul(q, drotmat(:,:,1))
         dRdangle(:,2) = matmul(q, drotmat(:,:,2))

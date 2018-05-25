@@ -107,7 +107,7 @@ contains
         self%rho_allocated = .true.
         if( l_expand )then
             ! setup expanded matrices
-            dim  = maxval(abs(self%lims)) + ceiling(KBWINSZ)
+            dim = maxval(abs(self%lims)) + ceiling(self%winsz)
             self%ldim_exp(1,:) = [self%lims(1,1)-self%wdim, dim]
             self%ldim_exp(2,:) = [-dim, dim]
             self%ldim_exp(3,:) = [-dim, dim]

@@ -64,7 +64,7 @@ contains
             do k=self%pdim(2),self%pdim(3)
                 ! polar coordinates
                 loc = pftcc%get_coord(i,k)
-                call sqwin_2d(loc(1), loc(2), KBWINSZ, win)
+                call sqwin_2d(loc(1), loc(2), kbwin%get_winsz(), win)
                 w   = 1.
                 cnt = 0
                 do l=1,self%wdim
