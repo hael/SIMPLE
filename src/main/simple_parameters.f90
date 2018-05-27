@@ -159,7 +159,7 @@ type :: parameters
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
-    character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
+    character(len=STDLEN) :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
@@ -878,6 +878,7 @@ contains
                     stop 'unsupported oritype; simple_parameters :: new'
             end select
         else
+            self%oritype     = 'ptcl3D'
             self%spproj_iseg = PTCL3D_SEG
         endif
         ! take care of nptcls etc.
