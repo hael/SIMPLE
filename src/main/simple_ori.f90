@@ -64,6 +64,7 @@ type :: ori
     procedure          :: ori2str
     procedure          :: ori2strlen_trim
     procedure          :: ori2chash
+    procedure          :: chash2ori
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print_ori
@@ -538,11 +539,9 @@ contains
     end function ori2strlen_trim
 
     function ori2chash( self ) result( ch )
-        use simple_chash, only: chash
         class(ori), intent(in) :: self
         type(chash) :: ch
         type(hash) :: h
-
         integer :: i
         ch = self%chtab
         h = self%htab
@@ -553,6 +552,14 @@ contains
             end do
         endif
     end function ori2chash
+
+    subroutine chash2ori( self, ch )
+        class(ori),   intent(inout) :: self
+        class(chash), intent(in)    :: ch
+        character(len=:), allocatable :: line
+        line = ch%chash2str()
+        call self%str2ori(line)
+    end subroutine chash2ori
 
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )

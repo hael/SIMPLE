@@ -93,16 +93,16 @@ contains
     subroutine init_params_and_build_spproj( self, cline, params )
         class(builder),    target, intent(inout)  :: self
         class(cmdline),    intent(inout)          :: cline
-        class(parameters), target,  intent(inout) :: params
+        class(parameters), intent(inout)          :: params
         call params%new(cline)
         call self%build_spproj(params, cline)
-        build_glob => self
+        if( .not. associated(build_glob) ) build_glob => self
     end subroutine init_params_and_build_spproj
 
     subroutine init_params_and_build_general_tbox( self, cline, params, do3d, boxmatch_off )
         class(builder),    target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        class(parameters), target, intent(inout) :: params
+        class(parameters),         intent(inout) :: params
         logical,         optional, intent(in)    :: do3d, boxmatch_off
         logical :: bboxmatch_off
         bboxmatch_off = .false.
@@ -110,27 +110,27 @@ contains
         call params%new(cline)
         if( bboxmatch_off ) params%boxmatch = params%box
         call self%build_general_tbox(params, cline, do3d=do3d)
-        build_glob => self
+        if( .not. associated(build_glob) ) build_glob => self
     end subroutine init_params_and_build_general_tbox
 
     subroutine init_params_and_build_strategy2D_tbox( self, cline, params )
         class(builder),    target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        class(parameters), target, intent(inout) :: params
+        class(parameters),         intent(inout) :: params
         call params%new(cline)
         call self%build_general_tbox(params, cline, do3d=.false.)
         call self%build_strategy2D_tbox(params)
-        build_glob => self
+        if( .not. associated(build_glob) ) build_glob => self
     end subroutine init_params_and_build_strategy2D_tbox
 
     subroutine init_params_and_build_strategy3D_tbox( self, cline, params )
         class(builder),    target,  intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        class(parameters), target,  intent(inout) :: params
+        class(parameters),          intent(inout) :: params
         call params%new(cline)
         call self%build_general_tbox(params, cline, do3d=.true.)
         call self%build_strategy3D_tbox(params)
-        build_glob => self
+        if( .not. associated(build_glob) ) build_glob => self
     end subroutine init_params_and_build_strategy3D_tbox
 
     ! LOW-LEVEL BUILDERS
@@ -189,14 +189,15 @@ contains
             if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%spproj_field, [1,params%nptcls])
             DebugPrint 'read deftab'
         endif
+        if( .not. associated(build_glob) ) build_glob => self
         write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d )
-        class(builder),    intent(inout) :: self
-        class(parameters), intent(inout) :: params
-        class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: do3d
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
+        class(cmdline),         intent(inout) :: cline
+        logical, optional,      intent(in)    :: do3d
         integer :: lfny,  lfny_match, cyc_lims(3,2)
         logical :: ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -260,8 +261,9 @@ contains
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
-        write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
+        if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
 
     subroutine kill_general_tbox( self )
@@ -289,8 +291,8 @@ contains
     end subroutine kill_general_tbox
 
     subroutine build_comlin_tbox( self, params )
-        class(builder),    intent(inout) :: self
-        class(parameters), intent(inout) :: params
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
         integer :: i
         call self%kill_comlin_tbox
         if( params%pgrp /= 'c1' )then ! set up symmetry functionality
@@ -319,8 +321,9 @@ contains
             self%clins = comlin( self%spproj_field, self%imgs, params%lp )
             DebugPrint 'build_comlin_tbox: comlin called '
         endif
-        write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
+        if( .not. associated(build_glob) ) build_glob => self
         self%comlin_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
     end subroutine build_comlin_tbox
 
     subroutine kill_comlin_tbox( self )
@@ -354,14 +357,15 @@ contains
     end subroutine kill_comlin_tbox
 
     subroutine build_rec_tbox( self, params )
-        class(builder),    intent(inout) :: self
-        class(parameters), intent(inout) :: params
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
         call self%kill_rec_tbox
         call self%recvol%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
         call self%recvol%alloc_rho( self%spproj)
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
+        if( .not. associated(build_glob) ) build_glob => self
         self%rec_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_tbox
 
     subroutine kill_rec_tbox( self )
@@ -374,14 +378,15 @@ contains
     end subroutine kill_rec_tbox
 
     subroutine build_rec_eo_tbox( self, params )
-        class(builder),    intent(inout) :: self
-        class(parameters), intent(inout) :: params
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
         call self%kill_rec_eo_tbox
         call self%eorecvol%new(self%spproj)
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
-        write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
+        if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_eo_tbox
 
     subroutine kill_rec_eo_tbox( self )
@@ -394,8 +399,8 @@ contains
     end subroutine kill_rec_eo_tbox
 
     subroutine build_strategy2D_tbox( self, params )
-        class(builder),    intent(inout) :: self
-        class(parameters), intent(inout) :: params
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
         call self%kill_strategy2D_tbox
         if( params%neigh.eq.'yes' )then
             if( self%spproj%os_cls3D%get_noris() == params%ncls )then
@@ -405,8 +410,9 @@ contains
             endif
         endif
         call self%projfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
-        write(*,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
+        if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
     end subroutine build_strategy2D_tbox
 
     subroutine kill_strategy2D_tbox( self )
@@ -418,8 +424,8 @@ contains
     end subroutine kill_strategy2D_tbox
 
     subroutine build_strategy3D_tbox( self, params )
-        class(builder),    intent(inout) :: self
-        class(parameters), intent(inout) :: params
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
         integer :: nnn
         call self%kill_strategy3D_tbox
         if( params%eo .ne. 'no' )then
@@ -435,8 +441,9 @@ contains
         endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
-        write(*,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
+        if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
     end subroutine build_strategy3D_tbox
 
     subroutine kill_strategy3D_tbox( self )
@@ -463,16 +470,17 @@ contains
     end subroutine kill_strategy3D_tbox
 
     subroutine build_extremal3D_tbox( self, params )
-        class(builder),    intent(inout) :: self
-        class(parameters), intent(inout) :: params
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
         call self%kill_extremal3D_tbox
         allocate( self%recvols(1), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 2', alloc_stat)
         call self%recvols(1)%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
         call self%recvols(1)%alloc_rho(self%spproj)
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
+        if( .not. associated(build_glob) ) build_glob => self
         self%extremal3D_tbox_exists = .true.
+        write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
     end subroutine build_extremal3D_tbox
 
     subroutine kill_extremal3D_tbox( self )

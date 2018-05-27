@@ -8,18 +8,18 @@ public :: cmdline, cmdline_err
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: MAX_CMDARGS = 60
+
 !> cmdarg key/value pair command-line type
 type cmdarg
-    character(len=KEYLEN)     :: key=''
-    character(len=LONGSTRLEN) :: carg=''
-    logical                   :: defined=.false.
-    real                      :: rarg=0.
+    character(len=:), allocatable :: key, carg
+    logical                       :: defined=.false.
+    real                          :: rarg=0.
 end type cmdarg
 
 type cmdline
-    integer               :: NMAX=60
-    type(cmdarg)          :: cmds(60)
-    character(len=KEYLEN) :: checker(60)
+    type(cmdarg)          :: cmds(MAX_CMDARGS)
+    character(len=KEYLEN) :: checker(MAX_CMDARGS)
     character(len=8192)   :: entire_line
     integer               :: argcnt=0, ncheck=0
 contains
@@ -37,8 +37,6 @@ contains
     procedure          :: checkvar
     procedure          :: check
     procedure          :: printline
-    procedure          :: write
-    procedure          :: read
     procedure          :: defined
     procedure          :: get_rarg
     procedure          :: get_carg
@@ -64,7 +62,7 @@ contains
         ! parse program name
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
-        call cmdline_err( cmdstat, cmdlen, arg, pos )
+        call cmdline_err(cmdstat, cmdlen, arg, pos)
         if( str_has_substr(arg(pos+1:), 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(arg(pos+1:), ptr2prg)
@@ -209,9 +207,20 @@ contains
     subroutine copy( self, self2copy )
         class(cmdline), intent(inout) :: self
         class(cmdline), intent(in) :: self2copy
+        integer :: icmd
         ! copy cmds
-        self%cmds(:)%key     = self2copy%cmds(:)%key
-        self%cmds(:)%carg    = self2copy%cmds(:)%carg
+        do icmd=1,MAX_CMDARGS
+            if( allocated(self2copy%cmds(icmd)%key) )then
+                self%cmds(icmd)%key = self2copy%cmds(icmd)%key
+            else
+                if( allocated(self%cmds(icmd)%key) ) deallocate(self%cmds(icmd)%key)
+            endif
+            if( allocated(self2copy%cmds(icmd)%carg) )then
+                self%cmds(icmd)%carg = self2copy%cmds(icmd)%carg
+            else
+                if( allocated(self%cmds(icmd)%carg) ) deallocate(self%cmds(icmd)%carg)
+            endif
+        end do
         self%cmds(:)%defined = self2copy%cmds(:)%defined
         self%cmds(:)%rarg    = self2copy%cmds(:)%rarg
         ! copy rest
@@ -237,7 +246,12 @@ contains
         which = self%lookup(key)
         if( which == 0 )then
             self%argcnt = self%argcnt + 1
-            self%cmds(self%argcnt)%key = key
+            if( self%argcnt > MAX_CMDARGS )then
+                write(*,*) 'self%argcnt: ', self%argcnt
+                write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                stop 'ERROR! stack overflow; simple_cmdline :: set_1'
+            endif
+            self%cmds(self%argcnt)%key = trim(key)
             self%cmds(self%argcnt)%rarg = rarg
             self%cmds(self%argcnt)%defined = .true.
         else
@@ -254,11 +268,16 @@ contains
         which = self%lookup(key)
         if( which == 0 )then
             self%argcnt = self%argcnt + 1
-            self%cmds(self%argcnt)%key = key
-            self%cmds(self%argcnt)%carg = carg
+            if( self%argcnt > MAX_CMDARGS )then
+                write(*,*) 'self%argcnt: ', self%argcnt
+                write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                stop 'ERROR! stack overflow; simple_cmdline :: set_2'
+            endif
+            self%cmds(self%argcnt)%key = trim(key)
+            self%cmds(self%argcnt)%carg = trim(carg)
             self%cmds(self%argcnt)%defined = .true.
         else
-            self%cmds(which)%carg = carg
+            self%cmds(which)%carg = trim(carg)
         endif
     end subroutine set_2
 
@@ -270,10 +289,10 @@ contains
         which = self%lookup(key)
         if( which > 0 )then
             self%cmds( which:self%argcnt-1 ) = self%cmds( which+1:self%argcnt )
-            self%cmds( self%argcnt )%key = ''
-            self%cmds( self%argcnt )%carg = ''
-            self%cmds( self%argcnt )%rarg = 0.
-            self%cmds( self%argcnt )%defined = .true.
+            if( allocated(self%cmds(self%argcnt)%key)  ) deallocate(self%cmds(self%argcnt)%key)
+            if( allocated(self%cmds(self%argcnt)%carg) ) deallocate(self%cmds(self%argcnt)%carg)
+            self%cmds(self%argcnt)%rarg = 0.
+            self%cmds(self%argcnt)%defined = .true.
             self%argcnt = self%argcnt - 1
         endif
     end subroutine delete
@@ -336,76 +355,13 @@ contains
         class(cmdline), intent(inout) :: self
         integer :: i
         do i=1,self%argcnt
-            if( self%cmds(i)%defined .and. self%cmds(i)%carg .eq. '' )then
-                write(*,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg
-            else if( self%cmds(i)%defined)then
+            if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
                 write(*,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
+            else if( self%cmds(i)%defined )then
+                write(*,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg
             endif
         end do
     end subroutine printline
-
-    !>  \brief  writes the hash to file
-    subroutine write( self, fname )
-        class(cmdline),   intent(inout) :: self
-        character(len=*), intent(inout) :: fname
-        type(chash) :: h
-        call self%gen_job_descr( h )
-        call h%write( trim(fname) )
-        call h%kill
-    end subroutine write
-
-    !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
-    subroutine read( self, fname, keys_required, keys_optional )
-        class(cmdline),             intent(inout) :: self
-        character(len=*),           intent(inout) :: fname
-        character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
-        type(chash)       :: h
-        character(len=32) :: key,arg
-        real              :: rval
-        integer           :: i, io_stat, ri, ikey, nreq
-        call h%new( self%NMAX )
-        call h%read( trim(fname) )
-        self%entire_line = trim(h%chash2str())
-        self%argcnt = h%size_of()
-        if( self%argcnt < 2 )then
-            call print_cmdline(keys_required, keys_optional)
-            stop
-        endif
-        do i=1,self%argcnt
-            key = h%get_key( i )
-            arg = h%get( i )
-            call str2int(adjustl(arg), io_stat, ri )
-            if( io_stat == 0 )then
-                self%cmds(i)%rarg = real(ri)
-            else
-                read(arg, *, iostat=io_stat) rval
-                if( io_stat == 0 )then
-                    self%cmds(i)%rarg = rval
-                else
-                    self%cmds(i)%carg = adjustl(arg)
-                endif
-            endif
-            self%cmds(i)%key     = trim(key)
-            self%cmds(i)%defined = .true.
-        end do
-        call h%kill
-        if( present(keys_required) )then
-            if( str_has_substr(self%entire_line,'prg=') )then
-                nreq = size(keys_required)+1 ! +1 because prg part of command line
-            else
-                nreq = size(keys_required)
-            endif
-            if( self%argcnt < nreq )then
-                call print_cmdline(keys_required, keys_optional)
-                stop
-            else
-                do ikey=1,size(keys_required)
-                    call self%checkvar(keys_required(ikey), ikey)
-                end do
-                call self%check
-            endif
-        endif
-    end subroutine read
 
     !> \brief  for checking the existence of of arg
     function defined( self, key ) result( def )
@@ -429,9 +385,11 @@ contains
         integer :: i, which
         which = 0
         do i=1,self%argcnt
-            if( trim(self%cmds(i)%key) .eq. trim(key) )then
-                which = i
-                return
+            if( allocated(self%cmds(i)%key) )then
+                if( trim(self%cmds(i)%key) .eq. trim(key) )then
+                    which = i
+                    return
+                endif
             endif
         end do
     end function lookup
@@ -444,9 +402,11 @@ contains
         integer :: i
         rval = 0.
         do i=1,self%argcnt
-            if( trim(self%cmds(i)%key) .eq. trim(key) )then
-                rval = self%cmds(i)%rarg
-                return
+            if( allocated(self%cmds(i)%key) )then
+                if( trim(self%cmds(i)%key) .eq. trim(key) )then
+                    rval = self%cmds(i)%rarg
+                    return
+                endif
             endif
         end do
     end function get_rarg
@@ -458,12 +418,13 @@ contains
         character(len=:), allocatable :: cval
         integer :: i
         do i=1,self%argcnt
-            if( trim(self%cmds(i)%key) .eq. trim(key) )then
-                allocate(cval, source=trim(self%cmds(i)%carg))
-                return
+            if( allocated(self%cmds(i)%key) )then
+                if( trim(self%cmds(i)%key) .eq. trim(key) )then
+                    cval = trim(self%cmds(i)%carg)
+                    return
+                endif
             endif
         end do
-        cval = ''
     end function get_carg
 
     !> \brief for generating a job description (prg overrides prg in cline)
@@ -472,9 +433,9 @@ contains
         class(chash),               intent(inout) :: hash
         character(len=*), optional, intent(in)    :: prg
         integer :: i
-        call hash%new(self%NMAX)
+        call hash%new(MAX_CMDARGS)
         do i=1,self%argcnt
-            if( self%cmds(i)%carg .eq. '' )then
+            if( .not. allocated(self%cmds(i)%carg) )then
                 ! value is real
                 call hash%push(trim(self%cmds(i)%key), real2str(self%cmds(i)%rarg))
             else
@@ -482,9 +443,7 @@ contains
                 call hash%push(trim(self%cmds(i)%key), trim(self%cmds(i)%carg))
             endif
         end do
-        if( present(prg) )then
-            call hash%set('prg', trim(prg))
-        endif
+        if( present(prg) ) call hash%set('prg', trim(prg))
     end subroutine gen_job_descr
 
     ! EXCEPTION-HANDLING

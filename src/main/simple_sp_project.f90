@@ -37,6 +37,7 @@ contains
     procedure          :: update_projinfo
     procedure          :: update_compenv
     procedure          :: append_project
+    procedure          :: append_job_descr2jobproc
     ! index management
     procedure, private :: map_ptcl_ind2stk_ind
     procedure          :: map_cavgs_selection
@@ -307,6 +308,49 @@ contains
                 call self%add_stk(stk, ctfvar, proj%os_ptcl2D)
         end select
     end subroutine append_project
+
+    subroutine append_job_descr2jobproc( self, exec_dir, job_descr, did_update )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: exec_dir
+        class(chash),      intent(inout) :: job_descr
+        logical,           intent(out)   :: did_update
+        character(len=:), allocatable :: edir
+        type(ori)     :: o
+        integer       :: njobs, ijob, ind
+        character(8)  :: date
+        character(10) :: time
+        did_update = .true.
+        njobs = self%jobproc%get_noris()
+        if( njobs > 0 )then
+            if( trim(exec_dir) .ne. './')then
+                do ijob=1,njobs
+                    if( self%jobproc%isthere(ijob, 'exec_dir') )then
+                        call self%jobproc%getter(ijob, 'exec_dir', edir)
+                        if( str_has_substr(exec_dir,edir) )then
+                            ! we already have a job description for this exec dir stored
+                            did_update = .false.
+                            return
+                        endif
+                    endif
+                end do
+            endif
+        endif
+        ! store job description along with exec_dir & execution time
+        call o%chash2ori(job_descr)
+        call o%set('exec_dir', trim(exec_dir))
+        call date_and_time(date=date, time=time)
+        call o%set('date', date)
+        call o%set('time', time)
+        ! update jobproc field
+        if( njobs > 0 )then
+            ind = njobs + 1
+            call self%jobproc%reallocate(ind)
+        else
+            call self%jobproc%new(1)
+            ind = 1
+        endif
+        call self%jobproc%set_ori(ind,o)
+    end subroutine append_job_descr2jobproc
 
     ! index management
 
@@ -777,9 +821,9 @@ contains
         class(sp_project),   intent(inout) :: self
         character(len=*),    intent(in)    :: stktab
         class(oris),         intent(inout) :: os ! parameters associated with stktab
-        type(ctfparams)                    :: ctfvars
-        type(ori)                          :: o_stk
-        type(oris)                         :: os_ptcls
+        type(ctfparams) :: ctfvars
+        type(ori)       :: o_stk
+        type(oris)      :: os_ptcls
         character(len=:),          allocatable :: phplate, ctfstr
         character(len=LONGSTRLEN), allocatable :: stknames(:)
         integer :: istk, ldim(3), ldim_here(3), nptcls, n_os, iptcl, nstks
@@ -835,6 +879,7 @@ contains
                 case('flip')
                     ctfvars%ctfflag = 2
             end select
+            ctfvars%smpd  = o_stk%get('smpd')
             ctfvars%kv    = o_stk%get('kv')
             ctfvars%cs    = o_stk%get('cs')
             ctfvars%fraca = o_stk%get('fraca')

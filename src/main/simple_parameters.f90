@@ -101,7 +101,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: dir_target=''        !< put output here
     character(len=LONGSTRLEN) :: dir_ptcls=''
     character(len=LONGSTRLEN) :: doclist=''           !< list of oritabs for different states
-    character(len=LONGSTRLEN) :: exec_dir=''          !< auto-named execution directory
+    character(len=LONGSTRLEN) :: exec_dir='./'        !< auto-named execution directory
     character(len=LONGSTRLEN) :: filetab=''           !< list of files(.txt)
     character(len=LONGSTRLEN) :: fname=''             !< file name
     character(len=LONGSTRLEN) :: frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
@@ -392,12 +392,13 @@ class(parameters), pointer :: params_glob => null()
 
 contains
 
-    subroutine new( self, cline )
+    subroutine new( self, cline, silent )
         use simple_ori,        only: ori
         use simple_sp_project, only: sp_project
         use simple_binoris,    only: binoris
         class(parameters), target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
+        logical,         optional, intent(in)    :: silent
         character(len=LONGSTRLEN), allocatable :: sp_files(:)
         character(len=:),          allocatable :: stk_part_fname_sc, phaseplate, ctfflag
         character(len=:),          allocatable :: imgfmt, debug_local, verbose_local
@@ -409,7 +410,9 @@ contains
         type(ori)             :: o
         integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer               :: idir, nsp_files
-        logical               :: nparts_set, sp_required
+        logical               :: nparts_set, sp_required, ssilent
+        ssilent = .false.
+        if( present(silent) ) ssilent = silent
         ! seed random number generator
         call seed_rnd
         ! constants
@@ -796,7 +799,7 @@ contains
                 if( sp_required )then
                     ! copy the project file from upstairs
                     call syslib_copy_file_stream('../'//trim(self%projfile), './'//trim(self%projfile))
-                    ! cwd of SP-project will be update in the builder
+                    ! cwd of SP-project will be updated in the builder
                 endif
                 ! get new cwd
                 call simple_getcwd(self%cwd)
@@ -1272,10 +1275,8 @@ contains
         end select
 !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
-        if( .not. associated(params_glob) )then
-            params_glob => self
-        endif
-        write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
+        if( .not. associated(params_glob) ) params_glob => self
+        if( .not. ssilent ) write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
         contains
 

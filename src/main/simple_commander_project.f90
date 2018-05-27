@@ -279,7 +279,7 @@ contains
         class(cmdline),                       intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        call params%new(cline)
+        call params%new(cline, silent=.true.)
         call spproj%read_segment(params%oritype, params%projfile)
         call spproj%print_segment(params%oritype)
         call spproj%kill
@@ -307,8 +307,6 @@ contains
         call spproj%update_compenv( cline )
         ! write project file
         call spproj%write
-        ! change back to original directory
-        call simple_chdir('../')
         ! end gracefully
         call simple_end('**** NEW_PROJECT NORMAL STOP ****')
     end subroutine exec_new_project
@@ -335,8 +333,6 @@ contains
         call spproj%update_compenv( cline )
         ! write project file
         call spproj%write
-        ! change back to original directory
-        call simple_chdir('../')
         ! end gracefully
         call simple_end('**** UPDATE_PROJECT NORMAL STOP ****')
     end subroutine exec_update_project
@@ -467,6 +463,7 @@ contains
         inputted_plaintexttab = cline%defined('plaintexttab')
         n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
         ! exceptions
+        if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing stacks of particles (stk); commander_project :: exec_import_particles'
         if( n_ori_inputs > 1 )then
             write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
             stop 'commander_project :: exec_import_particles'
@@ -547,7 +544,6 @@ contains
             end do
         endif
         if( cline%defined('stk') )then
-            if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing single stack of particles (stk); commander_project :: exec_import_particles'
             ctfvars%smpd = params%smpd
             select case(trim(params%ctf))
                 case('yes')
@@ -579,17 +575,7 @@ contains
             ! importing from stktab
             if( n_ori_inputs == 1 )then
                 ! sampling distance
-                if( cline%defined('smpd') )then
-                    call os%set_all2single('smpd', params%smpd)
-                else
-                    do i=1,ndatlines
-                        if( .not. os%isthere(i, 'smpd') )then
-                            write(*,*) 'os entry: ', i, ' lacks sampling distance (smpd)'
-                            write(*,*) 'Please, provide smpd on command line or update input document'
-                            stop 'ERROR! commander_project :: exec_extract_ptcls'
-                        endif
-                    end do
-                endif
+                call os%set_all2single('smpd', params%smpd)
                 ! acceleration voltage
                 if( cline%defined('kv') )then
                     call os%set_all2single('kv', params%kv)
@@ -662,14 +648,7 @@ contains
         endif
 
         ! PROJECT FILE MANAGEMENT
-        if( file_exists(trim(params%projfile)) )then
-            call spproj%read(params%projfile)
-        else
-            ! update project info
-            call spproj%update_projinfo( cline )
-            ! update computer environment
-            call spproj%update_compenv( cline )
-        endif
+        call spproj%read(params%projfile)
         ! UPDATE FIELDS
         ! add stack if present
         if( cline%defined('stk') )then

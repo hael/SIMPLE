@@ -3,6 +3,7 @@ program simple_exec
 include 'simple_lib.f08'
 use simple_user_interface, only:  make_user_interface ,list_shmem_prgs_in_ui, write_ui_json
 use simple_cmdline, only: cmdline, cmdline_err
+use simple_spproj_hlev
 use simple_commander_project
 use simple_commander_checks
 use simple_commander_comlin
@@ -251,5 +252,8 @@ select case(prg)
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'
-    end select
+end select
+
+call update_job_descriptions_in_project( cline )
+
 end program simple_exec

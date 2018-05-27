@@ -53,6 +53,7 @@ type :: simple_program
     procedure          :: print_prg_descr_long
     procedure          :: write2json
     procedure          :: get_name
+    procedure          :: get_executable
     procedure          :: get_nrequired_keys
     procedure          :: get_required_keys
     procedure          :: is_distr
@@ -3282,10 +3283,17 @@ contains
 
     end subroutine write2json
 
-    character(len=STDLEN) function get_name( self )
+    function get_name( self ) result( name )
         class(simple_program), intent(in) :: self
-        get_name = trim(self%name)
+        character(len=:), allocatable :: name
+        allocate(name, source=trim(self%name))
     end function get_name
+
+    function get_executable( self ) result( name )
+        class(simple_program), intent(in) :: self
+        character(len=:), allocatable :: name
+        allocate(name, source=trim(self%executable))
+    end function get_executable
 
     integer function get_nrequired_keys( self )
         class(simple_program), intent(in) :: self

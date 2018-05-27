@@ -274,7 +274,6 @@ contains
         end do
         deallocate( strategy2Dsrch )
         if( L_BENCH ) rt_align = toc(t_align)
-        DebugPrint ' strategy2D_matcher; completed alignment'
 
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
@@ -400,7 +399,6 @@ contains
             call build_glob%imgbatch(imatch)%kill
         end do
         deallocate(match_imgs, build_glob%imgbatch)
-        DebugPrint '*** strategy2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
 end module simple_strategy2D_matcher
