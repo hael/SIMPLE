@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(56)
+type(simple_prg_ptr) :: prg_ptr_array(57)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -105,6 +105,7 @@ type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
 type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
+type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: reproject
 type(simple_program), target :: reconstruct3D
@@ -250,6 +251,7 @@ contains
         call new_print_fsc
         call new_print_magic_boxes
         call new_print_project_info
+        call new_print_project_field
         call new_reproject
         call new_reconstruct3D
         call new_refine3D
@@ -311,25 +313,26 @@ contains
         prg_ptr_array(35)%ptr2prg => print_fsc
         prg_ptr_array(36)%ptr2prg => print_magic_boxes
         prg_ptr_array(37)%ptr2prg => print_project_info
-        prg_ptr_array(38)%ptr2prg => reproject
-        prg_ptr_array(39)%ptr2prg => reconstruct3D
-        prg_ptr_array(40)%ptr2prg => refine3D
-        prg_ptr_array(41)%ptr2prg => refine3D_init
-        prg_ptr_array(42)%ptr2prg => scale
-        prg_ptr_array(43)%ptr2prg => scale_project
-        prg_ptr_array(44)%ptr2prg => select_
-        prg_ptr_array(45)%ptr2prg => shift
-        prg_ptr_array(46)%ptr2prg => simulate_movie
-        prg_ptr_array(47)%ptr2prg => simulate_noise
-        prg_ptr_array(48)%ptr2prg => simulate_particles
-        prg_ptr_array(49)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(50)%ptr2prg => stack
-        prg_ptr_array(51)%ptr2prg => stackops
-        prg_ptr_array(52)%ptr2prg => symsrch
-        prg_ptr_array(53)%ptr2prg => tseries_track
-        prg_ptr_array(54)%ptr2prg => update_project
-        prg_ptr_array(55)%ptr2prg => vizoris
-        prg_ptr_array(56)%ptr2prg => volops
+        prg_ptr_array(38)%ptr2prg => print_project_field
+        prg_ptr_array(39)%ptr2prg => reproject
+        prg_ptr_array(40)%ptr2prg => reconstruct3D
+        prg_ptr_array(41)%ptr2prg => refine3D
+        prg_ptr_array(42)%ptr2prg => refine3D_init
+        prg_ptr_array(43)%ptr2prg => scale
+        prg_ptr_array(44)%ptr2prg => scale_project
+        prg_ptr_array(45)%ptr2prg => select_
+        prg_ptr_array(46)%ptr2prg => shift
+        prg_ptr_array(47)%ptr2prg => simulate_movie
+        prg_ptr_array(48)%ptr2prg => simulate_noise
+        prg_ptr_array(49)%ptr2prg => simulate_particles
+        prg_ptr_array(50)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(51)%ptr2prg => stack
+        prg_ptr_array(52)%ptr2prg => stackops
+        prg_ptr_array(53)%ptr2prg => symsrch
+        prg_ptr_array(54)%ptr2prg => tseries_track
+        prg_ptr_array(55)%ptr2prg => update_project
+        prg_ptr_array(56)%ptr2prg => vizoris
+        prg_ptr_array(57)%ptr2prg => volops
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -413,6 +416,8 @@ contains
                 ptr2prg => print_magic_boxes
             case('print_project_info')
                 ptr2prg => print_project_info
+            case('print_project_field')
+                ptr2prg => print_project_field
             case('reproject')
                 ptr2prg => reproject
             case('reconstruct3D')
@@ -505,6 +510,7 @@ contains
         write(*,'(A)') print_fsc%name
         write(*,'(A)') print_magic_boxes%name
         write(*,'(A)') print_project_info%name
+        write(*,'(A)') print_project_field%name
         write(*,'(A)') reproject%name
         write(*,'(A)') select_%name
         write(*,'(A)') shift%name
@@ -599,7 +605,8 @@ contains
         call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
         call set_param(angerr,         'angerr',       'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error in degrees', .false., 0.)
         call set_param(dferr,          'dferr',        'num',    'Underfocus error half-width',  'Uniform underfoucs error half-width(in microns)',  'defocus error in microns', .false., 1.)
-        call set_param(oritype,        'oritype',      'multi',  'Oritype segment in project',  'Oritype segment in project(ptcl2D|ptcl3D|cls3D){ptcl3D}', '(ptcl2D|ptcl3D|cls3D){ptcl3D}', .false., 'ptcl3D')
+        call set_param(oritype,        'oritype',      'multi',  'Oritype segment in project',  'Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}',&
+        &'(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}', .false., 'ptcl3D')
         call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
         call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
@@ -1947,6 +1954,32 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_print_magic_boxes
+
+    subroutine new_print_project_field
+        ! PROGRAM SPECIFICATION
+        call print_project_field%new(&
+        &'print_project_field', &                                             ! name
+        &'Print project field',&                                              ! descr_short
+        &'is a program for printing an orientation field in the project data structure (segment in *.simple project file)',&  ! descr_long
+        &'simple_exec',&                                                     ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                                        ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call print_project_field%set_input('parm_ios', 1, oritype)
+        print_project_field%parm_ios(1)%required = .true.
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_print_project_field
 
     subroutine new_print_project_info
         ! PROGRAM SPECIFICATION

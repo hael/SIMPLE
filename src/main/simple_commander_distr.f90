@@ -9,6 +9,7 @@ implicit none
 public :: merge_nnmat_commander
 public :: merge_similarities_commander
 public :: split_pairs_commander
+public :: split_commander
 private
 
 type, extends(commander_base) :: merge_nnmat_commander
@@ -23,6 +24,10 @@ type, extends(commander_base) :: split_pairs_commander
   contains
     procedure :: execute      => exec_split_pairs
 end type split_pairs_commander
+type, extends(commander_base) :: split_commander
+  contains
+    procedure :: execute      => exec_split
+end type split_commander
 
 contains
 
@@ -79,5 +84,36 @@ contains
         call split_pairs_in_parts(params%nptcls, params%nparts)
         call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs
+
+    !> split is a program for splitting of image stacks into partitions for parallel execution.
+    !! This is done to reduce I/O latency
+    subroutine exec_split( self, cline )
+        use simple_map_reduce ! use all in there
+        use simple_image, only: image
+        class(split_commander), intent(inout) :: self
+        class(cmdline),         intent(inout) :: cline
+        type(parameters)     :: p
+        type(image)          :: img
+        integer              :: iptcl, ipart, ldim(3), cnt, nimgs
+        integer, allocatable :: parts(:,:)
+        call p%new(cline)
+        call find_ldim_nptcls(p%stk, ldim, nimgs)
+        ldim(3) = 1
+        call img%new(ldim,p%smpd)
+        parts = split_nobjs_even(nimgs, p%nparts)
+        if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
+        do ipart=1,p%nparts
+            call progress(ipart,p%nparts)
+            cnt = 0
+            do iptcl=parts(ipart,1),parts(ipart,2)
+                cnt = cnt+1
+                call img%read(p%stk, iptcl)
+                call img%write('stack_part'//int2str_pad(ipart,p%numlen)//p%ext, cnt)
+            end do
+        end do
+        deallocate(parts)
+        call img%kill
+        call simple_end('**** SIMPLE_SPLIT NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_split
 
 end module simple_commander_distr

@@ -378,7 +378,7 @@ contains
         type(ctfparams)               :: ctfvars
         type(ori)                     :: o
         character(len=:), allocatable :: intg_forctf, output_dir, imgkind
-        integer                       :: fromto(2), imic, ntot, cnt
+        integer                       :: fromto(2), imic, ntot, cnt, state
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -402,19 +402,22 @@ contains
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! loop over exposures (movies)
-        cnt= 0
+        cnt = 0
         do imic = fromto(1),fromto(2)
-            o = spproj%os_mic%get_ori(imic)
+            cnt   = cnt + 1
+            o     = spproj%os_mic%get_ori(imic)
+            state = 1
+            if( o%isthere('state') ) state = nint(o%get('state'))
+            if( state == 0 ) cycle
             if( o%isthere('imgkind') )then
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
-                cnt = cnt + 1
                 call o%getter('forctf', intg_forctf)
                 ctfvars = spproj%get_micparams(imic)
                 call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir))
                 call spproj%os_mic%set_ori(imic, o)
-                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
             endif
+            write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
@@ -478,7 +481,7 @@ contains
         type(ori)                            :: o
         character(len=:),        allocatable :: output_dir, intg_name, imgkind
         character(len=LONGSTRLEN)            :: boxfile
-        integer :: fromto(2), imic, ntot, nptcls_out, cnt
+        integer :: fromto(2), imic, ntot, nptcls_out, cnt, state
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
@@ -504,17 +507,20 @@ contains
         ! main loop
         cnt = 0
         do imic=fromto(1),fromto(2)
-            o = spproj%os_mic%get_ori(imic)
+            cnt   = cnt + 1
+            o     = spproj%os_mic%get_ori(imic)
+            state = 1
+            if( o%isthere('state') ) state = nint(o%get('state'))
+            if( state == 0 ) cycle
             if( o%isthere('imgkind') )then
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
-                cnt = cnt + 1
                 call o%getter('intg', intg_name)
                 call piter%iterate(cline, intg_name, boxfile, nptcls_out, output_dir)
                 call spproj%os_mic%set(imic, 'boxfile', trim(boxfile))
                 call spproj%os_mic%set(imic, 'nptcls', real(nptcls_out))
-                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
             endif
+            write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
@@ -543,7 +549,7 @@ contains
         logical,          allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN)     :: stack
         integer                       :: nframes, imic, iptcl, ldim(3), nptcls, nmics, box, box_first
-        integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff
+        integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state
         real                          :: particle_position(2)
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -562,6 +568,9 @@ contains
         nptcls = 0
         do imic = 1, ntot
             o_mic = spproj%os_mic%get_ori(imic)
+            state = 1
+            if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
+            if( state == 0 ) cycle
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
             if( .not. o_mic%isthere('boxfile') )cycle
@@ -734,6 +743,7 @@ contains
                 inside = .true.        ! box is inside
                 if( any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
             end function box_inside
+
     end subroutine exec_extract
 
     subroutine exec_pick_extract( self, cline )
@@ -751,7 +761,7 @@ contains
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
-        integer :: fromto(2), imic, ntot, nptcls_out
+        integer :: fromto(2), imic, ntot, nptcls_out, state
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters
@@ -799,6 +809,9 @@ contains
             ! fetch movie orientation
             o_mic = spproj%os_mic%get_ori(imic)
             ! sanity check
+            state = 1
+            if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
+            if( state == 0 ) cycle
             if( .not.o_mic%isthere('intg')   )cycle
             call o_mic%getter('intg', micname)
             if( .not.file_exists(micname)) cycle

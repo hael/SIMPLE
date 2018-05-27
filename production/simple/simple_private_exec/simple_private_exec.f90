@@ -79,12 +79,13 @@ type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(cluster_oris_commander)         :: xcluster_oris
-type(rotmats2oris_commander)         :: xrotmats2oris
-type(txt2project_commander)          :: xtxt2project
-type(project2txt_commander)          :: xproject2txt
-type(print_project_header_commander) :: xprint_project_header
-type(print_project_vals_commander)   :: xprint_project_vals
+type(cluster_oris_commander)              :: xcluster_oris
+type(rotmats2oris_commander)              :: xrotmats2oris
+type(txt2project_commander)               :: xtxt2project
+type(project2txt_commander)               :: xproject2txt
+type(print_project_header_commander)      :: xprint_project_header
+type(print_project_vals_commander)        :: xprint_project_vals
+type(update_project_stateflags_commander) :: xupdate_project_stateflags
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)      :: xtseries_extract
@@ -96,6 +97,7 @@ type(tseries_split_commander)        :: xtseries_split
 type(merge_nnmat_commander)          :: xmerge_nnmat
 type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
+type(split_commander)                :: xsplit
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -421,43 +423,6 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xrefine3D_init%execute(cline)
-    ! case( 'multiptcl_init' )
-    !     ! for generating random initial models for initialisation multiparticle analysis
-    !     keys_required(1)  = 'smpd'
-    !     keys_required(2)  = 'ctf'
-    !     keys_required(3)  = 'pgrp'
-    !     keys_required(4)  = 'nstates'
-    !     keys_required(5)  = 'msk'
-    !     keys_required(6)  = 'oritab'
-    !     ! set optionnal keys
-    !     keys_optional(1)  = 'nthr'
-    !     keys_optional(2)  = 'deftab'
-    !     keys_optional(3)  = 'inner'
-    !     keys_optional(4)  = 'width'
-    !     keys_optional(5)  = 'lp'
-    !     keys_optional(6)  = 'eo'
-    !     keys_optional(7)  = 'frac'
-    !     keys_optional(8)  = 'state2split'
-    !     keys_optional(9)  = 'norec'
-    !     keys_optional(10) = 'mul'
-    !     keys_optional(11) = 'zero'
-    !     keys_optional(12) = 'tseries'
-    !     keys_optional(13) = 'center'
-    !     keys_optional(14) = 'stk'
-    !     keys_optional(15) = 'stktab'
-    !     keys_optional(16) = 'phaseplate'
-    !     ! parse command line
-    !     call cline%parse_oldschool(keys_required(:6), keys_optional(:16))
-    !     ! sanity check
-    !     if( cline%defined('stk') .or. cline%defined('stktab') )then
-    !         ! all ok
-    !     else
-    !         stop 'stk or stktab need to be part of command line!'
-    !     endif
-    !     ! set defaults
-    !     if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
-    !     !execute
-    !     call xmultiptcl_init%execute(cline)
     case( 'refine3D' )
         ! set required keys
         keys_required(1)  = 'vol1'
@@ -843,6 +808,12 @@ select case(prg)
         keys_required(3) = 'oritype'
         call cline%parse_oldschool(keys_required(:3))
         call xprint_project_vals%execute(cline)
+    case( 'update_project_stateflags' )
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'infile'
+        keys_required(3) = 'oritype'
+        call cline%parse_oldschool(keys_required(:3))
+        call xupdate_project_stateflags%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 
@@ -926,6 +897,13 @@ select case(prg)
         keys_required(2) = 'nparts'
         call cline%parse_oldschool(keys_required(:2))
         call xsplit_pairs%execute(cline)
+    case( 'split' )
+        ! for splitting of image stacks into partitions for parallel execution
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'nparts'
+        call cline%parse_oldschool(keys_required=keys_required(:3))
+        call xsplit%execute(cline)
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'

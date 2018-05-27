@@ -78,9 +78,10 @@ contains
     procedure          :: scale_projfile
     procedure          :: merge_algndocs
     procedure          :: map2ptcls
+    ! I/O
     ! printers
     procedure          :: print_info
-    ! I/O
+    procedure          :: print_segment
     ! readers
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -88,10 +89,10 @@ contains
     procedure, private :: segreader
     ! writers
     procedure          :: write
-    procedure          :: write_segment
+    procedure          :: write_segment2txt
     procedure          :: write_segment_inside
     procedure, private :: segwriter
-    procedure, private :: segwriter_inside
+    procedure          :: segwriter_inside
     ! destructor
     procedure          :: kill
 end type sp_project
@@ -1965,14 +1966,14 @@ contains
         call self%bos%close
     end subroutine write_segment_inside
 
-    subroutine write_segment( self, oritype, fname, fromto )
+    subroutine write_segment2txt( self, oritype, fname, fromto )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: oritype
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
         select case(fname2format(fname))
             case('O')
-                stop 'write_segment is not supported for *.simple project files; sp_project :: write_segment'
+                stop 'write_segment2txt is not supported for *.simple project files; sp_project :: write_segment2txt'
             case('T')
                 ! *.txt plain text ori file
                 select case(trim(oritype))
@@ -1980,70 +1981,184 @@ contains
                         if( self%os_mic%get_noris() > 0 )then
                             call self%os_mic%write(fname)
                         else
-                            write(*,*) 'WARNING, no mic-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no mic-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('stk')
                         if( self%os_stk%get_noris() > 0 )then
                             call self%os_stk%write(fname)
                         else
-                            write(*,*) 'WARNING, no stk-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no stk-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('ptcl2D')
                         if( self%os_ptcl2D%get_noris() > 0 )then
                             call self%os_ptcl2D%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no ptcl2D-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no ptcl2D-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('cls2D')
                         if( self%os_cls2D%get_noris() > 0 )then
                             call self%os_cls2D%write(fname)
                         else
-                            write(*,*) 'WARNING, no cls2D-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no cls2D-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('cls3D')
                         if( self%os_cls3D%get_noris() > 0 )then
                             call self%os_cls3D%write(fname,  fromto)
                         else
-                            write(*,*) 'WARNING, no cls3D-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no cls3D-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('ptcl3D')
                         if( self%os_ptcl3D%get_noris() > 0 )then
                             call self%os_ptcl3D%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no ptcl3D-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no ptcl3D-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('out')
                         if( self%os_out%get_noris() > 0 )then
                             call self%os_out%write(fname)
                         else
-                            write(*,*) 'WARNING, no out-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no out-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('projinfo')
                         if( self%projinfo%get_noris() > 0 )then
                             call self%projinfo%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no projinfo-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no projinfo-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('jobproc')
                         if( self%jobproc%get_noris() > 0 )then
                             call self%jobproc%write(fname)
                         else
-                            write(*,*) 'WARNING, no jobproc-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no jobproc-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case('compenv')
                         if( self%compenv%get_noris() > 0 )then
                             call self%compenv%write(fname)
                         else
-                            write(*,*) 'WARNING, no compenv-type oris available to write; sp_project :: write_segment'
+                            write(*,*) 'WARNING, no compenv-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case DEFAULT
-                        stop 'unsupported oritype flag; sp_project :: write_segment'
+                        stop 'unsupported oritype flag; sp_project :: write_segment2txt'
                 end select
             case DEFAULT
                 write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: write_segment'
+                stop 'file format not supported; sp_project :: write_segment2txt'
         end select
-    end subroutine write_segment
+    end subroutine write_segment2txt
+
+    subroutine print_segment( self, oritype, fromto )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: oritype
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: ffromto(2), iori, noris
+        logical :: fromto_present
+        fromto_present = present(fromto)
+        if( fromto_present ) ffromto = fromto
+        select case(trim(oritype))
+            case('mic')
+                noris = self%os_mic%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%os_mic%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No mic-type oris available to print; sp_project :: print_segment'
+                endif
+            case('stk')
+                noris = self%os_stk%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%os_stk%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No stk-type oris available to print; sp_project :: print_segment'
+                endif
+            case('ptcl2D')
+                noris = self%os_ptcl2D%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%os_ptcl2D%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No ptcl2D-type oris available to print; sp_project :: print_segment'
+                endif
+            case('cls2D')
+                noris = self%os_cls2D%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%os_cls2D%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No cls2D-type oris available to print; sp_project :: print_segment'
+                endif
+            case('cls3D')
+                noris = self%os_cls3D%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%os_cls3D%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No cls3D-type oris available to print; sp_project :: print_segment'
+                endif
+            case('ptcl3D')
+                noris = self%os_ptcl3D%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%os_ptcl3D%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No ptcl3D-type oris available to print; sp_project :: print_segment'
+                endif
+            case('out')
+                noris = self%os_out%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%os_out%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No out-type oris available to print; sp_project :: print_segment'
+                endif
+            case('projinfo')
+                noris = self%projinfo%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%projinfo%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No projinfo-type oris available to print; sp_project :: print_segment'
+                endif
+            case('jobproc')
+                noris = self%jobproc%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%jobproc%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No jobproc-type oris available to print; sp_project :: print_segment'
+                endif
+            case('compenv')
+                noris = self%compenv%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(*,'(a)') self%compenv%ori2str(iori)
+                    end do
+                else
+                    write(*,*) 'No compenv-type oris available to print; sp_project :: print_segment'
+                endif
+            case DEFAULT
+                stop 'unsupported oritype flag; sp_project :: print_segment'
+        end select
+    end subroutine print_segment
 
     subroutine segwriter( self, isegment, fromto )
         class(sp_project), intent(inout) :: self

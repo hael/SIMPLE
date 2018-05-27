@@ -13,7 +13,9 @@ public :: project2txt_commander
 public :: txt2project_commander
 public :: print_project_info_commander
 public :: print_project_header_commander
+public :: update_project_stateflags_commander
 public :: print_project_vals_commander
+public :: print_project_field_commander
 public :: new_project_commander
 public :: update_project_commander
 public :: import_movies_commander
@@ -38,10 +40,18 @@ type, extends(commander_base) :: print_project_header_commander
   contains
     procedure :: execute      => exec_print_project_header
 end type print_project_header_commander
+type, extends(commander_base) :: update_project_stateflags_commander
+  contains
+    procedure :: execute      => exec_update_project_stateflags
+end type update_project_stateflags_commander
 type, extends(commander_base) :: print_project_vals_commander
   contains
     procedure :: execute      => exec_print_project_vals
 end type print_project_vals_commander
+type, extends(commander_base) :: print_project_field_commander
+  contains
+    procedure :: execute      => exec_print_project_field
+end type print_project_field_commander
 type, extends(commander_base) :: new_project_commander
   contains
     procedure :: execute      => exec_new_project
@@ -97,8 +107,8 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call params%new(cline)
-        call spproj%read(params%projfile)
-        call spproj%write_segment(params%oritype, params%outfile)
+        call spproj%read_segment(params%projfile, params%oritype)
+        call spproj%write_segment2txt(params%oritype, params%outfile)
         call spproj%kill
         call simple_end('**** PROJECT2TXT NORMAL STOP ****')
     end subroutine exec_project2txt
@@ -128,6 +138,56 @@ contains
         call bos_doc%print_header
         call bos_doc%close
     end subroutine exec_print_project_header
+
+    subroutine exec_update_project_stateflags( self, cline )
+        use simple_binoris,    only: binoris
+        use simple_sp_project, only: oritype2segment
+        use simple_binoris,    only: binoris
+        use simple_oris,       only: oris
+        class(update_project_stateflags_commander), intent(inout) :: self
+        class(cmdline),                             intent(inout) :: cline
+        type(binoris)                 :: bos_doc
+        type(oris)                    :: os
+        character(len=:), allocatable :: file_w_states, projfile, oritype
+        integer,          allocatable :: states(:)
+        integer :: n_lines, state, fnr, iseg, noris, i
+        ! parse command line
+        projfile      = cline%get_carg('projfile')
+        file_w_states = cline%get_carg('infile')
+        oritype       = cline%get_carg('oritype')
+        ! read the state-flags
+        n_lines       = nlines(file_w_states)
+        allocate(states(n_lines))
+        call fopen(fnr, FILE=file_w_states, STATUS='OLD', action='READ')
+        do i=1,n_lines
+            read(fnr,*) states(i)
+        end do
+        call fclose(fnr)
+        ! look in projfile
+        call bos_doc%open(projfile)
+        iseg  = oritype2segment(oritype)
+        noris = bos_doc%get_n_records(iseg)
+        if( noris == 0 )then
+            call bos_doc%close
+            write(*,*) 'WARNING! Empty project file segment, nothing to update, aborting; exec_update_project_stateflags'
+            return
+        endif
+        if( noris /= n_lines )then
+            call bos_doc%close
+            write(*,*) '# lines in infile        : ', n_lines
+            write(*,*) '# entries in file segment: ', noris
+            write(*,*) 'WARNING! # entries in infile/project file segment do not match, aborting; exec_update_project_stateflags'
+            return
+        endif
+        ! read segment
+        call os%new(noris)
+        call bos_doc%read_segment(iseg, os)
+        ! update states
+        call os%set_all('state', real(states))
+        call bos_doc%write_segment_inside(iseg, os)
+        ! no need to update header (taken care of in binoris object)
+        call bos_doc%close
+    end subroutine exec_update_project_stateflags
 
     !> prints the values of inputted keys in the inputted segment
     subroutine exec_print_project_vals( self, cline )
@@ -213,6 +273,17 @@ contains
             write(*,*) 'ERROR! print request failed due to missing keys; simple_commander_project :: exec_print_project_vals'
         endif
     end subroutine exec_print_project_vals
+
+    subroutine exec_print_project_field( self, cline )
+        class(print_project_field_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        call params%new(cline)
+        call spproj%read_segment(params%oritype, params%projfile)
+        call spproj%print_segment(params%oritype)
+        call spproj%kill
+    end subroutine exec_print_project_field
 
     !> for creating a new project
     subroutine exec_new_project( self, cline )

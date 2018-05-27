@@ -25,6 +25,7 @@ implicit none
 type(new_project_commander)          :: xnew_project
 type(update_project_commander)       :: xupdate_project
 type(print_project_info_commander)   :: xprint_project_info
+type(print_project_field_commander)  :: xprint_project_field
 type(import_movies_commander)        :: ximport_movies
 type(import_boxes_commander)         :: ximport_boxes
 type(import_particles_commander)     :: ximport_particles
@@ -98,6 +99,9 @@ select case(prg)
     case( 'print_project_info' )
         call cline%parse()
         call xprint_project_info%execute(cline)
+    case( 'print_project_field' )
+        call cline%parse()
+        call xprint_project_field%execute(cline)
     case( 'import_movies' )
         call cline%parse()
         call ximport_movies%execute(cline)
