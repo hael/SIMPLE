@@ -65,6 +65,7 @@ type :: ori
     procedure          :: ori2strlen_trim
     procedure          :: ori2chash
     procedure          :: chash2ori
+    procedure          :: get_ctfvars
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print_ori
@@ -560,6 +561,37 @@ contains
         line = ch%chash2str()
         call self%str2ori(line)
     end subroutine chash2ori
+
+    function get_ctfvars(self) result(ctfvars)
+        class(ori), intent(inout) :: self
+        type(ctfparams) :: ctfvars
+        character(len=:), allocatable :: ctfstr, phplate
+        if( self%isthere('ctf') )then
+            call self%getter('ctf', ctfstr)
+            ctfvars%ctfflag = 1
+            select case( trim(ctfstr) )
+                case('no')
+                    ctfvars%ctfflag = 0
+                case('yes')
+                    ctfvars%ctfflag = 1
+                case('flip')
+                    ctfvars%ctfflag = 2
+            end select
+        endif
+        ctfvars%l_phaseplate = .false.
+        if( self%isthere('phaseplate') )then
+            call self%getter('phaseplate', phplate)
+            ctfvars%l_phaseplate = phplate .eq. 'yes'
+        endif
+        ctfvars%smpd    = self%get('smpd')
+        ctfvars%cs      = self%get('cs')
+        ctfvars%kv      = self%get('kv')
+        ctfvars%fraca   = self%get('fraca')
+        ctfvars%dfx     = self%get('dfx')
+        ctfvars%dfy     = self%get('dfy')
+        ctfvars%angast  = self%get('angast')
+        ctfvars%phshift = self%get('phshift')
+    end function get_ctfvars
 
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )

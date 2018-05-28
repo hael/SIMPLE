@@ -341,7 +341,7 @@ contains
             call stream_proj%read(spproj_list(iproj))
             ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
             if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
-            call work_proj%add_stk(stk_list(iproj), ctfvars, stream_proj%os_ptcl2D)
+            call work_proj%add_stk(stk_list(iproj), ctfvars)
         enddo
         call work_proj%write
         ! MAIN LOOP
@@ -406,7 +406,7 @@ contains
                         call stream_proj%read(spproj_list(iproj))
                         ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
                         if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
-                        call work_proj%add_stk(stk_list(iproj-n_spprojs_prev), ctfvars, stream_proj%os_ptcl2D)
+                        call work_proj%add_stk(stk_list(iproj-n_spprojs_prev), ctfvars)
                     enddo
                     ! updates counters
                     nptcls_glob_prev = nptcls_glob
@@ -455,7 +455,7 @@ contains
                     call stream_proj%read(spproj_list(iproj))
                     stk     = stream_proj%get_stkname(1)
                     ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
-                    call orig_proj%add_stk(stk, ctfvars, stream_proj%os_ptcl2D)
+                    call orig_proj%add_stk(stk, ctfvars)
                 enddo
                 ! updates 2D & wipes 3D segment
                 if( do_autoscale )call work_proj%os_ptcl2D%mul_shifts( 1./scale_factor )

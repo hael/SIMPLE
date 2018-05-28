@@ -35,6 +35,13 @@ contains
             stop 'single frame input to ctf_estimate assumed; simple_ctf_estimate_iter :: iterate'
         endif
         ldim(3) = 1
+
+        print *, 'ctfvars%smpd ', ctfvars%smpd
+        print *, 'ctfvars%kv ', ctfvars%kv
+        print *, 'ctfvars%cs ', ctfvars%cs
+        print *, 'ctfvars%fraca ', ctfvars%fraca
+        print *, 'ctfvars%l_phaseplate ', ctfvars%l_phaseplate
+
         call micrograph%new(ldim, ctfvars%smpd)
         call micrograph%read(trim(adjustl(moviename_forctf)), 1)
         ! filter out frequencies lower than the box can express to avoid aliasing

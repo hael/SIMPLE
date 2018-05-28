@@ -413,7 +413,7 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('forctf', intg_forctf)
-                ctfvars = spproj%get_micparams(imic)
+                ctfvars = o%get_ctfvars()
                 call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir))
                 call spproj%os_mic%set_ori(imic, o)
             endif
@@ -541,7 +541,6 @@ contains
         type(sp_project)              :: spproj
         type(nrtxtfile)               :: boxfile
         type(image)                   :: micrograph
-        type(oris)                    :: o_ptcls
         type(ori)                     :: o_mic
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind, ctfstr, phplate
@@ -628,7 +627,6 @@ contains
             niter = niter + 1
             call progress(imic,ntot)
             ! box checks
-            call o_ptcls%new(nptcls)
             if(allocated(oris_mask))deallocate(oris_mask)
             allocate(oris_mask(nptcls), source=.false., stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In simple_extract oris_mask")
@@ -652,37 +650,12 @@ contains
                 if( box_inside(ldim, nint(boxdata(iptcl,1:2)), params%box) )oris_mask(iptcl) = .true.
             end do
             nptcls_eff = count(oris_mask)
-            call o_ptcls%new(nptcls)
             ! extract ctf info
+            ctfparms      = o_mic%get_ctfvars()
+            ctfparms%smpd = params%smpd
             if( o_mic%isthere('dfx') )then
                 if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
                     stop 'ERROR! Input lacks at least cs, kv or fraca field; commander_preproc :: exec_extract'
-                endif
-                ctfparms%smpd = params%smpd
-                ! prepare CTF vars
-                call o_mic%getter('ctf', ctfstr)
-                ctfparms%ctfflag = 1
-                select case( trim(ctfstr) )
-                    case('no')
-                        ctfparms%ctfflag = CTFFLAG_NO
-                    case('yes')
-                        ctfparms%ctfflag = CTFFLAG_YES
-                    case('flip')
-                        ctfparms%ctfflag = CTFFLAG_FLIP
-                end select
-                ctfparms%kv           = o_mic%get('kv')
-                ctfparms%cs           = o_mic%get('cs')
-                ctfparms%fraca        = o_mic%get('fraca')
-                if( o_mic%isthere('phaseplate'))then
-                    call o_mic%getter('phaseplate', phplate)
-                    ctfparms%l_phaseplate = trim(phplate) .eq. 'yes'
-                else
-                    ctfparms%l_phaseplate = .false.
-                endif
-                if( ctfparms%ctfflag > 0 )then
-                    if( .not.o_mic%isthere('dfx') )then
-                        stop 'ERROR! ctf .ne. no and input lacks dfx; commander_preproc :: exec_extract'
-                    endif
                 endif
                 ! clean micrograph stats before transfer to particles
                 call o_mic%delete_entry('xdim')
@@ -692,12 +665,6 @@ contains
                 call o_mic%delete_entry('ctf_estimatecc')
                 call o_mic%delete_entry('ctfscore')
                 call o_mic%delete_entry('dferr')
-                ! transfer to particles
-                do iptcl=1,nptcls
-                    if( .not.oris_mask(iptcl) )cycle
-                    call o_ptcls%set_ori(iptcl, o_mic)
-                end do
-                call o_ptcls%compress(oris_mask)
             endif
             ! output stack
             stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
@@ -720,7 +687,7 @@ contains
                 endif
             end do
             ! IMPORT INTO PROJECT
-            call build%spproj%add_stk(trim(adjustl(stack)), ctfparms, o_ptcls)
+            call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
             ! clean
             call boxfile%kill()
         enddo

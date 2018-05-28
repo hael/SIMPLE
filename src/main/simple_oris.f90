@@ -66,6 +66,7 @@ type :: oris
     procedure          :: sample4update_and_incrcnt2D
     procedure          :: has_been_searched
     procedure          :: ori2str
+    procedure          :: get_ctfvars
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -1210,6 +1211,14 @@ contains
         character(len=:), allocatable :: str
         str = self%o(i)%ori2str()
     end function ori2str
+
+    !>  \brief  
+    function get_ctfvars( self, i ) result( ctfvars )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        type(ctfparams) :: ctfvars
+        ctfvars = self%o(i)%get_ctfvars()
+    end function get_ctfvars
 
     ! SETTERS
 

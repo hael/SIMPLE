@@ -971,6 +971,8 @@ contains
         character(len=*), parameter :: SYMSHTAB     = 'sym_3dshift'//trim(TXT_EXT)  !< volume 3D shift
         character(len=*), parameter :: SYMPROJSTK   = 'sym_projs.mrc'               !< volume reference projections
         integer,          parameter :: NBEST = 30
+        write(*,*)'Unsupported for now'
+        stop
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         call params%new(cline)
         ! constants
@@ -1048,7 +1050,7 @@ contains
         call e%new(params%nspace)
         call e%spiral
         ctfvars%smpd = params%smpd
-        call spproj%add_stk(trim(SYMPROJSTK), ctfvars, e)
+        !call spproj%add_stk(trim(SYMPROJSTK), ctfvars, e)
         call spproj%write
         ! execution
         cline_aggregate = cline

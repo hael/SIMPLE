@@ -303,9 +303,10 @@ contains
                     os_ptr = os
                 endif
             case('stk')
+                ! this assumes there's only one stack in the project to append
                 call os_append_ptr%getter(1, 'stk', stk)
                 ctfvar = proj%get_ctfparams('ptcl2D', 1)
-                call self%add_stk(stk, ctfvar, proj%os_ptcl2D)
+                call self%add_stk(stk, ctfvar)
         end select
     end subroutine append_project
 
@@ -559,7 +560,7 @@ contains
             imgfmt = str(1:3)
             if( self%projinfo%isthere('imgfmt') )then
                 call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
-                if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
+                if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_movies'
                 deallocate(prev_imgfmt)
             else
                 call self%projinfo%set(1,'imgfmt', trim(imgfmt))
@@ -624,59 +625,141 @@ contains
     function get_micparams( self, imic ) result( ctfvars )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: imic
-        character(len=:), allocatable :: phaseplate
         type(ctfparams) :: ctfvars
-        ! sampling distance
-        if( self%os_mic%isthere(imic, 'smpd') )then
-            ctfvars%smpd = self%os_mic%get(imic, 'smpd')
-        else
-            write(*,*) 'ERROR! smpd (sampling distance) lacking in os_mic field'
-            stop 'sp_project :: get_micparams'
-        endif
-        ! acceleration voltage
-        if( self%os_mic%isthere(imic, 'kv') )then
-            ctfvars%kv = self%os_mic%get(imic, 'kv')
-        else
-            write(*,*) 'ERROR! kv (acceleration voltage) lacking in os_mic_field'
-            stop 'sp_project :: get_micparam'
-        endif
-        ! spherical aberration constant
-        if( self%os_mic%isthere(imic, 'cs') )then
-            ctfvars%cs = self%os_mic%get(imic, 'cs')
-        else
-            write(*,*) 'ERROR! cs (spherical aberration constant) lacking in os_mic_field'
-            stop 'sp_project :: get_micparam'
-        endif
-        ! fraction of amplitude contrast
-        if( self%os_mic%isthere(imic, 'fraca') )then
-            ctfvars%fraca = self%os_mic%get(imic, 'fraca')
-        else
-            write(*,*) 'ERROR! fraca (fraction of amplitude contrast) lacking in os_mic_field'
-            stop 'sp_project :: get_micparam'
-        endif
-        ! phaseplate
-        if( self%os_mic%isthere(imic, 'phaseplate') )then
-            call self%os_mic%getter(imic, 'phaseplate', phaseplate)
-        else
-            allocate(phaseplate, source='no')
-        endif
-        ctfvars%l_phaseplate = phaseplate .eq. 'yes'
+        ctfvars = self%os_mic%get_ctfvars(imic)
     end function get_micparams
 
     ! os_stk related methods
 
-    subroutine add_stk( self, stk, ctfvars, os )
-        class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: stk
-        type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
-        class(oris),           intent(inout) :: os      ! parameters associated with stk
+    ! subroutine add_stk( self, stk, ctfvars, os )
+    !     class(sp_project),     intent(inout) :: self
+    !     character(len=*),      intent(in)    :: stk
+    !     type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
+    !     class(oris),           intent(inout) :: os      ! parameters associated with stk
+    !     type(ori)                     :: o
+    !     character(len=:), allocatable :: stk_abspath, prev_imgfmt
+    !     character(len=STDLEN)         :: str
+    !     character(len=3)              :: imgfmt
+    !     integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+    !     integer :: i, fromp, top
+    !     ! fuul path and existence check
+    !     call simple_full_path(stk, stk_abspath, 'sp_project :: add_stk')
+    !     ! find dimension of inputted stack
+    !     call find_ldim_nptcls(stk_abspath, ldim, nptcls)
+    !     if( ldim(1) /= ldim(2) )then
+    !         write(*,*) 'xdim: ', ldim(1)
+    !         write(*,*) 'ydim: ', ldim(2)
+    !         stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stk'
+    !     endif
+    !     ! check that inputs are of conforming sizes
+    !     n_os = os%get_noris()
+    !     if( n_os /= nptcls )then
+    !         write(*,*) '# input oris      : ', n_os
+    !         write(*,*) '# ptcl imgs in stk: ', nptcls
+    !         stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stk'
+    !     endif
+    !     ! existence of ctf/defocus values
+    !     if( ctfvars%ctfflag > 0 )then
+    !         if( .not.os%isthere(1,'dfx') )then
+    !             stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
+    !         endif
+    !     endif
+    !     ! updates_fields
+    !     n_os_stk    = self%os_stk%get_noris() + 1
+    !     n_os_ptcl2D = self%os_ptcl2D%get_noris()
+    !     n_os_ptcl3D = self%os_ptcl3D%get_noris()
+    !     if( n_os_stk == 1 )then
+    !         call self%os_stk%new(1)
+    !         call self%os_ptcl2D%new(nptcls)
+    !         call self%os_ptcl3D%new(nptcls)
+    !         fromp = 1
+    !         top   = n_os
+    !     else
+    !         ! stk
+    !         if( .not.self%os_stk%isthere(n_os_stk-1,'top') )then
+    !             stop 'FROMP/TOP keys should always be informed; simple_sp_project :: add_stk'
+    !         endif
+    !         call self%os_stk%reallocate(n_os_stk)
+    !         ! 2d
+    !         n_os_ptcl2D = self%os_ptcl2D%get_noris()
+    !         call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls)
+    !         ! 3d
+    !         n_os_ptcl3D = self%os_ptcl3D%get_noris()
+    !         call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
+    !         fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
+    !         top   = fromp + n_os - 1
+    !     endif
+    !     ! image format
+    !     str    = fname2ext(stk_abspath)
+    !     imgfmt = str(1:3)
+    !     if( self%projinfo%isthere('imgfmt') )then
+    !         call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
+    !         if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
+    !     else
+    !         call self%projinfo%set(1,'imgfmt', trim(imgfmt))
+    !     endif
+    !     ! updates oris_objects
+    !     call self%os_stk%set(n_os_stk, 'stk',     trim(stk_abspath))
+    !     call self%os_stk%set(n_os_stk, 'box',     real(ldim(1)))
+    !     call self%os_stk%set(n_os_stk, 'nptcls',  real(nptcls))
+    !     call self%os_stk%set(n_os_stk, 'fromp',   real(fromp))
+    !     call self%os_stk%set(n_os_stk, 'top',     real(top))
+    !     call self%os_stk%set(n_os_stk, 'stkkind', 'split')
+    !     call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
+    !     call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
+    !     call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
+    !     call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
+    !     call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
+    !     if( ctfvars%l_phaseplate )then
+    !         call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
+    !     else
+    !         call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
+    !     endif
+    !     select case(ctfvars%ctfflag)
+    !         case(CTFFLAG_NO)
+    !             call self%os_stk%set(n_os_stk, 'ctf', 'no')
+    !         case(CTFFLAG_YES)
+    !             call self%os_stk%set(n_os_stk, 'ctf', 'yes')
+    !         case(CTFFLAG_FLIP)
+    !             call self%os_stk%set(n_os_stk, 'ctf', 'flip')
+    !         case DEFAULT
+    !             write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
+    !             stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
+    !     end select
+    !     if( self%os_mic%get_noris() == n_os_stk)then
+    !         call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))
+    !     endif
+    !     ! update particle oris objects
+    !     do i = 1, nptcls
+    !         o = os%get_ori(i)
+    !         call o%kill_chash()
+    !         call o%delete_entry('kv')
+    !         call o%delete_entry('cs')
+    !         call o%delete_entry('fraca')
+    !         call o%delete_entry('smpd')
+    !         if( ctfvars%ctfflag > 0 )then
+    !             if( .not.o%isthere('dfx') )then
+    !                 stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
+    !             endif
+    !         endif
+    !         call o%set('stkind', real(n_os_stk))
+    !         if( .not.o%isthere('state') ) call o%set('state',1.)
+    !         call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
+    !         call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
+    !     enddo
+    ! end subroutine add_stk
+
+    subroutine add_stk( self, stk, ctfvars )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: stk
+        type(ctfparams),   intent(in)    :: ctfvars ! All CTF parameters associated with stk
         type(ori)                     :: o
         character(len=:), allocatable :: stk_abspath, prev_imgfmt
         character(len=STDLEN)         :: str
         character(len=3)              :: imgfmt
-        integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer :: i, fromp, top
-        ! fuul path and existence check
+        ! full path and existence check
         call simple_full_path(stk, stk_abspath, 'sp_project :: add_stk')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
@@ -684,19 +767,6 @@ contains
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
             stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stk'
-        endif
-        ! check that inputs are of conforming sizes
-        n_os = os%get_noris()
-        if( n_os /= nptcls )then
-            write(*,*) '# input oris      : ', n_os
-            write(*,*) '# ptcl imgs in stk: ', nptcls
-            stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stk'
-        endif
-        ! existence of ctf/defocus values
-        if( ctfvars%ctfflag > 0 )then
-            if( .not.os%isthere(1,'dfx') )then
-                stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
-            endif
         endif
         ! updates_fields
         n_os_stk    = self%os_stk%get_noris() + 1
@@ -707,7 +777,7 @@ contains
             call self%os_ptcl2D%new(nptcls)
             call self%os_ptcl3D%new(nptcls)
             fromp = 1
-            top   = n_os
+            top   = nptcls
         else
             ! stk
             if( .not.self%os_stk%isthere(n_os_stk-1,'top') )then
@@ -715,13 +785,11 @@ contains
             endif
             call self%os_stk%reallocate(n_os_stk)
             ! 2d
-            n_os_ptcl2D = self%os_ptcl2D%get_noris()
             call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls)
             ! 3d
-            n_os_ptcl3D = self%os_ptcl3D%get_noris()
             call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
             fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
-            top   = fromp + n_os - 1
+            top   = fromp + nptcls - 1
         endif
         ! image format
         str    = fname2ext(stk_abspath)
@@ -740,15 +808,6 @@ contains
         call self%os_stk%set(n_os_stk, 'top',     real(top))
         call self%os_stk%set(n_os_stk, 'stkkind', 'split')
         call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
-        call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
-        call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
-        call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
-        call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
-        if( ctfvars%l_phaseplate )then
-            call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
-        else
-            call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
-        endif
         select case(ctfvars%ctfflag)
             case(CTFFLAG_NO)
                 call self%os_stk%set(n_os_stk, 'ctf', 'no')
@@ -760,22 +819,27 @@ contains
                 write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
                 stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
         end select
-        if( self%os_mic%get_noris() == n_os_stk)then
+        call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
+        call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
+        call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
+        call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
+        if( ctfvars%l_phaseplate )then
+            call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
+        else
+            call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
+        endif
+        ! preprocessign / streaming adds pairs: one micrograph and one stack
+        ! so this keeps track of the index in this setting
+        if( self%os_mic%get_noris() == n_os_stk )then
             call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))
         endif
         ! update particle oris objects
         do i = 1, nptcls
-            o = os%get_ori(i)
-            call o%kill_chash()
-            call o%delete_entry('kv')
-            call o%delete_entry('cs')
-            call o%delete_entry('fraca')
-            call o%delete_entry('smpd')
-            if( ctfvars%ctfflag > 0 )then
-                if( .not.o%isthere('dfx') )then
-                    stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
-                endif
-            endif
+            call o%new
+            call o%set('dfx',    ctfvars%dfx)
+            call o%set('dfy',    ctfvars%dfy)
+            call o%set('angast', ctfvars%angast)
+            if( ctfvars%l_phaseplate ) call o%set('phshift', ctfvars%phshift)
             call o%set('stkind', real(n_os_stk))
             if( .not.o%isthere('state') ) call o%set('state',1.)
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
@@ -784,11 +848,12 @@ contains
     end subroutine add_stk
 
     subroutine add_single_stk( self, stk, ctfvars, os )
-        class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: stk
-        type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
-        class(oris), optional, intent(inout) :: os      ! parameters associated with stk
-        integer :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: stk
+        type(ctfparams),   intent(in)    :: ctfvars ! CTF parameters associated with stk (smpd,kv,cs,fraca,phaseplate)
+        class(oris),       intent(inout) :: os      ! parameters associated with stk (dfx,dfy,angast,phshift)
+        integer :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls
+        character(len=:), allocatable :: stk_abspath
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
@@ -806,15 +871,46 @@ contains
             write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
             stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
         endif
-        if( ctfvars%ctfflag > 0 )then
-            if( .not.os%isthere(1,'dfx') )then
-                stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_single_stk'
-            endif
+        self%os_ptcl2D = os
+        self%os_ptcl3D = os
+        call self%os_ptcl2D%set_all2single('stkind', 1.)
+        call self%os_ptcl3D%set_all2single('stkind', 1.)
+        ! full path and existence check
+        call simple_full_path(stk, stk_abspath, 'sp_project :: add_single_stk')
+        ! find dimension of inputted stack
+        call find_ldim_nptcls(stk_abspath, ldim, nptcls)
+        if( ldim(1) /= ldim(2) )then
+            write(*,*) 'xdim: ', ldim(1)
+            write(*,*) 'ydim: ', ldim(2)
+            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_single_stk'
         endif
-        ! add stack
-        call self%add_stk(stk, ctfvars, os)
-        ! indicate single
+        call self%os_stk%set(1, 'stk',     trim(stk_abspath))
+        call self%os_stk%set(1, 'box',     real(ldim(1)))
+        call self%os_stk%set(1, 'nptcls',  real(nptcls))
+        call self%os_stk%set(1, 'fromp',   1.0)
+        call self%os_stk%set(1, 'top',     real(nptcls))
         call self%os_stk%set(1, 'stkkind', 'single')
+        call self%os_stk%set(1, 'imgkind', 'ptcl')
+        call self%os_stk%set(1, 'kv',      ctfvars%kv)
+        call self%os_stk%set(1, 'cs',      ctfvars%cs)
+        call self%os_stk%set(1, 'fraca',   ctfvars%fraca)
+        if( ctfvars%l_phaseplate )then
+            if( .not. os%isthere('phshift') ) stop 'ERROR! phaseplate=yes & input oris lack phshift; sp_project :: add_single_stk'
+            call self%os_stk%set(1, 'phaseplate', 'yes')
+        else
+            call self%os_stk%set(1, 'phaseplate', 'no')
+        endif
+        select case(ctfvars%ctfflag)
+            case(CTFFLAG_NO)
+                call self%os_stk%set(1, 'ctf', 'no')
+            case(CTFFLAG_YES)
+                call self%os_stk%set(1, 'ctf', 'yes')
+            case(CTFFLAG_FLIP)
+                call self%os_stk%set(1, 'ctf', 'flip')
+            case DEFAULT
+                write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
+                stop 'ERROR, unsupported ctfflag; sp_project :: add_single_stk'
+        end select
     end subroutine add_single_stk
 
     subroutine add_stktab( self, stktab, os )
@@ -823,8 +919,6 @@ contains
         class(oris),         intent(inout) :: os ! parameters associated with stktab
         type(ctfparams) :: ctfvars
         type(ori)       :: o_stk
-        type(oris)      :: os_ptcls
-        character(len=:),          allocatable :: phplate, ctfstr
         character(len=LONGSTRLEN), allocatable :: stknames(:)
         integer :: istk, ldim(3), ldim_here(3), nptcls, n_os, iptcl, nstks
         ! file exists?
@@ -868,33 +962,17 @@ contains
                 write(*,*) 'ydim:     ', ldim(2)
                 stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stktab'
             endif
-            ! prepare CTF vars
-            call o_stk%getter('ctf', ctfstr)
-            ctfvars%ctfflag = 1
-            select case( trim(ctfstr) )
-                case('no')
-                    ctfvars%ctfflag = 0
-                case('yes')
-                    ctfvars%ctfflag = 1
-                case('flip')
-                    ctfvars%ctfflag = 2
-            end select
-            ctfvars%smpd  = o_stk%get('smpd')
-            ctfvars%kv    = o_stk%get('kv')
-            ctfvars%cs    = o_stk%get('cs')
-            ctfvars%fraca = o_stk%get('fraca')
-            if( o_stk%isthere('phaseplate'))then
-                call o_stk%getter('phaseplate', phplate)
-                ctfvars%l_phaseplate = trim(phplate) .eq. 'yes'
-            else
-                ctfvars%l_phaseplate = .false.
-            endif
-            ! import
-            call os_ptcls%new(nptcls)
-            do iptcl=1,nptcls
-                call os_ptcls%set_ori(iptcl, o_stk)
-            end do
-            call self%add_stk(stknames(istk), ctfvars, os_ptcls)
+            ! check variable presence
+            if( .not. o_stk%isthere('ctf') )    stop 'ERROR! ctf flag missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('smpd') )   stop 'ERROR! smpd missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('kv') )     stop 'ERROR! kv missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('cs') )     stop 'ERROR! cs missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('fraca') )  stop 'ERROR! fraca missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('dfx') )    stop 'ERROR! dfx missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('dfy') )    stop 'ERROR! dfy missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('angast') ) stop 'ERROR! angast missing in os input; sp_project :: add_stktab'
+            ctfvars = o_stk%get_ctfvars()
+            call self%add_stk(stknames(istk), ctfvars)
         enddo
     end subroutine add_stktab
 
@@ -1457,8 +1535,6 @@ contains
         ! sampling distance
         if( self%os_stk%isthere(stkind, 'smpd') )then
             ctfvars%smpd = self%os_stk%get(stkind, 'smpd')
-        else if( ptcl_field%isthere(iptcl, 'smpd') )then
-            ctfvars%smpd = ptcl_field%get(iptcl, 'smpd')
         else
             write(*,*) 'ERROR! smpd (sampling distance) lacking in os_stk and ptcl fields'
             stop 'sp_project :: get_ctfparams'
@@ -1466,8 +1542,6 @@ contains
         ! CTF flag
         if( self%os_stk%isthere(stkind, 'ctf') )then
             ctfflag = trim(self%os_stk%get_static(stkind, 'ctf'))
-        else if( ptcl_field%isthere(iptcl, 'ctf') )then
-            ctfflag = trim(ptcl_field%get_static(iptcl, 'ctf'))
         else
             ctfflag = NIL
         endif
@@ -1492,8 +1566,6 @@ contains
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
             ctfvars%kv = self%os_stk%get(stkind, 'kv')
-        else if( ptcl_field%isthere(iptcl, 'kv') )then
-            ctfvars%kv = ptcl_field%get(iptcl, 'kv')
         else
             write(*,*) 'ERROR! kv (acceleration voltage) lacking in os_stk_field'
             stop 'sp_project :: get_ctfparams'
@@ -1501,8 +1573,6 @@ contains
         ! spherical aberration constant
         if( self%os_stk%isthere(stkind, 'cs') )then
             ctfvars%cs = self%os_stk%get(stkind, 'cs')
-        else if( ptcl_field%isthere(iptcl, 'cs') )then
-            ctfvars%cs = ptcl_field%get(iptcl, 'cs')
         else
             write(*,*) 'ERROR! cs (spherical aberration constant) lacking in os_stk_field'
             stop 'sp_project :: get_ctfparams'
@@ -1510,8 +1580,6 @@ contains
         ! fraction of amplitude contrast
         if( self%os_stk%isthere(stkind, 'fraca') )then
             ctfvars%fraca = self%os_stk%get(stkind, 'fraca')
-        else if( ptcl_field%isthere(iptcl, 'fraca') )then
-            ctfvars%fraca = ptcl_field%get(iptcl, 'fraca')
         else
             write(*,*) 'ERROR! fraca (fraction of amplitude contrast) lacking in os_stk_field'
             stop 'sp_project :: get_ctfparams'
@@ -1551,9 +1619,7 @@ contains
             endif
         endif
         ! additional phase shift
-        if( self%os_stk%isthere(stkind, 'phshift') )then
-            ctfvars%phshift = self%os_stk%get(stkind, 'phshift')
-        else if( ptcl_field%isthere(iptcl, 'phshift') )then
+        if( ptcl_field%isthere(iptcl, 'phshift') )then
             ctfvars%phshift = ptcl_field%get(iptcl, 'phshift')
         else
             ctfvars%phshift = 0.
