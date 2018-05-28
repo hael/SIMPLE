@@ -76,9 +76,9 @@ print (polarizer*)self%wdim
 
 Note that in you can also make it a watched expression in ddd, gdbgui, codeblocks, etc.
 
-Non-array variables:
+Allocatable array variables:
 If the derived-type member variable you want to inspect is an array, you need to do it in the following way:
-Way you are in the module simple_bfgs2_opt, in the subroutine bfgs2_minimize and you want to inspect the variable self%gradient
+Say you are in the module simple_bfgs2_opt, in the subroutine bfgs2_minimize and you want to inspect the variable self%gradient
 (which you know already has 2 elements).
 Then the command you are looking for is:
 
