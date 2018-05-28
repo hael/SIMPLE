@@ -139,7 +139,6 @@ type :: polarft_corrcalc
     procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
     procedure, private :: calc_corrs_over_k
-    procedure, private :: calc_euclids_over_k
     procedure, private :: calc_k_corrs
     procedure, private :: calc_corr_for_rot
     procedure, private :: calc_corr_for_rot_8
@@ -147,8 +146,6 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclid_for_rot
     procedure, private :: calc_euclid_for_rot_8
     procedure, private :: calc_corrk_for_rot_8
-    procedure, private :: calc_euclidk_for_rot
-    procedure, private :: calc_euclidk_for_rot_8
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
     procedure, private :: gencorrs_cc_3
@@ -176,6 +173,12 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cont_grad_resnorm_for_rot_8
     procedure          :: gencorr_cont_shift_grad_resnorm_for_rot_8
     procedure          :: gencorr_resnorm_grad_only_for_rot_8
+    procedure          :: gencorr_euclid_for_rot
+    procedure          :: gencorr_euclid_for_rot_8
+    procedure          :: gencorr_cont_grad_euclid_for_rot_8
+    procedure          :: gencorr_cont_shift_grad_euclid_for_rot_8
+    procedure          :: gencorr_euclid_grad_for_rot_8
+    procedure          :: gencorr_euclid_grad_only_for_rot_8
     procedure, private :: genfrc
     procedure          :: calc_frc
     procedure          :: specscore
@@ -262,6 +265,8 @@ contains
                     &self%ptcl_bfac_norms(1:self%nptcls))
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
+            case('euclid')
+                self%cc_objfun = 3
             case DEFAULT
                 write(*,*) 'unsupported objective function: ', trim(params_glob%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'
@@ -682,11 +687,13 @@ contains
         real,                    intent(in)    :: bfac
         if( self%cc_objfun == 1 )then
             ! nothing to do
-        else
+        else if ( self%cc_objfun == 2 ) then
             self%ptcl_bfac_weights(:,self%pinds(iptcl)) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
             where( self%ptcl_bfac_weights(:,self%pinds(iptcl)) < TINY) self%ptcl_bfac_weights(:,self%pinds(iptcl)) = 0.
             self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(:,self%pinds(iptcl)))
-        endif
+        else 
+            ! nothing to do
+        end if
     end subroutine memoize_bfac
 
     ! CALCULATORS
@@ -794,21 +801,6 @@ contains
         corrs_over_k = corrs_over_k(self%nrots:1:-1) ! step 1 is reversing
         corrs_over_k = cshift(corrs_over_k, -1)      ! step 2 is circular shift by 1
     end subroutine calc_corrs_over_k
-
-    subroutine calc_euclids_over_k( self, pft_ref, i, kstop, euclids_over_k )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
-        real,                    intent(out)   :: euclids_over_k(self%nrots)
-        integer :: ithr, irot
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! sum up correlations over k-rings
-        euclids_over_k = 0.
-        do irot = 1,self%nrots
-            euclids_over_k(irot) = self%calc_euclid_for_rot(pft_ref, i, kstop, irot)
-        end do
-    end subroutine calc_euclids_over_k
 
     subroutine calc_k_corrs( self, pft_ref, i, k, kcorrs )
         class(polarft_corrcalc), intent(inout) :: self
@@ -952,7 +944,7 @@ contains
             tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,:) - conjg(self%pfts_ptcls(rot:self%pftsz,:,i))))
             tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(1:rot-1,:,i)))
         end if
-        euclid = tmp
+        euclid = -tmp
     end function calc_euclid_for_rot
 
     function calc_euclid_for_rot_8( self, pft_ref, i, kstop, irot ) result( euclid )
@@ -979,7 +971,7 @@ contains
             tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,:)          - conjg(self%pfts_ptcls(rot:self%pftsz,:,i))))
             tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(1:rot-1,:,i)))
         end if
-        euclid = tmp
+        euclid = exp( -tmp / (2. * sum(csq(self%pfts_ptcls(:,:,i)))) )
     end function calc_euclid_for_rot_8
 
     function calc_corrk_for_rot_8( self, pft_ref, i, kstop, k, irot ) result( corr )
@@ -1009,60 +1001,6 @@ contains
         end if
         corr = real(tmp)
     end function calc_corrk_for_rot_8
-
-    function calc_euclidk_for_rot( self, pft_ref, i, kstop, k, irot ) result( euclid )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop, k, irot
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
-        integer :: rot
-        real    :: euclid
-        complex :: tmp
-        tmp  = cmplx(0.,0.)
-        if( irot >= self%pftsz + 1 )then
-            rot = irot - self%pftsz
-        else
-            rot = irot
-        end if
-        if( irot == 1 )then
-            tmp =       sum(csq(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
-        else if( irot <= self%pftsz )then
-            tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i)))
-            tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i))))
-        else if( irot == self%pftsz + 1 )then
-            tmp =       sum(csq(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
-        else
-            tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
-            tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
-        end if
-        euclid = tmp
-    end function calc_euclidk_for_rot
-
-    function calc_euclidk_for_rot_8( self, pft_ref, i, kstop, k, irot ) result( euclid )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kstop, k, irot
-        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
-        integer     :: rot
-        real(dp)    :: euclid
-        complex(dp) :: tmp
-        tmp = cmplx(0.,0.,kind=dp)
-        if( irot >= self%pftsz + 1 )then
-            rot = irot - self%pftsz
-        else
-            rot = irot
-        end if
-        if( irot == 1 )then
-            tmp =       sum((pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
-        else if( irot <= self%pftsz )then
-            tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i)))
-            tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i))))
-        else if( irot == self%pftsz + 1 )then
-            tmp =       sum(csq(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
-        else
-            tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
-            tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
-        end if
-        euclid = tmp
-    end function calc_euclidk_for_rot_8
 
     subroutine genfrc( self, iref, i, irot, frc )
         class(polarft_corrcalc),  intent(inout) :: self
@@ -1278,14 +1216,17 @@ contains
         real(sp),                intent(out)   :: euclids(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: euclids_over_k(:)
-        real(sp) :: sqsum_ref
+        real(sp) :: sqsum_ref, sqsum_ptcl
         integer  :: ithr
         ithr           =  omp_get_thread_num() + 1
         pft_ref        => self%heap_vars(ithr)%pft_ref
         euclids_over_k => self%heap_vars(ithr)%corrs_over_k !can be reused
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sqsum_ref, self%kfromto(2))
-        call self%calc_euclids_over_k(pft_ref, self%pinds(iptcl), self%kfromto(2), euclids_over_k)
-        euclids = euclids_over_k
+        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), self%kfromto(2), euclids_over_k)
+        sqsum_ptcl = self%sqsums_ptcls(self%pinds(iptcl))
+        !euclids = exp( ( 2. * euclids_over_k - sqsum_ref - sqsum_ptcl ) / ( 2. * sqsum_ptcl ) )
+        euclids = exp( ( euclids_over_k - 0.5 * sqsum_ref ) / sqsum_ptcl - 0.5 )
+        
     end subroutine gencorrs_euclid_1
 
     subroutine gencorrs_euclid_2( self, iref, iptcl, kstop, euclids )
@@ -1300,9 +1241,11 @@ contains
         pft_ref        => self%heap_vars(ithr)%pft_ref
         euclids_over_k => self%heap_vars(ithr)%corrs_over_k !can be reused
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sqsum_ref, kstop)
-        call self%calc_euclids_over_k(pft_ref, self%pinds(iptcl), kstop, euclids_over_k)
-        !sqsum_ptcl = sum(csq(self%pfts_ptcls(:, self%kfromto(1):kstop, self%pinds(iptcl))))
-        euclids = euclids_over_k
+        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), kstop, euclids_over_k)
+        sqsum_ptcl = sum(csq(self%pfts_ptcls(:, self%kfromto(1):kstop, self%pinds(iptcl))))
+        euclids = 2. * euclids_over_k - sqsum_ref - sqsum_ptcl
+        !euclids = exp( ( 2. * euclids_over_k - sqsum_ref - sqsum_ptcl ) / ( 2. * sqsum_ptcl ) )
+        euclids = exp( ( euclids_over_k - 0.5 * sqsum_ref ) / sqsum_ptcl - 0.5 )
     end subroutine gencorrs_euclid_2
 
     subroutine gencorrs_euclid_3( self, iref, iptcl, shvec, euclids )
@@ -1312,7 +1255,7 @@ contains
         real(sp),                intent(out)   :: euclids(self%nrots)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: euclids_over_k(:), argmat(:,:)
-        real(sp) :: sqsum_ref
+        real(sp) :: sqsum_ref, sqsum_ptcl
         integer  :: ithr
         ithr           = omp_get_thread_num() + 1
         pft_ref        => self%heap_vars(ithr)%pft_ref
@@ -1334,31 +1277,38 @@ contains
                 pft_ref = self%pfts_refs_odd (:,:,iref) * shmat
             endif
         endif
-        !sqsum_ref = sum(csq(pft_ref))
-        call self%calc_euclids_over_k(pft_ref, self%pinds(iptcl), self%kfromto(2), euclids_over_k)
-        euclids = euclids_over_k
+        sqsum_ref = sum(csq(pft_ref))
+        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), self%kfromto(2), euclids_over_k)
+        sqsum_ptcl = self%sqsums_ptcls(self%pinds(iptcl))
+        euclids = 2. * euclids_over_k - sqsum_ref - sqsum_ptcl
+        !euclids = exp( ( 2. * euclids_over_k - sqsum_ref - sqsum_ptcl ) / ( 2. * sqsum_ptcl ) )
+        euclids = exp( ( euclids_over_k - 0.5 * sqsum_ref ) / sqsum_ptcl - 0.5 )
     end subroutine gencorrs_euclid_3
 
     subroutine gencorrs_1( self, iref, iptcl, cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
-        if( self%cc_objfun == 1 )then
+        if     ( self%cc_objfun == 1 )then
             call self%gencorrs_cc_1(iref, iptcl, cc)
-        else if ( self%cc_objfun == 2 ) then
+        else if( self%cc_objfun == 2 )then
             call self%gencorrs_resnorm_1(iref, iptcl, cc)
-        endif
+        else if( self%cc_objfun == 3 )then
+            call self%gencorrs_euclid_1(iref, iptcl, cc)
+        end if
     end subroutine gencorrs_1
 
     subroutine gencorrs_2( self, iref, iptcl, kstop, cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
         real,                    intent(out)   :: cc(self%nrots)
-        if( self%cc_objfun == 1 )then
+        if     ( self%cc_objfun == 1 )then
             call self%gencorrs_cc_2(iref, iptcl, kstop, cc)
-        else if ( self%cc_objfun == 2 )then
+        else if( self%cc_objfun == 2 )then
             call self%gencorrs_resnorm_2(iref, iptcl, kstop, cc)
-        endif
+        else if( self%cc_objfun == 3 )then
+            call self%gencorrs_euclid_2(iref, iptcl, kstop, cc)
+        end if
     end subroutine gencorrs_2
 
     subroutine gencorrs_3( self, iref, iptcl, shvec, cc )
@@ -1366,11 +1316,13 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
-        if( self%cc_objfun == 1 )then
+        if     ( self%cc_objfun == 1 )then
             call self%gencorrs_cc_3(iref, iptcl, shvec, cc)
-        else if ( self%cc_objfun == 2 )then
+        else if( self%cc_objfun == 2 )then
             call self%gencorrs_resnorm_3(iref, iptcl, shvec, cc)
-        endif
+        else if( self%cc_objfun == 3 )then
+            call self%gencorrs_euclid_3(iref, iptcl, shvec, cc)
+        end if
     end subroutine gencorrs_3
 
     function gencorr_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
@@ -1379,11 +1331,13 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp)                               :: cc
-        if( self%cc_objfun == 1 )then
+        if     ( self%cc_objfun == 1 )then
             cc = self%gencorr_cc_for_rot_8( iref, iptcl, shvec, irot )
-        else if ( self%cc_objfun == 2 )then
+        else if( self%cc_objfun == 2 )then
             cc = self%gencorr_resnorm_for_rot_8( iref, iptcl, shvec, irot )
-        endif
+        else if( self%cc_objfun == 3 ) then
+            cc = self%gencorr_euclid_for_rot_8( iref, iptcl, shvec, irot )
+        end if
     end function gencorr_for_rot_8
 
     function gencorr_cc_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
@@ -1617,11 +1571,13 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: f, grad(2)
-        if( self%cc_objfun == 1 )then
+        if     ( self%cc_objfun == 1 )then
             call self%gencorr_cc_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
-        else if ( self%cc_objfun == 2)then
+        else if( self%cc_objfun == 2)then
             call self%gencorr_resnorm_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
-        endif
+        else if( self%cc_objfun == 3)then
+            call self%gencorr_euclid_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
+        end if
     end subroutine gencorr_grad_for_rot_8
 
     subroutine gencorr_cc_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
@@ -1856,11 +1812,13 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: grad(2)
-        if( self%cc_objfun == 1 )then
+        if     ( self%cc_objfun == 1 )then
             call self%gencorr_cc_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
-        else if ( self%cc_objfun == 2 )then
+        else if( self%cc_objfun == 2 )then
             call self%gencorr_resnorm_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
-        endif
+        else if( self%cc_objfun == 3 )then
+            call self%gencorr_euclid_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
+        end if
     end subroutine gencorr_grad_only_for_rot_8
 
     subroutine gencorr_cc_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
@@ -1948,6 +1906,170 @@ contains
         grad = grad / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_resnorm_grad_only_for_rot_8
 
+    function gencorr_euclid_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
+        real(sp),    pointer :: argmat(:,:)
+        real(sp) :: cc, corr
+        integer  :: ithr
+        ithr    =  omp_get_thread_num() + 1
+        pft_ref => self%heap_vars(ithr)%pft_ref
+        shmat   => self%heap_vars(ithr)%shmat
+        argmat  => self%heap_vars(ithr)%argmat
+        argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
+        shmat   =  cmplx(cos(argmat),sin(argmat))
+        if( self%with_ctf )then
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd (:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            endif
+        else
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
+            else
+                pft_ref = self%pfts_refs_odd (:,:,iref) * shmat
+            endif
+        endif        
+        cc = self%calc_euclid_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), irot)
+    end function gencorr_euclid_for_rot
+
+    function gencorr_euclid_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        complex(dp), pointer :: pft_ref(:,:), shmat(:,:)
+        real(dp),    pointer :: argmat(:,:)
+        real(dp) :: cc, corr
+        integer  :: ithr
+        ithr    =  omp_get_thread_num() + 1
+        pft_ref => self%heap_vars(ithr)%pft_ref_8
+        shmat   => self%heap_vars(ithr)%shmat_8
+        argmat  => self%heap_vars(ithr)%argmat_8
+        argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
+        shmat   =  cmplx(cos(argmat),sin(argmat),dp)
+        if( self%with_ctf )then
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            endif
+        else
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
+            endif
+        endif
+        cc = self%calc_euclid_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), irot)
+    end function gencorr_euclid_for_rot_8
+
+    function gencorr_cont_grad_euclid_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: dcc(3)
+        real(dp) :: cc
+        cc = 0._dp
+        ! TODO: implement me
+    end function gencorr_cont_grad_euclid_for_rot_8
+
+    subroutine gencorr_cont_shift_grad_euclid_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: f
+        real(dp),                intent(out)   :: grad(5) ! 3 orientation angles, 2 shifts
+        ! TODO: implement me
+    end subroutine gencorr_cont_shift_grad_euclid_for_rot_8
+
+    subroutine gencorr_euclid_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: f, grad(2)
+        complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp(:,:), shmat(:,:)
+        real(dp),    pointer :: argmat(:,:)
+        real(dp) :: euclid, denom, corr
+        integer  :: ithr
+        ithr        =  omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
+        shmat       => self%heap_vars(ithr)%shmat_8
+        argmat      => self%heap_vars(ithr)%argmat_8
+        argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
+        shmat       =  cmplx(cos(argmat),sin(argmat),dp)
+        if( self%with_ctf )then
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            endif
+        else
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
+            endif
+        endif
+        euclid      = self%calc_euclid_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), irot)
+        f           = euclid
+        denom       = self%sqsums_ptcls(self%pinds(iptcl))
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
+        grad(1)     = corr / denom * euclid
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
+        grad(2)     = corr / denom * euclid
+    end subroutine gencorr_euclid_grad_for_rot_8
+
+    subroutine gencorr_euclid_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: grad(2)
+        complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp(:,:), shmat(:,:)
+        real(dp),    pointer :: argmat(:,:)
+        real(dp) :: euclid, corr, denom
+        integer  :: ithr
+        ithr        =  omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
+        shmat       => self%heap_vars(ithr)%shmat_8
+        argmat      => self%heap_vars(ithr)%argmat_8
+        argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
+        shmat       =  cmplx(cos(argmat),sin(argmat),dp)
+        if( self%with_ctf )then
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd(:,:,iref)  * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            endif
+        else
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = self%pfts_refs_even(:,:,iref) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)  * shmat
+            endif
+        endif
+        euclid      = self%calc_euclid_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), irot)
+        denom       = self%sqsums_ptcls(self%pinds(iptcl))
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
+        grad(1)     = corr / denom * euclid
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
+        grad(2)     = corr / denom * euclid
+    end subroutine gencorr_euclid_grad_only_for_rot_8
+    
     real function specscore( self, iref, iptcl, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
