@@ -379,7 +379,8 @@ contains
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph
         real(dp)                                                 :: dRdangle(3,3)
         real(dp)                                                 :: dapod_tmp(3)
-        real(dp)                                                 :: N, D, D2 !numerator, denominator
+        complex(dp)                                              :: N     !numerator
+        real(dp)                                                 :: D, D2 !denominator
         integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
         type(ori_light)                                          :: or
         ! interpolation kernel window
@@ -445,7 +446,8 @@ contains
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph, w
         real(dp)                                                 :: dRdangle(3,3)
         real(dp)                                                 :: dapod_tmp(3)
-        real(dp)                                                 :: N, D, D2 !numerator, denominator
+        complex(dp)                                              :: N     !numerator
+        real(dp)                                                 :: D, D2 !denominator
         integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
         type(ori_light)                                          :: or
         ! interpolation kernel window
@@ -512,7 +514,8 @@ contains
         real(dp), dimension(1:self%wdim,1:self%wdim,1:self%wdim) :: wt, wp, wph, w
         real(dp)                                                 :: dRdangle(3,3)
         real(dp)                                                 :: dapod_tmp(3)
-        real(dp)                                                 :: N, D, D2 !numerator, denominator        
+        complex(dp)                                              :: N     !numerator
+        real(dp)                                                 :: D, D2 !denominator        
         integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
         type(ori_light)                                          :: or
         ! interpolation kernel window
