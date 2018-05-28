@@ -1023,27 +1023,32 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
+
+        ! OLD JUNK BELOW, I SUPPOSE (HE)
         ! set name of partial files in parallel execution
-        stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
-        stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
-        self%stk_part     = stk_part_fname
-        if( self%autoscale .eq. 'yes' )then
-            if( file_exists(stk_part_fname_sc) )then
-                self%stk_part = stk_part_fname_sc
-            endif
-        endif
-        call set_ldim_box_from_stk( self%stk )
-        self%box_original = self%box
-        if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
-            call set_ldim_box_from_stk( self%stk_part )
-            if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
-                if( self%box /= self%box_original )then
-                    write(*,*) 'original box:                ', self%box_original
-                    write(*,*) 'box read from partial stack: ', self%box
-                    call simple_stop('dim mismatch; simple_parameters :: new')
-                endif
-            endif
-        endif
+        ! stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
+        ! stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
+        ! self%stk_part     = stk_part_fname
+        ! if( self%autoscale .eq. 'yes' )then
+        !     if( file_exists(stk_part_fname_sc) )then
+        !         self%stk_part = stk_part_fname_sc
+        !     endif
+        ! endif
+
+        ! OLD JUNK BELOW, I SUPPOSE (HE)
+        ! call set_ldim_box_from_stk( self%stk )
+        ! self%box_original = self%box
+        ! if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
+        !     call set_ldim_box_from_stk( self%stk_part )
+        !     if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
+        !         if( self%box /= self%box_original )then
+        !             write(*,*) 'original box:                ', self%box_original
+        !             write(*,*) 'box read from partial stack: ', self%box
+        !             call simple_stop('dim mismatch; simple_parameters :: new')
+        !         endif
+        !     endif
+        ! endif
+
         ! fractional search and volume update
         if( self%update_frac <= .99) self%l_frac_update = .true.
         if( .not. cline%defined('ncunits') )then

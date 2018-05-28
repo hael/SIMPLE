@@ -14,8 +14,9 @@ implicit none
 
 public :: strategy3D_srch, strategy3D_spec
 private
-
 #include "simple_local_flags.inc"
+
+logical, parameter :: DOCONTINUOUS = .false.
 
 type strategy3D_spec
     integer, pointer :: grid_projs(:) => null()
@@ -251,21 +252,25 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         real    :: cxy(3)
         integer :: i, ref, irot
-        if( self%doshift )then
-            ! BFGS
-            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                ref = s3D%proj_space_inds(self%iptcl_map, i)
-                call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                if( irot > 0 )then
-                    ! irot > 0 guarantees improvement found, update solution
-                    s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
-                    s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
-                    s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
-                endif
-            end do
+        if( DOCONTINUOUS )then
+            call self%cont_srch
+        else
+            if( self%doshift )then
+                ! BFGS
+                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                    ref = s3D%proj_space_inds(self%iptcl_map, i)
+                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        ! irot > 0 guarantees improvement found, update solution
+                        s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
+                        s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
+                    endif
+                end do
+            endif
+            DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
         endif
-        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
     end subroutine inpl_srch
 
     subroutine cont_srch( self )

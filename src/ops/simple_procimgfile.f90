@@ -926,7 +926,7 @@ contains
     !! \param fname  input filename
     !! \param nran number of random samples
     !! \param smpd sampling distance
-    subroutine random_selection_from_imgfile( spproj, fname, box, nran)
+    subroutine random_selection_from_imgfile( spproj, fname, box, nran )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: fname
