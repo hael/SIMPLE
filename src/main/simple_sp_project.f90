@@ -884,6 +884,7 @@ contains
             write(*,*) 'ydim: ', ldim(2)
             stop 'ERROR! nonsquare particle images not supported; sp_project :: add_single_stk'
         endif
+        call self%os_stk%new(1)
         call self%os_stk%set(1, 'stk',     trim(stk_abspath))
         call self%os_stk%set(1, 'box',     real(ldim(1)))
         call self%os_stk%set(1, 'nptcls',  real(nptcls))
@@ -891,6 +892,7 @@ contains
         call self%os_stk%set(1, 'top',     real(nptcls))
         call self%os_stk%set(1, 'stkkind', 'single')
         call self%os_stk%set(1, 'imgkind', 'ptcl')
+        call self%os_stk%set(1, 'smpd',    ctfvars%smpd)
         call self%os_stk%set(1, 'kv',      ctfvars%kv)
         call self%os_stk%set(1, 'cs',      ctfvars%cs)
         call self%os_stk%set(1, 'fraca',   ctfvars%fraca)

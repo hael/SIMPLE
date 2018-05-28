@@ -559,7 +559,6 @@ contains
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )
         use simple_binoris_io,       only: binread_oritab, binwrite_oritab
-        use simple_qsys_env,         only: qsys_env
         use simple_oris,             only: oris
         use simple_sym,              only: sym
         use simple_commander_volops, only: postprocess_commander

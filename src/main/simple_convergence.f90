@@ -41,7 +41,8 @@ contains
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt
         logical :: converged, update_frac
-        update_frac = .false.
+        update_frac   = .false.
+        avg_updatecnt = 0.
         if( build_glob%spproj_field%isthere('updatecnt') )then
             updatecnts    = build_glob%spproj_field%get_all('updatecnt')
             avg_updatecnt = sum(updatecnts) / real(size(updatecnts))
@@ -117,7 +118,8 @@ contains
         real    :: min_state_mi_joint, avg_updatecnt
         logical :: converged, update_frac
         integer :: iptcl, istate
-        update_frac = .false.
+        update_frac   = .false.
+        avg_updatecnt = 0.
         if( build_glob%spproj_field%isthere('updatecnt') )then
             updatecnts    = build_glob%spproj_field%get_all('updatecnt')
             avg_updatecnt = sum(updatecnts) / real(size(updatecnts))

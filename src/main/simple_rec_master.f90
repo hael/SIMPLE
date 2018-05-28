@@ -61,7 +61,7 @@ contains
             deallocate(fbody)
         end do
         write(*,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
-        call qsys_job_finished( 'simple_rec_master :: exec_rec')
+        call qsys_job_finished(  'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
     subroutine exec_eorec_distr( fbody_in )
@@ -82,7 +82,7 @@ contains
             call build_glob%eorecvol%eorec_distr( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, fbody=fbody)
             deallocate(fbody)
         end do
-        call qsys_job_finished( 'simple_rec_master :: exec_eorec')
+        call qsys_job_finished(  'simple_rec_master :: exec_eorec')
         write(*,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
     end subroutine exec_eorec_distr
 

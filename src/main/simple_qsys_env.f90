@@ -12,7 +12,7 @@ type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)
     type(qsys_ctrl),           public  :: qscripts
     type(chash),               public  :: qdescr
-    character(len=STDLEN),     private :: simple_exec_bin, ext
+    character(len=STDLEN),     private :: simple_exec_bin
     type(qsys_factory),        private :: qsys_fac
     class(qsys_base), pointer, private :: myqsys=>null()
     integer,                   private :: nparts

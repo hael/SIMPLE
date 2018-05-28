@@ -191,7 +191,7 @@ contains
             call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
         ! end gracefully
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_preprocess' )
+        call qsys_job_finished(  'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
@@ -279,7 +279,7 @@ contains
                 endif
             end do
         endif
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_powerspecs' )
+        call qsys_job_finished(  'simple_commander_preprocess :: exec_powerspecs' )
         ! end gracefully
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
@@ -361,7 +361,7 @@ contains
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_motion_correct' )
+        call qsys_job_finished(  'simple_commander_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
@@ -422,7 +422,7 @@ contains
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_ctf_estimate' )
+        call qsys_job_finished(  'simple_commander_preprocess :: exec_ctf_estimate' )
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate
 
@@ -525,7 +525,7 @@ contains
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         ! end gracefully
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_pick' )
+        call qsys_job_finished(  'simple_commander_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
@@ -800,7 +800,7 @@ contains
             call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
         ! end gracefully
-        call qsys_job_finished( 'simple_commander_preprocess :: exec_pick_extract' )
+        call qsys_job_finished(  'simple_commander_preprocess :: exec_pick_extract' )
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
     end subroutine exec_pick_extract
 

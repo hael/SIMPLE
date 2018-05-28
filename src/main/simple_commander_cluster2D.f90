@@ -102,7 +102,7 @@ contains
         call cavger_assemble_sums( .false. )
         ! write sums
         call cavger_readwrite_partial_sums('write')
-        call qsys_job_finished( 'simple_commander_cluster2D :: exec_make_cavgs' )
+        call qsys_job_finished(  'simple_commander_cluster2D :: exec_make_cavgs' )
         call cavger_kill
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
@@ -130,7 +130,7 @@ contains
         call cluster2D_exec( cline, startit) ! partition or not, depending on 'part'
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-        call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
+        call qsys_job_finished( 'simple_commander_cluster2D :: exec_cluster2D')
      end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )

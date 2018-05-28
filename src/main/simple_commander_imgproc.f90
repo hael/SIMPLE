@@ -431,7 +431,7 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished( 'simple_commander_imgproc :: exec_scale' )
+        call qsys_job_finished(  'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
 
     !>  for stacking individual images or multiple stacks into one

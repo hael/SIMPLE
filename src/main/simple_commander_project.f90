@@ -649,6 +649,7 @@ contains
 
         ! PROJECT FILE MANAGEMENT
         call spproj%read(params%projfile)
+
         ! UPDATE FIELDS
         ! add stack if present
         if( cline%defined('stk') )then
@@ -662,6 +663,7 @@ contains
         endif
         ! add list of stacks (stktab) if present
         if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
+
         ! WRITE PROJECT FILE
         call spproj%write
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')

@@ -1276,6 +1276,7 @@ contains
         end select
 !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
+        ! first touch policy here
         if( .not. associated(params_glob) ) params_glob => self
         if( .not. ssilent ) write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 

@@ -96,7 +96,7 @@ contains
         class(parameters), intent(inout)          :: params
         call params%new(cline)
         call self%build_spproj(params, cline)
-        if( .not. associated(build_glob) ) build_glob => self
+        build_glob => self
     end subroutine init_params_and_build_spproj
 
     subroutine init_params_and_build_general_tbox( self, cline, params, do3d, boxmatch_off )
@@ -110,7 +110,7 @@ contains
         call params%new(cline)
         if( bboxmatch_off ) params%boxmatch = params%box
         call self%build_general_tbox(params, cline, do3d=do3d)
-        if( .not. associated(build_glob) ) build_glob => self
+        build_glob => self
     end subroutine init_params_and_build_general_tbox
 
     subroutine init_params_and_build_strategy2D_tbox( self, cline, params )
@@ -120,7 +120,7 @@ contains
         call params%new(cline)
         call self%build_general_tbox(params, cline, do3d=.false.)
         call self%build_strategy2D_tbox(params)
-        if( .not. associated(build_glob) ) build_glob => self
+        build_glob => self
     end subroutine init_params_and_build_strategy2D_tbox
 
     subroutine init_params_and_build_strategy3D_tbox( self, cline, params )
@@ -130,7 +130,7 @@ contains
         call params%new(cline)
         call self%build_general_tbox(params, cline, do3d=.true.)
         call self%build_strategy3D_tbox(params)
-        if( .not. associated(build_glob) ) build_glob => self
+        build_glob => self
     end subroutine init_params_and_build_strategy3D_tbox
 
     ! LOW-LEVEL BUILDERS

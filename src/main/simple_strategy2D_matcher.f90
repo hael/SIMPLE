@@ -289,8 +289,8 @@ contains
         call cavger_kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
 
-        ! call qsys_job_finished( 'simple_strategy2D_matcher :: cluster2D_exec')
-        call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
+        ! call qsys_job_finished(  'simple_strategy2D_matcher :: cluster2D_exec')
+        call qsys_job_finished( 'simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.

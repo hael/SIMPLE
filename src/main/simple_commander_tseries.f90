@@ -147,7 +147,7 @@ contains
             endif
             call kill_tracker
         end do
-        if( params%l_distr_exec ) call qsys_job_finished( 'simple_commander_tseries :: exec_tseries_track')
+        if( params%l_distr_exec ) call qsys_job_finished(  'simple_commander_tseries :: exec_tseries_track')
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track

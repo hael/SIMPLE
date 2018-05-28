@@ -76,7 +76,7 @@ contains
             call simple_mkdir(output_dir_extract)
         endif
         ! setup the environment for distributed execution
-        call qenv%new( stream=.true. )
+        call qenv%new(stream=.true. )
         ! movie watcher init
         movie_buff = moviewatcher(longtime, prev_movies)
         ! start watching
@@ -431,7 +431,7 @@ contains
             call simple_sleep(WAIT_WATCHER)
         enddo
         ! cleanup
-        call qsys_cleanup()
+        call qsys_cleanup
         ! updates original project
         call update_orig_proj
         ! class averages at original sampling
@@ -476,7 +476,7 @@ contains
                 if( .not.do_autoscale )return
                 if( .not.allocated(stk_fnames) )return
                 call simple_mkdir(SCALE_DIR)
-                call qenv%new()
+                call qenv%new
                 call cline_scale%set('prg',        'scale')
                 call cline_scale%set('smpd',       orig_smpd)
                 call cline_scale%set('box',        real(orig_box))
@@ -487,7 +487,7 @@ contains
                 call cline_scale%set('stream',     'yes')
                 call write_filetable(trim(SCALE_FILETAB), stk_fnames)
                 call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
-                call qsys_cleanup()
+                call qsys_cleanup
                 do istk=1,size(stk_fnames)
                     fname            = add2fbody(stk_fnames(istk), params%ext, SCALE_SUFFIX)
                     stk_fnames(istk) = trim(SCALE_DIR)//trim(basename(fname))
