@@ -1023,32 +1023,8 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
-
-        ! OLD JUNK BELOW, I SUPPOSE (HE)
-        ! set name of partial files in parallel execution
-        ! stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
-        ! stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
-        ! self%stk_part     = stk_part_fname
-        ! if( self%autoscale .eq. 'yes' )then
-        !     if( file_exists(stk_part_fname_sc) )then
-        !         self%stk_part = stk_part_fname_sc
-        !     endif
-        ! endif
-
-        ! OLD JUNK BELOW, I SUPPOSE (HE)
-        ! call set_ldim_box_from_stk( self%stk )
-        ! self%box_original = self%box
-        ! if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
-        !     call set_ldim_box_from_stk( self%stk_part )
-        !     if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
-        !         if( self%box /= self%box_original )then
-        !             write(*,*) 'original box:                ', self%box_original
-        !             write(*,*) 'box read from partial stack: ', self%box
-        !             call simple_stop('dim mismatch; simple_parameters :: new')
-        !         endif
-        !     endif
-        ! endif
-
+        ! ldim & box from stack
+        call set_ldim_box_from_stk
         ! fractional search and volume update
         if( self%update_frac <= .99) self%l_frac_update = .true.
         if( .not. cline%defined('ncunits') )then
@@ -1504,20 +1480,19 @@ contains
                 endif
             end subroutine check_rarg
 
-            subroutine set_ldim_box_from_stk( stkfname )
-                character(len=*), intent(in) :: stkfname
-                if( stkfname .ne. '' )then
-                    if( file_exists(stkfname) )then
+            subroutine set_ldim_box_from_stk
+                if( cline%defined('stk') )then
+                    if( file_exists(self%stk) )then
                         if( cline%defined('box') )then
                         else
-                            call find_ldim_nptcls(stkfname, self%ldim, ifoo)
+                            call find_ldim_nptcls(self%stk, self%ldim, ifoo)
                             self%ldim(3) = 1
                             DebugPrint 'found logical dimension of stack: ', self%ldim
                             self%box     = self%ldim(1)
                         endif
                     else
                         write(*,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
-                        write(*,'(a,1x,a)') 'Stack file does not exist!', trim(stkfname)
+                        write(*,'(a,1x,a)') 'Stack file does not exist!', trim(self%stk)
                         call simple_stop(" In simple_parameters set_ldim_box_from_stk")
                     endif
                 endif
