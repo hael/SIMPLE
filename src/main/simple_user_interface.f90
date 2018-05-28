@@ -573,7 +573,7 @@ contains
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
-        call set_param(objfun,        'objfun',        'binary', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
+        call set_param(objfun,        'objfun',        'num',    'Objective function', 'Objective function(cc|ccres|euclid){cc}', '(cc|ccres|euclid){cc}', .false., 'cc')
         call set_param(weights2D,     'weights2D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(weights3D,     'weights3D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
@@ -740,7 +740,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
         call cluster2D%set_input('srch_ctrls', 9, frac)
         call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function in Angstroms^2', 'B-factor in Angstroms^2(>0.0){200}', .false., 200.)
-        call cluster2D%set_input('srch_ctrls',11, 'objfun','binary', 'Objective function', 'Objective function(cc|ccres){ccres}', '(cc|ccres){ccres}', .false., 'ccres')
+        call cluster2D%set_input('srch_ctrls',11, 'objfun','num', 'Objective function', 'Objective function(cc|ccres|euclid){ccres}', '(cc|ccres|euclid){ccres}', .false., 'ccres')
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

@@ -158,7 +158,7 @@ type :: parameters
     character(len=STDLEN) :: keys=''
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
+    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres|euclid){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN) :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -185,6 +185,7 @@ type :: parameters
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
+    integer :: cc_objfun=1         !< objective function(1:cc|2:ccres|3:euclid)
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
@@ -378,7 +379,6 @@ type :: parameters
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
     logical :: l_remap_cls    = .false.
-    logical :: l_cc_objfun    = .true.
     logical :: l_cc_bfac      = .true.
     logical :: l_phaseplate   = .false.
     logical :: l_dev          = .false.
@@ -1235,9 +1235,11 @@ contains
         ! objective function used in prime2D/3D
         select case(trim(self%objfun))
             case('cc')
-                self%l_cc_objfun = .true.
+                self%cc_objfun = 1
             case('ccres')
-                self%l_cc_objfun = .false.
+                self%cc_objfun = 2
+            case('euclid')
+                self%cc_objfun = 3
             case DEFAULT
                 write(*,*) 'objfun flag: ', trim(self%objfun)
                 stop 'unsupported objective function; parameters :: new'

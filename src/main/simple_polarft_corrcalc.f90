@@ -78,6 +78,7 @@ type :: polarft_corrcalc
     integer                          :: winsz      = 0        !< size of moving window in correlation calculations
     integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
     integer                          :: kfromto(2) = 0        !< Fourier index range
+    integer                          :: cc_objfun  = 1        !< objective function(1:cc|2:ccres|3:euclid)
     real(sp)                         :: smpd       = 0.       !< sampling distance
     integer,             allocatable :: pinds(:)              !< index array (to reduce memory when frac_update < 1)
     real(sp),            allocatable :: ptcl_bfac_weights(:,:)!< B-factor per particle array for weighting of the correlation
@@ -102,7 +103,6 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_bwd              !< -"-
     logical                          :: with_ctf    = .false. !< CTF flag
     logical                          :: existence   = .false. !< to indicate existence
-    logical                          :: l_cc_objfun = .true.  !< objective function(cc|ccres)
     type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
@@ -255,9 +255,9 @@ contains
         self%inv_resarrsq = -1. / (4.*self%inv_resarrsq*self%inv_resarrsq)
         select case(trim(params_glob%objfun))
             case('cc')
-                self%l_cc_objfun = .true.
+                self%cc_objfun = 1
             case('ccres')
-                self%l_cc_objfun = .false.
+                self%cc_objfun = 2
                 allocate(self%ptcl_bfac_weights(self%kfromto(1):self%kfromto(2), 1:self%nptcls),&
                     &self%ptcl_bfac_norms(1:self%nptcls))
                 self%ptcl_bfac_weights = 1.0
@@ -580,7 +580,7 @@ contains
     !>  \brief  returns whether objective function is cc/ccres
     logical function objfun_is_ccres( self )
         class(polarft_corrcalc), intent(in) :: self
-        objfun_is_ccres = .not. self%l_cc_objfun
+        objfun_is_ccres = (self%cc_objfun == 2)
     end function objfun_is_ccres
 
     !>  \brief  checks for existence
@@ -680,7 +680,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         real,                    intent(in)    :: bfac
-        if( self%l_cc_objfun )then
+        if( self%cc_objfun == 1 )then
             ! nothing to do
         else
             self%ptcl_bfac_weights(:,self%pinds(iptcl)) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
@@ -1343,9 +1343,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
-        if( self%l_cc_objfun )then
+        if( self%cc_objfun == 1 )then
             call self%gencorrs_cc_1(iref, iptcl, cc)
-        else
+        else if ( self%cc_objfun == 2 ) then
             call self%gencorrs_resnorm_1(iref, iptcl, cc)
         endif
     end subroutine gencorrs_1
@@ -1354,9 +1354,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
         real,                    intent(out)   :: cc(self%nrots)
-        if( self%l_cc_objfun )then
+        if( self%cc_objfun == 1 )then
             call self%gencorrs_cc_2(iref, iptcl, kstop, cc)
-        else
+        else if ( self%cc_objfun == 2 )then
             call self%gencorrs_resnorm_2(iref, iptcl, kstop, cc)
         endif
     end subroutine gencorrs_2
@@ -1366,9 +1366,9 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
-        if( self%l_cc_objfun )then
+        if( self%cc_objfun == 1 )then
             call self%gencorrs_cc_3(iref, iptcl, shvec, cc)
-        else
+        else if ( self%cc_objfun == 2 )then
             call self%gencorrs_resnorm_3(iref, iptcl, shvec, cc)
         endif
     end subroutine gencorrs_3
@@ -1379,9 +1379,9 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp)                               :: cc
-        if( self%l_cc_objfun )then
+        if( self%cc_objfun == 1 )then
             cc = self%gencorr_cc_for_rot_8( iref, iptcl, shvec, irot )
-        else
+        else if ( self%cc_objfun == 2 )then
             cc = self%gencorr_resnorm_for_rot_8( iref, iptcl, shvec, irot )
         endif
     end function gencorr_for_rot_8
@@ -1617,9 +1617,9 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: f, grad(2)
-        if( self%l_cc_objfun )then
+        if( self%cc_objfun == 1 )then
             call self%gencorr_cc_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
-        else
+        else if ( self%cc_objfun == 2)then
             call self%gencorr_resnorm_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
         endif
     end subroutine gencorr_grad_for_rot_8
@@ -1856,9 +1856,9 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: grad(2)
-        if( self%l_cc_objfun )then
+        if( self%cc_objfun == 1 )then
             call self%gencorr_cc_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
-        else
+        else if ( self%cc_objfun == 2 )then
             call self%gencorr_resnorm_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
         endif
     end subroutine gencorr_grad_only_for_rot_8
