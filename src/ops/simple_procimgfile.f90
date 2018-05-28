@@ -580,7 +580,6 @@ contains
         call img%kill
     end subroutine add_noise_imgfile
 
-
     !>  \brief  is for Fourier transformation visualization
     !! \param fname2process  output filename
     !! \param fname  input filename

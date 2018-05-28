@@ -361,7 +361,7 @@ contains
         class(parameters),      intent(inout) :: params
         call self%kill_rec_tbox
         call self%recvol%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
-        call self%recvol%alloc_rho( self%spproj)
+        call self%recvol%alloc_rho(self%spproj)
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%rec_tbox_exists = .true.

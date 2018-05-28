@@ -373,7 +373,7 @@ contains
         call build%spproj%split_stk(params%nparts)
         ! execute initialiser
         if( .not. cline%defined('refs') )then
-            refs               = 'start2Drefs' // params%ext
+            refs             = 'start2Drefs' // params%ext
             params%refs      = trim(refs)
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext

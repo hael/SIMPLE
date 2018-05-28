@@ -89,7 +89,7 @@ contains
             endif
         endif
         ! end gracefully
-        call qsys_job_finished(  cline%get_carg('prg') )
+        call qsys_job_finished( cline%get_carg('prg') )
         call simple_end('**** SIMPLE_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
 
         contains
@@ -106,7 +106,6 @@ contains
                 type(ctfparams)      :: ctfvars
                 integer, allocatable :: sample(:)
                 integer              :: i, nsamp
-
                 ! init volumes
                 call preprecvols()
                 if( trim(params%refine).eq.'tseries' )then

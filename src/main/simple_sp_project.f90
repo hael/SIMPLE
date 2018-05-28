@@ -978,6 +978,7 @@ contains
         enddo
     end subroutine add_stktab
 
+    !>  Only commits to disk when a change to the project is made
     subroutine split_stk( self, nparts )
         use simple_map_reduce, only: split_nobjs_even
         use simple_image,      only: image
@@ -1035,7 +1036,7 @@ contains
         endif
         ! updates new stack parts
         orig_stk = self%os_stk%get_ori(1)
-        call self%os_stk%getter(1, 'ctf', ctfstr)
+        call self%os_stk%getter(1,'ctf', ctfstr)
         cs    = self%os_stk%get(1,'cs')
         kv    = self%os_stk%get(1,'kv')
         fraca = self%os_stk%get(1,'fraca')
@@ -1097,15 +1098,20 @@ contains
         call self%os_stk%getter(stkind, 'stk', stkname)
     end subroutine get_stkname_and_ind
 
-    subroutine add_scale_tag( self )
-        class(sp_project), intent(inout) :: self
+    subroutine add_scale_tag( self, dir )
+        class(sp_project),          intent(inout) :: self
+        character(len=*), optional, intent(in)    :: dir
         character(len=:), allocatable :: ext, newname, stkname
         integer :: imic, nmics
         nmics = self%os_stk%get_noris()
         do imic=1,nmics
             call self%os_stk%getter(imic, 'stk', stkname)
-            ext     = fname2ext(trim(stkname))
-            newname = add2fbody(stkname, '.'//ext, trim(SCALE_SUFFIX))
+            ext = fname2ext(trim(stkname))
+            if(present(dir))then
+                newname = trim(dir)//basename(add2fbody(stkname, '.'//ext, trim(SCALE_SUFFIX)))
+            else
+                newname = add2fbody(stkname, '.'//ext, trim(SCALE_SUFFIX))
+            endif
             call self%os_stk%set(imic, 'stk', newname)
         end do
     end subroutine add_scale_tag
@@ -1691,7 +1697,7 @@ contains
         end select
     end subroutine set_sp_oris
 
-    subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale )
+    subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale, dir )
         ! this probably needs an oritype input for dealing with scale class averages
         use simple_cmdline, only: cmdline
         class(sp_project),             intent(inout) :: self
@@ -1699,6 +1705,7 @@ contains
         character(len=:), allocatable, intent(out)   :: new_projfile
         class(cmdline),                intent(inout) :: cline
         class(cmdline),                intent(out)   :: cline_scale
+        character(len=*), optional,    intent(in)    :: dir
         character(len=:), allocatable :: projfile, projname, new_projname
         real    :: scale_factor, smpd_sc, msk_sc, smpd, msk
         integer :: box, box_sc, istk, n_os_stk
@@ -1719,6 +1726,7 @@ contains
         call cline_scale%set('scale',    scale_factor)
         call cline_scale%set('projfile', projfile)
         call cline_scale%set('smpd',     smpd_sc)
+        if(present(dir))call cline_scale%set('dir_target',trim(dir))
         if( box == box_sc )then
             ! no scaling
             new_projfile = trim(projfile)
@@ -1742,7 +1750,7 @@ contains
         call cline%set('projname', trim(new_projname))
         call cline%delete('projfile')
         call self%update_projinfo( cline )
-        call self%add_scale_tag
+        call self%add_scale_tag(dir=dir)
         ! save
         call self%write()
         ! command line for scaling

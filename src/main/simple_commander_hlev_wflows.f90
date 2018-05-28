@@ -57,7 +57,7 @@ contains
         ! other variables
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_sc
-        character(len=:), allocatable :: projfile_sc, stk, stk_filt
+        character(len=:), allocatable :: projfile_sc, stk
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
         real     :: scale_stage1, scale_stage2
         integer  :: istk, nparts, last_iter_stage1, last_iter_stage2
@@ -87,11 +87,12 @@ contains
             endif
             ! Scaling
             call spproj%scale_projfile(params%smpd_targets2D(1), projfile_sc,&
-                &cline_cluster2D_stage1, cline_scale1)
+                &cline_cluster2D_stage1, cline_scale1, dir=trim(SCSTK_DIR))
             call spproj%kill
             scale_stage1 = cline_scale1%get_rarg('scale')
             scaling      = trim(projfile_sc) /= trim(params%projfile)
             if( scaling )then
+                call simple_mkdir(SCSTK_DIR)
                 call xscale_distr%execute( cline_scale1 )
                 ! scale references
                 if( cline%defined('refs') )then
@@ -139,7 +140,7 @@ contains
             ! Scaling
             call spproj%read( params%projfile )
             call spproj%scale_projfile( params%smpd_targets2D(2), projfile_sc,&
-                &cline_cluster2D_stage2, cline_scale2)
+                &cline_cluster2D_stage2, cline_scale2, dir=trim(SCSTK_DIR))
             call spproj%kill
             scale_stage2 = cline_scale2%get_rarg('scale')
             scaling      = trim(projfile_sc) /= params%projfile
@@ -206,11 +207,13 @@ contains
         use simple_oris,                   only: oris
         use simple_commander_volops,       only: reproject_commander
         use simple_commander_rec,          only: reconstruct3D_commander
+        use simple_parameters,             only: params_glob
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
         real,    parameter :: CENLP=30. !< consistency with refine3D
-        integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
+        ! integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
+        integer, parameter :: MAXITS_SNHC=3, MAXITS_INIT=3, MAXITS_REFINE=5
         integer, parameter :: STATE=1, NPROJS_SYMSRCH=50, MAXITS_SNHC_RESTART=3
         integer, parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         integer, parameter :: NRESTARTS=5
@@ -232,16 +235,16 @@ contains
         type(cmdline) :: cline_reproject
         type(cmdline) :: cline_scale
         ! other variables
-        character(len=:), allocatable :: projfile, stk, stk_even, stk_odd, stk_filt, orig_stk
+        character(len=:), allocatable :: stk, orig_stk
         character(len=:), allocatable :: WORK_PROJFILE
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars ! ctf=no by default
-        type(sp_project)      :: spproj, work_proj
+        type(sp_project)      :: spproj, work_proj1, work_proj2
         type(oris)            :: os
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter
         real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk
-        integer               :: ncavgs, orig_box, box, istk, status
+        integer               :: icls, ncavgs, orig_box, box, istk, status
         logical               :: srch4symaxis, do_autoscale, do_eo
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
@@ -283,41 +286,34 @@ contains
         call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
         params%smpd = ctfvars%smpd
         orig_stk    = stk
-        if( do_eo )call gen_eo_stks
+        if( do_eo )call prep_eo_stks_init
         ! prepare a temporary project file for the class average processing
         allocate(WORK_PROJFILE, source=trim(ORIG_WORK_PROJFILE))
         call del_file(WORK_PROJFILE)
-        work_proj%projinfo = spproj%projinfo
-        work_proj%compenv  = spproj%compenv
-        if( spproj%jobproc%get_noris()  > 0 ) work_proj%jobproc = spproj%jobproc
-        if( spproj%os_cls3D%get_noris() > 0 )then
-            os = spproj%os_cls3D
-        else
-            call os%new( ncavgs )
-        endif
-        call work_proj%add_single_stk(trim(stk), ctfvars, os)
-        call os%kill
+        work_proj1%projinfo = spproj%projinfo
+        work_proj1%compenv  = spproj%compenv
+        if( spproj%jobproc%get_noris()  > 0 ) work_proj1%jobproc = spproj%jobproc
+        call work_proj1%add_stk(trim(stk), ctfvars)
         ! name change
-        call work_proj%projinfo%delete_entry('projname')
-        call work_proj%projinfo%delete_entry('projfile')
+        call work_proj1%projinfo%delete_entry('projname')
+        call work_proj1%projinfo%delete_entry('projfile')
         call cline%set('projfile', trim(WORK_PROJFILE))
         call cline%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
-        call work_proj%update_projinfo(cline)
+        call work_proj1%update_projinfo(cline)
         ! split
-        if(params%nparts > 1)then
-            call work_proj%split_stk(params%nparts)
+        if(params%nparts == 1 )then
+            call work_proj1%write()
         else
-            call work_proj%write()
+            call work_proj1%split_stk(params%nparts)
         endif
         ! down-scale
-        orig_box     = work_proj%get_box()
+        orig_box     = work_proj1%get_box()
         orig_msk     = params%msk
         smpd_target  = max(params%smpd, lplims(2)*LP2SMPDFAC)
-        do_autoscale = do_autoscale .and. smpd_target > work_proj%get_smpd()
-        projfile     = trim(WORK_PROJFILE)
+        do_autoscale = do_autoscale .and. smpd_target > work_proj1%get_smpd()
         if( do_autoscale )then
             deallocate(WORK_PROJFILE)
-            call work_proj%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale)
+            call work_proj1%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale)
             scale_factor = cline_scale%get_rarg('scale')
             box          = nint(cline_scale%get_rarg('newbox'))
             msk          = cline%get_rarg('msk')
@@ -325,7 +321,6 @@ contains
         else
             box         = orig_box
             msk         = orig_msk
-            projfile    = params%projfile
         endif
         ! prepare command lines from prototype
         ! projects names are subject to change depending on scaling and are updated individually
@@ -441,46 +436,55 @@ contains
             status = simple_rename(trim(VOL_FBODY)//trim(str_state)//params%ext, 'rec_sym'//params%ext)
         endif
         ! prep refinement stage
-        call work_proj%read_segment('ptcl3D', trim(WORK_PROJFILE))
-        os = work_proj%os_ptcl3D
+        call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
+        os = work_proj1%os_ptcl3D
         ! modulate shifts
         if( do_autoscale )call os%mul_shifts( 1./scale_factor )
         ! clean stacks & project file
-        call work_proj%read_segment('stk', trim(WORK_PROJFILE))
-        do istk=1,work_proj%os_stk%get_noris()
-            call work_proj%os_stk%getter(istk, 'stk', stk)
+        call work_proj1%read_segment('stk', trim(WORK_PROJFILE))
+        do istk=1,work_proj1%os_stk%get_noris()
+            call work_proj1%os_stk%getter(istk, 'stk', stk)
             call del_file(trim(stk))
         enddo
-        call work_proj%kill()
+        call work_proj1%kill()
         call del_file(trim(WORK_PROJFILE))
         deallocate(WORK_PROJFILE)
         ! re-create project
-        allocate(WORK_PROJFILE, source='initial_3Dmodel_tmpproj.simple')
-        call del_file(WORK_PROJFILE)
-        ctfvars%smpd       = params%smpd
-        work_proj%projinfo = spproj%projinfo
-        work_proj%compenv  = spproj%compenv
-        if( spproj%jobproc%get_noris()  > 0 ) work_proj%jobproc = spproj%jobproc
+        call del_file(ORIG_WORK_PROJFILE)
+        ctfvars%smpd        = params%smpd
+        work_proj2%projinfo = spproj%projinfo
+        work_proj2%compenv  = spproj%compenv
+        if( spproj%jobproc%get_noris()  > 0 ) work_proj2%jobproc = spproj%jobproc
         if( do_eo )then
-            call work_proj%add_single_stk(trim(stk_filt), ctfvars, os)
+            call prep_eo_stks_refine
+            params_glob%eo     = 'yes'
+            params_glob%nptcls = work_proj2%get_nptcls()
         else
-            call work_proj%add_single_stk(trim(orig_stk), ctfvars, os)
+            call work_proj2%add_stk(trim(orig_stk), ctfvars)
+            work_proj2%os_ptcl3D = os
         endif
-        call spproj%kill
-        ! name change
-        call work_proj%projinfo%delete_entry('projname')
-        call work_proj%projinfo%delete_entry('projfile')
+        ! nameing
+        call work_proj2%projinfo%delete_entry('projname')
+        call work_proj2%projinfo%delete_entry('projfile')
         call cline%set('projfile', trim(ORIG_WORK_PROJFILE))
         call cline%set('projname', trim(get_fbody(trim(ORIG_WORK_PROJFILE),trim('simple'))))
-        call work_proj%update_projinfo(cline)
+        call work_proj2%update_projinfo(cline)
         ! split
-        call work_proj%split_stk(params%nparts)
-        call work_proj%kill()
+        if(params%nparts <= 2)then
+            call work_proj2%write()
+        else
+            call work_proj2%split_stk(params%nparts)
+        endif
+        call work_proj2%kill
         ! refinement stage
         if( do_autoscale )then
             ! refine3d_init will take care of reconstruction at original scale
         else
-            call cline_refine3D_refine%set('vol1', trim(vol_iter))
+            if( do_eo )then
+                ! refine3d_init will take care of reconstruction
+            else
+                call cline_refine3D_refine%set('vol1', trim(vol_iter))
+            endif
         endif
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> PROBABILISTIC REFINEMENT AT ORIGINAL SAMPLING'
@@ -489,15 +493,25 @@ contains
         call xrefine3D_distr%execute(cline_refine3D_refine)
         iter = cline_refine3D_refine%get_rarg('endit')
         call set_iter_dependencies
-        ! copy final volumes
+        ! rename final volumes
         status = simple_rename(vol_iter, 'rec_final'//params%ext)
         status = simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX), 'rec_final_pproc'//params%ext)
         ! update the original project cls3D segment with orientations
-        call work_proj%read_segment('ptcl3D', trim(ORIG_WORK_PROJFILE))
-        call spproj%read(params%projfile)
-        call work_proj%os_ptcl3D%delete_entry('stkind')
-        spproj%os_cls3D = work_proj%os_ptcl3D
-        call work_proj%kill
+        call work_proj2%read_segment('ptcl3D', trim(ORIG_WORK_PROJFILE))
+        call work_proj2%os_ptcl3D%delete_entry('stkind')
+        call work_proj2%os_ptcl3D%delete_entry('eo')
+        params_glob%nptcls = ncavgs
+        if( do_eo )then
+            ! setting the even cavgs oris here, there must be a better solution
+            ! to check map2ptcls
+            call spproj%os_cls3D%new(ncavgs)
+            do icls=1,ncavgs
+                call spproj%os_cls3D%set_ori(icls, work_proj2%os_ptcl3D%get_ori(icls))
+            enddo
+        else
+            spproj%os_cls3D = work_proj2%os_ptcl3D
+        endif
+        call work_proj2%kill
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         ! add rec_final to os_out
@@ -526,16 +540,18 @@ contains
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
             end subroutine set_iter_dependencies
 
-            subroutine gen_eo_stks
+            subroutine prep_eo_stks_init
                 use simple_commander_imgproc, only: filter_commander
                 type(filter_commander) :: xfilter
                 type(cmdline)          :: cline_filter
-                character(len=:), allocatable :: frcs_fname, stk_filt_even, stk_filt_odd, ext
+                character(len=:), allocatable :: frcs_fname, ext, stk_filt
                 ext = '.'//fname2ext( stk )
                 call spproj%get_frcs(frcs_fname, 'frc2D')
-                stk_filt      = add2fbody(trim(stk), trim(ext), '_filt')
-                stk_filt_even = add2fbody(trim(stk), trim(ext), '_even_filt')
-                stk_filt_odd  = add2fbody(trim(stk), trim(ext), '_odd_filt')
+                if( trim(frcs_fname).eq.'' )then
+                    write(*,*)'The project file does not contain the required information for e/o alignment'
+                    stop 'The project file does not contain the required information for e/o alignment'
+                endif
+                stk_filt = add2fbody(trim(stk), trim(ext), '_filt')
                 call cline_filter%set('prg',  'filter')
                 call cline_filter%set('nthr', real(params%nthr))
                 call cline_filter%set('smpd', params%smpd)
@@ -543,16 +559,35 @@ contains
                 call cline_filter%set('stk',   trim(stk))
                 call cline_filter%set('outstk',trim(stk_filt))
                 call xfilter%execute(cline_filter)
-                call cline_filter%set('stk',   trim(stk_even))
-                call cline_filter%set('outstk',trim(stk_filt_even))
-                call xfilter%execute(cline_filter)
-                call cline_filter%set('stk',   trim(stk_odd))
-                call cline_filter%set('outstk',trim(stk_filt_odd))
-                call xfilter%execute(cline_filter)
-                ! set low pass for testing !!!!!!!!!!!!!!!!!!!!
                 deallocate(stk)
                 stk = trim(stk_filt)
-            end subroutine gen_eo_stks
+            end subroutine prep_eo_stks_init
+
+            subroutine prep_eo_stks_refine
+                character(len=:), allocatable :: eostk, ext
+                integer :: i
+                ext = '.'//fname2ext( stk )
+                call os%delete_entry('lp')
+                call os%delete_entry('stkind')
+                ! even
+                call os%set_all2single('eo', 0.)
+                eostk = add2fbody(trim(orig_stk), trim(ext), '_even')
+                call work_proj2%add_single_stk(eostk, ctfvars, os)
+                deallocate(eostk)
+                ! odd
+                call os%set_all2single('eo', 1.)
+                call os%set_all2single('stkind', 2.)
+                eostk = add2fbody(trim(orig_stk), trim(ext), '_odd')
+                call work_proj2%add_stk(eostk, ctfvars)
+                do icls=1,ncavgs
+                    call work_proj2%os_ptcl3D%set_ori(ncavgs+icls, os%get_ori(icls))
+                enddo
+                ! seach parameters
+                call cline_refine3D_refine%set('eo', 'yes')
+                call cline_refine3D_refine%set('lplim_crit', 0.5)
+                call cline_refine3D_refine%delete('lp')
+                call cline_refine3D_refine%set('lpstop',lplims(2))
+            end subroutine prep_eo_stks_refine
 
     end subroutine exec_initial_3Dmodel
 
