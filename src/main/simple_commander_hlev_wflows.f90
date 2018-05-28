@@ -212,8 +212,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! constants
         real,    parameter :: CENLP=30. !< consistency with refine3D
-        ! integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer, parameter :: MAXITS_SNHC=3, MAXITS_INIT=3, MAXITS_REFINE=5
+        integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer, parameter :: STATE=1, NPROJS_SYMSRCH=50, MAXITS_SNHC_RESTART=3
         integer, parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         integer, parameter :: NRESTARTS=5
