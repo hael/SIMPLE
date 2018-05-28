@@ -1,14 +1,15 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 include 'simple_lib.f08'
-use simple_oris,              only: oris
-use simple_ori,               only: ori
-use simple_sym,               only: sym
-use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_strategy3D_alloc   ! singleton s3D
-use simple_polarft_corrcalc,  only: pftcc_glob
-use simple_parameters,        only: params_glob
-use simple_builder,           only: build_glob
+use simple_oris,               only: oris
+use simple_ori,                only: ori
+use simple_sym,                only: sym
+use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad ! gradient-based search over all df:s
+use simple_strategy3D_alloc    ! singleton s3D
+use simple_polarft_corrcalc,   only: pftcc_glob
+use simple_parameters,         only: params_glob
+use simple_builder,            only: build_glob
 implicit none
 
 public :: strategy3D_srch, strategy3D_spec
@@ -25,38 +26,40 @@ type strategy3D_spec
 end type strategy3D_spec
 
 type strategy3D_srch
-    type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
-    integer, allocatable    :: nnvec(:)                  !< nearest neighbours indices
-    integer                 :: iptcl         = 0         !< global particle index
-    integer                 :: iptcl_map     = 0         !< index in pre-allocated 2D arrays
-    integer                 :: kstop_grid    = 0         !< Frequency limit of first coarse grid search
-    integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
-    integer                 :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
-    integer                 :: nstates       = 0         !< # states
-    integer                 :: nprojs        = 0         !< # projections
-    integer                 :: nrots         = 0         !< # in-plane rotations in polar representation
-    integer                 :: npeaks        = 0         !< # peaks (nonzero orientation weights)
-    integer                 :: npeaks_eff    = 0         !< effective # peaks
-    integer                 :: npeaks_grid   = 0         !< # peaks after coarse search
-    integer                 :: nsym          = 0         !< symmetry order
-    integer                 :: nbetter       = 0         !< # better orientations identified
-    integer                 :: nrefs_eval    = 0         !< # references evaluated
-    integer                 :: nnn_static    = 0         !< # nearest neighbors (static)
-    integer                 :: nnn           = 0         !< # nearest neighbors (dynamic)
-    integer                 :: prev_roind    = 0         !< previous in-plane rotation index
-    integer                 :: prev_state    = 0         !< previous state index
-    integer                 :: prev_ref      = 0         !< previous reference index
-    real                    :: prev_corr     = 1.        !< previous best correlation
-    real                    :: specscore     = 0.        !< spectral score
-    real                    :: prev_shvec(2) = 0.        !< previous origin shift vector
-    logical                 :: neigh         = .false.   !< nearest neighbour refinement flag
-    logical                 :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
-    logical                 :: exists        = .false.   !< 2 indicate existence
+    type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+    type(pftcc_orisrch_grad) :: grad_orisrch_obj          !< obj 4 search over all df:s, L-BFGS with gradient
+    integer, allocatable     :: nnvec(:)                  !< nearest neighbours indices
+    integer                  :: iptcl         = 0         !< global particle index
+    integer                  :: iptcl_map     = 0         !< index in pre-allocated 2D arrays
+    integer                  :: kstop_grid    = 0         !< Frequency limit of first coarse grid search
+    integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
+    integer                  :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
+    integer                  :: nstates       = 0         !< # states
+    integer                  :: nprojs        = 0         !< # projections
+    integer                  :: nrots         = 0         !< # in-plane rotations in polar representation
+    integer                  :: npeaks        = 0         !< # peaks (nonzero orientation weights)
+    integer                  :: npeaks_eff    = 0         !< effective # peaks
+    integer                  :: npeaks_grid   = 0         !< # peaks after coarse search
+    integer                  :: nsym          = 0         !< symmetry order
+    integer                  :: nbetter       = 0         !< # better orientations identified
+    integer                  :: nrefs_eval    = 0         !< # references evaluated
+    integer                  :: nnn_static    = 0         !< # nearest neighbors (static)
+    integer                  :: nnn           = 0         !< # nearest neighbors (dynamic)
+    integer                  :: prev_roind    = 0         !< previous in-plane rotation index
+    integer                  :: prev_state    = 0         !< previous state index
+    integer                  :: prev_ref      = 0         !< previous reference index
+    real                     :: prev_corr     = 1.        !< previous best correlation
+    real                     :: specscore     = 0.        !< spectral score
+    real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
+    logical                  :: neigh         = .false.   !< nearest neighbour refinement flag
+    logical                  :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
+    logical                  :: exists        = .false.   !< 2 indicate existence
   contains
     procedure :: new
     procedure :: prep4srch
     procedure :: greedy_subspace_srch
     procedure :: inpl_srch
+    procedure :: cont_srch
     procedure :: calc_corr
     procedure :: store_solution
     procedure :: kill
@@ -107,13 +110,15 @@ contains
         else
             self%npeaks_grid = min(self%npeaks_grid,self%nrefs)
         endif
-        ! create in-plane search objects
+        ! create in-plane search object
         lims(:,1)      = -params_glob%trs
         lims(:,2)      =  params_glob%trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
             &shbarrier=params_glob%shbarrier, maxits=MAXITS)
+        ! create all df:s search object
+        call self%grad_orisrch_obj%new
         self%exists = .true.
         DebugPrint  '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
     end subroutine new
@@ -262,6 +267,42 @@ contains
         endif
         DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
     end subroutine inpl_srch
+
+    subroutine cont_srch( self )
+        class(strategy3D_srch), intent(inout) :: self
+        type(ori) :: o
+        real      :: cxy(3)
+        integer   :: i, ref, irot
+        logical   :: found_better
+        if( self%doshift )then
+            ! BFGS
+            call o%new
+            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                ref = s3D%proj_space_inds(self%iptcl_map, i)
+                call o%set_euler(s3D%proj_space_euls(self%iptcl_map,ref,:))
+                call o%set_shift([0.,0.])
+                call self%grad_orisrch_obj%set_particle(self%iptcl)
+                cxy = self%grad_orisrch_obj%minimize(o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
+                if( found_better )then
+                    s3D%proj_space_euls(self%iptcl_map, ref, :) = o%get_euler()
+                    s3D%proj_space_corrs(self%iptcl_map,ref)    = cxy(1)
+                    s3D%proj_space_shift(self%iptcl_map,ref,:)  = cxy(2:3)
+                else
+                    ! fall back on the previous method
+                    ref = s3D%proj_space_inds(self%iptcl_map, i)
+                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        ! irot > 0 guarantees improvement found, update solution
+                        s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
+                        s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
+                    endif
+                endif
+            end do
+        endif
+        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED CONT SEARCH'
+    end subroutine cont_srch
 
     subroutine calc_corr( self )
         class(strategy3D_srch), intent(inout) :: self

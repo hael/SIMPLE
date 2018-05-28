@@ -56,7 +56,7 @@ contains
         logical,         allocatable :: het_mask(:)
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
-            class(strategy3D), pointer :: ptr => null()
+            class(strategy3D), pointer :: ptr  => null()
         end type strategy3D_per_ptcl
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the

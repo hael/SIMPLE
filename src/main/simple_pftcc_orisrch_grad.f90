@@ -59,11 +59,12 @@ contains
     end subroutine set_particle
 
     !> minimisation
-    function minimize( self, o_inout, angerr_deg, maxHWshift ) result( cxy )
+    function minimize( self, o_inout, angerr_deg, maxHWshift, found_better ) result( cxy )
         use simple_ori, only: ori
         class(pftcc_orisrch_grad), intent(inout) :: self
         class(ori),                intent(inout) :: o_inout
         real,                      intent(in)    :: angerr_deg, maxHWshift
+        logical,                   intent(out)   :: found_better
         complex, allocatable :: pft_ref_even(:,:) !< for thread safe use of pftcc
         complex, allocatable :: pft_ref_odd(:,:)  !< -"-
         real     :: cxy(3), cost, cost_init
@@ -110,9 +111,12 @@ contains
             cxy(2:) = matmul(cxy(2:), rotmat2d(self%ospec%x(3)))
             ! update ori
             call o_inout%set_shift(cxy(2:))
+            ! indicate that better was found
+            found_better = .true.
         else
-            cxy(1)  = -cost_init ! correlation
-            cxy(2:) = 0.
+            cxy(1)       = -cost_init ! correlation
+            cxy(2:)      = 0.
+            found_better = .false.
         endif
 
         ! put back references

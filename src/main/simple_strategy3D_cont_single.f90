@@ -43,14 +43,19 @@ contains
     subroutine srch_cont_single( self )
         class(strategy3D_cont_single), intent(inout) :: self
         real, allocatable :: cxy(:)
+        logical :: found_better
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! initialize
             call self%s%prep4srch()
             call self%cont_srch%set_particle(self%s%iptcl)
             self%o    = build_glob%spproj_field%get_ori(self%s%iptcl)
-            cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, params_glob%trs)
+            cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
             self%corr = cxy(1)
+            if( .not. found_better )then
+                ! put back the original one
+                self%o = build_glob%spproj_field%get_ori(self%s%iptcl)
+            endif
             ! prepare weights and orientations
             call self%oris_assign
         else
