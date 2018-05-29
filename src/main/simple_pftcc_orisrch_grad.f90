@@ -71,7 +71,7 @@ contains
         real(dp) :: f, grad(5), vec(5)
         integer  :: ithr
         ! copy the pftcc references so we can put them back after minimization is done
-        ithr              = omp_get_thread_num() + 1
+        ithr         = omp_get_thread_num() + 1
         pft_ref_even = pftcc_glob%get_ref_pft(ithr, iseven=.true.)
         pft_ref_odd  = pftcc_glob%get_ref_pft(ithr, iseven=.false.)
 

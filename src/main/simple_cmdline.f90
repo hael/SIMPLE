@@ -32,6 +32,7 @@ contains
     procedure          :: set_1
     procedure          :: set_2
     procedure, private :: lookup
+    procedure          :: get_keys
     generic            :: set => set_1, set_2
     procedure          :: delete
     procedure          :: checkvar
@@ -393,6 +394,19 @@ contains
             endif
         end do
     end function lookup
+
+    !> \brief for getting the keys
+    function get_keys( self ) result( keys )
+        class(cmdline),   intent(in) :: self
+        type(str4arr), allocatable :: keys(:)
+        integer :: i
+        if( self%argcnt > 0 )then
+            allocate(keys(self%argcnt))
+            do i=1,self%argcnt
+                if( allocated(self%cmds(i)%key) ) allocate(keys(i)%str, source=self%cmds(i)%key)
+            end do
+        endif
+    end function get_keys
 
     !> \brief for getting real args
     pure function get_rarg( self, key ) result( rval )
