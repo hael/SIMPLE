@@ -34,7 +34,11 @@ endif()
 option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
 option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
 option(USE_SYSTEM_JPEG_SQLite "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
-
+# We probably don't want these to run on every build.
+option(COVERALLS "Generate coveralls data" OFF) #coveralls.io
+OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
+OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
+option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
 
 #################################################################
 #
@@ -227,9 +231,6 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
   endif()
 
 
-OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
-OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
-option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
 if(VERBOSE) #only for the fool-hardy
   OPTION(USE_FAST_MATH_OPTIMISATION "Optimize code for fastmath. " OFF)
   OPTION(USE_PROFILE_OPTIMISATION "Optimize code for PFO. (GNU: -fpfo )" OFF)
