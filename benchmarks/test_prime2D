@@ -20,8 +20,8 @@ echo " ##
 real	10m5.721s
 user	1m26.475s
 sys	0m1.997s"
-
-[ -d prime2D_bench ] && rm -rf prime2D_bench
+SECONDS=0
+[ -d betagal_prime2D_bench ] && rm -rf betagal_prime2D_bench
 # mkdir prime2D_bench && cd prime2D_bench
 simple_exec prg=new_project projname=betagal_prime2D_bench
 if [ ! -d betagal_prime2D_bench ];then
@@ -37,3 +37,5 @@ fi
 #nohup simple_distr_exec prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt > PRIME2D &
 # BGAL
 ## valgrind --tool=cachegrind simple_exec  prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt
+duration=$SECONDS
+echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."

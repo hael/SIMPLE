@@ -1,4 +1,5 @@
 #!/bin/bash
+set -ev
 ## SIMPLE_TESTBENCH
 if [ -z "${SIMPLE_TESTBENCH_DATA+set}" ]; then
    echo "SIMPLE_TESTBENCH_DATA env variable is not set."; exit 1
@@ -11,7 +12,7 @@ fi
 if [ ! -d "${SIMPLE_TESTBENCH_DATA}/recvol_1wcm" ]; then
     echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
 fi
-cd ${SIMPLE_TESTBENCH_DATA}/recvol_1wcm
+cd "${SIMPLE_TESTBENCH_DATA}/recvol_1wcm"
 
 echo " ## Expected Output: 10 core, Intel Xeon E5-2650, Compiled with GNU_RELEASE_FFTW  "
 echo " ## >>> DONE PROCESSING PARAMETERS                                                "
@@ -27,15 +28,16 @@ echo " ## real 0m3.263s                                                         
 echo " ## user 0m47.543s                                                                "
 echo " ## sys 0m0.345s                                                                  "
 echo "                                                                                  "
-
+SECONDS=0
 #time simple_distr_exec prg=reconstruct3D ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
 [ -d reconstruct3D_test ] && rm -rf reconstruct3D_test
-simple_exec prg=new_project projname=reconstruct3D_test
+simple_exec prg=new_project projname=reconstruct3D_test > /dev/null
 if [ ! -d reconstruct3D_test ]; then
     echo "new_project could not create folder"
 else
     cd reconstruct3D_test
-    nice simple_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projname=reconstruct3D_test
+    nice simple_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projname=reconstruct3D_test  > /dev/null
+
 
     time simple_distr_exec prg=reconstruct3D msk=50 nthr=10  pgrp=c1 nparts=2
 
@@ -46,3 +48,5 @@ else
         chimera 1_reconstruct3D/recvol_state01.mrc ../reference/recvol_state01.mrc
     fi
 fi
+duration=$SECONDS
+echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
