@@ -20,9 +20,13 @@ program simple_test_openacc
     call test_oacc_basics
     call test_oacc_vecadd
     call test_oacc_vecadd_nocopy
-    call test_oacc_omp
+
     call test_oacc_omp_matrixmul
+    call test_oacc_omp_matrixmul2
     call test_gang_static_addition
+    call test_nested1
+    call test_nested2
+    call test_oacc_omp
     call test_oacc_reduction
 #else
     print *,' simple_test_openacc OpenACC is disabled '
