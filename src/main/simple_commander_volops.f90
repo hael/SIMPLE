@@ -437,13 +437,21 @@ contains
         logical          :: here
         type(ori)        :: o
         type(image)      :: vol_rot
-        real             :: shvec(3)
+        real             :: shvec(3),  ave, sdev, maxv, minv
         call build%init_params_and_build_general_tbox(cline,params,boxmatch_off=.true.)
         inquire(FILE=params%vols(1), EXIST=here)
         if( here )then
             call build%vol%read(params%vols(1))
         else
             stop 'vol1 does not exists in cwd'
+        endif
+        if( params%stats .eq. 'yes' )then
+            call build%vol%stats('foreground', ave, sdev, maxv, minv)
+            write(*,*) 'ave : ', ave
+            write(*,*) 'sdev: ', sdev
+            write(*,*) 'maxv: ', maxv
+            write(*,*) 'minv: ', minv
+            return
         endif
         if( params%guinier .eq. 'yes' )then
             if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'

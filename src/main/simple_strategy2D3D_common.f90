@@ -457,7 +457,7 @@ contains
         real    :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz())
         real    :: xyz(3), sharg
         logical :: do_center
-        ! normalise
+        ! NORMALISATION FOR EUCLID ???
         call img_in%norm()
         do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
@@ -632,7 +632,8 @@ contains
             return
         endif
         call build_glob%vol%read(volfname)
-        call build_glob%vol%norm() ! because auto-normalisation on read is taken out
+        ! NORMALISATION FOR EUCLID ???
+        call build_glob%vol%norm()
         xyz = build_glob%vol%center(params_glob%cenlp,params_glob%msk) ! find center of mass shift
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
@@ -660,7 +661,8 @@ contains
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(volfname)
-        call build_glob%vol%norm() ! because auto-normalisation on read is taken out
+        ! NORMALISATION FOR EUCLID ???
+        call build_glob%vol%norm()
         if( do_center )then
             call build_glob%vol%fft()
             call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
@@ -891,7 +893,7 @@ contains
             !>  \brief  prepares even/odd volume for FSC/FRC calcualtion
             subroutine prepeovol( vol )
                 class(image), intent(inout) :: vol
-                call vol%norm() ! because auto-normalisation on read is taken out
+                call vol%norm()
                 ! masking
                 if( cline%defined('mskfile') )then
                     ! mask provided

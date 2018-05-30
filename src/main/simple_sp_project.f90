@@ -567,13 +567,14 @@ contains
                 call self%projinfo%set(1,'imgfmt', trim(imgfmt))
             endif
             ! updates segment
-            call os_ptr%set(imic, 'xdim',       real(ldim(1)))
-            call os_ptr%set(imic, 'ydim',       real(ldim(2)))
-            call os_ptr%set(imic, 'nframes',    real(nframes))
-            call os_ptr%set(imic, 'smpd',       ctfvars%smpd)
-            call os_ptr%set(imic, 'kv',         ctfvars%kv)
-            call os_ptr%set(imic, 'cs',         ctfvars%cs)
-            call os_ptr%set(imic, 'fraca',      ctfvars%fraca)
+            call os_ptr%set(imic, 'xdim',    real(ldim(1)))
+            call os_ptr%set(imic, 'ydim',    real(ldim(2)))
+            call os_ptr%set(imic, 'nframes', real(nframes))
+            call os_ptr%set(imic, 'smpd',    ctfvars%smpd)
+            call os_ptr%set(imic, 'kv',      ctfvars%kv)
+            call os_ptr%set(imic, 'cs',      ctfvars%cs)
+            call os_ptr%set(imic, 'fraca',   ctfvars%fraca)
+            call os_ptr%set(imic, 'state',   1.0) ! default on import
             if( ctfvars%l_phaseplate )then
                 call os_ptr%set(imic, 'phaseplate', 'yes')
             else
@@ -809,6 +810,7 @@ contains
         call self%os_stk%set(n_os_stk, 'top',     real(top))
         call self%os_stk%set(n_os_stk, 'stkkind', 'split')
         call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
+        call self%os_stk%set(n_os_stk, 'state',   1.0) ! default on import
         select case(ctfvars%ctfflag)
             case(CTFFLAG_NO)
                 call self%os_stk%set(n_os_stk, 'ctf', 'no')
@@ -842,7 +844,7 @@ contains
             call o%set('angast', ctfvars%angast)
             if( ctfvars%l_phaseplate ) call o%set('phshift', ctfvars%phshift)
             call o%set('stkind', real(n_os_stk))
-            if( .not.o%isthere('state') ) call o%set('state',1.)
+            call o%set('state',1.) ! default on import
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
             call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
         enddo
@@ -876,6 +878,8 @@ contains
         self%os_ptcl3D = os
         call self%os_ptcl2D%set_all2single('stkind', 1.)
         call self%os_ptcl3D%set_all2single('stkind', 1.)
+        call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
+        call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
         ! full path and existence check
         call simple_full_path(stk, stk_abspath, 'sp_project :: add_single_stk')
         ! find dimension of inputted stack
@@ -897,6 +901,7 @@ contains
         call self%os_stk%set(1, 'kv',      ctfvars%kv)
         call self%os_stk%set(1, 'cs',      ctfvars%cs)
         call self%os_stk%set(1, 'fraca',   ctfvars%fraca)
+        call self%os_stk%set(1, 'state',   1.0) ! default on import
         if( ctfvars%l_phaseplate )then
             if( .not. os%isthere('phshift') ) stop 'ERROR! phaseplate=yes & input oris lack phshift; sp_project :: add_single_stk'
             call self%os_stk%set(1, 'phaseplate', 'yes')

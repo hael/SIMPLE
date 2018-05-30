@@ -208,7 +208,6 @@ contains
             call img%read(fname,i)
             call img%stats('foreground', ave, sdev, maxv, minv, med=med, msk=msk)
             call img%fft()
-            !$ allocate(spectrum(1))
             call img%spectrum('power',spectrum)
             spec = sum(spectrum)/real(size(spectrum))
             call os%set(i, 'ave',   ave)

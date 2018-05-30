@@ -493,6 +493,7 @@ contains
                     eo = nint(orientation%get('eo'))
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
+                    call img%norm
                     call gridprep%prep(img, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                     call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, 1., bfac=bfac)
@@ -505,6 +506,7 @@ contains
                         eo          = nint(orientation%get('eo'))
                         call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                         call img%read(stkname, ind_in_stk)
+                        call img%norm
                         call gridprep%prep(img, img_pad)
                         ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                         call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)

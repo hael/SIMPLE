@@ -1375,8 +1375,8 @@ contains
                         if( notAllowed == file_descr ) raise_exception = .true.
                     endif
                     if( raise_exception )then
-                        write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', var
-                        write(*,*) 'File:', trim(file)
+                        write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', trim(var)
+                        write(*,*) 'flag:', trim(file)
                         stop
                     endif
                     select case(file_descr)

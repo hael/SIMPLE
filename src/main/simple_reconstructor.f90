@@ -736,7 +736,7 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk
-                real      :: pw, bfac
+                real      :: pw, bfac, ave, sdev, maxv, minv
                 state = o%get_state(i)
                 if( state == 0 ) return
                 if( params_glob%shellw.eq.'yes' )then
@@ -745,6 +745,7 @@ contains
                     if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
+                    call img%norm
                     call gridprep%prep(img, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                     call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=1., bfac=o%get(i,'bfac'))
@@ -756,6 +757,7 @@ contains
                         orientation = o%get_ori(i)
                         call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                         call img%read(stkname, ind_in_stk)
+                        call img%norm
                         call gridprep%prep(img, img_pad)
                         ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                         call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)

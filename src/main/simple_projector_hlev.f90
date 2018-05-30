@@ -57,7 +57,8 @@ contains
             ! clip
             call imgs_pad(ithr)%clip(imgs(i))
             ! normalise
-            call imgs(i)%norm()
+            ! TOOK OUT NORMALISATION FOR EUCLID
+            ! call imgs(i)%norm()
         end do
         !$omp end parallel do
         ! destruct
@@ -115,7 +116,8 @@ contains
         !$omp end parallel do
         call rovol_pad%ifft()
         call rovol_pad%clip(rovol)
-        call rovol%norm()
+        ! TOOK OUT NORMALISATION FOR EUCLID
+        ! call rovol%norm()
         call vol_pad%kill_expanded
         call vol_pad%kill
         call rovol_pad%kill
