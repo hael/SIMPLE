@@ -59,6 +59,7 @@ contains
     procedure          :: add_vol2os_out
     procedure, private :: add_entry2os_out
     procedure          :: get_cavgs_stk
+    procedure          :: get_vol
     procedure          :: get_frcs
     procedure          :: get_nptcls_from_osout
     ! getters
@@ -1068,6 +1069,7 @@ contains
             deallocate(stkpart, dest_stkpart)
         enddo
         call self%write
+        call simple_rmdir(tmp_dir)
     end subroutine split_stk
 
     function get_stkname( self, imic ) result( stkname )
@@ -1171,7 +1173,7 @@ contains
         character(len=:), allocatable :: vol_abspath, imgkind
         integer :: n_os_out, ind, i, ldim(3), ifoo
         select case(trim(which_imgkind))
-        case('vol_cavg','vol')
+            case('vol_cavg','vol')
                 ! all good
             case DEFAULT
                 write(*,*)'Invalid VOL kind: ', trim(which_imgkind)
@@ -1285,6 +1287,51 @@ contains
             smpd    = 0.
         endif
     end subroutine get_cavgs_stk
+
+    subroutine get_vol( self, imgkind, state, vol_fname, smpd, box)
+        class(sp_project),             intent(inout) :: self
+        character(len=*),              intent(in)    :: imgkind
+        integer,                       intent(in)    :: state
+        character(len=:), allocatable, intent(inout) :: vol_fname
+        real,                          intent(out)   :: smpd
+        integer,                       intent(out)   :: box
+        character(len=:), allocatable :: imgkind_here
+        integer :: i, ind, cnt
+        logical :: l_state, found
+        select case(trim(imgkind))
+            case('vol_cavg','vol')
+                ! all good
+            case DEFAULT
+                write(*,*)'Invalid VOL kind: ', trim(imgkind)
+                stop 'sp_project :: get_vol'
+        end select
+        ! defaults
+        if( allocated(vol_fname) ) deallocate(vol_fname)
+        allocate(vol_fname, source=NIL)
+        box  = 0
+        smpd = 0.
+        ! fetch index
+        ind   = 0
+        cnt   = 0
+        do i=1,self%os_out%get_noris()
+            if( self%os_out%isthere(i,'imgkind') )then
+                call self%os_out%getter(i,'imgkind',imgkind_here)
+                if(trim(imgkind).eq.trim(imgkind_here))then
+                    if( self%os_out%get_state(i).eq.state )then
+                        ind = i
+                        cnt = cnt + 1
+                    endif
+                endif
+            endif
+        enddo
+        if( cnt == 0 )stop 'ERROR! no os_out entry with imgkind=volXXX identified, aborting...; sp_project :: get_vol'
+        if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=volXXX, aborting...; sp_project :: get_vol'
+        ! set output
+        deallocate(vol_fname)
+        call self%os_out%getter(ind, 'vol', vol_fname)
+        smpd = self%os_out%get(ind,  'smpd')
+        box  = self%os_out%get(ind,  'box')
+    end subroutine get_vol
 
     subroutine get_frcs( self, frcs, which_imgkind, fail )
         class(sp_project),             intent(inout) :: self
@@ -1726,7 +1773,7 @@ contains
         call cline_scale%set('scale',    scale_factor)
         call cline_scale%set('projfile', projfile)
         call cline_scale%set('smpd',     smpd_sc)
-        if(present(dir))call cline_scale%set('dir_target',trim(dir))
+        if(present(dir))call cline_scale%set('dir_target',trim(dir)//'/')
         if( box == box_sc )then
             ! no scaling
             new_projfile = trim(projfile)
@@ -1750,7 +1797,11 @@ contains
         call cline%set('projname', trim(new_projname))
         call cline%delete('projfile')
         call self%update_projinfo( cline )
-        call self%add_scale_tag(dir=dir)
+        if(present(dir))then
+            call self%add_scale_tag(dir=trim(dir)//'/')
+        else
+            call self%add_scale_tag
+        endif
         ! save
         call self%write()
         ! command line for scaling

@@ -256,6 +256,135 @@ contains
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
 
+    ! subroutine exec_postprocess(self, cline)
+    !     use simple_sp_project,    only sp_roject
+    !     use simple_estimate_ssnr, only: fsc2optlp
+    !     class(postprocess_commander), intent(inout) :: self
+    !     class(cmdline),               intent(inout) :: cline
+    !     type(parameters)  :: params
+    !     ! type(builder)     :: build
+    !     type(image)       :: vol, vol_copy, vol_filt
+    !     type(masker)      :: mskvol
+    !     type(sp_project)  :: spproj
+    !     character(len=:), allocatable :: vol_fname
+    !     real, allocatable :: fsc(:), optlp(:), res(:)
+    !     real              :: fsc0143, fsc05, smpd
+    !     integer           :: state, box, ldim(3)
+    !     ! set oritype
+    !     call cline%set('oritype', 'out')
+    !     ! parse commad-line
+    !     call params%new(cline)
+    !     ! read project segment
+    !     call spproj%read_segment(params%oritype, params%projfile)
+    !     ! ! build general toolbox & project
+    !     ! call build%init_params_and_build_general_tbox(cline,params)
+    !     ! set state
+    !     if( cline%defined('state') )then
+    !         state = params%state
+    !     else
+    !         state = 1
+    !     endif
+    !     call spproj%get_vol(params%imgkind, state, vol_fname, smpd, box)
+    !     if( .not.file_exists(vol_fname) )then
+    !         write(*,*)'Volume does not exist; simple_commander_volops :: exec_postprocess:', trim(vol_fname)
+    !         stop 'Volume does not exist; simple_commander_volops :: exec_postprocess'
+    !     endif
+    !     write(*,*)'!!!!!!!!! smpd postprocess:',params%smpd, smpd
+    !     write(*,*)'!!!!!!!!! lp postprocess:',params%lp,cline%defined('lp')
+    !     write(*,*)'!!!!!!!!! eo postprocess:',params%eo,cline%defined('eo')
+    !     params%outvol = basename(add2fbody(trim(vol_fname), params%ext, PPROC_SUFFIX))
+    !     ldim = [box,box,box]
+    !     call vol%new(ldim, smpd)
+    !     call vol%read(vol_fname)
+    !     call vol%fft()
+    !     if( cline%defined('fsc') )then
+    !         ! resolution & optimal low-pass filter from FSC
+    !         if( file_exists(params%fsc) )then
+    !             fsc = file2rarr(params%fsc)
+    !         else
+    !             write(*,*) 'FSC file: ', trim(params%fsc), ' not in cwd'
+    !             stop 'FSC file: not in cwd'
+    !         endif
+    !         optlp = fsc2optlp(fsc)
+    !         res   = vol%get_res()
+    !         call get_resolution( fsc, res, fsc05, fsc0143 )
+    !         where(res < TINY) optlp = 0.
+    !     endif
+    !     if( cline%defined('lp') )then
+    !         ! low-pass overrides all input
+    !         call vol%bp(0., params%lp)
+    !     else if( cline%defined('vol_filt') )then
+    !         ! optimal low-pass filter from input vol_filt
+    !         call vol_filt%new(ldim, smpd)
+    !         call vol_filt%read(params%vol_filt)
+    !         call vol%apply_filter(vol_filt)
+    !         call vol_filt%kill
+    !     else if( cline%defined('fsc') )then
+    !         ! optimal low-pass filter from FSC
+    !         call vol%apply_filter(optlp)
+    !     else
+    !         write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
+    !         stop 'simple_commander_volops :: exec_postprocess'
+    !     endif
+    !     call vol_copy%copy(vol)
+    !     ! B-factor
+    !     if( cline%defined('bfac') ) call vol%apply_bfac(params%bfac)
+    !     ! final low-pass filtering for smoothness
+    !     if( cline%defined('fsc')  ) call vol%bp(0., fsc0143)
+    !     ! masking
+    !     call vol%ifft()
+    !     if( cline%defined('mskfile') )then
+    !         if( file_exists(params%mskfile) )then
+    !             call vol%zero_background
+    !             call mskvol%new(ldim, smpd)
+    !             call mskvol%read(params%mskfile)
+    !             call vol%mul(mskvol)
+    !         else
+    !             write(*,*) 'file: ', trim(params%mskfile)
+    !             stop 'maskfile does not exists in cwd'
+    !         endif
+    !     else if( params%automsk .eq. 'yes' )then
+    !         if( .not. cline%defined('thres') )then
+    !             write(*,*) 'Need a pixel threshold > 0. for the binarisation'
+    !             write(*,*) 'Procedure for obtaining thresh:'
+    !             write(*,*) '(1) postproc vol without bfac or automsk'
+    !             write(*,*) '(2) Use UCSF Chimera to look at the volume'
+    !             write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
+    !             stop 'commander_volops :: postprocess'
+    !         endif
+    !         if( .not. cline%defined('mw') )then
+    !             write(*,*) 'Molecular weight must be provided for auto-masking (MW)'
+    !             stop 'commander_volops :: postprocess'
+    !         endif
+    !         call vol_copy%ifft()
+    !         call mskvol%automask3D( vol_copy)
+    !         call mskvol%write('automask'//params%ext)
+    !         call vol%zero_background
+    !         call vol%mul(mskvol)
+    !     else
+    !         if( params%l_innermsk )then
+    !             call vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+    !         else
+    !             call vol%mask(params%msk, 'soft')
+    !         endif
+    !     endif
+    !     ! output in cwd
+    !     call vol%write(params%outvol)
+    !     ! also output mirrored by default (unless otherwise stated on command line)
+    !     if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
+    !         call vol%mirror('x')
+    !         params%outvol = add2fbody(params%outvol, params%ext, '_mirr')
+    !         call vol%write(params%outvol)
+    !     endif
+    !     ! destruct
+    !     call spproj%kill
+    !     call vol%kill
+    !     call vol_filt%kill
+    !     call vol_copy%kill
+    !     call mskvol%kill
+    !     call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
+    ! end subroutine exec_postprocess
+
     !> exec_project generate projections from volume
     !! \param cline command line
     !!

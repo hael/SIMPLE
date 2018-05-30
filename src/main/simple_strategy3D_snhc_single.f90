@@ -83,6 +83,7 @@ contains
         ref = s3D%proj_space_inds(self%s%iptcl_map, self%s%nrefs)
         if( ref < 1 .or. ref > self%s%nrefs )then
             print *, 'ref: ', ref
+            write(*,*)'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
             stop 'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
         endif
         roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%iptcl_map, ref, 3))

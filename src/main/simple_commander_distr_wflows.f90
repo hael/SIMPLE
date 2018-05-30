@@ -540,6 +540,276 @@ contains
         call simple_end('**** SIMPLE_DISTR_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_refine3D_init_distr
 
+    ! subroutine exec_refine3D_distr( self, cline )
+    !     use simple_commander_refine3D, only: check_3Dconv_commander
+    !     use simple_commander_volops,   only: postprocess_commander
+    !     class(refine3D_distr_commander), intent(inout) :: self
+    !     class(cmdline),                  intent(inout) :: cline
+    !     ! commanders
+    !     type(refine3D_init_distr_commander) :: xrefine3D_init_distr
+    !     type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
+    !     type(check_3Dconv_commander)        :: xcheck_3Dconv
+    !     type(postprocess_commander)         :: xpostprocess
+    !     ! command lines
+    !     type(cmdline)         :: cline_reconstruct3D_distr
+    !     type(cmdline)         :: cline_refine3D_init
+    !     type(cmdline)         :: cline_check_3Dconv
+    !     type(cmdline)         :: cline_volassemble
+    !     type(cmdline)         :: cline_postprocess
+    !     ! other variables
+    !     type(parameters)      :: params
+    !     type(builder)         :: build
+    !     type(qsys_env)        :: qenv
+    !     type(chash)           :: job_descr
+    !     character(len=STDLEN), allocatable :: state_assemble_finished(:)
+    !     integer,               allocatable :: state_pops(:)
+    !     character(len=STDLEN) :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
+    !     character(len=STDLEN) :: vol_iter_odd, str, str_iter, optlp_file
+    !     character(len=STDLEN) :: str_state, fsc_file, volassemble_output
+    !     real                  :: corr, corr_prev
+    !     integer               :: s, state, iter, iostat
+    !     logical               :: vol_defined, have_oris, do_abinitio, converged
+    !     if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+    !     call build%init_params_and_build_spproj(cline, params)
+    !     ! set mkdir to no (to avoid nested directory structure)
+    !     call cline%set('mkdir', 'no')
+    !     ! setup the environment for distributed execution
+    !     call qenv%new
+    !     ! prepare command lines from prototype master
+    !     cline_reconstruct3D_distr = cline
+    !     cline_refine3D_init       = cline
+    !     cline_check_3Dconv        = cline
+    !     cline_volassemble         = cline
+    !     cline_postprocess         = cline
+    !     ! initialise static command line parameters and static job description parameter
+    !     call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
+    !     call cline_refine3D_init%set(       'prg', 'refine3D_init' ) ! required for distributed call
+    !     call cline_postprocess%set('prg', 'postprocess' )            ! required for local call
+    !     if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
+    !     !!!! call cline_postprocess%set('nstates', 1.)
+    !     call cline_postprocess%set('mirr',  'no')
+    !     call cline_postprocess%set('imgkind','vol')
+    !     !!!! call cline_postprocess%delete('projfile')
+    !     !!!! call cline_postprocess%delete('projname')
+    !     ! for parallel volassemble over states
+    !     allocate(state_assemble_finished(params%nstates) , stat=alloc_stat)
+    !     if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_refine3D_distr state_assemble ",alloc_stat)
+    !     ! removes unnecessary volume keys and generates volassemble finished names
+    !     do state = 1,params%nstates
+    !         vol = 'vol'//int2str( state )
+    !         call cline_check_3Dconv%delete( trim(vol) )
+    !         call cline_volassemble%delete( trim(vol) )
+    !         state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
+    !     enddo
+    !     DebugPrint ' In exec_refine3D_distr; begin splitting'
+    !     ! splitting
+    !     call build%spproj%split_stk(params%nparts)
+    !     DebugPrint ' In exec_refine3D_distr; begin starting models'
+    !     ! GENERATE STARTING MODELS & ORIENTATIONS
+    !     vol_defined = .false.
+    !     do state = 1,params%nstates
+    !         vol = 'vol' // int2str(state)
+    !         if( cline%defined(trim(vol)) ) vol_defined = .true.
+    !     enddo
+    !     have_oris   = .not. build%spproj%is_virgin_field(params%oritype)
+    !     do_abinitio = .not. have_oris .and. .not. vol_defined
+    !     if( do_abinitio )then
+    !         call xrefine3D_init_distr%execute( cline_refine3D_init)
+    !         call cline%set('vol1', trim(STARTVOL_FBODY)//'01'//params%ext)
+    !     else if( have_oris .and. .not. vol_defined )then
+    !         ! reconstructions needed
+    !         call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
+    !         do state = 1,params%nstates
+    !             ! rename volumes and update cline
+    !             str_state = int2str_pad(state,2)
+    !             vol = trim(VOL_FBODY)//trim(str_state)//params%ext
+    !             str = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
+    !             iostat = simple_rename( trim(vol), trim(str) )
+    !             vol = 'vol'//trim(int2str(state))
+    !             call cline%set( trim(vol), trim(str) )
+    !             if( params%eo .ne. 'no' )then
+    !                 vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+    !                 str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
+    !                 iostat= simple_rename( trim(vol_even), trim(str) )
+    !                 vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+    !                 str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
+    !                 iostat =  simple_rename( trim(vol_odd), trim(str) )
+    !             endif
+    !         enddo
+    !     else if( .not. have_oris .and. vol_defined )then
+    !         ! projection matching
+    !         select case( params%neigh )
+    !             case( 'yes' )
+    !                 stop 'refinement method requires input orientation document'
+    !             case DEFAULT
+    !                 ! all good
+    !         end select
+    !     endif
+    !     ! EXTREMAL DYNAMICS
+    !     if( cline%defined('extr_iter') )then
+    !         params%extr_iter = params%extr_iter - 1
+    !     else
+    !         params%extr_iter = params%startit - 1
+    !     endif
+    !     ! EO PARTITIONING
+    !     DebugPrint ' In exec_refine3D_distr; begin partition_eo'
+    !     if( params%eo .ne. 'no' )then
+    !         if( build%spproj_field%get_nevenodd() == 0 )then
+    !             if( params%tseries .eq. 'yes' )then
+    !                 call build%spproj_field%partition_eo(tseries=.true.)
+    !             else
+    !                 call build%spproj_field%partition_eo
+    !             endif
+    !             call build%spproj%write_segment_inside(params%oritype)
+    !         endif
+    !     endif
+    !     ! prepare job description
+    !     call cline%gen_job_descr(job_descr)
+    !     ! MAIN LOOP
+    !     iter = params%startit - 1
+    !     corr = -1.
+    !     do
+    !         iter = iter + 1
+    !         str_iter = int2str_pad(iter,3)
+    !         write(*,'(A)')   '>>>'
+    !         write(*,'(A,I6)')'>>> ITERATION ', iter
+    !         write(*,'(A)')   '>>>'
+    !         if( have_oris .or. iter > params%startit )then
+    !             call build%spproj%read()
+    !             if( params%refine .eq. 'snhc' )then
+    !                 ! update stochastic neighborhood size if corr is not improving
+    !                 corr_prev = corr
+    !                 corr      = build%spproj_field%get_avg('corr')
+    !                 if( iter > 1 .and. corr <= corr_prev )then
+    !                     params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
+    !                 endif
+    !                 call job_descr%set('szsn', int2str(params%szsn))
+    !                 call cline%set('szsn', real(params%szsn))
+    !             endif
+    !         endif
+    !         ! exponential cooling of the randomization rate
+    !         params%extr_iter = params%extr_iter + 1
+    !         call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
+    !         call cline%set('extr_iter', real(params%extr_iter))
+    !         call job_descr%set( 'startit', trim(int2str(iter)))
+    !         call cline%set('startit', real(iter))
+    !         ! FRCs
+    !         if( cline%defined('frcs') )then
+    !             ! all good
+    !         else
+    !             call job_descr%set('frcs', trim(FRCS_FBODY)//'01'//BIN_EXT)
+    !         endif
+    !         ! schedule
+    !         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+    !         ! ASSEMBLE ALIGNMENT DOCS
+    !         call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+    !
+    !         ! ASSEMBLE VOLUMES
+    !         if( params%eo.ne.'no' )then
+    !             call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
+    !         else
+    !             call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
+    !         endif
+    !         do state = 1,params%nstates
+    !             str_state = int2str_pad(state,2)
+    !             if( params%eo .ne. 'no' )then
+    !                 volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+    !             else
+    !                 volassemble_output = ''
+    !             endif
+    !             call cline_volassemble%set( 'state', real(state) )
+    !             call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
+    !                 &script_name='simple_script_state'//trim(str_state))
+    !         end do
+    !         call qsys_watcher(state_assemble_finished)
+    !         ! rename & add volumes to project & update job_descr
+    !         call build%spproj_field%get_pops(state_pops, 'state')
+    !         do state = 1,params%nstates
+    !             str_state = int2str_pad(state,2)
+    !             if( state_pops(state) == 0 )then
+    !                 ! cleanup for empty state
+    !                 vol = 'vol'//trim(int2str(state))
+    !                 call cline%delete( vol )
+    !                 call job_descr%delete( trim(vol) )
+    !             else
+    !                 ! rename state volume
+    !                 vol = trim(VOL_FBODY)//trim(str_state)//params%ext
+    !                 if( params%refine .eq. 'snhc' )then
+    !                     vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
+    !                 else
+    !                     vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
+    !                 endif
+    !                 iostat = simple_rename( trim(vol), trim(vol_iter) )
+    !                 if( params%eo .ne. 'no' )then
+    !                     vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+    !                     vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+    !                     vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
+    !                     vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
+    !                     iostat= simple_rename( trim(vol_even), trim(vol_iter_even) )
+    !                     iostat= simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
+    !                 endif
+    !                 ! add state volume to os_out
+    !                 call build%spproj%add_vol2os_out(trim(vol_iter), build%spproj%get_smpd(), state, 'vol')
+    !                 ! updates cmdlines & job description
+    !                 vol = 'vol'//trim(int2str(state))
+    !                 call job_descr%set( trim(vol), trim(vol_iter) )
+    !                 call cline%set( trim(vol), trim(vol_iter) )
+    !             endif
+    !         enddo
+    !         ! writes os_out
+    !         call build%spproj%write_segment_inside('out')
+    !         ! per state post-process
+    !         do state = 1,params%nstates
+    !             if( state_pops(state) == 0 )cycle
+    !             call cline_postprocess%set('state', real(state))
+    !             if( params%eo .eq. 'no' )then
+    !                 call cline_postprocess%delete('fsc')
+    !                 call cline_postprocess%set('lp', params%lp)
+    !             else
+    !                 str_state  = int2str_pad(state,2)
+    !                 fsc_file   = FSC_FBODY//trim(str_state)//'.bin'
+    !                 optlp_file = ANISOLP_FBODY//trim(str_state)//params%ext
+    !                 if( file_exists(optlp_file) .and. params%eo .ne. 'no' )then
+    !                     call cline_postprocess%delete('lp')
+    !                     call cline_postprocess%set('fsc',      trim(fsc_file))
+    !                     call cline_postprocess%set('vol_filt', trim(optlp_file))
+    !                 else if( file_exists(fsc_file) .and. params%eo .ne. 'no' )then
+    !                     call cline_postprocess%delete('lp')
+    !                     call cline_postprocess%set('fsc', trim(fsc_file))
+    !                 endif
+    !             endif
+    !             call xpostprocess%execute(cline_postprocess)
+    !         enddo
+    !         ! CONVERGENCE
+    !         converged = .false.
+    !         if( params%refine.eq.'cluster' ) call cline_check_3Dconv%delete('update_res')
+    !         call xcheck_3Dconv%execute(cline_check_3Dconv)
+    !         if( iter >= params%startit + 2 )then
+    !             ! after a minimum of 2 iterations
+    !             if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
+    !         endif
+    !         if( iter >= params%maxits ) converged = .true.
+    !         if( converged )then
+    !             ! safest to write the whole thing here as multiple fields updated
+    !             call build%spproj%write()
+    !             exit ! main loop
+    !         endif
+    !         ! ITERATION DEPENDENT UPDATES
+    !         if( cline_check_3Dconv%defined('trs') .and. .not.job_descr%isthere('trs') )then
+    !             ! activates shift search if frac >= 90
+    !             str = real2str(cline_check_3Dconv%get_rarg('trs'))
+    !             call job_descr%set( 'trs', trim(str) )
+    !             call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
+    !         endif
+    !     end do
+    !     call qsys_cleanup
+    !     ! report the last iteration on exit
+    !     call cline%delete( 'startit' )
+    !     call cline%set('endit', real(iter))
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
+    ! end subroutine exec_refine3D_distr
+
     subroutine exec_refine3D_distr( self, cline )
         use simple_commander_refine3D, only: check_3Dconv_commander
         use simple_commander_volops,   only: postprocess_commander
@@ -587,6 +857,9 @@ contains
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_postprocess%set('nstates', 1.)
         call cline_postprocess%set('mirr',  'no')
+        !!!!!!!! TO DELETE once postprocess project file version is turned on
+        call cline_postprocess%set('smpd', build%spproj%get_smpd())
+        !!!!!!!!
         call cline_postprocess%delete('projfile')
         call cline_postprocess%delete('projname')
         ! for parallel volassemble over states
@@ -826,7 +1099,6 @@ contains
         type(cmdline)                      :: cline_volassemble
         character(len=STDLEN)              :: volassemble_output, str_state
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
-       ! type(build)                        :: b
         type(chash)                        :: job_descr
         integer                            :: state
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
