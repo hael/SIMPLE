@@ -961,8 +961,8 @@ int fcopy_mmap(char* file1,  int*len1, char* file2, int*len2)
 int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_t ivf_file2)
 {
     extern int errno;
-    fprintf(stderr, "DEBUG: In fcopy file1:%s \n size :%zu\t%d\t%zu\n", file1, strlen(file1), *len1, ivf_file1);
-    fprintf(stderr, "DEBUG: In fcopy file2:%s \n size :%zu\t%d\t%zu\n", file2, strlen(file2), *len2, ivf_file2);
+    dgprintf(stderr, "DEBUG: In fcopy file1:%s \n size :%zu\t%d\t%zu\n", file1, strlen(file1), *len1, ivf_file1);
+    dgprintf(stderr, "DEBUG: In fcopy file2:%s \n size :%zu\t%d\t%zu\n", file2, strlen(file2), *len2, ivf_file2);
     char *buffer1, *buffer2;
     int flag = 0;
     if(!(buffer1 = F90toCstring(file1, *len1))) {
@@ -1126,9 +1126,9 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 #else
     char *resolved = lrealpath(filein);
 #endif
-    dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", "input", filein);
-    dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
-    dgprintf(stderr, "DEBUG:%30s: resolved:%s\n", "DEBUG: In  get_absolute_pathname", resolved);
+    // dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%s:\n", "input", filein);
+    // dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
+    // dgprintf(stderr, "DEBUG: In get_absolute_pathname resolved:%s\n",  resolved);
 
 
     if(resolved == NULL) {
@@ -1142,15 +1142,15 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
     }
     strncpy(out, resolved, *outlen); //for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
     out[*outlen] = '\0';
-    dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
-    dgprintf(stderr, "DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
+    // dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
+    // dgprintf(stderr, "DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
 
     c2fstr(resolved, out, *outlen, sizeof(resolved));
     out[0] = '/';
 
-    dgprintf(stderr, "DEBUG: In get_absolute_pathname c2fstr: %s\n", out);
-    dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%d\n", " out path addr", *out);
-    dgprintf(stderr, "DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
+    // dgprintf(stderr, "DEBUG: In get_absolute_pathname out %s\n", out);
+    // dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%d\n", " out path addr", *out);
+    // dgprintf(stderr, "DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
 
     free(filein);
     free(resolved);
@@ -1517,7 +1517,7 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
         while(globlist.gl_pathv[i]) {
             if(strstr(globlist.gl_pathv[i], "__simple_filelist__") == NULL) {
                 if(strcmp(globlist.gl_pathv[i], ".") != 0 || strcmp(globlist.gl_pathv[i], "..") != 0) {
-                    fprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
+                    dgprintf(stderr, "GLOB>> %s ... ", globlist.gl_pathv[i]);
                     struct stat s;
                     int staterr = stat(globlist.gl_pathv[i], &s);
                     if(staterr == 0) {
@@ -1543,7 +1543,7 @@ int glob_rm_all(char *match,  int*count, size_t ivf_match)
                             fclose(f);
                         } else {
                             if(errno == ENOTEMPTY) {
-                                fprintf(stderr, " calling recursive delete\n");
+                                dgprintf(stderr, " calling recursive delete\n");
                                 int len2 = (int)strlen(globlist.gl_pathv[i]);
                                 err = remove_directory_recursive(globlist.gl_pathv[i], &len2, count);
                             }
