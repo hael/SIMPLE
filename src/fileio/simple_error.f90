@@ -5,7 +5,7 @@ use simple_defs, only: alloc_stat, LONGSTRLEN
     use, intrinsic :: iso_fortran_env, only: &
         &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
         &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
-#elif defined(INTEL) || defined(PGI)
+#elif defined(INTEL)
     use, intrinsic :: iso_fortran_env, only: &
         &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
         &IOSTAT_END, IOSTAT_EOR
@@ -15,21 +15,6 @@ use simple_defs, only: alloc_stat, LONGSTRLEN
     use ifcore
 #endif
 implicit none
-
-
-#if defined(PGI)
-    interface
-        subroutine gerror(str)
-            character*(*), intent(out) :: str
-        end subroutine gerror
-        integer function ierrno()
-        end function ierrno
-        subroutine perror(str)
-            character*(*), intent(in) :: str
-        end subroutine perror
-    end interface
-#endif
-
 
 contains
 
@@ -51,19 +36,14 @@ contains
         integer :: err
         character(len=100) :: msg
         err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
-        if( err < 0)then !! PGI likes to use negative error numbers
-            !#ifdef PGI
-            !            msg = gerror()
-            !#else
+        if( err < 0)then
             call gerror(msg) !! EXTERNAL;
-            !#endif
             write(stderr,'("SIMPLE_SYSLIB::SYSERROR NEG ",I0)') err
             write(stderr,*) trim(msg)
         else if (err /= 0) then
 
             write(msg,'("Last detected error (SIMPLE_SYSLIB::SYSERROR) ",I0,":")') err
             call perror(trim(adjustl(msg)))
-
         end if
     end function get_sys_error
 
@@ -99,22 +79,10 @@ contains
             io_stat_this = get_sys_error()
         end if
 
-#ifdef PGI
-        if(io_stat_this < 0)then
-            if (IS_IOSTAT_END(io_stat_this))then
-                write(stderr,'(a)')"fclose EOF reached (PGI version)"
-                io_stat_this=0
-            else if (IS_IOSTAT_EOR(io_stat_this)) then
-                write(stderr,'(a)')"fclose End-of-record reached (PGI version)"
-                io_stat_this=0
-            end if
-        end if
-#else
         !! Intel and GNU
         if (io_stat_this==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat_this
         if (io_stat_this==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat_this
 
-#endif
         if( io_stat_this /= 0 ) then
             write(stderr,'(a,1x,I0 )') 'ERROR: File I/O failure, IOS# ', io_stat_this
             if(present(msg)) write(stderr,'(a)') trim(adjustl(msg))

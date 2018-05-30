@@ -19,7 +19,7 @@ use iso_c_binding
 use, intrinsic :: iso_fortran_env, only: &
     &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
     &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
-#elif defined(INTEL) || defined(PGI)
+#elif defined(INTEL)
 use, intrinsic :: iso_fortran_env, only: &
     &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
     &IOSTAT_END, IOSTAT_EOR

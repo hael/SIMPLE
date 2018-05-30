@@ -29,9 +29,9 @@ contains
         if (present(iostat)) iostat_this=iostat
         if( iostat_this /= 0 ) write(stderr,'(a)') message
         if (iostat_this == -1)then
-            write(stderr,'(a)') "fileio: EOF reached (PGI version)"
+            write(stderr,'(a)') "fileio: EOF reached "
         else if (iostat_this == -2) then
-            write(stderr,'(a)') "fileio: End-of-record reached (PGI version)"
+            write(stderr,'(a)') "fileio: End-of-record reached "
         else if( iostat_this /= 0 ) then
             call simple_error_check(iostat_this,'File I/O Error#'//int2str(iostat_this))
             if(die_this)call simple_stop('File I/O stop ',__FILENAME__,__LINE__)
@@ -116,13 +116,7 @@ contains
         if (present(access))then
             if (stringsAreEqual(access, 'DIRECT',.false.))  write(access_this ,'(A)') upperCase(access)
             if (stringsAreEqual(access, 'STREAM',.false.))then
-#ifdef PGI
-               ! print *,"** Cannot 'stream' in current PGI version, using DIRECT"
-                write(access_this,'(A)') upperCase(access)
-                if (stringsAreEqual(status_this,'NEW',.false.)) write( status_this,'(A)')  'UNKNOWN'
-#else
                 write(access_this ,'(A)') upperCase(access)
-#endif
             endif
         end if
         recl_this=-1

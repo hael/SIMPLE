@@ -9,16 +9,10 @@ use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
 use simple_fftw3
 use gnufor2
-#ifdef PGI
-use simple_cufft
-#endif
 
 implicit none
 
 public :: image, test_image
-#ifdef PGI
-public :: test_image_pgi_cuda
-#endif
 
 private
 #include "simple_local_flags.inc"
@@ -335,16 +329,8 @@ contains
     ! FFTs and signal processing operations
     procedure          :: fwd_ft    ! FFTW forward transform
     procedure          :: bwd_ft    ! FFTW inverse transform
-#ifdef PGI
-    procedure          :: fft_pgi_cuda  ! CUFFT forward transform
-    !        procedure         :: fft_pgi_stream
-    procedure          :: ifft_pgi_cuda ! CUFFT inverse transform
-    generic            :: fft => fft_pgi_cuda
-    generic            :: ifft => ifft_pgi_cuda
-#else
     generic            :: fft => fwd_ft
     generic            :: ifft => bwd_ft
-#endif
     ! DENOISING FUNCTIONS
     procedure          :: cure_outliers
     procedure          :: denoise_NLM
@@ -3785,11 +3771,11 @@ contains
             endif
         endif
         lfny = self%get_lfny(1)
-        DebugPrint "In simple_image::spectrum lfny", lfny
+      !  DebugPrint "In simple_image::spectrum lfny", lfny
         if(allocated(spec))deallocate(spec)
         allocate( spec(lfny), counts(lfny), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('spectrum; simple_image',alloc_stat)
-        DebugPrint "In simple_image::spectrum spec size", size(spec)
+      !  DebugPrint "In simple_image::spectrum spec size", size(spec)
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3912,7 +3898,7 @@ contains
             end where
         endif
         if( didft ) call self%ifft()
-        DebugPrint "In simple_image::spectrum done"
+      !  DebugPrint "In simple_image::spectrum done"
     end subroutine spectrum
 
     !> \brief shellnorm for normalising each shell to uniform (=1) power
@@ -7763,9 +7749,5 @@ contains
             self%existence = .false.
         endif
     end subroutine kill
-
-#ifdef PGI
-    include 'pgi_image_fft.finc'
-#endif
 
 end module simple_image

@@ -1,5 +1,9 @@
 module simple_binoris_io
-include 'simple_lib.f08'
+!include 'simple_lib.f08'
+use simple_defs   ! singleton, fp_kind declared
+use simple_error,      only: simple_stop
+use simple_strings
+use simple_fileio
 use simple_oris,       only: oris
 use simple_sp_project, only: sp_project
 implicit none

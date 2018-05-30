@@ -22,10 +22,11 @@
 ! -----------------------------------------------------------------------------!
 
 module simple_timer
-!     use simple_jiffys ! singleton
 use simple_defs   ! singleton, fp_kind declared
 use simple_error, only: simple_stop
-!   use precision_m
+#if defined(INTEL)
+use ifport
+#endif
 implicit none
 !  private :: raise_sys_error
 
@@ -60,28 +61,12 @@ integer, parameter :: timer_int_kind = sp
 contains
 
 integer function simple_gettime ()
-#ifdef PGI
-    include 'lib3f.h'          ! time
     simple_gettime= time()
-#elif defined(INTEL)
-    use ifport
-    simple_gettime= time()
-#elif defined(GNU)
-    simple_gettime= time()
-#else
-    ! no support
-#endif
 end function simple_gettime
 
 function cast_time_char (arg)
-#if defined(INTEL)
-    use ifport
-#endif
     character(len=24) :: cast_time_char
     integer, intent(in) :: arg
-#ifdef PGI
-    include 'lib3f.h'          ! time
-#endif
     cast_time_char = ctime(arg)
 end function cast_time_char
 
@@ -439,13 +424,11 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
          write (*, '(A,1i8)') "Error profile: loop index outside range ", iloop
       end if
 #ifdef _DEBUG
-
       if ((ival .gt. num_profile_vars) .or. (iloop .gt. num_profile_loops)) then
          write (*, '(A,2i10)') "Timer_Profile_break: label/loop index outside range ", ival, iloop
       else
          DebugPrint "Label: ", profile_labels(ival), " time ", profile_matrix(iloop, ival)
       end if
-
 #endif
    end subroutine timer_profile_break
 
@@ -532,6 +515,5 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       toc_i4 = tdiff_i4(end_point, tstart)
       last_time_point = INT(end_point, timer_int_kind)
    end function toc_i4
-
 
 end module simple_timer
