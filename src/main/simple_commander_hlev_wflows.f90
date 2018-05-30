@@ -278,7 +278,6 @@ contains
         ! set lplims
         lplims(1) = 20.
         lplims(2) = 10.
-        ! passed
         if( cline%defined('lpstart') ) lplims(1) = params%lpstart
         if( cline%defined('lpstop')  ) lplims(2) = params%lpstop
         ! read project & update sampling distance
@@ -408,7 +407,7 @@ contains
             call cline_refine3D_refine%set('nspace', real(NSPACE_DEFAULT))
         endif
         ! (5) RE-PROJECT VOLUME
-        call cline_reproject%set('prg',    'project')
+        call cline_reproject%set('prg',    'reproject')
         call cline_reproject%set('outstk', 'reprojs'//params%ext)
         call cline_reproject%set('smpd',    params%smpd)
         call cline_reproject%set('msk',     orig_msk)
@@ -533,7 +532,6 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
-        call cline_reproject%set('projfile', params%projfile)
         call cline_reproject%set('vol1',     'rec_final'//params%ext)
         call cline_reproject%set('oritab',   'final_oris.txt')
         call xreproject%execute(cline_reproject)
