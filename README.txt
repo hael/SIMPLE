@@ -2,7 +2,7 @@
        _______ _____ _______  _____         _______
        |______   |   |  |  | |_____] |      |______
        ______| __|__ |  |  | |       |_____ |______  v3_dev
- 
+
 simplecryoem.com
 
 ABOUT
@@ -40,7 +40,7 @@ here as <simple_path>):
 
 2. Unzip the SIMPLE 2.5 tarball in this directory (assuming you have downloaded
 the tarball in the <downloads> directory):
-    
+
     $ mv <downloads>/SIMPLE2.5.tgz <simple path>
     $ cd <simple path>
     $ tar -xzf SIMPLE2.5.tgz
@@ -62,7 +62,7 @@ files and will finish with the following message (a reminder for step 5 below):
 Installation complete.
 ==========================================================================
 Please ensure the following variables are set properly in add2.*rc file:
-    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH 
+    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH
 To use SIMPLE, append the relevant add2.* to your HOME shell rc file:
   bash$ cat add2.bashrc >> ~/.bashrc
   tcsh$ cat add2.tcshrc >> ~/.tcshrc
@@ -96,13 +96,15 @@ step 4 with:
 For instance, on MacOS
  - Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local
  - Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/ and
- - Homebrew users" FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/
+ - Homebrew users: FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/
+
+For more advanced FFTW installations, see *Installation of FFTW* below.
 
 5. Set the environment variables
 
 To run SIMPLE the bin and scripts paths need to be in the PATH environment
-variable. The SIMPLE_PATH environment variable must also be defined. The example 
-shell scripts add2.bashrc and add2.tcshrc with the necessary instructions were 
+variable. The SIMPLE_PATH environment variable must also be defined. The example
+shell scripts add2.bashrc and add2.tcshrc with the necessary instructions were
 generated during the build step.
 
 For immediate use for running and testing:
@@ -123,10 +125,10 @@ application simple_test_install. It will test the most important components in
 the SIMPLE library (those used by prime2D and prime3D). Execute the following in
 a separate terminal to ensure the environment variables are set by your rc file:
 
-    $ simple_test_install 
+    $ simple_test_install
 
 The program will create its own folder SIMPLE_TEST_INSTALL*date*
-where temporary files and information about each test are stored. Upon 
+where temporary files and information about each test are stored. Upon
 succesful completion you should see
 
     $ **** SIMPLE_TEST_INSTALL NORMAL STOP ****
@@ -145,7 +147,7 @@ The Simple GUI is designed to have a single instance of the server running on an
 In this mode, the Simple GUI server will run as the user who started the server. Thus, this user must have read and write access to the directories where processing is to be undertaken.
 
 In order to use this mode, an htpasswd file must first be generated. The easiest way to do this is using the "htdigest" command from the apache2 package. Use the following command to create users:
-	
+
 	htdigest $SIMPLE_PATH/www/.htpasswd simple <username>
 
 You will be prompted to enter the new user's password twice.
@@ -155,4 +157,24 @@ The Simple GUI server can now be started with the -m flag for multiuser mode. We
 	nohup simple -m &
 
 
+### Installation of FFTW
 
+Simple requires three versions of the FFTW library. A double-precision, a single-precision and a threaded-single precision build.
+
+Copy the source from the FFTW homepage (www.fftw.org) and unpack it:
+$ wget ftp://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
+$ tar zxvf fftw-3.3.8.tar.gz
+$ cd fftw-3.3.8
+
+By default, the bootstrap script configures and builds the double precision and threaded libraries:
+$ ./bootstrap.sh --prefix=/usr/local
+$ make -j
+$ sudo make install
+$ make distclean
+
+Now build the single-precision libraries:
+
+$ ./bootstrap.sh --prefix=/usr/local --enable-single
+$ make -j
+$ sudo make install
+$ make distclean
