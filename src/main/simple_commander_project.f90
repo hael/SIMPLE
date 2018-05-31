@@ -107,7 +107,7 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call params%new(cline)
-        call spproj%read_segment(params%projfile, params%oritype)
+        call spproj%read_segment(params%oritype, params%projfile)
         call spproj%write_segment2txt(params%oritype, params%outfile)
         call spproj%kill
         call simple_end('**** PROJECT2TXT NORMAL STOP ****')
