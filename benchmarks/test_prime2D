@@ -32,7 +32,7 @@ else
     simple_exec prg=import_particles ctf=yes smpd=1.275 cs=2.7 deftab=../extract_params.txt fraca=0.1 kv=300 stk=../sumstack.mrc
     #nice simple_exec prg=import_particles ctf=yes smpd=1.275 cs=2.7 kv=300 fraca=0.1 deftab=../extract_params.txt stk=../sumstack.mrc projfile=betagal.simple
     #time nice simple_distr_exec prg=cluster2D projfile=betagal.simple nparts=2 nthr=10 ncls=50 msk=88
-    time simple_distr_exec prg=cluster2D ncls=100 msk=88 nparts=2 nthr=10
+    time simple_distr_exec prg=cluster2D ncls=100 msk=88 nparts=1 nthr=20
 fi
 #nohup simple_distr_exec prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt > PRIME2D &
 # BGAL

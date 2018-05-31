@@ -10,15 +10,21 @@ fi
 if [ ! -d "${SIMPLE_TESTBENCH_DATA}/bgal" ]; then
     echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
 fi
-
+SECONDS=0
 cd ${SIMPLE_TESTBENCH_DATA}/bgal
-prime_cleanup.pl
-pkill simple_exec
-[ -d prime3Dinit_bench ] && rm -rf prime3Dinit_bench
-mkdir prime3Dinit_bench && cd prime3Dinit_bench
 
+[ -d prime3Dinit_bench ] && rm -rf prime3Dinit_bench
+simple_exec prg=new_project projname=prime3Dinit_bench
+if [ ! -d prime3Dinit_bench ];then
+    echo ' simple_exec prg=new_project  FAILED!!!'
+    exit 1
+else
+    cd prime3Dinit_bench
 #time simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
-nice simple_exec prg=import_cavgs   stk=../cavgs_final.mrc smpd=2.55 projfile=init3Dtest.simple projname=init3Dtest
-time simple_distr_exec prg=initial_3Dmodel  projfile=init3Dtest.simple smpd=1.5 msk=50 ctf=no pgrp=c1 stk=../cavgs_final.mrc
-## valgrind --tool=cachegrind  simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
-## valgrind --tool=memgrind  simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
+nice simple_exec prg=import_cavgs   stk=../cavgs_final.mrc  smpd=1.5 msk=50 ctf=no pgrp=c1 stk=../cavgs_final.mrc
+time simple_distr_exec prg=initial_3Dmodel  nthr=10
+fi
+## valgrind --tool=cachegrind  simple_distr_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
+## valgrind --tool=memgrind  simple_distr_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
+duration=$SECONDS
+echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."

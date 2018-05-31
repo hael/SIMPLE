@@ -13,14 +13,14 @@ if [ ! -d "${SIMPLE_TESTBENCH_DATA}/ctffit" ]; then
 fi
 cd ${SIMPLE_TESTBENCH_DATA}/ctffit/
 [ -d ctffit_bench ] && rm -rf ctffit_bench
-simple_exec prg=new_project projname=ctffit_test > /dev/null
+simple_exec prg=new_project projname=ctffit_bench > /dev/null
 
-if [ ! -d ctffit_test ]; then
+if [ ! -d ctffit_bench ]; then
     echo "new_project could not create folder"
 else
- cd ctffit_test
+ cd ctffit_bench
  ls $(pwd)/../prx3_intg00[1-5].mrc > filetab.txt
- nice simple_exec prg=import_movies smpd=1.275 cs=2.7 kv=300 fraca=0.1 filetab=filetab.txt projname=ctffit_test projfile=ctffit_test.simple ctf=yes
+ nice simple_exec prg=import_movies smpd=1.275 cs=2.7 kv=300 fraca=0.1 filetab=filetab.txt  ctf=yes
 
  simple_distr_exec prg=ctf_estimate nthr=1 nparts=96 > CTFFIT &
 

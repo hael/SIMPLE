@@ -10,7 +10,7 @@ fi
 if [ ! -d "${SIMPLE_TESTBENCH_DATA}/bgal" ]; then
     echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
 fi
-
+SECONDS=0
 cd ${SIMPLE_TESTBENCH_DATA}/bgal
 #prime_cleanup.pl
 #pkill simple_exec
@@ -25,13 +25,14 @@ cd ${SIMPLE_TESTBENCH_DATA}/bgal
 # simple_distr_exec prg=prime3D stk=scaledstack.mrc ctf=yes smpd=2.55 msk=40 pgrp=d2 deftab=../extract_params.txt eo=yes nparts=2 nthr=8 vol1=startvol_state01.mrc lp=15 PRIME3D
 simple_exec prg=new_project projname=prime3D_bench
 
-
 if [ ! -d prime3D_bench ];then
     echo ' simple_exec prg=new_project  FAILED!!!'
     exit 1
 else
     cd prime3D_bench
-    simple_exec prg=import_particles ctf=yes smpd=1.275 cs=2.7 deftab=../extract_params.txt fraca=0.1 kv=300 stk=../scaledsel.mrc oritab=../prime3Ddoc_035.txt ctf=yes smpd=2.55 msk=40 projfile=prime3D_bench.simple projname=prime3D_bench
+    simple_exec prg=import_particles ctf=yes  cs=2.7 deftab=../extract_params.txt fraca=0.1 kv=300 stk=../scaledsel.mrc oritab=../prime3Ddoc_035.txt ctf=yes smpd=2.55 msk=40 projname=prime3D_bench
 
-    time simple_distr_exec prg=cluster3D ncls=100 msk=40 nparts=2 nthr=10 projfile=prime3D_bench.simple projname=prime3D_bench
+    time simple_distr_exec prg=cluster3D ncls=100 nparts=2 nthr=10
 fi
+duration=$SECONDS
+echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
