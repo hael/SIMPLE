@@ -493,7 +493,7 @@ contains
         if( inputted_deftab )then
             ndatlines = binread_nlines(params%deftab)
             call os%new(ndatlines)
-            call binread_oritab(params%deftab, spproj, os, [1,ndatlines])
+            call binread_ctfparams_state_eo(params%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_plaintexttab )then
