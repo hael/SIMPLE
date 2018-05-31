@@ -992,7 +992,8 @@ contains
         integer,               intent(in)    :: nparts
         type(image)                   :: img
         type(ori)                     :: orig_stk
-        character(len=:), allocatable :: stk, tmp_dir, ext, imgkind, stkpart, dest_stkpart, ctfstr
+        character(len=:), allocatable :: stk, tmp_dir, ext, imgkind, stkpart, dest_stkpart
+        character(len=:), allocatable :: ctfstr, prev_imgfmt
         character(len=STDLEN) :: cwd
         integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer    :: nptcls, nptcls_part, numlen, status
@@ -1008,8 +1009,16 @@ contains
         smpd    = self%os_stk%get(1,'smpd')
         box     = nint(self%os_stk%get(1,'box'))
         call self%os_stk%getter(1,'stk',stk)
-        ext     = fname2ext(stk)
+        ! image format
+        ext = fname2ext(stk)
+        ! under testing
+        ! if( self%projinfo%isthere('imgfmt') )then
+        !     call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
+        !     ! takes care of '.mrcs' format
+        !     if( ext(1:3).ne.trim(prev_imgfmt) )ext = trim(prev_imgfmt)
+        ! endif
         deallocate(stk)
+        ! copy prep
         call self%os_stk%getter(1,'imgkind', imgkind)
         nptcls  = self%get_nptcls()
         parts   = split_nobjs_even( nptcls, nparts )

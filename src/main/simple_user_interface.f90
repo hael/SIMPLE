@@ -1210,6 +1210,9 @@ contains
         call initial_3Dmodel%set_input('srch_ctrls', 7, 'pgrp_known', 'binary', 'Point-group applied directly', 'Point-group applied direclty rather than first doing a reconstruction &
         &in c1 and searching for the symmerty axis(yes|no){no}', '(yes|no){no}', .false., 'no')
         call initial_3Dmodel%set_input('srch_ctrls', 8, objfun)
+        initial_3Dmodel%srch_ctrls(8)%descr_long        = 'Objective function(cc|ccres){ccres}'
+        initial_3Dmodel%srch_ctrls(8)%descr_placeholder = '(cc|ccres){ccres}'
+        initial_3Dmodel%srch_ctrls(8)%cval_default      = 'ccres'
         call initial_3Dmodel%set_input('srch_ctrls', 9, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
         call initial_3Dmodel%set_input('srch_ctrls', 10, 'nrestarts', 'num', 'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
@@ -1218,7 +1221,9 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, eo)
-        initial_3Dmodel%filt_ctrls(4)%cval_default = 'no'
+        initial_3Dmodel%filt_ctrls(4)%descr_long        = 'Gold-standard FSC for filtering and resolution estimation(yes|no){no}'
+        initial_3Dmodel%filt_ctrls(4)%descr_placeholder = '(yes|no){no}'
+        initial_3Dmodel%filt_ctrls(4)%cval_default      = 'no'
         call initial_3Dmodel%set_input('filt_ctrls', 5, shellw)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)

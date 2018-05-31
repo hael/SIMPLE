@@ -261,8 +261,6 @@ contains
         call cline%set('mkdir', 'no')
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         call cline%set('oritype', 'ptcl3D')
-        ! objfun=cc only
-        call cline%set('objfun', 'cc')
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
@@ -334,6 +332,11 @@ contains
         cline_refine3D_snhc_restart = cline
         cline_refine3D_init         = cline
         cline_symsrch               = cline
+        ! In shnc & stage 1 the objective function is always standard cross-correlation,
+        ! in stage 2 it follows optional user input and defaults to ccres
+        call cline_refine3D_snhc_restart%set('objfun', 'cc')
+        call cline_refine3D_init%set('objfun', 'cc')
+        if( .not.cline%defined('objfun') )call cline_refine3D_refine%set('objfun', 'ccres')
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
         call cline_reproject%delete('nparts')
