@@ -72,7 +72,7 @@ call myproject%os_stk%set(2, 'smpd',        1.3)
 call myproject%write('myproject.simple')
 call myproject%read('myproject.simple')
 ! call myproject%print_header
-call myproject%write_segment('stk', 'myproject_os_stk_1.txt')
+call myproject%write_segment2txt('stk', 'myproject_os_stk_1.txt')
 ! ctf_estimate
 call myproject%os_stk%set(1, 'kv',       300.)
 call myproject%os_stk%set(1, 'cs',       2.7 )
@@ -96,7 +96,7 @@ call myproject%os_stk%set(2, 'ctfres',   3.8 )
 call myproject%write('myproject.simple')
 call myproject%read('myproject.simple')
 call myproject%print_info
-call myproject%write_segment('stk', 'myproject_os_stk_2.txt')
+call myproject%write_segment2txt('stk', 'myproject_os_stk_2.txt')
 
 ! generate 3 algndocs for testing merging
 call myproject%os_ptcl3D%new(9)
