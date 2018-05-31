@@ -41,7 +41,9 @@ type :: ftiter
     ! LOOPING LIMITS
     procedure :: loop_lims
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
-    procedure :: comp_addr_phys
+    procedure :: comp_addr_phys1
+    procedure :: comp_addr_phys2
+    generic :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
     procedure :: comp_addr_logi
     procedure :: comp_addr_phys_orig
     ! TESTS
@@ -275,7 +277,7 @@ contains
         endif
     end function comp_addr_phys_orig
 
-    pure function comp_addr_phys(self,logi) result(phys)
+    pure function comp_addr_phys1(self,logi) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: logi(3) !<  Logical address
         integer :: phys(3)                   !<  Physical address
@@ -288,8 +290,21 @@ contains
             phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
             phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
         endif
-    end function comp_addr_phys
-
+    end function comp_addr_phys1
+  pure function comp_addr_phys2(self,h,k,m) result(phys)
+        class(ftiter), intent(in) :: self
+        integer,       intent(in) :: h,k,m !<  Logical address
+        integer :: phys(3)                 !<  Physical address
+        if (h .ge. 0) then
+            phys(1) = h + 1
+            phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
+            phys(3) = m + 1 + MERGE(self%ldim(3),0, m < 0)
+        else
+            phys(1) = -h + 1
+            phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+            phys(3) = -m + 1 + MERGE(self%ldim(3),0, -m < 0)
+        endif
+    end function comp_addr_phys2
     !> \brief Convert physical address to logical address. Complex image.
     function comp_addr_logi(self,phys) result(logi)
         class(ftiter), intent(in) :: self

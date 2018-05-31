@@ -254,7 +254,10 @@ contains
     procedure          :: checkimg4nans
     procedure          :: cure
     procedure          :: loop_lims
-    procedure          :: comp_addr_phys
+!    procedure          :: comp_addr_phys
+    procedure :: comp_addr_phys1
+    procedure :: comp_addr_phys2
+    generic :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
     procedure          :: get_2Dphys_ind_mapping
     procedure          :: corr
     procedure          :: corr_shifted
@@ -791,8 +794,6 @@ contains
         if( self%is_ft() ) call simple_stop('only 4 real images; extr_pixels; simple_image')
         if( self.eqdims.mskimg )then
             ! pixels = self%packer(mskimg) ! Intel hickup
-            !$ allocate(pixels(self%ldim(1)*self%ldim(2)*self%ldim(3)), stat=alloc_stat)
-            !$ if(alloc_stat.ne.0)call allocchk("In simple_image::extr_pixels possible prealloc ",alloc_stat)
             pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>0.5 )
         else
@@ -2941,8 +2942,6 @@ contains
         if( self%ft ) call simple_stop('only for real images; bin_2; simple image')
         npixtot = product(self%ldim)
         ! forsort = self%packer() ! Intel hickup
-        !$ allocate(forsort(self%ldim(1)*self%ldim(2)*self%ldim(3)),stat=alloc_stat)
-        !$ if(alloc_stat.ne.0)call allocchk("simple_image::bin_2 packing rmat for sorting - possible prealloc", alloc_stat)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
         thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
@@ -3057,8 +3056,6 @@ contains
         call mask2d%new([self%ldim(1), self%ldim(2), 1], self%smpd)
         mask2d = 1.
         call mask2d%mask(rad, 'hard')
-        !$ allocate(plane(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat)
-        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::bin_cylinder posible prealloc plane",alloc_stat)
         plane = mask2d%get_rmat()
         self%rmat = 0.
         do k = 1,self%ldim(3)
@@ -3922,7 +3919,6 @@ contains
         lfny  = self%get_lfny(1)
         lims  = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
-        !$ allocate(expec_pow(1))
         call self%spectrum('power',expec_pow)
         ! normalise
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys)&
@@ -4954,13 +4950,19 @@ contains
     end function loop_lims
 
     !>  \brief  Convert logical address to physical address. Complex image.
-    pure function comp_addr_phys(self,logi) result(phys)
+    pure function comp_addr_phys1(self,logi) result(phys)
         class(image), intent(in) :: self
         integer,      intent(in) :: logi(3) !<  Logical address
         integer                  :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(logi)
-    end function comp_addr_phys
-
+    end function comp_addr_phys1
+    !>  \brief  Convert logical address to physical address. Complex image.
+    pure function comp_addr_phys2(self,h,k,m) result(phys)
+        class(image), intent(in) :: self
+        integer,      intent(in) :: h,k,m !<  Logical address
+        integer                  :: phys(3) !<  Physical address
+        phys = self%fit%comp_addr_phys(h,k,m)
+    end function comp_addr_phys2
     !>  \brief  generate physical index mapping array
     subroutine get_2Dphys_ind_mapping( self, lims, ind_map )
         class(image), intent(in)  :: self
@@ -6615,8 +6617,6 @@ contains
         .and. self_out%ldim(3) >= self_in%ldim(3) )then
             if( self_in%ft )then
                 self_out = cmplx(0.,0.)
-                !$ allocate(antialw(1), stat=alloc_stat)
-                !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pad possible prealloc antialw",alloc_stat)
                 antialw = self_in%hannw()
                 lims = self_in%fit%loop_lims(2)
                 !$omp parallel do collapse(3) schedule(static) default(shared)&
