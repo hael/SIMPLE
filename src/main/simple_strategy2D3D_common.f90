@@ -7,7 +7,7 @@ use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
 implicit none
 
-public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
+public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
 &prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
 &build_pftcc_particles
@@ -36,12 +36,6 @@ contains
         call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
         call build_glob%img%read(stkname, ind_in_stk)
     end subroutine read_img
-
-    subroutine read_img_and_norm( iptcl )
-        integer,       intent(in)     :: iptcl
-        call read_img( iptcl )
-        call build_glob%img%norm()
-     end subroutine read_img_and_norm
 
     subroutine read_imgbatch_1( fromptop, ptcl_mask )
         integer,           intent(in) :: fromptop(2)
@@ -368,6 +362,7 @@ contains
     end subroutine build_pftcc_particles
 
     !>  \brief  prepares one particle image for alignment
+    !!          serial routine
     subroutine prepimg4align( iptcl, img_in, img_out, is3D )
         use simple_polarizer,     only: polarizer
         use simple_estimate_ssnr, only: fsc2optlp_sub
@@ -457,8 +452,6 @@ contains
         real    :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz())
         real    :: xyz(3), sharg
         logical :: do_center
-        ! NORMALISATION FOR EUCLID ???
-        call img_in%norm()
         do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
@@ -632,8 +625,6 @@ contains
             return
         endif
         call build_glob%vol%read(volfname)
-        ! NORMALISATION FOR EUCLID ???
-        call build_glob%vol%norm()
         xyz = build_glob%vol%center(params_glob%cenlp,params_glob%msk) ! find center of mass shift
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
@@ -661,8 +652,6 @@ contains
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(volfname)
-        ! NORMALISATION FOR EUCLID ???
-        call build_glob%vol%norm()
         if( do_center )then
             call build_glob%vol%fft()
             call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
@@ -893,7 +882,6 @@ contains
             !>  \brief  prepares even/odd volume for FSC/FRC calcualtion
             subroutine prepeovol( vol )
                 class(image), intent(inout) :: vol
-                call vol%norm()
                 ! masking
                 if( cline%defined('mskfile') )then
                     ! mask provided

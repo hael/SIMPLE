@@ -24,9 +24,9 @@ type, extends(image) :: masker
   contains
     procedure          :: automask3D
     procedure          :: resmask
-    procedure          :: apply_2Denvmask22Dref
+    ! procedure          :: apply_2Denvmask22Dref
     procedure          :: mask_from_pdb
-    procedure, private :: bin_cavg
+    ! procedure, private :: bin_cavg
     procedure, private :: bin_vol_thres
     procedure, private :: env_rproject
 end type masker
@@ -86,19 +86,19 @@ contains
     end subroutine resmask
 
     !>  \brief  is for envelope masking of the reference in prime2D
-    subroutine apply_2Denvmask22Dref( self, ref )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: ref
-        type(image) :: img
-        ! binarize image
-        img = ref
-        call self%bin_cavg(img)
-        ! soft edge mask
-        call img%cos_edge(self%edge)
-        ! apply envelope mask to reference
-        call ref%mul(img)
-        DebugPrint 'simple_masker::update_cls done'
-    end subroutine apply_2Denvmask22Dref
+    ! subroutine apply_2Denvmask22Dref( self, ref )
+    !     class(masker), intent(inout) :: self
+    !     class(image),  intent(inout) :: ref
+    !     type(image) :: img
+    !     ! binarize image
+    !     img = ref
+    !     call self%bin_cavg(img)
+    !     ! soft edge mask
+    !     call img%cos_edge(self%edge)
+    !     ! apply envelope mask to reference
+    !     call ref%mul(img)
+    !     DebugPrint 'simple_masker::update_cls done'
+    ! end subroutine apply_2Denvmask22Dref
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)
         use simple_oris,  only: oris
@@ -161,22 +161,22 @@ contains
     ! BINARISATION ROUTINES
 
     !>  \brief  is for binarizing the 2D image
-    subroutine bin_cavg( self, img )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: img
-        ! normalize
-        call img%norm()
-        ! soft masking
-        call img%mask(self%msk, 'soft')
-        ! low-pass
-        call img%bp(0., self%amsklp)
-        ! binarize within mask
-        call img%mask(self%msk, 'hard')
-        call img%bin_kmeans
-        ! add one layer
-        call img%grow_bins(self%binwidth)
-        DebugPrint 'simple_masker::bin_cavg done'
-    end subroutine bin_cavg
+    ! subroutine bin_cavg( self, img )
+    !     class(masker), intent(inout) :: self
+    !     class(image),  intent(inout) :: img
+    !     ! normalize
+    !     call img%norm()
+    !     ! soft masking
+    !     call img%mask(self%msk, 'soft')
+    !     ! low-pass
+    !     call img%bp(0., self%amsklp)
+    !     ! binarize within mask
+    !     call img%mask(self%msk, 'hard')
+    !     call img%bin_kmeans
+    !     ! add one layer
+    !     call img%grow_bins(self%binwidth)
+    !     DebugPrint 'simple_masker::bin_cavg done'
+    ! end subroutine bin_cavg
 
     !>  \brief  is for binarizing the 3D image using thresholding
     subroutine bin_vol_thres( self )

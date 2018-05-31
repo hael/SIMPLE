@@ -7,7 +7,6 @@ module simple_projector_hlev
 include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_parameters, only: params_glob
-use simple_gridding,   only: prep4_cgrid
 use simple_projector,  only: projector
 use simple_kbinterpol, only: kbinterpol
 implicit none
@@ -23,11 +22,10 @@ contains
         type(image),       allocatable :: imgs(:)   !< resulting images
         type(image),       allocatable :: imgs_pad(:)
         type(projector)  :: vol_pad
-        type(kbinterpol) :: kbwin
         integer          :: n, i, ithr
-        kbwin = kbinterpol(KBWINSZ, params_glob%alpha)
         call vol_pad%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
-        call prep4_cgrid(vol, vol_pad, kbwin)
+        call vol%pad(vol_pad)
+        call vol_pad%fft
         if( present(top) )then
             n = top
         else
@@ -56,9 +54,6 @@ contains
             call imgs_pad(ithr)%ifft()
             ! clip
             call imgs_pad(ithr)%clip(imgs(i))
-            ! normalise
-            ! TOOK OUT NORMALISATION FOR EUCLID
-            ! call imgs(i)%norm()
         end do
         !$omp end parallel do
         ! destruct
@@ -78,11 +73,9 @@ contains
         real, optional, intent(in)    :: shvec(3) !< 3D shift vector
         type(projector)  :: vol_pad
         type(image)      :: rovol_pad, rovol
-        type(kbinterpol) :: kbwin
         integer          :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
         real             :: loc(3)
         logical          :: l_shvec_present
-        kbwin           = kbinterpol(KBWINSZ, params_glob%alpha)
         ldim            = vol%get_ldim()
         ldim_pd         = [params_glob%boxpd,params_glob%boxpd,params_glob%boxpd]
         l_shvec_present = present(shvec)
@@ -90,7 +83,8 @@ contains
         call rovol_pad%new(ldim_pd, params_glob%smpd)
         call rovol_pad%set_ft(.true.)
         call rovol%new(ldim, params_glob%smpd)
-        call prep4_cgrid(vol, vol_pad, kbwin)
+        call vol%pad(vol_pad)
+        call vol_pad%fft
         call vol_pad%expand_cmat(params_glob%alpha)
         lims = vol_pad%loop_lims(2)
         nyq  = vol_pad%get_lfny(1)
@@ -116,8 +110,6 @@ contains
         !$omp end parallel do
         call rovol_pad%ifft()
         call rovol_pad%clip(rovol)
-        ! TOOK OUT NORMALISATION FOR EUCLID
-        ! call rovol%norm()
         call vol_pad%kill_expanded
         call vol_pad%kill
         call rovol_pad%kill

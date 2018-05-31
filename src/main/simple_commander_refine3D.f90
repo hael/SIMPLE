@@ -96,14 +96,14 @@ contains
 
             subroutine gen_random_model( nsamp_in )
                 use simple_kbinterpol,         only: kbinterpol
-                use simple_prep4cgrid,         only: prep4cgrid
                 use simple_strategy2D3D_common ! use all in there
+                use simple_image,              only: image
                 integer, optional, intent(in) :: nsamp_in  !< num input samples
                 type(ran_tabu)       :: rt
                 type(ori)            :: orientation
                 type(kbinterpol)     :: kbwin
-                type(prep4cgrid)     :: gridprep
                 type(ctfparams)      :: ctfvars
+                type(image)          :: mskimg
                 integer, allocatable :: sample(:)
                 integer              :: i, nsamp
                 ! init volumes
@@ -126,15 +126,13 @@ contains
                     forall(i=1:nsamp) sample(i) = i
                 endif
                 write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
-                ! make the gridding prepper
-                kbwin = build%recvols(1)%get_kbwin()
-                call gridprep%new(build%img, kbwin, [params%boxpd,params%boxpd,1])
+                call mskimg%disc(build%img%get_ldim(), params%smpd, params%msk)
                 do i=1,nsamp
                     call progress(i, nsamp)
                     orientation = build%spproj_field%get_ori(sample(i) + params%fromp - 1)
                     ctfvars     = build%spproj%get_ctfparams(params%oritype, sample(i) + params%fromp - 1)
-                    call read_img_and_norm( sample(i) + params%fromp - 1 )
-                    call gridprep%prep(build%img, build%img_pad)
+                    call read_img( sample(i) + params%fromp - 1 )
+                    call build%img%norm_subtr_backgr_pad_fft(mskimg, build%img_pad)
                     call build%recvols(1)%insert_fplane(build%pgrpsyms, orientation, ctfvars, build%img_pad, pwght=1.0)
                 end do
                 deallocate(sample)

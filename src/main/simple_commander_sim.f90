@@ -63,19 +63,16 @@ contains
     subroutine exec_simulate_particles( self, cline )
         use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
-        use simple_gridding,   only: prep4_cgrid
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         type(ori)        :: orientation
         type(ctf)        :: tfun
-        type(kbinterpol) :: kbwin
         type(projector)  :: vol_pad
         real             :: snr_pink, snr_detector, bfac, bfacerr
         integer          :: i, cnt, ntot
         call build%init_params_and_build_general_tbox(cline,params)
-        kbwin = kbinterpol(KBWINSZ, params%alpha)
         tfun  = ctf(params%smpd, params%kv, params%cs, params%fraca)
         if( .not. cline%defined('outstk') ) params%outstk = 'simulated_particles'//params%ext
         if( cline%defined('part') )then
@@ -104,7 +101,7 @@ contains
         call build%vol%read(params%vols(1))
         call build%vol%mask(params%msk, 'soft')
         call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
-        call prep4_cgrid(build%vol, vol_pad, kbwin)
+        call build%vol%pad(vol_pad)
         call vol_pad%expand_cmat(params%alpha)
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0

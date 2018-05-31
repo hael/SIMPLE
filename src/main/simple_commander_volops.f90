@@ -75,9 +75,6 @@ contains
         call odd%new([params%box,params%box,params%box], params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
-        ! always normalise before masking
-        call even%norm()
-        call odd%norm()
         if( cline%defined('mskfile') )then
             if( file_exists(params%mskfile) )then
                 call mskvol%new([params%box,params%box,params%box], params%smpd)

@@ -10,7 +10,6 @@ use simple_binoris_io,               only: binwrite_oritab
 use simple_kbinterpol,               only: kbinterpol
 use simple_ori,                      only: ori
 use simple_sym,                      only: sym
-use simple_prep4cgrid,               only: prep4cgrid
 use simple_image,                    only: image
 use simple_cmdline,                  only: cmdline
 use simple_parameters,               only: params_glob
@@ -65,9 +64,9 @@ contains
         type(ori)             :: orientation, orientation2
         type(kbinterpol)      :: kbwin
         type(sym)             :: c1_symop
-        type(prep4cgrid)      :: gridprep
         type(ctfparams)       :: ctfvars
         type(convergence)     :: conv
+        type(image)           :: mskimg
         real    :: frac_srch_space, extr_thresh, corr_thresh, bfac_rec, specscore_avg
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch
         integer :: ibatch, npeaks, batchlims(2), updatecnt
@@ -363,7 +362,6 @@ contains
         else
             kbwin = build_glob%recvols(1)%get_kbwin()
         endif
-        call gridprep%new(build_glob%img, kbwin, [params_glob%boxpd,params_glob%boxpd,1])
         ! init volumes
         call preprecvols
         ! prep rec imgs
@@ -373,18 +371,16 @@ contains
         end do
         ! prep batch imgs
         call prepimgbatch( MAXIMGBATCHSZ)
+        ! make mask image
+        call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
         ! gridding batch loop
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call read_imgbatch( nptcls2update, pinds, batchlims)
-            ! parallel gridprep
             !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 ibatch = i - batchlims(1) + 1
-                ! normalise (read_imgbatch does not normalise)
-                call build_glob%imgbatch(ibatch)%norm()
-                ! prepare for gridding
-                call gridprep%prep_serial_no_fft(build_glob%imgbatch(ibatch), rec_imgs(ibatch))
+                call build_glob%imgbatch(ibatch)%norm_subtr_backgr_pad_serial(mskimg, rec_imgs(ibatch))
             end do
             !$omp end parallel do
             ! gridding
@@ -414,13 +410,12 @@ contains
         endif
         ! destruct
         call killrecvols()
-        call gridprep%kill
         do ibatch=1,MAXIMGBATCHSZ
             call rec_imgs(ibatch)%kill
             call build_glob%imgbatch(ibatch)%kill
         end do
         deallocate(rec_imgs, build_glob%imgbatch)
-        call gridprep%kill
+        call mskimg%kill
         if( L_BENCH ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE

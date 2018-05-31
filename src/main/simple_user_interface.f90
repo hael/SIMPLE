@@ -2502,10 +2502,11 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_particles%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
+        simulate_particles%img_ios(1)%required = .true.
         ! parameter input/output
         call simulate_particles%set_input('parm_ios', 1,  smpd)
         call simulate_particles%set_input('parm_ios', 2,  nptcls)
-        call simulate_particles%set_input('parm_ios', 3,  'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .false., 0.)
+        call simulate_particles%set_input('parm_ios', 3,  'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .true., 0.)
         call simulate_particles%set_input('parm_ios', 4,  oritab)
         call simulate_particles%set_input('parm_ios', 5,  outfile)
         call simulate_particles%set_input('parm_ios', 6,  outstk)

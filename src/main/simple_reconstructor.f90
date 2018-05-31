@@ -677,7 +677,6 @@ contains
         use simple_ori,        only: ori
         use simple_oris,       only: oris
         use simple_sym,        only: sym
-        use simple_prep4cgrid, only: prep4cgrid
         use simple_sp_project, only: sp_project
         class(reconstructor), intent(inout) :: self   !< this object
         class(sp_project),    intent(inout) :: spproj !< project description
@@ -685,18 +684,16 @@ contains
         class(sym),           intent(inout) :: se     !< symmetry element
         integer,              intent(in)    :: state  !< state to reconstruct
         integer, optional,    intent(in)    :: part   !< partition (4 parallel rec)
-        type(image)      :: img, img_pad
-        type(prep4cgrid) :: gridprep
+        type(image)      :: img, img_pad, mskimg
         type(ctfparams)  :: ctfvars
         integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
         DebugPrint ' In reconstructor;rec'
         ! make the images
-        call img%new([params_glob%box,params_glob%box,1], self%get_smpd())
-        call img_pad%new([params_glob%boxpd,params_glob%boxpd,1], self%get_smpd())
-        ! make the gridding prepper
-        call gridprep%new(img, self%kbwin, [params_glob%boxpd,params_glob%boxpd,1])
+        call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
+        call img_pad%new([params_glob%boxpd,params_glob%boxpd,1], params_glob%smpd)
         ! zero the Fourier volume and rho
         call self%reset
         call self%reset_exp
@@ -724,6 +721,7 @@ contains
         call self%ifft()
         call img%kill
         call img_pad%kill
+        call mskimg%kill
         ! report how many particles were used to reconstruct each state
         if( params_glob%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
@@ -745,8 +743,7 @@ contains
                     if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
-                    call img%norm
-                    call gridprep%prep(img, img_pad)
+                    call img%norm_subtr_backgr_pad_fft(mskimg, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                     call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=1., bfac=o%get(i,'bfac'))
                     deallocate(stkname)
@@ -757,8 +754,7 @@ contains
                         orientation = o%get_ori(i)
                         call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                         call img%read(stkname, ind_in_stk)
-                        call img%norm
-                        call gridprep%prep(img, img_pad)
+                        call img%norm_subtr_backgr_pad_fft(mskimg, img_pad)
                         ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                         call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
                         deallocate(stkname)

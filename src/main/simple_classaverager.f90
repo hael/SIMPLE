@@ -273,12 +273,10 @@ contains
     !!          using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
         use simple_kbinterpol,          only: kbinterpol
-        use simple_prep4cgrid,          only: prep4cgrid
         use simple_strategy2D3D_common, only: read_img
         logical,           intent(in) :: do_frac_update
         type(kbinterpol)              :: kbwin
-        type(prep4cgrid)              :: gridprep
-        type(image)                   :: cls_imgsum_even, cls_imgsum_odd
+        type(image)                   :: cls_imgsum_even, cls_imgsum_odd, mskimg
         type(image), allocatable      :: batch_imgs(:), cgrid_imgs(:)
         complex,     allocatable      :: cmat_even(:,:,:), cmat_odd(:,:,:)
         real,        allocatable      :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:)
@@ -325,6 +323,9 @@ contains
             call batch_imgs(i)%new(ldim, params_glob%smpd,    wthreads=.false.)
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         end do
+        ! mask image
+        call mskimg%disc(ldim, params_glob%smpd, params_glob%msk)
+        ! limits
         lims_small = batch_imgs(1)%loop_lims(2)
         lims       = cgrid_imgs(1)%loop_lims(2)
         cyc_lims   = cgrid_imgs(1)%loop_lims(3)
@@ -334,7 +335,6 @@ contains
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                   rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                  &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)), stat=alloc_stat)
-        call gridprep%new(build_glob%img, kbwin, ldim_pd)
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
@@ -382,7 +382,6 @@ contains
                     iprec = iprecs(batches(batch,1) + i - 1)
                     iori  = ioris(batches(batch,1)  + i - 1)
                     ! normalise and FFT
-                    call batch_imgs(i)%norm()
                     call batch_imgs(i)%fft()
                     ! apply CTF and shift
                     if( phaseplate )then
@@ -420,7 +419,7 @@ contains
                     end select
                     ! reverse FFT and prepare for gridding
                     call batch_imgs(i)%ifft()
-                    call gridprep%prep_serial(batch_imgs(i), cgrid_imgs(i))
+                    call batch_imgs(i)%norm_subtr_backgr_pad_fft_serial(mskimg, cgrid_imgs(i))
                     ! rotation
                     mat = rotmat2d( -precs(iprec)%e3s(iori) )
                     ! Fourier components loop
@@ -503,9 +502,9 @@ contains
             deallocate(ptcls_inds, batches, iprecs, ioris)
         enddo ! class loop
         ! batch cleanup
+        call mskimg%kill
         call cls_imgsum_even%kill
         call cls_imgsum_odd%kill
-        call gridprep%kill
         do i=1,batchsz_max
             call batch_imgs(i)%kill
             call cgrid_imgs(i)%kill
@@ -544,13 +543,10 @@ contains
             ! (w*CTF)**2 density correction
             call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
             call cavgs_even(icls)%ifft()
-            call cavgs_even(icls)%norm()
             call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
             call cavgs_odd(icls)%ifft()
-            call cavgs_odd(icls)%norm()
             call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
             call cavgs_merged(icls)%ifft()
-            call cavgs_merged(icls)%norm()
         end do
         !$omp end parallel do
     end subroutine cavger_merge_eos_and_norm
@@ -570,8 +566,6 @@ contains
         ! parallel loop to do the job
         !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
-            call even_imgs(icls)%norm()
-            call odd_imgs(icls)%norm()
             if( params_glob%l_innermsk )then
                 call even_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
                 call odd_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)

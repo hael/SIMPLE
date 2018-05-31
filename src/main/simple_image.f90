@@ -294,9 +294,9 @@ contains
     procedure          :: zero_and_unflag_ft
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
-    procedure          :: subtr_backgr_pad_divwinstr_fft
-    procedure          :: subtr_backgr_pad_divwinstr_fft_serial
-    procedure          :: subtr_backgr_pad_divwinstr_serial
+    procedure          :: norm_subtr_backgr_pad_fft
+    procedure          :: norm_subtr_backgr_pad_fft_serial
+    procedure          :: norm_subtr_backgr_pad_serial
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: corners
@@ -5708,43 +5708,57 @@ contains
         ! deallocate(pixels)
     end subroutine zero_background
 
-    subroutine subtr_backgr_pad_divwinstr_fft( self, mskimg, instr_fun, self_out )
+    subroutine norm_subtr_backgr_pad_fft( self, mskimg, self_out )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: mskimg
-        real,         intent(in)    :: instr_fun(:,:,:)
         class(image), intent(inout) :: self_out
         real, allocatable :: pixels(:)
-        integer :: starts(3), stops(3)
-        real    :: med
-        pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+        integer :: starts(3), stops(3), npix
+        real    :: med, ave, ep, var
+        npix   = product(self%ldim)
+        ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
+        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        if( is_a_number(var) )then
+            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
+        endif
+        pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
             &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
-        starts        = (self_out%ldim - self%ldim) / 2 + 1
-        stops         = self_out%ldim - starts + 1
-        self_out%ft   = .false.
+        starts      = (self_out%ldim - self%ldim) / 2 + 1
+        stops       = self_out%ldim - starts + 1
+        self_out%ft = .false.
         !$omp parallel workshare proc_bind(close)
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
-            &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
         !$omp end parallel workshare
         call self_out%fft()
-    end subroutine subtr_backgr_pad_divwinstr_fft
+    end subroutine norm_subtr_backgr_pad_fft
 
-    subroutine subtr_backgr_pad_divwinstr_fft_serial( self, mskimg, instr_fun, self_out )
+    subroutine norm_subtr_backgr_pad_fft_serial( self, mskimg, self_out )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: mskimg
-        real,         intent(in)    :: instr_fun(:,:,:)
         class(image), intent(inout) :: self_out
         real, allocatable :: pixels(:)
-        integer :: starts(3), stops(3)
-        real    :: med
+        integer :: starts(3), stops(3), npix
+        real    :: med, ave, ep, var
+        npix   = product(self%ldim)
+        ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
+        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        if( is_a_number(var) )then
+            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
+        endif
         pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
             &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-        med = median_nocopy(pixels)
+        med           = median_nocopy(pixels)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
@@ -5753,33 +5767,37 @@ contains
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
-            &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
         call self_out%fft()
-    end subroutine subtr_backgr_pad_divwinstr_fft_serial
+    end subroutine norm_subtr_backgr_pad_fft_serial
 
-    subroutine subtr_backgr_pad_divwinstr_serial( self, mskimg, instr_fun, self_out )
+    subroutine norm_subtr_backgr_pad_serial( self, mskimg, self_out )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: mskimg
-        real,         intent(in)    :: instr_fun(:,:,:)
         class(image), intent(inout) :: self_out
         real, allocatable :: pixels(:)
-        integer :: starts(3), stops(3)
-        real    :: med
+        integer :: starts(3), stops(3), npix
+        real    :: med, ave, ep, var
+        npix   = product(self%ldim)
+        ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
+        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        if( is_a_number(var) )then
+            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
+        endif
         pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
             &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-        med = median_nocopy(pixels)
-        starts        = (self_out%ldim - self%ldim) / 2 + 1
-        stops         = self_out%ldim - starts + 1
-        self_out%ft   = .false.
+        med         = median_nocopy(pixels)
+        starts      = (self_out%ldim - self%ldim) / 2 + 1
+        stops       = self_out%ldim - starts + 1
+        self_out%ft = .false.
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
-            &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
-    end subroutine subtr_backgr_pad_divwinstr_serial
+    end subroutine norm_subtr_backgr_pad_serial
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)

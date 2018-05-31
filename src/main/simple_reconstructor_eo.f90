@@ -352,9 +352,6 @@ contains
         ! write unnormalised unmasked even/odd volumes
         call even%write(trim(fname_even), del_if_exists=.true.)
         call odd%write(trim(fname_odd),   del_if_exists=.true.)
-        ! always normalise before masking
-        call even%norm()
-        call odd%norm()
         if( self%automsk )then
             call even%zero_background
             call odd%zero_background
@@ -418,29 +415,23 @@ contains
 
     !> \brief  for distributed reconstruction of even/odd maps
     subroutine eorec_distr( self, spproj, o, se, state, fbody )
-        use simple_oris,       only: oris
-        use simple_sym,        only: sym
-        use simple_prep4cgrid, only: prep4cgrid
-        use simple_kbinterpol, only: kbinterpol
+        use simple_oris, only: oris
+        use simple_sym,  only: sym
         class(reconstructor_eo),    intent(inout) :: self   !< object
         class(sp_project),          intent(inout) :: spproj !< project description
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element
         integer,                    intent(in)    :: state  !< state to reconstruct
         character(len=*), optional, intent(in)    :: fbody  !< body of output file
-        type(kbinterpol) :: wf
-        type(image)      :: img, img_pad
-        type(prep4cgrid) :: gridprep
+        type(image)      :: img, img_pad, mskimg
         type(ctfparams)  :: ctfvars
         integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
         ! make the images
         call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
+        call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
         call img_pad%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd)
-        ! make the gridding prepper
-        wf = self%even%get_kbwin()
-        call gridprep%new(img, wf, [params_glob%boxpd,params_glob%boxpd,1])
         ! zero the Fourier volumes and rhos
         call self%reset_all
         call self%reset_eoexp
@@ -470,6 +461,7 @@ contains
         endif
         call img%kill
         call img_pad%kill
+        call mskimg%kill
         ! report how many particles were used to reconstruct each state
         if( params_glob%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
@@ -493,8 +485,7 @@ contains
                     eo = nint(orientation%get('eo'))
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
-                    call img%norm
-                    call gridprep%prep(img, img_pad)
+                    call img%norm_subtr_backgr_pad_fft(mskimg, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                     call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, 1., bfac=bfac)
                     deallocate(stkname)
@@ -506,8 +497,7 @@ contains
                         eo          = nint(orientation%get('eo'))
                         call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                         call img%read(stkname, ind_in_stk)
-                        call img%norm
-                        call gridprep%prep(img, img_pad)
+                        call img%norm_subtr_backgr_pad_fft(mskimg, img_pad)
                         ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                         call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
                         deallocate(stkname)

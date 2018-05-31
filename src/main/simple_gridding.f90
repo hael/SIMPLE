@@ -5,25 +5,11 @@ use simple_image,      only: image
 use simple_kbinterpol, only: kbinterpol
 implicit none
 
-public :: prep4_cgrid, divide_w_instr , mul_w_instr
+public :: divide_w_instr , mul_w_instr
 private
 #include "simple_local_flags.inc"
 
 contains
-
-    !>  \brief  prepare image for gridding interpolation in Fourier space
-    subroutine prep4_cgrid( img, img4grid, kbwin )
-        class(image),      intent(inout) :: img, img4grid
-        class(kbinterpol), intent(in)    :: kbwin
-        call img%ifft()                      ! make sure not FTed
-        call img%zero_background             ! remove median backround
-        call img%pad(img4grid, backgr=0.)    ! padding in real space
-        VerbosePrint "In simple_gridding::prep4cgrid padded"
-        call divide_w_instr(img4grid, kbwin) ! division w instr in real space
-        VerbosePrint "In simple_gridding::prep4cgrid div intr"
-        call img4grid%fft()               ! return the Fourier transform
-        VerbosePrint "In simple_gridding::prep4cgrid FFT to Fourier domain"
-      end subroutine prep4_cgrid
 
     !> \brief  for dividing a real or complex image with the instrument function
     subroutine divide_w_instr( img, kbwin )

@@ -1075,13 +1075,7 @@ contains
             self%ring2 = round2even(real(min(self%box/2-2,self%ring2)))
         endif
         ! set default msk value
-        if( .not. cline%defined('msk') )then
-            if( cline%defined('ring2') )then
-                self%msk = self%ring2
-            else
-                self%msk = self%box/2
-            endif
-        endif
+        if( .not. cline%defined('msk') ) self%msk = round2even(real(self%box/2-2))
         ! set mode of masking
         if( cline%defined('inner') )then
             self%l_innermsk = .true.

@@ -8,7 +8,6 @@ use simple_commander_base, only: commander_base
 implicit none
 
 public :: mask_commander
-public :: automask2D_commander
 public :: resmask_commander
 private
 
@@ -16,10 +15,6 @@ type, extends(commander_base) :: mask_commander
  contains
    procedure :: execute      => exec_mask
 end type mask_commander
-type, extends(commander_base) :: automask2D_commander
-  contains
-    procedure :: execute      => exec_automask2D
-end type automask2D_commander
 type, extends(commander_base) :: resmask_commander
   contains
     procedure :: execute      => exec_resmask
@@ -37,7 +32,6 @@ contains
         class(cmdline),        intent(inout) :: cline
         type(parameters)           :: params
         type(builder)              :: build
-        type(automask2D_commander) :: automask2D
         type(image)                :: mskvol
         type(atoms)                :: pdb
         type(masker)               :: msker
@@ -47,12 +41,7 @@ contains
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
-            if( params%automsk.eq.'yes' )then
-                ! auto
-                if( .not. cline%defined('amsklp') )call cline%set('amsklp', 25.)
-                if( .not. cline%defined('edge')   )call cline%set('edge', 10.)
-                call exec_automask2D( automask2D, cline )
-            else if( cline%defined('msk') .or. cline%defined('inner') )then
+            if( cline%defined('msk') .or. cline%defined('inner') )then
                 ! spherical
                 if( cline%defined('inner') )then
                     if( cline%defined('width') )then
@@ -115,26 +104,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
     end subroutine exec_mask
-
-    !> for solvent flattening of class averages
-    subroutine exec_automask2D( self, cline )
-        class(automask2D_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer          :: iptcl
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
-        write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        params%amsklp, ' ANGSTROMS'
-        write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', params%edge,   ' PIXELS'
-        params%outstk = add2fbody(params%stk, params%ext, 'msk')
-        do iptcl=1,params%nptcls
-            call build%img%read(params%stk, iptcl)
-            call build%mskimg%apply_2Denvmask22Dref(build%img)
-            call build%img%write(params%outstk, iptcl)
-        end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
-    end subroutine exec_automask2D
 
     !> for generating an envelope mask for resolution estimation
     subroutine exec_resmask( self, cline )
