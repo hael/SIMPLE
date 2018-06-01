@@ -62,7 +62,7 @@ contains
         real,             intent(in)    :: alpha !< oversampling factor
         integer, allocatable :: cyck(:), cycm(:), cych(:)
         integer :: h, k, m, phys(3), logi(3), lims(3,2), ldim(3)
-        real    :: winsz
+        !real    :: winsz
         call self%kill_expanded
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_projector'
@@ -421,7 +421,8 @@ contains
         w   = w1 * w2 * w3
         N   = sum( w  *  self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) )
         D   = sum( w )
-        D   = D**2
+        D2   = D**2
+        !! FIXME D2  uninitialized
         res(1) = cmplx( ( sum( wt  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wt  ) ) / D2 )
         res(2) = cmplx( ( sum( wp  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wp  ) ) / D2 )
         res(3) = cmplx( ( sum( wph * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wph ) ) / D2 )
@@ -488,7 +489,8 @@ contains
         w   = w1 * w2 * w3
         N   = sum( w  *  self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) )
         D   = sum( w )
-        D   = D**2
+        D2   = D**2
+        !! FIXME D2 uninitialized
         res(1) = cmplx( ( sum( wt  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wt  ) ) / D2 )
         res(2) = cmplx( ( sum( wp  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wp  ) ) / D2 )
         res(3) = cmplx( ( sum( wph * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wph ) ) / D2 )
@@ -515,7 +517,7 @@ contains
         real(dp)                                                 :: dRdangle(3,3)
         real(dp)                                                 :: dapod_tmp(3)
         complex(dp)                                              :: N     !numerator
-        real(dp)                                                 :: D, D2 !denominator        
+        real(dp)                                                 :: D, D2 !denominator
         integer                                                  :: i, win(2,3) ! window boundary array in fortran contiguous format
         type(ori_light)                                          :: or
         ! interpolation kernel window
@@ -556,11 +558,12 @@ contains
         w   = w1 * w2 * w3
         N   = sum( w  *  self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) )
         D   = sum( w )
-        D   = D**2
+        D2   = D**2
+        !! FIXME D2 uninitialized
         res(1) = cmplx( ( sum( wt  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wt  ) ) / D2 )
         res(2) = cmplx( ( sum( wp  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wp  ) ) / D2 )
         res(3) = cmplx( ( sum( wph * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wph ) ) / D2 )
-        fcomp  = cmplx( N / D )        
+        fcomp  = cmplx( N / D )
     end function fdf_interp_fcomp_memo
 
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
