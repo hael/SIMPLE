@@ -274,6 +274,7 @@ contains
             self%spproj_field => null()
             call self%spproj%kill
             call self%eulspace%kill
+            call self%eulspace_red%kill
             call self%img%kill
             call self%img_match%kill_polarizer
             call self%img_match%kill
