@@ -319,7 +319,7 @@ contains
         type(builder)            :: build
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
-        real                     :: x, y
+       ! real                     :: x, y
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif

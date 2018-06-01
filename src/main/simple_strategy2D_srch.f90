@@ -78,7 +78,7 @@ contains
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS)
-        DebugPrint  '>>> strategy2D_srch::CONSTRUCTED NEW SIMPLE_strategy2D_srch OBJECT'
+     !   DebugPrint  '>>> strategy2D_srch::CONSTRUCTED NEW SIMPLE_strategy2D_srch OBJECT'
     end subroutine new
 
     subroutine prep4srch( self )
@@ -146,7 +146,7 @@ contains
                 self%best_shvec = cxy(2:3)
             endif
         endif
-        DebugPrint '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
+      !  DebugPrint '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
 
     subroutine store_solution( self, entropy )
@@ -191,7 +191,7 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'mi_joint',   mi_joint)
         call build_glob%spproj_field%set(self%iptcl, 'frac',       100.*(real(self%nrefs_eval)/real(self%nrefs)))
         if( present(entropy) )call build_glob%spproj_field%set(self%iptcl, 'ent', entropy)
-        DebugPrint  '>>> strategy2D_srch::GOT BEST ORI'
+      !  DebugPrint  '>>> strategy2D_srch::GOT BEST ORI'
     end subroutine store_solution
 
     subroutine kill( self )

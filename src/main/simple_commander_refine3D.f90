@@ -95,13 +95,11 @@ contains
         contains
 
             subroutine gen_random_model( nsamp_in )
-                use simple_kbinterpol,         only: kbinterpol
                 use simple_strategy2D3D_common ! use all in there
                 use simple_image,              only: image
                 integer, optional, intent(in) :: nsamp_in  !< num input samples
                 type(ran_tabu)       :: rt
                 type(ori)            :: orientation
-                type(kbinterpol)     :: kbwin
                 type(ctfparams)      :: ctfvars
                 type(image)          :: mskimg
                 integer, allocatable :: sample(:)

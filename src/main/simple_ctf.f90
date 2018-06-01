@@ -396,7 +396,6 @@ contains
         real,           intent(in)    :: bfac !< b-factor for weighing CTF
         integer :: ldim(3),logi(3),h,k,phys(3)
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3), rnyq_sq, bfac_w
-        complex :: comp
         ! initialize
         call self%init(dfx, dfy, angast)
         rnyq_sq  = real(img%get_nyq()**2)

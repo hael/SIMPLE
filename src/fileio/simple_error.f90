@@ -54,7 +54,7 @@ contains
         character(len=*), intent(in), optional :: file !< filename of caller
         integer,          intent(in), optional :: line !< line number from calling file
         character(len=*), intent(in), optional :: iomsg !< IO message
-        integer                                :: syserr, alloc_status
+        integer                                :: alloc_status
         alloc_status=alloc_stat    !! global variable from simple_defs
         if(present(alloc_err))alloc_status=alloc_err
         if (alloc_status/=0)then

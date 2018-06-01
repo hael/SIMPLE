@@ -922,6 +922,7 @@ contains
         character(len=1) :: form
         integer          :: first_slice, last_slice, iform, ii
         logical          :: isvol, die
+        isvol = .false.
         if( self%existence )then
             dev = self%rmsd()
             die = .false.
@@ -1603,9 +1604,9 @@ contains
                     if( e > 0.5 )then
                         npix = npix + 1
                         if( pack )then
-                            pcavec(npix) = self%rmat(i,j,k)
+                            pcavec(npix) = self%rmat(i,j,1)
                         else
-                            self%rmat(i,j,k) = pcavec(npix)
+                            self%rmat(i,j,1) = pcavec(npix)
                         endif
                     endif
                 enddo
@@ -4139,6 +4140,7 @@ contains
         real, allocatable :: pixels(:)
         ! FT
         didft = .false.
+        background = .true.
         if( self%ft )then
             call self%ifft()
             didft = .true.
@@ -4157,7 +4159,7 @@ contains
         endif
         ! back/foreground
         if( which.eq.'background' )then
-            background = .true.
+           background = .true.
         else if( which.eq.'foreground' )then
             background = .false.
         else
@@ -4339,6 +4341,7 @@ contains
             call self%ifft()
             didft = .true.
         endif
+        avg=0.
         !avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         !$omp parallel do default(shared) private(i,j,k) reduction(+:avg) collapse(3) proc_bind(close) schedule(static)
         do j=1,self%ldim(2)
@@ -4484,6 +4487,9 @@ contains
         real    :: r, sumasq, sumbsq
         integer :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
         logical :: didft1, didft2
+        r = 0.
+        sumasq = 0.
+        sumbsq = 0.
         if( self1.eqdims.self2 )then
             didft1 = .false.
             if( .not. self1%ft )then
@@ -4495,9 +4501,7 @@ contains
                 call self2%fft()
                 didft2 = .true.
             endif
-            r = 0.
-            sumasq = 0.
-            sumbsq = 0.
+
             if( present(lp_dyn) )then
                 lims = self1%fit%loop_lims(1,lp_dyn)
             else
@@ -4607,6 +4611,9 @@ contains
         npix = real(product(self1%ldim))
         ax   = self1%mean()
         ay   = self2%mean()
+        sxx = 0.
+        syy = 0.
+        sxy = 0.
         !$omp parallel do default(shared) private(i,j,k,diff1,diff2) collapse(3) proc_bind(close) schedule(static) reduction(+:sxx,syy,sxy)
         do i=1,self1%ldim(1)
             do j=1,self1%ldim(2)
@@ -5881,6 +5888,7 @@ contains
         ! soft mask width limited to +/- COSMSKHALFWIDTH pixels
         minlen = min(nint(2.*(mskrad+COSMSKHALFWIDTH)), minlen)
         ! soft/hard
+        soft  = .true.
         select case(trim(which))
         case('soft')
             soft  = .true.
@@ -6420,6 +6428,8 @@ contains
         rx2 =  self_in%ldim(1)/2
         ry1 = -self_in%ldim(2)/2
         ry2 =  self_in%ldim(2)/2
+        rye1 = 0.
+        rye2 = 0.
         if(mod(self_in%ldim(1),2) == 0)then
             rx2  =  rx2-1.0
             rxe1 = -self_in%ldim(1)
@@ -6499,6 +6509,8 @@ contains
         rx2 =  self_in%ldim(1)/2
         ry1 = -self_in%ldim(2)/2
         ry2 =  self_in%ldim(2)/2
+        rye1 = 0.
+        rye2 = 0.
         if(mod(self_in%ldim(1),2) == 0)then
             rx2  =  rx2-1.0
             rxe1 = -self_in%ldim(1)
@@ -6652,6 +6664,7 @@ contains
             retl1norm=.true.
             selfcopy = self    ! create copy for comparision
         end if
+        ncured=0
         hwinsz   = 6
         nsigma = 1.0/ sqrt(1.0)
         if( allocated(outliers) ) deallocate(outliers)

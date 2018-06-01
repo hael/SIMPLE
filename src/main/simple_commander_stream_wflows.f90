@@ -214,7 +214,7 @@ contains
     end subroutine exec_preprocess_stream
 
     subroutine exec_cluster2D_stream_distr( self, cline )
-        use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander,scale_project_distr_commander
+        use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander!,scale_project_distr_commander
         use simple_image,                  only: image
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
@@ -228,7 +228,7 @@ contains
         type(parameters)                    :: params
         type(cluster2D_distr_commander)     :: xcluster2D_distr
         type(make_cavgs_distr_commander)    :: xmake_cavgs
-        type(scale_project_distr_commander) :: xscale_distr
+        !type(scale_project_distr_commander) :: xscale_distr
         type(cmdline)                       :: cline_cluster2D, cline_make_cavgs
         type(sp_project)                    :: orig_proj, work_proj, stream_proj
         type(ctfparams)                     :: ctfvars
@@ -596,7 +596,7 @@ contains
         class(pick_extract_stream_distr_commander), intent(inout) :: self
         class(cmdline),                             intent(inout) :: cline
         integer,          parameter   :: WAIT_WATCHER        = 10    ! seconds prior to new stack detection
-        integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
+        !integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         type(parameters)                    :: params
         type(cmdline)                       :: cline_pick_extract
         type(sp_project)                    :: orig_proj, stream_proj

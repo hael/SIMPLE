@@ -34,18 +34,22 @@ implicit none
 private :: raise_sys_error
 public
 
-!> libc interface
+!> glibc interface CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
 interface
 
-    ! rmdir    CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
-    ! On  success,  zero is returned.  On error, -1 is returned, and errno is
-    ! set appropriately.
+    !! rmdir() deletes a directory, which must be empty. On success, zero is
+    !! returned. On error, -1 is returned, and errno is set appropriately.
     function rmdir(dirname) bind(C, name="rmdir")
         use, intrinsic :: iso_c_binding
         integer(c_int) :: rmdir
         character(c_char),dimension(*),intent(in)  ::  dirname
     end function rmdir
 
+    !! mkdir() attempts to create a directory named pathname. mkdir returns zero
+    !! on success, or -1 if an error occurred (in which case, errno is set
+    !! appropriately). If errno equals EEXIST pathname already exists (not
+    !! necessarily as a directory). This includes the case where pathname is a
+    !! symbolic link, dangling or not.
     function mkdir(path,mode) bind(c,name="mkdir")
         use, intrinsic :: iso_c_binding
         integer(c_int) :: mkdir
@@ -53,15 +57,20 @@ interface
         integer(c_int16_t), value :: mode
     end function mkdir
 
+    !! symlink() creates a symbolic link named linkpath to target. On success,
+    !! zero is returned. On error, -1 is returned, and errno is set
+    !! appropriately.
     function symlink(target_path, link_path) bind(c,name="symlink")
         use, intrinsic :: iso_c_binding
         integer(c_int) :: symlink
         character(kind=c_char,len=1),dimension(*),intent(in) :: target_path
         character(kind=c_char,len=1),dimension(*),intent(in) :: link_path
     end function symlink
-    function sync () bind(c,name="sync")
-        integer :: sync
-    end function sync
+
+    !!  sync() causes all buffered modifications to file metadata and data to be
+    !!  written to the underlying filesystems.
+    subroutine sync () bind(c,name="sync")
+    end subroutine sync
 
 end interface
 
@@ -114,7 +123,7 @@ interface
         integer(c_int) :: get_file_list_modified                  !> return success
         character(kind=c_char,len=1),dimension(*),intent(in)   :: path
         character(kind=c_char,len=1),dimension(3),intent(in)   :: ext
-        integer(c_int), intent(inout) :: count                    !> number of elements in results
+        integer(c_int), intent(inout)     :: count                !> number of elements in results
         integer(c_int), intent(in), value :: flag                 !> 1st bit reverse, 2nd bit alphanumeric sort or modified time
     end function get_file_list_modified
 
@@ -122,7 +131,7 @@ interface
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: glob_file_list                           !> return success
-        character(kind=c_char,len=1),dimension(*),intent(in)    :: av  !> glob string
+        character(kind=c_char,len=1),dimension(*),intent(in):: av  !> glob string
         integer(c_int), intent(inout) :: count                     !> number of elements in results
         integer(c_int), intent(in)    :: flag                      !> flag 1=time-modified reverse
     end function glob_file_list
@@ -139,8 +148,7 @@ interface
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: list_dirs                                 !> return success
-        character(kind=c_char,len=1),dimension(*),intent(in)   :: path
-        type(c_ptr) :: file_list_ptr
+        character(kind=c_char,len=1),dimension(*),intent(in):: path !> input pathname
         integer(c_int), intent(inout) :: count                      !> return number of elements in results
     end function list_dirs
 
@@ -154,46 +162,16 @@ interface
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: subprocess                                  !> return PID of forked process
-        character(kind=c_char,len=1),dimension(*),intent(in) :: cmd   !> executable path
-        integer(c_int), intent(in) :: cmdlen
+        character(kind=c_char,len=1),dimension(*),intent(in) :: cmd   !> shell command
+        integer(c_int), intent(in) :: cmdlen                          !> command string length
     end function subprocess
 
     function wait_pid(pid) bind(c,name="wait_pid")
         use, intrinsic :: iso_c_binding
         implicit none
-        integer(c_int) :: wait_pid                                  !> return PID of forked process
+        integer(c_int) :: wait_pid                                    !> return PID of forked process
         integer(c_int), intent(in) :: pid
     end function wait_pid
-
-    function fcopy(file1, len1, file2, len2) bind(c,name="fcopy")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: fcopy                                       !> return success of fcopy
-        character(kind=c_char,len=1),dimension(*),intent(in) :: file1
-        integer(c_int), intent(in) :: len1
-        character(kind=c_char,len=1),dimension(*),intent(in) :: file2
-        integer(c_int), intent(in) :: len2
-    end function fcopy
-
-    function fcopy_mmap(file1, len1, file2, len2) bind(c,name="fcopy_mmap")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: fcopy_mmap                                       !> return success of fcopy
-        character(kind=c_char,len=1),dimension(*),intent(in) :: file1
-        integer(c_int), intent(in) :: len1
-        character(kind=c_char,len=1),dimension(*),intent(in) :: file2
-        integer(c_int), intent(in) :: len2
-      end function fcopy_mmap
-
-    function fcopy2(file1, len1, file2, len2) bind(c,name="fcopy_sendfile")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: fcopy2                                       !> return success of fcopy
-        character(kind=c_char,len=1),dimension(*),intent(in) :: file1
-        integer(c_int), intent(in) :: len1
-        character(kind=c_char,len=1),dimension(*),intent(in) :: file2
-        integer(c_int), intent(in) :: len2
-    end function fcopy2
 
     function touch(filename, len) bind(c,name="touch")
         use, intrinsic :: iso_c_binding
@@ -206,25 +184,29 @@ interface
     subroutine free_file_list(p, n) bind(c, name='free_file_list')
         use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_char
         implicit none
-        type(c_ptr), intent(in), value :: p
+        type(c_ptr),    intent(in), value :: p
         integer(c_int), intent(in), value :: n
     end subroutine free_file_list
 
     function get_absolute_pathname(infile, inlen, outfile, outlen) bind(c,name="get_absolute_pathname")
         use, intrinsic :: iso_c_binding
         implicit none
-        integer(c_int) :: get_absolute_pathname
-        character(kind=c_char,len=1),dimension(*),intent(in) :: infile
-        integer(c_int), intent(in) :: inlen  !> string lengths
-        character(kind=c_char,len=1),dimension(*),intent(inout) :: outfile
-        integer(c_int), intent(out) :: outlen  !> string lengths
+        integer(c_int) :: get_absolute_pathname                             !> return status
+        character(kind=c_char,len=1),dimension(*),intent(in)    :: infile   !> input pathname
+        integer(c_int), intent(in)  :: inlen                                !> input pathname string length
+        character(kind=c_char,len=1),dimension(*),intent(inout) :: outfile  !> output pathname
+        integer(c_int), intent(out) :: outlen                               !> output pathname string length
     end function get_absolute_pathname
 
     function get_sysinfo(HWM, totRAM, shRAM, bufRAM, peakBuf) bind(c,name="get_sysinfo")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: get_sysinfo
-        integer(c_long), intent(inout) :: HWM, totRAM, shRAM, bufRAM, peakBuf
+        integer(c_long), intent(inout) :: HWM                !> high-water mark
+        integer(c_long), intent(inout) :: totRAM             !> total RAM usage
+        integer(c_long), intent(inout) :: shRAM              !> shared RAM usage
+        integer(c_long), intent(inout) :: bufRAM             !> this process's buffered RAM
+        integer(c_long), intent(inout) :: peakBuf            !> this process's peak RAM usage
     end function get_sysinfo
 
 end interface
@@ -259,9 +241,8 @@ contains
     subroutine exec_subprocess( cmdline, pid )
         character(len=*),  intent(in)      :: cmdline
         integer, intent(out)               :: pid
-        character(len=STDLEN)              :: tmp
         character(len=:), allocatable      :: cmd
-        integer                            :: pos, cmdlen
+        integer                            :: cmdlen
         allocate(cmd, source=trim(adjustl(cmdline))//c_null_char)
         cmdlen = len(trim(adjustl(cmd)))
         pid = subprocess( cmd, cmdlen  )
@@ -291,8 +272,7 @@ contains
     !> isenv; return 0 if environment variable is present
     logical function simple_isenv( name )
         character(len=*), intent(in) :: name
-        character(len=STDLEN)        :: varval
-        integer                      :: length, status
+        integer                      :: status
         simple_isenv=.false.
         status=1
         call get_environment_variable( trim(adjustl(name)), status=status)
@@ -321,7 +301,6 @@ contains
 
     subroutine simple_sleep( secs )
         integer, intent(in) :: secs
-        integer(kind=8)     :: longtime
 #if defined(INTEL)
         integer             :: msecs
         msecs = 1000*INT(secs)
@@ -475,9 +454,11 @@ contains
         integer,              intent(inout) :: status
         integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
         logical, optional,    intent(in)    :: doprint
-        logical :: l_print = .true., currently_opened=.false.
+        logical :: l_print, currently_opened
         integer :: funit
         character(len=STDLEN) :: io_message
+        l_print = .true.
+        currently_opened=.false.
 #if defined(GNU)
         allocate(buffer(13), source=0)
         status = stat(trim(adjustl(filename)), buffer)
@@ -528,7 +509,6 @@ contains
         integer, allocatable :: buffer(:)
         character(kind=c_char, len=:), allocatable :: d1
         dir_exists=.false.
-        !        inquire(file=trim(adjustl(dname)), exist = dir_exists)
         allocate(d1,source=trim(adjustl(dname))//achar(0))
         status = isdir(trim(d1), len_trim(d1))
         deallocate(d1)
@@ -632,7 +612,7 @@ contains
         logical,          intent(in), optional  :: ignore
         integer,          intent(out), optional :: status
         character(kind=c_char, len=:), allocatable :: path
-        integer :: io_status, idir, ndirs, lenstr
+        integer :: io_status, lenstr
         logical :: dir_e, ignore_here,  dir_p, qq
         ignore_here = .false.
         io_status=0
@@ -671,7 +651,6 @@ contains
         logical                                   :: dir_e
         integer :: err, length, count
         logical(4) qq
-        character(len=100) :: msg
         io_status=0
         inquire(file=trim(adjustl(d)), exist=dir_e)
         if(dir_e) then
@@ -702,7 +681,6 @@ contains
         character(len=*), optional, intent(in)  :: outfile
         integer,          optional, intent(out) :: status
         character(len=STDLEN), allocatable      :: list(:)
-        character(len=STDLEN)                   :: cur
         character(kind=c_char,len=:), allocatable :: pathhere
         integer :: stat, i,num_dirs, luntmp
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
@@ -727,7 +705,7 @@ contains
         character(len=STDLEN), allocatable :: dirs(:)
         logical,               allocatable :: nrmap(:)
         integer,               allocatable :: dirinds(:)
-        integer :: i, j, last_nr_ind, io_stat, ivar
+        integer :: i, j, last_nr_ind, io_stat
         integer :: next_int_dir_prefix, ndirs
         dirs  = simple_list_dirs(dir2list)
         if( allocated(dirs) )then
@@ -806,10 +784,8 @@ contains
         character(len=*), intent(in)           :: outfile
         logical,          intent(in), optional :: tr !> "ls -tr " reverse time-modified flag
         character(kind=c_char,len=:), allocatable :: thisglob
-        character(1) :: sep='/'
         integer      :: status
-        type(c_ptr)  :: file_list_ptr
-        integer      :: i,num_files, luntmp, time_sorted_flag
+        integer      :: num_files, time_sorted_flag
         time_sorted_flag = 0
         status=0
         if(len(glob)==0) then
@@ -852,9 +828,7 @@ contains
         character(len=*), intent(in), optional   :: glob
         character(len=:), allocatable, intent(out), optional  :: dlist(:)
         integer,          intent(out), optional  :: status
-        type(c_ptr)                                :: listptr
         character(kind=c_char,len=STDLEN), pointer :: list(:)
-        character(len=STDLEN)                      :: cur
         character(kind=c_char,len=:), allocatable  :: thisglob
         integer                                    :: i, glob_elems,iostatus, luntmp
         if(present(glob))then
@@ -902,9 +876,7 @@ contains
         character(len=*), intent(in), optional     :: glob
         integer,          intent(out), optional    :: status
         character(kind=c_char,len=STDLEN), pointer :: list(:)
-        character(len=STDLEN)                      :: cur
         character(kind=c_char,len=:), allocatable  :: thisglob
-        type(c_ptr)                                :: listptr
         integer                                    :: i, glob_elems,iostatus, luntmp
         if(present(glob))then
             allocate(thisglob, source=trim(glob)//c_null_char)
@@ -943,9 +915,8 @@ contains
         character(len=:), allocatable, intent(out), optional    :: dlist(:)
         integer,          intent(out), optional    :: status
         character(kind=c_char,len=STDLEN), pointer :: list(:)
-        character(len=STDLEN)                      :: cur
+        !character(len=STDLEN)                      :: cur
         character(kind=c_char,len=:), allocatable  :: thisglob
-        type(c_ptr)                                :: listptr
         integer                                    :: i, glob_elems,iostatus, luntmp
         if(present(glob))then
             allocate(thisglob, source=trim(glob)//c_null_char)
@@ -1206,11 +1177,10 @@ contains
     subroutine simple_dump_mem_usage(dump_file)
         character(len=*), intent(inout), optional :: dump_file
         character(len=200)    :: filename=' '
-        character(len=80)     :: line
         character(len=8)      :: pid_char=' '
         character(len=STDLEN) :: command
-        integer               :: pid,unit
-        logical               :: ifxst
+        integer               :: pid!,unit
+        !logical               :: ifxst
 #ifdef MACOSX
         print *," simple_dump_mem_usage cannot run on MacOSX"
         return
@@ -1232,12 +1202,10 @@ contains
         character(len=:), allocatable, intent(out) :: absolute_name
         logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                                :: cstring
-        integer(1),          dimension(:), pointer :: iptr
-        character(kind=c_char),            pointer :: fstring(:)
         character(len=LINE_MAX_LEN),       target  :: fstr
         character(kind=c_char,len=STDLEN)          :: infilename_c
         character(kind=c_char,len=LONGSTRLEN)      :: outfilename_c
-        integer :: slen, i
+        !integer :: slen, i
         integer :: lengthin, status, lengthout
         logical :: check_exists_here
         check_exists_here = .true.

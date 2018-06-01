@@ -93,7 +93,7 @@ contains
         class(strategy3D_greedy_multi), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks), state_ws(self%s%nstates)
-        real      :: wcorr, frac, ang_sdev, dist, dist_inpl, euldist
+        real      :: wcorr, frac, ang_sdev, dist_inpl, euldist
         integer   :: best_loc(1), neff_states, state
         logical   :: included(self%s%npeaks)
         ! extract peak info

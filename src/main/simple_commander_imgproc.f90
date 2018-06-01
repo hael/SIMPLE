@@ -138,14 +138,13 @@ contains
 
     !> for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
-        use simple_ctf,         only: ctf
+        !use simple_ctf,         only: ctf
         use simple_procimgfile, only: apply_ctf_imgfile
         class(ctfops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        type(ctf)        :: tfun
-        real             :: dfx, dfy, angast
+        !type(ctf)        :: tfun
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( cline%defined('oritab') .or. cline%defined('deftab') )then
         else
@@ -312,9 +311,9 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: vol2, img, img2
-        real             :: ave, sdev, var, med, smpd_new, smpds_new(2), scale
+        real             :: ave, sdev, var, med, smpd_new, scale
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
-        integer          :: ldims_scaled(2,3)
+        !integer          :: ldims_scaled(2,3)
         character(len=:), allocatable :: fname
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         if( cline%defined('stk') .and. cline%defined('vol1') ) stop 'Cannot operate on images AND volume at once'

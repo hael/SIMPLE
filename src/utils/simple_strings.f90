@@ -41,7 +41,7 @@ contains
     function str2format( str ) result( format )
         character(len=*), intent(in)  :: str
         character(len=:), allocatable :: format
-        integer :: iostat, ivar, ind, i
+        integer :: iostat, ivar, i
         real    :: rvar
         logical :: str_is_file
         i = index(str, '.')

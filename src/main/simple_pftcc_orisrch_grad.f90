@@ -129,7 +129,7 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: grad(D)
-        real(dp)                :: corr, cost
+        real(dp)                :: corr!, cost
         real(dp)                :: corr_grad(5)
         integer :: ithr, irot
         ! thread-safe extraction of projection and derivatives (because pftcc is an OpenMP shared data structure)
@@ -158,7 +158,7 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: corr, cost
-        real(dp)                :: corr_grad(5)
+        !real(dp)                :: corr_grad(5)
         integer   :: ithr, irot
         type(ori) :: e
         ! thread-safe extraction of projection and derivatives (because pftcc is an OpenMP shared data structure)

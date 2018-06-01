@@ -40,7 +40,7 @@ contains
         character(len=:), allocatable :: fbody_here, ext, fname
         real,             allocatable :: shifts(:,:)
         type(image) :: img_jpg
-        integer     :: ldim(3), ldim_thumb(3), status
+        integer     :: ldim(3), ldim_thumb(3)
         real        :: corr, scale
         logical     :: err
         ! check, increment counter & print

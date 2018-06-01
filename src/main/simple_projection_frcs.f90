@@ -175,8 +175,7 @@ contains
         integer, optional,      intent(in) :: state
         real, allocatable :: frc(:)
         real, allocatable :: res(:)
-        real    :: frcmax
-        integer :: sstate, find_plate
+        integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in get_frc')
@@ -231,7 +230,7 @@ contains
         class(projection_frcs), intent(in)  :: self
         integer, optional,      intent(in)  :: state
         real    :: lplims(self%nprojs)
-        integer :: alloc_stat, sstate, iproj
+        integer :: sstate, iproj
         real    :: lp, res_frc05, res_frc0143
         sstate = 1
         if( present(state) ) sstate = state
@@ -252,7 +251,7 @@ contains
         class(projection_frcs), intent(inout) :: self
         character(len=*),       intent(in)    :: fname
         integer          :: funit, io_stat
-        character(len=7) :: stat_str
+        !character(len=7) :: stat_str
         call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
         call fileiochk('projection_frcs; read; open for read '//trim(fname), io_stat)
         read(unit=funit,pos=1) self%file_header
@@ -266,7 +265,7 @@ contains
         class(projection_frcs), intent(in) :: self
         character(len=*),       intent(in) :: fname
         integer          :: funit, io_stat
-        character(len=7) :: stat_str
+        !character(len=7) :: stat_str
         call fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         call fileiochk('projection_frcs; write; open for write '//trim(fname), io_stat)
         write(unit=funit,pos=1) self%file_header

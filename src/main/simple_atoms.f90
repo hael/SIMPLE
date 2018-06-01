@@ -2,7 +2,10 @@
 module simple_atoms
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+!include 'simple_lib.f08'
+use simple_error, only: allocchk
+use simple_strings
+use simple_fileio
 implicit none
 
 public :: atoms
@@ -130,7 +133,7 @@ contains
     subroutine new_instance( self, n )
         class(atoms), intent(inout) :: self
         integer,      intent(inout) :: n
-        integer :: i, alloc_stat
+        integer :: alloc_stat
         call self%kill
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
@@ -349,7 +352,6 @@ contains
     subroutine translate( self, shift )
         class(atoms), intent(inout) :: self
         real,         intent(in)    :: shift(3)
-        integer :: i
         self%xyz(:,1) = self%xyz(:,1) + shift(1)
         self%xyz(:,2) = self%xyz(:,2) + shift(2)
         self%xyz(:,3) = self%xyz(:,3) + shift(3)

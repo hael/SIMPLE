@@ -291,7 +291,7 @@ contains
             phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
         endif
     end function comp_addr_phys1
-  pure function comp_addr_phys2(self,h,k,m) result(phys)
+    pure function comp_addr_phys2(self,h,k,m) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: h,k,m !<  Logical address
         integer :: phys(3)                 !<  Physical address
@@ -305,6 +305,7 @@ contains
             phys(3) = -m + 1 + MERGE(self%ldim(3),0, -m < 0)
         endif
     end function comp_addr_phys2
+
     !> \brief Convert physical address to logical address. Complex image.
     function comp_addr_logi(self,phys) result(logi)
         class(ftiter), intent(in) :: self

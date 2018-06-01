@@ -67,7 +67,6 @@ contains
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
         integer(kind=8)    :: filesz
         integer            :: isegment
-        character(len=512) :: io_message
         if( present(del_if_exists) )then
             if( del_if_exists )then
                 call del_file(trim(fname))

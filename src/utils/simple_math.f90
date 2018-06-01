@@ -524,7 +524,6 @@ contains
         allocate(  mask(ndat), labels(ndat), stat=alloc_stat )
         if(alloc_stat /= 0) call allocchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
-        !$ allocate(dat_sorted(ndat))
         dat_sorted = dat
         call hpsort(dat_sorted)
         clssz = int(real(ndat)/real(ncls))

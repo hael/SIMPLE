@@ -340,7 +340,7 @@ contains
             call spproj%os_mic%getter(1, 'movie', moviename)
             call find_ldim_nptcls(moviename, lfoo, nframes)
             ! calculate time_per_frame
-            params%time_per_frame = params%exp_time/real(nframes*nmovies)
+            params%time_per_frame = params%exp_time/real(nframes*nmovies) !! nmovies initialized
         endif
         ! align
         frame_counter = 0
@@ -550,7 +550,7 @@ contains
         type(image)                   :: micrograph
         type(ori)                     :: o_mic
         type(ctfparams)               :: ctfparms
-        character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind, ctfstr, phplate
+        character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind!, ctfstr!, phplate
         real,             allocatable :: boxdata(:,:)
         logical,          allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN)     :: stack
@@ -751,7 +751,7 @@ contains
         endif
         ! command lines
         cline_extract = cline
-        call cline_extract%set('dir', trim(output_dir_extract))
+        call cline_extract%set('dir', trim(output_dir_extract)) !! output_dir_extract may be used uninitialized
         call cline_extract%set('pcontrast', params%pcontrast)
         if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
         call cline%delete('box')

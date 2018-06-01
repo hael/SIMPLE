@@ -276,7 +276,7 @@ contains
     subroutine fftshift3cc(fftimage,lims)
         complex(kind=dp), intent(inout) :: fftimage(:,:,:)
         integer, intent(in) :: lims(3,2)
-        integer :: nx,ny,nz,lbx,lby,lbz
+        integer :: nx,ny,nz!,lbx,lby,lbz
         complex(kind=dp), allocatable  :: tmp(:,:,:)
         integer :: i,j,k,ii,jj,kk
         verbose=.true.

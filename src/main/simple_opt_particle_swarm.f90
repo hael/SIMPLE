@@ -48,7 +48,7 @@ contains
         real, intent(out)                        :: lowest_cost !< lowest cost
         integer :: t                !< iteration counter
         integer :: npeaks           !< number of local minima
-        real    :: rtol             !< relative tolerance
+        !real    :: rtol             !< relative tolerance
         real    :: costs(spec%npop) !< particle costs
         integer :: loc(1), nworse
         if( .not. associated(spec%costfun) )then

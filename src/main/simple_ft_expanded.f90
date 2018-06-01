@@ -364,7 +364,7 @@ contains
     function corr_shifted_8( self1, self2, shvec ) result( r )
         class(ft_expanded), intent(inout) :: self1, self2 !< instances
         real(dp), intent(in)              :: shvec(2)
-        real(dp)                          :: r,arg
+        real(dp)                          :: r
         integer                           :: hind,kind
         if ( self1.eqdims.self2 ) then
             call calc_tmpmat_re(self1, self2, shvec)

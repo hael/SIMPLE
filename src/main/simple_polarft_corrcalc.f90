@@ -893,7 +893,6 @@ contains
         complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop), pft_dref(1:self%pftsz,self%kfromto(1):kstop,nderivs)
         real(dp),                intent(out)   :: T1_k(self%kfromto(1):kstop,nderivs), T2_k(self%kfromto(1):kstop,nderivs)
         integer                                :: k, rot, j
-        complex(dp)                            :: tmp_y (self%kfromto(1):kstop)
         complex(dp)                            :: tmp_T1(self%kfromto(1):kstop,nderivs)
         complex(dp)                            :: tmp_T2(self%kfromto(1):kstop,nderivs)
         if( irot >= self%pftsz + 1 )then
@@ -1235,7 +1234,7 @@ contains
         real,                    intent(out)   :: euclids(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: euclids_over_k(:)
-        real(sp) :: sqsum_ref, sqsum_ptcl
+        real(sp) :: sqsum_ref
         integer  :: ithr
         ithr           =  omp_get_thread_num() + 1
         pft_ref        => self%heap_vars(ithr)%pft_ref
@@ -1680,7 +1679,7 @@ contains
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:), pft_dref(:,:,:)
         real(dp),    pointer :: argmat(:,:)
         real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)
-        real(dp) :: cc, corrk, sqsumk_ref, sqsumk_ptcl, fdf_yk
+        real(dp) :: cc, sqsumk_ref, sqsumk_ptcl, fdf_yk
         real(dp) :: bfac_weight, denomk
         integer  :: ithr, k, j
         ithr    =  omp_get_thread_num() + 1

@@ -150,7 +150,7 @@ contains
         type(oris)                    :: os
         character(len=:), allocatable :: file_w_states, projfile, oritype
         integer,          allocatable :: states(:)
-        integer :: n_lines, state, fnr, iseg, noris, i
+        integer :: n_lines, fnr, iseg, noris, i
         ! parse command line
         projfile      = cline%get_carg('projfile')
         file_w_states = cline%get_carg('infile')
@@ -194,16 +194,16 @@ contains
         use simple_binoris,    only: binoris
         use simple_sp_project, only: oritype2segment
         use simple_binoris,    only: binoris
-        use simple_ori,        only: ori
+        !use simple_ori,        only: ori
         class(print_project_vals_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(binoris)                 :: bos_doc
         character(len=:), allocatable :: keys, fname, oritype, str
         logical,          allocatable :: keys_present(:)
         character(len=STDLEN)         :: args(32)
-        logical    :: ischar, isthere
+        logical    :: ischar
         type(oris) :: os
-        type(ori)  :: o
+        !type(ori)  :: o
         integer    :: nargs, iseg, noris, ikey, iori, state
         real       :: rval, norm(3)
         ! parse the keys
@@ -445,7 +445,7 @@ contains
         use simple_binoris_io ! use all in there
         class(import_particles_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        character(len=STDLEN)         :: projfile
+        !character(len=STDLEN)         :: projfile
         character(len=:), allocatable :: phaseplate, ctfstr
         real,             allocatable :: line(:)
         type(parameters) :: params

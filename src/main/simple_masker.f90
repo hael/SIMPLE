@@ -110,7 +110,7 @@ contains
         character(len=*), optional, intent(inout) :: pdbout
         type(image) :: distimg
         type(atoms) :: shifted_pdb
-        real        :: centre(3), shift(3), pdb_center(3), xyz(3), minmax(2), radius, smpd
+        real        :: centre(3), shift(3), pdb_center(3), minmax(2), radius, smpd
         integer     :: i
         logical     :: was_ft
         if( vol_inout%is_2d() )stop 'sphere_mask is intended for volumes only, simple_masker::sphere_mask'

@@ -18,7 +18,7 @@ contains
         type(image) :: img1_img2, img1_temp, img2_temp,&
             img1_sq,img2_sq, mu1, mu2, mu1_sq, mu2_sq, mu1_mu2, &
             sigma1_sq, sigma2_sq, sigma12, ssim_temp
-        type(image) :: luminance, contrast, structure, sigma1, sigma2
+        type(image) ::  contrast, luminance,  structure, sigma1, sigma2
         integer :: w(3)
         integer :: ldim(3) , nChan
         nChan = 1

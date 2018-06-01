@@ -153,9 +153,9 @@ contains
     function grad_shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(out)   :: irot
-        real    :: cost, corrs(self%nrots), cxy(3)
-        real    :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
-        integer :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh
+        real    :: corrs(self%nrots), cxy(3)
+        real    :: lowest_cost, lowest_cost_overall, lowest_shift(2)
+        integer :: loc(1), i, lowest_rot
         logical :: found_better
         found_better      = .false.
         call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
