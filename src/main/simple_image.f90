@@ -6152,7 +6152,7 @@ contains
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
         ! now scale the values so that a ifft() of the output yields the
         ! original image back, rather than a scaled version
-        self%cmat = self%cmat/real(product(self%ldim))
+        self%cmat = self%cmat/sqrt(real(product(self%ldim)))
         self%ft = .true.
     end subroutine fwd_ft
 
@@ -6162,6 +6162,8 @@ contains
         class(image), intent(inout) :: self
         if( self%ft )then
             call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
+            ! now scale the values accordingly
+            self%rmat = self%rmat/sqrt(real(product(self%ldim)))
             self%ft = .false.
             if( shift_to_phase_origin ) call self%shift_phorig
         endif
