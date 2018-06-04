@@ -55,11 +55,13 @@ contains
     procedure, private :: add_scale_tag
     ! os_out related methods
     procedure          :: add_cavgs2os_out
+    procedure          :: add_fsc2os_out
     procedure          :: add_frcs2os_out
     procedure          :: add_vol2os_out
     procedure, private :: add_entry2os_out
     procedure          :: get_cavgs_stk
     procedure          :: get_vol
+    procedure          :: get_fsc
     procedure          :: get_frcs
     procedure          :: get_nptcls_from_osout
     ! getters
@@ -1027,6 +1029,47 @@ contains
         call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
     end subroutine add_frcs2os_out
 
+    subroutine add_fsc2os_out( self, fsc, state, box)
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fsc
+        integer,           intent(in)    :: state, box
+        character(len=:), allocatable :: fsc_abspath, imgkind
+        integer :: i, ind, n_os_out
+        ! full path and existence check
+        call simple_full_path(fsc, fsc_abspath, 'sp_project :: add_fsc2os_out')
+        ! add os_out entry
+        ! check if field is empty
+        n_os_out = self%os_out%get_noris()
+        if( n_os_out == 0 )then
+            n_os_out = 1
+            ind      = 1
+            call self%os_out%new(n_os_out)
+        else
+            ind = 0
+            do i=1,n_os_out
+                if( self%os_out%isthere(i,'imgkind') )then
+                    call self%os_out%getter(i,'imgkind',imgkind)
+                    if(trim(imgkind).eq.'fsc')then
+                        if( self%os_out%get_state(i) == state )then
+                            ind = i
+                            exit
+                        endif
+                    endif
+                endif
+            end do
+            if( ind == 0 )then
+                n_os_out = n_os_out + 1
+                call self%os_out%reallocate(n_os_out)
+                ind = n_os_out
+            endif
+        endif
+        ! fill-in field
+        call self%os_out%set(ind, 'fsc',     trim(fsc_abspath))
+        call self%os_out%set(ind, 'imgkind', 'fsc')
+        call self%os_out%set(ind, 'state',   real(state))
+        call self%os_out%set(ind, 'box',   real(box))
+    end subroutine add_fsc2os_out
+
     subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: vol, which_imgkind
@@ -1035,10 +1078,10 @@ contains
         character(len=:), allocatable :: vol_abspath, imgkind
         integer :: n_os_out, ind, i, ldim(3), ifoo
         select case(trim(which_imgkind))
-            case('vol_cavg','vol')
+            case('vol_cavg','vol','vol_filt','vol_msk')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid VOL kind: ', trim(which_imgkind)
+                write(*,*)'Invalid VOL kind: ', trim(which_imgkind), '; sp_project :: add_vol2os_out'
                 stop 'sp_project :: add_vol2os_out'
         end select
         ! full path and existence check
@@ -1052,23 +1095,44 @@ contains
             ind      = 1
             call self%os_out%new(n_os_out)
         else
-            ind = 0
-            do i=1,n_os_out
-                if( self%os_out%isthere(i,'imgkind') )then
-                    call self%os_out%getter(i,'imgkind',imgkind)
-                    if(trim(imgkind).eq.trim(which_imgkind))then
-                        if( self%os_out%get_state(i) == state )then
-                            ind = i
-                            exit
+            select case(trim(which_imgkind))
+                case('vol_msk','vol_cavg')
+                    ! one volume type for all states
+                    ind = 0
+                    do i=1,n_os_out
+                        if( self%os_out%isthere(i,'imgkind') )then
+                            call self%os_out%getter(i,'imgkind',imgkind)
+                            if(trim(imgkind).eq.trim(which_imgkind))then
+                                ind = i
+                                exit
+                            endif
                         endif
+                    end do
+                    if( ind == 0 )then
+                        n_os_out = n_os_out + 1
+                        call self%os_out%reallocate(n_os_out)
+                        ind = n_os_out
                     endif
-                endif
-            end do
-            if( ind == 0 )then
-                n_os_out = n_os_out + 1
-                call self%os_out%reallocate(n_os_out)
-                ind = n_os_out
-            endif
+                case DEFAULT
+                    ! one volume per state
+                    ind = 0
+                    do i=1,n_os_out
+                        if( self%os_out%isthere(i,'imgkind') )then
+                            call self%os_out%getter(i,'imgkind',imgkind)
+                            if(trim(imgkind).eq.trim(which_imgkind))then
+                                if( self%os_out%get_state(i) == state )then
+                                    ind = i
+                                    exit
+                                endif
+                            endif
+                        endif
+                    end do
+                    if( ind == 0 )then
+                        n_os_out = n_os_out + 1
+                        call self%os_out%reallocate(n_os_out)
+                        ind = n_os_out
+                    endif
+            end select
         endif
         ! fill-in field
         call self%os_out%set(ind, 'vol',     trim(vol_abspath))
@@ -1159,34 +1223,53 @@ contains
         integer,                       intent(out)   :: box
         character(len=:), allocatable :: imgkind_here
         integer :: i, ind, cnt
-        logical :: l_state, found
         select case(trim(imgkind))
-            case('vol_cavg','vol')
+            case('vol_cavg','vol','vol_filt','vol_msk')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid VOL kind: ', trim(imgkind)
+                write(*,*)'Invalid VOL kind: ', trim(imgkind), '; sp_project :: get_vol'
                 stop 'sp_project :: get_vol'
         end select
         ! defaults
         if( allocated(vol_fname) ) deallocate(vol_fname)
-        allocate(vol_fname, source=NIL)
+        allocate(vol_fname, source='')
         box  = 0
         smpd = 0.
         ! fetch index
-        ind   = 0
-        cnt   = 0
-        do i=1,self%os_out%get_noris()
-            if( self%os_out%isthere(i,'imgkind') )then
-                call self%os_out%getter(i,'imgkind',imgkind_here)
-                if(trim(imgkind).eq.trim(imgkind_here))then
-                    if( self%os_out%get_state(i).eq.state )then
-                        ind = i
-                        cnt = cnt + 1
+        ind = 0
+        cnt = 0
+        select case(trim(imgkind))
+            case('vol_cavg', 'vol_msk')
+                do i=1,self%os_out%get_noris()
+                    if( self%os_out%isthere(i,'imgkind') )then
+                        call self%os_out%getter(i,'imgkind',imgkind_here)
+                        if(trim(imgkind).eq.trim(imgkind_here))then
+                            ind = i
+                            cnt = cnt + 1
+                        endif
                     endif
-                endif
+                enddo
+            case DEFAULT
+                do i=1,self%os_out%get_noris()
+                    if( self%os_out%isthere(i,'imgkind') )then
+                        call self%os_out%getter(i,'imgkind',imgkind_here)
+                        if(trim(imgkind).eq.trim(imgkind_here))then
+                            if( self%os_out%get_state(i).eq.state )then
+                                ind = i
+                                cnt = cnt + 1
+                            endif
+                        endif
+                    endif
+                enddo
+        end select
+        if( cnt == 0 )then
+            if( trim(imgkind).eq.'vol_msk')then
+                ! we do not fall over if the volume mask is absent
+                return
+            else
+                stop 'ERROR! no os_out entry with imgkind=volXXX identified, aborting...; sp_project :: get_vol'
             endif
-        enddo
-        if( cnt == 0 )stop 'ERROR! no os_out entry with imgkind=volXXX identified, aborting...; sp_project :: get_vol'
+        endif
         if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=volXXX, aborting...; sp_project :: get_vol'
         ! set output
         deallocate(vol_fname)
@@ -1194,6 +1277,38 @@ contains
         smpd = self%os_out%get(ind,  'smpd')
         box  = self%os_out%get(ind,  'box')
     end subroutine get_vol
+
+    subroutine get_fsc( self, state, fsc_fname, box )
+        class(sp_project),             intent(inout) :: self
+        integer,                       intent(in)    :: state
+        character(len=:), allocatable, intent(inout) :: fsc_fname
+        integer,                       intent(out)   :: box
+        character(len=:), allocatable :: imgkind_here
+        integer :: i, ind, cnt
+        ! defaults
+        if( allocated(fsc_fname) ) deallocate(fsc_fname)
+        allocate(fsc_fname, source=NIL)
+        ! fetch index
+        ind   = 0
+        cnt   = 0
+        do i=1,self%os_out%get_noris()
+            if( self%os_out%isthere(i,'imgkind') )then
+                call self%os_out%getter(i,'imgkind',imgkind_here)
+                if(trim(imgkind_here).eq.'fsc')then
+                    if( self%os_out%get_state(i).eq.state )then
+                        ind = i
+                        cnt = cnt + 1
+                    endif
+                endif
+            endif
+        enddo
+        if( cnt == 0 )stop 'ERROR! no os_out entry with imgkind=fsc identified, aborting...; sp_project :: get_fsc'
+        if( cnt > 1 ) stop 'ERROR! multiple os_out entries with imgkind=fsc, aborting...; sp_project :: get_fsc'
+        ! set output
+        deallocate(fsc_fname)
+        call self%os_out%getter(ind, 'fsc', fsc_fname)
+        box = nint(self%os_out%get(ind, 'box'))
+    end subroutine get_fsc
 
     subroutine get_frcs( self, frcs, which_imgkind, fail )
         class(sp_project),             intent(inout) :: self

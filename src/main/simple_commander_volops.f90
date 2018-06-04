@@ -144,76 +144,129 @@ contains
     end subroutine exec_centervol
 
     subroutine exec_postprocess(self, cline)
+        use simple_sp_project,    only: sp_project
         use simple_estimate_ssnr, only: fsc2optlp
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)  :: params
-        type(builder)     :: build
-        type(image)       :: vol_copy, vol_filt
+        type(image)       :: vol, vol_copy, vol_filt
         type(masker)      :: mskvol
-        real, allocatable :: fsc(:), optlp(:), res(:)
-        real              :: fsc0143, fsc05
-        integer           :: state, ldim(3)
-        call build%init_params_and_build_general_tbox(cline,params)
-        if( cline%defined('projfile') )then
-
-            ! 2do
-
-        else if( cline%defined('vol1') )then
-            state = 1
-            call build%vol%read(params%vols(state))
-            call build%vol%fft()
+        type(sp_project)  :: spproj
+        character(len=:), allocatable :: vol_fname, fsc_fname, vol_filt_fname, mskfile_fname
+        real,             allocatable :: fsc(:), optlp(:), res(:)
+        real              :: fsc0143, fsc05, smpd, mskfile_smpd
+        integer           :: state, box, fsc_box, mskfile_box, ldim(3)
+        logical           :: has_fsc, has_vol_filt, has_mskfile
+        ! set oritype
+        call cline%set('oritype', 'out')
+        ! parse commad-line
+        call params%new(cline)
+        ! read project segment
+        call spproj%read_segment(params%oritype, params%projfile)
+        ! state
+        if( cline%defined('state') )then
+            state = params%state
         else
-            stop 'ERROR! either projfile or vol1 needs to be part of command line; commander_volops :: postprocess'
+            state = 1
         endif
-        params%outvol = add2fbody(trim(params%vols(state)), params%ext, PPROC_SUFFIX)
-        if( cline%defined('fsc') )then
-            ! optimal low-pass filter from FSC
-            if( file_exists(params%fsc) )then
-                fsc   = file2rarr(params%fsc)
-                optlp = fsc2optlp(fsc)
+        ! check volume, gets correct smpd & box
+        call spproj%get_vol('vol', state, vol_fname, smpd, box)
+        if( .not.file_exists(vol_fname) )then
+            write(*,*)'Volume does not exist; simple_commander_volops :: exec_postprocess:', trim(vol_fname)
+            stop 'Volume does not exist; simple_commander_volops :: exec_postprocess'
+        endif
+        ! check fsc filter
+        has_fsc = .false.
+        if( params%eo.eq.'no' .or. cline%defined('lp') )then
+            ! all good
+        else
+            if( cline%defined('fsc') )then
+                ! all good
             else
-                write(*,*) 'FSC file: ', trim(params%fsc), ' not in cwd'
-                stop
+                call spproj%get_fsc(state, fsc_fname, fsc_box)
+                params%fsc = trim(fsc_fname)
             endif
-            res = build%vol%get_res()
+            if( .not.file_exists(params%fsc) )then
+                write(*,*) 'FSC file: ', trim(params%fsc), ' not found'
+                stop 'FSC file: not found'
+            else
+                has_fsc = .true.
+            endif
+        endif
+        ! check volume filter
+        has_vol_filt = .false.
+        if( params%eo.eq.'no' .or. cline%defined('lp') )then
+            ! all good
+        else
+            if( cline%defined('vol_filt') )then
+                ! all good
+            else
+                call spproj%get_vol('vol_filt', state, vol_filt_fname, smpd, box)
+                params%vol_filt = trim(vol_filt_fname)
+            endif
+            if( .not.file_exists(params%vol_filt) )then
+                write(*,*) 'Volume filter: ', trim(params%vol_filt), ' not found'
+                stop 'Volume filter file: not found'
+            else
+                has_vol_filt = .true.
+            endif
+        endif
+        ! check volume mask
+        has_mskfile = .false.
+        if( cline%defined('mskfile') )then
+            if( .not.file_exists(params%mskfile) )then
+                write(*,*) 'Volume mask file: ', trim(params%vol_filt), ' not found'
+                stop 'Volume mask file: not found'
+            else
+                has_mskfile = .true.
+            endif
+        else
+            call spproj%get_vol('vol_msk', 1, mskfile_fname, mskfile_smpd, mskfile_box)
+            params%mskfile = trim(mskfile_fname)
+            if( file_exists(params%mskfile) )has_mskfile = .true.
+        endif
+        ! read volume
+        params%outvol = basename(add2fbody(trim(vol_fname), params%ext, PPROC_SUFFIX))
+        ldim = [box,box,box]
+        call vol%new(ldim, smpd)
+        call vol%read(vol_fname)
+        call vol%fft()
+        if( has_fsc )then
+            ! resolution & optimal low-pass filter from FSC
+            fsc   = file2rarr(params%fsc)
+            optlp = fsc2optlp(fsc)
+            res   = vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
             where(res < TINY) optlp = 0.
         endif
-        if( cline%defined('vol_filt') )then
-            ! optimal low-pass filter from input vol_filt
-            call vol_filt%new(build%vol%get_ldim(), params%smpd)
+        if( cline%defined('lp') )then
+            ! low-pass overrides all input
+            call vol%bp(0., params%lp)
+        else if( has_vol_filt )then
+            ! optimal low-pass filter from vol_filt
+            call vol_filt%new(ldim, smpd)
             call vol_filt%read(params%vol_filt)
-            call build%vol%apply_filter(vol_filt)
+            call vol%apply_filter(vol_filt)
             call vol_filt%kill
-        else if( cline%defined('fsc') )then
+        else if( has_fsc )then
             ! optimal low-pass filter from FSC
-            call build%vol%apply_filter(optlp)
-        else if( cline%defined('lp') )then
-            ! ad hoc low-pass filter
-            call build%vol%bp(0., params%lp)
+            call vol%apply_filter(optlp)
         else
             write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
             stop 'simple_commander_volops :: exec_postprocess'
         endif
-        call vol_copy%copy(build%vol)
-        ! B-fact
-        if( cline%defined('bfac') ) call build%vol%apply_bfac(params%bfac)
+        call vol_copy%copy(vol)
+        ! B-factor
+        if( cline%defined('bfac') ) call vol%apply_bfac(params%bfac)
         ! final low-pass filtering for smoothness
-        if( cline%defined('fsc')  ) call build%vol%bp(0., fsc0143)
+        if( has_fsc ) call vol%bp(0., fsc0143)
         ! masking
-        call build%vol%ifft()
-        if( cline%defined('mskfile') )then
-            if( file_exists(params%mskfile) )then
-                ldim = build%vol%get_ldim()
-                call build%vol%zero_background
-                call mskvol%new(ldim, params%smpd)
-                call mskvol%read(params%mskfile)
-                call build%vol%mul(mskvol)
-            else
-                write(*,*) 'file: ', trim(params%mskfile)
-                stop 'maskfile does not exists in cwd'
-            endif
+        call vol%ifft()
+        if( has_mskfile )then
+            call vol%zero_background
+            call mskvol%new(ldim, smpd)
+            call mskvol%read(params%mskfile)
+            call vol%mul(mskvol)
         else if( params%automsk .eq. 'yes' )then
             if( .not. cline%defined('thres') )then
                 write(*,*) 'Need a pixel threshold > 0. for the binarisation'
@@ -227,160 +280,33 @@ contains
                 write(*,*) 'Molecular weight must be provided for auto-masking (MW)'
                 stop 'commander_volops :: postprocess'
             endif
-            call vol_copy%ifft()
-            call mskvol%automask3D( vol_copy)
+            call vol_copy%ifft
+            call mskvol%automask3D(vol_copy)
             call mskvol%write('automask'//params%ext)
-            call build%vol%zero_background
-            call build%vol%mul(mskvol)
+            call vol%zero_background
+            call vol%mul(mskvol)
+            call mskvol%kill
         else
             if( params%l_innermsk )then
-                call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+                call vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
             else
-                call build%vol%mask(params%msk, 'soft')
+                call vol%mask(params%msk, 'soft')
             endif
         endif
-        ! output
-        call build%vol%write(params%outvol)
+        ! output in cwd
+        call vol%write(params%outvol)
         ! also output mirrored by default (unless otherwise stated on command line)
         if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
-            call build%vol%mirror('x')
+            call vol%mirror('x')
             params%outvol = add2fbody(params%outvol, params%ext, '_mirr')
-            call build%vol%write(params%outvol)
+            call vol%write(params%outvol)
         endif
         ! destruct
+        call spproj%kill
+        call vol%kill
         call vol_copy%kill
-        call mskvol%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
-
-    ! subroutine exec_postprocess(self, cline)
-    !     use simple_sp_project,    only sp_roject
-    !     use simple_estimate_ssnr, only: fsc2optlp
-    !     class(postprocess_commander), intent(inout) :: self
-    !     class(cmdline),               intent(inout) :: cline
-    !     type(parameters)  :: params
-    !     ! type(builder)     :: build
-    !     type(image)       :: vol, vol_copy, vol_filt
-    !     type(masker)      :: mskvol
-    !     type(sp_project)  :: spproj
-    !     character(len=:), allocatable :: vol_fname
-    !     real, allocatable :: fsc(:), optlp(:), res(:)
-    !     real              :: fsc0143, fsc05, smpd
-    !     integer           :: state, box, ldim(3)
-    !     ! set oritype
-    !     call cline%set('oritype', 'out')
-    !     ! parse commad-line
-    !     call params%new(cline)
-    !     ! read project segment
-    !     call spproj%read_segment(params%oritype, params%projfile)
-    !     ! ! build general toolbox & project
-    !     ! call build%init_params_and_build_general_tbox(cline,params)
-    !     ! set state
-    !     if( cline%defined('state') )then
-    !         state = params%state
-    !     else
-    !         state = 1
-    !     endif
-    !     call spproj%get_vol(params%imgkind, state, vol_fname, smpd, box)
-    !     if( .not.file_exists(vol_fname) )then
-    !         write(*,*)'Volume does not exist; simple_commander_volops :: exec_postprocess:', trim(vol_fname)
-    !         stop 'Volume does not exist; simple_commander_volops :: exec_postprocess'
-    !     endif
-    !     write(*,*)'!!!!!!!!! smpd postprocess:',params%smpd, smpd
-    !     write(*,*)'!!!!!!!!! lp postprocess:',params%lp,cline%defined('lp')
-    !     write(*,*)'!!!!!!!!! eo postprocess:',params%eo,cline%defined('eo')
-    !     params%outvol = basename(add2fbody(trim(vol_fname), params%ext, PPROC_SUFFIX))
-    !     ldim = [box,box,box]
-    !     call vol%new(ldim, smpd)
-    !     call vol%read(vol_fname)
-    !     call vol%fft()
-    !     if( cline%defined('fsc') )then
-    !         ! resolution & optimal low-pass filter from FSC
-    !         if( file_exists(params%fsc) )then
-    !             fsc = file2rarr(params%fsc)
-    !         else
-    !             write(*,*) 'FSC file: ', trim(params%fsc), ' not in cwd'
-    !             stop 'FSC file: not in cwd'
-    !         endif
-    !         optlp = fsc2optlp(fsc)
-    !         res   = vol%get_res()
-    !         call get_resolution( fsc, res, fsc05, fsc0143 )
-    !         where(res < TINY) optlp = 0.
-    !     endif
-    !     if( cline%defined('lp') )then
-    !         ! low-pass overrides all input
-    !         call vol%bp(0., params%lp)
-    !     else if( cline%defined('vol_filt') )then
-    !         ! optimal low-pass filter from input vol_filt
-    !         call vol_filt%new(ldim, smpd)
-    !         call vol_filt%read(params%vol_filt)
-    !         call vol%apply_filter(vol_filt)
-    !         call vol_filt%kill
-    !     else if( cline%defined('fsc') )then
-    !         ! optimal low-pass filter from FSC
-    !         call vol%apply_filter(optlp)
-    !     else
-    !         write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
-    !         stop 'simple_commander_volops :: exec_postprocess'
-    !     endif
-    !     call vol_copy%copy(vol)
-    !     ! B-factor
-    !     if( cline%defined('bfac') ) call vol%apply_bfac(params%bfac)
-    !     ! final low-pass filtering for smoothness
-    !     if( cline%defined('fsc')  ) call vol%bp(0., fsc0143)
-    !     ! masking
-    !     call vol%ifft()
-    !     if( cline%defined('mskfile') )then
-    !         if( file_exists(params%mskfile) )then
-    !             call vol%zero_background
-    !             call mskvol%new(ldim, smpd)
-    !             call mskvol%read(params%mskfile)
-    !             call vol%mul(mskvol)
-    !         else
-    !             write(*,*) 'file: ', trim(params%mskfile)
-    !             stop 'maskfile does not exists in cwd'
-    !         endif
-    !     else if( params%automsk .eq. 'yes' )then
-    !         if( .not. cline%defined('thres') )then
-    !             write(*,*) 'Need a pixel threshold > 0. for the binarisation'
-    !             write(*,*) 'Procedure for obtaining thresh:'
-    !             write(*,*) '(1) postproc vol without bfac or automsk'
-    !             write(*,*) '(2) Use UCSF Chimera to look at the volume'
-    !             write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
-    !             stop 'commander_volops :: postprocess'
-    !         endif
-    !         if( .not. cline%defined('mw') )then
-    !             write(*,*) 'Molecular weight must be provided for auto-masking (MW)'
-    !             stop 'commander_volops :: postprocess'
-    !         endif
-    !         call vol_copy%ifft()
-    !         call mskvol%automask3D( vol_copy)
-    !         call mskvol%write('automask'//params%ext)
-    !         call vol%zero_background
-    !         call vol%mul(mskvol)
-    !     else
-    !         if( params%l_innermsk )then
-    !             call vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-    !         else
-    !             call vol%mask(params%msk, 'soft')
-    !         endif
-    !     endif
-    !     ! output in cwd
-    !     call vol%write(params%outvol)
-    !     ! also output mirrored by default (unless otherwise stated on command line)
-    !     if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
-    !         call vol%mirror('x')
-    !         params%outvol = add2fbody(params%outvol, params%ext, '_mirr')
-    !         call vol%write(params%outvol)
-    !     endif
-    !     ! destruct
-    !     call spproj%kill
-    !     call vol%kill
-    !     call vol_filt%kill
-    !     call vol_copy%kill
-    !     call mskvol%kill
-    !     call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
-    ! end subroutine exec_postprocess
 
     !> exec_project generate projections from volume
     !! \param cline command line

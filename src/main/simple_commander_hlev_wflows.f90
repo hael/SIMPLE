@@ -144,7 +144,7 @@ contains
             call spproj%kill
             scale_stage2 = cline_scale2%get_rarg('scale')
             scaling      = trim(projfile_sc) /= params%projfile
-            if( scaling ) call xscale_distr%execute( cline_scale2 )
+            if( scaling )call xscale_distr%execute( cline_scale2 )
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(projfile_sc))
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
@@ -607,566 +607,6 @@ contains
 
     end subroutine exec_initial_3Dmodel
 
-    ! !> for heterogeinity analysis
-    ! subroutine exec_cluster3D( self, cline )
-    !     use simple_binoris_io,       only: binread_oritab, binwrite_oritab
-    !     use simple_oris,             only: oris
-    !     use simple_sym,              only: sym
-    !     use simple_commander_volops, only: postprocess_commander
-    !     use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
-    !     class(cluster3D_commander), intent(inout) :: self
-    !     class(cmdline),             intent(inout) :: cline
-    !     ! constants
-    !     integer,          parameter :: MAXITS1 = 50
-    !     integer,          parameter :: MAXITS2 = 40
-    !     character(len=*), parameter :: one     = '01'
-    !     ! distributed commanders
-    !     type(refine3D_distr_commander)       :: xrefine3D_distr
-    !     type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
-    !     ! shared-mem commanders
-    !     type(postprocess_commander) :: xpostprocess
-    !     ! command lines
-    !     type(cmdline) :: cline_refine3D1, cline_refine3D2
-    !     type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
-    !     type(cmdline) :: cline_postprocess
-    !     ! other variables
-    !     type(parameters)              :: params
-    !     type(sym)                     :: symop
-    !     integer,     allocatable      :: labels(:)
-    !     logical,     allocatable      :: included(:)
-    !     type(sp_project)              :: spproj, spproj_states
-    !     class(oris), pointer          :: os => null(), os_states => null()
-    !     character(len=STDLEN)         :: oritab, str_state
-    !     real                          :: trs
-    !     integer                       :: state, iter, n_incl, startit
-    !     integer                       :: rename_stat
-    !     ! sanity check
-    !     if(nint(cline%get_rarg('nstates')) <= 1)&
-    !         &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
-    !     if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-    !     call params%new(cline)
-    !     if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-    !         &stop 'need lp input when eo .eq. no; cluster3D'
-    !     ! set mkdir to no (to avoid nested directory structure)
-    !     call cline%set('mkdir', 'no')
-    !
-    !     ! prepare command lines from prototype
-    !     call cline%delete('refine')
-    !     cline_refine3D1                 = cline
-    !     cline_refine3D2                 = cline
-    !     cline_postprocess               = cline ! eo always eq yes
-    !     cline_reconstruct3D_distr       = cline ! eo always eq yes
-    !     cline_reconstruct3D_mixed_distr = cline ! eo always eq yes
-    !     call cline_refine3D1%set('prg', 'refine3D')
-    !     call cline_refine3D2%set('prg', 'refine3D')
-    !     call cline_refine3D1%set('maxits', real(MAXITS1))
-    !     select case(trim(params%refine))
-    !         case('sym')
-    !             call cline_refine3D1%set('refine', 'clustersym')
-    !         case DEFAULT
-    !             if( .not.cline%defined('refine') )then
-    !                 call cline_refine3D1%set('refine', 'cluster')
-    !             else
-    !                 call cline_refine3D1%set('refine', trim(params%refine))
-    !             endif
-    !     end select
-    !     call cline_refine3D2%set('refine', 'multi')
-    !     call cline_refine3D1%delete('oritab2')
-    !     call cline_refine3D1%delete('update_frac')
-    !     call cline_refine3D1%set('frcs', 'cluster3D_frcs.bin') !! mixed model FRCs
-    !     call cline_refine3D2%delete('oritab2')
-    !     if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
-    !     call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
-    !     call cline_reconstruct3D_distr%delete('lp')
-    !     call cline_reconstruct3D_distr%set('eo','yes')
-    !     call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
-    !     call cline_reconstruct3D_mixed_distr%delete('lp')
-    !     call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
-    !     call cline_postprocess%set('prg', 'postprocess')
-    !     call cline_postprocess%delete('lp')
-    !     call cline_postprocess%set('eo','yes')
-    !     if( cline%defined('trs') )then
-    !         ! all good
-    !     else
-    !         ! works out shift lmits for in-plane search
-    !         trs = MSK_FRAC*real(params%msk)
-    !         trs = min(MAXSHIFT, max(MINSHIFT, trs))
-    !         call cline_refine3D1%set('trs',trs)
-    !         call cline_refine3D2%set('trs',trs)
-    !     endif
-    !
-    !     ! generate diverse initial labels & orientations
-    !     oritab = 'cluster3Ddoc_init'//trim(METADATA_EXT)
-    !     call spproj%new_seg_with_ptr(params%nptcls, params%oritype, os)
-    !     call binread_oritab(params%oritab, spproj, os, [1,params%nptcls])
-    !     if( params%eo.eq.'no' )then
-    !         ! updates e/o flags
-    !         call os%set_all2single('eo', -1.)
-    !     else
-    !         if( os%get_nevenodd() == 0 ) call os%partition_eo
-    !     endif
-    !     if( trim(params%refine) .eq. 'sym' )then
-    !         ! randomize projection directions with respect to symmetry
-    !         symop = sym(params%pgrp)
-    !         call symop%symrandomize(os)
-    !         call symop%kill
-    !         call binwrite_oritab(trim('symrnd_'//oritab), spproj, os, [1,params%nptcls])
-    !     endif
-    !     if( cline%defined('oritab2') )then
-    !         ! this is  to force initialisation (4 testing)
-    !         call spproj_states%new_seg_with_ptr(params%nptcls, params%oritype, os_states)
-    !         call binread_oritab(params%oritab2, spproj_states, os_states, [1,params%nptcls])
-    !         labels = nint(os_states%get_all('state'))
-    !         call os%set_all('state', real(labels))
-    !         call os_states%kill
-    !     else if( .not. cline%defined('startit') )then
-    !         write(*,'(A)') '>>>'
-    !         write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-    !         call diverse_labeling(os, params%nstates, labels, corr_ranked=.true.)
-    !         call os%set_all('state', real(labels))
-    !     else
-    !         ! starting from a previous solution
-    !         labels = nint(os%get_all('state'))
-    !     endif
-    !
-    !     ! to accomodate state=0s in oritab input
-    !     included = os%included()
-    !     n_incl   = count(included)
-    !     where( .not. included ) labels = 0
-    !     call os%set_all('state', real(labels))
-    !     call binwrite_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-    !     call cline_refine3D1%set('oritab', trim(oritab))
-    !     deallocate(labels, included)
-    !
-    !     ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-    !     if( trim(params%refine) .eq. 'sym' )then
-    !         call cline%set('oritab', trim('symrnd_'//oritab))
-    !         call cline%set('pgrp', 'c1')
-    !     endif
-    !     call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
-    !     rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
-    !     if( params%eo .ne. 'no' )then
-    !         rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
-    !         rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
-    !         rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
-    !         rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
-    !         rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
-    !     endif
-    !     ! THis is experimental to keep FCs & RHO matrices from mixed model
-    !     ! do ipart = 1, params%nparts
-    !     !     allocate(part_str, source=int2str_pad(ipart,params%numlen))
-    !     !     allocate(recname, source=trim(VOL_FBODY)//one//'_part'//part_str//params%ext)
-    !     !     allocate(rhoname, source='rho_'//trim(VOL_FBODY)//one//'_part'//part_str//params%ext)
-    !     !     rename_stat = rename(recname, 'cluster3D_'//trim(recname))
-    !     !     rename_stat = rename(rhoname, 'cluster3D_'//trim(rhoname))
-    !     !     deallocate(part_str,recname,rhoname)
-    !     ! enddo
-    !
-    !     ! STAGE1: frozen orientation parameters
-    !     write(*,'(A)')    '>>>'
-    !     write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 1'
-    !     write(*,'(A)')    '>>>'
-    !     call xrefine3D_distr%execute(cline_refine3D1)
-    !     iter   = nint(cline_refine3D1%get_rarg('endit'))
-    !     oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-    !     call binread_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-    !     oritab = 'cluster3Ddoc_stage1'//trim(METADATA_EXT)
-    !     call binwrite_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-    !
-    !     ! ! stage 1 reconstruction to obtain resolution estimate when eo .eq. 'no'
-    !     ! if( params%eo .eq. 'no' )then
-    !     !     call cline_reconstruct3D_distr%set('oritab', trim(oritab))
-    !     !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-    !     !     do state = 1, params%nstates
-    !     !         str_state  = int2str_pad(state, 2)
-    !     !         call cline_postprocess%set(state, real(state))
-    !     !         call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-    !     !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
-    !     !         call xpostprocess%execute(cline_postprocess)
-    !     !     enddo
-    !     ! endif
-    !
-    !     ! STAGE2: soft multi-states refinement
-    !     startit = iter + 1
-    !     call cline_refine3D2%set('startit', real(startit))
-    !     call cline_refine3D2%set('maxits',  real(startit + MAXITS2))
-    !     call cline_refine3D2%set('oritab',  trim(oritab))
-    !     write(*,'(A)')    '>>>'
-    !     write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 2'
-    !     write(*,'(A)')    '>>>'
-    !     call xrefine3D_distr%execute(cline_refine3D2)
-    !     iter   = nint(cline_refine3D2%get_rarg('endit'))
-    !     oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-    !     call binread_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-    !     oritab = 'cluster3Ddoc_stage2'//trim(METADATA_EXT)
-    !     call binwrite_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-    !
-    !     ! stage 2 reconstruction to obtain resolution estimate when eo .eq. 'no'
-    !     if( params%eo .eq. 'no' )then
-    !         call cline_reconstruct3D_distr%set('oritab', trim(oritab))
-    !         call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-    !         do state = 1, params%nstates
-    !             str_state  = int2str_pad(state, 2)
-    !             call cline_postprocess%set('state', real(state))
-    !             call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-    !             call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
-    !             call xpostprocess%execute(cline_postprocess)
-    !         enddo
-    !     endif
-    !
-    !     ! cleanup
-    !     call os%kill
-    !
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_CLUSTER3D NORMAL STOP ****')
-    !
-    !     contains
-    !
-    !         subroutine diverse_labeling( os, nlabels, config_diverse, corr_ranked )
-    !             use simple_oris, only: oris
-    !             type(oris),           intent(inout) :: os
-    !             integer,              intent(in)    :: nlabels
-    !             integer, allocatable, intent(out)   :: config_diverse(:)
-    !             logical, optional,    intent(in)    :: corr_ranked
-    !             integer, allocatable :: tmp(:), states(:), order(:)
-    !             real,    allocatable :: corrs(:)
-    !             type(ran_tabu)       :: rt
-    !             integer              :: iptcl, nptcls,nonzero_nptcls, alloc_stat, cnt, s, ind
-    !             logical              :: corr_ranked_here
-    !             corr_ranked_here = .false.
-    !             if(present(corr_ranked)) corr_ranked_here = corr_ranked
-    !             if(.not.os%isthere('corr')) corr_ranked_here = .false.
-    !             nptcls = os%get_noris()
-    !             states = nint(os%get_all('state'))
-    !             nonzero_nptcls = count(states>0)
-    !             if( .not.corr_ranked_here )then
-    !                 allocate(config_diverse(nptcls), tmp(nonzero_nptcls), stat=alloc_stat )
-    !                 if(alloc_stat /= 0) call allocchk('In: commander_hlev_wflows::diverse_labeling ', alloc_stat)
-    !                 rt = ran_tabu(nonzero_nptcls)
-    !                 call rt%balanced(nlabels, tmp)
-    !                 cnt = 0
-    !                 do iptcl=1,nptcls
-    !                     if(states(iptcl)>0 .and. states(iptcl)<=nlabels)then
-    !                         cnt = cnt + 1
-    !                         config_diverse(iptcl) = tmp(cnt)
-    !                     else
-    !                         config_diverse(iptcl) = states(iptcl)
-    !                     endif
-    !                 enddo
-    !                 deallocate(tmp,states)
-    !             else
-    !                 allocate(config_diverse(nptcls), source=0, stat=alloc_stat )
-    !                 allocate(order(nptcls),          source=0, stat=alloc_stat )
-    !                 allocate(tmp(nlabels),           source=0, stat=alloc_stat )
-    !                 corrs = os%get_all('corr')
-    !                 tmp   = (/(s,s=1,nlabels)/)
-    !                 where( states<=0 ) corrs = -1.
-    !                 order = (/(iptcl,iptcl=1,nptcls)/)
-    !                 call hpsort( corrs, order )
-    !                 call reverse(order)
-    !                 call reverse(corrs)
-    !                 rt = ran_tabu(nlabels)
-    !                 do iptcl = 1, nonzero_nptcls+nlabels, nlabels
-    !                     call rt%reset
-    !                     call rt%shuffle(tmp)
-    !                     do s = 1, nlabels
-    !                         ind = iptcl + s - 1
-    !                         if(ind > nptcls)exit
-    !                         config_diverse(order(ind)) = tmp(s)
-    !                     enddo
-    !                 enddo
-    !                 where( states<=0 ) config_diverse = 0
-    !                 deallocate(states,corrs,order,tmp)
-    !             endif
-    !             call rt%kill
-    !         end subroutine diverse_labeling
-    !
-    ! end subroutine exec_cluster3D
-    !
-    ! !> multi-particle refinement after cluster3D
-    ! subroutine exec_cluster3D_refine( self, cline )
-    !     use simple_binoris_io,       only: binread_nlines, binread_oritab, binwrite_oritab
-    !     use simple_oris,             only: oris
-    !     use simple_commander_volops, only: postprocess_commander
-    !     use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
-    !     class(cluster3D_refine_commander), intent(inout) :: self
-    !     class(cmdline),                    intent(inout) :: cline
-    !     ! constants
-    !     integer,            parameter :: MAXITS = 40
-    !     character(len=:), allocatable :: INIT_FBODY
-    !     character(len=:), allocatable :: FINAL_FBODY
-    !     character(len=:), allocatable :: FINAL_DOC
-    !     ! distributed commanders
-    !     type(refine3D_distr_commander)      :: xrefine3D_distr
-    !     type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
-    !     ! shared-mem commanders
-    !     type(postprocess_commander)   :: xpostprocess
-    !     ! command lines
-    !     type(cmdline)                 :: cline_refine3D_master
-    !     type(cmdline)                 :: cline_refine3D
-    !     type(cmdline)                 :: cline_reconstruct3D_distr
-    !     type(cmdline)                 :: cline_postprocess
-    !     ! other variables
-    !     integer,               allocatable :: state_pops(:), states(:)
-    !     character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
-    !     logical,               allocatable :: l_hasmskvols(:), l_hasvols(:)
-    !     type(parameters)         :: params
-    !     type(sp_project)         :: spproj_master
-    !     type(sp_project), target :: spproj_state
-    !     class(oris), pointer     :: os_master => null(), os_state => null()
-    !     character(len=STDLEN)    :: oritab, vol, fname
-    !     character(len=9)         :: dir
-    !     character(len=2)         :: str_state
-    !     integer                  :: state, iptcl, iter
-    !     logical                  :: l_singlestate, error
-    !     integer                  :: rename_stat
-    !     if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-    !     call params%new(cline)
-    !     l_singlestate = cline%defined('state')
-    !     error         = .false.
-    !     ! set mkdir to no (to avoid nested directory structure)
-    !     call cline%set('mkdir', 'no')
-    !
-    !     ! filenaming strings allocation
-    !     allocate(INIT_FBODY, source='cluster3Dinit_refine_state')
-    !     allocate(FINAL_FBODY, source='cluster3Ddoc_refine_state')
-    !     allocate(FINAL_DOC, source='cluster3Ddoc_refine'//trim(METADATA_EXT))
-    !
-    !     ! sanity checks
-    !     if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-    !         &stop 'need lp input when eo .eq. no; cluster3D_refine'
-    !     if(.not.file_exists(params%oritab))then
-    !         print *,'Document ',trim(params%oritab),' does not exist!'
-    !         stop
-    !     endif
-    !
-    !     ! general prep
-    !     params%nptcls = binread_nlines( params%oritab)
-    !     call spproj_master%new_seg_with_ptr(params%nptcls, params%oritype, os_master)
-    !     call binread_oritab(params%oritab, spproj_master, os_master, [1,params%nptcls])
-    !     params%nstates = os_master%get_n('state')
-    !     if(params%nstates < 2 .and. .not.l_singlestate)then
-    !         print *, 'Non-sensical number of states argument for heterogeneity refinement: ',params%nstates
-    !         stop
-    !     endif
-    !     allocate(l_hasmskvols(params%nstates), source=.false.)
-    !     allocate(l_hasvols(params%nstates),    source=.false.)
-    !     allocate(init_docs(params%nstates), final_docs(params%nstates))
-    !     call os_master%get_pops(state_pops, 'state', consider_w=.false.)
-    !     do state = 1, params%nstates
-    !         if( state_pops(state) == 0 )cycle
-    !         if( l_singlestate .and. state.ne.params%state )cycle
-    !         str_state = int2str_pad(state,2)
-    !         dir = 'state_'//str_state//'/'
-    !         call simple_mkdir(dir)
-    !         ! preps individual documents
-    !         spproj_state%os_ptcl3D = spproj_master%os_ptcl3D
-    !         os_state => spproj_state%os_ptcl3D
-    !         states   = nint(os_state%get_all('state'))
-    !         where( states .ne. state )
-    !             states = 0
-    !         else where
-    !             states = 1
-    !         end where
-    !         call os_state%set_all('state', real(states))
-    !         deallocate(states)
-    !         init_docs(state) = trim(INIT_FBODY)//str_state//trim(METADATA_EXT)
-    !         call binwrite_oritab(init_docs(state), spproj_state, os_state, [1,params%nptcls])
-    !         final_docs(state) = trim(FINAL_FBODY)//str_state//trim(METADATA_EXT)
-    !         ! check & move volumes
-    !         l_hasvols(state) = trim(params%vols(state)) .ne. ''
-    !         if( l_hasvols(state) )then
-    !             if( params%eo .ne. 'no' )then
-    !                 ! fsc
-    !                 fname = trim(FSC_FBODY)//str_state//BIN_EXT
-    !                 if( .not.file_exists(fname) )then
-    !                     print *, 'File missing: ', trim(fname)
-    !                     error = .true.
-    !                 else
-    !                     rename_stat = simple_rename(fname, dir//trim(fname))
-    !                 endif
-    !                 ! FRC
-    !                 fname = trim(FRCS_FBODY)//str_state//BIN_EXT
-    !                 if( .not.file_exists(fname) )then
-    !                     print *, 'File missing: ', trim(fname)
-    !                 else
-    !                     rename_stat = simple_rename(fname, dir//trim(fname))
-    !                 endif
-    !                 ! aniso
-    !                 fname = trim(ANISOLP_FBODY)//str_state//params%ext
-    !                 if( .not.file_exists(fname) )then
-    !                     print *, 'File missing: ', trim(fname)
-    !                 else
-    !                     rename_stat = simple_rename(fname, dir//trim(fname))
-    !                 endif
-    !                 ! e/o
-    !                 fname = add2fbody(trim(params%vols(state)), params%ext, '_even')
-    !                 if( .not.file_exists(fname) )then
-    !                     print *, 'File missing: ', trim(fname)
-    !                 else
-    !                     rename_stat = simple_rename(fname, dir//trim(fname))
-    !                 endif
-    !                 fname = add2fbody(trim(params%vols(state)), params%ext, '_odd')
-    !                 if( .not.file_exists(fname) )then
-    !                     print *, 'File missing: ', trim(fname)
-    !                 else
-    !                     rename_stat = simple_rename(fname, dir//trim(fname))
-    !                 endif
-    !             endif
-    !             ! volume
-    !             if( .not.file_exists(params%vols(state)) )then
-    !                 print *, 'File missing: ', params%vols(state)
-    !                 error = .true.
-    !             else
-    !                 fname = trim(params%vols(state))
-    !                 params%vols(state) = dir//trim(fname) ! name change
-    !                 rename_stat = simple_rename(fname, params%vols(state))
-    !             endif
-    !         endif
-    !         ! mask volume
-    !         l_hasmskvols(state) = trim(params%mskvols(state)) .ne. ''
-    !         if( l_hasmskvols(state) )then
-    !             if( .not.file_exists(params%mskvols(state)) )then
-    !                 print *, 'File missing: ', trim(fname)
-    !                 error = .true.
-    !             else
-    !                 fname = trim(params%mskvols(state))
-    !                 params%mskvols(state) = dir//trim(fname)  ! name change
-    !                 call simple_copy_file(trim(fname), trim(params%mskvols(state)))
-    !             endif
-    !         endif
-    !     enddo
-    !     if( error ) stop
-    !     if( cline%defined('vollist') .and. count(l_hasvols).eq.0 )stop 'Missing volume(s)'
-    !     if( cline%defined('msklist') .and. count(l_hasmskvols).eq.0 )stop 'Missing mask volume(s)'
-    !
-    !     ! preps command-lines
-    !     call cline%delete('vollist')
-    !     call cline%delete('nstates')
-    !     call cline%delete('msklist')
-    !     call cline%delete('mskfile')
-    !     do state = 1, params%nstates
-    !         call cline%delete('vol'//int2str_pad(state,1))
-    !     enddo
-    !     cline_refine3D_master     = cline
-    !     cline_reconstruct3D_distr = cline
-    !     cline_postprocess         = cline
-    !     call cline_refine3D_master%set('prg', 'refine3D')
-    !     if( .not.cline%defined('maxits') ) call cline_refine3D_master%set('maxits', real(MAXITS))
-    !     call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
-    !     call cline_reconstruct3D_distr%set('oritab', trim(FINAL_DOC))
-    !     call cline_reconstruct3D_distr%set('nstates', trim(int2str(params%nstates)))
-    !     call cline_reconstruct3D_distr%set('eo', 'yes')
-    !     call cline_postprocess%delete('lp')
-    !
-    !     ! Main loop
-    !     do state = 1, params%nstates
-    !         if( state_pops(state) == 0 )cycle
-    !         if( l_singlestate .and. state.ne.params%state )cycle
-    !         str_state = int2str_pad(state,2)
-    !         dir       = 'state_'//str_state//'/'
-    !         write(*,'(A)')   '>>>'
-    !         write(*,'(A,I2)')'>>> REFINING STATE: ', state
-    !         write(*,'(A)')   '>>>'
-    !         ! prep
-    !         cline_refine3D = cline_refine3D_master
-    !         call cline_refine3D%set('oritab', trim(init_docs(state)))
-    !         if( l_hasvols(state) )then
-    !             call cline_refine3D%set('vol1', trim(params%vols(state)))
-    !             if( params%eo.ne.'no' )then
-    !                 fname = dir//trim(FSC_FBODY)//str_state//BIN_EXT
-    !                 call simple_copy_file(trim(fname),'fsc_state01.bin')
-    !                 fname = dir//trim(FRCS_FBODY)//str_state//BIN_EXT
-    !                 if(file_exists(fname))call simple_copy_file(trim(fname),'frcs_state01.bin')
-    !                 fname = dir//trim(ANISOLP_FBODY)//str_state//params%ext
-    !                 if(file_exists(fname))call simple_copy_file(trim(fname),'aniso_optlp_state01.mrc')
-    !             endif
-    !         endif
-    !         if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(params%mskvols(state)))
-    !         ! run
-    !         call xrefine3D_distr%execute(cline_refine3D)
-    !         ! harvest outcome
-    !         iter   = nint(cline_refine3D%get_rarg('endit'))
-    !         oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-    !         ! stash
-    !         call binread_oritab(oritab, spproj_state, os_state, [1,params%nptcls])
-    !         do iptcl = 1,params%nptcls
-    !             if( nint(os_master%get(iptcl, 'state')) .ne. 1 )cycle
-    !             call os_master%set_ori(iptcl, os_state%get_ori(iptcl))
-    !             call os_master%set(iptcl, 'state', real(state))
-    !         enddo
-    !         call os_state%kill
-    !         call refine3D_cleanup
-    !     enddo
-    !
-    !     ! final document
-    !     call binwrite_oritab(FINAL_DOC, spproj_master, os_master, [1,params%nptcls])
-    !
-    !     ! final reconstruction
-    !     if( params%eo .eq.'no' )then
-    !         call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-    !         do state = 1, params%nstates
-    !             if( state_pops(state) == 0 )cycle
-    !             if( l_singlestate .and. state.ne.params%state )cycle
-    !             str_state = int2str_pad(state, 2)
-    !             if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(params%mskvols(state)))
-    !             vol = 'recvol_state'//trim(str_state)//params%ext
-    !             call cline_postprocess%set('state', real(state))
-    !             call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-    !             call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
-    !             call xpostprocess%execute(cline_postprocess)
-    !         enddo
-    !     endif
-    !
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_CLUSTER3D_REFINE NORMAL STOP ****')
-    !     contains
-    !
-    !         ! stash docs, volumes , etc.
-    !         subroutine refine3D_cleanup
-    !             character(len=STDLEN) :: src, dist
-    !             character(len=*), parameter :: one = '01'
-    !             character(len=3) :: str_iter
-    !             integer          :: it, rename_stat
-    !             dir = 'state_'//str_state//'/'
-    !             call simple_mkdir(dir)
-    !             do it = 1, iter
-    !                 str_iter = int2str_pad(it,3)
-    !                 ! volumes
-    !                 src  = trim(VOL_FBODY)//one//'_iter'//str_iter//params%ext
-    !                 dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//params%ext
-    !                 rename_stat = simple_rename(src, dist)
-    !                 src  = trim(VOL_FBODY)//one//'_iter'//str_iter//trim(PPROC_SUFFIX)//params%ext
-    !                 dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//trim(PPROC_SUFFIX)//params%ext
-    !                 rename_stat = simple_rename(src, dist)
-    !                 ! e/o
-    !                 if( params%eo.ne.'no')then
-    !                     src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//params%ext
-    !                     dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_even'//params%ext
-    !                     rename_stat = simple_rename(src, dist)
-    !                     src  = trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//params%ext
-    !                     dist = dir//trim(VOL_FBODY)//one//'_iter'//str_iter//'_odd'//params%ext
-    !                     rename_stat = simple_rename(src, dist)
-    !                     src = 'RESOLUTION_STATE'//one//'_ITER'//str_iter
-    !                     rename_stat = simple_rename(src, dir//src)
-    !                 endif
-    !                 ! orientation document
-    !                 src = trim(REFINE3D_ITER_FBODY)//str_iter//trim(METADATA_EXT)
-    !                 if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
-    !             enddo
-    !             ! resolution measures
-    !             if( params%eo.ne.'no')then
-    !                 src  = trim(FSC_FBODY)//one//BIN_EXT
-    !                 if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
-    !                 src  = trim(FRCS_FBODY)//one//BIN_EXT
-    !                 if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
-    !                 src  = trim(ANISOLP_FBODY)//one//params%ext
-    !                 if( file_exists(src) ) rename_stat = simple_rename(src, dir//src)
-    !             endif
-    !         end subroutine refine3D_cleanup
-    !
-    ! end subroutine exec_cluster3D_refine
-
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )
         use simple_binoris_io,       only: binread_oritab, binwrite_oritab
@@ -1186,9 +626,8 @@ contains
         ! shared-mem commanders
         type(postprocess_commander) :: xpostprocess
         ! command lines
-        type(cmdline) :: cline_refine3D1, cline_refine3D2
+        type(cmdline) :: cline_refine3D1, cline_refine3D2, cline_postprocess
         type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
-        type(cmdline) :: cline_postprocess
         ! other variables
         type(parameters)              :: params
         type(sym)                     :: symop
@@ -1214,9 +653,9 @@ contains
         call cline%delete('refine')
         cline_refine3D1                 = cline
         cline_refine3D2                 = cline
-        cline_postprocess               = cline ! eo always eq yes
-        cline_reconstruct3D_distr       = cline ! eo always eq yes
-        cline_reconstruct3D_mixed_distr = cline ! eo always eq yes
+        cline_postprocess               = cline ! eo always eq yes, for resolution only
+        cline_reconstruct3D_distr       = cline ! eo always eq yes, for resolution only
+        cline_reconstruct3D_mixed_distr = cline ! eo always eq yes, for resolution only
         call cline_refine3D1%set('prg', 'refine3D')
         call cline_refine3D2%set('prg', 'refine3D')
         call cline_refine3D1%set('maxits', real(MAXITS1))
@@ -1237,13 +676,13 @@ contains
         call cline_refine3D2%delete('oritab2')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
-        call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
-        call cline_postprocess%set('prg', 'postprocess')
         call cline_reconstruct3D_distr%delete('lp')
-        call cline_reconstruct3D_mixed_distr%delete('lp')
-        call cline_postprocess%delete('lp')
         call cline_reconstruct3D_distr%set('eo','yes')
+        call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
+        call cline_reconstruct3D_mixed_distr%delete('lp')
         call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
+        call cline_postprocess%set('prg', 'postprocess')
+        call cline_postprocess%delete('lp')
         call cline_postprocess%set('eo','yes')
         if( cline%defined('trs') )then
             ! all good
@@ -1339,7 +778,7 @@ contains
         !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
         !     do state = 1, params%nstates
         !         str_state  = int2str_pad(state, 2)
-        !         call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//params%ext)
+        !         call cline_postprocess%set(state, real(state))
         !         call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
         !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
         !         call xpostprocess%execute(cline_postprocess)
@@ -1367,7 +806,7 @@ contains
             call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
             do state = 1, params%nstates
                 str_state  = int2str_pad(state, 2)
-                call cline_postprocess%set('vol1', trim(VOL_FBODY)//trim(str_state)//params%ext)
+                call cline_postprocess%set('state', real(state))
                 call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
                 call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
                 call xpostprocess%execute(cline_postprocess)
@@ -1617,6 +1056,7 @@ contains
         call cline_reconstruct3D_distr%set('oritab', trim(FINAL_DOC))
         call cline_reconstruct3D_distr%set('nstates', trim(int2str(params%nstates)))
         call cline_reconstruct3D_distr%set('eo', 'yes')
+        call cline_postprocess%set('eo', 'yes')
         call cline_postprocess%delete('lp')
 
         ! Main loop
@@ -1671,7 +1111,7 @@ contains
                 str_state = int2str_pad(state, 2)
                 if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(params%mskvols(state)))
                 vol = 'recvol_state'//trim(str_state)//params%ext
-                call cline_postprocess%set('vol1', trim(vol))
+                call cline_postprocess%set('state', real(state))
                 call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
                 call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
                 call xpostprocess%execute(cline_postprocess)

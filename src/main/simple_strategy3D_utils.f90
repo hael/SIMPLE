@@ -127,6 +127,35 @@ contains
         call s3D%o_peaks(s%iptcl)%set_shift(1,    shvecs(prob_peak,:))
     end subroutine prob_select_peak
 
+    subroutine corrsweights( s, corrs, tau, ws, included, best_loc, wcorr )
+        class(strategy3D_srch), intent(inout) :: s
+        real,                   intent(in)    :: corrs(s%npeaks), tau
+        real,                   intent(out)   :: ws(s%npeaks), wcorr
+        logical,                intent(out)   :: included(s%npeaks)
+        integer,                intent(out)   :: best_loc(1)
+        integer :: i, ind
+        if( s%npeaks == 1 )then
+            best_loc(1)  = 1
+            ws(1)        = 1.
+            included(1)  = .true.
+            s%npeaks_eff = 1
+            wcorr        = corrs(1)
+        else
+            best_loc = maxloc(corrs)
+            included = .true.
+            where( corrs<TINY )included = .false.
+            s%npeaks_eff = count(included)
+            where( included )
+                ws = corrs / sum(corrs, mask=included)
+            else where
+                ws = 0.
+            end where
+            wcorr = sum(ws*corrs,mask=included)
+        endif
+        ! update npeaks individual weights
+        call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
+    end subroutine corrsweights
+
     subroutine corrs2softmax_weights( s, corrs, tau, ws, included, best_loc, wcorr )
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s

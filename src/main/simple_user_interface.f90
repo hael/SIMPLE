@@ -1694,39 +1694,86 @@ contains
         call pick_extract_stream%set_input('comp_ctrls', 2, nthr)
     end subroutine new_pick_extract_stream
 
+    ! subroutine new_postprocess
+    !     ! PROGRAM SPECIFICATION
+    !     call postprocess%new(&
+    !     &'postprocess',& ! name
+    !     &'Post-processing of volume',&                                        ! descr_short
+    !     &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
+    !     &'simple_exec',&                                                            ! executable
+    !     &1, 4, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group, requires sp_project
+    !     ! INPUT PARAMETER SPECIFICATIONS
+    !     ! image input/output
+    !     call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process', &
+    !     & 'input volume e.g. vol.mrc', .false., '')
+    !     ! parameter input/output
+    !     call postprocess%set_input('parm_ios', 1, smpd)
+    !     call postprocess%set_input('parm_ios', 2, mkdir_)
+    !     call postprocess%set_input('parm_ios', 3, projfile)
+    !     postprocess%parm_ios(3)%required = .false.
+    !     call postprocess%set_input('parm_ios', 4, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
+    !     ! alternative inputs
+    !     ! <empty>
+    !     ! search controls
+    !     ! <empty>
+    !     ! filter controls
+    !     call postprocess%set_input('filt_ctrls', 1, hp)
+    !     call postprocess%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+    !     & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+    !     call postprocess%set_input('filt_ctrls', 3, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
+    !     call postprocess%set_input('filt_ctrls', 4, 'vol_filt', 'file', 'Input filter volume', 'Input filter volume',&
+    !     & 'input filter volume e.g. aniso_optlp_state01.mrc', .false., '')
+    !     call postprocess%set_input('filt_ctrls', 5, 'fsc', 'file', 'FSC file', 'Binary file with FSC info&
+    !     & for filtering', 'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin')
+    !     call postprocess%set_input('filt_ctrls', 6, bfac)
+    !     call postprocess%set_input('filt_ctrls', 7, mirr)
+    !     ! mask controls
+    !     call postprocess%set_input('mask_ctrls', 1, msk)
+    !     call postprocess%set_input('mask_ctrls', 2, inner)
+    !     call postprocess%set_input('mask_ctrls', 3, mskfile)
+    !     call postprocess%set_input('mask_ctrls', 4, 'binwidth', 'num', 'Envelope binary layers width',&
+    !     &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
+    !     call postprocess%set_input('mask_ctrls', 5, 'thres', 'num', 'Volume threshold',&
+    !     &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
+    !     call postprocess%set_input('mask_ctrls', 6, 'automsk', 'binary', 'Perform envelope masking',&
+    !     &'Whether to generate an envelope mask(yes|no){no}', '(yes|no){no}', .false., 'no')
+    !     call postprocess%set_input('mask_ctrls', 7, mw)
+    !     call postprocess%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
+    !     &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
+    !     call postprocess%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
+    !     &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
+    !     ! computer controls
+    !     call postprocess%set_input('comp_ctrls', 1, nthr)
+    ! end subroutine new_postprocess
+
     subroutine new_postprocess
         ! PROGRAM SPECIFICATION
         call postprocess%new(&
         &'postprocess',& ! name
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
-        &'simple_exec',&                                                            ! executable
-        &1, 4, 0, 0, 7, 9, 1, .false.)                                              ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                      ! executable
+        &0, 2, 0, 0, 6, 9, 1, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call postprocess%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to post-process', &
-        & 'input volume e.g. vol.mrc', .false., '')
+        ! <empty>
         ! parameter input/output
-        call postprocess%set_input('parm_ios', 1, smpd)
-        call postprocess%set_input('parm_ios', 2, mkdir_)
-        call postprocess%set_input('parm_ios', 3, projfile)
-        postprocess%parm_ios(3)%required = .false.
-        call postprocess%set_input('parm_ios', 4, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
+        call postprocess%set_input('parm_ios', 1, projfile)
+        call postprocess%set_input('parm_ios', 2, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call postprocess%set_input('filt_ctrls', 1, hp)
-        call postprocess%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        call postprocess%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
-        call postprocess%set_input('filt_ctrls', 3, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
-        call postprocess%set_input('filt_ctrls', 4, 'vol_filt', 'file', 'Input filter volume', 'Input filter volume',&
+        call postprocess%set_input('filt_ctrls', 2, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
+        call postprocess%set_input('filt_ctrls', 3, 'vol_filt', 'file', 'Input filter volume', 'Input filter volume',&
         & 'input filter volume e.g. aniso_optlp_state01.mrc', .false., '')
-        call postprocess%set_input('filt_ctrls', 5, 'fsc', 'file', 'FSC file', 'Binary file with FSC info&
+        call postprocess%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'Binary file with FSC info&
         & for filtering', 'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin')
-        call postprocess%set_input('filt_ctrls', 6, bfac)
-        call postprocess%set_input('filt_ctrls', 7, mirr)
+        call postprocess%set_input('filt_ctrls', 5, bfac)
+        call postprocess%set_input('filt_ctrls', 6, mirr)
         ! mask controls
         call postprocess%set_input('mask_ctrls', 1, msk)
         call postprocess%set_input('mask_ctrls', 2, inner)

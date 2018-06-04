@@ -1234,7 +1234,7 @@ contains
         if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.
         ! sanity check imgkind
         select case(trim(self%imgkind))
-        case('movie', 'mic','ptcl', 'cavg', 'vol', 'vol_cavg')
+            case('movie', 'mic','ptcl', 'cavg', 'vol', 'vol_cavg')
                 ! alles gut!
             case DEFAULT
                 write(*,*) 'imgkind: ', trim(self%imgkind)

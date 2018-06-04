@@ -610,9 +610,8 @@ select case(prg)
 
     case( 'postprocess' )
         ! for post-processing of volumes
-        keys_required(1)  = 'vol1'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
+        keys_required(1)  = 'msk'
+        keys_required(2)  = 'projfile'
         ! set optional keys
         keys_optional(1)  = 'fsc'
         keys_optional(2)  = 'lp'
@@ -627,8 +626,30 @@ select case(prg)
         keys_optional(11) = 'vol_filt'
         keys_optional(12) = 'inner'
         keys_optional(13) = 'mirr'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:13))
+        ! set defaults
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:14))
         call xpostprocess%execute(cline)
+    ! case( 'postprocess' )
+    !     ! for post-processing of volumes
+    !     keys_required(1)  = 'vol1'
+    !     keys_required(2)  = 'smpd'
+    !     keys_required(3)  = 'msk'
+    !     ! set optional keys
+    !     keys_optional(1)  = 'fsc'
+    !     keys_optional(2)  = 'lp'
+    !     keys_optional(3)  = 'mw'
+    !     keys_optional(4)  = 'bfac'
+    !     keys_optional(5)  = 'automsk'
+    !     keys_optional(6)  = 'amsklp'
+    !     keys_optional(7)  = 'edge'
+    !     keys_optional(8)  = 'binwidth'
+    !     keys_optional(9)  = 'thres'
+    !     keys_optional(10) = 'mskfile'
+    !     keys_optional(11) = 'vol_filt'
+    !     keys_optional(12) = 'inner'
+    !     keys_optional(13) = 'mirr'
+    !     call cline%parse_oldschool(keys_required(:3), keys_optional(:13))
+    !     call xpostprocess%execute(cline)
     case( 'reproject' )
         ! for re-projecting a volume using interpolation in Fourier space
         keys_required(1)  = 'vol1'
