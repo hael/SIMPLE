@@ -412,7 +412,14 @@ contains
             if( o%isthere('imgkind') )then
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
-                call o%getter('forctf', intg_forctf)
+                if( o%isthere('forctf') )then
+                    call o%getter('forctf', intg_forctf)
+                else if( o%isthere('intg') )then
+                    call o%getter('intg', intg_forctf)
+                else
+                    write(*,*) 'ERROR! No image available (forctf|intg) for CTF fitting'
+                    stop 'commander_preprocess :: exec_ctf_estimate'
+                endif
                 ctfvars = o%get_ctfvars()
                 call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir))
                 call spproj%os_mic%set_ori(imic, o)

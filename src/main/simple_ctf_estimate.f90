@@ -19,6 +19,7 @@ type(image)           :: pspec_ctf_roavg         ! rotationally averaged CTF pow
 type(image)           :: pspec_all_roavg         ! rotationally averaged all micrograph powerspec
 type(image)           :: pspec_lower_roavg       ! rotationally averaged lower half of micrograph powerspec
 type(image)           :: pspec_upper_roavg       ! rotationally averaged upper half of micrograph powerspec
+type(image)           :: ppspec_all_rot90        ! 90 deg rotated all pspec
 type(image)           :: imgmsk                  ! mask image
 type(ctf)             :: tfun                    ! transfer function object
 type(ctf)             :: tfun_roavg              ! rotationally averaged transfer function object
@@ -36,12 +37,12 @@ real                  :: lp           = 0.       ! low-pass limit
 real                  :: sxx_roavg    = 0.       ! memoized corr term, rotationally averaged power spec
 real                  :: limits(4,2)  = 0.       ! barrier limits
 
-integer, parameter :: IARES = 10, NSTEPS = 100
+integer, parameter :: IARES = 5, NSTEPS = 100
 
 contains
 
     subroutine ctf_estimate_init( pspec_all, pspec_lower, pspec_upper, smpd, kV, Cs,&
-        &amp_contr, dfrange, resrange, astigtol_in, l_phplate )
+        &amp_contr, dfrange, resrange, astigtol_in, l_phplate, corr90deg )
         class(image), target, intent(inout) :: pspec_all   !< all micrograph powerspec
         class(image), target, intent(inout) :: pspec_lower !< lower half of micrograph powerspec
         class(image), target, intent(inout) :: pspec_upper !< upper half of micrograph powerspec
@@ -53,6 +54,7 @@ contains
         real,                 intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
         real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
         logical,              intent(in)    :: l_phplate   !< Volta phase-plate images (yes|no)
+        real,                 intent(out)   :: corr90deg   !< corr for validation
         integer :: ldim(3)
         ! set constants
         l_phaseplate = l_phplate
@@ -89,9 +91,14 @@ contains
         call ppspec_upper%dampen_central_cross
         call ppspec_upper%subtr_backgr(hp)
         ! prepare rotationally averaged power spectra
-        call ppspec_all%roavg(IARES,   pspec_all_roavg)
-        call ppspec_lower%roavg(IARES, pspec_lower_roavg)
-        call ppspec_upper%roavg(IARES, pspec_upper_roavg)
+        call ppspec_all%roavg(IARES,   pspec_all_roavg,   180)
+        call ppspec_lower%roavg(IARES, pspec_lower_roavg, 180)
+        call ppspec_upper%roavg(IARES, pspec_upper_roavg, 180)
+        ! prepare 90 deg rotated spectrum
+        call ppspec_all%rtsq(90., 0., 0., ppspec_all_rot90)
+        ! calculate CTF quality score based on corr with 90 deg rotated
+        corr90deg = ppspec_all%real_corr(ppspec_all_rot90, cc_msk)
+        call ppspec_all_rot90%kill
         ! prepare CTF power spectra
         call pspec_ctf%new(ldim, smpd)
         call pspec_ctf_roavg%new(ldim, smpd)

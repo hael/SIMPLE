@@ -26,7 +26,7 @@ contains
         integer                       :: nframes, ldim(3)
         character(len=:), allocatable :: fname_diag
         type(image)                   :: micrograph, pspec_lower, pspec_upper, pspec_all
-        real                          :: dfx, dfy, angast, phshift, cc, dferr, ctfscore
+        real                          :: dfx, dfy, angast, phshift, cc, dferr, ctfscore, cc90
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
@@ -35,13 +35,6 @@ contains
             stop 'single frame input to ctf_estimate assumed; simple_ctf_estimate_iter :: iterate'
         endif
         ldim(3) = 1
-
-        print *, 'ctfvars%smpd ', ctfvars%smpd
-        print *, 'ctfvars%kv ', ctfvars%kv
-        print *, 'ctfvars%cs ', ctfvars%cs
-        print *, 'ctfvars%fraca ', ctfvars%fraca
-        print *, 'ctfvars%l_phaseplate ', ctfvars%l_phaseplate
-
         call micrograph%new(ldim, ctfvars%smpd)
         call micrograph%read(trim(adjustl(moviename_forctf)), 1)
         ! filter out frequencies lower than the box can express to avoid aliasing
@@ -53,12 +46,16 @@ contains
         call micrograph%mic2eospecs(params_glob%pspecsz, 'sqrt', pspec_lower, pspec_upper, pspec_all)
         ! deal with output
         fname_diag = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
-        fname_diag = swap_suffix(fname_diag, '_ctf_estimate_diag', FORCTF_SUFFIX)
+        if( str_has_substr(fname_diag, FORCTF_SUFFIX) )then
+            fname_diag = swap_suffix(fname_diag, '_ctf_estimate_diag', FORCTF_SUFFIX)
+        else if( str_has_substr(fname_diag, INTGMOV_SUFFIX) )then
+            fname_diag = swap_suffix(fname_diag, '_ctf_estimate_diag', INTGMOV_SUFFIX)
+        endif
         fname_diag = trim(dir_out)//'/'//trim(fname_diag)//trim(JPG_EXT)
         ! fitting
         call ctf_estimate_init(pspec_all, pspec_lower, pspec_upper, ctfvars%smpd, ctfvars%kv,&
             &ctfvars%cs, ctfvars%fraca, [params_glob%dfmin,params_glob%dfmax],&
-            &[params_glob%hp,params_glob%lp], params_glob%astigtol, ctfvars%l_phaseplate)
+            &[params_glob%hp,params_glob%lp], params_glob%astigtol, ctfvars%l_phaseplate, cc90)
         call ctf_estimate_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
         call ctf_estimate_kill
         ! reporting
@@ -69,6 +66,7 @@ contains
         call orientation%set('ctf_estimatecc',   cc)
         call orientation%set('dferr',      dferr   )
         call orientation%set('ctfscore',   ctfscore)
+        call orientation%set('cc90',       cc90)
         ! destruct
         call micrograph%kill
         call pspec_lower%kill

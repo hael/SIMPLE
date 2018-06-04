@@ -222,7 +222,7 @@ contains
         endif
     end subroutine apply
 
-    !>  \brief  is for generating an imacge of CTF
+    !>  \brief  is for generating an image of CTF
     subroutine ctf2img( self, img, dfx, dfy, angast, phshift )
         use simple_image, only: image
         class(ctf),       intent(inout) :: self  !< instance

@@ -4447,7 +4447,7 @@ contains
             end do
         else
             if (which == 'bman')then
- do i=-winsz,winsz
+              do i=-winsz,winsz
                 do j=-winsz,winsz
                     do k=-winsz,winsz
                         cnt = cnt + 1
@@ -6970,17 +6970,20 @@ contains
     !! \param angstep angular step
     !! \param avg output image rotation average
     !!
-    subroutine roavg( self, angstep, avg )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: angstep
-        class(image), intent(inout) :: avg
+    subroutine roavg( self, angstep, avg, ang_stop )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: angstep
+        class(image),      intent(inout) :: avg
+        integer, optional, intent(in) :: ang_stop
         real    :: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
         real    :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
-        integer :: irot, ithr
+        integer :: irot, ithr, aang_stop
+        aang_stop = 359
+        if( present(ang_stop) ) aang_stop = ang_stop
         avgs_rmat = 0.
         rotated   = 0.
         !$omp parallel do schedule(static) default(shared) private(irot) proc_bind(close)
-        do irot = 0 + angstep,359,angstep
+        do irot = 0 + angstep,aang_stop,angstep
             ! get thread index
             ithr = omp_get_thread_num() + 1
             ! rotate & sum
