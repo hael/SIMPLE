@@ -1212,7 +1212,7 @@ contains
         str = self%o(i)%ori2str()
     end function ori2str
 
-    !>  \brief  
+    !>  \brief
     function get_ctfvars( self, i ) result( ctfvars )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -2559,10 +2559,16 @@ contains
                 ! to use in conjunction with objfun=cc
             case('bfac')
                 ! to use in conjunction with objfun=ccres
+            case('specscore')
+                ! to be tested, should be amenable to any objective function
             case DEFAULT
                 write(*,*)'Invalid metric: ', trim(which_here)
                 stop 'simple_oris :: extremal_bound'
         end select
+        if( .not.self%isthere(which_here) )then
+            write(*,*)'Metric is unpopulated; simple_oris :: extremal_bound:', trim(which_here)
+            stop 'Metric is unpopulated; simple_oris :: extremal_bound:'
+        endif
         ! fetch scores
         scores      = self%get_all(which_here)
         incl        = self%included()

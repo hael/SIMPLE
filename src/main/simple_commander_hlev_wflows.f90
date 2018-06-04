@@ -502,7 +502,11 @@ contains
             endif
         endif
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> PROBABILISTIC REFINEMENT AT ORIGINAL SAMPLING'
+        if( do_autoscale )then
+            write(*,'(A)') '>>> PROBABILISTIC REFINEMENT AT ORIGINAL SAMPLING'
+        else
+            write(*,'(A)') '>>> PROBABILISTIC REFINEMENT'
+        endif
         write(*,'(A)') '>>>'
         call cline_refine3D_refine%set('startit', iter + 1.)
         call xrefine3D_distr%execute(cline_refine3D_refine)

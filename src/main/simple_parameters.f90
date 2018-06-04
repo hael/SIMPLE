@@ -401,7 +401,7 @@ contains
         logical,         optional, intent(in)    :: silent
         character(len=LONGSTRLEN), allocatable :: sp_files(:)
         character(len=:),          allocatable :: stk_part_fname_sc, phaseplate, ctfflag
-        character(len=:),          allocatable :: imgfmt, debug_local, verbose_local
+        character(len=:),          allocatable :: debug_local, verbose_local
         logical               :: vol_defined(MAXS)
         character(len=STDLEN) :: stk_part_fname
         character(len=1)      :: checkupfile(50)
@@ -922,15 +922,6 @@ contains
                 ! nothing to do for streaming, values set at runtime
             endif
             if( .not.bos%is_opened() )call bos%open(trim(self%projfile)) ! projfile opened here
-            ! image format
-            if( trim(self%ext).eq.'' )then
-                call bos%read_first_segment_record(PROJINFO_SEG, o)
-                if( o%isthere('imgfmt') )then
-                    call o%getter('imgfmt', imgfmt)
-                    call self%set_img_format(fname2format('dummy.'//trim(imgfmt)))
-                endif
-                call o%kill
-            endif
             ! CTF plan
             select case(trim(self%oritype))
                 case('ptcl2D', 'ptcl3D')
@@ -1385,7 +1376,7 @@ contains
                             cntfile = cntfile+1
                             checkupfile(cntfile) = 'S'
                         case ('N')
-                            write(*,*) 'file: ', trim(file)
+                            write(*,*) 'file: ', trim(var)
                             call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')
                         case ('T','B','P','O')
                             ! text files are supported
@@ -1393,7 +1384,7 @@ contains
                             ! PDB files are supported
                             ! *.simple project files are supported
                         case DEFAULT
-                            write(*,*) 'file: ', trim(file)
+                            write(*,*) 'file: ', trim(var)
                             call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')
                     end select
                     if( file_exists(var) )then

@@ -44,13 +44,13 @@ contains
         update_frac   = .false.
         avg_updatecnt = 0.
         if( build_glob%spproj_field%isthere('updatecnt') )then
-            updatecnts    = build_glob%spproj_field%get_all('updatecnt')
-            avg_updatecnt = sum(updatecnts) / real(size(updatecnts))
-            update_frac   = count(updatecnts > 0.5) > 0 ! for the case of greedy step with frac_update on
+            updatecnts  = build_glob%spproj_field%get_all('updatecnt')
+            update_frac = count(updatecnts > 0.5) > 0 ! for the case of greedy step with frac_update on
         endif
         if( update_frac )then
             ! fractional particle update
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+            avg_updatecnt  = build_glob%spproj_field%get_avg('updatecnt', mask=mask)
             self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
             self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
             self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
@@ -121,13 +121,13 @@ contains
         update_frac   = .false.
         avg_updatecnt = 0.
         if( build_glob%spproj_field%isthere('updatecnt') )then
-            updatecnts    = build_glob%spproj_field%get_all('updatecnt')
-            avg_updatecnt = sum(updatecnts) / real(size(updatecnts))
-            update_frac   = count(updatecnts > 0.5) > 0
+            updatecnts  = build_glob%spproj_field%get_all('updatecnt')
+            update_frac = count(updatecnts > 0.5) > 0
         endif
         if( update_frac )then
             ! fractional particle update
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+            avg_updatecnt  = build_glob%spproj_field%get_avg('updatecnt', mask=mask)
             self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
             self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
             self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)

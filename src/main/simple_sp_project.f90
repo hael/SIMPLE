@@ -449,9 +449,7 @@ contains
         character(len=*),          intent(in)    :: moviename
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),      pointer     :: os_ptr
-        character(len=:), allocatable :: fname, prev_imgfmt
-        character(len=STDLEN)         :: str
-        character(len=3)              :: imgfmt
+        character(len=:), allocatable :: fname
         integer :: n_os_mic, ldim(3), nframes
         ! oris object pointer
         os_ptr => self%os_mic
@@ -474,15 +472,6 @@ contains
         else
             call os_ptr%set(1, 'intg',  trim(fname))
             call os_ptr%set(1, 'imgkind', 'mic')
-        endif
-        ! image format
-        str    = fname2ext(fname)
-        imgfmt = str(1:3)
-        if( self%projinfo%isthere('imgfmt') )then
-            call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
-            if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
-        else
-            call self%projinfo%set(1,'imgfmt', trim(imgfmt))
         endif
         ! updates segment
         call os_ptr%set(1, 'xdim',       real(ldim(1)))
@@ -514,11 +503,9 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: filetab
         type(ctfparams),           intent(in)    :: ctfvars
-        class(oris),           pointer     :: os_ptr
+        class(oris),               pointer     :: os_ptr
         character(len=LONGSTRLEN), allocatable :: movienames(:)
-        character(len=:),          allocatable :: name, moviename, prev_imgfmt
-        character(len=STDLEN) :: str
-        character(len=3)      :: imgfmt
+        character(len=:),          allocatable :: name, moviename
         integer               :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical               :: is_movie
         ! file exists?
@@ -555,16 +542,6 @@ contains
                 call os_ptr%set(imic, 'intg',  trim(moviename))
                 call os_ptr%set(imic, 'imgkind', 'mic')
                 is_movie = .false.
-            endif
-            ! image format
-            str    = fname2ext(moviename)
-            imgfmt = str(1:3)
-            if( self%projinfo%isthere('imgfmt') )then
-                call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
-                if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_movies'
-                deallocate(prev_imgfmt)
-            else
-                call self%projinfo%set(1,'imgfmt', trim(imgfmt))
             endif
             ! updates segment
             call os_ptr%set(imic, 'xdim',    real(ldim(1)))
@@ -633,132 +610,12 @@ contains
 
     ! os_stk related methods
 
-    ! subroutine add_stk( self, stk, ctfvars, os )
-    !     class(sp_project),     intent(inout) :: self
-    !     character(len=*),      intent(in)    :: stk
-    !     type(ctfparams),       intent(in)    :: ctfvars ! CTF parameters associated with stk
-    !     class(oris),           intent(inout) :: os      ! parameters associated with stk
-    !     type(ori)                     :: o
-    !     character(len=:), allocatable :: stk_abspath, prev_imgfmt
-    !     character(len=STDLEN)         :: str
-    !     character(len=3)              :: imgfmt
-    !     integer :: ldim(3), nptcls, n_os, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
-    !     integer :: i, fromp, top
-    !     ! fuul path and existence check
-    !     call simple_full_path(stk, stk_abspath, 'sp_project :: add_stk')
-    !     ! find dimension of inputted stack
-    !     call find_ldim_nptcls(stk_abspath, ldim, nptcls)
-    !     if( ldim(1) /= ldim(2) )then
-    !         write(*,*) 'xdim: ', ldim(1)
-    !         write(*,*) 'ydim: ', ldim(2)
-    !         stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stk'
-    !     endif
-    !     ! check that inputs are of conforming sizes
-    !     n_os = os%get_noris()
-    !     if( n_os /= nptcls )then
-    !         write(*,*) '# input oris      : ', n_os
-    !         write(*,*) '# ptcl imgs in stk: ', nptcls
-    !         stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stk'
-    !     endif
-    !     ! existence of ctf/defocus values
-    !     if( ctfvars%ctfflag > 0 )then
-    !         if( .not.os%isthere(1,'dfx') )then
-    !             stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
-    !         endif
-    !     endif
-    !     ! updates_fields
-    !     n_os_stk    = self%os_stk%get_noris() + 1
-    !     n_os_ptcl2D = self%os_ptcl2D%get_noris()
-    !     n_os_ptcl3D = self%os_ptcl3D%get_noris()
-    !     if( n_os_stk == 1 )then
-    !         call self%os_stk%new(1)
-    !         call self%os_ptcl2D%new(nptcls)
-    !         call self%os_ptcl3D%new(nptcls)
-    !         fromp = 1
-    !         top   = n_os
-    !     else
-    !         ! stk
-    !         if( .not.self%os_stk%isthere(n_os_stk-1,'top') )then
-    !             stop 'FROMP/TOP keys should always be informed; simple_sp_project :: add_stk'
-    !         endif
-    !         call self%os_stk%reallocate(n_os_stk)
-    !         ! 2d
-    !         n_os_ptcl2D = self%os_ptcl2D%get_noris()
-    !         call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls)
-    !         ! 3d
-    !         n_os_ptcl3D = self%os_ptcl3D%get_noris()
-    !         call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
-    !         fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
-    !         top   = fromp + n_os - 1
-    !     endif
-    !     ! image format
-    !     str    = fname2ext(stk_abspath)
-    !     imgfmt = str(1:3)
-    !     if( self%projinfo%isthere('imgfmt') )then
-    !         call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
-    !         if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
-    !     else
-    !         call self%projinfo%set(1,'imgfmt', trim(imgfmt))
-    !     endif
-    !     ! updates oris_objects
-    !     call self%os_stk%set(n_os_stk, 'stk',     trim(stk_abspath))
-    !     call self%os_stk%set(n_os_stk, 'box',     real(ldim(1)))
-    !     call self%os_stk%set(n_os_stk, 'nptcls',  real(nptcls))
-    !     call self%os_stk%set(n_os_stk, 'fromp',   real(fromp))
-    !     call self%os_stk%set(n_os_stk, 'top',     real(top))
-    !     call self%os_stk%set(n_os_stk, 'stkkind', 'split')
-    !     call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
-    !     call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
-    !     call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
-    !     call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
-    !     call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
-    !     if( ctfvars%l_phaseplate )then
-    !         call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
-    !     else
-    !         call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
-    !     endif
-    !     select case(ctfvars%ctfflag)
-    !         case(CTFFLAG_NO)
-    !             call self%os_stk%set(n_os_stk, 'ctf', 'no')
-    !         case(CTFFLAG_YES)
-    !             call self%os_stk%set(n_os_stk, 'ctf', 'yes')
-    !         case(CTFFLAG_FLIP)
-    !             call self%os_stk%set(n_os_stk, 'ctf', 'flip')
-    !         case DEFAULT
-    !             write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
-    !             stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
-    !     end select
-    !     if( self%os_mic%get_noris() == n_os_stk)then
-    !         call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))
-    !     endif
-    !     ! update particle oris objects
-    !     do i = 1, nptcls
-    !         o = os%get_ori(i)
-    !         call o%kill_chash()
-    !         call o%delete_entry('kv')
-    !         call o%delete_entry('cs')
-    !         call o%delete_entry('fraca')
-    !         call o%delete_entry('smpd')
-    !         if( ctfvars%ctfflag > 0 )then
-    !             if( .not.o%isthere('dfx') )then
-    !                 stop 'ERROR! ctf .ne. no and input lacks dfx; sp_project :: add_stk'
-    !             endif
-    !         endif
-    !         call o%set('stkind', real(n_os_stk))
-    !         if( .not.o%isthere('state') ) call o%set('state',1.)
-    !         call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
-    !         call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
-    !     enddo
-    ! end subroutine add_stk
-
     subroutine add_stk( self, stk, ctfvars )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: stk
         type(ctfparams),   intent(in)    :: ctfvars ! All CTF parameters associated with stk
         type(ori)                     :: o
-        character(len=:), allocatable :: stk_abspath, prev_imgfmt
-        character(len=STDLEN)         :: str
-        character(len=3)              :: imgfmt
+        character(len=:), allocatable :: stk_abspath
         integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer :: i, fromp, top
         ! full path and existence check
@@ -792,15 +649,6 @@ contains
             call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls)
             fromp = nint(self%os_stk%get(n_os_stk-1,'top')) + 1
             top   = fromp + nptcls - 1
-        endif
-        ! image format
-        str    = fname2ext(stk_abspath)
-        imgfmt = str(1:3)
-        if( self%projinfo%isthere('imgfmt') )then
-            call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
-            if( imgfmt(1:3).ne.trim(prev_imgfmt) )stop 'Cannot mix 2 image formats in one project! simple_sp_project::add_stk'
-        else
-            call self%projinfo%set(1,'imgfmt', trim(imgfmt))
         endif
         ! updates oris_objects
         call self%os_stk%set(n_os_stk, 'stk',     trim(stk_abspath))
@@ -990,10 +838,11 @@ contains
         use simple_image,      only: image
         class(sp_project),     intent(inout) :: self
         integer,               intent(in)    :: nparts
+        character(len=4),   parameter :: EXT = '.mrc'
         type(image)                   :: img
         type(ori)                     :: orig_stk
-        character(len=:), allocatable :: stk, tmp_dir, ext, imgkind, stkpart, dest_stkpart
-        character(len=:), allocatable :: ctfstr, prev_imgfmt
+        character(len=:), allocatable :: stk, tmp_dir, imgkind, stkpart, dest_stkpart
+        character(len=:), allocatable :: ctfstr
         character(len=STDLEN) :: cwd
         integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer    :: nptcls, nptcls_part, numlen, status
@@ -1008,16 +857,6 @@ contains
         endif
         smpd    = self%os_stk%get(1,'smpd')
         box     = nint(self%os_stk%get(1,'box'))
-        call self%os_stk%getter(1,'stk',stk)
-        ! image format
-        ext = fname2ext(stk)
-        ! under testing
-        ! if( self%projinfo%isthere('imgfmt') )then
-        !     call self%projinfo%getter(1, 'imgfmt', prev_imgfmt)
-        !     ! takes care of '.mrcs' format
-        !     if( ext(1:3).ne.trim(prev_imgfmt) )ext = trim(prev_imgfmt)
-        ! endif
-        deallocate(stk)
         ! copy prep
         call self%os_stk%getter(1,'imgkind', imgkind)
         nptcls  = self%get_nptcls()
@@ -1029,14 +868,13 @@ contains
         tmp_dir = trim(cwd) // '/tmp_stacks/'
         call simple_mkdir(trim(tmp_dir))
         do istk = 1,nparts
-            allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
+            allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
             cnt = 0
             do iptcl = parts(istk,1), parts(istk,2)
                 cnt = cnt + 1
                 call self%get_stkname_and_ind( 'ptcl2D', iptcl, stk, ind_in_stk )
                 call img%read(stk, ind_in_stk)
                 call img%write(stkpart, cnt)
-                deallocate(stk)
             enddo
             deallocate(stkpart)
         enddo
@@ -1046,7 +884,6 @@ contains
             do istk = 1,n_os_stk
                 call self%os_stk%getter(istk,'stk', stkpart)
                 call del_file(stkpart)
-                deallocate(stkpart)
             enddo
         endif
         ! updates new stack parts
@@ -1058,8 +895,8 @@ contains
         call self%os_stk%new(nparts)
         call simple_mkdir(trim(STKPARTSDIR), status=status)
         do istk = 1,nparts
-            allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//'.'//trim(ext))
-            allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//'.'//trim(ext))
+            allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
+            allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             status = simple_rename(trim(stkpart), trim(dest_stkpart))
             deallocate(stkpart)
             call simple_full_path(dest_stkpart, stkpart, 'sp_project :: split_stk')
@@ -1118,16 +955,27 @@ contains
         class(sp_project),          intent(inout) :: self
         character(len=*), optional, intent(in)    :: dir
         character(len=:), allocatable :: ext, newname, stkname
+        character(len=4) :: ext_out
         integer :: imic, nmics
         nmics = self%os_stk%get_noris()
         do imic=1,nmics
             call self%os_stk%getter(imic, 'stk', stkname)
             ext = fname2ext(trim(stkname))
+            select case(fname2format(stkname))
+                case('M','D','B')
+                    ext_out = '.mrc'
+                case('S')
+                    ext_out = '.spi'
+                case DEFAULT
+                    write(*,*)'format: ', trim(ext)
+                    call simple_stop('This file format is not supported by SIMPLE; simple_sp_project::add_scale_tag')
+            end select
             if(present(dir))then
-                newname = trim(dir)//basename(add2fbody(stkname, '.'//ext, trim(SCALE_SUFFIX)))
+                newname = trim(dir)//basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
             else
-                newname = add2fbody(stkname, '.'//ext, trim(SCALE_SUFFIX))
+                newname = add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX))
             endif
+            newname = fname_new_ext(newname, ext_out(2:4))
             call self%os_stk%set(imic, 'stk', newname)
         end do
     end subroutine add_scale_tag
