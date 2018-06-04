@@ -60,7 +60,6 @@ type strategy3D_srch
     procedure :: prep4srch
     procedure :: greedy_subspace_srch
     procedure :: inpl_srch
-    procedure :: cont_srch
     procedure :: calc_corr
     procedure :: store_solution
     procedure :: kill
@@ -250,10 +249,40 @@ contains
 
     subroutine inpl_srch( self )
         class(strategy3D_srch), intent(inout) :: self
-        real    :: cxy(3)
-        integer :: i, ref, irot
+        type(ori) :: o
+        real      :: cxy(3)
+        integer   :: i, ref, irot, cnt
+        logical   :: found_better
         if( DOCONTINUOUS )then
-            call self%cont_srch
+            ! BFGS
+            call o%new
+            cnt = 0
+            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                cnt = cnt + 1
+                ref = s3D%proj_space_inds(self%iptcl_map, i)
+                if( cnt <= CONTNPEAKS )then
+                    ! continuous refinement over all df:s
+                    call o%set_euler(s3D%proj_space_euls(self%iptcl_map,ref,:))
+                    call o%set_shift([0.,0.])
+                    call self%grad_orisrch_obj%set_particle(self%iptcl)
+                    cxy = self%grad_orisrch_obj%minimize(o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
+                    if( found_better )then
+                        s3D%proj_space_euls(self%iptcl_map, ref, :) = o%get_euler()
+                        s3D%proj_space_corrs(self%iptcl_map,ref)    = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref,:)  = cxy(2:3)
+                    endif
+                else
+                    ! refinement of in-plane rotation (discrete) & shift (continuous)
+                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        ! irot > 0 guarantees improvement found, update solution
+                        s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
+                        s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
+                    endif
+                endif
+            end do
         else
             if( self%doshift )then
                 ! BFGS
@@ -272,42 +301,6 @@ contains
             DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
         endif
     end subroutine inpl_srch
-
-    subroutine cont_srch( self )
-        class(strategy3D_srch), intent(inout) :: self
-        type(ori) :: o
-        real      :: cxy(3)
-        integer   :: i, ref, irot
-        logical   :: found_better
-        if( self%doshift )then
-            ! BFGS
-            call o%new
-            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                ref = s3D%proj_space_inds(self%iptcl_map, i)
-                call o%set_euler(s3D%proj_space_euls(self%iptcl_map,ref,:))
-                call o%set_shift([0.,0.])
-                call self%grad_orisrch_obj%set_particle(self%iptcl)
-                cxy = self%grad_orisrch_obj%minimize(o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
-                if( found_better )then
-                    s3D%proj_space_euls(self%iptcl_map, ref, :) = o%get_euler()
-                    s3D%proj_space_corrs(self%iptcl_map,ref)    = cxy(1)
-                    s3D%proj_space_shift(self%iptcl_map,ref,:)  = cxy(2:3)
-                else
-                    ! fall back on the previous method
-                    ref = s3D%proj_space_inds(self%iptcl_map, i)
-                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        ! irot > 0 guarantees improvement found, update solution
-                        s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
-                        s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
-                    endif
-                endif
-            end do
-        endif
-        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED CONT SEARCH'
-    end subroutine cont_srch
 
     subroutine calc_corr( self )
         class(strategy3D_srch), intent(inout) :: self
