@@ -811,7 +811,7 @@ contains
 !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
         ! determines whether at least one volume is on the cmdline
         vol_defined = .false.
-        do i=1,self%nstates
+        do i=1,size(vol_defined)
             if( cline%defined( trim('vol')//int2str(i) ))then
                 vol_defined(i) = .true.
             endif
@@ -823,8 +823,8 @@ contains
             endif
         else
             if( any(vol_defined) )then
-                do i=1,self%nstates
-                    call check_vol( i )
+                do i=1,size(vol_defined)
+                    if(vol_defined(i))call check_vol( i )
                 end do
             endif
         endif

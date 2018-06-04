@@ -28,11 +28,12 @@ type, extends(image) :: reconstructor
     real                        :: shconst_rec(3) = 0.          !< memoized constants for origin shifting
     integer                     :: wdim           = 0           !< dim of interpolation matrix
     integer                     :: nyq            = 0           !< Nyqvist Fourier index
+    integer                     :: sh_lim         = 0           !< limit for shell-limited reconstruction
     integer                     :: ldim_img(3)    = 0           !< logical dimension of the original image
     integer                     :: ldim_exp(3,2)  = 0           !< logical dimension of the expanded complex matrix
     integer                     :: lims(3,2)      = 0           !< Friedel limits
     integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
-    integer                     :: cyc_lims(3,2)  = 0           !< redundant limits
+    integer                     :: cyc_lims(3,2)  = 0           !< redundant limits of the 2D image
     integer                     :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
     logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
@@ -43,6 +44,8 @@ type, extends(image) :: reconstructor
     procedure          :: reset
     procedure          :: reset_exp
     procedure          :: apply_weight
+    procedure          :: set_lplim
+    procedure          :: unset_lplim
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
@@ -88,6 +91,7 @@ contains
         if( present(expand) ) l_expand = expand
         self%ldim_img    =  self%get_ldim()
         self%nyq         =  self%get_lfny(1)
+        self%sh_lim      =  self%nyq
         self%winsz       =  params_glob%winsz
         self%alpha       =  params_glob%alpha
         self%ctfflag     =  spproj%get_ctfflag_type(params_glob%oritype)
@@ -206,6 +210,32 @@ contains
         endif
     end subroutine apply_weight
 
+    subroutine set_lplim( self, lp )
+        class(reconstructor), intent(inout) :: self !< this instance
+        real,                 intent(in)    :: lp   !< low-pas limit
+        ! low-pass limited reconstruction
+        write(*,*) 'self%nyq',self%nyq
+        write(*,*) 'self%ldim_img',self%ldim_img
+        write(*,*) 'self%lims:', self%lims
+        write(*,*) 'self%cyc_lims', self%cyc_lims
+        write(*,*) 'self%ldim_exp', self%ldim_exp
+        self%sh_lim = calc_fourier_index(lp, self%ldim_img(1), self%get_smpd()) + 1
+        self%sh_lim = self%sh_lim + ceiling(2.*max(KBWINSZ,self%winsz))
+        if( params_glob%eo.eq.'yes' )self%sh_lim = self%sh_lim + 3
+        self%sh_lim = min(self%sh_lim, self%nyq)
+        write(*,*) 'lp', lp
+        write(*,*) 'self%sh_lim', self%sh_lim
+        self%cyc_lims(:,1) = self%cyc_lims(:,1) + (self%nyq-self%sh_lim) - ceiling(2.*max(KBWINSZ,self%winsz))
+        self%cyc_lims(:,2) = self%cyc_lims(:,2) - (self%nyq-self%sh_lim) + ceiling(2.*max(KBWINSZ,self%winsz))
+        write(*,*) 'self%cyc_lims', self%cyc_lims
+    end subroutine set_lplim
+
+    subroutine unset_lplim( self )
+        class(reconstructor), intent(inout) :: self !< this instance
+        self%sh_lim   = self%nyq
+        self%cyc_lims = self%loop_lims(3)
+    end subroutine unset_lplim
+
     ! GETTERS
 
     !> get the kbinterpol window
@@ -307,7 +337,7 @@ contains
                 do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
                     rsh_sq = real(h*h + k*k)
                     sh     = nint(sqrt(rsh_sq))
-                    if( sh > self%nyq + 1 ) cycle
+                    if( sh > self%sh_lim + 1 ) cycle
                     logi = [h,k,0]
                     vec  = real(logi)
                     ! non-uniform sampling location
@@ -436,7 +466,7 @@ contains
                     do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
                         rsh_sq = real(h*h + k*k)
                         sh     = nint(sqrt(rsh_sq))
-                        if( sh > self%nyq + 1 ) cycle
+                        if( sh > self%sh_lim + 1 ) cycle
                         logi = [h,k,0]
                         vec  = real(logi)
                         ! non-uniform sampling location
