@@ -25,6 +25,7 @@ type :: parameters
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
+    character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: cure='no'
@@ -399,18 +400,18 @@ contains
         class(parameters), target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         logical,         optional, intent(in)    :: silent
-        character(len=LONGSTRLEN), allocatable :: sp_files(:)
-        character(len=:),          allocatable :: stk_part_fname_sc, phaseplate, ctfflag
-        character(len=:),          allocatable :: debug_local, verbose_local
-        logical               :: vol_defined(MAXS)
-        character(len=STDLEN) :: stk_part_fname
-        character(len=1)      :: checkupfile(50)
-        type(binoris)         :: bos
-        type(sp_project)      :: spproj
-        type(ori)             :: o
-        integer               :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        integer               :: idir, nsp_files
-        logical               :: nparts_set, sp_required, ssilent
+        character(len=LONGSTRLEN), allocatable   :: sp_files(:)
+        character(len=:),          allocatable   :: stk_part_fname_sc, phaseplate, ctfflag
+        character(len=:),          allocatable   :: debug_local, verbose_local
+        logical                       :: vol_defined(MAXS)
+        character(len=STDLEN)         :: stk_part_fname
+        character(len=1)              :: checkupfile(50)
+        character(len=:), allocatable :: absname
+        type(binoris)    :: bos
+        type(sp_project) :: spproj
+        type(ori)        :: o
+        integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate, idir, nsp_files
+        logical          :: nparts_set, sp_required, ssilent
         ssilent = .false.
         if( present(silent) ) ssilent = silent
         ! seed random number generator
@@ -448,6 +449,7 @@ contains
         call check_carg('classtats',      self%classtats)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
+        call check_carg('continue',       self%continue)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfstats',       self%ctfstats)
@@ -778,13 +780,22 @@ contains
         endif
         if( nsp_files == 1 .and. sp_required )then
             ! good, we found a single monolithic project file
-            ! set projfile and projname fields
-            self%projfile = trim(sp_files(1))
-            self%projname = get_fbody(self%projfile, 'simple')
+            ! set projfile and projname fields unless given on command line
+            if( .not. cline%defined('projfile') ) self%projfile = trim(sp_files(1))
+            self%projname = get_fbody(basename(self%projfile), 'simple')
             ! update command line so that prototype copy in distr commanders transfers the info
             if( .not. cline%defined('projfile') ) call cline%set('projfile', trim(self%projfile))
             if( .not. cline%defined('projname') ) call cline%set('projname', trim(self%projname))
         endif
+        ! put a full path on projfile
+        if( self%projfile .ne. '' )then
+            if( file_exists(self%projfile) )then
+                call simple_full_path(trim(self%projfile), absname, 'simple_parameters::new')
+                self%projfile = absname
+                self%projname = get_fbody(basename(self%projfile), 'simple')
+            endif
+        endif
+        ! execution directory
         if( self%mkdir .eq. 'yes' )then
             if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
                 ! the associated(self%ptr2prg) condition required for commanders executed within
@@ -798,7 +809,12 @@ contains
                 call simple_chdir('./'//trim(self%exec_dir))
                 if( sp_required )then
                     ! copy the project file from upstairs
-                    call syslib_copy_file_stream('../'//trim(self%projfile), './'//trim(self%projfile))
+                    call syslib_copy_file(trim(self%projfile), './'//basename(self%projfile))
+                    ! update the projfile/projname
+                    self%projfile = './'//basename(self%projfile)
+                    call simple_full_path(trim(self%projfile), absname, 'simple_parameters::new')
+                    self%projfile = absname
+                    self%projname = get_fbody(basename(self%projfile), 'simple')
                     ! cwd of SP-project will be updated in the builder
                 endif
                 ! get new cwd

@@ -551,24 +551,26 @@ contains
         type(check_3Dconv_commander)        :: xcheck_3Dconv
         type(postprocess_commander)         :: xpostprocess
         ! command lines
-        type(cmdline)         :: cline_reconstruct3D_distr
-        type(cmdline)         :: cline_refine3D_init
-        type(cmdline)         :: cline_check_3Dconv
-        type(cmdline)         :: cline_volassemble
-        type(cmdline)         :: cline_postprocess
+        type(cmdline)    :: cline_reconstruct3D_distr
+        type(cmdline)    :: cline_refine3D_init
+        type(cmdline)    :: cline_check_3Dconv
+        type(cmdline)    :: cline_volassemble
+        type(cmdline)    :: cline_postprocess
         ! other variables
-        type(parameters)      :: params
-        type(builder)         :: build
-        type(qsys_env)        :: qenv
-        type(chash)           :: job_descr
-        character(len=STDLEN), allocatable :: state_assemble_finished(:)
-        integer,               allocatable :: state_pops(:)
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        character(len=:),          allocatable :: vol_fname, prev_refine_path, target_name
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        character(len=STDLEN),     allocatable :: state_assemble_finished(:)
+        integer,                   allocatable :: state_pops(:)
         character(len=STDLEN) :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
         character(len=STDLEN) :: vol_iter_odd, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
-        real                  :: corr, corr_prev
-        integer               :: s, state, iter, iostat
-        logical               :: vol_defined, have_oris, do_abinitio, converged
+        real    :: corr, corr_prev, smpd
+        integer :: s, state, iter, iostat, box, i, nfiles
+        logical :: vol_defined, have_oris, do_abinitio, converged
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_spproj(cline, params)
         ! set mkdir to no (to avoid nested directory structure)
@@ -603,6 +605,30 @@ contains
         call build%spproj%split_stk(params%nparts)
         DebugPrint ' In exec_refine3D_distr; begin starting models'
         ! GENERATE STARTING MODELS & ORIENTATIONS
+        if( params%continue .eq. 'yes' )then
+            ! we are continuing from a previous refinement round,
+            ! i.e. projfile is fetched from a X_refine3D dir
+            do state=1,params%nstates
+                vol = 'vol' // int2str(state)
+                call build%spproj%get_vol('vol', state, vol_fname, smpd, box)
+                call cline%set(trim(vol), vol_fname)
+                params%vols(state) = vol_fname
+            end do
+            ! if we are doing fractional volume update, partial reconstructions need to be carried over
+            if( params%l_frac_update )then
+                prev_refine_path = get_fpath(vol_fname)
+                call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
+                nfiles = size(list)
+                if( params%nparts /= nfiles/2 )then
+                    write(*,*) 'ERROR! # partitions not consistent with previous refinement round'
+                    stop 'simple_commander_distr_wflows ::  exec_refine3D_distr'
+                endif
+                do i=1,nfiles
+                    target_name = './'//basename(trim(list(i)))
+                    call syslib_copy_file(trim(list(i)), target_name)
+                end do
+            endif
+        endif
         vol_defined = .false.
         do state = 1,params%nstates
             vol = 'vol' // int2str(state)

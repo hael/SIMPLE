@@ -3,8 +3,8 @@ module simple_fileio
 use simple_defs
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
 use simple_error,   only: allocchk, simple_stop, simple_error_check
-use simple_syslib, only: file_exists, is_open, is_file_open, is_io,  &
-    &exec_cmdline, del_file, simple_list_files, simple_glob_list_tofile
+use simple_syslib,  only: file_exists, is_open, is_file_open, is_io,&
+&exec_cmdline, del_file, simple_list_files, simple_glob_list_tofile, syslib_copy_file
 implicit none
 
 interface fclose
@@ -18,15 +18,15 @@ contains
 
     !> \brief  is for checking file IO status
     subroutine fileiochk( message, iostat , die)
-        character(len=*), intent(in)              :: message  !< error message
-        integer,          intent(inout), optional :: iostat   !< error status
-        logical,          intent(in),    optional :: die      !< do you want to terminate or not
+        character(len=*),  intent(in)    :: message  !< error message
+        integer, optional, intent(inout) :: iostat   !< error status
+        logical, optional, intent(in)    :: die      !< do you want to terminate or not
         logical :: die_this
         integer :: iostat_this
         die_this=.true.
         iostat_this=2
-        if(present(die)) die_this=die
-        if (present(iostat)) iostat_this=iostat
+        if( present(die) ) die_this=die
+        if( present(iostat) ) iostat_this=iostat
         if( iostat_this /= 0 ) write(stderr,'(a)') message
         if (iostat_this == -1)then
             write(stderr,'(a)') "fileio: EOF reached "
@@ -285,8 +285,8 @@ contains
 
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
-        character(len=*), intent(in)    :: fname !< input filename
-        character(len=:), allocatable   :: tfile
+        character(len=*), intent(in)  :: fname !< input filename
+        character(len=:), allocatable :: tfile
         integer          :: n, funit, ios,io_status
         character(len=1) :: junk
         if( file_exists(fname) )then
@@ -337,8 +337,8 @@ contains
 
     !> \brief  return file size in bytes
     function funit_size(unit) result(sz)
-        integer, intent(in)          :: unit !< input file unit
-        integer(kind=8)              :: sz
+        integer, intent(in) :: unit !< input file unit
+        integer(kind=8)     :: sz
         inquire(unit=unit,size=sz)
     end function funit_size
 
@@ -446,7 +446,20 @@ contains
         else
             allocate(new_fname, source=trim(fname(pos+1:length)))
         endif
-    end function
+    end function basename
+
+    !> get path from file name
+    pure function get_fpath( fname ) result( path )
+        character(len=*), intent(in)  :: fname !< abs filename
+        character(len=:), allocatable :: path
+        integer :: pos
+        pos = scan(fname,'/',back=.true.)
+        if( pos == 0 )then
+            allocate(path, source='./')
+        else
+            allocate(path, source=trim(fname(:pos)))
+        endif
+    end function get_fpath
 
     !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
@@ -613,12 +626,9 @@ contains
     end function file2rarr
 
     subroutine simple_copy_file(fname1, fname2, status)
-        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
+        character(len=*), intent(in) :: fname1, fname2 !< input filenames
         integer, intent(out), optional :: status
-        character(len=STDLEN) :: cmd
-        status=0
-        cmd = 'cp '//trim(fname1)//'  '//trim(fname2)
-        call exec_cmdline(cmd)
+        call syslib_copy_file(fname1, fname2, status)
     end subroutine simple_copy_file
 
 end module simple_fileio

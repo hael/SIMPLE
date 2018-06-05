@@ -358,140 +358,62 @@ contains
         if(present(status))status=iostat
     end subroutine syslib_symlink
 
-
-    !> \brief Copy file1 to file1
     subroutine syslib_copy_file(fname1, fname2, status)
-        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
-        integer, intent(out), optional :: status
-        character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=1) c
-        integer:: in, out, ioerr
-        status = 0
-        if(.not. file_exists(fname1) )&
-            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" does not exist",__FILENAME__,__LINE__)
-        if( dir_exists(fname1) )&
-            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
-
-        allocate(f1, source=trim(adjustl(fname1))//achar(0))
-        allocate(f2, source=trim(adjustl(fname2))//achar(0))
-        status = fcopy(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
-        if (status/=0)&
-            call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
-            trim(fname2),__FILENAME__,__LINE__)
-        deallocate(f1,f2)
-    end subroutine syslib_copy_file
-
-    !> \brief Copy file1 to file1
-    subroutine syslib_copy_file3(fname1, fname2, status)
-        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
-        integer, intent(out), optional :: status
-        character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=1) c
-        integer:: in, out, ioerr
-        status = 0
-        if(.not. file_exists(fname1) )&
-            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" does not exist",__FILENAME__,__LINE__)
-        if( dir_exists(fname1) )&
-            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
-
-        if(global_debug) print *,"In simple_copy_file"
-        allocate(f1, source=trim(adjustl(fname1))//achar(0))
-        allocate(f2, source=trim(adjustl(fname2))//achar(0))
-        status = fcopy_mmap(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
-        if (status/=0)&
-            call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
-            trim(fname2),__FILENAME__,__LINE__)
-        deallocate(f1,f2)
-    end subroutine syslib_copy_file3
-
-    !> \brief Copy file1 to file1
-    subroutine syslib_copy_file2(fname1, fname2, status)
-        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
-        integer, intent(out), optional :: status
-        character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=1) c
-        integer:: in, out, ioerr
-        status = 0
-        if(.not. file_exists(fname1) )&
-            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" does not exist",__FILENAME__,__LINE__)
-        if( dir_exists(fname1) )&
-            call simple_stop("simple_syslib::simple_copy_file failed, "//trim(fname1)//" is a directory",__FILENAME__,__LINE__)
-
-        allocate(f1, source=trim(adjustl(fname1))//achar(0))
-        allocate(f2, source=trim(adjustl(fname2))//achar(0))
-        status = fcopy2(trim(f1), len_trim(f1), trim(f2), len_trim(f2))
-        if (status/=0)&
-            call simple_stop("simple_syslib::simple_copy_file failed "//trim(fname1)//" "//&
-            trim(fname2),__FILENAME__,__LINE__)
-        deallocate(f1,f2)
-    end subroutine syslib_copy_file2
-
-    subroutine syslib_copy_file_direct(fname1, fname2, status)
-        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
-        integer, intent(out), optional :: status
-        character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=1) c
-        integer:: in, out, ioerr ,irec, i, I_RECLENGTH
-        !! DIRECT method
-        if(present(status))status=0
-        inquire( iolength=I_RECLENGTH)c
-        open(newunit=out, file=trim(adjustl(fname2)), access='direct', status='new', action='write', iostat=ioerr, recl=I_RECLENGTH)
-        if(ioerr/=0)then
-            open(newunit=in, file=trim(adjustl(fname1)), access='direct', status='old', action='read', iostat=ioerr, recl=I_RECLENGTH)
-            if(ioerr/=0) then
-                do
-                    read(unit=in, rec=irec, iostat=ioerr) c
-                    if (ioerr.ne.0) exit
-                    write(unit=out, rec=irec, iostat=ioerr) c
-                    if(ioerr.ne.0) call simple_stop("simple_syslib::syslib_copy_file failed write char:"//trim(c),&
-                        __FILENAME__,__LINE__)
-                    irec = irec + 1
-                end do
-                close(out)
-            else
-                print *, "syslib_copy_file_direct:  unable to open ", trim(adjustl(fname1))
-                if(present(status)) status=ioerr
-            endif
-            close(in)
-        else
-            print *, "syslib_copy_file_direct:  unable to open ", trim(adjustl(fname2))
-            if(present(status))status=ioerr
+        character(len=*),  intent(in)  :: fname1, fname2 !< input filenames
+        integer, optional, intent(out) :: status
+        integer(dp),      parameter   :: MAXBUFSZ = 1e8  ! 100 MB max buffer size
+        character(len=1), allocatable :: byte_buffer(:)
+        integer(dp) :: sz, nchunks, leftover, bufsz, bytepos, in, out, ichunk
+        integer     :: ioerr
+        if( present(status) )status = 0
+        ! process input file
+        ! we need to inquire size before opening file as stream access
+        ! does not allow inquire of size from file unit
+        inquire(file=trim(fname1),size=sz)
+        open(newunit=in, file=trim(fname1), status="old", action="read", access="stream", iostat=ioerr)
+        if( ioerr /= 0 )then
+            print *,"In syslib_copy_file, failed to open input file ", trim(fname1)
+            call simple_error_check(ioerr,"syslib_copy_file input file not opened")
+            if( present(status) ) status = ioerr
+            return
         endif
-    end subroutine syslib_copy_file_direct
-
-    subroutine syslib_copy_file_stream(fname1, fname2, status)
-        character(len=*), intent(in)           :: fname1, fname2 !< input filenames
-        integer, intent(out), optional :: status
-        character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=1) c
-        integer:: in, out, ioerr
-        if(present(status))status = 0
-        open(newunit=out, file=trim(fname2), status="new", action="write", access="stream", iostat=ioerr)
-        if (ioerr == 0) then
-            open(newunit=in, file=trim(fname1), status="old", action="read", access="stream", iostat=ioerr)
-            if (ioerr == 0) then
-                ioerr = 0
-                do while (ioerr == 0)
-                    read(unit=in, iostat=ioerr) c
-                    if (ioerr == 0) then
-                        write(out, iostat=ioerr) c
-                        if(ioerr/=0) call simple_stop("simple_syslib::syslib_copy_file failed write char:"//c,&
-                            __FILENAME__,__LINE__)
-                    endif
-                end do
-                close(in)
-            else
-                print *,"In syslib_copy_file, failed to open input file ", fname1
-                call simple_error_check(ioerr,"syslib_copy_file input file not opened")
-                if(present(status))status = ioerr
-            end if
-            close(out)
+        if( sz <= MAXBUFSZ )then
+            nchunks  = 1
+            leftover = 0
+            bufsz    = sz
         else
-            print *,"In syslib_copy_file, failed to open output file ", fname2
+            nchunks  = sz / MAXBUFSZ
+            leftover = sz - nchunks * MAXBUFSZ
+            bufsz    = MAXBUFSZ
+        endif
+        ! allocate raw byte buffer
+        allocate(byte_buffer(bufsz))
+        ! process output file
+        open(newunit=out, file=trim(fname2), status="replace", action="write", access="stream", iostat=ioerr)
+        if( ioerr /= 0 )then
+            print *,"In syslib_copy_file, failed to open output file ", trim(fname2)
             call simple_error_check(ioerr,"syslib_copy_file output file not opened")
-            if(present(status))status = ioerr
-        end if
-    end subroutine syslib_copy_file_stream
+            if( present(status) ) status = ioerr
+            return
+        endif
+        bytepos = 1
+        do ichunk=1,nchunks
+            read(in,   pos=bytepos, iostat=ioerr) byte_buffer
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to read byte buffer ", __FILENAME__,__LINE__)
+            write(out, pos=bytepos, iostat=ioerr) byte_buffer
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to write byte buffer ", __FILENAME__,__LINE__)
+            bytepos = bytepos + bufsz
+        end do
+        ! take care of leftover
+        if( leftover > 0 )then
+            read(in,   pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to read byte buffer ", __FILENAME__,__LINE__)
+            write(out, pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to write byte buffer ", __FILENAME__,__LINE__)
+        endif
+        close(in)
+        close(out)
+    end subroutine syslib_copy_file
 
     !> \brief  Rename or move file
     function simple_rename( filein, fileout , overwrite,errmsg) result(file_status)
@@ -848,11 +770,11 @@ contains
 
     subroutine simple_list_files( pattern, list, id )
         use simple_strings, only: int2str
-        character(len=*),  intent(in) :: pattern
-        integer, optional, intent(in) :: id
+        character(len=*),                       intent(in)    :: pattern
+        character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
+        integer,                   optional,    intent(in)    :: id
         character(len=STDLEN)     :: cmd
         character(len=LONGSTRLEN) :: tmpfile
-        character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
         character(len=1) :: junk
         integer :: sz, funit, ios, i, nlines
         if( present(id) )then
@@ -1151,7 +1073,6 @@ contains
             write(*, fmt = '(F6.2,A2)') percent, '%'
             oldidle = times(4)
             oldsum = sumtimes
-
         end if
         cpu_usage=percent
     end function cpu_usage
@@ -1171,11 +1092,9 @@ contains
         character(*), parameter :: compilation_cmd = compiler_options()
         character(*), parameter :: compiler_ver = compiler_version()
 #endif
-
         integer, intent (in), optional :: file_unit
         integer  :: file_unit_op
         integer  :: status
-
         if (present(file_unit)) then
             file_unit_op = file_unit
         else
@@ -1225,7 +1144,6 @@ contains
         integer(kind=8), intent(out), optional :: valuePeak
         integer(kind=8), intent(out), optional :: valueSize
         integer(kind=8), intent(out), optional :: valueHWM
-
         character(len=200) :: filename=' '
         character(len=80)  :: line
         character(len=8)   :: pid_char=' '
@@ -1237,19 +1155,16 @@ contains
         if(present(valueSize))valueSize=-1
         if(present(valueHWM))valueHWM=-1
         !--- get process ID
-
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
         if(debug) print *,'simple_mem_usage:debug:  Fetching ', trim(filename)
         !--- read system file
-
         inquire (file=trim(filename),exist=ifxst)
         if (.not.ifxst) then
             write (*,*) 'system file does not exist'
             return
         endif
-
         open(newunit=unit, file=filename, action='read')
         ! the order of the following do loops is dependent on cat /proc/PID/status listing
         if(present(valuePeak))then

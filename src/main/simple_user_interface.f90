@@ -2262,13 +2262,15 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 1, 0, 13, 8, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 2, 0, 14, 8, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
         & sections for particle image matching', 'input volume e.g. vol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
         call refine3D%set_input('parm_ios', 1, mkdir_)
+        call refine3D%set_input('parm_ios', 2, projfile)
+        refine3D%parm_ios(2)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2289,6 +2291,7 @@ contains
         call refine3D%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
         &clustersym){no}', '(snhc|single|multi|greedy_single|cont_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
         call refine3D%set_input('srch_ctrls', 13, neigh)
+        call refine3D%set_input('srch_ctrls', 14, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

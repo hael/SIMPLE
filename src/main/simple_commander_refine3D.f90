@@ -171,7 +171,7 @@ contains
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             call refine3D_exec( cline, startit, converged) ! partition or not, depending on 'part'
         else
-            params%find = calc_fourier_index( params%lp, params%boxmatch, params%smpd )
+            params%find = calc_fourier_index( params%lp, params%boxmatch, params%smpd)
             ! init extremal dynamics
             if( cline%defined('extr_iter') )then
                 ! all is well
