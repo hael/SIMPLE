@@ -45,7 +45,6 @@ type, extends(image) :: reconstructor
     procedure          :: reset_exp
     procedure          :: apply_weight
     procedure          :: set_lplim
-    procedure          :: unset_lplim
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
@@ -210,31 +209,22 @@ contains
         endif
     end subroutine apply_weight
 
+    ! this updates frequency indices and limits of the images for low-pass limited reconstruction
     subroutine set_lplim( self, lp )
         class(reconstructor), intent(inout) :: self !< this instance
         real,                 intent(in)    :: lp   !< low-pas limit
-        ! low-pass limited reconstruction
-        write(*,*) 'self%nyq',self%nyq
-        write(*,*) 'self%ldim_img',self%ldim_img
-        write(*,*) 'self%lims:', self%lims
-        write(*,*) 'self%cyc_lims', self%cyc_lims
-        write(*,*) 'self%ldim_exp', self%ldim_exp
+        integer :: i
+        ! updates frequency limit for ring/shell limit
         self%sh_lim = calc_fourier_index(lp, self%ldim_img(1), self%get_smpd()) + 1
-        self%sh_lim = self%sh_lim + ceiling(2.*max(KBWINSZ,self%winsz))
-        if( params_glob%eo.eq.'yes' )self%sh_lim = self%sh_lim + 3
+        self%sh_lim = self%sh_lim + 2*ceiling(max(KBWINSZ,self%winsz)) + 1
+        if( params_glob%eo.eq.'yes' )self%sh_lim = self%sh_lim + 5
         self%sh_lim = min(self%sh_lim, self%nyq)
-        write(*,*) 'lp', lp
-        write(*,*) 'self%sh_lim', self%sh_lim
-        self%cyc_lims(:,1) = self%cyc_lims(:,1) + (self%nyq-self%sh_lim) - ceiling(2.*max(KBWINSZ,self%winsz))
-        self%cyc_lims(:,2) = self%cyc_lims(:,2) - (self%nyq-self%sh_lim) + ceiling(2.*max(KBWINSZ,self%winsz))
-        write(*,*) 'self%cyc_lims', self%cyc_lims
+        ! updates image frequency limit for improved threading
+        do i=1,3
+            self%cyc_lims(i,1) = max(self%cyc_lims(i,1), self%cyc_lims(i,1)+(self%nyq-self%sh_lim)-1)
+            self%cyc_lims(i,2) = min(self%cyc_lims(i,2), self%cyc_lims(i,2)-(self%nyq-self%sh_lim)+1)
+        enddo
     end subroutine set_lplim
-
-    subroutine unset_lplim( self )
-        class(reconstructor), intent(inout) :: self !< this instance
-        self%sh_lim   = self%nyq
-        self%cyc_lims = self%loop_lims(3)
-    end subroutine unset_lplim
 
     ! GETTERS
 

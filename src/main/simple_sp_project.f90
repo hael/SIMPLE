@@ -776,9 +776,12 @@ contains
         character(len=*),    intent(in)    :: stktab
         class(oris),         intent(inout) :: os ! parameters associated with stktab
         type(ctfparams) :: ctfvars
-        type(ori)       :: o_stk
+        type(ori)       :: o_ptcl, o_stk
+        character(len=:),          allocatable :: stk_abspath
         character(len=LONGSTRLEN), allocatable :: stknames(:)
-        integer :: istk, ldim(3), ldim_here(3), nptcls, n_os, iptcl, nstks
+        integer,                   allocatable :: nptcls_arr(:)
+        integer :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
+        integer :: i, istk, fromp, top, nptcls, n_os, iptcl, nstks, nptcls_tot, stk_ind
         ! file exists?
         if( .not. file_exists(stktab) )then
             write(*,*) 'Inputted stack list (stktab): ', trim(stktab)
@@ -794,12 +797,13 @@ contains
             write(*,*) '# stacks in stktab: ', nstks
             stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stktab'
         endif
+        ! first pass for sanity check and determining dimensions
+        allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
-            if( .not.file_exists(stknames(istk)) )then
-                write(*,*) 'Inputted stack: ', trim(stknames(istk))
-                stop 'does not exist in cwd; sp_project :: add_stktab'
-            endif
-            o_stk = os%get_ori(istk)
+            ! full path and existence check
+            call simple_full_path(stknames(istk), stk_abspath, 'sp_project :: add_stktab')
+            stknames(istk) = trim(stk_abspath)
+            o_stk          = os%get_ori(istk)
             ! logical dimension management
             call find_ldim_nptcls(trim(stknames(istk)), ldim, nptcls)
             ldim(3) = 1
@@ -829,9 +833,83 @@ contains
             if( .not. o_stk%isthere('dfx') )    stop 'ERROR! dfx missing in os input; sp_project :: add_stktab'
             if( .not. o_stk%isthere('dfy') )    stop 'ERROR! dfy missing in os input; sp_project :: add_stktab'
             if( .not. o_stk%isthere('angast') ) stop 'ERROR! angast missing in os input; sp_project :: add_stktab'
-            ctfvars = o_stk%get_ctfvars()
-            call self%add_stk(stknames(istk), ctfvars)
+            ! stash number of images
+            nptcls_arr(istk) = nptcls
         enddo
+        ! oris allocation
+        nptcls_tot  = sum(nptcls_arr)
+        n_os_stk    = self%os_stk%get_noris()
+        n_os_ptcl2D = self%os_ptcl2D%get_noris()
+        n_os_ptcl3D = self%os_ptcl3D%get_noris()
+        if( n_os_stk == 0 )then
+            call self%os_stk%new(nstks)
+            call self%os_ptcl2D%new(nptcls_tot)
+            call self%os_ptcl3D%new(nptcls_tot)
+            fromp = 1
+        else
+            if( .not.self%os_stk%isthere(n_os_stk,'top') )then
+                stop 'FROMP/TOP keys should always be informed; simple_sp_project :: add_stk'
+            endif
+            call self%os_stk%reallocate(n_os_stk + nstks)
+            call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls_tot)
+            call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls_tot)
+            fromp = nint(self%os_stk%get(n_os_stk,'top')) + 1
+        endif
+        ! parameters transfer
+        do istk=1,nstks
+            o_stk   = os%get_ori(istk)
+            top     = fromp + nptcls_arr(istk) - 1 ! global index
+            ctfvars = o_stk%get_ctfvars()
+            stk_ind = n_os_stk + istk
+            ! updates stk segment
+            call self%os_stk%set(stk_ind, 'stk',     trim(stknames(istk)))
+            call self%os_stk%set(stk_ind, 'box',     real(ldim(1)))
+            call self%os_stk%set(stk_ind, 'nptcls',  real(nptcls_arr(istk)))
+            call self%os_stk%set(stk_ind, 'fromp',   real(fromp))
+            call self%os_stk%set(stk_ind, 'top',     real(top))
+            call self%os_stk%set(stk_ind, 'stkkind', 'split')
+            call self%os_stk%set(stk_ind, 'imgkind', 'ptcl')
+            call self%os_stk%set(stk_ind, 'state',   1.0) ! default on import
+            select case(ctfvars%ctfflag)
+                case(CTFFLAG_NO)
+                    call self%os_stk%set(stk_ind, 'ctf', 'no')
+                case(CTFFLAG_YES)
+                    call self%os_stk%set(stk_ind, 'ctf', 'yes')
+                case(CTFFLAG_FLIP)
+                    call self%os_stk%set(stk_ind, 'ctf', 'flip')
+                case DEFAULT
+                    write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
+                    stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
+            end select
+            call self%os_stk%set(stk_ind, 'smpd',    ctfvars%smpd)
+            call self%os_stk%set(stk_ind, 'kv',      ctfvars%kv)
+            call self%os_stk%set(stk_ind, 'cs',      ctfvars%cs)
+            call self%os_stk%set(stk_ind, 'fraca',   ctfvars%fraca)
+            if( ctfvars%l_phaseplate )then
+                call self%os_stk%set(stk_ind, 'phaseplate', 'yes')
+            else
+                call self%os_stk%set(stk_ind, 'phaseplate', 'no')
+            endif
+            ! updates particles segment
+            call o_ptcl%new
+            call o_ptcl%set('dfx',    ctfvars%dfx)
+            call o_ptcl%set('dfy',    ctfvars%dfy)
+            call o_ptcl%set('angast', ctfvars%angast)
+            if( ctfvars%l_phaseplate ) call o_ptcl%set('phshift', ctfvars%phshift)
+            call o_ptcl%set('stkind', real(stk_ind))
+            call o_ptcl%set('state',1.) ! default on import
+            do i=1,nptcls_arr(istk)
+                call self%os_ptcl2D%set_ori(fromp+i-1, o_ptcl)
+                call self%os_ptcl3D%set_ori(fromp+i-1, o_ptcl)
+            enddo
+            ! update
+            fromp = top + 1  ! global index
+        enddo
+        ! preprocessing / streaming adds pairs: one micrograph and one stack
+        ! so this keeps track of the index in this setting
+        if( nstks == 1 .and. self%os_mic%get_noris() == n_os_stk+1 )then
+            call self%os_stk%set(n_os_stk+1, 'micind',  real(n_os_stk+1))
+        endif
     end subroutine add_stktab
 
     !>  Only commits to disk when a change to the project is made
