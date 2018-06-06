@@ -36,6 +36,7 @@ public
 
 !> libc interface
 interface
+
     ! rmdir    CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
     ! On  success,  zero is returned.  On error, -1 is returned, and errno is
     ! set appropriately.
@@ -416,7 +417,7 @@ contains
     end subroutine syslib_copy_file
 
     !> \brief  Rename or move file
-    function simple_rename( filein, fileout , overwrite,errmsg) result(file_status)
+    function simple_rename( filein, fileout , overwrite, errmsg ) result(file_status)
         character(len=*), intent(in)  :: filein, fileout !< input filename
         logical, intent(in), optional :: overwrite      !< default true
         character(len=*), intent(in), optional  :: errmsg !< message
@@ -623,17 +624,6 @@ contains
         endif
         if(present(status)) status = io_status
     end subroutine simple_chdir
-
-    !> Make directory
-    subroutine simple_mkdir_old( path )
-        character(len=*), intent(in) :: path
-        integer :: iostat
-        logical :: dir_e
-        inquire( file=trim(adjustl(path)), exist=dir_e , iostat=iostat)
-        if (.not. dir_e ) then
-            call exec_cmdline('mkdir -p '//trim(adjustl(path))//' | true')
-        end if
-    end subroutine simple_mkdir_old
 
     !> \brief  Make directory -- fail when ignore is false
     !! return optional status 0=success

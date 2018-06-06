@@ -434,6 +434,22 @@ contains
         endif
     end function fname2ext
 
+    pure integer function fname2iter( fname )
+        use simple_strings, only: map_str_nrs, str2int
+        character(len=*), intent(in)  :: fname
+        character(len=:), allocatable :: iter_num_ext, nrstr
+        logical,          allocatable :: lnrs(:)
+        integer :: ind, i, istat
+        ind          = index(fname, 'iter')
+        iter_num_ext = fname(ind:)
+        lnrs         = map_str_nrs(iter_num_ext)
+        nrstr        = ''
+        do i=1,len_trim(iter_num_ext)
+            if( lnrs(i) ) nrstr = nrstr//iter_num_ext(i:i)
+        end do
+        call str2int(nrstr, istat, fname2iter)
+    end function fname2iter
+
     !> strip directory from filenames
     pure function basename( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename

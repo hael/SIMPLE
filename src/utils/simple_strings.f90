@@ -120,7 +120,7 @@ contains
 
     !> \brief  converts multiple spaces and tabs to single spaces;
     !!         deletes control characters; removes initial spaces.
-    subroutine compact(str)
+    subroutine compact( str )
         character(len=*), intent(inout) :: str
         character(len=1):: ch
         character(len=len_trim(str)):: outstr
@@ -154,40 +154,15 @@ contains
     !!         output in 'before'. The characters after the found delimiter are
     !!         output in 'str'.
     subroutine split_str(str, delim, before)
-      character(len=*), intent(inout) :: str
-      character(len=1), intent(in)    :: delim
-      character(len=*), intent(out)   :: before
-      integer :: index
-      str    = trim(str)
-      index  = scan(str, delim)
-      before = adjustl(trim(str(1:index-1)))
-      str    = adjustl(str(index+1:))
-  end subroutine split_str
-
-    !> \brief  finds the first instance of a character 'delim' in the
-    !!         the string 'str'. The characters before the found delimiter are
-    !!         output in 'before'. The characters after the found delimiter are
-    !!         output in 'str'.
-    ! subroutine nsplit_str(str, delim, before, n)
-    !   character(len=*), intent(inout) :: str
-    !   character(len=1), intent(in)    :: delim
-    !   character(len=*), intent(out)   :: before
-    !   integer, intent(in)    :: n
-    !   integer :: start, index, i
-    !   str    = trim(str)
-    !   index=1
-    !   start=1
-    !   before=''
-    !   do i=1,n
-    !       if (start >= len(str)) exit
-    !       index  = scan(str(start:), delim)
-    !       start=index
-    !   end do
-    !   if (index>1)then
-    !       before = trim(adjustl(str(1:index-1)))
-    !       str    = adjustl(str(index:))
-    !   endif
-    ! end subroutine nsplit_str
+        character(len=*), intent(inout) :: str
+        character(len=1), intent(in)    :: delim
+        character(len=*), intent(out)   :: before
+        integer :: index
+        str    = trim(str)
+        index  = scan(str, delim)
+        before = adjustl(trim(str(1:index-1)))
+        str    = adjustl(str(index+1:))
+    end subroutine split_str
 
     !> \brief  finds the first instance of a character 'delim' in the
     !!         the string 'str'. The characters before the found delimiter are
@@ -232,44 +207,6 @@ contains
         return
     end subroutine split
 
-    !> \brief  replace any tokens in string (str) with char rch
-    ! subroutine replace(str, tokens, rch)
-    !     character(len=*), intent(inout) :: str        !< input string
-    !     character(len=*), intent(inout) :: tokens     !< array of searchable chars
-    !     character(len=1), intent(in) :: rch           !< replace any element in tokens with char
-    !     character(len=1)             :: ch,tok
-    !     character(len=len_trim(str)) :: outstr
-    !     integer :: lenstr,lensstr, k, i,j, ich, itoken
-    !     str = adjustl(str)
-    !     tokens = adjustl(tokens)
-    !     lensstr = len_trim(tokens)
-    !     outstr = adjustl(str)      ! initialise outstr
-    !     do j=1,lensstr
-    !         str = adjustl(outstr)  ! update str for each element in sstr in case rch == ''
-    !         lenstr = len_trim(str) ! re-adjust length
-    !         outstr = ''            ! reset outstr
-    !         k = 0
-    !         tok = tokens(j:j)
-    !         itoken = iachar(tok)
-    !         do i=1,lenstr
-    !             ch = str(i:i)
-    !             ich = iachar(ch)
-    !             if(ich == itoken) then  ! character in schs
-    !                 if ( len_trim(rch) == 0 ) then
-    !                     cycle
-    !                 else
-    !                     k = k + 1
-    !                     outstr(k:k) = rch
-    !                 end if
-    !             else
-    !                 k = k+1
-    !                 outstr(k:k) = ch
-    !             end if
-    !         end do
-    !     end do
-    !     str = adjustl(outstr)
-    ! end subroutine replace
-
     !> \brief  removes punctuation (except comma) characters in string str
     subroutine removepunct(str)
         character(len=*), intent(inout) :: str
@@ -284,19 +221,19 @@ contains
             ch = str(i:i)
             ich = iachar(ch)
             select case(ich)
-            case(32:43)  ! exclamation double-quote hash dollar percent ampersand quote ( ) * +  characters
-                cycle
-            case(45:47)  ! . - fwd-slash characters
-                cycle
-            case(58:64)  ! : ; < = > question-mark at characters
-                cycle
-            case(91:94)  !  _ ^ [ ] characters
-                cycle
-            case(123:126) ! { | }
-                cycle
-            case default
-                k = k + 1
-                outstr(k:k) = ch
+                case(32:43)   ! exclamation double-quote hash dollar percent ampersand quote ( ) * +  characters
+                    cycle
+                case(45:47)   ! . - fwd-slash characters
+                    cycle
+                case(58:64)   ! : ; < = > question-mark at characters
+                    cycle
+                case(91:94)   !  _ ^ [ ] characters
+                    cycle
+                case(123:126) ! { | }
+                    cycle
+                case default
+                    k = k + 1
+                    outstr(k:k) = ch
             end select
         end do
         str = adjustl(outstr)
@@ -349,12 +286,11 @@ contains
 
     !>  \brief  turn integer variable into character variable
     !! - now supports negative values
-    function int2str(intg) result(string)
+    pure function int2str(intg) result(string)
         integer, intent(in)           :: intg
         character(len=:), allocatable :: string
         integer :: ndigs_int, intg_this
         logical :: isnegative
-#include "simple_local_flags.inc"
         isnegative=.false.
         intg_this=intg
         if( intg < 0 )then
@@ -366,7 +302,7 @@ contains
         else
             ndigs_int = int(log10(real(intg_this))) + 1
         endif
-        if (isnegative) ndigs_int = ndigs_int +1
+        if (isnegative) ndigs_int = ndigs_int + 1
         allocate(character(len=ndigs_int) :: string)
         if (isnegative)then
             write(string,'(a1,i0)') '-',intg_this
@@ -402,7 +338,7 @@ contains
     end function int2str_pad
 
     !>  \brief  turns a string into an integer variable
-    subroutine str2int( string, io_stat, ivar )
+    pure subroutine str2int( string, io_stat, ivar )
         character(len=*), intent(in)  :: string
         integer,          intent(out) :: io_stat, ivar
         read(string,*, iostat=io_stat) ivar
@@ -410,7 +346,7 @@ contains
 
     !>  \brief  maps out the number characters in a string
     !!          .true. means is number, .false. means is not
-    function map_str_nrs( str ) result( map )
+    pure function map_str_nrs( str ) result( map )
         character(len=*), intent(in) :: str
         logical, allocatable :: map(:)
         integer :: lstr, i, j, ind

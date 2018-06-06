@@ -613,6 +613,13 @@ contains
                 call build%spproj%get_vol('vol', state, vol_fname, smpd, box)
                 call cline%set(trim(vol), vol_fname)
                 params%vols(state) = vol_fname
+                if( state == 1 )then
+                    ! get the iteration number
+                    iter = fname2iter(basename(vol_fname))
+                    ! startit becomes the next
+                    params%startit = iter + 1
+                    call cline%set('startit', real(params%startit))
+                endif
             end do
             ! if we are doing fractional volume update, partial reconstructions need to be carried over
             if( params%l_frac_update )then
@@ -726,7 +733,6 @@ contains
             call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
             ! ASSEMBLE ALIGNMENT DOCS
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
-
             ! ASSEMBLE VOLUMES
             if( params%eo.ne.'no' )then
                 call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
