@@ -570,7 +570,7 @@ contains
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real    :: corr, corr_prev, smpd
         integer :: s, state, iter, iostat, box, i, nfiles
-        logical :: vol_defined, have_oris, do_abinitio, converged
+        logical :: vol_defined, have_oris, do_abinitio, converged, err
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_spproj(cline, params)
         ! set mkdir to no (to avoid nested directory structure)
@@ -626,7 +626,14 @@ contains
                 prev_refine_path = get_fpath(vol_fname)
                 call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                 nfiles = size(list)
-                if( params%nparts /= nfiles/2 )then
+                err    = .false.
+                select case(trim(params%eo))
+                    case('no')
+                        if( params%nparts * 2 /= nfiles ) err = .true.
+                    case DEFAULT
+                        if( params%nparts * 4 /= nfiles ) err = .true.
+                end select
+                if( err )then
                     write(*,*) 'ERROR! # partitions not consistent with previous refinement round'
                     stop 'simple_commander_distr_wflows ::  exec_refine3D_distr'
                 endif

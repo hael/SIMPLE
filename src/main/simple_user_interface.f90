@@ -2262,7 +2262,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 2, 0, 14, 8, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 2, 0, 13, 8, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2275,23 +2275,22 @@ contains
         ! <empty>
         ! search controls
         call refine3D%set_input('srch_ctrls', 1, nspace)
-        call refine3D%set_input('srch_ctrls', 2, startit)
-        call refine3D%set_input('srch_ctrls', 3, trs)
-        call refine3D%set_input('srch_ctrls', 4, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call refine3D%set_input('srch_ctrls', 2, trs)
+        call refine3D%set_input('srch_ctrls', 3, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call refine3D%set_input('srch_ctrls', 5, maxits)
-        call refine3D%set_input('srch_ctrls', 6, update_frac)
-        call refine3D%set_input('srch_ctrls', 7, frac)
-        call refine3D%set_input('srch_ctrls', 8, pgrp)
-        call refine3D%set_input('srch_ctrls', 9, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
+        call refine3D%set_input('srch_ctrls', 4, maxits)
+        call refine3D%set_input('srch_ctrls', 5, update_frac)
+        call refine3D%set_input('srch_ctrls', 6, frac)
+        call refine3D%set_input('srch_ctrls', 7, pgrp)
+        call refine3D%set_input('srch_ctrls', 8, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
         &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false., 200.)
-        call refine3D%set_input('srch_ctrls', 10, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
+        call refine3D%set_input('srch_ctrls', 9, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false., 1.0)
-        call refine3D%set_input('srch_ctrls', 11, objfun)
-        call refine3D%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
+        call refine3D%set_input('srch_ctrls', 10, objfun)
+        call refine3D%set_input('srch_ctrls', 11, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
         &clustersym){no}', '(snhc|single|multi|greedy_single|cont_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
-        call refine3D%set_input('srch_ctrls', 13, neigh)
-        call refine3D%set_input('srch_ctrls', 14, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call refine3D%set_input('srch_ctrls', 12, neigh)
+        call refine3D%set_input('srch_ctrls', 13, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
