@@ -690,6 +690,7 @@ contains
         call cline_postprocess%set('prg', 'postprocess')
         call cline_postprocess%delete('lp')
         call cline_postprocess%set('eo','yes')
+        call cline_postprocess%set('mkdir','no')
         if( cline%defined('trs') )then
             ! all good
         else

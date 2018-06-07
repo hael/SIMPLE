@@ -177,15 +177,11 @@ contains
         endif
         ! check fsc filter
         has_fsc = .false.
-        if( params%eo.eq.'no' .or. cline%defined('lp') )then
+        if( cline%defined('lp') )then
             ! all good
         else
-            if( cline%defined('fsc') )then
-                ! all good
-            else
-                call spproj%get_fsc(state, fsc_fname, fsc_box)
-                params%fsc = trim(fsc_fname)
-            endif
+            call spproj%get_fsc(state, fsc_fname, fsc_box)
+            params%fsc = trim(fsc_fname)
             if( .not.file_exists(params%fsc) )then
                 write(*,*) 'FSC file: ', trim(params%fsc), ' not found'
                 stop 'FSC file: not found'
@@ -195,15 +191,11 @@ contains
         endif
         ! check volume filter
         has_vol_filt = .false.
-        if( params%eo.eq.'no' .or. cline%defined('lp') )then
+        if( cline%defined('lp') )then
             ! all good
         else
-            if( cline%defined('vol_filt') )then
-                ! all good
-            else
-                call spproj%get_vol('vol_filt', state, vol_filt_fname, smpd, box)
-                params%vol_filt = trim(vol_filt_fname)
-            endif
+            call spproj%get_vol('vol_filt', state, vol_filt_fname, smpd, box)
+            params%vol_filt = trim(vol_filt_fname)
             if( .not.file_exists(params%vol_filt) )then
                 write(*,*) 'Volume filter: ', trim(params%vol_filt), ' not found'
                 stop 'Volume filter file: not found'
@@ -223,7 +215,7 @@ contains
         else
             call spproj%get_vol('vol_msk', 1, mskfile_fname, mskfile_smpd, mskfile_box)
             params%mskfile = trim(mskfile_fname)
-            if( file_exists(params%mskfile) )has_mskfile = .true.
+            if( file_exists(params%mskfile) ) has_mskfile = .true.
         endif
         ! read volume
         params%outvol = basename(add2fbody(trim(vol_fname), params%ext, PPROC_SUFFIX))

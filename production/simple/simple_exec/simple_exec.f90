@@ -133,6 +133,7 @@ select case(prg)
         call xcluster_cavgs%execute(cline)
     case( 'postprocess' )
         call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xpostprocess%execute(cline)
 
     ! IMAGE PROCESSING

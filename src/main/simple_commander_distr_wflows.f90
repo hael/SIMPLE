@@ -588,7 +588,8 @@ contains
         call cline_refine3D_init%set(       'prg', 'refine3D_init' ) ! required for distributed call
         call cline_postprocess%set('prg', 'postprocess' )            ! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
-        call cline_postprocess%set('mirr',  'no')
+        call cline_postprocess%set('mirr',    'no')
+        call cline_postprocess%set('mkdir',   'no')
         call cline_postprocess%set('imgkind','vol')
         ! for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) , stat=alloc_stat)
