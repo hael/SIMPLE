@@ -120,7 +120,7 @@ contains
             pinds     = (/(i,i=params_glob%fromp,params_glob%top)/)
             ptcl_mask = .true.
             do iptcl=params_glob%fromp,params_glob%top
-                if( build_glob%spproj_field%isthere('update_cnt') )then
+                if( build_glob%spproj_field%isthere(iptcl,'update_cnt') )then
                     update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
                     call build_glob%spproj_field%set(iptcl,'update_cnt', real(update_cnt+1))
                 else
