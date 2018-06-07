@@ -589,7 +589,6 @@ contains
 
             subroutine prep_eo_stks_refine
                 character(len=:), allocatable :: eostk, ext
-                integer :: i
                 ext = '.'//fname2ext( stk )
                 call os%delete_entry('lp')
                 ! even
@@ -615,7 +614,6 @@ contains
 
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )
-        use simple_binoris_io,       only: binread_oritab, binwrite_oritab
         use simple_oris,             only: oris
         use simple_sym,              only: sym
         use simple_commander_volops, only: postprocess_commander
@@ -627,43 +625,40 @@ contains
         integer,          parameter :: MAXITS2 = 40
         character(len=*), parameter :: one     = '01'
         ! distributed commanders
-        type(refine3D_distr_commander)       :: xrefine3D_distr
-        type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
+        type(refine3D_distr_commander)      :: xrefine3D_distr
+        type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
         ! shared-mem commanders
-        type(postprocess_commander) :: xpostprocess
+        type(postprocess_commander)         :: xpostprocess
         ! command lines
-        type(cmdline) :: cline_refine3D1, cline_refine3D2, cline_postprocess
-        type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
+        type(cmdline) :: cline_refine3D1, cline_refine3D2
+        type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr, cline_postprocess
         ! other variables
-        type(parameters)              :: params
-        type(sym)                     :: symop
-        integer,     allocatable      :: labels(:)
-        logical,     allocatable      :: included(:)
-        type(sp_project)              :: spproj, spproj_states
-        class(oris), pointer          :: os => null(), os_states => null()
-        character(len=STDLEN)         :: oritab, str_state
-        real                          :: trs
-        integer                       :: state, iter, n_incl, startit
-        integer                       :: rename_stat
+        type(parameters)      :: params
+        type(sym)             :: symop
+        type(sp_project)      :: spproj
+        type(oris)            :: os
+        integer,  allocatable :: labels(:)
+        real                  :: trs
+        integer               :: iter, startit, rename_stat
+        logical               :: write_proj
         ! sanity check
-        if(nint(cline%get_rarg('nstates')) <= 1)&
-            &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
+        if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        ! make master parameters
         call params%new(cline)
-        if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-            &stop 'need lp input when eo .eq. no; cluster3D'
-        ! set mkdir to no (to avoid nested directory structure)
+        if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )stop 'need lp input when eo .eq. no; cluster3D'
+        ! set mkdir to no
         call cline%set('mkdir', 'no')
 
         ! prepare command lines from prototype
         call cline%delete('refine')
-        cline_refine3D1                 = cline
-        cline_refine3D2                 = cline
+        cline_refine3D1                 = cline ! first stage, extremal optimization
+        cline_refine3D2                 = cline ! second stage, stochastic refinement
         cline_postprocess               = cline ! eo always eq yes, for resolution only
         cline_reconstruct3D_distr       = cline ! eo always eq yes, for resolution only
         cline_reconstruct3D_mixed_distr = cline ! eo always eq yes, for resolution only
+        ! first stage
         call cline_refine3D1%set('prg', 'refine3D')
-        call cline_refine3D2%set('prg', 'refine3D')
         call cline_refine3D1%set('maxits', real(MAXITS1))
         select case(trim(params%refine))
             case('sym')
@@ -675,18 +670,20 @@ contains
                     call cline_refine3D1%set('refine', trim(params%refine))
                 endif
         end select
+        call cline_refine3D1%delete('neigh')
+        call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
+        ! second stage
+        call cline_refine3D2%set('prg', 'refine3D')
         call cline_refine3D2%set('refine', 'multi')
-        call cline_refine3D1%delete('oritab2')
-        call cline_refine3D1%delete('update_frac')
-        call cline_refine3D1%set('frcs', 'cluster3D_frcs.bin') !! mixed model FRCs
-        call cline_refine3D2%delete('oritab2')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
+        ! reconstructions
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_distr%delete('lp')
         call cline_reconstruct3D_distr%set('eo','yes')
         call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_mixed_distr%delete('lp')
         call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
+        if( trim(params%refine) .eq. 'sym' ) call cline_reconstruct3D_mixed_distr%set('pgrp', 'c1')
         call cline_postprocess%set('prg', 'postprocess')
         call cline_postprocess%delete('lp')
         call cline_postprocess%set('eo','yes')
@@ -701,12 +698,31 @@ contains
             call cline_refine3D2%set('trs',trs)
         endif
 
-        ! generate diverse initial labels & orientations
-        oritab = 'cluster3Ddoc_init'//trim(METADATA_EXT)
-        call spproj%new_seg_with_ptr(params%nptcls, params%oritype, os)
-        call binread_oritab(params%oritab, spproj, os, [1,params%nptcls])
+        ! MIXED MODEL RECONSTRUCTION
+        ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
+        if( params%eo .ne. 'no' )then
+            if( trim(params%refine) .eq. 'sym' ) call cline_reconstruct3D_mixed_distr%set('pgrp', 'c1')
+            call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
+            rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
+            rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
+            rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
+        endif
+
+        ! PREP
+        call spproj%read(params%projfile )
+        os = spproj%os_ptcl3D
+        ! wipe previous states
+        labels = os%get_all('states')
+        if( any(labels > 1) )then
+            where(labels > 0) labels = 1
+            call os%set_all('state', real(labels))
+        endif
+        deallocate(labels)
+        ! e/o partition
         if( params%eo.eq.'no' )then
-            ! updates e/o flags
             call os%set_all2single('eo', -1.)
         else
             if( os%get_nevenodd() == 0 ) call os%partition_eo
@@ -716,112 +732,62 @@ contains
             symop = sym(params%pgrp)
             call symop%symrandomize(os)
             call symop%kill
-            call binwrite_oritab(trim('symrnd_'//oritab), spproj, os, [1,params%nptcls])
         endif
-        if( cline%defined('oritab2') )then
-            ! this is  to force initialisation (4 testing)
-            call spproj_states%new_seg_with_ptr(params%nptcls, params%oritype, os_states)
-            call binread_oritab(params%oritab2, spproj_states, os_states, [1,params%nptcls])
-            labels = nint(os_states%get_all('state'))
-            call os%set_all('state', real(labels))
-            call os_states%kill
-        else if( .not. cline%defined('startit') )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-            call diverse_labeling(os, params%nstates, labels, corr_ranked=.true.)
-            call os%set_all('state', real(labels))
-        else
-            ! starting from a previous solution
-            labels = nint(os%get_all('state'))
-        endif
-
-        ! to accomodate state=0s in oritab input
-        included = os%included()
-        n_incl   = count(included)
-        where( .not. included ) labels = 0
-        call os%set_all('state', real(labels))
-        call binwrite_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-        call cline_refine3D1%set('oritab', trim(oritab))
-        deallocate(labels, included)
-
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-        if( trim(params%refine) .eq. 'sym' )then
-            call cline%set('oritab', trim('symrnd_'//oritab))
-            call cline%set('pgrp', 'c1')
-        endif
-        call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
-        rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
         if( params%eo .ne. 'no' )then
+            spproj%os_ptcl3D = os
+            call spproj%write
+            call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
+            rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
             rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
             rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
             rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
         endif
-        ! THis is experimental to keep FCs & RHO matrices from mixed model
-        ! do ipart = 1, params%nparts
-        !     allocate(part_str, source=int2str_pad(ipart,params%numlen))
-        !     allocate(recname, source=trim(VOL_FBODY)//one//'_part'//part_str//params%ext)
-        !     allocate(rhoname, source='rho_'//trim(VOL_FBODY)//one//'_part'//part_str//params%ext)
-        !     rename_stat = rename(recname, 'cluster3D_'//trim(recname))
-        !     rename_stat = rename(rhoname, 'cluster3D_'//trim(rhoname))
-        !     deallocate(part_str,recname,rhoname)
-        ! enddo
+        ! randomize state labels
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
+        call diverse_labeling(os, params%nstates, labels, corr_ranked=.true.)
+        call os%set_all('state', real(labels))
+        call os%write('cluster3D_init.txt') ! analysis purpose only
+        ! writes for refine3D
+        spproj%os_ptcl3D = os
+        call spproj%write
+        call spproj%kill
+        call os%kill
 
-        ! STAGE1: frozen orientation parameters
+        ! STAGE1: extremal optimization, frozen orientation parameters
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 1'
         write(*,'(A)')    '>>>'
         call xrefine3D_distr%execute(cline_refine3D1)
-        iter   = nint(cline_refine3D1%get_rarg('endit'))
-        oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-        call binread_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-        oritab = 'cluster3Ddoc_stage1'//trim(METADATA_EXT)
-        call binwrite_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-
-        ! ! stage 1 reconstruction to obtain resolution estimate when eo .eq. 'no'
-        ! if( params%eo .eq. 'no' )then
-        !     call cline_reconstruct3D_distr%set('oritab', trim(oritab))
-        !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-        !     do state = 1, params%nstates
-        !         str_state  = int2str_pad(state, 2)
-        !         call cline_postprocess%set(state, real(state))
-        !         call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-        !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
-        !         call xpostprocess%execute(cline_postprocess)
-        !     enddo
-        ! endif
+        iter = nint(cline_refine3D1%get_rarg('endit'))
+        ! for analysis purpose only
+        call spproj%read_segment(params%oritype, params%projfile)
+        call spproj%os_ptcl3D%write('cluster3D_stage1.txt')
+        call spproj%kill
 
         ! STAGE2: soft multi-states refinement
         startit = iter + 1
         call cline_refine3D2%set('startit', real(startit))
         call cline_refine3D2%set('maxits',  real(startit + MAXITS2))
-        call cline_refine3D2%set('oritab',  trim(oritab))
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 2'
         write(*,'(A)')    '>>>'
         call xrefine3D_distr%execute(cline_refine3D2)
         iter   = nint(cline_refine3D2%get_rarg('endit'))
-        oritab = trim(REFINE3D_ITER_FBODY)//int2str_pad(iter,3)//trim(METADATA_EXT)
-        call binread_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-        oritab = 'cluster3Ddoc_stage2'//trim(METADATA_EXT)
-        call binwrite_oritab(trim(oritab), spproj, os, [1,params%nptcls])
-
         ! stage 2 reconstruction to obtain resolution estimate when eo .eq. 'no'
-        if( params%eo .eq. 'no' )then
-            call cline_reconstruct3D_distr%set('oritab', trim(oritab))
-            call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-            do state = 1, params%nstates
-                str_state  = int2str_pad(state, 2)
-                call cline_postprocess%set('state', real(state))
-                call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-                call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
-                call xpostprocess%execute(cline_postprocess)
-            enddo
-        endif
-
-        ! cleanup
-        call os%kill
+        ! if( params%eo .eq. 'no' )then
+        !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
+        !     do state = 1, params%nstates
+        !         str_state  = int2str_pad(state, 2)
+        !         call cline_postprocess%set('state', real(state))
+        !         call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
+        !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
+        !         call xpostprocess%execute(cline_postprocess)
+        !     enddo
+        ! endif
 
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER3D NORMAL STOP ****')

@@ -74,7 +74,7 @@ contains
         class(cmdline), intent(inout) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05, mapres(params_glob%nstates)
-        integer               :: s, loc(1), lp_ind
+        integer               :: s, loc(1), lp_ind, kstop_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         logical               :: kstop_grid_set
@@ -102,28 +102,31 @@ contains
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
                             if( str_has_substr(params_glob%refine,'cluster') )then
-                                ! mixed model FSC
-                                fsc_fname = trim(CLUSTER3D_FSC)
+                                fsc_fname = trim(CLUSTER3D_FSC) ! mixed model FSC
                             else
                                 fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                             endif
-                            fsc_arr    = file2rarr(trim(adjustl(fsc_fname)))
+                            fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
                             build_glob%fsc(s,:) = fsc_arr(:)
                             deallocate(fsc_arr)
                             call get_resolution(build_glob%fsc(s,:), resarr, fsc05, fsc0143)
-                            mapres(s)   = fsc0143
+                            mapres(s) = fsc0143
                         else
                             ! empty state
-                            mapres(s)   = 0.
-                            build_glob%fsc(s,:)  = 0.
+                            mapres(s)           = 0.
+                            build_glob%fsc(s,:) = 0.
                         endif
                     end do
-                    loc    = maxloc(mapres) ! worst resolved
+                    loc = maxloc(mapres) ! worst resolved
                     ! get median updatecnt
-                    if( build_glob%spproj_field%median('updatecnt') > 1.0 )then
-                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
+                    if( params_glob%nstates == 1 )then
+                        if( build_glob%spproj_field%median('updatecnt') > 1.0 )then
+                            lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
+                        else
+                            lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
+                        endif
                     else
-                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                     endif
                     ! low pass limit
                     params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), params_glob%boxmatch, params_glob%smpd)
@@ -131,13 +134,18 @@ contains
                         call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
                     endif
                     ! set highest Fourier index for coarse grid search
-                    params_glob%kstop_grid   = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
-                    kstop_grid_set = .true.
+                    if( str_has_substr(params_glob%refine,'cluster') )then
+                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
+                    else
+                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
+                    endif
+                    params_glob%kstop_grid = calc_fourier_index(resarr(kstop_ind), params_glob%boxmatch, params_glob%smpd)
+                    kstop_grid_set         = .true.
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
-                    params_glob%kfromto(2)     = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
+                    params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
                 else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
-                    params_glob%kfromto(2)     = calc_fourier_index(build_glob%spproj_field%get(params_glob%fromp,'lp'), params_glob%boxmatch, params_glob%smpd)
+                    params_glob%kfromto(2) = calc_fourier_index(build_glob%spproj_field%get(params_glob%fromp,'lp'), params_glob%boxmatch, params_glob%smpd)
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_strategy2D3D_common'
@@ -157,7 +165,7 @@ contains
                     endif
                 endif
                 ! re-set the low-pass limit
-                params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%boxmatch, params_glob%smpd)
+                params_glob%lp     = calc_lowpass_lim(params_glob%kfromto(2), params_glob%boxmatch, params_glob%smpd)
                 params_glob%lp_dyn = params_glob%lp
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case('no')
@@ -173,8 +181,8 @@ contains
                 call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
         end select
         ! set highest Fourier index for coarse grid search
-        if( .not. kstop_grid_set )          params_glob%kstop_grid = params_glob%kfromto(2)
-        if( params_glob%kstop_grid > params_glob%kfromto(2) )   params_glob%kstop_grid = params_glob%kfromto(2)
+        if( .not. kstop_grid_set ) params_glob%kstop_grid = params_glob%kfromto(2)
+        params_glob%kstop_grid = min(params_glob%kstop_grid, params_glob%kfromto(2))
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
@@ -527,12 +535,18 @@ contains
     subroutine preprecvols( wcluster )
         real, optional, intent(in)    :: wcluster
         character(len=:), allocatable :: recname, rhoname, part_str
+        real,    allocatable :: resarr(:)
+        integer, allocatable :: pops(:)
+        real    :: lplim_rec, fsc05, fsc0143
         integer :: istate
         allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
+        call build_glob%spproj_field%get_pops(pops, 'state')
         select case(params_glob%eo)
             case('yes','aniso')
+                lplim_rec = huge(lplim_rec)
+                resarr    = build_glob%img%get_res()
                 do istate = 1, params_glob%nstates
-                    if( build_glob%spproj_field%get_pop(istate, 'state') > 0)then
+                    if( pops(istate) > 0)then
                         call build_glob%eorecvols(istate)%new( build_glob%spproj)
                         call build_glob%eorecvols(istate)%reset_all
                         if( params_glob%l_frac_update )then
@@ -540,15 +554,28 @@ contains
                             call build_glob%eorecvols(istate)%expand_exp
                             call build_glob%eorecvols(istate)%apply_weight(1.0 - params_glob%update_frac)
                         endif
+                        ! determining resolution for low-pass limited reconstruction
+                        if( any(build_glob%fsc(istate,:) > 0.143) )then
+                            call get_resolution(build_glob%fsc(istate,:), resarr, fsc05, fsc0143)
+                            lplim_rec = min(lplim_rec, fsc0143)
+                        endif
                     endif
                 end do
-            case DEFAULT
+                ! For low-pass limited reconstruction, under testing
                 do istate = 1, params_glob%nstates
-                    if( build_glob%spproj_field%get_pop(istate, 'state') > 0)then
+                    if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
+                end do
+                deallocate(resarr)
+            case DEFAULT
+                lplim_rec = params_glob%lp
+                do istate = 1, params_glob%nstates
+                    if( pops(istate) > 0)then
                         call build_glob%recvols(istate)%new([params_glob%boxpd, params_glob%boxpd, params_glob%boxpd], params_glob%smpd)
                         call build_glob%recvols(istate)%alloc_rho(build_glob%spproj)
                         call build_glob%recvols(istate)%reset
                         call build_glob%recvols(istate)%reset_exp
+                        ! For low-pass limited reconstruction, under testing
+                        call build_glob%recvols(istate)%set_lplim(lplim_rec)
                         if( params_glob%l_frac_update )then
                             allocate(recname, source=trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//params_glob%ext)
                             allocate(rhoname, source='rho_'//trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//params_glob%ext)
@@ -563,6 +590,7 @@ contains
                     endif
                 end do
         end select
+        deallocate(pops)
     end subroutine preprecvols
 
     !>  \brief  destructs all volumes for reconstruction
@@ -662,7 +690,7 @@ contains
             if( params_glob%nstates.eq.1 )then
                 allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
             else
-                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
+                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext)) ! under testing
             endif
             if( file_exists(fname_vol_filter) )then
                 call build_glob%vol2%read(fname_vol_filter)
@@ -676,7 +704,6 @@ contains
                     call build_glob%vol%shellnorm_and_apply_filter(filter)
                 endif
             endif
-            deallocate(fname_vol_filter)
         endif
         ! back to real space
         call build_glob%vol%ifft()

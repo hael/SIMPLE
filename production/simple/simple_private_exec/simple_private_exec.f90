@@ -455,16 +455,15 @@ select case(prg)
         keys_optional(23) = 'nnn'
         keys_optional(24) = 'rrate'
         keys_optional(25) = 'update_frac'
-        keys_optional(26)  = 'shellw'
+        keys_optional(26) = 'shellw'
         call cline%parse_oldschool(keys_required(:4), keys_optional(:26))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('refine') )then
             call cline%set('refine',  'single')
         else
-            if( cline%get_carg('refine').eq.'multi' )then
-                if( .not. cline%defined('nstates') ) stop 'refine=MULTI requires specification of NSTATES'
-                if( .not. cline%defined('oritab')  ) stop 'refine=MULTI requires ORITAB input'
+            if( cline%get_carg('refine').eq.'multi' .and. .not. cline%defined('nstates') )then
+                stop 'refine=MULTI requires specification of NSTATES'
             endif
         endif
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')

@@ -1039,7 +1039,7 @@ contains
             endif
         end do
         ires0143 = ires0143-1
-        if( ires0143 == n .or. ires0143 == 0 )then
+        if( ires0143 == 0 )then
             fsc0143 = 0.
         else
             fsc0143 = res(ires0143)
@@ -1054,7 +1054,7 @@ contains
             endif
         end do
         ires05 = ires05-1
-        if( ires05 == n .or. ires05 == 0 )then
+        if( ires05 == 0 )then
             fsc05 = 0.
         else
             fsc05 = res(ires05)

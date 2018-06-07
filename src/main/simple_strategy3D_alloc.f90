@@ -120,7 +120,7 @@ contains
         enddo
         ! refine mode specific allocations and initialisations
         select case( trim(params_glob%refine) )
-            case( 'cluster','clustersym','clusterdev' )
+            case( 'cluster','clustersym')
                 ! nothing to do
             case DEFAULT
                 if( params_glob%neigh.eq.'yes' )then

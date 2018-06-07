@@ -149,6 +149,7 @@ type(simple_input_param) :: dfmin
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfstep
 type(simple_input_param) :: frac
+type(simple_input_param) :: focusmsk
 type(simple_input_param) :: hp
 type(simple_input_param) :: lp
 type(simple_input_param) :: lplim_crit
@@ -625,6 +626,7 @@ contains
         call set_param(frcs,           'frcs',         'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
         call set_param(mkdir_,         'mkdir',        'binary', 'Make auto-named dir for output', 'Make auto-named consequtively numbered dir for output(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
+        call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -819,7 +821,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
-        &0, 2, 0, 7, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 2, 0, 8, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -838,6 +840,7 @@ contains
         call cluster3D%set_input('srch_ctrls', 6, objfun)
         call cluster3D%set_input('srch_ctrls', 7, 'refine', 'binary', 'Refinement mode', 'Refinement mode(cluster|clustersym)&
         &){cluster}', '(cluster|clustersym){cluster}', .false., 'cluster')
+        call cluster3D%set_input('srch_ctrls', 8, neigh)
         ! filter controls
         call cluster3D%set_input('filt_ctrls', 1, hp)
         call cluster3D%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
@@ -851,8 +854,7 @@ contains
         call cluster3D%set_input('mask_ctrls', 1, msk)
         call cluster3D%set_input('mask_ctrls', 2, inner)
         call cluster3D%set_input('mask_ctrls', 3, mskfile)
-        call cluster3D%set_input('mask_ctrls', 4, 'focusmsk', 'num', 'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular &
-        &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
+        call cluster3D%set_input('mask_ctrls', 4, focusmsk)
         call cluster3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         ! computer controls
         call cluster3D%set_input('comp_ctrls', 1, nparts)
@@ -904,8 +906,7 @@ contains
         call cluster3D_refine%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D_refine%set_input('filt_ctrls', 5, lplim_crit)
-        call cluster3D_refine%set_input('filt_ctrls', 6, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        call cluster3D_refine%set_input('filt_ctrls', 6, eo)
         call cluster3D_refine%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
@@ -2244,8 +2245,7 @@ contains
         call refine3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
-        call refine3D%set_input('filt_ctrls', 6, 'eo', 'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call refine3D%set_input('filt_ctrls', 6, eo)
         call refine3D%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('filt_ctrls', 8, shellw)
@@ -2253,8 +2253,7 @@ contains
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)
         call refine3D%set_input('mask_ctrls', 3, mskfile)
-        call refine3D%set_input('mask_ctrls', 4, 'focusmsk', 'num', 'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular &
-        &mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
+        call refine3D%set_input('mask_ctrls', 4, focusmsk)
         call refine3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts)

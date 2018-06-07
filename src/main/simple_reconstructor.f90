@@ -219,7 +219,7 @@ contains
         self%sh_lim = self%sh_lim + 2*ceiling(max(KBWINSZ,self%winsz)) + 1
         if( params_glob%eo.eq.'yes' )self%sh_lim = self%sh_lim + 5
         self%sh_lim = min(self%sh_lim, self%nyq)
-        ! updates image frequency limit for improved threading
+        ! updates redundant image frequency limits for improved threading
         do i=1,3
             self%cyc_lims(i,1) = max(self%cyc_lims(i,1), self%cyc_lims(i,1)+(self%nyq-self%sh_lim)-1)
             self%cyc_lims(i,2) = min(self%cyc_lims(i,2), self%cyc_lims(i,2)-(self%nyq-self%sh_lim)+1)
@@ -754,7 +754,7 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk
-                real      :: pw, bfac, ave, sdev, maxv, minv
+                real      :: pw, bfac
                 state = o%get_state(i)
                 if( state == 0 ) return
                 if( params_glob%shellw.eq.'yes' )then

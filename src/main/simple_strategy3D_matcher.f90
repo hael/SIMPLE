@@ -61,13 +61,13 @@ contains
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy3D base class
         type(strategy3D_spec) :: strategy3Dspec
-        type(ori)             :: orientation, orientation2
+        type(ori)             :: orientation
         type(kbinterpol)      :: kbwin
         type(sym)             :: c1_symop
         type(ctfparams)       :: ctfvars
         type(convergence)     :: conv
         type(image)           :: mskimg
-        real    :: frac_srch_space, extr_thresh, corr_thresh, bfac_rec, specscore_avg
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch
         integer :: ibatch, npeaks, batchlims(2), updatecnt
         logical :: doprint, do_extr
@@ -93,7 +93,7 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'clusterdev', 'cont_single')
+            case('cluster', 'snhc', 'clustersym', 'cont_single')
                 npeaks = 1
             case('hard_single','hard_multi')
                 npeaks = MAXNPEAKS
@@ -125,7 +125,12 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
+        select case(params_glob%refine)
+            case('cluster', 'clustersym')
+                if( file_exists(CLUSTER3D_FRCS) ) call build_glob%projfrcs%read(CLUSTER3D_FRCS)
+            case DEFAULT
+                if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
+        end select
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -160,11 +165,11 @@ contains
         ! EXTREMAL LOGICS
         do_extr = .false.
         select case(trim(params_glob%refine))
-            case('cluster','clusterdev','clustersym')
+            case('cluster','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
                 zero_pop    = count(.not.build_glob%spproj_field%included(consider_w=.false.))
-                corr_thresh = -huge(corr_thresh)
+                extr_score_thresh = -huge(extr_score_thresh)
                 if( params_glob%l_frac_update )then
                     ptcl_mask = .true.
                     iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)) * (2.-params_glob%update_frac))
@@ -177,7 +182,7 @@ contains
                 endif
                 if( do_extr )then
                     extr_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
-                    corr_thresh = build_glob%spproj_field%extremal_bound(extr_thresh)
+                    extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
                 endif
                 if(trim(params_glob%refine).eq.'clustersym')then
                    ! symmetry pairing matrix
@@ -277,7 +282,7 @@ contains
                         if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
-            case('cluster','clustersym','clusterdev')
+            case('cluster','clustersym')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_cluster       :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
@@ -297,7 +302,7 @@ contains
                 strategy3Dspec%iptcl       =  iptcl
                 strategy3Dspec%iptcl_map   =  cnt
                 strategy3Dspec%szsn        =  params_glob%szsn
-                strategy3Dspec%corr_thresh =  corr_thresh
+                strategy3Dspec%extr_score_thresh =  extr_score_thresh
                 if( allocated(het_mask) )  strategy3Dspec%do_extr =  het_mask(iptcl)
                 if( allocated(symmat) )    strategy3Dspec%symmat  => symmat
                 ! search object

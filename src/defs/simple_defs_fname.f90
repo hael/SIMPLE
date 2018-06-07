@@ -46,10 +46,10 @@ character(len=*), parameter :: UNIDOC_FBODY         = 'unidoc_'
 character(len=*), parameter :: UNIDOC_OUTPUT        = 'unidoc_output_'
 character(len=*), parameter :: SIMPLE_UNIDOC        = 'simple_unidoc'//trim(METADATA_EXT)
 ! CLUSTER3D
-character(len=*), parameter :: CLUSTER3D_FSC        = 'cluster3D_fsc'//BIN_EXT
-character(len=*), parameter :: CLUSTER3D_FRCS       = 'cluster3D_frcs'//BIN_EXT
-character(len=*), parameter :: CLUSTER3D_ANISOLP    = 'cluster3D_aniso_optlp'
-character(len=*), parameter :: CLUSTER3D_VOL        = 'cluster3D_mixed_recvol'
+character(len=*), parameter :: CLUSTER3D_FSC        = 'mixed_fsc'//BIN_EXT
+character(len=*), parameter :: CLUSTER3D_FRCS       = 'mixed_frcs'//BIN_EXT
+character(len=*), parameter :: CLUSTER3D_ANISOLP    = 'mixed_aniso_optlp'
+character(len=*), parameter :: CLUSTER3D_VOL        = 'mixed_recvol'
 ! OLD DIRECTORIES
 character(len=*), parameter :: STDERROUT_DIR        = 'stderrout/'
 ! NEW DIRECTORIES

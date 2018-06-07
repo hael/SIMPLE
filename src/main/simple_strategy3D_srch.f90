@@ -23,7 +23,7 @@ type strategy3D_spec
     integer, pointer :: symmat(:,:)   => null()
     integer :: iptcl=0, iptcl_map=0, szsn=0
     logical :: do_extr=.false.
-    real    :: corr_thresh=0.
+    real    :: extr_score_thresh=0.
 end type strategy3D_spec
 
 type strategy3D_srch
@@ -98,7 +98,7 @@ contains
             ! number of populated states
             nstates_eff = count(s3D%state_exists)
             select case(trim(params_glob%refine))
-            case('cluster','clustersym','clusterdev')
+            case('cluster','clustersym')
                     self%npeaks_grid = 1
                 case DEFAULT
                     ! "-(nstates_eff-1)" because all states share the same previous orientation

@@ -22,7 +22,6 @@ type :: reconstructor_eo
     real                :: res_fsc0143        !< target resolution at FSC=0.143
     real                :: smpd, msk, fny, inner=0., width=10.
     integer             :: box=0, nstates=1, numlen=2, hpind_fsc=0
-    integer             :: cyc_lims(3,2)  = 0 !< redundant limits
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
     logical             :: wiener     = .false.
@@ -38,6 +37,7 @@ type :: reconstructor_eo
     procedure, private :: reset_odd
     procedure          :: reset_sum
     procedure          :: apply_weight
+    procedure          :: set_lplim
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
@@ -106,8 +106,7 @@ contains
         call self%odd%set_ft(.true.)
         call self%eosum%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
         call self%eosum%alloc_rho( spproj, expand=.false.)
-        ! set redundant limits
-        self%cyc_lims = self%even%loop_lims(3)
+
         ! set existence
         self%exists = .true.
     end subroutine new
@@ -160,6 +159,13 @@ contains
         call self%even%apply_weight(w)
         call self%odd%apply_weight(w)
     end subroutine apply_weight
+
+    subroutine set_lplim( self, lp )
+        class(reconstructor_eo), intent(inout) :: self
+        real,                    intent(in)    :: lp
+        call self%even%set_lplim(lp)
+        call self%odd%set_lplim(lp)
+    end subroutine set_lplim
 
     ! GETTERS
 
