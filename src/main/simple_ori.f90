@@ -24,6 +24,7 @@ type :: ori
     procedure          :: copy_ori
     procedure          :: copy => copy_ori
     procedure          :: delete_entry
+    procedure          :: delete_2Dclustering
     procedure          :: set_euler
     procedure          :: e1set
     procedure          :: e2set
@@ -165,6 +166,15 @@ contains
             call self%chtab%delete(key)
         endif
     end subroutine delete_entry
+
+    subroutine delete_2Dclustering( self )
+        class(ori), intent(inout) :: self
+        call self%htab%delete('class')
+        call self%htab%delete('e3')
+        call self%htab%delete('x')
+        call self%htab%delete('y')
+        call self%htab%delete('corr')
+    end subroutine delete_2Dclustering
 
     !>  \brief  is a setter
     subroutine set_euler( self, euls )

@@ -407,7 +407,7 @@ contains
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: states(:)
         integer, allocatable :: pinds(:)
-        integer :: icls, iptcl, sz_cls2D, sz_states, sz_cls3D, ncls
+        integer :: icls, sz_cls2D, sz_states, sz_cls3D, ncls, i
         real    :: rstate
         sz_cls2D  = self%os_cls2D%get_noris()
         sz_states = size(states)
@@ -435,8 +435,8 @@ contains
                 call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
                 if( allocated(pinds) )then
                     rstate = real(states(icls))
-                    do iptcl=1,size(pinds)
-                        call self%os_ptcl2D%set(iptcl, 'state', rstate)
+                    do i=1,size(pinds)
+                        call self%os_ptcl2D%set(pinds(i), 'state', rstate)
                     end do
                     deallocate(pinds)
                 endif

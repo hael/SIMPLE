@@ -96,7 +96,7 @@ contains
             endif
         endif
         self%prev_rot   = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl))  ! in-plane angle index
-        self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                           ! shift vector
+        self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                       ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot

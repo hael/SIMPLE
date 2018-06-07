@@ -72,6 +72,7 @@ type :: oris
     generic            :: assignment(=) => assign
     procedure          :: reject
     procedure          :: delete_entry
+    procedure          :: delete_2Dclustering
     procedure          :: set_euler
     procedure          :: set_shift
     procedure          :: e1set
@@ -1249,6 +1250,14 @@ contains
             call self%o(i)%delete_entry(key)
         end do
     end subroutine delete_entry
+
+    subroutine delete_2Dclustering( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%delete_2Dclustering
+        end do
+    end subroutine delete_2Dclustering
 
     !>  \brief  is a setter
     subroutine set_euler( self, i, euls )

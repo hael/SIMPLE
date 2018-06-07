@@ -64,12 +64,18 @@ contains
         logical  :: scaling
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
+        nparts = params%nparts
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        call cline%delete('automsk')
-        nparts = params%nparts
-        ! SPLITTING
-        call spproj%read(params%projfile )
+        ! read project file
+        call spproj%read(params%projfile)
+        ! delete any previous solution
+        if( .not. spproj%is_virgin_field(params%oritype) )then
+            ! removes previous cluster2D solution (states are preserved)
+            call spproj%os_ptcl2D%delete_2Dclustering
+            call spproj%write_segment_inside(params%oritype)
+        endif
+        ! stack splitting
         call spproj%split_stk(params%nparts)
         if( params%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function

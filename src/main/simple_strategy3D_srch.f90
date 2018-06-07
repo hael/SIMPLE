@@ -254,7 +254,7 @@ contains
         integer   :: i, ref, irot, cnt
         logical   :: found_better
         if( DOCONTINUOUS )then
-            ! BFGS
+            ! BFGS over all df:s
             call o%new
             cnt = 0
             do i=self%nrefs,self%nrefs-self%npeaks+1,-1
@@ -285,7 +285,7 @@ contains
             end do
         else
             if( self%doshift )then
-                ! BFGS
+                ! BFGS over shifts with in-plane rot exhaustive callback
                 do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                     ref = s3D%proj_space_inds(self%iptcl_map, i)
                     call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
