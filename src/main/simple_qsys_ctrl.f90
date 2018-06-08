@@ -370,18 +370,18 @@ contains
                 endif
                 !!!!!!!!!!!!
                 select type( pmyqsys => self%myqsys )
-                class is(qsys_local)
-                    if(self%l_suppress_errors)then
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
-                    else
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//&
-                            &' > JOB'//trim(adjustl(int2str(ipart)))//'.out 2> JOB'//&
-                            &trim(adjustl(int2str(ipart)))//'.err &'
-                    endif
+                    class is(qsys_local)
+                        if(self%l_suppress_errors)then
+                            qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
+                        else
+                            qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//&
+                                &' > JOB'//trim(adjustl(int2str(ipart)))//'.out 2> JOB'//&
+                                &trim(adjustl(int2str(ipart)))//'.err &'
+                        endif
                     class DEFAULT
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))
                 end select
-                call exec_subprocess(trim(adjustl(qsys_cmd)), pid)
+                call exec_cmdline(trim(adjustl(qsys_cmd)))
             endif
         end do
     end subroutine submit_scripts
@@ -404,7 +404,7 @@ contains
                 &//'/'//trim(adjustl(script_name))
         end select
         ! execute the command
-        call exec_subprocess(trim(cmd), pid)
+        call exec_cmdline(trim(cmd))
     end subroutine submit_script
 
     ! QUERIES

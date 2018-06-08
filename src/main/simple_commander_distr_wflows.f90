@@ -528,7 +528,7 @@ contains
             vol = 'startvol_state01'//params%ext
         endif
         ! splitting
-        call build%spproj%split_stk(params%nparts)
+        call build%spproj%split_stk(params%nparts, dir='..')
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
@@ -603,7 +603,7 @@ contains
         enddo
         DebugPrint ' In exec_refine3D_distr; begin splitting'
         ! splitting
-        call build%spproj%split_stk(params%nparts)
+        call build%spproj%split_stk(params%nparts, dir='..')
         DebugPrint ' In exec_refine3D_distr; begin starting models'
         ! GENERATE STARTING MODELS & ORIENTATIONS
         if( params%continue .eq. 'yes' )then
@@ -860,7 +860,7 @@ contains
         call qenv%new
         call cline%gen_job_descr(job_descr)
         ! splitting
-        call build%spproj%split_stk(params%nparts)
+        call build%spproj%split_stk(params%nparts, dir='..')
         ! eo partitioning
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then
@@ -1137,17 +1137,24 @@ contains
     subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
+        type(scale_project_distr_commander) :: xscale_distr
         type(qsys_env)                     :: qenv
         type(chash)                        :: job_descr
         type(cmdline)                      :: cline_scale
         type(chash),               allocatable :: part_params(:)
         character(len=LONGSTRLEN), allocatable :: part_stks(:)
-        type(parameters)      :: params
-        type(builder)         :: build
+        type(parameters)              :: params
+        type(builder)                 :: build
+        character(len=:), allocatable :: projfile_sc, projname_sc, stk, stk_sc, ext
         character(len=STDLEN) :: filetab
         integer, allocatable  :: parts(:,:)
-        real                  :: smpd
-        integer               :: ipart, nparts, nstks, cnt, istk, partsz, box
+        real                  :: smpd, smpd_target
+        integer               :: istk, ipart, nparts, nstks, cnt, partsz, box, newbox
+        logical               :: gen_sc_project
+        ! mkdir=yes: a new *_sc project + stacks are generated
+        ! mkdir=no : only stacks are scaled
+        gen_sc_project = cline%get_carg('mkdir').eq.'yes'
+        ! make parameters and project
         call build%init_params_and_build_spproj(cline, params)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -1201,6 +1208,21 @@ contains
             filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
             call del_file( filetab )
         end do
+        ! make new project
+        if( gen_sc_project )then
+            smpd_target = max(smpd, smpd * real(box)/real(params%newbox))
+            call simple_mkdir('../stack_parts_sc')
+            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale, dir='../stack_parts_sc')
+            newbox = nint(cline_scale%get_rarg('newbox'))
+            if( newbox == box )then
+                write(*,*)'Inconsistent input dimensions: from ',box,' to ',newbox
+                stop 'Inconsistent input dimensions; simple_commander_distr_wflows::exec_scale_project_distr'
+            endif
+            call cline_scale%set('newbox', real(newbox))
+            call xscale_distr%execute( cline_scale )
+            ! delete copy in working directory
+            call del_file(params%projfile)
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
     end subroutine exec_scale_project_distr

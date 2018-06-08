@@ -220,6 +220,7 @@ select case(prg)
 
     case( 'scale_project' )
         call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xscale_project%execute(cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)

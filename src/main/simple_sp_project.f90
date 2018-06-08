@@ -216,13 +216,18 @@ contains
         endif
         iostat = simple_getenv('SIMPLE_EMAIL', env_var)
         if( iostat/=0 ) env_var = 'my.name@uni.edu'
-        call self%compenv%set(1, 'user_email', trim(env_var))
         ! get from command line
+        call self%compenv%set(1, 'user_email', trim(env_var))
+        if( cline%defined('user_email') )then
+            call self%compenv%set(1, 'user_email', cline%get_carg('user_email'))
+        else
+            call self%compenv%set(1, 'user_email', trim(env_var))
+        endif
         if( cline%defined('time_per_image') )then
-            call self%compenv%set(1, 'time_per_image', real2str(cline%get_rarg('time_per_image')))
+            call self%compenv%set(1, 'time_per_image', cline%get_rarg('time_per_image'))
         else
             if( .not. self%compenv%isthere('time_per_image') )then
-                call self%compenv%set(1, 'time_per_image', int2str(TIME_PER_IMAGE_DEFAULT))
+                call self%compenv%set(1, 'time_per_image', real(TIME_PER_IMAGE_DEFAULT))
             endif
         endif
         if( cline%defined('user_account') )then
@@ -245,10 +250,10 @@ contains
             call self%compenv%set(1, 'job_name', 'simple_'//trim(projname) )
         endif
         if( cline%defined('job_memory_per_task') )then
-            call self%compenv%set(1, 'job_memory_per_task', real2str(cline%get_rarg('job_memory_per_task')) )
+            call self%compenv%set(1, 'job_memory_per_task', cline%get_rarg('job_memory_per_task') )
         else
             if( .not. self%compenv%isthere('job_memory_per_task') )then
-                call self%compenv%set(1, 'job_memory_per_task', int2str(JOB_MEMORY_PER_TASK_DEFAULT) )
+                call self%compenv%set(1, 'job_memory_per_task', real(JOB_MEMORY_PER_TASK_DEFAULT))
             endif
         endif
     end subroutine update_compenv
@@ -913,11 +918,12 @@ contains
     end subroutine add_stktab
 
     !>  Only commits to disk when a change to the project is made
-    subroutine split_stk( self, nparts )
+    subroutine split_stk( self, nparts, dir )
         use simple_map_reduce, only: split_nobjs_even
         use simple_image,      only: image
-        class(sp_project),     intent(inout) :: self
-        integer,               intent(in)    :: nparts
+        class(sp_project),          intent(inout) :: self
+        integer,                    intent(in)    :: nparts
+        character(len=*), optional, intent(in)    :: dir
         character(len=4),   parameter :: EXT = '.mrc'
         type(image)                   :: img
         type(ori)                     :: orig_stk
@@ -944,8 +950,12 @@ contains
         numlen  = len_trim(int2str(nparts))
         ! images copy
         call img%new([box,box,1], smpd)
-        call simple_getcwd(cwd)
-        tmp_dir = trim(cwd) // '/tmp_stacks/'
+        if( present(dir) )then
+            tmp_dir = trim(dir) // '/tmp_stacks/'
+        else
+            call simple_getcwd(cwd)
+            tmp_dir = trim(cwd) // '/tmp_stacks/'
+        endif
         call simple_mkdir(trim(tmp_dir))
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
@@ -973,10 +983,18 @@ contains
         kv    = self%os_stk%get(1,'kv')
         fraca = self%os_stk%get(1,'fraca')
         call self%os_stk%new(nparts)
-        call simple_mkdir(trim(STKPARTSDIR), status=status)
+        if( present(dir) )then
+            call simple_mkdir(trim(dir)//'/'//trim(STKPARTSDIR), status=status)
+        else
+            call simple_mkdir(trim(STKPARTSDIR), status=status)
+        endif
         do istk = 1,nparts
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
-            allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+            if( present(dir) )then
+                allocate(dest_stkpart, source=trim(dir)//'/'//trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+            else
+                allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+            endif
             status = simple_rename(trim(stkpart), trim(dest_stkpart))
             deallocate(stkpart)
             call simple_full_path(dest_stkpart, stkpart, 'sp_project :: split_stk')
@@ -1034,7 +1052,7 @@ contains
     subroutine add_scale_tag( self, dir )
         class(sp_project),          intent(inout) :: self
         character(len=*), optional, intent(in)    :: dir
-        character(len=:), allocatable :: ext, newname, stkname
+        character(len=:), allocatable :: ext, newname, stkname, abs_dir
         character(len=4) :: ext_out
         integer :: imic, nmics
         nmics = self%os_stk%get_noris()
@@ -1051,7 +1069,9 @@ contains
                     call simple_stop('This file format is not supported by SIMPLE; simple_sp_project::add_scale_tag')
             end select
             if(present(dir))then
-                newname = trim(dir)//basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
+                call simple_mkdir(trim(dir))
+                call simple_full_path(dir, abs_dir, 'sp_project :: add_scale_tag')
+                newname = trim(abs_dir)//'/'//basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
             else
                 newname = add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX))
             endif

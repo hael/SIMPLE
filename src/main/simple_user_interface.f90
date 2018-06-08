@@ -2334,12 +2334,13 @@ contains
         &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
         &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 1, 0, 0, 0, 0, 2, .false.)                                                     ! # entries in each group
+        &0, 2, 0, 0, 0, 0, 2, .true.)                                                     ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call scale_project%set_input('parm_ios', 1, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
+        call scale_project%set_input('parm_ios', 2, mkdir_)
         ! alternative inputs
         ! <empty>
         ! search controls

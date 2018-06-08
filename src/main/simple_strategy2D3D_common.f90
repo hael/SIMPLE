@@ -135,7 +135,7 @@ contains
                     endif
                     ! set highest Fourier index for coarse grid search
                     if( str_has_substr(params_glob%refine,'cluster') )then
-                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
+                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.8)
                     else
                         kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
                     endif
@@ -561,7 +561,6 @@ contains
                         endif
                     endif
                 end do
-                ! For low-pass limited reconstruction, under testing
                 do istate = 1, params_glob%nstates
                     if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
                 end do
@@ -574,7 +573,6 @@ contains
                         call build_glob%recvols(istate)%alloc_rho(build_glob%spproj)
                         call build_glob%recvols(istate)%reset
                         call build_glob%recvols(istate)%reset_exp
-                        ! For low-pass limited reconstruction, under testing
                         call build_glob%recvols(istate)%set_lplim(lplim_rec)
                         if( params_glob%l_frac_update )then
                             allocate(recname, source=trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str//params_glob%ext)
@@ -690,7 +688,7 @@ contains
             if( params_glob%nstates.eq.1 )then
                 allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
             else
-                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext)) ! under testing
+                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
             endif
             if( file_exists(fname_vol_filter) )then
                 call build_glob%vol2%read(fname_vol_filter)

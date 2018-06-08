@@ -392,9 +392,9 @@ contains
                 if( .not. cline%defined('msk')  ) stop 'need msk (mask radius) input for volume rotation'
                 call o%new
                 call o%set_euler([params%e1,params%e2,params%e3])
-                shvec   = [params%xsh,params%ysh,params%zsh]
-                vol_rot = rotvol(build%vol, o,  shvec)
-                build%vol   = vol_rot
+                shvec     = [params%xsh,params%ysh,params%zsh]
+                vol_rot   = rotvol(build%vol, o,  shvec)
+                build%vol = vol_rot
             endif
             if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
                 call build%vol%shift([params%xsh,params%ysh,params%zsh])

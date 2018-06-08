@@ -76,7 +76,7 @@ contains
             call spproj%write_segment_inside(params%oritype)
         endif
         ! stack splitting
-        call spproj%split_stk(params%nparts)
+        call spproj%split_stk(params%nparts, dir='..')
         if( params%l_autoscale )then
             call cline%delete('objfun') ! stage dependent objective function
             ! this workflow executes two stages of CLUSTER2D

@@ -167,9 +167,9 @@ contains
             call find(res_orig, filtsz_orig, res_new(k), ind, dist)
             filt_resamp(k) = filt_orig(ind)
         end do
-      end function resample_filter
+    end function resample_filter
+
     function get_frc( self, proj, box, state ) result( frc )
-        !use simple_estimate_ssnr, only: resample_filter
         class(projection_frcs), intent(in) :: self
         integer,                intent(in) :: proj, box
         integer, optional,      intent(in) :: state

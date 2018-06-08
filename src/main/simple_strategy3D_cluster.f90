@@ -51,8 +51,6 @@ contains
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
             ! extremal optimization score
             score4extr = self%s%prev_corr
-            ! if( build_glob%spproj_field%isthere(self%s%iptcl, 'specscore') )&
-            !     &score4extr = build_glob%spproj_field%get(self%s%iptcl,'specscore')
             ! B-factor memoization
             if( params_glob%l_bfac_static )then
                 bfac = params_glob%bfac_static
@@ -71,10 +69,9 @@ contains
                     do isym = 1, self%s%nsym
                         iproj = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
                         iref  = (state-1) * self%s%nprojs + iproj
-                        ! call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                         ! dual resolution limit scheme:
-                        ! state assignement employs correlations up to kstop_grid & are reported
-                        ! image alignment to state employs correlations up to kfromto(2) & are NOT reported
+                        ! state assignement employs correlations up to kstop_grid
+                        ! image alignment to state employs correlations up to kfromto(2)
                         call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%kstop_grid, corrs_inpl)
                         corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
                     enddo
@@ -85,11 +82,9 @@ contains
                 else
                     iref = (state-1) * self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
                     ! dual resolution limit scheme:
-                    ! state assignement employs correlations up to kstop_grid & are reported
-                    ! image alignment to state employs correlations up to kfromto(2) & are NOT reported
+                    ! state assignement employs correlations up to kstop_grid
+                    ! image alignment to state employs correlations up to kfromto(2)
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%kstop_grid, corrs_inpl)
-                    ! single resolution imit
-                    ! call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                     ! replaced:
                     ! corrs(state) = corrs_inpl(self%s%prev_roind)
                     ! with:

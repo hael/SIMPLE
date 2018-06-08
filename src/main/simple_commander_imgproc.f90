@@ -277,7 +277,6 @@ contains
                 endif
             else if( params%shellnorm.eq.'yes' )then
                 ! shell normalization
-                print *,'in'
                 call shellnorm_imgfile( params%stk, params%outstk, params%smpd)
             endif
         else if( cline%defined('vol1') )then
@@ -292,9 +291,6 @@ contains
                 ! shell normalization
                 call build%vol%shellnorm()
                 call build%vol%spectrum('power', spec)
-                do k=1,size(spec)
-                    print *, k, spec(k)
-                end do
                 call build%vol%write(params%outvol, del_if_exists=.true.)
             else
                 stop 'Normalization type not implemented yet'
