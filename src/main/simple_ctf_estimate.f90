@@ -19,7 +19,6 @@ type(image)           :: pspec_ctf_roavg         ! rotationally averaged CTF pow
 type(image)           :: pspec_all_roavg         ! rotationally averaged all micrograph powerspec
 type(image)           :: pspec_lower_roavg       ! rotationally averaged lower half of micrograph powerspec
 type(image)           :: pspec_upper_roavg       ! rotationally averaged upper half of micrograph powerspec
-type(image)           :: ppspec_all_rot90        ! 90 deg rotated all pspec
 type(image)           :: imgmsk                  ! mask image
 type(ctf)             :: tfun                    ! transfer function object
 type(ctf)             :: tfun_roavg              ! rotationally averaged transfer function object
@@ -55,7 +54,8 @@ contains
         real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
         logical,              intent(in)    :: l_phplate   !< Volta phase-plate images (yes|no)
         real,                 intent(out)   :: corr90deg   !< corr for validation
-        integer :: ldim(3)
+        type(image) :: ppspec_all_rot90 ! 90 deg rotated all pspec
+        integer     :: ldim(3)
         ! set constants
         l_phaseplate = l_phplate
         ppspec_all   => pspec_all
@@ -96,9 +96,6 @@ contains
         call ppspec_upper%roavg(IARES, pspec_upper_roavg, 180)
         ! prepare 90 deg rotated spectrum
         call ppspec_all%rtsq(90., 0., 0., ppspec_all_rot90)
-        ! calculate CTF quality score based on corr with 90 deg rotated
-        corr90deg = ppspec_all%real_corr(ppspec_all_rot90, cc_msk)
-        call ppspec_all_rot90%kill
         ! prepare CTF power spectra
         call pspec_ctf%new(ldim, smpd)
         call pspec_ctf_roavg%new(ldim, smpd)
@@ -106,6 +103,9 @@ contains
         call imgmsk%new(ldim, smpd)
         call imgmsk%resmsk(hp, lp)
         cc_msk = imgmsk%bin2logical()
+        ! calculate CTF quality score based on corr with 90 deg rotated
+        corr90deg = ppspec_all%real_corr(ppspec_all_rot90, cc_msk)
+        call ppspec_all_rot90%kill
         ! contruct DE optimiser
         call seed_rnd
         limits        = 0.
