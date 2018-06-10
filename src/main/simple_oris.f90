@@ -64,6 +64,7 @@ type :: oris
     procedure          :: print_matrices
     procedure          :: sample4update_and_incrcnt
     procedure          :: sample4update_and_incrcnt2D
+    procedure          :: incr_updatecnt
     procedure          :: has_been_searched
     procedure          :: ori2str
     procedure          :: get_ctfvars
@@ -1197,6 +1198,17 @@ contains
             end do
         endif
     end subroutine sample4update_and_incrcnt2D
+
+    subroutine incr_updatecnt( self, fromto )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: fromto(2)
+        integer :: i
+        real    :: cnt
+        do i=fromto(1),fromto(2)
+            cnt = self%o(i)%get('updatecnt')
+            call self%o(i)%set('updatecnt', cnt + 1.0)
+        end do
+    end subroutine incr_updatecnt
 
     !>  \brief  check wether the orientation has any typical search parameter
     logical function has_been_searched( self, i )

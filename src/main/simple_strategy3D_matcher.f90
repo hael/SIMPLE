@@ -157,6 +157,7 @@ contains
             allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
             pinds = (/(i,i=params_glob%fromp,params_glob%top)/)
             ptcl_mask = .true.
+            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
         endif
 
         ! B-factor weighted reconstruction
