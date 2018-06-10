@@ -119,14 +119,7 @@ contains
             allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
             pinds     = (/(i,i=params_glob%fromp,params_glob%top)/)
             ptcl_mask = .true.
-            do iptcl=params_glob%fromp,params_glob%top
-                if( build_glob%spproj_field%isthere(iptcl,'update_cnt') )then
-                    update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
-                    call build_glob%spproj_field%set(iptcl,'update_cnt', real(update_cnt+1))
-                else
-                    call build_glob%spproj_field%set(iptcl,'update_cnt', 1.)
-                endif
-            enddo
+            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
         endif
 
         ! PREP REFERENCES
