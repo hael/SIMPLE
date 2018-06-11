@@ -168,7 +168,7 @@ select case(prg)
         if( .not. cline%defined('refine') ) call cline%set('refine', 'single')
         if( .not. cline%defined('eo')     ) call cline%set('eo',         'no')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',     'yes')
-        call xprime3D_distr%execute(cline)
+        call execute_commander(xprime3D_distr, cline)
     case( 'reconstruct3D' )
         call cline%parse()
         if( .not. cline%defined('trs')  ) call cline%set('trs',      5.) ! to assure that shifts are being used

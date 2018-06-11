@@ -163,6 +163,7 @@ type(simple_input_param) :: mw
 type(simple_input_param) :: ncls
 type(simple_input_param) :: neigh
 type(simple_input_param) :: neg
+type(simple_input_param) :: nrestarts
 type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nparts
@@ -627,6 +628,7 @@ contains
         call set_param(mkdir_,         'mkdir',        'binary', 'Make auto-named dir for output', 'Make auto-named consequtively numbered dir for output(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
+        call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1216,7 +1218,7 @@ contains
         initial_3Dmodel%srch_ctrls(8)%cval_default      = 'ccres'
         call initial_3Dmodel%set_input('srch_ctrls', 9, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_input('srch_ctrls', 10, 'nrestarts', 'num', 'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
+        call initial_3Dmodel%set_input('srch_ctrls', 10, nrestarts)
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
@@ -2207,7 +2209,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 2, 0, 13, 8, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 2, 0, 14, 8, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2236,6 +2238,8 @@ contains
         &clustersym){no}', '(snhc|single|multi|greedy_single|cont_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
         call refine3D%set_input('srch_ctrls', 12, neigh)
         call refine3D%set_input('srch_ctrls', 13, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call refine3D%set_input('srch_ctrls', 14, nrestarts)
+
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
