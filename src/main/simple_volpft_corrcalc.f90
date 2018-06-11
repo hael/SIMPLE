@@ -29,15 +29,18 @@ type :: volpft_corrcalc
     ! CONSTRUCTOR
     procedure          :: new
     ! INTERPOLATION METHODS
-    procedure, private :: extract_ref
+    procedure          :: extract_ref
     procedure, private :: extract_target_1
     procedure, private :: extract_target_2
+    procedure, private :: extract_target_3
+    generic            :: extract_target => extract_target_1, extract_target_2, extract_target_3
     ! CORRELATORS
     procedure, private :: corr_1
     procedure, private :: corr_2
     procedure, private :: corr_3
     procedure, private :: corr_4
-    generic            :: corr => corr_1, corr_2, corr_3, corr_4
+    procedure, private :: corr_5
+    generic            :: corr => corr_1, corr_2, corr_3, corr_4, corr_5
     ! DESTRUCTOR
     procedure          :: kill
 end type volpft_corrcalc
@@ -120,14 +123,11 @@ contains
     subroutine extract_target_1( self, e, serial )
         class(volpft_corrcalc), intent(inout) :: self
         class(ori),             intent(in)    :: e
-        logical, optional,      intent(in)    :: serial
+        logical,                intent(in)    :: serial
         real    :: loc(3), mat(3,3)
         integer :: ispace, k
-        logical :: sserial
-        sserial = .true.
-        if( present(serial) ) sserial = serial
         mat = e%get_mat()
-        if( sserial )then
+        if( serial )then
             do ispace=1,self%nspace
                 do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                     loc  = matmul(self%locs_ref(ispace,k,:),mat)
@@ -154,14 +154,11 @@ contains
         class(volpft_corrcalc), intent(inout) :: self
         class(ori),             intent(in)    :: e
         real,                   intent(in)    :: shvec(3)
-        logical, optional,      intent(in)    :: serial
+        logical,                intent(in)    :: serial
         real    :: loc(3), mat(3,3)
         integer :: ispace, k
-        logical :: sserial
-        sserial = .true.
-        if( present(serial) ) sserial = serial
         mat = e%get_mat()
-        if( sserial )then
+        if( serial )then
             do ispace=1,self%nspace
                 do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                     loc  = matmul(self%locs_ref(ispace,k,:),mat)
@@ -184,11 +181,40 @@ contains
         self%sqsum_target = sum(csq(self%vpft_target))
     end subroutine extract_target_2
 
+    !>  \brief  extracts the lines required for matchiing
+    !!          from the reference
+    subroutine extract_target_3( self, rmat, serial )
+        class(volpft_corrcalc), intent(inout) :: self
+        real,                   intent(in)    :: rmat(3,3)
+        logical,                intent(in)    :: serial
+        real    :: loc(3)
+        integer :: ispace, k
+        if( serial )then
+            do ispace=1,self%nspace
+                do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                    loc  = matmul(self%locs_ref(ispace,k,:),rmat)
+                    self%vpft_target(ispace,k) = self%vol_target%interp_fcomp(loc)
+                end do
+            end do
+        else
+            !$omp parallel do schedule(static) default(shared)&
+            !$omp private(ispace,k,loc) proc_bind(close)
+            do ispace=1,self%nspace
+                do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                    loc  = matmul(self%locs_ref(ispace,k,:),rmat)
+                    self%vpft_target(ispace,k) = self%vol_target%interp_fcomp(loc)
+                end do
+            end do
+            !$omp end parallel do
+        endif
+        self%sqsum_target = sum(csq(self%vpft_target))
+    end subroutine extract_target_3
+
     !>  \brief  continous rotational correlator
     function corr_1( self, e, serial ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self
         class(ori),             intent(in)    :: e
-        logical, optional,      intent(in)    :: serial
+        logical,                intent(in)    :: serial
         real :: cc
         call self%extract_target_1(e, serial)
         cc = sum(real(self%vpft_ref*conjg(self%vpft_target)))
@@ -199,7 +225,7 @@ contains
     function corr_2( self, euls, serial ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: euls(3)
-        logical, optional,      intent(in)    :: serial
+        logical,                intent(in)    :: serial
         real      :: cc
         type(ori) :: e
         call e%new
@@ -212,7 +238,7 @@ contains
         class(volpft_corrcalc), intent(inout) :: self
         class(ori),             intent(in)    :: e
         real,                   intent(in)    :: shvec(3)
-        logical, optional,      intent(in)    :: serial
+        logical,                intent(in)    :: serial
         real :: cc
         call self%extract_target_2(e, shvec, serial)
         cc = sum(real(self%vpft_ref*conjg(self%vpft_target)))
@@ -224,13 +250,21 @@ contains
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: euls(3)
         real,                   intent(in)    :: shvec(3)
-        logical, optional,      intent(in)    :: serial
+        logical,                intent(in)    :: serial
         real      :: cc
         type(ori) :: e
         call e%new
         call e%set_euler(euls)
         cc = self%corr_3(e, shvec, serial)
     end function corr_4
+
+    !>  \brief  continous rotational correlator
+    function corr_5( self ) result( cc )
+        class(volpft_corrcalc), intent(inout) :: self
+        real :: cc
+        cc = sum(real(self%vpft_ref*conjg(self%vpft_target)))
+        cc = cc/sqrt(self%sqsum_target*self%sqsum_ref)
+    end function corr_5
 
     !>  \brief  is a destructor
     subroutine kill( self )

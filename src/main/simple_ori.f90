@@ -3,7 +3,7 @@ module simple_ori
 include 'simple_lib.f08'
 implicit none
 
-public :: ori, test_ori
+public :: ori, test_ori, euler2m
 private
 
 !>  orientation parameter stuct and operations
