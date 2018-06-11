@@ -25,7 +25,6 @@ type(ori)             :: e_glob               !< ori of best solution found so f
 real                  :: shift_scale =  1.0   !< shift scale factor
 logical               :: shbarr      = .true. !< shift barrier constraint or not
 integer               :: nrestarts   = 3      !< simplex restarts (randomized bounds)
-logical               :: serial      = .true. !< controls shared-mem parallellization of corr calc
 
 contains
 
@@ -104,14 +103,13 @@ contains
         call espace%spiral
         allocate(corrs(ffromto(1):ffromto(2),0:359))
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
-        serial = .true. ! since the below loop is parallel
         corrs  = -1.
         !$omp parallel do schedule(static) default(shared) private(iproj,euls,inpl) proc_bind(close)
         do iproj=ffromto(1),ffromto(2)
             euls = espace%get_euler(iproj)
             do inpl=0,359,ANGSTEP
                 euls(3) = real(inpl)
-                corrs(iproj,inpl) = vpftcc%corr(euls, serial)
+                corrs(iproj,inpl) = vpftcc%corr(euls)
             end do
         end do
         !$omp end parallel do
@@ -132,7 +130,6 @@ contains
             call orientation%set('corr', corr_best)
             call resoris%set_ori(iproj,orientation)
         end do
-        serial = .false. ! since the simplex search (below) is not parallel, we parallelise the cost eval
         if( distr_exec )then
             ! refine all local optima
             do iloc=ffromto(1),ffromto(2)
@@ -167,7 +164,6 @@ contains
         class(*), pointer :: fun_self => null()
         orientation_best = e_glob
         ospec_shift%x    = 0.
-        serial           = .false. ! since we want to parallellize the cost calc
         cost_init        = volpft_srch_costfun_shift(fun_self, ospec_shift%x, ospec_shift%ndim)
         call nlopt_shift%minimize(ospec_shift, fun_self, cost)
         if( cost < cost_init )then
@@ -186,7 +182,7 @@ contains
             call orientation_best%set('z', 0.0)
         endif
         ! update global ori
-        e_glob = orientation_best  
+        e_glob = orientation_best
     end function volpft_srch_minimize_shift
 
     function volpft_srch_minimize_all( ) result( orientation_best )
@@ -204,7 +200,6 @@ contains
         ospec_all%limits(4:,:) = ospec_all%limits(4:,:) * shift_scale
         ospec_all%x(4:)        = ospec_all%x(4:)        * shift_scale
         ! initialize
-        serial    = .false. ! since we want to parallellize the cost calc
         cost_init = volpft_srch_costfun_all(fun_self, ospec_all%x, ospec_all%ndim)
         ! minimisation
         call nlopt_all%minimize(ospec_all, fun_self, cost)
@@ -220,17 +215,17 @@ contains
             call orientation_best%set('y', ospec_all%x(5))
             call orientation_best%set('z', ospec_all%x(6))
             ! update global ori
-            e_glob = orientation_best  
+            e_glob = orientation_best
         endif
     end function volpft_srch_minimize_all
 
-    function volpft_srch_costfun_eul( fun_self, vec, D ) result( cost )        
+    function volpft_srch_costfun_eul( fun_self, vec, D ) result( cost )
         use simple_ori, only: ori
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real                    :: cost
-        cost = -vpftcc%corr(vec(:3), serial)
+        cost = -vpftcc%corr(vec(:3))
     end function volpft_srch_costfun_eul
 
     function volpft_srch_costfun_shift( fun_self, vec, D ) result( cost )
@@ -248,7 +243,7 @@ contains
                 return
             endif
         endif
-        cost = -vpftcc%corr(e_glob, vec_here(:3), serial)
+        cost = -vpftcc%corr(e_glob, vec_here(:3))
     end function volpft_srch_costfun_shift
 
     function volpft_srch_costfun_all( fun_self, vec, D ) result( cost )
@@ -271,7 +266,7 @@ contains
         if( abs(vec_here(5)) < 1.e-6 ) vec_here(5) = 0.0
         if( abs(vec_here(6)) < 1.e-6 ) vec_here(6) = 0.0
         ! cost
-        cost = -vpftcc%corr(vec_here(:3), vec_here(4:), serial)
+        cost = -vpftcc%corr(vec_here(:3), vec_here(4:))
     end function volpft_srch_costfun_all
 
 end module simple_volpft_srch

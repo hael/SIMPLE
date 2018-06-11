@@ -15,16 +15,15 @@ integer, parameter :: NPROJ   = 200
 integer, parameter :: NBEST   = 20
 integer, parameter :: ANGSTEP = 10
 
-type(volpft_corrcalc) :: vpftcc             !< corr calculator
-type(opt_spec)        :: ospec              !< optimizer specification object
-type(opt_simplex)     :: nlopt              !< optimizer object
-type(ori)             :: saxis_glob         !< best syumaxis solution found so far
-type(sym)             :: symobj             !< symmetry object
-real, allocatable     :: sym_rmats(:,:,:)   !< symmetry operations rotation matrices
-real, allocatable     :: corrs(:,:)         !< symmetry axis correlations
-integer               :: nrestarts = 3      !< simplex restarts (randomized bounds)
-integer               :: nsym      = 0      !< # symmetry ops
-logical               :: serial    = .true. !< controls shared-mem parallellization of corr calc
+type(volpft_corrcalc) :: vpftcc           !< corr calculator
+type(opt_spec)        :: ospec            !< optimizer specification object
+type(opt_simplex)     :: nlopt            !< optimizer object
+type(ori)             :: saxis_glob       !< best symaxis solution found so far
+type(sym)             :: symobj           !< symmetry object
+real, allocatable     :: sym_rmats(:,:,:) !< symmetry operations rotation matrices
+real, allocatable     :: corrs(:,:)       !< symmetry axis correlations
+integer               :: nrestarts = 3    !< simplex restarts (randomized bounds)
+integer               :: nsym      = 0    !< # symmetry ops
 
 contains
 
@@ -50,7 +49,7 @@ contains
             sym_rmats(isym,:,:) = o%get_mat()
         end do
         ! create the correlator
-        call vpftcc%new( vol, vol, hp, lp, KBALPHA )
+        call vpftcc%new(vol, vol, hp, lp, KBALPHA)
         ! set nrestarts
         nrestarts = 3
         if( present(nrestarts_in) ) nrestarts = nrestarts_in
@@ -93,9 +92,7 @@ contains
         call espace%spiral
         allocate(corrs(ffromto(1):ffromto(2),0:359))
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
-        serial = .true. ! since the below loop is parallel
         corrs  = -1.
-        call vpftcc%extract_ref
         !$omp parallel do schedule(static) default(shared) private(iproj,eul,inpl,rmat_symaxis,isym,rmat)&
         !$omp proc_bind(close)
         do iproj=ffromto(1),ffromto(2)
@@ -106,7 +103,7 @@ contains
                 corrs(iproj,inpl) = 0.
                 do isym=1,nsym
                     rmat = matmul(rmat_symaxis,sym_rmats(isym,:,:))
-                    call vpftcc%extract_target(rmat, serial)
+                    call vpftcc%extract_target(rmat)
                     corrs(iproj,inpl) = corrs(iproj,inpl) + vpftcc%corr()
                 end do
                 corrs(iproj,inpl) = corrs(iproj,inpl) / real(nsym)
@@ -132,7 +129,6 @@ contains
         end do
     end subroutine volpft_symsrch_gridsrch
 
-    ! cost fun, assumes reference extracted (call vpftcc%extract_ref)
     function volpft_symsrch_costfun( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
@@ -143,7 +139,7 @@ contains
         cc = 0.
         do isym=1,nsym
             rmat = matmul(rmat_symaxis,sym_rmats(isym,:,:))
-            call vpftcc%extract_target(rmat, .true.)
+            call vpftcc%extract_target(rmat)
             cc = cc + vpftcc%corr()
         end do
         cc = cc / real(nsym)
