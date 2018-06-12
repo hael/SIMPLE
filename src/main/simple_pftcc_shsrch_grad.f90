@@ -71,11 +71,11 @@ contains
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: cost
         select type(self)
-        class is (pftcc_shsrch_grad)
-            cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
-        class default
-            write (*,*) 'error in grad_shsrch_costfun: unknown type'
-            stop
+            class is (pftcc_shsrch_grad)
+                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+            class default
+                write (*,*) 'error in grad_shsrch_costfun: unknown type'
+                stop
         end select
     end function grad_shsrch_costfun
 
@@ -86,13 +86,13 @@ contains
         real(dp), intent(out)   :: grad(D)
         real(dp)                :: corrs_grad(2)
         select type(self)
-        class is (pftcc_shsrch_grad)
-            call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-            grad = - corrs_grad
-        class default
-            write (*,*) 'error in grad_shsrch_gcostfun: unknown type'
-            grad = 0.
-            stop
+            class is (pftcc_shsrch_grad)
+                call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+                grad = - corrs_grad
+            class default
+                write (*,*) 'error in grad_shsrch_gcostfun: unknown type'
+                grad = 0.
+                stop
         end select
     end subroutine grad_shsrch_gcostfun
 

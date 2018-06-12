@@ -364,7 +364,7 @@ contains
         ! prepare command lines from prototype master
         cline_check_2Dconv = cline
         cline_cavgassemble = cline
-        cline_make_cavgs   = cline
+        cline_make_cavgs   = cline ! ncls is transferred here
         ! initialise static command line parameters and static job description parameters
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_make_cavgs%set('prg',   'make_cavgs')

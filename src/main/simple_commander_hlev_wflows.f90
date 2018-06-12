@@ -174,7 +174,7 @@ contains
                 call spproj_sc%kill()
                 call del_file(trim(projfile_sc))
                 ! original scale references
-                cline_make_cavgs = cline
+                cline_make_cavgs = cline ! ncls is transferred here
                 call cline_make_cavgs%delete('autoscale')
                 call cline_make_cavgs%delete('balance')
                 call cline_make_cavgs%set('prg',      'make_cavgs')

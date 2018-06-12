@@ -558,7 +558,7 @@ contains
         call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
         &'inner mask radius in pixels', .false., 0.)
         call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
-        &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .false., 200.)
+        &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
         call set_param(nparts,        'nparts',        'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per part', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
@@ -726,7 +726,6 @@ contains
         ! <empty>
         ! search controls
         call cluster2D%set_input('srch_ctrls', 1, ncls)
-        cluster2D%srch_ctrls(1)%required = .true.
         call cluster2D%set_input('srch_ctrls', 2, startit)
         call cluster2D%set_input('srch_ctrls', 3, trs)
         call cluster2D%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
