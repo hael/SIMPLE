@@ -914,7 +914,7 @@ contains
         if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
-        if( n_os_stk==0 )then
+        if( n_os_stk == 0 )then
             stop 'No stack to split! sp_project :: split_single_stk'
         else if( n_os_stk > 1 )then ! re-splitting not supported
             return
@@ -927,6 +927,7 @@ contains
         numlen  = len_trim(int2str(nparts))
         ! images copy
         smpd = orig_stk%get('smpd')
+        box  = nint(orig_stk%get('box'))
         call img%new([box,box,1], smpd)
         if( present(dir) )then
             tmp_dir = trim(dir) // '/tmp_stacks/'
