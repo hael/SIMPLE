@@ -10,8 +10,9 @@ implicit none
 public :: volpft_srch_init, volpft_srch_minimize_eul, volpft_srch_minimize_shift, volpft_srch_minimize_all
 private
 
-integer, parameter :: NPROJ  = 200
-integer, parameter :: NBEST  = 20
+logical, parameter :: DEBUG   = .false.
+integer, parameter :: NPROJ   = 200
+integer, parameter :: NBEST   = 20
 integer, parameter :: ANGSTEP = 10
 
 type(volpft_corrcalc) :: vpftcc               !< corr calculator
@@ -70,6 +71,7 @@ contains
         call nlopt_all%new(ospec_all)
         ! create global ori
         call e_glob%new()
+        if( DEBUG ) write(*,*) 'debug(volpft_srch); volpft_srch_init, DONE'
     end subroutine volpft_srch_init
 
     function volpft_srch_minimize_eul( fromto ) result( orientation_best )
@@ -119,7 +121,7 @@ contains
             config_best = 0
             do inpl=0,359,ANGSTEP
                 if( corrs(iproj,inpl) > corr_best )then
-                    corr_best = corrs(iproj,inpl) 
+                    corr_best = corrs(iproj,inpl)
                     config_best(1) = iproj
                     config_best(2) = inpl
                 endif

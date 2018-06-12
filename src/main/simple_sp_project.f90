@@ -677,10 +677,10 @@ contains
                 write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
                 stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
         end select
-        call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
-        call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
-        call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
-        call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
+        call self%os_stk%set(n_os_stk, 'smpd',  ctfvars%smpd)
+        call self%os_stk%set(n_os_stk, 'kv',    ctfvars%kv)
+        call self%os_stk%set(n_os_stk, 'cs',    ctfvars%cs)
+        call self%os_stk%set(n_os_stk, 'fraca', ctfvars%fraca)
         if( ctfvars%l_phaseplate )then
             call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
         else
@@ -780,13 +780,12 @@ contains
         class(sp_project),   intent(inout) :: self
         character(len=*),    intent(in)    :: stktab
         class(oris),         intent(inout) :: os ! parameters associated with stktab
-        type(ctfparams) :: ctfvars
-        type(ori)       :: o_ptcl, o_stk
         character(len=:),          allocatable :: stk_abspath
         character(len=LONGSTRLEN), allocatable :: stknames(:)
         integer,                   allocatable :: nptcls_arr(:)
-        integer :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
-        integer :: i, istk, fromp, top, nptcls, n_os, iptcl, nstks, nptcls_tot, stk_ind
+        type(ori) :: o_ptcl, o_stk
+        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
+        integer   :: i, istk, fromp, top, nptcls, n_os, iptcl, nstks, nptcls_tot, stk_ind
         ! file exists?
         if( .not. file_exists(stktab) )then
             write(*,*) 'Inputted stack list (stktab): ', trim(stktab)
@@ -864,9 +863,9 @@ contains
         do istk=1,nstks
             o_stk   = os%get_ori(istk)
             top     = fromp + nptcls_arr(istk) - 1 ! global index
-            ctfvars = o_stk%get_ctfvars()
             stk_ind = n_os_stk + istk
             ! updates stk segment
+            call self%os_stk%set_ori(stk_ind, o_stk)
             call self%os_stk%set(stk_ind, 'stk',     trim(stknames(istk)))
             call self%os_stk%set(stk_ind, 'box',     real(ldim(1)))
             call self%os_stk%set(stk_ind, 'nptcls',  real(nptcls_arr(istk)))
@@ -875,32 +874,12 @@ contains
             call self%os_stk%set(stk_ind, 'stkkind', 'split')
             call self%os_stk%set(stk_ind, 'imgkind', 'ptcl')
             call self%os_stk%set(stk_ind, 'state',   1.0) ! default on import
-            select case(ctfvars%ctfflag)
-                case(CTFFLAG_NO)
-                    call self%os_stk%set(stk_ind, 'ctf', 'no')
-                case(CTFFLAG_YES)
-                    call self%os_stk%set(stk_ind, 'ctf', 'yes')
-                case(CTFFLAG_FLIP)
-                    call self%os_stk%set(stk_ind, 'ctf', 'flip')
-                case DEFAULT
-                    write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
-                    stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
-            end select
-            call self%os_stk%set(stk_ind, 'smpd',    ctfvars%smpd)
-            call self%os_stk%set(stk_ind, 'kv',      ctfvars%kv)
-            call self%os_stk%set(stk_ind, 'cs',      ctfvars%cs)
-            call self%os_stk%set(stk_ind, 'fraca',   ctfvars%fraca)
-            if( ctfvars%l_phaseplate )then
-                call self%os_stk%set(stk_ind, 'phaseplate', 'yes')
-            else
-                call self%os_stk%set(stk_ind, 'phaseplate', 'no')
-            endif
             ! updates particles segment
             call o_ptcl%new
-            call o_ptcl%set('dfx',    ctfvars%dfx)
-            call o_ptcl%set('dfy',    ctfvars%dfy)
-            call o_ptcl%set('angast', ctfvars%angast)
-            if( ctfvars%l_phaseplate ) call o_ptcl%set('phshift', ctfvars%phshift)
+            call o_ptcl%set('dfx',     o_stk%get('dfx'))
+            call o_ptcl%set('dfy',     o_stk%get('dfy'))
+            call o_ptcl%set('angast',  o_stk%get('angast'))
+            call o_ptcl%set('phshift', o_stk%get('phshift'))
             call o_ptcl%set('stkind', real(stk_ind))
             call o_ptcl%set('state',1.) ! default on import
             do i=1,nptcls_arr(istk)
@@ -908,12 +887,12 @@ contains
                 call self%os_ptcl3D%set_ori(fromp+i-1, o_ptcl)
             enddo
             ! update
-            fromp = top + 1  ! global index
+            fromp = top + 1 ! global index
         enddo
         ! preprocessing / streaming adds pairs: one micrograph and one stack
         ! so this keeps track of the index in this setting
         if( nstks == 1 .and. self%os_mic%get_noris() == n_os_stk+1 )then
-            call self%os_stk%set(n_os_stk+1, 'micind',  real(n_os_stk+1))
+            call self%os_stk%set(n_os_stk+1, 'micind', real(n_os_stk+1))
         endif
     end subroutine add_stktab
 
@@ -928,27 +907,26 @@ contains
         type(image)                   :: img
         type(ori)                     :: orig_stk
         character(len=:), allocatable :: stk, tmp_dir, imgkind, stkpart, dest_stkpart
-        character(len=:), allocatable :: ctfstr
         character(len=STDLEN) :: cwd
-        integer    :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
-        integer    :: nptcls, nptcls_part, numlen, status
-        real       :: smpd, cs, kv, fraca
+        integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
+        integer :: nptcls, nptcls_part, numlen, status
+        real    :: smpd
         if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk==0 )then
             stop 'No stack to split! sp_project :: split_single_stk'
-        else if( n_os_stk >= nparts )then
+        else if( n_os_stk > 1 )then ! re-splitting not supported
             return
         endif
-        smpd    = self%os_stk%get(1,'smpd')
-        box     = nint(self%os_stk%get(1,'box'))
+        ! get original simple_parameters
+        orig_stk = self%os_stk%get_ori(1)
         ! copy prep
-        call self%os_stk%getter(1,'imgkind', imgkind)
         nptcls  = self%get_nptcls()
         parts   = split_nobjs_even( nptcls, nparts )
         numlen  = len_trim(int2str(nparts))
         ! images copy
+        smpd = orig_stk%get('smpd')
         call img%new([box,box,1], smpd)
         if( present(dir) )then
             tmp_dir = trim(dir) // '/tmp_stacks/'
@@ -969,19 +947,6 @@ contains
             deallocate(stkpart)
         enddo
         call img%kill
-        if( n_os_stk > 1 )then
-            ! wipe previous stack parts
-            do istk = 1,n_os_stk
-                call self%os_stk%getter(istk,'stk', stkpart)
-                call del_file(stkpart)
-            enddo
-        endif
-        ! updates new stack parts
-        orig_stk = self%os_stk%get_ori(1)
-        call self%os_stk%getter(1,'ctf', ctfstr)
-        cs    = self%os_stk%get(1,'cs')
-        kv    = self%os_stk%get(1,'kv')
-        fraca = self%os_stk%get(1,'fraca')
         call self%os_stk%new(nparts)
         if( present(dir) )then
             call simple_mkdir(trim(dir)//'/'//trim(STKPARTSDIR), status=status)
@@ -989,6 +954,7 @@ contains
             call simple_mkdir(trim(STKPARTSDIR), status=status)
         endif
         do istk = 1,nparts
+            ! file stuff
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
             if( present(dir) )then
                 allocate(dest_stkpart, source=trim(dir)//'/'//trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
@@ -998,18 +964,14 @@ contains
             status = simple_rename(trim(stkpart), trim(dest_stkpart))
             deallocate(stkpart)
             call simple_full_path(dest_stkpart, stkpart, 'sp_project :: split_stk')
-            nptcls_part = parts(istk,2)-parts(istk,1)+1
-            call self%os_stk%set(istk, 'ctf',   ctfstr)
-            call self%os_stk%set(istk, 'cs',    cs)
-            call self%os_stk%set(istk, 'kv',    kv)
-            call self%os_stk%set(istk, 'fraca', fraca)
+            nptcls_part = parts(istk,2) - parts(istk,1) + 1
+            ! set original before overriding
+            call self%os_stk%set_ori(istk, orig_stk)
+            ! override
             call self%os_stk%set(istk, 'stk',     trim(stkpart))
-            call self%os_stk%set(istk, 'box',     real(box))
-            call self%os_stk%set(istk, 'smpd',    smpd)
             call self%os_stk%set(istk, 'nptcls',  real(nptcls_part))
             call self%os_stk%set(istk, 'fromp',   real(parts(istk,1)))
             call self%os_stk%set(istk, 'top',     real(parts(istk,2)))
-            call self%os_stk%set(istk, 'imgkind', trim(imgkind))
             call self%os_stk%set(istk, 'stkkind', 'split')
             do iptcl=parts(istk,1),parts(istk,2)
                 call self%os_ptcl2D%set(iptcl,'stkind',real(istk))
@@ -1032,7 +994,7 @@ contains
             print *, 'nmics: ', nmics
             stop 'imic index out of range; sp_project :: get_stkname'
         endif
-        call self%os_stk%getter(imic, 'stk', stkname)
+        stkname = trim(self%os_stk%get_static(imic, 'stk'))
     end function get_stkname
 
     subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind_in_stk )
@@ -1046,7 +1008,7 @@ contains
         call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk )
         ! output name
         if( allocated(stkname) ) deallocate(stkname)
-        call self%os_stk%getter(stkind, 'stk', stkname)
+        stkname = trim(self%os_stk%get_static(stkind, 'stk'))
     end subroutine get_stkname_and_ind
 
     subroutine add_scale_tag( self, dir )
@@ -1082,7 +1044,7 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd)
+    subroutine add_cavgs2os_out( self, stk, smpd )
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
@@ -1290,7 +1252,7 @@ contains
         cnt = 0
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
-                call self%os_out%getter(i,'imgkind',imgkind)
+                imgkind = trim(self%os_out%get_static(i,'imgkind'))
                 if(trim(imgkind).eq.'cavg')then
                     ind = i
                     cnt = cnt + 1
@@ -1302,7 +1264,7 @@ contains
             if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=cavg identified, aborting...; sp_project :: get_cavgs_stk'
             ! set return values
             if( allocated(stkname) ) deallocate(stkname)
-            call self%os_out%getter(ind,'stk',stkname)
+            stkname = trim(self%os_out%get_static(ind,'stk'))
             ncls = nint(self%os_out%get(ind, 'nptcls'))
             smpd = self%os_out%get(ind, 'smpd')
         else
@@ -1461,7 +1423,7 @@ contains
         ! look for cavgs, defaults to zero for other entries (frcs, volumes)
         do i=1,nos
             if( self%os_out%isthere(i,'imgkind') )then
-                imgkind = self%os_out%get_static(i,'imgkind')
+                imgkind = trim(self%os_out%get_static(i,'imgkind'))
                 if(trim(imgkind).eq.'cavg')then
                     if( self%os_out%isthere(i,'fromp').and.self%os_out%isthere(i,'top') )then
                         get_nptcls_from_osout = get_nptcls_from_osout +&
@@ -1602,37 +1564,18 @@ contains
         end select
     end function get_ctfflag_type
 
+    ! the entire project must be phase-plate, so the 1 is
     logical function has_phaseplate( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        class(oris), pointer          :: ptcl_field
         character(len=:), allocatable :: phaseplate
-        integer              :: stkind, ind_in_stk
-        nullify(ptcl_field)
-        select case(trim(oritype))
-            case('ptcl2D', 'ptcl3D')
-                ! all good
-            case('cls3D')
-                has_phaseplate = .false.
-                return
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: has_phaseplate'
-        end select
-        ! do the index mapping
-        call self%map_ptcl_ind2stk_ind(oritype, 1, stkind, ind_in_stk)
-        ! set field pointer
-        select case(trim(oritype))
-            case('ptcl2D')
-                ptcl_field => self%os_ptcl2D
-            case('ptcl3D')
-                ptcl_field => self%os_ptcl3D
-        end select
+        if( trim(oritype) .eq. 'cls3D' )then
+            has_phaseplate = .false.
+            return
+        endif
         ! get info
-        if( self%os_stk%isthere(stkind, 'phaseplate') )then
-            call self%os_stk%getter(stkind, 'phaseplate', phaseplate)
-        else if( ptcl_field%isthere(1, 'phaseplate') )then
-            call ptcl_field%getter(1, 'phaseplate', phaseplate)
+        if( self%os_stk%isthere(1, 'phaseplate') )then
+            phaseplate = trim(self%os_stk%get_static(1, 'phaseplate'))
         else
             phaseplate = 'no'
         endif
@@ -1644,7 +1587,7 @@ contains
         character(len=*),          intent(in)    :: oritype
         integer,                   intent(in)    :: iptcl
         class(oris), pointer          :: ptcl_field
-        character(len=:), allocatable :: ctfflag
+        character(len=:), allocatable :: ctfflag, phaseplate
         type(ctfparams)      :: ctfvars
         integer              :: stkind, ind_in_stk
         logical              :: dfy_was_there, l_noctf
@@ -1748,6 +1691,13 @@ contains
                 ctfvars%angast = 0.
             endif
         endif
+        ! has phaseplate
+        if( self%os_stk%isthere(stkind, 'phaseplate') )then
+            phaseplate = trim(self%os_stk%get_static(stkind, 'phaseplate'))
+        else
+            phaseplate = 'no'
+        endif
+        ctfvars%l_phaseplate = trim(phaseplate).eq.'yes'
         ! additional phase shift
         if( ptcl_field%isthere(iptcl, 'phshift') )then
             ctfvars%phshift = ptcl_field%get(iptcl, 'phshift')

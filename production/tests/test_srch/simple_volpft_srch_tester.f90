@@ -61,24 +61,23 @@ contains
         ! deal with target (randomly rotated version of vols(1))
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
         call vol_tmp%read(p%vols(1))
+        call ranori%new
         call ranori%rnd_ori
         call b%vol%copy( rotvol(vol_tmp, ranori))
-        call b%vol%write('vol_target_1.mrc')
         call b%vol%add_gauran(SNR)
-        call b%vol%write('vol_target_2.mrc')
         call b%vol%mask(p%msk,'soft')
-        call b%vol%write('vol_target_3.mrc')
         call b%vol%fft()
         call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp,0.)
         call vol_tmp%kill
     end subroutine setup_testenv
 
     subroutine test_volpft_srch
-        type(ori) :: o_best, ranori !, e
-        real      :: corr_best, dist, sumdist, sumcorr, corr !, shvec(3)
+        type(ori) :: o_best, ranori
+        real      :: corr_best, dist, sumdist, sumcorr, corr
         integer   :: itest
         sumdist = 0.
         sumcorr = 0.
+        call ranori%new
         do itest=1,NTESTS
             call progress(itest,NTESTS)
             call ranori%rnd_ori
@@ -90,8 +89,8 @@ contains
         end do
         dist = sumdist/real(NTESTS)
         corr = sumcorr/real(NTESTS)
-        if( verbose ) write(*,'(a,1x,f5.2)') 'ROT ERROR (IN DEGREES): ', dist
-        if( verbose ) write(*,'(a,1x,f7.4)') 'CORR: ', corr
+        write(*,'(a,1x,f5.2)') 'ROT ERROR (IN DEGREES): ', dist
+        write(*,'(a,1x,f7.4)') 'CORR: ', corr
         if( .not. test_passed() ) stop '****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch'
 
         contains
