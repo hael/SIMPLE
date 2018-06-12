@@ -38,7 +38,6 @@ type :: hash
     procedure          :: get_values
     procedure          :: get_str
     procedure          :: get_value_at
-  !  procedure          :: push2chash
     procedure          :: hash2str
     procedure          :: size_of
     ! I/O
@@ -116,14 +115,14 @@ contains
             ! copy key-value pairs
             allocate(keys_copy(oldsz), values_copy(oldsz))
             do i=1,oldsz
-                if( allocated(self%keys(i)%str) ) allocate(keys_copy(i)%str, source=self%keys(i)%str)
+                if( allocated(self%keys(i)%str) ) keys_copy(i)%str = self%keys(i)%str
                 values_copy(i) = self%values(i)
             enddo
             ! allocate extended size
             call self%alloc_hash(newsz)
             ! set back the copied key-value pairs
             do i=1,oldsz
-                if( allocated(keys_copy(i)%str) ) allocate(self%keys(i)%str, source=keys_copy(i)%str)
+                if( allocated(keys_copy(i)%str) ) self%keys(i)%str = keys_copy(i)%str
                 self%values(i) = values_copy(i)
             enddo
         else
@@ -143,7 +142,7 @@ contains
         self_out%exists     = .true.
         if( self_in%hash_index > 0 )then
             do i=1,self_in%hash_index
-                if( allocated(self_in%keys(i)%str) ) allocate(self_out%keys(i)%str, source=self_in%keys(i)%str)
+                if( allocated(self_in%keys(i)%str) ) self_out%keys(i)%str = self_in%keys(i)%str
                 self_out%values(i) = self_in%values(i)
             end do
         endif
@@ -170,7 +169,7 @@ contains
         sz = size(self%keys)
         if( self%hash_index > sz ) call self%realloc_hash
         ! set key
-        allocate(self%keys(self%hash_index)%str, source= trim(adjustl(key)))
+        self%keys(self%hash_index)%str = trim(adjustl(key))
         ! set value
         self%values(self%hash_index) = val
     end subroutine push
@@ -202,15 +201,12 @@ contains
         if( ind==0 .or. ind > self%hash_index ) return
         do i=ind,self%hash_index - 1
             ! replace key
-            if( allocated(self%keys(i)%str) ) deallocate(self%keys(i)%str)
-            if(allocated(tmp)) deallocate(tmp)
-            allocate(tmp, source=self%keys(i + 1)%str)
-            self%keys(i)%str  = tmp
+            self%keys(i)%str  = self%keys(i + 1)%str
             ! replace value
             self%values(i) = self%values(i + 1)
         enddo
         ! remove previous last entry
-        if( allocated(self%keys(self%hash_index)%str)   ) deallocate(self%keys(self%hash_index)%str)
+        if( allocated(self%keys(self%hash_index)%str) ) deallocate(self%keys(self%hash_index)%str)
         self%values( self%hash_index ) = 0.
         ! decrement index
         self%hash_index = self%hash_index - 1
@@ -263,19 +259,17 @@ contains
         end do
     end function get
 
-        !>  \brief  gets a value in the hash
+    !>  \brief  gets a value in the hash
     function get_str( self, keyindx ) result( vstr )
         class(hash),      intent(inout) :: self
         integer,          intent(in)    :: keyindx
         character(len=:), allocatable   :: vstr
-
-        if(keyindx > 0 .and.  keyindx .le. self%hash_index)then
-           allocate(vstr, source=trim(self%keys(keyindx)%str))
-       endif
-
+        if( keyindx > 0 .and.  keyindx .le. self%hash_index )then
+            vstr = trim(self%keys(keyindx)%str)
+        endif
    end function get_str
 
-        !>  \brief  gets a value in the hash
+    !>  \brief  gets a value in the hash
     function get_value_at( self, keyindx ) result( val )
         class(hash),      intent(inout) :: self
         integer,          intent(in)    :: keyindx
@@ -283,10 +277,8 @@ contains
         val=0.
         if(keyindx > 0 .and.  keyindx .le. self%hash_index)then
             val = self%values(keyindx)
-       endif
-
-   end function get_value_at
-
+        endif
+    end function get_value_at
 
     !>  \brief  returns the values of the hash
     function get_values( self ) result( values )
@@ -294,24 +286,6 @@ contains
         real, allocatable  :: values(:)
         allocate(values(self%hash_index), source=self%values(:self%hash_index))
     end function get_values
-
-    !>  \brief  pushes the hash content to chash
-    ! subroutine push2chash( self, ch, as_ints )
-    !     use simple_chash, only: chash
-    !     class(hash),  intent(in)    :: self
-    !     class(chash), intent(inout) :: ch
-    !     logical,      intent(in)    :: as_ints
-    !     integer :: i
-    !     if( self%hash_index >= 1 )then
-    !         do i=1,self%hash_index
-    !             if( as_ints )then
-    !                 call ch%push(trim(self%keys(i)%str), int2str(int(self%values(i))))
-    !             else
-    !                 call ch%push(trim(self%keys(i)%str), real2str(self%values(i)))
-    !             endif
-    !         end do
-    !     endif
-    ! end subroutine push2chash
 
     !>  \brief  convert hash to string
     function hash2str( self ) result( str )

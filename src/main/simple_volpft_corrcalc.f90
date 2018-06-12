@@ -15,6 +15,7 @@ type :: volpft_corrcalc
     class(projector), pointer :: vol_ref=>null()          !< pointer to reference volume
     class(projector), pointer :: vol_target=>null()       !< pointer to target volume
     type(sym)                 :: ico                      !< defines the icosahedral group
+    type(ori)                 :: e                        !< for cost function eval
     integer                   :: nspace          = 0      !< number of vec:s in representation
     integer                   :: kfromto_vpft(2) = 0      !< Fourier index range
     real                      :: hp                       !< high-pass limit
@@ -74,6 +75,8 @@ contains
         ! make the icosahedral group
         call self%ico%new('ico')
         self%nspace = self%ico%get_nsym()
+        ! make the instance ori
+        call self%e%new
         ! set other stuff
         self%kfromto_vpft(1) = vol_ref%get_find(hp)
         self%kfromto_vpft(2) = vol_ref%get_find(lp)
@@ -209,11 +212,9 @@ contains
     function corr_2( self, euls ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: euls(3)
-        real      :: cc
-        type(ori) :: e
-        call e%new
-        call e%set_euler(euls)
-        cc = self%corr_1(e)
+        real :: cc
+        call self%e%set_euler(euls)
+        cc = self%corr_1(self%e)
     end function corr_2
 
     !>  \brief  continous rotational correlator
@@ -232,11 +233,9 @@ contains
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: euls(3)
         real,                   intent(in)    :: shvec(3)
-        real      :: cc
-        type(ori) :: e
-        call e%new
-        call e%set_euler(euls)
-        cc = self%corr_3(e, shvec)
+        real :: cc
+        call self%e%set_euler(euls)
+        cc = self%corr_3(self%e, shvec)
     end function corr_4
 
     !>  \brief  continous rotational correlator
@@ -254,6 +253,7 @@ contains
             self%vol_ref    => null()
             self%vol_target => null()
             call self%ico%kill
+            call self%e%kill
             deallocate(self%vpft_ref,self%vpft_target,self%locs_ref)
             self%existence_vpft = .false.
         endif

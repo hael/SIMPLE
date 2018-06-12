@@ -1,4 +1,6 @@
 ! volume alignment based on band-pass limited cross-correlation
+! the all df:s & shift routines need further testing
+! need to introduce openMP:ed cost function in volpft_corrcalc for the serial optimisers
 module simple_volpft_srch
 include 'simple_lib.f08'
 !$ use omp_lib
@@ -19,26 +21,20 @@ integer, parameter :: NBEST   = 20
 integer, parameter :: ANGSTEP = 10
 
 type opt4openMP
-    type(opt_spec)            :: ospec          !< optimizer specification object
-    class(optimizer), pointer :: nlopt =>null() !< optimizer object
+    type(opt_spec)            :: ospec                 !< optimizer specification object
+    class(optimizer), pointer :: nlopt => null()       !< optimizer object
 end type opt4openMP
 
-type(volpft_corrcalc)         :: vpftcc       !< corr calculator
-type(opt4openMP), allocatable :: opt_eul(:)   !< parallel optimisation, Euler angles
-type(opt4openMP), allocatable :: opt_shift(:) !< parallel optimisation, shifts
-type(opt4openMP), allocatable :: opt_all(:)   !< parallel optimisation, all df:s
-
-! type(opt_spec)        :: ospec_eul            !< optimizer specification object, Euler angles
-! type(opt_spec)        :: ospec_shift          !< optimizer specification object, rotational origin shifts
-! type(opt_spec)        :: ospec_all            !< optimizer specification object, all df:s
-! type(opt_simplex)     :: nlopt_eul            !< optimizer object, Euler angles
-! type(opt_simplex)     :: nlopt_shift          !< optimizer object, rotational origin shifts
-! type(opt_simplex)     :: nlopt_all            !< optimizer object, all df:s
-
-type(ori)             :: e_glob               !< ori of best solution found so far
-real                  :: shift_scale =  1.0   !< shift scale factor
-logical               :: shbarr      = .true. !< shift barrier constraint or not
-integer               :: nrestarts   = 3      !< simplex restarts (randomized bounds)
+type(volpft_corrcalc)         :: vpftcc                !< corr calculator
+type(opt4openMP), allocatable :: opt_eul(:)            !< parallel optimisation, Euler angles
+type(opt_spec)                :: ospec_shift           !< optimizer specification object, rotational origin shifts
+type(opt_spec)                :: ospec_all             !< optimizer specification object, all df:s
+class(optimizer), pointer     :: nlopt_shift => null() !< optimizer object, rotational origin shifts
+class(optimizer), pointer     :: nlopt_all   => null() !< optimizer object, all df:s
+type(ori)                     :: e_glob                !< ori of best solution found so far
+real                          :: shift_scale =  1.0    !< shift scale factor
+logical                       :: shbarr      = .true.  !< shift barrier constraint or not
+integer                       :: nrestarts   = 3       !< simplex restarts (randomized bounds)
 
 contains
 
@@ -52,6 +48,7 @@ contains
         type(opt_factory) :: ofac
         real              :: lims_eul(3,2), lims_shift(3,2), lims_all(6,2)
         integer           :: ithr
+        call volpft_srch_kill
         ! create the correlator
         call vpftcc%new( vol_ref, vol_target, hp, lp, KBALPHA )
         ! flag the barrier constraint
@@ -71,25 +68,26 @@ contains
         lims_shift(:,2) =  trs
         lims_all(:3,:)  = lims_eul
         lims_all(4:,:)  = lims_shift
-        ! make parallel optimiser structs
-        allocate(opt_eul(nthr_glob), opt_shift(nthr_glob), opt_all(nthr_glob))
+        ! make parallel optimiser struct
+        allocate(opt_eul(nthr_glob))
         do ithr=1,nthr_glob
-            ! optimiser specs
+            ! optimiser spec
             call opt_eul(ithr)%ospec%specify('simplex', 3, ftol=1e-4,&
             &gtol=1e-4, limits=lims_eul, nrestarts=nrestarts, maxits=30)
-            call opt_shift(ithr)%ospec%specify('simplex', 3, ftol=1e-4,&
-            &gtol=1e-4, limits=lims_shift, nrestarts=nrestarts, maxits=30)
-            call opt_all(ithr)%ospec%specify('simplex', 6, ftol=1e-4,&
-            &gtol=1e-4, limits=lims_all, nrestarts=nrestarts, maxits=30)
-            ! point to costfuns
+            ! point to costfun
             call opt_eul(ithr)%ospec%set_costfun(volpft_srch_costfun_eul)
-            call opt_shift(ithr)%ospec%set_costfun(volpft_srch_costfun_shift)
-            call opt_all(ithr)%ospec%set_costfun(volpft_srch_costfun_all)
             ! generate optimizer object with the factory
-            call ofac%new(opt_eul(ithr)%ospec,   opt_eul(ithr)%nlopt)
-            call ofac%new(opt_shift(ithr)%ospec, opt_shift(ithr)%nlopt)
-            call ofac%new(opt_all(ithr)%ospec,   opt_all(ithr)%nlopt)
+            call ofac%new(opt_eul(ithr)%ospec, opt_eul(ithr)%nlopt)
         end do
+        ! serial optimizers
+        call ospec_shift%specify('simplex', 3, ftol=1e-4,&
+        &gtol=1e-4, limits=lims_shift, nrestarts=nrestarts, maxits=30)
+        call ospec_all%specify('simplex', 6, ftol=1e-4,&
+        &gtol=1e-4, limits=lims_all, nrestarts=nrestarts, maxits=30)
+        call ospec_shift%set_costfun(volpft_srch_costfun_shift)
+        call ospec_all%set_costfun(volpft_srch_costfun_all)
+        call ofac%new(ospec_shift, nlopt_shift)
+        call ofac%new(ospec_all, nlopt_all)
         ! create global ori
         call e_glob%new()
         if( DEBUG ) write(*,*) 'debug(volpft_srch); volpft_srch_init, DONE'
@@ -159,7 +157,7 @@ contains
         ! determine range
         istart = 1
         istop  = min(ffromto(2) - ffromto(1) + 1,NBEST)
-        !$omp parallel do schedule(static) default(shared) private(iloc) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
         do iloc=istart,istop
             ithr = omp_get_thread_num() + 1
             opt_eul(ithr)%ospec%x = resoris%get_euler(order(iloc))
@@ -180,61 +178,61 @@ contains
         type(ori)         :: orientation_best
         real              :: cost_init, cost
         class(*), pointer :: fun_self => null()
-        ! orientation_best = e_glob
-        ! ospec_shift%x    = 0.
-        ! cost_init        = volpft_srch_costfun_shift(fun_self, ospec_shift%x, ospec_shift%ndim)
-        ! call nlopt_shift%minimize(ospec_shift, fun_self, cost)
-        ! if( cost < cost_init )then
-        !     ! set corr
-        !     call orientation_best%set('corr', -cost)
-        !     ! set shift
-        !     call orientation_best%set('x', ospec_shift%x(1))
-        !     call orientation_best%set('y', ospec_shift%x(2))
-        !     call orientation_best%set('z', ospec_shift%x(3))
-        ! else
-        !     ! set corr
-        !     call orientation_best%set('corr', -cost_init)
-        !     ! set shift
-        !     call orientation_best%set('x', 0.0)
-        !     call orientation_best%set('y', 0.0)
-        !     call orientation_best%set('z', 0.0)
-        ! endif
-        ! ! update global ori
-        ! e_glob = orientation_best
+        orientation_best = e_glob
+        ospec_shift%x    = 0.
+        cost_init        = volpft_srch_costfun_shift(fun_self, ospec_shift%x, ospec_shift%ndim)
+        call nlopt_shift%minimize(ospec_shift, fun_self, cost)
+        if( cost < cost_init )then
+            ! set corr
+            call orientation_best%set('corr', -cost)
+            ! set shift
+            call orientation_best%set('x', ospec_shift%x(1))
+            call orientation_best%set('y', ospec_shift%x(2))
+            call orientation_best%set('z', ospec_shift%x(3))
+        else
+            ! set corr
+            call orientation_best%set('corr', -cost_init)
+            ! set shift
+            call orientation_best%set('x', 0.0)
+            call orientation_best%set('y', 0.0)
+            call orientation_best%set('z', 0.0)
+        endif
+        ! update global ori
+        e_glob = orientation_best
     end function volpft_srch_minimize_shift
 
     function volpft_srch_minimize_all( ) result( orientation_best )
         type(ori)         :: orientation_best
         real              :: cost_init, cost
         class(*), pointer :: fun_self => null()
-        ! orientation_best = e_glob
-        ! ospec_all%x(1:3) = e_glob%get_euler()
-        ! ospec_all%x(4)   = e_glob%get('x')
-        ! ospec_all%x(5)   = e_glob%get('y')
-        ! ospec_all%x(6)   = e_glob%get('z')
-        ! ! determines & applies shift scaling
-        ! shift_scale = (maxval(ospec_all%limits(1:3,2)) - minval(ospec_all%limits(1:3,1)))/&
-        !              &(maxval(ospec_all%limits(4:6,2)) - minval(ospec_all%limits(4:6,1)))
-        ! ospec_all%limits(4:,:) = ospec_all%limits(4:,:) * shift_scale
-        ! ospec_all%x(4:)        = ospec_all%x(4:)        * shift_scale
-        ! ! initialize
-        ! cost_init = volpft_srch_costfun_all(fun_self, ospec_all%x, ospec_all%ndim)
-        ! ! minimisation
-        ! call nlopt_all%minimize(ospec_all, fun_self, cost)
-        ! ! solution and un-scaling
-        ! if( cost < cost_init )then
-        !     ! set corr
-        !     call orientation_best%set('corr', -cost)
-        !     ! set Euler
-        !     call orientation_best%set_euler(ospec_all%x(1:3))
-        !     ! unscale & set shift
-        !     ospec_all%x(4:6) = ospec_all%x(4:6) / shift_scale
-        !     call orientation_best%set('x', ospec_all%x(4))
-        !     call orientation_best%set('y', ospec_all%x(5))
-        !     call orientation_best%set('z', ospec_all%x(6))
-        !     ! update global ori
-        !     e_glob = orientation_best
-        ! endif
+        orientation_best = e_glob
+        ospec_all%x(1:3) = e_glob%get_euler()
+        ospec_all%x(4)   = e_glob%get('x')
+        ospec_all%x(5)   = e_glob%get('y')
+        ospec_all%x(6)   = e_glob%get('z')
+        ! determines & applies shift scaling
+        shift_scale = (maxval(ospec_all%limits(1:3,2)) - minval(ospec_all%limits(1:3,1)))/&
+                     &(maxval(ospec_all%limits(4:6,2)) - minval(ospec_all%limits(4:6,1)))
+        ospec_all%limits(4:,:) = ospec_all%limits(4:,:) * shift_scale
+        ospec_all%x(4:)        = ospec_all%x(4:)        * shift_scale
+        ! initialize
+        cost_init = volpft_srch_costfun_all(fun_self, ospec_all%x, ospec_all%ndim)
+        ! minimisation
+        call nlopt_all%minimize(ospec_all, fun_self, cost)
+        ! solution and un-scaling
+        if( cost < cost_init )then
+            ! set corr
+            call orientation_best%set('corr', -cost)
+            ! set Euler
+            call orientation_best%set_euler(ospec_all%x(1:3))
+            ! unscale & set shift
+            ospec_all%x(4:6) = ospec_all%x(4:6) / shift_scale
+            call orientation_best%set('x', ospec_all%x(4))
+            call orientation_best%set('y', ospec_all%x(5))
+            call orientation_best%set('z', ospec_all%x(6))
+            ! update global ori
+            e_glob = orientation_best
+        endif
     end function volpft_srch_minimize_all
 
     function volpft_srch_costfun_eul( fun_self, vec, D ) result( cost )
@@ -252,16 +250,16 @@ contains
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real                    :: vec_here(3), cost
-        ! vec_here = vec
-        ! where( abs(vec) < 1.e-6 ) vec_here = 0.0
-        ! if( shbarr )then
-        !     if( any(vec_here(:) < ospec_shift%limits(:,1)) .or.&
-        !        &any(vec_here(:) > ospec_shift%limits(:,2)) )then
-        !         cost = 1.
-        !         return
-        !     endif
-        ! endif
-        ! cost = -vpftcc%corr(e_glob, vec_here(:3))
+        vec_here = vec
+        where( abs(vec) < 1.e-6 ) vec_here = 0.0
+        if( shbarr )then
+            if( any(vec_here(:) < ospec_shift%limits(:,1)) .or.&
+               &any(vec_here(:) > ospec_shift%limits(:,2)) )then
+                cost = 1.
+                return
+            endif
+        endif
+        cost = -vpftcc%corr(e_glob, vec_here(:3))
     end function volpft_srch_costfun_shift
 
     function volpft_srch_costfun_all( fun_self, vec, D ) result( cost )
@@ -269,22 +267,47 @@ contains
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real                    :: vec_here(6), cost
-        ! vec_here = vec
-        ! if( shbarr )then
-        !     if( any(vec_here(4:6) < ospec_all%limits(4:6,1)) .or.&
-        !        &any(vec_here(4:6) > ospec_all%limits(4:6,2)) )then
-        !         cost = 1.
-        !         return
-        !     endif
-        ! endif
-        ! ! unscale shift
-        ! vec_here(4:6) = vec_here(4:6) / shift_scale
-        ! ! zero small shifts
-        ! if( abs(vec_here(4)) < 1.e-6 ) vec_here(4) = 0.0
-        ! if( abs(vec_here(5)) < 1.e-6 ) vec_here(5) = 0.0
-        ! if( abs(vec_here(6)) < 1.e-6 ) vec_here(6) = 0.0
-        ! ! cost
-        ! cost = -vpftcc%corr(vec_here(:3), vec_here(4:))
+        vec_here = vec
+        if( shbarr )then
+            if( any(vec_here(4:6) < ospec_all%limits(4:6,1)) .or.&
+               &any(vec_here(4:6) > ospec_all%limits(4:6,2)) )then
+                cost = 1.
+                return
+            endif
+        endif
+        ! unscale shift
+        vec_here(4:6) = vec_here(4:6) / shift_scale
+        ! zero small shifts
+        if( abs(vec_here(4)) < 1.e-6 ) vec_here(4) = 0.0
+        if( abs(vec_here(5)) < 1.e-6 ) vec_here(5) = 0.0
+        if( abs(vec_here(6)) < 1.e-6 ) vec_here(6) = 0.0
+        ! cost
+        cost = -vpftcc%corr(vec_here(:3), vec_here(4:))
     end function volpft_srch_costfun_all
+
+    subroutine volpft_srch_kill
+        integer :: ithr
+        if( allocated(opt_eul) )then
+            do ithr=1,size(opt_eul)
+                call opt_eul(ithr)%ospec%kill
+                if( associated(opt_eul(ithr)%nlopt) )then
+                    call opt_eul(ithr)%nlopt%kill
+                    nullify(opt_eul(ithr)%nlopt)
+                endif
+            end do
+            deallocate(opt_eul)
+        endif
+        call vpftcc%kill
+        call ospec_shift%kill
+        call ospec_all%kill
+        if( associated(nlopt_shift) )then
+            call nlopt_shift%kill
+            nullify(nlopt_shift)
+        endif
+        if( associated(nlopt_all) )then
+            call nlopt_all%kill
+            nullify(nlopt_all)
+        endif 
+    end subroutine volpft_srch_kill
 
 end module simple_volpft_srch
