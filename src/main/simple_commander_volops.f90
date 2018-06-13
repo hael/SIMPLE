@@ -568,20 +568,20 @@ contains
         class(cmdline),           intent(inout) :: cline
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
         character(len=32), parameter :: SYMAXISTAB = 'sym_axis'//trim(TXT_EXT)
-        type(parameters)      :: params
-        type(builder)         :: build
-        type(ori)             :: symaxis
-        type(oris)            :: oshift, symaxis4write
-        type(sym)             :: syme
-        real                  :: shvec(3)
-        character(len=STDLEN) :: fname_finished
+        character(len=STDLEN)        :: fname_finished
+        type(parameters) :: params
+        type(builder)    :: build
+        type(ori)        :: symaxis
+        type(oris)       :: oshift, symaxis4write
+        type(sym)        :: syme
+        real             :: shvec(3)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         ! center volume
         call build%vol%read(params%vols(1))
         shvec = 0.
         if( params%center.eq.'yes' ) shvec = build%vol%center(params%cenlp,params%msk)
-        ! stash shift
+        ! stash shifts
         call oshift%new(1)
         call oshift%set(1,'x',shvec(1))
         call oshift%set(1,'y',shvec(2))
@@ -606,12 +606,14 @@ contains
             call symaxis4write%write(params%outfile, [1,1])
         else
             call symaxis4write%write(SYMAXISTAB, [1,1])
-            ! transfer shift and symmetry to input orientations
-            call syme%new(params%pgrp)
-            ! rotate the orientations & transfer the 3d shifts to 2d
-            shvec = -1. * shvec ! the sign is right
-            call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            if( .not. build%spproj%is_virgin_field(params%oritype) )then
+                ! transfer shift and symmetry to orientations
+                call syme%new(params%pgrp)
+                ! rotate the orientations & transfer the 3d shifts to 2d
+                shvec = -1. * shvec ! the sign is right
+                call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            endif
         endif
         ! destruct
         call symaxis%kill

@@ -13,7 +13,7 @@ private
 
 type :: parameters
     ! pointer 2 program UI
-    type(simple_program), pointer :: ptr2prg
+    type(simple_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
@@ -374,7 +374,7 @@ type :: parameters
     logical :: l_doshift      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_autoscale    = .false.
-    logical :: l_bfac_static   = .false.
+    logical :: l_bfac_static  = .false.
     logical :: l_dose_weight  = .false.
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
@@ -382,8 +382,7 @@ type :: parameters
     logical :: l_cc_bfac      = .true.
     logical :: l_phaseplate   = .false.
     logical :: l_dev          = .false.
-    logical :: l_suppress_errors   = .false.
-    logical :: singleton_initiated = .false.
+    logical :: sp_required    = .false.
   contains
     procedure          :: new
     procedure, private :: set_img_format
@@ -411,7 +410,7 @@ contains
         type(sp_project) :: spproj
         type(ori)        :: o
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate, idir, nsp_files
-        logical          :: nparts_set, sp_required, ssilent
+        logical          :: nparts_set, ssilent
         ssilent = .false.
         if( present(silent) ) ssilent = silent
         ! seed random number generator
@@ -758,8 +757,8 @@ contains
         if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
             ! the associated(self%ptr2prg) condition required for commanders executed within
             ! distributed workflows without invoking simple_private_exec
-            sp_required = self%ptr2prg%requires_sp_project()
-            if( .not.cline%defined('projfile') .and. sp_required )then
+            self%sp_required = self%ptr2prg%requires_sp_project()
+            if( .not.cline%defined('projfile') .and. self%sp_required )then
                 ! so that distributed execution can deal with multiple project files (eg scaling)
                 ! and simple_exec can also not require a project file
                 if( nsp_files > 1 )then
@@ -771,14 +770,14 @@ contains
                 endif
             endif
         else
-            sp_required = .false.
+            self%sp_required = .false.
         endif
-        if( nsp_files == 0 .and. sp_required .and. .not. cline%defined('projfile') )then
+        if( nsp_files == 0 .and. self%sp_required .and. .not. cline%defined('projfile') )then
             write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
             write(*,*) 'cwd:     ', trim(self%cwd)
             stop 'ERROR! no *.simple project file identified; simple_parameters :: new'
         endif
-        if( nsp_files == 1 .and. sp_required )then
+        if( nsp_files == 1 .and. self%sp_required )then
             ! good, we found a single monolithic project file
             ! set projfile and projname fields unless given on command line
             if( .not. cline%defined('projfile') ) self%projfile = trim(sp_files(1))
@@ -807,7 +806,7 @@ contains
                 call simple_mkdir('./'//trim(self%exec_dir))
                 ! change to execution directory directory
                 call simple_chdir('./'//trim(self%exec_dir))
-                if( sp_required )then
+                if( self%sp_required )then
                     ! copy the project file from upstairs
                     call syslib_copy_file(trim(self%projfile), './'//basename(self%projfile))
                     ! update the projfile/projname

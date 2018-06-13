@@ -141,7 +141,6 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
-        logical ::  metadata_read
         ! create object for orientations
         ! b%a is now a pointer to a field in b%spproj
         select case(params%spproj_iseg)
@@ -169,17 +168,7 @@ contains
                 self%spproj_field => self%spproj%os_ptcl3D
         end select
         ! read from project file
-        metadata_read = .false.
-        if( cline%defined('projfile') )then
-            if( .not. file_exists(params%projfile) )then
-                write(*,*) 'project file not in exec dir: ', trim(params%projfile)
-                stop 'ERROR! build :: build_spproj'
-            endif
-            metadata_read = .true.
-        else if( associated(params%ptr2prg) )then
-            if( params%ptr2prg%requires_sp_project() ) metadata_read = .true.
-        endif
-        if( metadata_read )then
+        if( params%sp_required )then
             call self%spproj%read(params%projfile)
             ! update cwd of project (in case the params class changed exec dir)
             call self%spproj%projinfo%set(1, 'cwd', trim(params%cwd))
