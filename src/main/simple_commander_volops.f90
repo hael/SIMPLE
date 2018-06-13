@@ -21,6 +21,7 @@ public :: reproject_commander
 public :: volops_commander
 public :: volume_smat_commander
 public :: dock_volpair_commander
+public :: symsrch_commander
 public :: make_pickrefs_commander
 private
 #include "simple_local_flags.inc"
@@ -53,6 +54,10 @@ type, extends(commander_base) :: dock_volpair_commander
   contains
     procedure :: execute      => exec_dock_volpair
 end type dock_volpair_commander
+type, extends(commander_base) :: symsrch_commander
+  contains
+    procedure :: execute      => exec_symsrch
+end type symsrch_commander
 type, extends(commander_base) :: make_pickrefs_commander
 contains
     procedure :: execute      => exec_make_pickrefs
@@ -552,6 +557,73 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
     end subroutine exec_dock_volpair
+
+    !> for identification of the principal symmetry axis
+    subroutine exec_symsrch( self, cline )
+        use simple_volpft_symsrch
+        use simple_sym,  only: sym
+        use simple_ori,  only: ori
+        use simple_oris, only: oris
+        class(symsrch_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
+        character(len=32), parameter :: SYMAXISTAB = 'sym_axis'//trim(TXT_EXT)
+        type(parameters)      :: params
+        type(builder)         :: build
+        type(ori)             :: symaxis
+        type(oris)            :: oshift, symaxis4write
+        type(sym)             :: syme
+        real                  :: shvec(3)
+        character(len=STDLEN) :: fname_finished
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        ! center volume
+        call build%vol%read(params%vols(1))
+        shvec = 0.
+        if( params%center.eq.'yes' ) shvec = build%vol%center(params%cenlp,params%msk)
+        ! stash shift
+        call oshift%new(1)
+        call oshift%set(1,'x',shvec(1))
+        call oshift%set(1,'y',shvec(2))
+        call oshift%set(1,'z',shvec(3))
+        if( params%l_distr_exec .and. params%part.eq.1 )then
+            ! write shifts for distributed execution
+            call oshift%write(trim(SYMSHTAB), [1,1])
+        endif
+        ! mask volume
+        call build%vol%mask(params%msk, 'soft')
+        ! init search object
+        call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
+        ! search
+        if( params%l_distr_exec )then
+            call volpft_srch4symaxis(symaxis, [params%fromp,params%top])
+        else
+            call volpft_srch4symaxis(symaxis)
+        endif
+        call symaxis4write%new(1)
+        call symaxis4write%set_ori(1, symaxis)
+        if( params%l_distr_exec )then
+            call symaxis4write%write(params%outfile, [1,1])
+        else
+            call symaxis4write%write(SYMAXISTAB, [1,1])
+            ! transfer shift and symmetry to input orientations
+            call syme%new(params%pgrp)
+            ! rotate the orientations & transfer the 3d shifts to 2d
+            shvec = -1. * shvec ! the sign is right
+            call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
+        ! destruct
+        call symaxis%kill
+        call oshift%kill
+        call symaxis4write%kill
+        call syme%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
+        ! indicate completion (when run in a qsys env)
+        fname_finished = 'JOB_FINISHED_'//int2str_pad(params%part,params%numlen)
+        call simple_touch(trim(fname_finished), errmsg='In: commander_comlin :: exec_symsrch finished' )
+    end subroutine exec_symsrch
 
     !> for making picker references
     subroutine exec_make_pickrefs( self, cline )

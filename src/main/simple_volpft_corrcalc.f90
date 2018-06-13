@@ -28,7 +28,9 @@ type :: volpft_corrcalc
     logical                   :: existence_vpft = .false. !< to indicate existence
   contains
     ! CONSTRUCTOR
-    procedure          :: new
+    procedure, private :: new_1
+    procedure, private :: new_2
+    generic            :: new => new_1, new_2
     ! GETTERS
     procedure          :: get_nspace
     procedure          :: get_kfromto
@@ -53,7 +55,7 @@ end type volpft_corrcalc
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, vol_ref, vol_target, hp, lp, alpha )
+    subroutine new_1( self, vol_ref, vol_target, hp, lp, alpha )
         class(volpft_corrcalc),    intent(inout) :: self
         class(projector), target , intent(in)    :: vol_ref, vol_target
         real,                      intent(in)    :: hp, lp, alpha
@@ -105,7 +107,55 @@ contains
         ! extract the reference lines
         call self%extract_ref
         self%existence_vpft = .true.
-    end subroutine new
+    end subroutine new_1
+
+    !>  \brief  is a constructor
+    subroutine new_2( self, vol, hp, lp, alpha )
+        class(volpft_corrcalc),    intent(inout) :: self
+        class(projector), target , intent(in)    :: vol
+        real,                      intent(in)    :: hp, lp, alpha
+        integer    :: isym, k
+        real       :: vec(3)
+        type(ori)  :: e
+        call self%kill
+        ! set pointers
+        ! we assume that the volumes have been masked and prepared with prep4cgrid
+        self%vol_ref    => vol
+        self%vol_target => self%vol_ref
+        self%hp         =  hp
+        self%lp         =  lp
+        ! make the icosahedral group
+        call self%ico%new('ico')
+        self%nspace = self%ico%get_nsym()
+        ! make the instance ori
+        call self%e%new
+        ! set other stuff
+        self%kfromto_vpft(1) = self%vol_ref%get_find(hp)
+        self%kfromto_vpft(2) = self%vol_ref%get_find(lp)
+        allocate( self%vpft_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace),&
+                  self%vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace),&
+                  self%locs_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,3), stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
+        ! generate sampling space
+        do isym=1,self%nspace
+            ! get symmetry rotation matrix
+            e = self%ico%get_symori(isym)
+            ! loop over resolution shells
+            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                ! calculate sampling location
+                vec(1) = 0.
+                vec(2) = 0.
+                vec(3) = real(k)
+                self%locs_ref(k,isym,:) = matmul(vec,e%get_mat())
+            end do
+        end do
+        ! prepare for fast interpolation
+        call self%vol_ref%fft()
+        call self%vol_ref%expand_cmat(alpha)
+        ! extract the reference lines
+        call self%extract_ref
+        self%existence_vpft = .true.
+    end subroutine new_2
 
     ! GETTERS
 

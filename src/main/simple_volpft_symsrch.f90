@@ -10,7 +10,7 @@ use simple_ori,             only: ori, euler2m
 use simple_sym,             only: sym
 implicit none
 
-public :: volpft_symsrch_init, volpft_symsrch_gridsrch
+public :: volpft_symsrch_init, volpft_srch4symaxis
 private
 
 logical, parameter :: DEBUG   = .false.
@@ -51,7 +51,7 @@ contains
         real    :: lims(3,2)
         call volpft_symsrch_kill
         ! create the correlator
-        call vpftcc%new(vol, vol, hp, lp, KBALPHA)
+        call vpftcc%new(vol, hp, lp, KBALPHA)
         nspace  = vpftcc%get_nspace()
         kfromto = vpftcc%get_kfromto()
         ! create the symmetry object
@@ -93,7 +93,7 @@ contains
         call espace%spiral
     end subroutine volpft_symsrch_init
 
-    subroutine volpft_symsrch_gridsrch( symaxis_best, fromto )
+    subroutine volpft_srch4symaxis( symaxis_best, fromto )
         class(ori),        intent(out) :: symaxis_best
         integer, optional, intent(in)  :: fromto(2)
         real,    allocatable :: corrs(:,:)
@@ -169,7 +169,7 @@ contains
         saxis_glob = cand_axes%get_ori(order(1))
         ! return best
         symaxis_best = cand_axes%get_ori(order(1))
-    end subroutine volpft_symsrch_gridsrch
+    end subroutine volpft_srch4symaxis
 
     function volpft_symsrch_costfun( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
