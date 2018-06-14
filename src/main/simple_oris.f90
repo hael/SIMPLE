@@ -2171,6 +2171,7 @@ contains
                     &avail(i) = .true.
                 end do
             end subroutine gen_c1
+            
     end subroutine spiral_2
 
     !>  \brief  orders oris according to specscore
@@ -2206,6 +2207,7 @@ contains
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
         call hpsort(corrs, inds)
+        call reverse(inds)
     end function order_corr
 
     !>  \brief  orders clusters according to population

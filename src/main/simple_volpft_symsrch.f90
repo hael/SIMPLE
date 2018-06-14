@@ -25,12 +25,9 @@ end type opt4openMP
 
 type(opt4openMP), allocatable :: opt_symaxes(:)     !< parallel optimisation, symmetry axes
 real,             allocatable :: sym_rmats(:,:,:)   !< symmetry operations rotation matrices
-complex,          allocatable :: sym_targets(:,:,:) !< symmetry target distributions of Fourier components
 type(volpft_corrcalc)         :: vpftcc             !< corr calculator
 type(ori)                     :: saxis_glob         !< best symaxis solution found so far
-type(oris)                    :: espace             !< projection directions in discrete search
-type(oris)                    :: cand_axes          !< candidate symmetry axes
-type(sym)                     :: symobj             !< symmetry object
+
 integer                       :: nrestarts = 3      !< simplex restarts (randomized bounds)
 integer                       :: nsym      = 0      !< # symmetry ops
 integer                       :: nspace    = 0      !< # complex vectors in vpftcc
@@ -47,19 +44,21 @@ contains
         integer, optional, intent(in) :: nrestarts_in
         type(opt_factory) :: ofac
         type(ori)         :: o
-        integer :: isym, nspace, kfromto(2), ithr
+        type(sym)         :: symobj
+        integer :: isym, ithr
         real    :: lims(3,2)
         call volpft_symsrch_kill
         ! create the correlator
-        call vpftcc%new(vol, hp, lp, KBALPHA)
+        call vpftcc%new(vol, pgrp, hp, lp, KBALPHA)
         nspace  = vpftcc%get_nspace()
         kfromto = vpftcc%get_kfromto()
+        if( DEBUG ) print *, 'nspace : ', nspace
+        if( DEBUG ) print *, 'kfromto: ', kfromto
         ! create the symmetry object
         call symobj%new(pgrp)
         nsym = symobj%get_nsym()
         ! allocate
         allocate(sym_rmats(nsym,3,3), source=0.0)
-        allocate(sym_targets(nsym,kfromto(1):kfromto(2),nspace), source=cmplx(0.,0.))
         ! extract the rotation matrices for the symops
         do isym=1,nsym
             o = symobj%get_symori(isym)
@@ -86,24 +85,22 @@ contains
         end do
         ! create global symaxis
         call saxis_glob%new
-        ! container for candidate symmetry axes
-        call cand_axes%new(NPROJ)
-        ! projection directions in discrete search
-        call espace%new(NPROJ)
-        call espace%spiral
+        if( DEBUG ) print *, '***debug(volpft_symsrch)***; volpft_symsrch_init, DONE'
     end subroutine volpft_symsrch_init
 
     subroutine volpft_srch4symaxis( symaxis_best, fromto )
         class(ori),        intent(out) :: symaxis_best
         integer, optional, intent(in)  :: fromto(2)
-        real,    allocatable :: corrs(:,:)
+        real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:)
         integer, allocatable :: order(:)
         class(*), pointer    :: fun_self => null()
-        type(ori) :: symaxis
-        integer   :: ffromto(2), ntot, inpl, iproj, iproj_best
-        integer   :: inpl_best, istart, istop, ithr, iloc
-        real      :: eul(3), corr_best, cost
-        logical   :: distr_exec
+        type(ori)  :: symaxis
+        type(oris) :: espace
+        type(oris) :: cand_axes
+        integer    :: ffromto(2), ntot, inpl, iproj, iproj_best
+        integer    :: inpl_best, istop, ithr, iloc, n_inpls
+        real       :: eul(3), corr_best, cost
+        logical    :: distr_exec
         ! flag distributed/shmem exec & set range
         distr_exec = present(fromto)
         if( distr_exec )then
@@ -116,26 +113,54 @@ contains
            stop 'range out of bound; simple_volpft_srch :: volpft_symsrch_gridsrch'
         endif
         ntot = ffromto(2) - ffromto(1) + 1
-        allocate(corrs(ffromto(1):ffromto(2),0:359))
-        ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
-        corrs  = -1.
-        !$omp parallel do schedule(static) default(shared) private(iproj,eul,inpl)&
-        !$omp proc_bind(close)
+        if( DEBUG ) print *, 'ffromto: ', ffromto
+        if( DEBUG ) print *, 'ntot   : ', ntot
+        ! create
+        ! container for candidate symmetry axes
+        call cand_axes%new(NPROJ)
+        call cand_axes%set_all2single('corr', -1.0) ! for later ordering
+        ! projection directions in discrete search
+        call espace%new(NPROJ)
+        call espace%spiral
+        ! count # in-plane angles
+        n_inpls = 0
+        do inpl=0,359,ANGSTEP
+            n_inpls = n_inpls + 1
+        end do
+        ! allocate
+        allocate(inpl_angs(n_inpls), rmats(ffromto(1):ffromto(2),n_inpls,3,3),&
+            &corrs(ffromto(1):ffromto(2),n_inpls))
+        ! fill-in the in-plane angles
+        n_inpls = 0
+        do inpl=0,359,ANGSTEP
+            n_inpls = n_inpls + 1
+            inpl_angs(n_inpls) = real(inpl)
+        end do
+        ! fill-in the rotation matrices
         do iproj=ffromto(1),ffromto(2)
             eul = espace%get_euler(iproj)
-            do inpl=0,359,ANGSTEP
-                eul(3) = real(inpl)
-                corrs(iproj,inpl) = volpft_symsrch_scorefun( eul )
+            do inpl=1,n_inpls
+                eul(3) = inpl_angs(inpl)
+                rmats(iproj,inpl,:,:) = euler2m(eul)
             end do
         end do
-        !$omp end parallel do
+        ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
+        corrs  = -1.
+        !omp parallel do schedule(static) default(shared) private(iproj,eul,inpl)&
+        !omp proc_bind(close)
+        do iproj=ffromto(1),ffromto(2)
+            do inpl=1,n_inpls
+                corrs(iproj,inpl) = volpft_symsrch_scorefun(rmats(iproj,inpl,:,:))
+            end do
+        end do
+        !omp end parallel do
+        if( DEBUG ) print *, '***debug(volpft_symsrch)***; grid search, DONE'
         ! identify the best candidates (serial code)
-        call symaxis%new
         do iproj=ffromto(1),ffromto(2)
             corr_best  = -1.0
             iproj_best = 0
             inpl_best  = 0
-            do inpl=0,359,ANGSTEP
+            do inpl=1,n_inpls
                 if( corrs(iproj,inpl) > corr_best )then
                     corr_best  = corrs(iproj,inpl)
                     iproj_best = iproj
@@ -143,19 +168,22 @@ contains
                 endif
             end do
             symaxis = espace%get_ori(iproj_best)
-            call symaxis%e3set(real(inpl_best))
+            call symaxis%e3set(inpl_angs(inpl_best))
             call symaxis%set('corr', corr_best)
             call cand_axes%set_ori(iproj,symaxis)
         end do
-        call symaxis%kill
+        if( DEBUG ) print *, '***debug(volpft_symsrch)***; identify the best candidates, DONE'
         ! refine local optima
         ! order the local optima according to correlation
         order = cand_axes%order_corr()
-        ! determine range
-        istart = 1
-        istop  = min(ffromto(2) - ffromto(1) + 1,NBEST)
+        symaxis_best = cand_axes%get_ori(order(1))
+
+        return
+
+        ! determine end of range
+        istop = min(ffromto(2) - ffromto(1) + 1,NBEST)
         !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
-        do iloc=istart,istop
+        do iloc=1,istop
             ithr = omp_get_thread_num() + 1
             opt_symaxes(ithr)%ospec%x = cand_axes%get_euler(order(iloc))
             call opt_symaxes(ithr)%nlopt%minimize(opt_symaxes(ithr)%ospec, fun_self, cost)
@@ -175,40 +203,36 @@ contains
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real :: cost
-        cost = -volpft_symsrch_scorefun(vec(1:3))
+        real :: cost, rmat(3,3)
+        rmat = euler2m(vec(1:3))
+        cost = -volpft_symsrch_scorefun(rmat)
     end function volpft_symsrch_costfun
 
-    function volpft_symsrch_scorefun( eul ) result( cc )
-        real, intent(in) :: eul(3)
-        real    :: cc, rmat_symaxis(3,3), rmat(3,3), sqsum_sum, sqsum_target
-        complex :: sum_targets(kfromto(1):kfromto(2),nspace)
-        integer :: isym
-        rmat_symaxis = euler2m(eul)
-        sum_targets  = cmplx(0.,0.)
+    function volpft_symsrch_scorefun( rmat_symaxis ) result( cc )
+        real, intent(in) :: rmat_symaxis(3,3)
+        real    :: cc, rmat(3,3)
+        complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace)
+        real    :: sqsum_targets(nsym), eul_swap(3)
+        integer :: isym, jsym
         do isym=1,nsym
             ! extracts Fourier component distribution @ symaxis @ symop isym
-            rmat = matmul(rmat_symaxis,sym_rmats(isym,:,:))
-            call vpftcc%extract_target(rmat)
-            ! stores isym distribution and updates sum over symops
-            call vpftcc%get_target(sym_targets(isym,:,:))
-            sum_targets = sum_targets + sym_targets(isym,:,:)
+            rmat = matmul(rmat_symaxis, sym_rmats(isym,:,:))
+            call vpftcc%extract_target(rmat, sym_targets(isym,:,:), sqsum_targets(isym))
         end do
-        ! correlate sum over symmetry related distributions with
-        ! the individual distributions to score the symmetry axis
-        sqsum_sum = sum(csq(sum_targets))
+        ! correlate the individual distributions to score the symmetry axis
         cc = 0.
-        do isym=1,nsym
-            sqsum_target = sum(csq(sym_targets(isym,:,:)))
-            cc = cc + sum(real(sum_targets * conjg(sym_targets(isym,:,:)))) / sqrt(sqsum_sum * sqsum_target)
+        do isym=1,nsym - 1
+            do jsym=isym + 1,nsym
+                cc = cc + sum(real(sym_targets(isym,:,:) * conjg(sym_targets(jsym,:,:))))&
+                    &/ sqrt(sqsum_targets(isym) * sqsum_targets(jsym))
+            end do
         end do
-        cc = cc / real(nsym)
+        cc = cc / real(nsym * (nsym - 1) / 2)
     end function volpft_symsrch_scorefun
 
     subroutine volpft_symsrch_kill
         integer :: ithr
         if( allocated(sym_rmats)   ) deallocate(sym_rmats)
-        if( allocated(sym_targets) ) deallocate(sym_targets)
         if( allocated(opt_symaxes) )then
             do ithr=1,size(opt_symaxes)
                 call opt_symaxes(ithr)%ospec%kill
@@ -221,9 +245,6 @@ contains
         endif
         call vpftcc%kill
         call saxis_glob%kill
-        call symobj%kill
-        call cand_axes%kill
-        call espace%kill
     end subroutine volpft_symsrch_kill
 
 end module simple_volpft_symsrch

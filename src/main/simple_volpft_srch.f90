@@ -9,7 +9,7 @@ use simple_opt_spec,        only: opt_spec
 use simple_volpft_corrcalc, only: volpft_corrcalc
 use simple_optimizer,       only: optimizer
 use simple_oris,            only: oris
-use simple_ori,             only: ori
+use simple_ori,             only: ori, euler2m
 implicit none
 
 public :: volpft_srch_init, volpft_srch_minimize_eul, volpft_srch_minimize_shift, volpft_srch_minimize_all
@@ -95,14 +95,14 @@ contains
 
     function volpft_srch_minimize_eul( fromto ) result( orientation_best )
         integer, optional, intent(in) :: fromto(2)
+        real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:)
         integer, allocatable :: order(:)
-        real,    allocatable :: corrs(:,:)
         class(*), pointer    :: fun_self => null()
-        type(oris) :: espace, resoris
+        type(oris) :: espace, cand_oris
         type(ori)  :: orientation, orientation_best
-        integer    :: ffromto(2), ntot, iproj, config_best(2)
-        integer    :: iloc, inpl, ithr, istart, istop
-        real       :: euls(3), corr_best, cost
+        integer    :: ffromto(2), ntot, iproj, iproj_best, inpl_best
+        integer    :: iloc, inpl, ithr, istart, istop, n_inpls
+        real       :: eul(3), corr_best, cost
         logical    :: distr_exec
         ! flag distributed/shmem exec & set range
         distr_exec = present(fromto)
@@ -118,60 +118,89 @@ contains
         ntot = ffromto(2) - ffromto(1) + 1
         ! create
         call orientation%new
-        call resoris%new(NPROJ)
-        call resoris%set_all2single('corr', -1.0) ! for later ordering
+        call cand_oris%new(NPROJ)
+        call cand_oris%set_all2single('corr', -1.0) ! for later ordering
         call espace%new(NPROJ)
         call espace%spiral
-        allocate(corrs(ffromto(1):ffromto(2),0:359))
+        ! count # in-plane angles
+        n_inpls = 0
+        do inpl=0,359,ANGSTEP
+            n_inpls = n_inpls + 1
+        end do
+        ! allocate
+        allocate(inpl_angs(n_inpls), rmats(ffromto(1):ffromto(2),n_inpls,3,3),&
+            &corrs(ffromto(1):ffromto(2),n_inpls))
+        ! fill-in the in-plane angles
+        n_inpls = 0
+        do inpl=0,359,ANGSTEP
+            n_inpls = n_inpls + 1
+            inpl_angs(n_inpls) = real(inpl)
+        end do
+        ! fill-in the rotation matrices
+        do iproj=ffromto(1),ffromto(2)
+            eul = espace%get_euler(iproj)
+            do inpl=1,n_inpls
+                eul(3) = inpl_angs(inpl)
+                rmats(iproj,inpl,:,:) = euler2m(eul)
+            end do
+        end do
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         corrs  = -1.
-        !$omp parallel do schedule(static) default(shared) private(iproj,euls,inpl) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iproj,inpl) proc_bind(close) collapse(2)
         do iproj=ffromto(1),ffromto(2)
-            euls = espace%get_euler(iproj)
-            do inpl=0,359,ANGSTEP
-                euls(3) = real(inpl)
-                corrs(iproj,inpl) = vpftcc%corr(euls)
+            do inpl=1,n_inpls
+                corrs(iproj,inpl) = vpftcc%corr(rmats(iproj,inpl,:,:))
             end do
         end do
         !$omp end parallel do
         ! identify the best candidates (serial code)
         do iproj=ffromto(1),ffromto(2)
-            corr_best   = -1.
-            config_best = 0
-            do inpl=0,359,ANGSTEP
+            corr_best  = -1.
+            iproj_best = 0
+            inpl_best  = 0
+            do inpl=1,n_inpls
                 if( corrs(iproj,inpl) > corr_best )then
-                    corr_best      = corrs(iproj,inpl)
-                    config_best(1) = iproj
-                    config_best(2) = inpl
+                    corr_best  = corrs(iproj,inpl)
+                    iproj_best = iproj
+                    inpl_best  = inpl
                 endif
             end do
             ! set local in-plane optimum for iproj
-            orientation = espace%get_ori(config_best(1))
-            call orientation%e3set(real(config_best(2)))
+            orientation = espace%get_ori(iproj_best)
+            call orientation%e3set(inpl_angs(inpl_best))
             call orientation%set('corr', corr_best)
-            call resoris%set_ori(iproj,orientation)
+            call cand_oris%set_ori(iproj,orientation)
         end do
+
+        ! order = cand_oris%order_corr()
+        ! orientation_best = cand_oris%get_ori(order(1))
+        ! return
+
         ! refine local optima
         ! order the local optima according to correlation
-        order = resoris%order_corr()
+        order = cand_oris%order_corr()
         ! determine range
         istart = 1
         istop  = min(ffromto(2) - ffromto(1) + 1,NBEST)
         !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
         do iloc=istart,istop
             ithr = omp_get_thread_num() + 1
-            opt_eul(ithr)%ospec%x = resoris%get_euler(order(iloc))
+            opt_eul(ithr)%ospec%x = cand_oris%get_euler(order(iloc))
             call opt_eul(ithr)%nlopt%minimize(opt_eul(ithr)%ospec, fun_self, cost)
-            call resoris%set_euler(order(iloc), opt_eul(ithr)%ospec%x)
-            call resoris%set(order(iloc), 'corr', -cost)
+            call cand_oris%set_euler(order(iloc), opt_eul(ithr)%ospec%x)
+            call cand_oris%set(order(iloc), 'corr', -cost)
         end do
         !$omp end parallel do
         ! order the local optima according to correlation
-        order = resoris%order_corr()
+        order = cand_oris%order_corr()
         ! update global ori
-        e_glob = resoris%get_ori(order(1))
+        e_glob = cand_oris%get_ori(order(1))
         ! return best
-        orientation_best = resoris%get_ori(order(1))
+        orientation_best = cand_oris%get_ori(order(1))
+        ! destruct
+        call espace%kill
+        call cand_oris%kill
+        call orientation%kill
     end function volpft_srch_minimize_eul
 
     function volpft_srch_minimize_shift( ) result( orientation_best )
@@ -240,8 +269,9 @@ contains
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real                    :: cost
-        cost = -vpftcc%corr(vec(:3))
+        real                    :: cost, rmat(3,3)
+        rmat = euler2m(vec(:3))
+        cost = -vpftcc%corr(rmat)
     end function volpft_srch_costfun_eul
 
     function volpft_srch_costfun_shift( fun_self, vec, D ) result( cost )
@@ -259,14 +289,14 @@ contains
                 return
             endif
         endif
-        cost = -vpftcc%corr(e_glob, vec_here(:3))
+        cost = -vpftcc%corr(e_glob%get_mat(), vec_here(:3))
     end function volpft_srch_costfun_shift
 
     function volpft_srch_costfun_all( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real                    :: vec_here(6), cost
+        real                    :: vec_here(6), cost, rmat(3,3)
         vec_here = vec
         if( shbarr )then
             if( any(vec_here(4:6) < ospec_all%limits(4:6,1)) .or.&
@@ -282,7 +312,8 @@ contains
         if( abs(vec_here(5)) < 1.e-6 ) vec_here(5) = 0.0
         if( abs(vec_here(6)) < 1.e-6 ) vec_here(6) = 0.0
         ! cost
-        cost = -vpftcc%corr(vec_here(:3), vec_here(4:))
+        rmat = euler2m(vec_here(:3))
+        cost = -vpftcc%corr(rmat, vec_here(4:))
     end function volpft_srch_costfun_all
 
     subroutine volpft_srch_kill
@@ -307,7 +338,7 @@ contains
         if( associated(nlopt_all) )then
             call nlopt_all%kill
             nullify(nlopt_all)
-        endif 
+        endif
     end subroutine volpft_srch_kill
 
 end module simple_volpft_srch

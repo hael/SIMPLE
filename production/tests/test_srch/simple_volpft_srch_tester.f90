@@ -56,16 +56,24 @@ contains
         call vol_ref%read(p%vols(1))
         call vol_ref%add_gauran(SNR)
         call vol_ref%mask(p%msk,'soft')
+
         call vol_ref%write('vol_ref.mrc')
+
         call vol_ref%fft()
         ! deal with target (randomly rotated version of vols(1))
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
         call vol_tmp%read(p%vols(1))
         call ranori%new
-        call ranori%rnd_ori
+        ! call ranori%rnd_ori
+
+        call ranori%set_euler([20.,40.,160.])
+
         call b%vol%copy( rotvol(vol_tmp, ranori))
         call b%vol%add_gauran(SNR)
         call b%vol%mask(p%msk,'soft')
+
+        call b%vol%write('rotated.mrc')
+
         call b%vol%fft()
         call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp,0.)
         call vol_tmp%kill
@@ -77,29 +85,34 @@ contains
         integer   :: itest
         sumdist = 0.
         sumcorr = 0.
-        call ranori%new
-        do itest=1,NTESTS
-            call progress(itest,NTESTS)
-            call ranori%rnd_ori
-            o_best  = volpft_srch_minimize_eul()
-            corr    = o_best%get('corr')
-            sumcorr = sumcorr + corr
-            dist    = o_best.euldist.ranori
-            sumdist = sumdist + dist
-        end do
-        dist = sumdist/real(NTESTS)
-        corr = sumcorr/real(NTESTS)
-        write(*,'(a,1x,f5.2)') 'ROT ERROR (IN DEGREES): ', dist
-        write(*,'(a,1x,f7.4)') 'CORR: ', corr
-        if( .not. test_passed() ) stop '****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch'
 
-        contains
 
-            function test_passed() result( passed )
-                logical :: passed
-                passed = .false.
-                if( dist < ROERR_LIM ) passed = .true.
-            end function test_passed
+        o_best  = volpft_srch_minimize_eul()
+        call o_best%print_ori
+
+        ! call ranori%new
+        ! do itest=1,NTESTS
+        !     call progress(itest,NTESTS)
+        !     call ranori%rnd_ori
+        !     o_best  = volpft_srch_minimize_eul()
+        !     corr    = o_best%get('corr')
+        !     sumcorr = sumcorr + corr
+        !     dist    = o_best.euldist.ranori
+        !     sumdist = sumdist + dist
+        ! end do
+        ! dist = sumdist/real(NTESTS)
+        ! corr = sumcorr/real(NTESTS)
+        ! write(*,'(a,1x,f5.2)') 'ROT ERROR (IN DEGREES): ', dist
+        ! write(*,'(a,1x,f7.4)') 'CORR: ', corr
+        ! if( .not. test_passed() ) stop '****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch'
+        !
+        ! contains
+        !
+        !     function test_passed() result( passed )
+        !         logical :: passed
+        !         passed = .false.
+        !         if( dist < ROERR_LIM ) passed = .true.
+        !     end function test_passed
 
     end subroutine test_volpft_srch
 
