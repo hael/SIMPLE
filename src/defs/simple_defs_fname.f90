@@ -24,8 +24,6 @@ character(len=*), parameter :: DEFAULT_FILE_FORMAT  = 'M'
 ! CLUSTER2D
 character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'
 character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
-! CLUSTER2D STREAM
-character(len=*), parameter :: SCSTK_DIR            = 'stacks_sc/'
 ! REFINE3D
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'

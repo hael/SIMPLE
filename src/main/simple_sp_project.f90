@@ -677,10 +677,10 @@ contains
                 write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
                 stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
         end select
-        call self%os_stk%set(n_os_stk, 'smpd',  ctfvars%smpd)
-        call self%os_stk%set(n_os_stk, 'kv',    ctfvars%kv)
-        call self%os_stk%set(n_os_stk, 'cs',    ctfvars%cs)
-        call self%os_stk%set(n_os_stk, 'fraca', ctfvars%fraca)
+        call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
+        call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
+        call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
+        call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
         if( ctfvars%l_phaseplate )then
             call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
         else
@@ -1045,7 +1045,7 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd )
+    subroutine add_cavgs2os_out( self, stk, smpd)
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: stk
         real,                  intent(in)    :: smpd ! sampling distance of images in stk
@@ -1219,7 +1219,7 @@ contains
             ind = 0
             do i=1,n_os_out
                 if( self%os_out%isthere(i,'imgkind') )then
-                    call self%os_out%getter(i,'imgkind',imgkind)
+                    imgkind = trim(self%os_out%get_static(i,'imgkind'))
                     if(trim(imgkind).eq.trim(which_imgkind))then
                         ind = i
                         exit

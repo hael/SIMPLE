@@ -141,6 +141,7 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
+        logical :: read_spproj
         ! create object for orientations
         ! b%a is now a pointer to a field in b%spproj
         select case(params%spproj_iseg)
@@ -167,8 +168,14 @@ contains
                 call self%spproj%os_ptcl3D%new(params%nptcls)
                 self%spproj_field => self%spproj%os_ptcl3D
         end select
-        ! read from project file
+        ! read project file
+        read_spproj = .false.
         if( params%sp_required )then
+            read_spproj = .true.
+        else
+            if( cline%defined('projfile') )read_spproj = .true.
+        endif
+        if( read_spproj )then
             call self%spproj%read(params%projfile)
             ! update cwd of project (in case the params class changed exec dir)
             call self%spproj%projinfo%set(1, 'cwd', trim(params%cwd))
@@ -187,7 +194,7 @@ contains
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical, optional,      intent(in)    :: do3d
-        integer :: lfny,  lfny_match, cyc_lims(3,2)
+        integer :: lfny, cyc_lims(3,2)
         logical :: ddo3d, fforce_ctf
         call self%kill_general_tbox
         ddo3d = .true.

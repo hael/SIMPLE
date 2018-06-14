@@ -28,7 +28,6 @@ type jpg_img
     logical                           :: fmode      = .false.
     real                              :: gamma      = 0.707
     logical                           :: normalised = .false.
-    integer(1), dimension(:), pointer :: img_buffer => NULL()
 contains
     procedure          :: destructor
     procedure          :: constructor
@@ -124,7 +123,6 @@ contains
 
     subroutine constructor (self)
         class(jpg_img) :: self
-        if(associated(self%img_buffer)) nullify(self%img_buffer)
     end subroutine constructor
 
     integer function getWidth(self)
@@ -256,11 +254,11 @@ contains
         real,              intent(in)    :: in_buffer(:,:)
         integer, optional, intent(in)    :: quality, colorspec
         type(c_ptr)                      :: img
-        integer                          :: w, h,c, i, j
-        real lo, hi
-        integer                         :: status
-        integer(c_int)                  :: pixel
-        character(len=:), allocatable   :: fstr
+        real                          :: lo, hi
+        integer                       :: status, w, h,c, i, j
+        integer(c_int)                :: pixel
+        character(len=:), allocatable :: fstr
+        integer(1),       pointer     :: img_buffer(:) => NULL()
         status = 1
         c      = 1
         VerbosePrint '>>> In save_jpeg_r4 '
@@ -276,25 +274,25 @@ contains
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
         VerbosePrint '>>> In save_jpeg_r4 input lo hi ', lo, hi
-        allocate(self%img_buffer(w*h*3))
+        allocate(img_buffer(w*h*3))
         do j=0,h-1
             do i=0,w-1
                 if  (self%colorspace == 3) then
                     c=3
                     pixel = NINT( (2**24) * (in_buffer(i+1,j+1)-lo)/(hi-lo),kind=4)
-                    self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
-                    self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , z'000000ff') ,kind=c_char)
-                    self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c+ 1)  = INT( ISHFT( pixel , -16) ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , z'000000ff') ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*REAL( (in_buffer(i+1,j+1)-lo)/REAL(hi - lo) ) ,kind=c_int)
                     pixel =  IAND( pixel , z'00ffffff')
-                    self%img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
+                    img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
                 end if
 
             end do
         end do
-        img = c_loc(self%img_buffer)
+        img = c_loc(img_buffer)
         self%width = w
         self%height = h
         VerbosePrint '>>> Calling stbi_write_jpg fname ', fname
@@ -306,7 +304,7 @@ contains
         VerbosePrint '>>> stbi_write_jpg returned status ', status
         if(status == 0 ) call simple_stop('save_jpeg_r4 call to write_jpeg failed' )
         status = 0
-        deallocate(fstr)
+        deallocate(fstr,img_buffer)
         VerbosePrint '>>> Done  save_jpeg_r4 '
     end function save_jpeg_r4
 
@@ -315,11 +313,12 @@ contains
         character(len=*), intent(in)    :: fname
         integer, intent(in)             :: in_buffer(:,:)
         integer, intent(in), optional   :: quality, colorspec
-        type(c_ptr)                     :: img
-        integer                         :: w,h,j,i,c, lo,hi
-        integer                         :: status
-        integer(c_int)                  :: pixel
-        character(len=:), allocatable    :: fstr
+        type(c_ptr)                   :: img
+        integer                       :: w,h,j,i,c, lo,hi, status
+        integer(c_int)                :: pixel
+        character(len=:), allocatable :: fstr
+        integer(1),       pointer     :: img_buffer(:) => NULL()
+
         VerbosePrint '>>>  In save_jpeg_i4 '
         status       = 0
         w            = size(in_buffer,1)
@@ -332,30 +331,30 @@ contains
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
         VerbosePrint '>>> In save_jpeg_i4 input lo hi ', lo, hi
-        allocate(self%img_buffer(w*h*3))
+        allocate(img_buffer(w*h*3))
         do j=0,h-1
             do i=0,w-1
                 if  (self%colorspace == 3) then
                     c=3
                     pixel = NINT( REAL(2**24) * REAL(in_buffer(i+1,j+1)-lo)/REAL(hi-lo),kind=4)
-
-                    self%img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
-                    self%img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , z'000000ff') ,kind=c_char)
-                    self%img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , z'000000ff') ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*( REAL(in_buffer(i+1,j+1)-lo) / REAL(hi - lo) ) ,kind=c_int)
                     pixel =  IAND( pixel , z'00ffffff')
-                    self%img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
+                    img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
                 end if
             end do
         end do
-        img=c_loc(self%img_buffer)
+        img=c_loc(img_buffer)
         allocate(fstr, source=trim(fname)//c_null_char)
         status = stbi_write_jpg (fstr, self%width, self%height, self%colorspace, img, self%quality )
         if( status == 0 ) call simple_stop('save_jpeg_i4 call to write_jpeg returned status ==1' )
         status = 0
         if(allocated(fstr)) deallocate(fstr)
+        deallocate(img_buffer)
     end function save_jpeg_i4
 
     function load_jpeg_r4(self, fname, out_buffer) result(status)
@@ -411,7 +410,7 @@ contains
         integer                             :: bshape(1)
         integer                             :: i,j,w,h,c
         integer                             :: status,pixel
-        integer(1), dimension(:),pointer :: imgbuffer
+        integer(1), dimension(:),pointer    :: imgbuffer
         character(len=:),allocatable  :: fstr
         status = 1
         verbose =.true.
@@ -447,7 +446,6 @@ contains
     subroutine destructor(self)
         class(jpg_img) :: self
         DebugPrint 'Destructor of jpg_img object with address: ', loc(self)
-        if(associated(self%img_buffer)) nullify(self%img_buffer)
     end subroutine destructor
 
     subroutine test_jpg_export()

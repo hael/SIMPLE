@@ -38,7 +38,7 @@ type :: ft_expanded
     procedure          :: new_2
     procedure          :: new_3
     generic            :: new => new_1, new_2, new_3
-   procedure          :: copy
+   procedure           :: copy
     ! checkers
     procedure          :: exists
     procedure, private :: same_dims

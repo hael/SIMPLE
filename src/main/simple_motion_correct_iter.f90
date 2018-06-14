@@ -134,6 +134,8 @@ contains
         call self%moviesum_ctf%kill
         call self%pspec_half_n_half%kill
         call img_jpg%kill
+        call self%thumbnail%kill
+        deallocate(shifts)
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )

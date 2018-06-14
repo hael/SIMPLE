@@ -332,10 +332,9 @@ contains
         use simple_strategy2D3D_common,   only: prep2dref,build_pftcc_particles
         integer,       intent(in)    :: which_iter
         type(polarizer), allocatable :: match_imgs(:)
-        integer   :: icls, pop, pop_even, pop_odd
-        integer   :: imatch, batchsz_max
-        logical   :: do_center
         real      :: xyz(3)
+        integer   :: icls, pop, pop_even, pop_odd, imatch, batchsz_max
+        logical   :: do_center, has_been_searched
         ! create the polarft_corrcalc object
         call pftcc%new(params_glob%ncls,  eoarr=nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
         ! prepare the polarizer images
@@ -349,6 +348,7 @@ contains
             call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
         ! PREPARATION OF REFERENCES IN PFTCC
+        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
         !$omp schedule(static) proc_bind(close)
@@ -356,16 +356,16 @@ contains
             pop      = 1
             pop_even = 0
             pop_odd  = 0
-            if( params_glob%oritab /= '' )then
+            if( has_been_searched )then
                 pop      = build_glob%spproj_field%get_pop(icls, 'class'      )
                 pop_even = build_glob%spproj_field%get_pop(icls, 'class', eo=0)
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
                 ! prepare the references
-                do_center = (params_glob%oritab /= '' .and. (pop > MINCLSPOPLIM) .and.&
-                    &(which_iter > 2) .and. .not.params_glob%l_frac_update)
                 ! here we are determining the shifts and map them back to classes
+                do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
+                    &.and. .not.params_glob%l_frac_update)
                 call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                     ! here we are passing in the shifts and do NOT map them back to classes

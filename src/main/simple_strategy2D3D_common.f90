@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
-&eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
+&eonorm_struct_facts, norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
 &prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
 &build_pftcc_particles
 private
@@ -561,9 +561,9 @@ contains
                         endif
                     endif
                 end do
-                do istate = 1, params_glob%nstates
-                    if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
-                end do
+                ! do istate = 1, params_glob%nstates
+                !     if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
+                ! end do
                 deallocate(resarr)
             case DEFAULT
                 lplim_rec = params_glob%lp
@@ -633,17 +633,19 @@ contains
         endif
     end subroutine prepimgbatch
 
-    !>  \brief  center the reference volume and map shifts back to particles
-    subroutine cenrefvol_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz )
+    !>  \brief  determines the reference volume shift and map shifts back to particles
+    !>          reference volume shifting is performed in preprefvol
+    subroutine calcrefvolshift_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz )
         class(cmdline),   intent(inout) :: cline
         integer,          intent(in)    :: s
         character(len=*), intent(in)    :: volfname
         logical,          intent(out)   :: do_center
         real,             intent(out)   :: xyz(3)
+        logical :: has_been_searched
+        do_center = .true.
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         ! centering
-        do_center = .true.
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. .not. params_glob%l_doshift .or.&
         &params_glob%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') .or. params_glob%l_frac_update )then
             do_center = .false.
@@ -652,17 +654,16 @@ contains
         endif
         call build_glob%vol%read(volfname)
         xyz = build_glob%vol%center(params_glob%cenlp,params_glob%msk) ! find center of mass shift
+        if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
-            xyz = 0.
+            xyz       = 0.
             return
         endif
-        call build_glob%vol%fft()
-        if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
-        call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)]) ! performs shift
         ! map back to particle oritentations
-        if( cline%defined('oritab') ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
-    end subroutine cenrefvol_and_mapshifts2ptcls
+        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+        if( has_been_searched ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
+    end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, volfname, do_center, xyz )
@@ -690,14 +691,13 @@ contains
             else
                 allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
             endif
+            call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
             if( file_exists(fname_vol_filter) )then
                 call build_glob%vol2%read(fname_vol_filter)
-                call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
                 call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
             else
                 ! matched filter based on Rosenthal & Henderson, 2003
                 if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
                     filter = fsc2optlp(build_glob%fsc(s,:))
                     call build_glob%vol%shellnorm_and_apply_filter(filter)
                 endif

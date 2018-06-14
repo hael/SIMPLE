@@ -457,16 +457,16 @@ contains
 
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( cline )
-        use simple_polarizer, only: polarizer
-        use simple_cmdline,   only: cmdline
-        use simple_strategy2D3D_common,   only: cenrefvol_and_mapshifts2ptcls, preprefvol, build_pftcc_particles
-        class(cmdline),             intent(inout) :: cline !< command line
-        type(polarizer), allocatable :: match_imgs(:)
-        integer   :: cnt, s, ind, iref, nrefs
-        integer   :: imatch
-        logical   :: do_center
+        use simple_polarizer,             only: polarizer
+        use simple_cmdline,               only: cmdline
+        use simple_strategy2D3D_common,   only: calcrefvolshift_and_mapshifts2ptcls, preprefvol, build_pftcc_particles
+        class(cmdline), intent(inout) :: cline !< command line
+        type(polarizer),  allocatable :: match_imgs(:)
         real      :: xyz(3)
-        nrefs  = params_glob%nspace * params_glob%nstates
+        integer   :: cnt, s, ind, iref, nrefs, imatch
+        logical   :: do_center, has_been_searched
+        nrefs             = params_glob%nspace * params_glob%nstates
+        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! must be done here since params_glob%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         if( params_glob%eo .ne. 'no' )then
@@ -479,7 +479,7 @@ contains
         ! read reference volumes and create polar projections
         cnt = 0
         do s=1,params_glob%nstates
-            if( params_glob%oritab .ne. '' )then
+            if( has_been_searched )then
                 if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
                     ! empty state
                     cnt = cnt + params_glob%nspace
@@ -487,7 +487,7 @@ contains
                     cycle
                 endif
             endif
-            call cenrefvol_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             if( params_glob%eo .ne. 'no' )then
                 if( params_glob%nstates.eq.1 )then
                     ! PREPARE ODD REFERENCES

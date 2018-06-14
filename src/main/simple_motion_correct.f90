@@ -316,6 +316,8 @@ contains
                 acc_doses(iframe) = dose_rate*current_time      ! unit: e/A2/s * s = e/A2
             end do
         endif
+        deallocate(rmat, rmat_pad, win, outliers)
+        call tmpmovsum%kill
         existence = .true.
         DebugPrint  'motion_correct_init, done'
     end subroutine motion_correct_init
