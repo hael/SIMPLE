@@ -145,6 +145,10 @@ select case(prg)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no' )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
+        if( cline%defined('frac') .and. cline%get_carg('weights2D').eq.'yes' )then
+            write(*,*)'FRAC & WEIGHTS2D=yes options are incompatible'
+            stop 'FRAC & WEIGHTS2D=yes options are incompatible'
+        endif
         call xcluster2D_distr%execute(cline)
     case( 'cluster2D_stream' )
         call cline%parse()

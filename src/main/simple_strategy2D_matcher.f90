@@ -39,7 +39,7 @@ contains
         use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
-        integer, allocatable  :: prev_pops(:), pinds(:)
+        integer, allocatable  :: prev_pops(:), pinds(:), w_pinds(:)
         logical, allocatable  :: ptcl_mask(:)
         !---> The below is to allow particle-dependent decision about which 2D strategy to use
         type :: strategy2D_per_ptcl
@@ -161,12 +161,12 @@ contains
                     ! zero-populated classes, for congruence with empty cavgs
                     do icls = 1, params_glob%ncls
                         if( prev_pops(icls) > 0 ) cycle
-                        call build_glob%spproj_field%get_pinds(icls, 'class', pinds, consider_w=.false.)
-                        if( .not.allocated(pinds) )cycle
-                        do iptcl = 1, size(pinds)
-                            call build_glob%spproj_field%set(pinds(iptcl), 'w', 0.)
+                        call build_glob%spproj_field%get_pinds(icls, 'class', w_pinds, consider_w=.false.)
+                        if( .not.allocated(w_pinds) )cycle
+                        do iptcl = 1, size(w_pinds)
+                            call build_glob%spproj_field%set(w_pinds(iptcl), 'w', 0.)
                         enddo
-                        deallocate(pinds)
+                        deallocate(w_pinds)
                     enddo
                 endif
                 deallocate(prev_pops)

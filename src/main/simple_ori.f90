@@ -174,6 +174,7 @@ contains
         call self%htab%delete('x')
         call self%htab%delete('y')
         call self%htab%delete('corr')
+        call self%htab%delete('frac')
     end subroutine delete_2Dclustering
 
     !>  \brief  is a setter
