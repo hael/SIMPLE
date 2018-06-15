@@ -22,8 +22,6 @@ public :: print_fsc_commander
 public :: print_magic_boxes_commander
 public :: res_commander
 public :: shift_commander
-public :: sym_aggregate_commander
-public :: dsymsrch_commander
 private
 #include "simple_local_flags.inc"
 
@@ -59,14 +57,6 @@ type, extends(commander_base) :: shift_commander
   contains
     procedure :: execute       => exec_shift
 end type shift_commander
-type, extends(commander_base) :: sym_aggregate_commander
-  contains
-    procedure :: execute       => exec_sym_aggregate
-end type sym_aggregate_commander
-type, extends(commander_base) :: dsymsrch_commander
-  contains
-    procedure :: execute       => exec_dsymsrch
-end type dsymsrch_commander
 
 contains
 
@@ -298,139 +288,5 @@ contains
         call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), build%spproj, build%spproj_field, [1,params%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
-
-    !> for robust identifiaction of the symmetry axis
-    !> of a map using image-to-volume simiarity validation of the axis
-    subroutine exec_sym_aggregate( self, cline )
-        class(sym_aggregate_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(parameters)     :: params
-        type(builder)        :: build
-        type(oris)           :: sym_peaks, sym_axes
-        type(ori)            :: symaxis, o
-        type(image)          :: symvol, asym_vol, mskvol
-        type(sym)            :: se_c1
-        logical, allocatable :: l_msk(:,:,:)
-        real                 :: cc, rotmat(3,3)
-        integer              :: i
-        integer, parameter   :: MAXLABELS = 9    !< maximum numbers symmetry peaks
-        real,    parameter   :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
-        call cline%set('oritype', 'ptcl3D')
-        call build%init_params_and_build_general_tbox(cline,params)
-        ! init
-        sym_axes = build%spproj%os_cls3D ! that is where they are stored
-        call se_c1%new('c1')
-        call asym_vol%new([params%box,params%box,params%box], params%smpd)
-        call asym_vol%read(params%vols(1))
-        ! spherical mask
-        call mskvol%new([params%box,params%box,params%box], params%smpd)
-        mskvol = 1.
-        call mskvol%mask(params%msk, 'hard')
-        l_msk = mskvol%bin2logical()
-        call mskvol%kill
-        ! identify top ranking symmetry peaks
-        call find_sym_peaks(sym_axes, sym_peaks)
-        ! reconstruct & correlate volumes
-        do i = 1, sym_peaks%get_noris()
-            symaxis = sym_peaks%get_ori(i)
-            build%eulspace = build%spproj_field ! here build%spproj_field are the reference orientations
-            call build%eulspace%rot(symaxis)
-            ! symmetry
-            call rec_vol( build%pgrpsyms)
-            call symvol%copy( build%vol )
-            call symvol%write('sym_vol'//int2str_pad(i,2)//params%ext)
-            ! c1
-            rotmat = symaxis%get_mat()
-            call o%ori_from_rotmat(transpose(rotmat))
-            call build%vol%copy( rotvol(asym_vol, o) )
-            call build%vol%bp(params%hp, params%lp)
-            call build%vol%mask(params%msk, 'soft')
-            call build%vol%write('asym_vol'//int2str_pad(i,2)//params%ext)
-            ! correlation
-            cc = symvol%real_corr(build%vol, l_msk)
-            call sym_peaks%set(i, 'corr', cc)
-        enddo
-        ! output
-        build%spproj%os_cls3D = sym_peaks
-        call build%spproj%write_segment_inside('cls3D')
-        ! the end
-        call simple_touch('SYM_AGGREGATE_FINISHED', errmsg='commander_misc; sym_aggregate ')
-        call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')
-
-        contains
-
-            subroutine rec_vol(  se )
-                type(sym)    :: se
-                call build%build_rec_tbox(params)
-                call build%recvol%rec(build%spproj, build%eulspace, se, 1)
-                call build%recvol%clip(build%vol)
-                call build%vol%bp(params%hp, params%lp)
-                call build%vol%mask(params%msk, 'soft')
-            end subroutine rec_vol
-
-            subroutine find_sym_peaks(sym_axes, sym_peaks)
-                class(oris), intent(inout) :: sym_axes
-                class(oris), intent(out)   :: sym_peaks
-                integer, allocatable :: sort_inds(:)
-                type(oris) :: axes, tmp_axes
-                type(ori)  :: axis, o
-                integer    :: iaxis, naxes, ilabel, axis_ind, istate, n_sympeaks
-                axes       = sym_axes
-                naxes      = axes%get_noris()
-                tmp_axes   = oris(MAXLABELS)
-                n_sympeaks = 0
-                ! geometric clustering
-                call axes%swape1e3
-                sort_inds = axes%order_corr()
-                call reverse(sort_inds)
-                call axes%set_all2single('state', 0.)
-                do ilabel = 1, MAXLABELS
-                    ! identify next best axis
-                    do iaxis = 1, naxes
-                        axis_ind = sort_inds(iaxis)
-                        if( nint(axes%get(axis_ind,'state') ) == 0)exit
-                    enddo
-                    if(iaxis > naxes)exit
-                    axis       = axes%get_ori(axis_ind)
-                    n_sympeaks = n_sympeaks + 1
-                    call tmp_axes%set_ori(ilabel, axis)
-                    ! flags axes within threshold
-                    do iaxis = 1,naxes
-                        axis_ind = sort_inds(iaxis)
-                        o        = axes%get_ori(axis_ind)
-                        istate   = nint(o%get('state'))
-                        if(istate /= 0)cycle
-                        if( rad2deg(axis.euldist.o) <= ANGTHRESH )then
-                            axis_ind = sort_inds(iaxis)
-                            call axes%set(axis_ind, 'state', real(ilabel))
-                        endif
-                    enddo
-                enddo
-                ! prep outcome
-                write(*,'(A,I2)') '>>> SYMMETRY AXES PEAKS FOUND: ',n_sympeaks
-                sym_peaks = oris(n_sympeaks)
-                do iaxis=1,n_sympeaks
-                    call sym_peaks%set_ori(iaxis, tmp_axes%get_ori(iaxis))
-                enddo
-                call sym_peaks%swape1e3
-                deallocate(sort_inds)
-            end subroutine find_sym_peaks
-
-    end subroutine exec_sym_aggregate
-
-    !> for identifying rotational symmetries in class averages
-    !> of D-symmetric molecules and generating a cylinder that matches the shape
-    subroutine exec_dsymsrch( self, cline )
-        use simple_symsrcher, only: dsym_cylinder
-        class(dsymsrch_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        call cline%set('oritype', 'cls3D')
-        call build%init_params_and_build_general_tbox(cline,params)
-        call dsym_cylinder( build%spproj_field, build%vol)
-        call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,params%nptcls])
-        call build%vol%write(params%outvol)
-    end subroutine exec_dsymsrch
 
 end module simple_commander_misc

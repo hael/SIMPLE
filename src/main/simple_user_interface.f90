@@ -1188,12 +1188,12 @@ contains
     subroutine new_initial_3Dmodel
         ! PROGRAM SPECIFICATION
         call initial_3Dmodel%new(&
-        &'initial_3Dmodel',&                                                            ! name
-        &'3D ab initio model generation from class averages',&                          ! descr_short
+        &'initial_3Dmodel',&                                                          ! name
+        &'3D ab initio model generation from class averages',&                        ! descr_short
         &'is a distributed workflow for generating an initial 3D model from class'&
-        &' averages obtained with cluster2D',&                                          ! descr_long
-        &'simple_distr_exec',&                                                          ! executable
-        &0, 1, 0, 10, 5, 3, 2, .true.)                                                  ! # entries in each group, requires sp_project
+        &' averages obtained with cluster2D',&                                        ! descr_long
+        &'simple_distr_exec',&                                                        ! executable
+        &0, 1, 0, 6, 5, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1202,22 +1202,14 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call initial_3Dmodel%set_input('srch_ctrls', 1, nspace)
-        call initial_3Dmodel%set_input('srch_ctrls', 2, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call initial_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_input('srch_ctrls', 3, maxits)
-        call initial_3Dmodel%set_input('srch_ctrls', 4, update_frac)
-        call initial_3Dmodel%set_input('srch_ctrls', 5, frac)
-        call initial_3Dmodel%set_input('srch_ctrls', 6, pgrp)
-        call initial_3Dmodel%set_input('srch_ctrls', 7, 'pgrp_known', 'binary', 'Point-group applied directly', 'Point-group applied direclty rather than first doing a reconstruction &
-        &in c1 and searching for the symmerty axis(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call initial_3Dmodel%set_input('srch_ctrls', 8, objfun)
-        initial_3Dmodel%srch_ctrls(8)%descr_long        = 'Objective function(cc|ccres){ccres}'
-        initial_3Dmodel%srch_ctrls(8)%descr_placeholder = '(cc|ccres){ccres}'
-        initial_3Dmodel%srch_ctrls(8)%cval_default      = 'ccres'
-        call initial_3Dmodel%set_input('srch_ctrls', 9, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        call initial_3Dmodel%set_input('srch_ctrls', 2, update_frac)
+        call initial_3Dmodel%set_input('srch_ctrls', 3, frac)
+        call initial_3Dmodel%set_input('srch_ctrls', 4, pgrp)
+        call initial_3Dmodel%set_input('srch_ctrls', 5, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_input('srch_ctrls', 10, nrestarts)
+        call initial_3Dmodel%set_input('srch_ctrls', 6, nrestarts)
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
@@ -2640,28 +2632,26 @@ contains
         call symsrch%new(&
         &'symsrch',&                                                                                               ! name
         &'Search for symmetry axis',&                                                                              ! descr_short
-        &'is a distributed workflow for searching for the principal symmetry axis of a volume reconstructed in C1. &
-        &The 3D reconstruction is projected and common lines-based optimisation is used to identify the principal &
-        &symmetry axis. The rotational transformation is applied to the inputted orientations and a new document &
-        &is produced. If you are unsure about the point-group, use the compare=yes mode and input the highest &
+        &'is a program for searching for the principal symmetry axis of a volume reconstructed in C1. &
+        &The rotational transformation is applied to the oritype field in the project and the project &
+        &file is updated. If you are unsure about the point-group, use the compare=yes mode and input the highest &
         &conceviable point-group. The program then calculates probabilities for all lower groups inclusive',&      ! descr_long
         &'simple_exec',&                                                                                           ! executable
-        &1, 4, 0, 3, 3, 1, 2, .false.)                                                                             ! # entries in each group
+        &1, 3, 0, 2, 3, 1, 1, .false.)                                                                             ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symsrch%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
         call symsrch%set_input('parm_ios', 1, smpd)
-        call symsrch%set_input('parm_ios', 2, oritab)
-        call symsrch%set_input('parm_ios', 3, outfile)
-        call symsrch%set_input('parm_ios', 4, mkdir_)
+        call symsrch%set_input('parm_ios', 2, projfile)
+        symsrch%parm_ios(2)%required = .false.
+        call symsrch%set_input('parm_ios', 3, mkdir_)
         ! alternative inputs
         ! <empty>
         ! search controls
         call symsrch%set_input('srch_ctrls', 1, pgrp)
-        call symsrch%set_input('srch_ctrls', 2, nspace)
-        call symsrch%set_input('srch_ctrls', 3, 'center', 'binary', 'Center input volume', 'Center input volume by its &
+        call symsrch%set_input('srch_ctrls', 2, 'center', 'binary', 'Center input volume', 'Center input volume by its &
         &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls
         call symsrch%set_input('filt_ctrls', 1, lp)
@@ -2672,8 +2662,7 @@ contains
         ! mask controls
         call symsrch%set_input('mask_ctrls', 1, msk)
         ! computer controls
-        call symsrch%set_input('comp_ctrls', 1, nparts)
-        call symsrch%set_input('comp_ctrls', 2, nthr)
+        call symsrch%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symsrch
 
     subroutine new_tseries_track

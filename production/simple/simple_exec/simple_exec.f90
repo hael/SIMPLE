@@ -6,7 +6,6 @@ use simple_cmdline, only: cmdline, cmdline_err
 use simple_spproj_hlev
 use simple_commander_project
 use simple_commander_checks
-use simple_commander_comlin
 use simple_commander_distr
 use simple_commander_imgproc
 use simple_commander_mask
@@ -36,6 +35,7 @@ type(import_cavgs_commander)         :: ximport_cavgs
 type(make_pickrefs_commander)        :: xmake_pickrefs
 type(extract_commander)              :: xextract
 type(cluster_cavgs_commander)        :: xcluster_cavgs
+type(symsrch_commander)              :: xsymsrch
 type(postprocess_commander)          :: xpostprocess
 
 ! IMAGE PROCESSING
@@ -131,6 +131,12 @@ select case(prg)
     case('cluster_cavgs')
         call cline%parse()
         call xcluster_cavgs%execute(cline)
+    case( 'symsrch' )
+        call cline%parse()
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
+        call xsymsrch%execute( cline )
     case( 'postprocess' )
         call cline%parse()
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')

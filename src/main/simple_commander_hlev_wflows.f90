@@ -209,9 +209,9 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-        use simple_commander_distr_wflows, only: refine3D_distr_commander, symsrch_distr_commander, scale_project_distr_commander
+        use simple_commander_distr_wflows, only: refine3D_distr_commander, scale_project_distr_commander
         use simple_oris,                   only: oris
-        use simple_commander_volops,       only: reproject_commander
+        use simple_commander_volops,       only: reproject_commander, symsrch_commander
         use simple_commander_rec,          only: reconstruct3D_commander
         use simple_parameters,             only: params_glob
         class(initial_3Dmodel_commander), intent(inout) :: self
@@ -219,16 +219,16 @@ contains
         ! constants
         real,    parameter :: CENLP=30. !< consistency with refine3D
         integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer, parameter :: STATE=1, NPROJS_SYMSRCH=50, MAXITS_SNHC_RESTART=3
+        integer, parameter :: STATE=1, MAXITS_SNHC_RESTART=3
         integer, parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         integer, parameter :: NRESTARTS=5
         integer, parameter :: NPEAKS_INIT=6, NPEAKS_REFINE=1
         character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE = 'initial_3Dmodel_tmpproj.simple'
         ! distributed commanders
         type(refine3D_distr_commander)      :: xrefine3D_distr
-        type(symsrch_distr_commander)       :: xsymsrch_distr
         type(scale_project_distr_commander) :: xscale_distr
         ! shared-mem commanders
+        type(symsrch_commander)       :: xsymsrch
         type(reconstruct3D_commander) :: xreconstruct3D
         type(reproject_commander)     :: xreproject
         ! command lines
@@ -269,17 +269,8 @@ contains
         call cline%set('oritype', 'ptcl3D')
         ! set global state string
         str_state = int2str_pad(STATE,2)
-        ! decide wether to search for the symmetry axis or put the point-group in from the start
-        ! if the point-group is considered known, it is put in from the start
-        srch4symaxis = .false.
-        if( params%pgrp_known .eq. 'no' )then
-            if( params%pgrp .ne. 'c1' )then
-                if(  params%pgrp(1:1).eq.'c'  .or. params%pgrp(1:1).eq.'C'&
-                .or. params%pgrp(1:2).eq.'d2' .or. params%pgrp(1:2).eq.'D2' )then
-                    srch4symaxis = .true.
-                endif
-            endif
-        endif
+        ! decide wether to search for the symmetry axis
+        srch4symaxis = params%pgrp .ne. 'c1'
         ! set lplims
         lplims(1) = 20.
         lplims(2) = 10.
@@ -377,15 +368,10 @@ contains
             call cline_refine3D_snhc%set('pgrp', 'c1')
             call cline_refine3D_init%set('pgrp', 'c1')
             ! symsrch
-            call cline_symsrch%set('prg', 'symsrch')
             call cline_symsrch%set('msk',      msk)
-            call cline_symsrch%set('box',      real(box))
-            call cline_symsrch%delete('stk')  ! volumetric symsrch
-            call cline_symsrch%set('nptcls',  real(NPROJS_SYMSRCH))
-            call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
-            call cline_symsrch%set('cenlp',   CENLP)
-            call cline_symsrch%set('outfile', 'symdoc'//trim(METADATA_EXT))
-            call cline_symsrch%set('lp',      lplims(2))
+            call cline_symsrch%set('projfile', trim(WORK_PROJFILE))
+            call cline_symsrch%set('cenlp',    CENLP)
+            call cline_symsrch%set('lp',       lplims(2))
             ! (3.1) RECONSTRUCT SYMMETRISED VOLUME
             call cline_reconstruct3D%set('prg',      'reconstruct3D')
             call cline_reconstruct3D%set('projfile', trim(WORK_PROJFILE))
@@ -441,7 +427,7 @@ contains
             write(*,'(A)') '>>>'
             !call cline_symsrch%set('oritab', trim(oritab)) ! TO UPDATE
             call cline_symsrch%set('vol1', trim(vol_iter))
-            call xsymsrch_distr%execute(cline_symsrch)
+            call xsymsrch%execute(cline_symsrch)
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'

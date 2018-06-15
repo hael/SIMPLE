@@ -106,7 +106,7 @@ contains
     procedure          :: subtr_fcomp
     procedure          :: vis
     procedure          :: set_ft
-    procedure          :: extr_fcomp
+    ! procedure          :: extr_fcomp
     procedure          :: packer
     ! CHECKUPS
     procedure          :: exists
@@ -1999,52 +1999,52 @@ contains
     !! \param x,y Image coordinates
     !! \return  comp
     !!
-    function extr_fcomp( self, h, k, x, y ) result( comp )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: h, k, x, y
-        complex, allocatable :: comps(:,:)
-        complex :: comp
-        integer :: win(2,2), i, j, phys(3)
-        if( self%ldim(3) > 1 )         call simple_stop('only 4 2D images; extr_fcomp; simple_image')
-        if( .not. self%ft )            call simple_stop('image need to be FTed; extr_fcomp; simple_image')
-        ! evenness and squareness are checked in the comlin class
-        call sqwin_2d(h, k, 1., win)
-        allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
-        do i=win(1,1),win(1,2)
-            do j=win(2,1),win(2,2)
-                phys       = self%comp_addr_phys([i,j,0])
-                comps(i,j) = self%get_fcomp([i,j,0], phys)
-            end do
-            comps(i,:) = comps(i,:) * sinc(h-real(i))
-        end do
-        do i = win(2,1), win(2,2)
-            comps(:,i) = comps(:,i) * sinc(k-real(i))
-        enddo
-        comp = sum(comps)
-        deallocate(comps)
-        ! origin shift
-        if( (abs(x) > TINY) .and. (abs(y) > TINY) )then
-            comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
-        endif
-
-    contains
-
-        !> oshift_here
-        !! \param xdim
-        !! \param x,y Image coords
-        !! \param dx,dy pixel width
-        !! \return  comp
-        !!
-        pure function oshift_here( xdim, x, y, dx, dy ) result( comp )
-            integer, intent(in)  :: xdim
-            real, intent(in)     :: x, y, dx, dy
-            complex              :: comp
-            real                 :: arg
-            arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
-            comp = cmplx(cos(arg),sin(arg))
-        end function oshift_here
-
-    end function extr_fcomp
+    ! function extr_fcomp( self, h, k, x, y ) result( comp )
+    !     class(image), intent(inout) :: self
+    !     real,         intent(in)    :: h, k, x, y
+    !     complex, allocatable :: comps(:,:)
+    !     complex :: comp
+    !     integer :: win(2,2), i, j, phys(3)
+    !     if( self%ldim(3) > 1 )         call simple_stop('only 4 2D images; extr_fcomp; simple_image')
+    !     if( .not. self%ft )            call simple_stop('image need to be FTed; extr_fcomp; simple_image')
+    !     ! evenness and squareness are checked in the comlin class
+    !     call sqwin_2d(h, k, 1., win)
+    !     allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
+    !     do i=win(1,1),win(1,2)
+    !         do j=win(2,1),win(2,2)
+    !             phys       = self%comp_addr_phys([i,j,0])
+    !             comps(i,j) = self%get_fcomp([i,j,0], phys)
+    !         end do
+    !         comps(i,:) = comps(i,:) * sinc(h-real(i))
+    !     end do
+    !     do i = win(2,1), win(2,2)
+    !         comps(:,i) = comps(:,i) * sinc(k-real(i))
+    !     enddo
+    !     comp = sum(comps)
+    !     deallocate(comps)
+    !     ! origin shift
+    !     if( (abs(x) > TINY) .and. (abs(y) > TINY) )then
+    !         comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
+    !     endif
+    !
+    ! contains
+    !
+    !     !> oshift_here
+    !     !! \param xdim
+    !     !! \param x,y Image coords
+    !     !! \param dx,dy pixel width
+    !     !! \return  comp
+    !     !!
+    !     pure function oshift_here( xdim, x, y, dx, dy ) result( comp )
+    !         integer, intent(in)  :: xdim
+    !         real, intent(in)     :: x, y, dx, dy
+    !         complex              :: comp
+    !         real                 :: arg
+    !         arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
+    !         comp = cmplx(cos(arg),sin(arg))
+    !     end function oshift_here
+    !
+    ! end function extr_fcomp
 
     !> \brief packer  replaces the pack intrinsic because the Intel compiler bugs out
     !! \param mskimg

@@ -57,7 +57,6 @@ type :: parameters
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
-    character(len=3)      :: pgrp_known='no'      !< point-group known a priori(yes|no){no}
     character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
@@ -92,7 +91,6 @@ type :: parameters
     character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
     character(len=LONGSTRLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
     character(len=LONGSTRLEN) :: classdoc=''          !< doc with per-class stats(.txt)
-    character(len=LONGSTRLEN) :: comlindoc=''         !< clustering_shc_nclsX.txt
     character(len=LONGSTRLEN) :: cwd=''
     character(len=LONGSTRLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
     character(len=LONGSTRLEN) :: dir=''               !< directory
@@ -503,7 +501,6 @@ contains
         call check_carg('pad',            self%pad)
         call check_carg('pcontrast',      self%pcontrast)
         call check_carg('pgrp',           self%pgrp)
-        call check_carg('pgrp_known',     self%pgrp_known)
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
@@ -545,7 +542,6 @@ contains
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
         call check_file('classdoc',       self%classdoc,     'T')
-        call check_file('comlindoc',      self%comlindoc,    'T')
         call check_file('deftab',         self%deftab,       'T', 'O')
         call check_file('doclist',        self%doclist,      'T')
         call check_file('ext',            self%ext,          notAllowed='T')

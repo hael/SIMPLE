@@ -29,7 +29,6 @@ type(cluster2D_stream_distr_commander)    :: xcluster2D_stream_distr
 type(refine3D_init_distr_commander)       :: xrefine3D_init_distr
 type(refine3D_distr_commander)            :: xprime3D_distr
 type(reconstruct3D_distr_commander)       :: xreconstruct3D_distr
-type(symsrch_distr_commander)             :: xsymsrch_distr
 
 ! HIGH-LEVEL WORKFLOWS
 type(initial_3Dmodel_commander)           :: xinitial_3Dmodel
@@ -179,15 +178,6 @@ select case(prg)
         if( .not. cline%defined('eo')   ) call cline%set('eo',     'no')
         if( .not. cline%defined('mkdir')) call cline%set('mkdir', 'yes')
         call xreconstruct3D_distr%execute( cline )
-    case( 'symsrch' )
-        call cline%parse()
-        if( .not. cline%defined('nspace') )then
-            call cline%set('nspace', 50.) ! 50 projections 4 symsrch
-        endif
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
-        call xsymsrch_distr%execute( cline )
 
     ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
 

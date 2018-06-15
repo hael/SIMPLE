@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_cmdline, only: cmdline, cmdline_err
 use simple_commander_project
 use simple_commander_checks
-use simple_commander_comlin
 use simple_commander_distr
 use simple_commander_misc
 use simple_commander_imgproc
@@ -41,13 +40,6 @@ type(nspace_commander)               :: xnspace
 type(refine3D_init_commander)        :: xrefine3D_init
 type(refine3D_commander)             :: xprime3D
 type(check_3Dconv_commander)         :: xcheck_3Dconv
-
-! COMMON-LINES PROGRAMS
-type(symsrch_commander)              :: xsymsrch
-
-! SYMMETRY PROGRAMS
-type(sym_aggregate_commander)        :: xsym_aggregate
-type(dsymsrch_commander)             :: xdsymsrch
 
 ! MASK PROGRAMS
 type(resmask_commander)              :: xresmask
@@ -484,76 +476,6 @@ select case(prg)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! execute
         call xcheck_3Dconv%execute(cline)
-
-    ! COMMON-LINES PROGRAMS
-
-    case( 'symsrch' )
-        ! search for symmetry axis of vol
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'pgrp'
-        keys_required(5) = 'lp'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'cenlp'
-        keys_optional(3) = 'hp'
-        keys_optional(4) = 'nspace'
-        keys_optional(5) = 'center'
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:5))
-        ! set defaults
-        if( .not. cline%defined('nspace') )then
-            call cline%set('nspace', 50.) ! 50 projections 4 symsrch
-        endif
-        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 30.)
-        call xsymsrch%execute(cline)
-
-    ! SYMMETRY PROGRAMs
-
-    case( 'sym_aggregate' )
-        ! for robust identification of the symmetry axis of a map using image-to-volume simiarity validation of the axis
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'pgrp'
-        keys_required(5) = 'lp'
-        keys_required(6) = 'oritype'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'cenlp'
-        keys_optional(3) = 'hp'
-        call cline%parse_oldschool(keys_required(:6), keys_optional(:3))
-        ! set defaults
-        call cline%set('eo','no')
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
-        call xsym_aggregate%execute(cline)
-    case( 'dsymsrch' )
-        ! for identifying rotational symmetries in class averages of D-symmetric molecules
-        ! and generating a cylinder that matches the shape
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'msk'
-        keys_required(3) = 'pgrp'
-        keys_required(4) = 'stk'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'cenlp'
-        keys_optional(3) = 'outfile'
-        keys_optional(4) = 'outvol'
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
-        ! set defaults
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
-        call xdsymsrch%execute(cline)
-
-    ! MASK PROGRAMS
-
-    case( 'resmask' )
-        ! for 3D envelope masking for resolution estimation
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'msk'
-        keys_required(3) = 'mskfile'
-        call cline%parse_oldschool(keys_required(:3))
-        call xresmask%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
 

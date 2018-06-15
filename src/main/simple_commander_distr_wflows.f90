@@ -22,7 +22,6 @@ public :: refine3D_init_distr_commander
 public :: refine3D_distr_commander
 public :: reconstruct3D_distr_commander
 public :: tseries_track_distr_commander
-public :: symsrch_distr_commander
 public :: scale_project_distr_commander
 private
 
@@ -74,10 +73,6 @@ type, extends(commander_base) :: tseries_track_distr_commander
   contains
     procedure :: execute      => exec_tseries_track_distr
 end type tseries_track_distr_commander
-type, extends(commander_base) :: symsrch_distr_commander
-  contains
-    procedure :: execute      => exec_symsrch_distr
-end type symsrch_distr_commander
 type, extends(commander_base) :: scale_project_distr_commander
   contains
     procedure :: execute      => exec_scale_project_distr
@@ -961,178 +956,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
-
-    subroutine exec_symsrch_distr( self, cline )
-        use simple_comlin_srch,    only: comlin_srch_get_nproj
-        use simple_commander_misc, only: sym_aggregate_commander
-        use simple_ori,            only: ori
-        use simple_oris,          only: oris
-        use simple_sym,            only: sym
-        class(symsrch_distr_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(cmdline)                  :: cline_gridsrch
-        type(cmdline)                  :: cline_srch
-        type(cmdline)                  :: cline_aggregate
-        type(qsys_env)                 :: qenv
-        type(chash)                    :: job_descr
-        type(oris)                     :: o_shift, grid_symaxes,e
-        type(ori)                      :: symaxis
-        type(sym)                      :: syme
-        type(sp_project)               :: spproj
-        type(ctfparams)                :: ctfvars
-        type(parameters)               :: params
-        integer,    allocatable        :: order(:)
-        real,       allocatable        :: corrs(:)
-        real                           :: shvec(3)
-        integer                        :: i, comlin_srch_nproj, nbest_here
-        integer                        :: bestloc(1), cnt, numlen
-        character(len=STDLEN)          :: part_tab
-        character(len=:),  allocatable :: symsrch_projname
-        character(len=*), parameter :: GRIDSYMFBODY = 'grid_symaxes_part'           !<
-        character(len=*), parameter :: SYMFBODY     = 'symaxes_part'                !< symmetry axes doc (distributed mode)
-        character(len=*), parameter :: SYMSHTAB     = 'sym_3dshift'//trim(TXT_EXT)  !< volume 3D shift
-        character(len=*), parameter :: SYMPROJSTK   = 'sym_projs.mrc'               !< volume reference projections
-        integer,          parameter :: NBEST = 30
-        write(*,*)'Unsupported for now'
-        stop
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
-        call params%new(cline)
-        ! constants
-        symsrch_projname = 'symsrch_proj'
-        call del_file(trim(symsrch_projname)//trim(METADATA_EXT))
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(params%pgrp) )
-        params%nptcls     = comlin_srch_nproj
-        if( params%nparts > comlin_srch_nproj )then
-            stop 'number of partitions (npart) > nr of jobs, adjust!'
-        endif
-        call cline%set('nptcls', real(params%nspace))
-        ! read in master project
-        call spproj%read(params%projfile)
-
-        ! 1. GRID SEARCH
-        cline_gridsrch = cline
-        call cline_gridsrch%set('prg',      'symsrch')
-        call cline_gridsrch%set('refine',   'no') !!
-        call cline_gridsrch%set('fbody',    trim(GRIDSYMFBODY))
-        call cline_gridsrch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
-        call cline_gridsrch%set('oritype',  params%oritype)
-        ! local project update
-        ! reference orientations for common lines
-        call spproj%os_cls3D%new(params%nspace)
-        call spproj%os_cls3D%spiral
-        ! name change
-        call spproj%projinfo%delete_entry('projname')
-        call spproj%projinfo%delete_entry('projfile')
-        call spproj%update_projinfo(cline_gridsrch)
-        call spproj%write
-        ! schedule & merge
-        call qenv%new
-        call cline_gridsrch%gen_job_descr(job_descr)
-        call qenv%gen_scripts_and_schedule_jobs(job_descr)
-        call spproj%merge_algndocs(comlin_srch_nproj, params%nparts, params%oritype, trim(GRIDSYMFBODY))
-
-        ! 2. SELECTION OF SYMMETRY PEAKS TO REFINE
-        nbest_here = min(NBEST, spproj%os_cls3D%get_noris())
-        call grid_symaxes%new(nbest_here)
-        order = spproj%os_cls3D%order_corr()
-        cnt = 0
-        do i = comlin_srch_nproj, comlin_srch_nproj-nbest_here+1, -1
-            cnt = cnt + 1
-            call grid_symaxes%set_ori(cnt, spproj%os_cls3D%get_ori(order(i)))
-        enddo
-        spproj%os_cls3D = grid_symaxes
-        call spproj%write
-        deallocate(order)
-        call grid_symaxes%kill
-
-        ! 3. REFINEMENT
-        call qsys_cleanup
-        cline_srch = cline
-        call cline_srch%set('prg',      'symsrch')
-        call cline_srch%set('refine',   'yes') !!
-        call cline_srch%set('nthr',     1.) !!
-        call cline_srch%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
-        call cline_srch%set('oritype',  params%oritype)
-        call cline_srch%set('fbody',    trim(SYMFBODY))
-        ! switch to collection of single threaded jobs
-        params%nptcls  = min(comlin_srch_nproj, nbest_here)
-        params%ncunits = params%nparts * params%nthr
-        params%nparts  = nbest_here
-        params%nthr    = 1
-        ! schedule & merge
-        call qenv%new
-        call cline_srch%gen_job_descr(job_descr)
-        call qenv%gen_scripts_and_schedule_jobs(job_descr)
-        call spproj%merge_algndocs(nbest_here, params%nparts, params%oritype, trim(SYMFBODY))
-
-        ! 4. REAL-SPACE EVALUATION
-        ! adding reference orientations to ptcl3D segment to allow for reconstruction
-        call e%new(params%nspace)
-        call e%spiral
-        ctfvars%smpd = params%smpd
-        !call spproj%add_stk(trim(SYMPROJSTK), ctfvars, e)
-        call spproj%write
-        ! execution
-        cline_aggregate = cline
-        call cline_aggregate%set('prg' ,     'sym_aggregate' )
-        call cline_aggregate%set('projfile', trim(symsrch_projname)//trim(METADATA_EXT))
-        call cline_aggregate%set('oritype',  'ptcl3D')
-        call cline_aggregate%set('eo',       'no' )
-        call qenv%exec_simple_prg_in_queue(cline_aggregate,'SYM_AGGREGATE','SYM_AGGREGATE_FINISHED')
-
-        ! read and pick best
-        call spproj%read_segment('cls3D', symsrch_projname)
-        corrs = spproj%os_cls3D%get_all('corr')
-        bestloc = maxloc(corrs)
-        symaxis = spproj%os_cls3D%get_ori(bestloc(1))
-        write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        call symaxis%print_ori()
-        call spproj%kill
-        ! output
-        if( cline%defined('projfile') )then
-            call spproj%read(params%projfile)
-            if( spproj%os_ptcl3D%get_noris() == 0 )then
-                print *,'No orientations found in this project:',params%projfile
-                stop
-            endif
-            ! transfer shift and symmetry to input orientations
-            call syme%new(params%pgrp)
-            call o_shift%new(1)
-            ! retrieve shift
-            call o_shift%read(trim(SYMSHTAB), [1,1])
-            shvec(1) = o_shift%get(1,'x')
-            shvec(2) = o_shift%get(1,'y')
-            shvec(3) = o_shift%get(1,'z')
-            shvec    = -1. * shvec ! the sign is right
-            ! rotate the orientations & transfer the 3d shifts to 2d
-            if( cline%defined('state') )then
-                call syme%apply_sym_with_shift(spproj%os_ptcl3D, symaxis, shvec, params%state )
-            else
-                call syme%apply_sym_with_shift(spproj%os_ptcl3D, symaxis, shvec )
-            endif
-            call spproj%write
-        endif
-
-        ! Cleanup
-        call qsys_cleanup
-        call del_file(trim(SYMSHTAB))
-        numlen =  len(int2str(nbest_here))
-        do i = 1, nbest_here
-            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
-            call del_file(trim(part_tab))
-        enddo
-        params%nparts = nint(cline%get_rarg('nparts'))
-        numlen =  len(int2str(params%nparts))
-        do i = 1, params%nparts
-            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(METADATA_EXT)
-            call del_file(trim(part_tab))
-        enddo
-        call del_file('SYM_AGGREGATE')
-        ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_SYMSRCH NORMAL STOP ****')
-    end subroutine exec_symsrch_distr
 
     subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self

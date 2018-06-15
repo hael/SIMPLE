@@ -98,10 +98,9 @@ contains
     end subroutine new_1
 
     !>  \brief  is a constructor
-    subroutine new_2( self, vol, pgrp, hp, lp, alpha )
+    subroutine new_2( self, vol, hp, lp, alpha )
         class(volpft_corrcalc),   intent(inout) :: self
         class(projector), target, intent(in)    :: vol
-        character(len=*),         intent(in)    :: pgrp
         real,                     intent(in)    :: hp, lp, alpha
         integer    :: ispace, k
         real       :: vec(3), eullims(3,2), rmat(3,3)

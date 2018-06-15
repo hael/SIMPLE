@@ -1,7 +1,6 @@
 ! centralised builder (the main object constructor in SIMPLE)
 module simple_builder
 include 'simple_lib.f08'
-use simple_comlin,           only: comlin
 use simple_image,            only: image
 use simple_sp_project,       only: sp_project
 use simple_oris,             only: oris
@@ -40,7 +39,6 @@ type :: builder
     ! COMMON LINES TOOLBOX
     type(image),            allocatable :: imgs(:)                !< images (all should be read in)
     type(image),            allocatable :: imgs_sym(:)            !< images (all should be read in)
-    type(comlin)                        :: clins                  !< common lines data structure
     type(image),            allocatable :: ref_imgs(:,:)          !< array of reference images
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
@@ -54,7 +52,6 @@ type :: builder
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
     logical, private                    :: cluster_tbox_exists    = .false.
-    logical, private                    :: comlin_tbox_exists     = .false.
     logical, private                    :: rec_tbox_exists        = .false.
     logical, private                    :: eo_rec_tbox_exists     = .false.
     logical, private                    :: strategy3D_tbox_exists = .false.
@@ -70,8 +67,6 @@ type :: builder
     procedure, private                  :: build_spproj
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
-    procedure                           :: build_comlin_tbox
-    procedure, private                  :: kill_comlin_tbox
     procedure                           :: build_rec_tbox
     procedure, private                  :: kill_rec_tbox
     procedure                           :: build_rec_eo_tbox
@@ -286,72 +281,6 @@ contains
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
-
-    subroutine build_comlin_tbox( self, params )
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
-        integer :: i
-        call self%kill_comlin_tbox
-        if( params%pgrp /= 'c1' )then ! set up symmetry functionality
-            DebugPrint 'build_comlin_tbox:  set up symmetry functionality'
-            ! make object for symmetrized orientations
-            call self%spproj_field%symmetrize(params%nsym)
-            DebugPrint 'build_comlin_tbox:  symmetrized orientations obj made'
-            allocate( self%imgs_sym(1:params%nsym*params%nptcls), self%ref_imgs(params%nstates,params%nspace), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk( 'build_comlin_tbox; simple_builder, 1', alloc_stat)
-            DebugPrint 'build_comlin_tbox: allocated imgs '
-            do i=1,params%nptcls*params%nsym
-               call self%imgs_sym(i)%new([params%box,params%box,1],params%smpd)
-            end do
-            DebugPrint 'build_comlin_tbox: sym ptcls created '
-            self%clins = comlin(self%spproj_field, self%imgs_sym, params%lp)
-            DebugPrint 'build_comlin_tbox: comlin called '
-        else ! set up assymetrical common lines-based alignment functionality
-            DebugPrint 'build_comlin_tbox:  set up assymetrical common lines mode'
-            allocate( self%imgs(1:params%nptcls), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk( 'build_comlin_tbox; simple_builder, 2', alloc_stat)
-            DebugPrint 'build_comlin_tbox: allocated imgs '
-            do i=1,params%nptcls
-                call self%imgs(i)%new([params%box,params%box,1],params%smpd)
-            end do
-            DebugPrint 'build_comlin_tbox: sym ptcls created '
-            self%clins = comlin( self%spproj_field, self%imgs, params%lp )
-            DebugPrint 'build_comlin_tbox: comlin called '
-        endif
-        if( .not. associated(build_glob) ) build_glob => self
-        self%comlin_tbox_exists = .true.
-        write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
-    end subroutine build_comlin_tbox
-
-    subroutine kill_comlin_tbox( self )
-        class(builder), intent(inout) :: self
-        integer :: i,j
-        if( self%comlin_tbox_exists )then
-            call self%spproj_field%kill
-            if( allocated(self%imgs_sym) )then
-                do i=1,size(self%imgs_sym)
-                    call self%imgs_sym(i)%kill
-                end do
-                deallocate(self%imgs_sym)
-            endif
-            if( allocated(self%ref_imgs) )then
-                do i=1,size(self%ref_imgs,1)
-                    do j=1,size(self%ref_imgs,2)
-                        call self%ref_imgs(i,j)%kill
-                    end do
-                end do
-                deallocate(self%ref_imgs)
-            endif
-            if( allocated(self%imgs) )then
-                do i=1,size(self%imgs)
-                    call self%imgs(i)%kill
-                end do
-                deallocate(self%imgs)
-            endif
-            call self%clins%kill
-            self%comlin_tbox_exists = .false.
-        endif
-    end subroutine kill_comlin_tbox
 
     subroutine build_rec_tbox( self, params )
         class(builder), target, intent(inout) :: self

@@ -606,13 +606,16 @@ contains
             call symaxis4write%write(params%outfile, [1,1])
         else
             call symaxis4write%write(SYMAXISTAB, [1,1])
-            if( .not. build%spproj%is_virgin_field(params%oritype) )then
-                ! transfer shift and symmetry to orientations
-                call syme%new(params%pgrp)
-                ! rotate the orientations & transfer the 3d shifts to 2d
-                shvec = -1. * shvec ! the sign is right
-                call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
-                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            if( cline%defined('projfile') )then
+                call build%spproj%read
+                if( .not. build%spproj%is_virgin_field(params%oritype) )then
+                    ! transfer shift and symmetry to orientations
+                    call syme%new(params%pgrp)
+                    ! rotate the orientations & transfer the 3d shifts to 2d
+                    shvec = -1. * shvec ! the sign is right
+                    call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+                    call build%spproj%write_segment_inside(params%oritype, params%projfile)
+                endif
             endif
         endif
         ! destruct
@@ -622,9 +625,6 @@ contains
         call syme%kill
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
-        ! indicate completion (when run in a qsys env)
-        fname_finished = 'JOB_FINISHED_'//int2str_pad(params%part,params%numlen)
-        call simple_touch(trim(fname_finished), errmsg='In: commander_comlin :: exec_symsrch finished' )
     end subroutine exec_symsrch
 
     !> for making picker references

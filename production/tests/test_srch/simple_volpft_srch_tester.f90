@@ -56,30 +56,20 @@ contains
         call vol_ref%read(p%vols(1))
         call vol_ref%add_gauran(SNR)
         call vol_ref%mask(p%msk,'soft')
-
         call vol_ref%write('vol_ref.mrc')
-
         call vol_ref%fft()
         ! deal with target (randomly rotated version of vols(1))
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
         call vol_tmp%read(p%vols(1))
         call ranori%new
         ! call ranori%rnd_ori
-
         call ranori%set_euler([20.,40.,160.])
-
         call b%vol%copy( rotvol(vol_tmp, ranori))
         call b%vol%add_gauran(SNR)
         call b%vol%mask(p%msk,'soft')
-
         call b%vol%write('rotated.mrc')
-
         call b%vol%fft()
-        ! call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp,0.) ! produces mirror orientation
-        call volpft_srch_init(b%vol,vol_ref,p%hp,p%lp,0.)   ! produces expected outcome
-
-
-
+        call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp,0.)
         call vol_tmp%kill
     end subroutine setup_testenv
 

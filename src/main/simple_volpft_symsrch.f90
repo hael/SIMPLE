@@ -27,7 +27,6 @@ type(opt4openMP), allocatable :: opt_symaxes(:)     !< parallel optimisation, sy
 real,             allocatable :: sym_rmats(:,:,:)   !< symmetry operations rotation matrices
 type(volpft_corrcalc)         :: vpftcc             !< corr calculator
 type(ori)                     :: saxis_glob         !< best symaxis solution found so far
-
 integer                       :: nrestarts = 3      !< simplex restarts (randomized bounds)
 integer                       :: nsym      = 0      !< # symmetry ops
 integer                       :: nspace    = 0      !< # complex vectors in vpftcc
@@ -49,7 +48,7 @@ contains
         real    :: lims(3,2)
         call volpft_symsrch_kill
         ! create the correlator
-        call vpftcc%new(vol, pgrp, hp, lp, KBALPHA)
+        call vpftcc%new(vol, hp, lp, KBALPHA)
         nspace  = vpftcc%get_nspace()
         kfromto = vpftcc%get_kfromto()
         if( DEBUG ) print *, 'nspace : ', nspace
@@ -146,14 +145,13 @@ contains
         end do
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         corrs  = -1.
-        !omp parallel do schedule(static) default(shared) private(iproj,eul,inpl)&
-        !omp proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iproj,inpl) proc_bind(close) collapse(2)
         do iproj=ffromto(1),ffromto(2)
             do inpl=1,n_inpls
                 corrs(iproj,inpl) = volpft_symsrch_scorefun(rmats(iproj,inpl,:,:))
             end do
         end do
-        !omp end parallel do
+        !$omp end parallel do
         if( DEBUG ) print *, '***debug(volpft_symsrch)***; grid search, DONE'
         ! identify the best candidates (serial code)
         do iproj=ffromto(1),ffromto(2)
@@ -176,10 +174,6 @@ contains
         ! refine local optima
         ! order the local optima according to correlation
         order = cand_axes%order_corr()
-        symaxis_best = cand_axes%get_ori(order(1))
-
-        return
-
         ! determine end of range
         istop = min(ffromto(2) - ffromto(1) + 1,NBEST)
         !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
@@ -212,22 +206,26 @@ contains
         real, intent(in) :: rmat_symaxis(3,3)
         real    :: cc, rmat(3,3)
         complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace)
-        real    :: sqsum_targets(nsym), eul_swap(3)
+        complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace)
+        real    :: sqsum_targets(nsym), eul_swap(3), sqsum_sum
         integer :: isym, jsym
+        sum_of_sym_targets = cmplx(0.,0.)
         do isym=1,nsym
             ! extracts Fourier component distribution @ symaxis @ symop isym
-            rmat = matmul(rmat_symaxis, sym_rmats(isym,:,:))
+            ! ROTATION MATRICES DO NOT COMMUTE
+            ! this is the correct order
+            rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
             call vpftcc%extract_target(rmat, sym_targets(isym,:,:), sqsum_targets(isym))
+            sum_of_sym_targets = sum_of_sym_targets + sym_targets(isym,:,:)
         end do
-        ! correlate the individual distributions to score the symmetry axis
+        ! correlate with the average to score the symmetry axis
+        sqsum_sum = sum(csq(sum_of_sym_targets))
         cc = 0.
-        do isym=1,nsym - 1
-            do jsym=isym + 1,nsym
-                cc = cc + sum(real(sym_targets(isym,:,:) * conjg(sym_targets(jsym,:,:))))&
-                    &/ sqrt(sqsum_targets(isym) * sqsum_targets(jsym))
-            end do
+        do isym=1,nsym
+            cc = cc + sum(real(sum_of_sym_targets * conjg(sym_targets(isym,:,:))))&
+                &/ sqrt(sqsum_sum * sqsum_targets(isym))
         end do
-        cc = cc / real(nsym * (nsym - 1) / 2)
+        cc = cc / real(nsym)
     end function volpft_symsrch_scorefun
 
     subroutine volpft_symsrch_kill

@@ -146,13 +146,13 @@ contains
         end do
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         corrs  = -1.
-        !$omp parallel do schedule(static) default(shared) private(iproj,inpl) proc_bind(close) collapse(2)
+        !omp parallel do schedule(static) default(shared) private(iproj,inpl) proc_bind(close) collapse(2)
         do iproj=ffromto(1),ffromto(2)
             do inpl=1,n_inpls
                 corrs(iproj,inpl) = vpftcc%corr(rmats(iproj,inpl,:,:))
             end do
         end do
-        !$omp end parallel do
+        !omp end parallel do
         ! identify the best candidates (serial code)
         do iproj=ffromto(1),ffromto(2)
             corr_best  = -1.
@@ -171,11 +171,6 @@ contains
             call orientation%set('corr', corr_best)
             call cand_oris%set_ori(iproj,orientation)
         end do
-
-        ! order = cand_oris%order_corr()
-        ! orientation_best = cand_oris%get_ori(order(1))
-        ! return
-
         ! refine local optima
         ! order the local optima according to correlation
         order = cand_oris%order_corr()
