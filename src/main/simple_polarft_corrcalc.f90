@@ -944,7 +944,7 @@ contains
             tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,:) - conjg(self%pfts_ptcls(rot:self%pftsz,:,i))))
             tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,:) - self%pfts_ptcls(1:rot-1,:,i)))
         end if
-        euclid = -tmp
+        euclid = exp( -tmp / (2. * sum(csq(self%pfts_ptcls(:,:,i)))) )
     end function calc_euclid_for_rot
 
     function calc_euclid_for_rot_8( self, pft_ref, i, kstop, irot ) result( euclid )
