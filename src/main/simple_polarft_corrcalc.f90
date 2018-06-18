@@ -691,7 +691,7 @@ contains
             self%ptcl_bfac_weights(:,self%pinds(iptcl)) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
             where( self%ptcl_bfac_weights(:,self%pinds(iptcl)) < TINY) self%ptcl_bfac_weights(:,self%pinds(iptcl)) = 0.
             self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(:,self%pinds(iptcl)))
-        else 
+        else
             ! nothing to do
         end if
     end subroutine memoize_bfac
@@ -1226,7 +1226,7 @@ contains
         sqsum_ptcl = self%sqsums_ptcls(self%pinds(iptcl))
         !euclids = exp( ( 2. * euclids_over_k - sqsum_ref - sqsum_ptcl ) / ( 2. * sqsum_ptcl ) )
         euclids = exp( ( euclids_over_k - 0.5 * sqsum_ref ) / sqsum_ptcl - 0.5 )
-        
+
     end subroutine gencorrs_euclid_1
 
     subroutine gencorrs_euclid_2( self, iref, iptcl, kstop, euclids )
@@ -1933,7 +1933,7 @@ contains
             else
                 pft_ref = self%pfts_refs_odd (:,:,iref) * shmat
             endif
-        endif        
+        endif
         cc = self%calc_euclid_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), irot)
     end function gencorr_euclid_for_rot
 
@@ -2069,7 +2069,7 @@ contains
         corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), self%kfromto(2), irot)
         grad(2)     = corr / denom * euclid
     end subroutine gencorr_euclid_grad_only_for_rot_8
-    
+
     real function specscore( self, iref, iptcl, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot

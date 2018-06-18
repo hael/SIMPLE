@@ -46,6 +46,9 @@ contains
         !$omp parallel do schedule(static) default(shared)&
         !$omp private(i,ithr) proc_bind(close)
         do i=1,n
+            if(o%isthere('state'))then
+                if(o%get_state(i)==0)cycle
+            endif
             ! get thread index
             ithr = omp_get_thread_num() + 1
             ! extract central secion

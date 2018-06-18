@@ -243,6 +243,7 @@ contains
         ! other variables
         character(len=:), allocatable :: stk, orig_stk
         character(len=:), allocatable :: WORK_PROJFILE
+        integer,          allocatable :: states(:)
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(sp_project)      :: spproj, work_proj1, work_proj2
@@ -280,6 +281,7 @@ contains
         call spproj%read(params%projfile)
         ! retrieve cavgs stack & FRCS info
         call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
+        states      = nint(spproj%os_cls2D%get_all('state'))
         params%smpd = ctfvars%smpd
         orig_stk    = stk
         if( do_eo )call prep_eo_stks_init
@@ -290,6 +292,7 @@ contains
         work_proj1%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris()  > 0 ) work_proj1%jobproc = spproj%jobproc
         call work_proj1%add_stk(trim(stk), ctfvars)
+        call work_proj1%os_ptcl3D%set_all('state', real(states)) ! takes care of states
         ! name change
         call work_proj1%projinfo%delete_entry('projname')
         call work_proj1%projinfo%delete_entry('projfile')
@@ -462,6 +465,7 @@ contains
             call work_proj2%add_stk(trim(orig_stk), ctfvars)
             work_proj2%os_ptcl3D = os
         endif
+        call work_proj2%os_ptcl3D%set_all('state', real(states)) ! takes care of states
         ! naming
         call work_proj2%projinfo%delete_entry('projname')
         call work_proj2%projinfo%delete_entry('projfile')

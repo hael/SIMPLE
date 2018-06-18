@@ -1904,7 +1904,12 @@ contains
         ! ensure ptcl3D field congruent with ptcl2D field
         noris_ptcl3D = self%os_ptcl3D%get_noris()
         noris_ptcl2D = self%os_ptcl2D%get_noris()
-        if( noris_ptcl3D /= noris_ptcl2D ) call self%os_ptcl3D%new(noris_ptcl2D)
+        if( noris_ptcl3D /= noris_ptcl2D )then
+            ! preserve defocus parameters, stack indices
+            self%os_ptcl3D = self%os_ptcl2D
+            call self%os_ptcl3D%delete_2Dclustering
+        endif
+        call self%os_ptcl3D%delete_entry('state') ! states reset below
         ! do the mapping
         ncls = self%os_cls3D%get_noris()
         do icls=1,ncls
