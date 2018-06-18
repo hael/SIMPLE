@@ -434,7 +434,7 @@ contains
                             win(2,:) = win(1,:) + iwinsz
                             win(1,:) = win(1,:) - iwinsz
                             ! weights kernel
-                            w = pw
+                            w = 1.
                             do l=1,wdim
                                 incr = l - 1
                                 ! circular addresses
@@ -444,6 +444,7 @@ contains
                                 w(l,:) = w(l,:) * kbwin%apod( real(win(1,1) + incr) - loc(1) )
                                 w(:,l) = w(:,l) * kbwin%apod( real(win(1,2) + incr) - loc(2) )
                             enddo
+                            w = pw * w / sum(w)
                             ! point of addition
                             phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])
                             select case(precs(iprec)%eo)
