@@ -72,7 +72,7 @@ contains
         ! alloc
         allocate( self%frcs(self%nstates,self%nprojs,self%filtsz), stat=alloc_stat)
         if(alloc_stat .ne. 0)call allocchk('new; simple_projection_frcs', alloc_stat)
-        self%frcs   = 1.0
+        self%frcs   = 0.0
         self%exists = .true.
     end subroutine new
 
