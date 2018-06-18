@@ -967,6 +967,7 @@ contains
             call rt%insert(ii)
             call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
             call img%read(stkname, ind)
+            call img%norm()
             if( doscale )then
                 call img%fft()
                 if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2)&
