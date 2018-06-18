@@ -368,7 +368,6 @@ contains
                 if( L_BENCH ) t_batch_loop = tic()
                 do i=1,batchsz
                     iptcl = ptcls_inds(batches(batch,1) + i - 1)
-                   ! call read_img( bp, pp, iptcl )
                     call read_img( iptcl )
                     batch_imgs(i) = build_glob%img
                 enddo

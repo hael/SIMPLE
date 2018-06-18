@@ -250,31 +250,6 @@ contains
         endif
     end subroutine states_reweight
 
-    ! subroutine fit_bfactors( s, ws )
-    !     class(strategy3D_srch), intent(inout) :: s
-    !     real,                   intent(in)    :: ws(s%npeaks)
-    !     integer :: ipeak, cnt, ref, roind
-    !     real    :: shvec(2), bfacs(s%npeaks), bfac
-    !     if( pftcc_glob%objfun_is_ccres() )then
-    !         bfacs = 0.
-    !         do ipeak = 1, s%npeaks
-    !             if( ws(ipeak) > TINY .or. s%npeaks == 1 )then
-    !                 cnt   = s%nrefs - s%npeaks + ipeak
-    !                 ref   = s3D%proj_space_inds(s%iptcl_map, cnt)
-    !                 shvec = 0.
-    !                 if( s%doshift )shvec = s3D%proj_space_shift(s%iptcl_map, ref, 1:2)
-    !                 roind        = pftcc_glob%get_roind(360. - s3D%proj_space_euls(s%iptcl_map, ref, 3))
-    !                 bfacs(ipeak) = pftcc_glob%fit_bfac(ref, s%iptcl, roind, shvec)
-    !             else
-    !                 bfacs(ipeak) = 0.
-    !             endif
-    !             call s3D%o_peaks(s%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
-    !         enddo
-    !         bfac = sum(ws * bfacs, mask=(ws>TINY))
-    !         call build_glob%spproj_field%set(s%iptcl, 'bfac',  bfac )
-    !     endif
-    ! end subroutine fit_bfactors
-
     function estimate_ang_sdev( s, best_loc ) result( ang_sdev )
         use simple_ori,  only: ori
         use simple_oris, only: oris

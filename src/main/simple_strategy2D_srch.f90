@@ -48,7 +48,6 @@ type strategy2D_srch
     procedure :: new
     procedure :: prep4srch
     procedure :: inpl_srch
-    procedure :: calc_corr
     procedure :: store_solution
     procedure :: kill
 end type strategy2D_srch
@@ -149,24 +148,6 @@ contains
         endif
         DebugPrint '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
-
-    subroutine calc_corr( self )
-        class(strategy2D_srch),   intent(inout) :: self
-        integer :: prev_roind, state
-        real    :: cc
-        state = build_glob%spproj_field%get_state(self%iptcl)
-        if( state > 0 )then
-            self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                   ! class index
-            if( self%prev_class > 0 )then
-                prev_roind = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! rotation index
-                cc = pftcc_glob%gencorr_cc_for_rot(self%prev_class, self%iptcl, [0.,0.], prev_roind)
-                call build_glob%spproj_field%set(self%iptcl,'corr', cc)
-            endif
-        else
-            call build_glob%spproj_field%reject(self%iptcl)
-        endif
-        DebugPrint  '>>> strategy2D_srch::FINISHED CALC_CORR'
-    end subroutine calc_corr
 
     subroutine store_solution( self, entropy )
         use simple_ori,  only: ori
