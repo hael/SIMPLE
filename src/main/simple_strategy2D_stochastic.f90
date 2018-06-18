@@ -41,7 +41,7 @@ contains
             glob_best_set = .false.
             call self%s%prep4srch
             ! objective function based logics for performing extremal search
-            if( pftcc_glob%objfun_is_ccres() )then
+            if( pftcc_glob%get_objfun() == 2 )then
                 ! based on b-factor for objfun=ccres (the lower the better)
                 do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_bfac < self%spec%extr_bound)
             else

@@ -84,11 +84,13 @@ contains
             ! factorial decay, -2 because first step is always greedy
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(params_glob%extr_iter-2)
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
-            select case(trim(params_glob%objfun))
-                case('cc')
+            select case(params_glob%cc_objfun)
+                case(1)
                     extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
-                case('ccres')
+                case(2)
                     extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'bfac')
+                case(3)
+                    extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
             end select
             write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
             write(*,'(A,F8.2)') '>>> EXTREMAL THRESHOLD:    ', extr_bound

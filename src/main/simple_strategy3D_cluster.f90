@@ -57,7 +57,7 @@ contains
             else
                 bfac = pftcc_glob%fit_bfac(self%s%prev_ref, self%s%iptcl, self%s%prev_roind, [0.,0.])
             endif
-            if( pftcc_glob%objfun_is_ccres() )call pftcc_glob%memoize_bfac(self%s%iptcl, bfac)
+            if( pftcc_glob%get_objfun() == 2 )call pftcc_glob%memoize_bfac(self%s%iptcl, bfac)
             ! specscore
             self%s%specscore = pftcc_glob%specscore(self%s%prev_ref, self%s%iptcl, self%s%prev_roind)
             ! evaluate all correlations

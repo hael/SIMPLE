@@ -155,7 +155,7 @@ contains
         else
             bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
         endif
-        if( pftcc_glob%objfun_is_ccres() ) call pftcc_glob%memoize_bfac(self%iptcl, bfac)
+        if( pftcc_glob%get_objfun() == 2 ) call pftcc_glob%memoize_bfac(self%iptcl, bfac)
         call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)
         ! calc specscore
         self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)

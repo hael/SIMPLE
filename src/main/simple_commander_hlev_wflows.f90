@@ -78,13 +78,16 @@ contains
         ! stack splitting
         call spproj%split_stk(params%nparts, dir='..')
         if( params%l_autoscale )then
-            call cline%delete('objfun') ! stage dependent objective function
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%set('objfun', 'cc')
+            if( cline%get_carg('objfun').eq.'euclid' )then
+                call cline_cluster2D_stage1%set('objfun', 'euclid')
+            else
+                call cline_cluster2D_stage1%set('objfun', 'cc')
+            endif
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -137,7 +140,11 @@ contains
             !          learning for acceleration, objective function is resolution weighted
             !          cross-correlation with automtic fitting of B-factors
             cline_cluster2D_stage2 = cline
-            call cline_cluster2D_stage2%set('objfun', 'ccres')
+            if( cline%get_carg('objfun').eq.'euclid' )then
+                call cline_cluster2D_stage2%set('objfun', 'euclid')
+            else
+                call cline_cluster2D_stage2%set('objfun', 'ccres')
+            endif
             call cline_cluster2D_stage2%delete('refs')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then

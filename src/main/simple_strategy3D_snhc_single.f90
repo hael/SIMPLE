@@ -96,7 +96,7 @@ contains
         call s3D%o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
         call s3D%o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
         ! B factor
-        if( pftcc_glob%objfun_is_ccres() )then
+        if( pftcc_glob%get_objfun() == 2 )then
             bfac  = pftcc_glob%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
             call build_glob%spproj_field%set(self%s%iptcl, 'bfac',  bfac )
         endif

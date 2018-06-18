@@ -123,7 +123,7 @@ type :: polarft_corrcalc
     procedure          :: get_roind
     procedure          :: get_coord
     procedure          :: get_ref_pft
-    procedure          :: objfun_is_ccres
+    procedure          :: get_objfun
     procedure          :: exists
     procedure          :: ptcl_iseven
     ! PRINTERS/VISUALISERS
@@ -582,12 +582,12 @@ contains
         if(alloc_stat.ne.0)call allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
-    !>  \brief  returns whether objective function is cc/ccres
-    logical function objfun_is_ccres( self )
+    !>  \brief  returns the objective function flag
+    integer function get_objfun( self )
         class(polarft_corrcalc), intent(in) :: self
-        objfun_is_ccres = (self%cc_objfun == 2)
-    end function objfun_is_ccres
-
+        get_objfun = self%cc_objfun
+    end function get_objfun
+    
     !>  \brief  checks for existence
     function exists( self ) result( yes )
         class(polarft_corrcalc), intent(in) :: self
