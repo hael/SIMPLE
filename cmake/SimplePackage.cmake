@@ -117,8 +117,8 @@ AUTHORS: Hans Elmlund, Dominika Elmlund, Cyril Reboul, Michael Eager, Fred Bonne
     # Debian package
   elseif(CPACK_GENERATOR MATCHES "DEB")
     # https://github.com/hhvm/packaging/tree/master/hhvm/deb
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "binutils, libfftw3-dev,"
-      "gfortran, cmake")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "gcc, build-essential, binutils, libfftw3-dev, gfortran, cmake, gnuplot")
+    set(CPACK_DEBIAN_PACKAGE_OPTIONAL "nvidia-cuda-dev, libopenmpi-dev, libjpeg9-dev, libsqlite3-dev ")
     set(CPACK_DEBIAN_PACKAGE_SECTION "science")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
     set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://simplecryoem.org")
@@ -131,7 +131,7 @@ AUTHORS: Hans Elmlund, Dominika Elmlund, Cyril Reboul, Michael Eager, Fred Bonne
     # https://github.com/pld-linux/hhvm
     # https://github.com/hhvm/packaging/tree/master/hhvm/rpm/fedora20/rpmbuild/
     set(CPACK_RPM_PACKAGE_REQUIRES "binutils-devel, cmake >= 2.8.7, "
-      "gcc >= 6:4.6.0, libfftw3-devel   ")
+      "gcc >= 6:4.6.0, libfftw3-devel, gnuplot   ")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/Engineering")
     set(CPACK_RPM_PACKAGE_LICENSE "GPL3+ ")
     set(CPACK_RPM_PACKAGE_URL "https://simplecryoem.org")

@@ -520,6 +520,7 @@ contains
             write(*,*) 'Inputted movie list (filetab): ', trim(filetab)
             stop 'does not exist in cwd; sp_project :: add_movies'
         endif
+        is_movie = .true.
         ! oris object pointer
         os_ptr => self%os_mic
         ! read movie names

@@ -5,7 +5,7 @@ implicit none
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui, write_ui_json
 private
 
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type simple_input_param
     character(len=:), allocatable :: key

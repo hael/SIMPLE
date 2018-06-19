@@ -11,7 +11,6 @@ fi
 if [ ! -d "${SIMPLE_TESTBENCH_DATA}/recvol_1wcm" ]; then
     echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
 fi
-cd "${SIMPLE_TESTBENCH_DATA}/recvol_1wcm"
 
 echo " ## Expected Output: 10 core, Intel Xeon E5-2650, Compiled with GNU_RELEASE_FFTW  "
 echo " ## >>> DONE PROCESSING PARAMETERS                                                "
@@ -29,6 +28,7 @@ echo " ## sys 0m0.345s                                                          
 echo "                                                                                  "
 SECONDS=0
 set -ev
+cd "${SIMPLE_TESTBENCH_DATA}/recvol_1wcm"
 
 #time simple_distr_exec prg=reconstruct3D ctf=no msk=50 oritab=projvol_oris.txt pgrp=c1 smpd=2 stk=projs.mrc
 [ -d reconstruct3D_test ] && rm -rf reconstruct3D_test

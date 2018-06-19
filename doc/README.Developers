@@ -121,7 +121,7 @@ Source the =compilervars.sh= file from your Intel compiler source path
 
 
 
-**** PGI Linux   (Unsupported)
+**** PGI Linux   ( No longer supported )
 
 Shell environment variables FC and LD_LIBRARY_PATH are crucial in the cmake
 build to determine the fortran compiler and for finding the FFTW3 libraries.
@@ -230,7 +230,7 @@ Generic environment variables affecting Fortran programs:
  - STATIC_RANDOM_SEED: if this var equals YES, calls to random_seed() will return the same value
 
 
-***  Convert specifier
+*** Convert specifier
 
 File formats can be manipulated by the CONVERT specifier. See
 https://gcc.gnu.org/onlinedocs/gcc-7.1.0/gfortran/CONVERT-specifier.html#CONVERT-specifier
@@ -419,11 +419,13 @@ WITH
 :+ allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
 :+ call alloc_errchk("In: new_simplex_opt", alloc_stat)
 
+
 * Memory check and profiling
 
+** Valgrind
 Valgrind memcheck
 1. Compile with -g option (DEBUG or RELWITHDEBUGINFO)
-2. Run: valgrind --tool=memcheck --leak-check=yes    program
+2. Run: valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all -v   program
 
 Valgrind Massif :  [[https://valgrind.org/docs/manual/ms-manual.html][Massif manual]]
 1. Compile with -g option (DEBUG or RELWITHDEBUGINFO)
@@ -438,3 +440,65 @@ Valgrind DHAT dynamic heap analysis tool [[https://valgrind.org/docs/manual/dh-m
 Valgrind SGCheck stack and global array overrun detector
 1. Compile with -g option (DEBUG or RELWITHDEBUGINFO)
 2. Run: valgrind--tool=exp-sgcheck program
+
+** TAU https://www.cs.uoregon.edu/research/tau/home.php
+*Installation*
+./configure -c++=mpicxx -cc=mpicc -fortran=mpif90 -mpi -ompt=download -bfd=download -unwind=download
+make -j4 install
+
+*Runtime Environment*
+export TAU_MAKEFILE=<path to TAU>/x86_64/lib/Makefile.tau-mpi-openmp
+export TAU_OPTIONS='-optVerbose -optDetectMemoryLeaks -optCompInst'
+export TAU_PROFILE=1
+
+*Debugging*
+<In SIMPLE3.0/build>
+FC=tau_f90.sh CC=tau_cc.sh CXX=tau_cxx.sh cmake ..
+make -j install
+tau_exec -T OpenMP -memory -ompt -io -ebs ./bin/simple_test_qsort
+pprof
+paraprof
+
+** OpenSpeedShop  https://openspeedshop.org/
+*Installation*
+Read the installation PDF from the website
+*Runtime Environment*
+TOOL_VERS="_v2.3.1.release"
+export OPENSS_PREFIX=~/OpenSpeedShop/openspeedshop-release-2.3
+export KROOT_IDIR=${OPENSS_PREFIX}/krellroot${TOOL_VERS}
+export CBTF_IDIR=${OPENSS_PREFIX}/cbtf${TOOL_VERS}
+export OSSCBTF_IDIR=${OPENSS_PREFIX}/osscbtf${TOOL_VERS}
+export OSSOFF_IDIR=${OPENSS_PREFIX}/ossoff${TOOL_VERS}
+export OPENSS_DOC_DIR=$OPENSS_PREFIX/share/doc/packages/OpenSpeedShop
+export OPENSS_INSTRUMENTOR=offline
+export XPLAT_RSH=ssh
+export OPENSS_MPI_IMPLEMENTATION=openmpi
+export CBTF_MPI_IMPLEMENTATION=openmpi
+export OPENSS_RAWDATA_DIR=$OPENSS_PREFIX/Offline
+export OPENSS_DB_DIR=$OPENSS_PREFIX/DB
+
+export MRNET_COMM_PATH=${CBTF_IDIR}/sbin/cbtf_mrnet_commnode
+export CBTF_MRNET_BACKEND_PATH=${CBTF_IDIR}/sbin/cbtf_libcbtf_mrnet_backend
+# OPENSS_PREFIX_target/bin must come first to
+# find the osslink in the target directory
+
+export PATH=$OPENSS_PREFIX/bin:${KROOT_IDIR}/bin:${CBTF_IDIR}/bin:${OSSCBTF_IDIR}/bin:${OSSOFF_IDIR}/bin:${CBTF_IDIR}/sbin:${PATH}
+export MANPATH=$OPENSS_PREFIX/share/man:${MANPATH}
+export OPENSS_PLUGIN_PATH=$OSSCBTF_IDIR/lib64/openspeedshop
+export DYNINSTAPI_RT_LIB=$OPENSS_PREFIX/lib64/libdyninstAPI_RT.so.1
+export LD_LIBRARY_PATH=$OPENSS_PREFIX/lib64:${KROOT_IDIR}/lib:${OSSCBTF_IDIR}/lib64:${CBTF_IDIR}/lib64:${OSSOFF_IDIR}/lib64:${GRAPHVIZ_IDIR}/lib:${LD_LIBRARY_PATH}
+
+*Debugging*
+Basic analysis
+$ osspcsamp  "simple_test_qsort"
+$ ossusertime "simple_test_qsort"
+$ oss[hwc,hwctime,hwcsamp] "simple_test_qsort"
+
+Memory Leak detection
+$ ossmem "simple_test_memleaks"
+
+Parallel profiling, tracing etc.
+$ oss[mpi,mpit,mpip] "simple_test_mpi"
+$ osscuda "simple_test_cuda"
+$ osspthread "simple_test_omp"
+$ ossomptp "simple_test_omp"

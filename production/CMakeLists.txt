@@ -2,85 +2,39 @@
 add_executable(${SIMPLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_exec/simple_exec.f90")
 add_executable(${SIMPLE_DISTR_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_distr_exec/simple_distr_exec.f90")
 add_executable(${SIMPLE_PRIVATE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_private_exec/simple_private_exec.f90")
-
+set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SIMPLE_DISTR_EXE} ${SIMPLE_PRIVATE_EXE})
 # This links foo to the bar library
+
+#target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_DISTR_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 
-IF(USE_OPENMPI AND USE_MPI)
-  set_target_properties(${SIMPLE_EXE}
+if(USE_OPENMPI AND USE_MPI)
+  set_target_properties(${SIMPLE_MAIN_TARGETS}
     PROPERTIES
-      COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
-      LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
-      JOB_POOL_COMPILE NUM_JOBS)
-  set_target_properties(${SIMPLE_DISTR_EXE}
+    COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
+    LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
+    JOB_POOL_COMPILE NUM_JOBS)
+  target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
+elseif(USE_OPENMP)
+  set_target_properties(${SIMPLE_MAIN_TARGETS}
     PROPERTIES
-      COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
-      LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
-      JOB_POOL_COMPILE NUM_JOBS)
-  set_target_properties(${SIMPLE_PRIVATE_EXE}
-    PROPERTIES
-      COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
-      LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
-      JOB_POOL_COMPILE NUM_JOBS)
-
-target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
-target_link_libraries(${SIMPLE_DISTR_EXE} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
-target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
-ELSEIF(USE_OPENMP)
-  set_target_properties(${SIMPLE_EXE}
-    PROPERTIES
-      COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
-      LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
-      JOB_POOL_COMPILE NUM_JOBS)
-  set_target_properties(${SIMPLE_DISTR_EXE}
-    PROPERTIES
-      COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
-      LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
-      JOB_POOL_COMPILE NUM_JOBS)
-  set_target_properties(${SIMPLE_PRIVATE_EXE}
-  PROPERTIES
     COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
     LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
     JOB_POOL_COMPILE NUM_JOBS)
-ELSEIF(USE_MPI)
-     set_target_properties(${SIMPLE_EXE}
+elseif(USE_MPI)
+  set_target_properties(${SIMPLE_MAIN_TARGETS}
     PROPERTIES
-      COMPILE_FLAGS "${MPI_Fortran_FLAGS}"
-      LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
-      JOB_POOL_COMPILE NUM_JOBS)
-  set_target_properties(${SIMPLE_DISTR_EXE}
-    PROPERTIES
-      COMPILE_FLAGS "${MPI_Fortran_FLAGS}"
-      LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
-      JOB_POOL_COMPILE NUM_JOBS)
-  set_target_properties(${SIMPLE_PRIVATE_EXE}
-  PROPERTIES
     COMPILE_FLAGS "${MPI_Fortran_FLAGS}"
     LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
     JOB_POOL_COMPILE NUM_JOBS)
-
-target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
-target_link_libraries(${SIMPLE_DISTR_EXE} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
-target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
-ENDIF()
-
-install(TARGETS "${SIMPLE_EXE}"
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_BINDIR}"
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-         CONFIGURATIONS DEBUG|RELEASE
-)
-install(TARGETS "${SIMPLE_DISTR_EXE}"
+  target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
+endif()
+install(TARGETS ${SIMPLE_MAIN_TARGETS}
   ARCHIVE DESTINATION "${CMAKE_INSTALL_BINDIR}"
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
   CONFIGURATIONS DEBUG|RELEASE
-)
-
-install(TARGETS "${SIMPLE_PRIVATE_EXE}"
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_BINDIR}"
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-         CONFIGURATIONS DEBUG|RELEASE
 )
 
 #################################################################
@@ -195,7 +149,7 @@ foreach(TESTNAME ${TESTDIRS})
        target_link_libraries(${TESTEXE} ${TESTEXE}_cuda_kernels)
      endif()
      CUDA_ADD_CUBLAS_TO_TARGET(${TESTEXE})
-     target_link_libraries(${TESTEXE} cuda_kernels)
+     target_link_libraries(${TESTEXE} cuda_kernels stdc++)
     endif()
     # if(BLAS_FOUND AND USE_OPENACC)
     #   message(STATUS "Adding  ${BLAS_blas_LIBRARY} library to ${TESTEXE}")

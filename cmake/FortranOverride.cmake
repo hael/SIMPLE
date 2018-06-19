@@ -184,25 +184,26 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
   set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                # preprocessor flags
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
-  set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wreal-q-constant")
-  #  -Waliasing, -Wampersand, -Wconversion, -Wsurprising, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow, -Wline-truncation, -Wtarget-lifetime, -Winteger-division, -Wreal-q-constant
-  # Wcompare-reals, -Wunused-parameter and -Wdo-subscript
-  set(checks   " -frange-check -fstack-protector -fstack-check -fbounds-check ")                # checks
-  set(forspeed "-O3 -ffrontend-optimize")                                                       # optimisation
-  set(forpar   "-fopenmp  -Wp,-fopenmp")                                                        # parallel flags
-  set(target   "${GNUNATIVE} -fPIC -mcmodel=medium")                                            # target platform
+  set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wreal-q-constant ")
+  #-Wconversion, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow -Wtarget-lifetime
+  #-Wcompare-reals, -Wunused-parameter and -Wdo-subscript
+  set(checks   "-frange-check -fstack-protector -fstack-check -fbounds-check ")                # checks
+  set(forspeed "-O3 -ffrontend-optimize -fno-stack-protector -fno-lifetime-dse")                # optimisation
+  set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                   # parallel flags
+  set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
 
   set(common   "${preproc} ${dialect} ${target} ${warn}")
 
-  set(warnDebug "-Wall -Wextra -Wimplicit-interface  ${checks}")                              # extra warning flag
-  set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
+  set(warnDebug "-Wall -Wcompare-reals -Wtype-limits -Wuninitialized -Wunused-but-set-parameter -Wimplicit-interface -Wno-unused-dummy-argument -Wno-unused-value")     # extra warning flag
+  set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ${checks}")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
   #
   set(cstd   "-std=${C_DIALECT}11" )
   set(cppstd "-std=${C_DIALECT}++14" )
 
-  option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
+option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
+
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
   message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
@@ -214,8 +215,8 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
   set(fordebug "-g ${warn}  -traceback -gopt -Mcuda=debug -Mneginfo=all,ftn -Mpgicoff -traceback -Mprof  ")
   set(forspeed "-O3 -fast " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
-  set(forpar   " -mp -acc ") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
-  set(target   " -m64 ")  #
+  set(forpar   "-mp -acc ")   # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
+  set(target   "-m64 ")  #
   set(common   "${preproc} ${dialect} ${target}")
   # further PGI options
   option(PGI_EXTRACT_ALL  "PGI --Extract subprograms for inlining (-Mextract)" OFF)
@@ -245,27 +246,46 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
   set(preproc  "-fpp")
   set(dialect  "-free -implicitnone -std08  -list-line-len=264 -diag-disable 6477  -diag-disable 406 -gen-interfaces  ")
-  set(checks   "-check bounds -check uninit -assume buffered_io -assume realloc_lhs ") # -mcmodel=medium -shared-intel
+  set(checks   "-check bounds -check uninit -assume buffered_io -assume realloc_lhs ")
+
   set(warn     "-warn all ")
-  set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence ")
+  set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence -traceback")
   set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port  ")
-  set(forpar   "-qopenmp")
-  set(target   "-no-prec-div -fPIC -mcmodel=medium -shared-intel -traceback -xHost ")
+  set(forpar   " ")
+  set(target   "-no-prec-div -fPIC -xHost -traceback ")
   set(common   "${preproc} ${dialect} ${checks} ${target}")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")
   if(NOT "$ENV{MKLROOT}" STREQUAL "")
     set(MKLROOT $ENV{MKLROOT})
   else()
-    message( "MKLROOT must be set using INTEL compilervars or mklvars ")
+    message( "MKLROOT must be set using INTEL mklvars ")
   endif()
+  if(NOT "$ENV{INTEL_DIR}" STREQUAL "")
+    set(INTEL_DIR $ENV{INTEL_DIR})
+    set(INTEL_TARGET_ARCH $ENV{INTEL_TARGET_ARCH})
+    set(INTEL_TARGET_PLATFORM $ENV{INTEL_TARGET_PLATFORM})
+  else()
+    message( "INTEL_DIR must be set using INTEL compilervars ")
+  endif()
+  if (CMAKE_Fortran_COMPILER STREQUAL "mpiif*")
+    if(NOT "$ENV{I_MPI_ROOT}" STREQUAL "")
+      set(I_MPI_ROOT $ENV{I_MPI_ROOT})
+    else()
+      message( "I_MPI_ROOT must be set using INTEL mpivars ")
+    endif()
+  endif()
+
   set(cstd "-std=c11" )
   set(cppstd "-std=c++14" )
 endif ()
 
+
+option(LARGE_FILE_SUPPORT  "GNU -- Link with library directory for large file support (-mcmodel=large)" ON)
+
 string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)
- message( STATUS "CMAKE_C_FLAGS_RELEASE_INIT: ${CMAKE_C_FLAGS_RELEASE_INIT} (Old version)")
- message( STATUS "CMAKE_CXX_FLAGS_RELEASE_INIT: ${CMAKE_CXX_FLAGS_RELEASE_INIT} (Old version)")
+message( STATUS "CMAKE_C_FLAGS_RELEASE_INIT: ${CMAKE_C_FLAGS_RELEASE_INIT} (Old version)")
+message( STATUS "CMAKE_CXX_FLAGS_RELEASE_INIT: ${CMAKE_CXX_FLAGS_RELEASE_INIT} (Old version)")
 set(CMAKE_C_FLAGS_RELEASE_INIT " ${CMAKE_C_FLAGS_RELEASE_INIT} ${cstd} -D${ID_STRING}"  CACHE STRING "Default C release flags -- this cannot be edited " FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE_INIT "${CMAKE_CXX_FLAGS_RELEASE_INIT} ${cppstd} -D${ID_STRING}"  CACHE STRING "Default CXX release flags -- this cannot be edited" FORCE)
 message( STATUS "CMAKE_C_FLAGS_RELEASE_INIT: ${CMAKE_C_FLAGS_RELEASE_INIT}")
@@ -379,5 +399,5 @@ endif(BT STREQUAL "RELEASE")
 
 
 IF (LINUX)
-    option(MAP_TEXT_HUGE_PAGES "Remap hot static code onto huge pages" ON)
+  option(MAP_TEXT_HUGE_PAGES "Remap hot static code onto huge pages" ON)
 ENDIF()
