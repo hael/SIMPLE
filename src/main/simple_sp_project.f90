@@ -63,7 +63,7 @@ contains
     procedure          :: get_vol
     procedure          :: get_fsc
     procedure          :: get_frcs
-    procedure          :: get_nptcls_from_osout
+    procedure          :: get_imginfo_from_osout
     ! getters
     procedure          :: get_nptcls
     procedure          :: get_box
@@ -1414,29 +1414,40 @@ contains
         endif
     end subroutine get_frcs
 
-    integer function get_nptcls_from_osout( self )
-        class(sp_project), target, intent(inout) :: self
+    subroutine get_imginfo_from_osout( self, smpd, box, nptcls )
+        class(sp_project), intent(inout) :: self
+        real,              intent(out)   :: smpd
+        integer,           intent(out)   :: box, nptcls
         character(len=LONGSTRLEN) :: imgkind
         integer :: i, nos
-        get_nptcls_from_osout = 0
-        nos = self%os_out%get_noris()
+        nptcls = 0
+        smpd   = 0.
+        box    = 0
+        nos    = self%os_out%get_noris()
         if( nos == 0 )return
-        ! look for cavgs, defaults to zero for other entries (frcs, volumes)
+        ! nptcls: look for cavgs, defaults to zero for other entries (frcs, volumes)
         do i=1,nos
             if( self%os_out%isthere(i,'imgkind') )then
                 imgkind = trim(self%os_out%get_static(i,'imgkind'))
                 if(trim(imgkind).eq.'cavg')then
                     if( self%os_out%isthere(i,'fromp').and.self%os_out%isthere(i,'top') )then
-                        get_nptcls_from_osout = get_nptcls_from_osout +&
-                            &nint(self%os_out%get(i,'top')) - nint(self%os_out%get(i,'fromp')) + 1
+                        nptcls = nptcls + nint(self%os_out%get(i,'top')) - nint(self%os_out%get(i,'fromp')) + 1
                     else
                         write(*,*) 'Missing fromp and top entries in cavg ', i
-                        stop 'Missing fromp and top entries in cavg ; sp_project :: get_nptcls_from_osout'
+                        stop 'Missing fromp and top entries in cavg ; sp_project :: get_imginfo_from_osout'
                     endif
                 endif
             endif
         end do
-    end function get_nptcls_from_osout
+        ! box/smpd: first in
+        do i=1,nos
+            if( self%os_out%isthere(i,'smpd').and.self%os_out%isthere(i,'box') )then
+                smpd = self%os_out%get(i,'smpd')
+                box  = nint(self%os_out%get(i,'box'))
+                return
+            endif
+        end do
+    end subroutine get_imginfo_from_osout
 
     ! getters
 

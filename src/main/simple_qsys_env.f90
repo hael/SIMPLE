@@ -1,7 +1,7 @@
 ! batch-processing manager - environment module
 module simple_qsys_env
 include 'simple_lib.f08'
-use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup,parse_env_file
+use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
 use simple_qsys_ctrl,    only: qsys_ctrl
@@ -22,17 +22,19 @@ type :: qsys_env
     procedure :: exists
     procedure :: gen_scripts_and_schedule_jobs
     procedure :: exec_simple_prg_in_queue
+    procedure :: get_qsys
     procedure :: kill
 end type qsys_env
 
 contains
 
-    subroutine new( self, stream, numlen )
+    subroutine new( self, stream, numlen, exec_bin )
         use simple_ori,        only: ori
         use simple_sp_project, only: sp_project
         class(qsys_env),             intent(inout) :: self
         logical,           optional, intent(in)    :: stream
         integer,           optional, intent(in)    :: numlen
+        character(len=*),  optional, intent(in)    :: exec_bin
         type(ori)                     :: compenv_o
         type(sp_project)              :: spproj
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
@@ -63,13 +65,9 @@ contains
         end select
         ! retrieve environment variables from file
         call self%qdescr%new(MAXENVKEYS)
-        if( trim(params_glob%projfile) .ne. '' )then
-            call spproj%read_segment('compenv', params_glob%projfile)
-            compenv_o   = spproj%compenv%get_ori(1)
-            self%qdescr = compenv_o%ori2chash()
-        else
-            call parse_env_file(self%qdescr) ! parse .env file
-        endif
+        call spproj%read_segment('compenv', params_glob%projfile)
+        compenv_o   = spproj%compenv%get_ori(1)
+        self%qdescr = compenv_o%ori2chash()
         ! deal with time
         if( self%qdescr%isthere('time_per_image') )then
             tpi          = self%qdescr%get('time_per_image')
@@ -90,7 +88,11 @@ contains
         qsnam = self%qdescr%get('qsys_name')
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
-        self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_private_exec'
+        if(present(exec_bin))then
+            self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/'//trim(exec_bin)
+        else
+            self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_private_exec'
+        endif
         if( present(numlen) )then
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
             &[1, self%nparts], params_glob%ncunits, sstream, numlen)
@@ -141,13 +143,32 @@ contains
         if( allocated(halt_ind) ) call del_file(halt_ind)
         call cline%gen_job_descr(job_descr)
         call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name_here, outfile)
-        call wait_for_closure(script_name_here) !!!!!
+        call wait_for_closure(script_name_here)
         call self%qscripts%submit_script(script_name_here)
         if( allocated(halt_ind) )then
             call qsys_watcher(halt_ind)
             call del_file(halt_ind)
         endif
     end subroutine exec_simple_prg_in_queue
+
+    function get_qsys( self )result( qsys )
+        use simple_qsys_local, only: qsys_local
+        use simple_qsys_slurm, only: qsys_slurm
+        use simple_qsys_pbs,   only: qsys_pbs
+        use simple_qsys_sge,   only: qsys_sge
+        class(qsys_env), intent(in)   :: self
+        character(len=:), allocatable :: qsys
+        select type(pmyqsys => self%myqsys)
+            class is(qsys_local)
+                qsys = 'local'
+            class is(qsys_slurm)
+                qsys = 'slurm'
+            class is(qsys_sge)
+                qsys = 'sge'
+            class is(qsys_pbs)
+                qsys = 'pbs'
+        end select
+    end function get_qsys
 
     subroutine kill( self )
         class(qsys_env) :: self

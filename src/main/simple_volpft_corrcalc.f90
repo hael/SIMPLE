@@ -184,7 +184,7 @@ contains
         integer :: ispace, k
         do ispace=1,self%nspace
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-                loc  = matmul(self%locs_ref(k,ispace,:),rmat)
+                loc = matmul(self%locs_ref(k,ispace,:),rmat)
                 vpft_target(k,ispace) = self%vol_target%interp_fcomp(loc)
             end do
         end do

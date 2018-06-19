@@ -43,7 +43,8 @@ contains
             ! objective function based logics for performing extremal search
             if( pftcc_glob%get_objfun() == 2 )then
                 ! based on b-factor for objfun=ccres (the lower the better)
-                do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_bfac < self%spec%extr_bound)
+                do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_corr > self%spec%extr_bound)
+                !do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_bfac < self%spec%extr_bound)
             else
                 ! based on correlation for objfun=cc (the higher the better)
                 do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_corr > self%spec%extr_bound)

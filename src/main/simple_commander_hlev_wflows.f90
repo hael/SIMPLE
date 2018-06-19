@@ -221,13 +221,14 @@ contains
         use simple_commander_volops,       only: reproject_commander, symsrch_commander
         use simple_commander_rec,          only: reconstruct3D_commander
         use simple_parameters,             only: params_glob
+        use simple_qsys_env,               only: qsys_env
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
         real,    parameter :: CENLP=30. !< consistency with refine3D
         integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer, parameter :: STATE=1, MAXITS_SNHC_RESTART=3
-        integer, parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
+        integer, parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE= 2500
         integer, parameter :: NRESTARTS=5
         integer, parameter :: NPEAKS_INIT=6, NPEAKS_REFINE=1
         character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE = 'initial_3Dmodel_tmpproj.simple'
@@ -251,6 +252,7 @@ contains
         character(len=:), allocatable :: stk, orig_stk
         character(len=:), allocatable :: WORK_PROJFILE
         integer,          allocatable :: states(:)
+        type(qsys_env)        :: qenv
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(sp_project)      :: spproj, work_proj1, work_proj2
@@ -370,7 +372,7 @@ contains
         call cline_refine3D_init%set('lp',       lplims(1))
         call cline_refine3D_init%set('npeaks',   real(NPEAKS_INIT))
         if( .not. cline_refine3D_init%defined('nspace') )then
-            call cline_refine3D_init%set('nspace', real(NSPACE_DEFAULT))
+            call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -378,22 +380,14 @@ contains
             call cline_refine3D_snhc%set('pgrp', 'c1')
             call cline_refine3D_init%set('pgrp', 'c1')
             ! symsrch
-            call cline_symsrch%set('msk',      msk)
+            call qenv%new(exec_bin='simple_exec')
+            call cline_symsrch%set('msk', msk)
+            call cline_symsrch%set('smpd', work_proj1%get_smpd())
             call cline_symsrch%set('projfile', trim(WORK_PROJFILE))
             call cline_symsrch%set('cenlp',    CENLP)
-            call cline_symsrch%set('lp',       lplims(2))
-            ! (3.1) RECONSTRUCT SYMMETRISED VOLUME
-            call cline_reconstruct3D%set('prg',      'reconstruct3D')
-            call cline_reconstruct3D%set('projfile', trim(WORK_PROJFILE))
-            call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
-            call cline_reconstruct3D%set('oritab',   'symdoc'//trim(METADATA_EXT))
-            ! refinement step now uses the symmetrised vol and doc
-            ! call cline_refine3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT)) !! TO UPDATE
-            ! call cline_refine3D_refine%set('vol1',   'rec_sym'//params%ext)
-            ! (4) RECONSTRUCT AT ORIGINAL SCALE
-            ! call cline_reconstruct3D%set('prg',      'reconstruct3D')
-            ! call cline_reconstruct3D%set('projfile', trim(ORIG_WORK_PROJFILE))
-            ! call cline_reconstruct3D%set('trs',      5.) ! to assure that shifts are being used
+            call cline_symsrch%set('hp',       params%hp)
+            call cline_symsrch%set('lp',       lplims(1))
+            call cline_symsrch%set('oritype',  'ptcl3D')
         endif
         ! (4) REFINE3D REFINE STEP
         call cline_refine3D_refine%set('prg',      'refine3D')
@@ -412,7 +406,7 @@ contains
             call cline_refine3D_refine%set('lp', lplims(2))
         endif
         if( .not. cline_refine3D_refine%defined('nspace') )then
-            call cline_refine3D_refine%set('nspace', real(NSPACE_DEFAULT))
+            call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
         endif
         ! (5) RE-PROJECT VOLUME
         call cline_reproject%set('prg',    'reproject')
@@ -435,14 +429,13 @@ contains
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> SYMMETRY AXIS SEARCH'
             write(*,'(A)') '>>>'
-            !call cline_symsrch%set('oritab', trim(oritab)) ! TO UPDATE
             call cline_symsrch%set('vol1', trim(vol_iter))
-            call xsymsrch%execute(cline_symsrch)
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
-            write(*,'(A)') '>>>'
-            call xreconstruct3D%execute(cline_reconstruct3D)
-            status = simple_rename(trim(VOL_FBODY)//trim(str_state)//params%ext, 'rec_sym'//params%ext)
+            if( qenv%get_qsys() .eq. 'local' )then
+                call xsymsrch%execute(cline_symsrch)
+            else
+                call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMSRCH', 'SYMSRCH_FINISHED')
+            endif
+            call del_file('SYMSRCH_FINISHED')
         endif
         ! prep refinement stage
         call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))

@@ -341,7 +341,7 @@ contains
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
         character(len=LONGSTRLEN)        :: qsys_cmd
-        character(len=STDLEN)            ::  script_name
+        character(len=STDLEN)            :: script_name
         integer               :: ipart, pid
         logical               :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         ! make a submission mask

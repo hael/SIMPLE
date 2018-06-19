@@ -96,7 +96,7 @@ contains
         type(ori)  :: symaxis
         type(oris) :: espace
         type(oris) :: cand_axes
-        integer    :: ffromto(2), ntot, inpl, iproj, iproj_best
+        integer    :: ffromto(2), ntot, inpl, iproj, iproj_best, err
         integer    :: inpl_best, istop, ithr, iloc, n_inpls
         real       :: eul(3), corr_best, cost
         logical    :: distr_exec
@@ -176,7 +176,7 @@ contains
         order = cand_axes%order_corr()
         ! determine end of range
         istop = min(ffromto(2) - ffromto(1) + 1,NBEST)
-        !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iloc,ithr,cost) proc_bind(close)
         do iloc=1,istop
             ithr = omp_get_thread_num() + 1
             opt_symaxes(ithr)%ospec%x = cand_axes%get_euler(order(iloc))

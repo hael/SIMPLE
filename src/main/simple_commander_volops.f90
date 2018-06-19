@@ -342,7 +342,7 @@ contains
             if( params%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(params%outstk,i)
         end do
-        call build%spproj_field%write('project_oris'//trim(TXT_EXT), [1,params%nptcls])
+        call build%spproj_field%write('reproject_oris'//trim(TXT_EXT), [1,params%nptcls])
         call simple_end('**** SIMPLE_PROJECT NORMAL STOP ****')
     end subroutine exec_reproject
 
@@ -625,6 +625,7 @@ contains
         call syme%kill
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
+        call simple_touch('SYMSRCH_FINISHED', errmsg='In: commander_volops :: exec_symsrch')
     end subroutine exec_symsrch
 
     !> for making picker references

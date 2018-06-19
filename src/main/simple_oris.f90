@@ -2171,7 +2171,7 @@ contains
                     &avail(i) = .true.
                 end do
             end subroutine gen_c1
-            
+
     end subroutine spiral_2
 
     !>  \brief  orders oris according to specscore

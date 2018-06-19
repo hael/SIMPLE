@@ -340,9 +340,10 @@ contains
                 call os%set_ori(i, o)
             end do
         else
-            call os%map3dshift22d( shvec )
+            !write(*,*)shvec
+            !call os%map3dshift22d( shvec )
             call os%rot(symaxis_ori)
-            call self%rotall_to_asym(os)
+            !call self%rotall_to_asym(os)
         endif
     end subroutine apply_sym_with_shift
 
@@ -457,7 +458,7 @@ contains
            a = matcreate(0, degree)
            do j=0,self%ncsym-1
               cnt = cnt+1
-                  degree = j*delta
+              degree = j*delta
               b = matcreate(1, degree)
               g = matmul(a,b) ! this is the c-symmetry
               call self%e_sym%set_euler(cnt,real(matextract(g)))

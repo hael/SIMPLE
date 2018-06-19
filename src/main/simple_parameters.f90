@@ -407,7 +407,8 @@ contains
         type(binoris)    :: bos
         type(sp_project) :: spproj
         type(ori)        :: o
-        integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate, idir, nsp_files
+        real             :: smpd
+        integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate, idir, nsp_files, box, nptcls
         logical          :: nparts_set, ssilent
         ssilent = .false.
         if( present(silent) ) ssilent = silent
@@ -902,33 +903,35 @@ contains
                                                    ! or the private_exec programs don't get what they need
             ! get nptcls/box/smpd from project file
             if( self%stream.eq.'no' )then
-                ! nptcls
-                if( .not. cline%defined('nptcls') )then
+                if( self%spproj_iseg==OUT_SEG )then
+                    call spproj%read_segment('out', self%projfile)
+                    call spproj%get_imginfo_from_osout(smpd, box, nptcls)
+                    call spproj%kill
+                    if( .not.cline%defined('smpd'))   self%smpd   = smpd
+                    if( .not.cline%defined('box'))    self%box    = box
+                    if( .not.cline%defined('nptcls')) self%nptcls = nptcls
+                else
+                    call bos%open(trim(self%projfile)) ! projfile opened here
+                    ! nptcls
+                    if( .not. cline%defined('nptcls') )then
+                        call bos%open(trim(self%projfile))
+                        self%nptcls = bos%get_n_records(self%spproj_iseg)
+                    endif
+                    ! smpd/box
+                    call o%new
                     select case(self%spproj_iseg)
-                        case(OUT_SEG)
-                            call spproj%read_segment('out', self%projfile) ! projfile opened here
-                            self%nptcls = spproj%get_nptcls_from_osout()
-                            call spproj%kill
-                            call bos%open(trim(self%projfile)) ! projfile opened here
+                        case(MIC_SEG)
+                            call bos%read_first_segment_record(MIC_SEG, o)
                         case DEFAULT
-                            call bos%open(trim(self%projfile)) ! projfile opened here
-                            self%nptcls = bos%get_n_records(self%spproj_iseg)
+                            call bos%read_first_segment_record(STK_SEG, o)
                     end select
+                    if( o%isthere('smpd') .and. .not. cline%defined('smpd') )then
+                        self%smpd = o%get('smpd')
+                    endif
+                    call bos%read_first_segment_record(STK_SEG, o)
+                    if( o%isthere('box') .and. .not. cline%defined('box')   ) self%box = nint(o%get('box'))
+                    call o%kill
                 endif
-                ! smpd/box
-                call o%new
-                select case(self%spproj_iseg)
-                    case(MIC_SEG)
-                        call bos%read_first_segment_record(MIC_SEG, o)
-                    case(STK_SEG, PTCL2D_SEG, PTCL3D_SEG, CLS2D_SEG)
-                        call bos%read_first_segment_record(STK_SEG, o)
-                    case(OUT_SEG)
-                        call bos%read_first_segment_record(OUT_SEG, o)
-                end select
-                if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
-                call bos%read_first_segment_record(STK_SEG, o)
-                if( o%isthere('box') .and. .not. cline%defined('box')   ) self%box = nint(o%get('box'))
-                call o%kill
             else
                 ! nothing to do for streaming, values set at runtime
             endif
@@ -1050,7 +1053,7 @@ contains
         ! set derived Fourier related variables
         self%dstep   = real(self%box-1)*self%smpd                  ! first wavelength of FT
         self%dsteppd = real(self%boxpd-1)*self%smpd                ! first wavelength of padded FT
-        if( .not. cline%defined('hp') ) self%hp = 0.7*self%dstep   ! high-pass limit
+        if( .not. cline%defined('hp') ) self%hp = 0.5*self%dstep   ! high-pass limit
         self%fny = 2.*self%smpd                                    ! Nyqvist limit
         if( .not. cline%defined('lpstop') )then                    ! default highest resolution lp
             self%lpstop = self%fny                                 ! deafult lpstop
