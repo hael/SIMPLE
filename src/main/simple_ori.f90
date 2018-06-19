@@ -79,6 +79,7 @@ type :: ori
     procedure          :: map3dshift22d
     procedure          :: mirror3d
     procedure          :: mirror2d
+    procedure          :: transp
     procedure, private :: geodesic_dist
     procedure, private :: geodesic_dist_scaled
     generic            :: operator(.geod.)   => geodesic_dist
@@ -811,6 +812,16 @@ contains
         euls = m2euler(rmat)
         call self%set_euler(euls)
     end subroutine mirror2d
+
+    subroutine transp( self )
+        class(ori), intent(inout) :: self
+        real :: euls(3), rmat(3,3)
+        euls = self%get_euler()
+        rmat = euler2m(euls)
+        rmat = transpose(rmat)
+        euls = m2euler(rmat)
+        call self%set_euler(euls)
+    end subroutine transp
 
     ! GEODESIC DISTANCE METRIC
 

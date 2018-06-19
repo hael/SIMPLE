@@ -153,11 +153,11 @@ contains
                 do i=1,build%spproj_field%get_noris()
                     s = nint(build%spproj_field%get(i, 'state'))
                     if( s == params%state )then
-                        call build%spproj_field%rot(i,orientation)
+                        call build%spproj_field%rot_transp(i,orientation)
                     endif
                 end do
             else
-                call build%spproj_field%rot(orientation)
+                call build%spproj_field%rot_transp(orientation)
             endif
         endif
         if( cline%defined('mul') )       call build%spproj_field%mul_shifts(params%mul)

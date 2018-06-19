@@ -334,7 +334,9 @@ contains
                 s = nint(os%get(i, 'state'))
                 if(s .ne. state) cycle
                 call os%map3dshift22d(i, shvec)
-                call os%rot(i,symaxis_ori)
+                ! transposed rotation to get the correct sign on rotation
+                ! the old fetching versus inserting issue
+                call os%rot_transp(i,symaxis_ori)
                 o = os%get_ori(i)
                 call self%rot_to_asym(o)
                 call os%set_ori(i, o)
@@ -342,7 +344,9 @@ contains
         else
             !write(*,*)shvec
             !call os%map3dshift22d( shvec )
-            call os%rot(symaxis_ori)
+            ! transposed rotation to get the correct sign on rotation
+            ! the old fetching versus inserting issue
+            call os%rot_transp(symaxis_ori)
             !call self%rotall_to_asym(os)
         endif
     end subroutine apply_sym_with_shift

@@ -134,6 +134,9 @@ type :: oris
     procedure, private :: rot_1
     procedure, private :: rot_2
     generic            :: rot => rot_1, rot_2
+    procedure, private :: rot_transp_1
+    procedure, private :: rot_transp_2
+    generic            :: rot_transp => rot_transp_1, rot_transp_2
     procedure, private :: median_1
     generic            :: median => median_1
     procedure          :: stats
@@ -2026,6 +2029,32 @@ contains
         o_tmp = e.compose.self%o(i)
         call self%o(i)%set_euler(o_tmp%get_euler())
     end subroutine rot_2
+
+    !>  \brief  is an Euler angle composer
+    subroutine rot_transp_1( self, e )
+        class(oris), intent(inout) :: self
+        class(ori),  intent(in)    :: e
+        type(ori) :: o_tmp, e_transp
+        integer   :: i
+        e_transp = e
+        call e_transp%transp
+        do i=1,self%n
+             o_tmp = e_transp.compose.self%o(i)
+             call self%o(i)%set_euler(o_tmp%get_euler())
+        end do
+    end subroutine rot_transp_1
+
+    !>  \brief  is an Euler angle composer
+    subroutine rot_transp_2( self, i, e )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        class(ori),  intent(in)    :: e
+        type(ori) :: o_tmp, e_transp
+        e_transp = e
+        call e_transp%transp
+        o_tmp = e_transp.compose.self%o(i)
+        call self%o(i)%set_euler(o_tmp%get_euler())
+    end subroutine rot_transp_2
 
     !>  \brief  for identifying the median value of parameter which within the cluster class
     function median_1( self, which ) result( med )

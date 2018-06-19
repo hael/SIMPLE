@@ -538,6 +538,9 @@ contains
         select case(params%dockmode)
             case('eul')
                 orientation = volpft_srch_minimize_eul()
+
+                call orientation%print_ori
+
                 vol_out     = rotvol(vol2, orientation)
             case('shift')
                 orientation = volpft_srch_minimize_shift()
