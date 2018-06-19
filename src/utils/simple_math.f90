@@ -2662,6 +2662,15 @@ contains
         end do
     end subroutine hpsort_5
 
+    !>  angle between two non-zero vectors in R^n
+    !! magnitude of v and w must equal 1
+    !! \theta = \arccos \frac {\mathbf v \cdot \mathbf w}{\left\Vert{\mathbf v}\right\Vert \left\Vert{\mathbf w}\right\Vert}
+    !! by definition of the cosine formula for dot product.
+    pure real function angleDist(v, w)
+        real, dimension(3), intent(in) :: v,w
+        angleDist = acos( dot_product(v, w) )
+    end function angleDist
+
     !>
     function min3( rarr ) result(min_3)
         real, intent(in) :: rarr(:)
