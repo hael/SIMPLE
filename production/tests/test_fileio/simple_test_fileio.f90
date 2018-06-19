@@ -10,7 +10,7 @@ program simple_test_fileio
     integer               :: box, nspace, msk, i,j,istat
     integer               :: un, u(1200)
     character(len=8)      :: datestr
-    character(len=STDLEN) :: folder,  oldfolder, curDir
+    character(len=STDLEN) :: folder,  oldfolder, curDir, cmd
     character(len=30)     :: fname
 
     global_verbose=.true.
@@ -21,7 +21,8 @@ program simple_test_fileio
     call simple_mkdir( trim(folder) )
     call simple_mkdir( trim(folder) ) !! double checking creation to print ignore statement
     print *," Listing of ", folder
-    call exec_cmdline(trim('ls -al '//folder))
+    cmd='ls -al '//trim(folder)
+    call execute_command_line(trim(cmd))
     print *," Changing directory to ", folder
     call simple_chdir( trim(folder),  oldfolder)
     call simple_getcwd(curDir)
