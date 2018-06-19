@@ -12,11 +12,13 @@ contains
     procedure :: new_frame
     procedure :: kill_frame
 end type starframes
+
 interface starframes
     module procedure constructor_frames
-end interface
+end interface starframes
+
 type stardoc
-    type(chash) :: data
+    type(str4arr), allocatable :: data(:)
     type(starframes), allocatable :: frames(:)
     integer     :: num_data_elements
     integer     :: num_frames
@@ -91,26 +93,30 @@ contains
         write(relionstar,'(A)') "data_"
         write(relionstar,'(A)') ""
         write(relionstar,'(A)') "loop_"
-        write(relionstar,'(A)') "_rlnImageName"
-        write(relionstar,'(A)') "_rlnVoltage"
-        write(relionstar,'(A)') "_rlnDefocusU"
-        write(relionstar,'(A)') "_rlnDefocusV"
-        write(relionstar,'(A)') "_rlnDefocusAngle"
-        write(relionstar,'(A)') "_rlnSphericalAberration"
-        write(relionstar,'(A)') "_rlnAmplitudeContrast"
-        write(relionstar,'(A)') "_rlnMagnification"
-        write(relionstar,'(A)') "_rlnDetectorPixelSize"
+        do i=1, self%num_data_elements
+            write(relionstar,'("_rln",A,3x,"#",I0)') self%data(i)%str, i
+        end do
+
+        ! write(relionstar,'(A)') "_rlnImageName"
+        ! write(relionstar,'(A)') "_rlnVoltage"
+        ! write(relionstar,'(A)') "_rlnDefocusU"
+        ! write(relionstar,'(A)') "_rlnDefocusV"
+        ! write(relionstar,'(A)') "_rlnDefocusAngle"
+        ! write(relionstar,'(A)') "_rlnSphericalAberration"
+        ! write(relionstar,'(A)') "_rlnAmplitudeContrast"
+        ! write(relionstar,'(A)') "_rlnMagnification"
+        ! write(relionstar,'(A)') "_rlnDetectorPixelSize"
 
         do i=1, self%num_frames
             statef = self%frames(i)%state
-            if (statef /= 0)then
-                imagename=int2str(self%get_i4(i,"frameid"))//'@'//&
+            if (statef .ne. 0)then
+                !! create zero-padded frame number and stackfile
+                imagename=int2str_pad(self%get_i4(i,"frameid"),5)//'@'//&
                     self%get_str(i,"stackfile")//'s'
 
                 stackfile = self%get_str(i,"stackfile")
                 call syslib_symlink(trim(stackfile), trim(stackfile)//'s',status=io_stat)
                 if(io_stat/=0)call simple_stop("in write; StarDoc")
-
 
                 starline =imagename//&
                     &" "//real2str(self%get_r4(i,"kv"))//&
@@ -126,6 +132,18 @@ contains
         end do
         call fclose(relionstar)
     end subroutine write
+
+    subroutine putdata(self, strarr)
+        class(stardoc), intent(inout) :: self
+        character(len=*), intent(in) :: strarr(:)
+        integer :: i
+        self%num_data_elements = size(strarr)
+        allocate(self%data(self%num_data_elements))
+        do i=1, self%num_data_elements
+            allocate(self%data(i)%str, source=strarr(i))
+        end do
+    end subroutine putdata
+
 
     subroutine put_r4 (self, iframe, key, val)
         class(stardoc), intent(inout) :: self

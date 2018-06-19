@@ -16,6 +16,7 @@ use simple_commander_cluster2D
 use simple_commander_refine3D
 use simple_commander_rec
 use simple_commander_sim
+use simple_commander_star
 use simple_commander_volops
 use simple_commander_tseries
 use simple_projection_frcs
@@ -30,6 +31,11 @@ type(import_movies_commander)        :: ximport_movies
 type(import_boxes_commander)         :: ximport_boxes
 type(import_particles_commander)     :: ximport_particles
 type(import_cavgs_commander)         :: ximport_cavgs
+
+! STAR PROJECT SUPPORT
+type(exportstar_project_commander)   :: xexportstar_project
+type(importstar_project_commander)   :: ximportstar_project
+type(print_star_project_info_commander):: xprint_star_project_info
 
 ! PART OF SP WORKFLOW
 type(make_pickrefs_commander)        :: xmake_pickrefs
@@ -115,6 +121,20 @@ select case(prg)
     case( 'import_cavgs' )
         call cline%parse()
         call ximport_cavgs%execute(cline)
+
+    ! STAR SUPPORT
+    case( 'exportstar_project' )
+        call cline%parse()
+        if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
+        call xexportstar_project%execute(cline)
+    case( 'importstar_project' )
+        call cline%parse()
+        if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
+        call ximportstar_project%execute(cline)
+    case( 'print_star_project_info' )
+        call cline%parse()
+        if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
+        call xprint_star_project_info%execute(cline)
 
     ! PART OF SP WORKFLOW
 

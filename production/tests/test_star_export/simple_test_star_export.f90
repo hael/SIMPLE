@@ -13,7 +13,7 @@ implicit none
 type(sp_project)     :: myproject
 type(binoris)        :: bos
 integer, allocatable :: strlens(:)
-type(starfile) :: s
+type(star_project) :: s
 ! type(parameters) :: p
 call s%export_motion_corrected_micrographs (trim('tmp_mc.star'))
 call exec_cmdline( 'relion_star_loopheader rlnMicrographNameNoDW rlnMicrographName > tmp_mc.star')
