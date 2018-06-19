@@ -13,18 +13,21 @@
 ! Public License.
 ! -----------------------------------------------------------------------------!
 program simple_omp_test
+
 include 'simple_lib.f08'
 use simple_timer_omp_test
 use simple_test_omp_basics
 implicit none
+include 'omp_lib.h'
 
 real              :: starttime, stoptime
 logical           :: be_verbose=.false.
 character(STDLEN) :: timestr
 call date_and_time(TIME=timestr)
 starttime = str2real(timestr)
-
 be_verbose = .true.
+
+write(*,'(a,i0)') 'OpenMP version: ', openmp_version
 
 call exec_OpenMP_timer_test(be_verbose)
 call date_and_time(TIME=timestr)

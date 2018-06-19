@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 !$ use omp_lib_kinds
 implicit none
 private
- public :: test_omp_basics, test_internal_omp, test_parallel_omp, test_shared_race_condition
+public :: test_omp_basics, test_internal_omp, test_parallel_omp, test_shared_race_condition
 contains
 
     subroutine test_omp_basics (n)

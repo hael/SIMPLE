@@ -7,7 +7,7 @@
 ! copies the data it needs to its GPU and proceeds.
 module simple_oacc_omp
     use openacc
-   use omp_lib
+    use omp_lib
 ! #include "openacc_lib.h"
 
     implicit none
@@ -16,6 +16,7 @@ module simple_oacc_omp
 
 contains
     subroutine test_oacc_omp
+        include 'openacc_lib.h'
         integer, parameter :: N = 10000
         real(8) x(N), y(N), z
         integer, allocatable :: offs(:)
@@ -23,7 +24,7 @@ contains
         real(8) ddot
 
         integer nthr,i,nsec,j
-        if (openacc_version >= 201306) then
+        if (openacc_version > 201306 .and. openmp_version > 201511) then
             ! Max at 4 threads for now
             nthr = omp_get_max_threads()
             if (nthr .gt. 4) nthr = 4
@@ -36,7 +37,10 @@ contains
             ! Attach each thread to a device
             !$omp PARALLEL private(i)
             i = omp_get_thread_num()
+#ifdef PGI
             call acc_set_device_num(i, acc_device_nvidia)
+#endif
+
             !$omp end parallel
             ! Break up the array into sections
             nsec = N / nthr
@@ -70,7 +74,7 @@ contains
             print *,"Multi-Device Parallel",z
 
         else
-            print *,"test_oacc_omp: OPENACC not supported. ", openacc_version
+            print *,"test_oacc_omp: gxOPENACC not supported. ", openacc_version
         endif
     end subroutine test_oacc_omp
 
