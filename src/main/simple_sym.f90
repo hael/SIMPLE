@@ -342,12 +342,11 @@ contains
                 call os%set_ori(i, o)
             end do
         else
-            !write(*,*)shvec
-            !call os%map3dshift22d( shvec )
+            call os%map3dshift22d( shvec )
             ! transposed rotation to get the correct sign on rotation
             ! the old fetching versus inserting issue
             call os%rot_transp(symaxis_ori)
-            !call self%rotall_to_asym(os)
+            call self%rotall_to_asym(os)
         endif
     end subroutine apply_sym_with_shift
 

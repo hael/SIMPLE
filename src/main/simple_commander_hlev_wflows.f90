@@ -290,7 +290,13 @@ contains
         call spproj%read(params%projfile)
         ! retrieve cavgs stack & FRCS info
         call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
-        states      = nint(spproj%os_cls2D%get_all('state'))
+        if( .not.spproj%os_cls2D%isthere('state') )then
+            ! start from import
+            allocate(states(ncavgs), source=1)
+        else
+            ! start from previous 2D
+            states = nint(spproj%os_cls2D%get_all('state'))
+        endif
         params%smpd = ctfvars%smpd
         orig_stk    = stk
         if( do_eo )call prep_eo_stks_init
