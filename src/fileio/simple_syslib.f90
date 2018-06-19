@@ -250,17 +250,18 @@ contains
     end subroutine exec_subprocess
 
     !>  Handles error from system call
-    subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
-        integer,               intent(in) :: exitstat, cmdstat
+    subroutine raise_sys_error( cmd, exit_status, cmdstat, cmdmsg )
+        integer,               intent(in) :: exit_status, cmdstat
         character(len=*),      intent(in) :: cmd
-        character(len=STDLEN), intent(in) :: cmdmsg
+        character(len=*),      intent(in) :: cmdmsg
         logical :: err
         err = .false.
-        if( exitstat /= 0 )then
-            write(*,*)'System error', exitstat,' for command: ', trim(adjustl(cmd))
+        if( exit_status /= 0 )then
+            write(*,*)'System error', exit_status,' for command: ', trim(adjustl(cmd))
             err = .true.
         endif
         if( cmdstat /= 0 )then
+            write(*,*)cmdmsg
             call simple_error_check(cmdstat,' command could not be executed: '//trim(adjustl(cmd)))
             write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
@@ -581,28 +582,53 @@ contains
         character(len=*),           intent(in)  :: newd   !< output pathname
         character(len=*), optional, intent(out) :: oldd
         integer,          optional, intent(out) :: status
-        character(len=STDLEN)                   :: olddir
+        character(len=LONGSTRLEN)               :: olddir
+        character(len=300)                      :: errmsg
+        character(len=:), allocatable :: targetdir
         integer :: io_status
-        logical :: dir_e, qq
+        logical :: dir_e, qq, check_exists
         if(present(status)) status = 1
         if(present(oldd))then
             call simple_getcwd(olddir)
             oldd = trim(olddir)
         endif
-        inquire(file=newd, exist=dir_e)
-        if(dir_e) then
+        if(allocated(targetdir))deallocate(targetdir)
+        call simple_full_path (trim(newd), targetdir, errmsg, check_exists)
+        write(*,*) " In simple_syslib chdir changing to target dir "//trim(targetdir)
 #ifdef INTEL
-            if( changedirqq(trim(newd)) .eqv. .false.) call simple_error_check(io_status, &
-                "syslib:: changedirqq failed  "//trim(newd))
+       inquire(DIRECTORY=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
 #else
-            io_status = chdir(newd)
+       inquire(file=trim(targetdir), EXIST=dir_e)
 #endif
-            if(io_status /= 0) call simple_error_check(io_status, &
-                "syslib:: simple_chdir failed to change path "//trim(newd))
+       if(dir_e) then
+
+            ! qq = changedirqq(trim(targetdir))
+            ! if(qq)io_status = 0
+            ! if( .not. qq) then
+            !     io_status=Ierrno()
+            !     call simple_error_check(io_status, "syslib:: changedirqq failed  "//trim(newd))
+            ! endif
+
+            io_status = chdir(trim(targetdir))
+
+            if(io_status /= 0)then
+                select case (io_status)
+                case (2)  ! ENOENT
+                    errmsg = 'The directory '//TRIM(targetdir)//' does not exist'
+                case (20) ! ENOTDIR
+                    errmsg = TRIM(targetdir)//' is not a directory'
+                case default
+                    write (errmsg,*) 'Error with code ', io_status
+                end select
+                write(*,*)  TRIM(errmsg)
+                call simple_error_check(io_status, &
+                    "syslib:: simple_chdir failed to change path "//trim(targetdir))
+                endif
         else
             call simple_stop("syslib:: simple_chdir directory does not exist ",__FILENAME__,__LINE__)
         endif
         if(present(status)) status = io_status
+        deallocate(targetdir)
     end subroutine simple_chdir
 
     !> \brief  Make directory -- fail when ignore is false
@@ -614,19 +640,21 @@ contains
         character(kind=c_char, len=:), allocatable :: path
         integer :: io_status, lenstr
         logical :: dir_e, ignore_here,  dir_p, qq
+
         ignore_here = .false.
         io_status=0
         inquire(file=trim(dir), exist=dir_e)
         if(.not. dir_e) then
             allocate(path, source=trim(adjustl(dir))//c_null_char)
-#ifdef INTEL
-            if(makedirqq(trim(path)) .eqv. .false.) call simple_error_check(io_status, &
-                    "syslib:: makedirqq failed creating "//trim(path))
-#else
-            io_status = makedir(trim(path))
+! #ifdef INTEL
+!             qq = makedirqq(trim(adjustl(path)))
+!             if(.not. qq) call simple_error_check(io_status, &
+!                     "syslib:: makedirqq failed creating "//trim(path))
+! #else
+            io_status = makedir(trim(adjustl(path)))
 
-#endif
-            inquire(file=trim(path), exist=dir_e)
+!#endif
+            inquire(file=trim(adjustl(path)), exist=dir_e)
             if(.not. dir_e) then
                 print *," syslib:: simple_mkdir failed to create "//trim(path)
             endif
@@ -658,15 +686,16 @@ contains
             allocate(path, source=trim(adjustl(d))//c_null_char)
             length = len_trim(adjustl(path))
 #ifdef INTEL
-            if( deldirqq(trim(path)).eqv. .false.) call simple_error_check(io_status, &
+            qq =  deldirqq(trim(adjustl(path)))
+            if(.not. qq) call simple_error_check(io_status, &
                     "syslib:: deldirqq failed  "//trim(path))
 #else
-            io_status = removedir(trim(path), length, count)
+            io_status = removedir(trim(adjustl(path)), length, count)
 #endif
             if(global_debug) print *,' simple_rmdir removed ', count, ' items'
             deallocate(path)
             if(io_status /= 0)then
-                err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
+                err = int(IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
                 call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
                 io_status=0
             endif
@@ -1198,8 +1227,9 @@ contains
     end subroutine simple_dump_mem_usage
 
     subroutine simple_full_path (infile, absolute_name, errmsg, check_exists)
-        character(len=*),              intent(in)  :: infile, errmsg
+        character(len=*),              intent(in)  :: infile
         character(len=:), allocatable, intent(out) :: absolute_name
+        character(len=*), optional,    intent(in) :: errmsg
         logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                                :: cstring
         character(len=LINE_MAX_LEN),       target  :: fstr
@@ -1213,7 +1243,7 @@ contains
         if( check_exists_here )then
             if( .not.file_exists(trim(infile)) )then
                 write(*,*)'File does not exists: ', trim(infile)
-                write(*,*)trim(errmsg)
+                if(present(errmsg)) write(*,*)trim(errmsg)
                 stop
             endif
         endif
@@ -1221,7 +1251,7 @@ contains
         cstring      = c_loc(fstr)
         infilename_c = trim(infile)//achar(0)
         status       = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
-        if(global_debug) print *, " out string ", trim(outfilename_c(1:lengthout))
+        if(global_debug) print *, " out string "//trim(outfilename_c(1:lengthout))
         if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
