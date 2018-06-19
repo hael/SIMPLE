@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_cmd_dict ! use all in there
 implicit none
 
-public :: cmdline, cmdline_err
+public :: cmdarg, cmdline, cmdline_err
 private
 #include "simple_local_flags.inc"
 
@@ -15,7 +15,13 @@ type cmdarg
     character(len=:), allocatable :: key, carg
     logical                       :: defined=.false.
     real                          :: rarg=0.
+contains
+    procedure :: new
+    final     :: destructor
 end type cmdarg
+interface cmdarg
+    module procedure constructor
+end interface
 
 type cmdline
     type(cmdarg)          :: cmds(MAX_CMDARGS)
@@ -31,9 +37,11 @@ contains
     generic            :: assignment(=) => assign
     procedure          :: set_1
     procedure          :: set_2
+    procedure          :: set_3
+    procedure          :: set_4
     procedure, private :: lookup
     procedure          :: get_keys
-    generic            :: set => set_1, set_2
+    generic            :: set => set_1, set_2,set_3, set_4
     procedure          :: delete
     procedure          :: checkvar
     procedure          :: check
@@ -45,6 +53,31 @@ contains
 end type cmdline
 
 contains
+    function constructor( key, carg, rarg ) result( self )
+        character(len=*),  intent(in) :: key
+        character(len=*),  intent(in), optional :: carg
+        real,              intent(in), optional :: rarg
+        type(cmdarg) :: self
+        call self%new( key, carg, rarg )
+    end function constructor
+
+    subroutine new( self, key, carg, rarg )
+        class(cmdarg) :: self
+        character(len=*),  intent(in) :: key
+        character(len=*),  intent(in), optional :: carg
+        real,              intent(in), optional :: rarg
+        allocate(self%key, source=key)
+        if(present(carg)) allocate(self%carg, source=carg)
+        if(present(rarg)) self%rarg = rarg
+    end subroutine new
+
+    subroutine destructor(self)
+        type(cmdarg) :: self
+        if(allocated(self%carg)) deallocate(self%carg)
+        if(allocated(self%key)) deallocate(self%key)
+    end subroutine destructor
+
+
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self )
@@ -281,6 +314,68 @@ contains
             self%cmds(which)%carg = trim(carg)
         endif
     end subroutine set_2
+
+   !> \brief  for setting a command line argument with cmdarg object
+    subroutine set_3( self, cmarg )
+        class(cmdline),   intent(inout) :: self
+        type(cmdarg), intent(in)    :: cmarg
+        integer :: which, n
+     !   do n=1,size(cmarg)
+            which = self%lookup(cmarg%key)
+            if( which == 0 )then
+                self%argcnt = self%argcnt + 1
+                if( self%argcnt > MAX_CMDARGS )then
+                    write(*,*) 'self%argcnt: ', self%argcnt
+                    write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                    stop 'ERROR! stack overflow; simple_cmdline :: set_3'
+                endif
+                self%cmds(self%argcnt)%key = trim(cmarg%key)
+                if(allocated(cmarg%carg))then
+                    self%cmds(self%argcnt)%carg = trim(cmarg%carg)
+                else
+                    self%cmds(self%argcnt)%rarg = cmarg%rarg
+                endif
+                self%cmds(self%argcnt)%defined = .true.
+            else
+                if(allocated(cmarg%carg))then
+                    self%cmds(which)%carg = trim(cmarg%carg)
+                else
+                    self%cmds(self%argcnt)%rarg = cmarg%rarg
+                endif
+            endif
+      !  end do
+    end subroutine set_3
+
+    !> \brief  for setting a command line argument with a list of cmdarg objects
+    subroutine set_4( self, cmarg )
+        class(cmdline),   intent(inout) :: self
+        type(cmdarg), intent(in)    :: cmarg(:)
+        integer :: which, n
+        do n=1,size(cmarg)
+            which = self%lookup(cmarg(n)%key)
+            if( which == 0 )then
+                self%argcnt = self%argcnt + 1
+                if( self%argcnt > MAX_CMDARGS )then
+                    write(*,*) 'self%argcnt: ', self%argcnt
+                    write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                    stop 'ERROR! stack overflow; simple_cmdline :: set_3'
+                endif
+                self%cmds(self%argcnt)%key = trim(cmarg(n)%key)
+                if(allocated(cmarg(n)%carg))then
+                    self%cmds(self%argcnt)%carg = trim(cmarg(n)%carg)
+                else
+                    self%cmds(self%argcnt)%rarg = cmarg(n)%rarg
+                endif
+                self%cmds(self%argcnt)%defined = .true.
+            else
+                if(allocated(cmarg(n)%carg))then
+                    self%cmds(which)%carg = trim(cmarg(n)%carg)
+                else
+                    self%cmds(self%argcnt)%rarg = cmarg(n)%rarg
+                endif
+            endif
+        end do
+    end subroutine set_4
 
     !> \brief for removing a command line argument
     subroutine delete( self, key )

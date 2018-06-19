@@ -127,7 +127,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=LONGSTRLEN) :: refs_even=''
     character(len=LONGSTRLEN) :: refs_odd=''
-    character(len=LONGSTRLEN) :: starfile=''
+    character(len=LONGSTRLEN) :: starfile=''          !< STAR-formatted EM file (proj.star)
     character(len=LONGSTRLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
     character(len=LONGSTRLEN) :: stktab=''            !< list of per-micrograph stacks
     character(len=LONGSTRLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
