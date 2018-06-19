@@ -1,6 +1,6 @@
 module CUDA
-  use cuda_h
-  use cuda_runtime_h
+use cuda_h
+use cuda_runtime_h
 implicit none
 contains
 

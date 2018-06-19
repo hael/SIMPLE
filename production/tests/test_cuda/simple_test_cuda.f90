@@ -18,16 +18,30 @@ program simple_test_cuda
     include 'simple_lib.f08'
     use simple_image,            only: image
     use gnufor2
-
     use simple_cuda
+    use simple_timer_cuda
+    implicit none
+    type (timer_cuda) :: ctimer
+    type (cudaEvent_t)  :: ev1,ev2
+    integer(timer_int_kind) :: t1
 
     call check_cuda_device
-    call test_FortCUDA_kernels(0.)
+  !  call set_cuda_device(0)
+  !  call test_FortCUDA_kernels(0.)
+
+    write (*,'(A)') 'SIMPLE_CUDA timer setup'
+    ctimer = timer_cuda()
+
+    write (*,'(A)') 'TESTING CUDAFOR TIMING'
+    call ctimer%nowCU()
+    t1=tic()
+    ev1=ctimer%ticU()
+    ev2=ctimer%ticU()
+    write (*,'(A)') 'SIMPLE_CUDA timer CPU/CUDA', toc(t1), ctimer%tocU(ev1), ctimer%tocU(ev2)
 
 
 #if defined(PGI)
     use simple_cuda_tests
-
     use simple_timer_cuda
     use cudafor
     implicit none

@@ -4,20 +4,21 @@ use, intrinsic :: ISO_C_BINDING
 use CUDA
 implicit none
 
-public :: check_cuda_device, test_FortCUDA_kernels
-private
+! public :: check_cuda_device, test_FortCUDA_kernels
+! private
 
-#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 
 contains
 
     subroutine check_cuda_device
         integer :: device
-        integer :: deviceCount=0
-        integer :: gpuDeviceCount=0
+        integer :: deviceCount
+        integer :: gpuDeviceCount
         type( cudaDeviceProp ) :: properties
         integer(c_int) :: cudaResultCode
-
+        deviceCount=0
+        gpuDeviceCount=0
         ! Obtain the device count from the system and check for errors
         cudaResultCode = cudaGetDeviceCount(deviceCount)
         if (cudaResultCode /= cudaSuccess) then
@@ -52,8 +53,58 @@ contains
             print*, "    deviceOverlap:", properties%deviceOverlap
             print*, "    multiProcessorCount:", properties%multiProcessorCount
         end do
-        print*, " Check CUDA completed "
+        print *, " Check CUDA completed "
     end subroutine check_cuda_device
+
+    subroutine set_cuda_device(d)
+        integer , intent(in) :: d
+        integer :: device
+        integer :: deviceCount
+        type( cudaDeviceProp ) :: properties
+        integer(c_int) :: cudaResultCode
+
+        deviceCount=0
+        ! Obtain the device count from the system and check for errors
+        cudaResultCode = cudaGetDeviceCount(deviceCount)
+        if (cudaResultCode /= cudaSuccess) then
+            call simple_stop( "simple_cuda::set_cuda_device  cudaGetDeviceCount failed ")
+
+        end if
+        if (d >= deviceCount) call simple_stop( "simple_cuda::set_cuda_device index too high ")
+
+        cudaResultCode = cudaGetDeviceProperties(properties, d)
+        if (cudaResultCode /= cudaSuccess) then
+            call simple_stop( "simple_cuda::set_cuda_device cudaGetDeviceProperties failed ")
+        endif
+
+        cudaResultCode = cudaSetDevice(d)
+        if (cudaResultCode /= cudaSuccess) then
+            call simple_stop( "simple_cuda::set_cuda_device cudaSetDevice failed ")
+        endif
+
+    end subroutine set_cuda_device
+
+    function get_cuda_property(d) result(properties)
+         integer , intent(in) :: d
+         integer :: deviceCount
+         type( cudaDeviceProp ) :: properties
+         integer(c_int) :: cudaResultCode
+
+         deviceCount=0
+
+        ! Obtain the device count from the system and check for errors
+        cudaResultCode = cudaGetDeviceCount(deviceCount)
+        if (cudaResultCode /= cudaSuccess) then
+            call simple_stop( "simple_cuda::set_cuda_device  cudaGetDeviceCount failed ")
+
+        end if
+        if (d >= deviceCount) call simple_stop( "simple_cuda::set_cuda_device index too high ")
+
+        cudaResultCode = cudaGetDeviceProperties(properties, d)
+        if (cudaResultCode /= cudaSuccess) then
+            call simple_stop( "simple_cuda::set_cuda_device cudaGetDeviceProperties failed ")
+        endif
+    end function get_cuda_property
 
 
     subroutine test_FortCUDA_kernels (arg)
@@ -199,7 +250,7 @@ contains
 
         do i = 1, num_streams
 
-            call vecAddF95(d_A(i), d_B(i), d_C(i), nblk, nthrd, NTHREADS, stream(i))
+            call vecAdd_Float(d_A(i), d_B(i), d_C(i), nblk, nthrd, NTHREADS, stream(i))
 
         enddo
 

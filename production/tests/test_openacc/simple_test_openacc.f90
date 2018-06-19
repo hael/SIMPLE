@@ -16,6 +16,8 @@ program simple_test_openacc
 #ifdef  _OPENACC
     print *,' simple_test_openacc OpenACC is enabled '
     print *,' OpenACC version : ', openacc_version
+    call  saxpy_test_omp
+    call  saxpy_test_acc
 
     call test_oacc_basics
     call test_oacc_vecadd
@@ -115,5 +117,61 @@ contains
 #endif
 
     end subroutine test_oacc_basics
+
+
+   subroutine saxpy_test_omp
+       implicit none
+       integer, parameter :: dp = selected_real_kind(15)
+       integer, parameter :: ip = selected_int_kind(15)
+       integer(ip) :: i,n
+       real(dp),dimension(:),allocatable :: x, y
+       real(dp) :: a,start_time, end_time
+       n=500000000
+       allocate(x(n),y(n))
+       !$omp parallel sections
+       !$omp section
+       x = 1.0
+       !$omp section
+       y = 1.0
+       !$omp end parallel sections
+       a = 2.0
+       call cpu_time(start_time)
+       !$omp parallel do default(shared) private(i)
+       do i = 1, n
+           y(i) = y(i) + a * x(i)
+       end do
+       !$omp end parallel do
+       call cpu_time(end_time)
+       deallocate(x,y)
+       print *, 'SAXPY Time (OpenMP): ', end_time - start_time, 'in secs'
+   end subroutine saxpy_test_omp
+
+    subroutine saxpy_test_acc
+        use omp_lib
+        implicit none
+        integer :: i,n
+        real,dimension(:),allocatable :: x, y
+        real :: a,start_time, end_time
+        n=500000000
+        allocate(x(n),y(n))
+        a = 2.0
+        !$acc data create(x,y) copyin(a)
+        !$acc parallel
+        x(:) = 1.0
+        !$acc end parallel
+        !$acc parallel
+        y(:) = 1.0
+        !$acc end parallel
+        start_time = omp_get_wtime()
+        !$acc parallel loop
+        do i = 1, n
+            y(i) = y(i) + a * x(i)
+        end do
+        !$acc end parallel loop
+        end_time = omp_get_wtime()
+        !$acc end data
+        deallocate(x,y)
+        print *,'SAXPY Time (OpenACC): ', end_time - start_time, 'in secs'
+    end subroutine saxpy_test_acc
 
 end program simple_test_openacc

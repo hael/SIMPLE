@@ -17,23 +17,63 @@
 ................................................................................
 */
 
+/*
+ * Modified by Michael Eager (michael.eager@monash.edu) 2018
+ */
+
 #include "cuda.h"
 #include <stdio.h>
 
-__global__ void vecAdd( const float *A, const float *B, float *C, int N )
+__global__ void vecAddInt( const int *A, const int *B, int *C, int N )
 {
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
-    if ( i < N ) {
-	C[i] = A[i] + B[i];
-    }
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+  if ( i < N ) {
+    C[i] = A[i] + B[i];
+  }
 }
+__global__ void vecAddFloat( const float *A, const float *B, float *C, int N )
+{
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+  if ( i < N ) {
+    C[i] = A[i] + B[i];
+  }
+}
+__global__ void vecAddConstInt( const int *A, const int B, int *C, int N )
+{
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+  if ( i < N ) {
+    C[i] = A[i] + B;
+  }
+}
+__global__ void vecAddConstFloat( const float *A, const float B, float *C, int N )
+{
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+  if ( i < N ) {
+    C[i] = A[i] + B;
+  }
+}
+
 
 extern "C"
 {
-    void vecaddf95(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
-	           int N, cudaStream_t *stream)
-    {
-	vecAdd<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
-    }
-
+  void vecadd_float_(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
+                   int N, cudaStream_t *stream)
+  {
+    vecAddFloat<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
+  }
+  void vecadd_int_(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
+                 int N, cudaStream_t *stream)
+  {
+    vecAddInt<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
+  }
+  void vecaddconst_int(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
+                 int N, cudaStream_t *stream)
+  {
+    vecAddConstInt<<<*dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);
+  }
+  void vecaddconst_float(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
+                   int N, cudaStream_t *stream)
+  {
+    vecAddConstFloat<<<*dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);
+  }
 }

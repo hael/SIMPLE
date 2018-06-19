@@ -1,5 +1,6 @@
-/*  BAsed on Tau 2.27 example gpu/cuda/openmp */
-
+/*  Based on Tau 2.27 example gpu/cuda/openmp
+ *  Modified by Michael Eager (michael.eager@monash.edu) 2018
+ */
 #include <omp.h>
 #include <stdio.h>      // stdio functions are used since C++ streams aren't necessarily thread safe
 #include <unistd.h>
