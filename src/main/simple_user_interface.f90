@@ -483,7 +483,6 @@ contains
         write(*,'(A)') refine3D%name
         write(*,'(A)') refine3D_init%name
         write(*,'(A)') scale_project%name
-        write(*,'(A)') symsrch%name
         write(*,'(A)') tseries_track%name
         stop
     end subroutine list_distr_prgs_in_ui
@@ -524,6 +523,7 @@ contains
         write(*,'(A)') scale%name
         write(*,'(A)') stack%name
         write(*,'(A)') stackops%name
+        write(*,'(A)') symsrch%name
         write(*,'(A)') update_project%name
         write(*,'(A)') vizoris%name
         write(*,'(A)') volops%name
