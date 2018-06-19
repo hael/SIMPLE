@@ -1,7 +1,7 @@
 # - Finds OpenMP support
 # This module can be used to detect OpenMP support in a compiler.
 # If the compiler supports OpenMP, the flags required to compile with
-# openmp support are set.  
+# openmp support are set.
 #
 # This module was modified from the standard FindOpenMP module to find Fortran
 # flags.
@@ -29,14 +29,14 @@
 INCLUDE (${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake)
 
 SET (OpenMP_Fortran_FLAG_CANDIDATES
+     #Gnu
+     "-fopenmp"
      #Microsoft Visual Studio
      "/openmp"
      #Intel windows
-     "/Qopenmp" 
+     "/Qopenmp"
      #Intel
-     "-qopenmp" 
-     #Gnu
-     "-fopenmp"
+     "-qopenmp"
      #Sun
      "-xopenmp"
      #HP
@@ -59,46 +59,52 @@ FOREACH (FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
     SET (CMAKE_REQUIRED_FLAGS "${FLAG}")
     UNSET (OpenMP_FLAG_DETECTED CACHE)
     MESSAGE (STATUS "Try OpenMP Fortran flag = [${FLAG}]")
-    FILE (WRITE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90" 
-"
+    FILE (WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90 "
 program TestOpenMP
- use omp_lib
- write(*,'(I2)',ADVANCE='NO') omp_get_num_procs()
+   use omp_lib
+write(*,'(I2)',ADVANCE='NO') omp_get_num_procs()
 end program TestOpenMP
 ")
     SET (MACRO_CHECK_FUNCTION_DEFINITIONS
-         "-DOpenMP_FLAG_DETECTED ${CMAKE_REQUIRED_FLAGS}")
-    TRY_RUN (OpenMP_RUN_FAILED OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
-        ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
-        COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
-        CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
-        COMPILE_OUTPUT_VARIABLE OUTPUT
-        RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
+      "-DOpenMP_FLAG_DETECTED ${CMAKE_REQUIRED_FLAGS}")
+    try_compile(OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
+      ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
+      COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
+      CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
+      COMPILE_OUTPUT_VARIABLE OUTPUT
+      RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
+
+    # TRY_RUN (OpenMP_RUN_FAILED OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
+    #     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
+    #     COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
+    #     CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
+    #     COMPILE_OUTPUT_VARIABLE OUTPUT
+    #     RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
     IF (OpenMP_FLAG_DETECTED)
         FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
              "Determining if the Fortran compiler supports OpenMP passed with "
-             "the following output:\n${OUTPUT}\n\n")
+             "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n")
         SET (OpenMP_FLAG_DETECTED 1)
-        IF (OpenMP_RUN_FAILED)
-            MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
-        ENDIF (OpenMP_RUN_FAILED)
+       # IF (OpenMP_RUN_FAILED)
+       #     MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
+       # ENDIF (OpenMP_RUN_FAILED)
         SET (OMP_NUM_PROCS ${OMP_NUM_PROCS_INTERNAL} CACHE
              STRING "Number of processors OpenMP may use" FORCE)
         SET (OpenMP_Fortran_FLAGS_INTERNAL "${FLAG}")
         BREAK ()
-    ELSE ()
+      ELSE ()
         FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
              "Determining if the Fortran compiler supports OpenMP failed with "
-             "the following output:\n${OUTPUT}\n\n")
+             "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n")
         SET (OpenMP_FLAG_DETECTED 0)
     ENDIF (OpenMP_FLAG_DETECTED)
 ENDFOREACH (FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
 
 SET (OpenMP_Fortran_FLAGS "${OpenMP_Fortran_FLAGS_INTERNAL}"
-     CACHE STRING "Fortran compiler flags for OpenMP parallization")
+     CACHE STRING "Fortran compiler flags for OpenMP parallelism")
 
 # handle the standard arguments for FIND_PACKAGE
-FIND_PACKAGE_HANDLE_STANDARD_ARGS (OpenMP_Fortran DEFAULT_MSG 
+FIND_PACKAGE_HANDLE_STANDARD_ARGS (OpenMP_Fortran DEFAULT_MSG
     OpenMP_Fortran_FLAGS)
 
 MARK_AS_ADVANCED(OpenMP_Fortran_FLAGS)

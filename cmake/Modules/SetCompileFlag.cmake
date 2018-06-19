@@ -66,50 +66,55 @@ FUNCTION(SET_COMPILE_FLAG FLAGVAR FLAGVAL LANG)
 
   # Now, loop over each flag
   FOREACH(flag ${FLAGLIST})
+    list(FIND ${FLAGVAR} "${flag}" FLAG_EXISTS_ALREADY)
+    if(NOT FLAG_EXISTS_ALREADY)
+      UNSET(FLAG_WORKS)
+      # Check the flag for the given language
+      IF(LANG STREQUAL "C")
+        CHECK_C_COMPILER_FLAG("${flag}" FLAG_WORKS)
+      ELSEIF(LANG STREQUAL "CXX")
+        CHECK_CXX_COMPILER_FLAG("${flag}" FLAG_WORKS)
+      ELSEIF(LANG STREQUAL "Fortran")
+	      if(FC_flagcheck)
+  	      CHECK_Fortran_COMPILER_FLAG("${flag}" FLAG_WORKS)
+	      else()
 
-    UNSET(FLAG_WORKS)
-    # Check the flag for the given language
-    IF(LANG STREQUAL "C")
-      CHECK_C_COMPILER_FLAG("${flag}" FLAG_WORKS)
-    ELSEIF(LANG STREQUAL "CXX")
-      CHECK_CXX_COMPILER_FLAG("${flag}" FLAG_WORKS)
-    ELSEIF(LANG STREQUAL "Fortran")
-	    if(FC_flagcheck)
-  	    CHECK_Fortran_COMPILER_FLAG("${flag}" FLAG_WORKS)
-	    else()
-
-        # There is no nice function to do this for FORTRAN, so we must manually
-        # create a test program and check if it compiles with a given flag.
-        SET(TESTFILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}")
-        SET(TESTFILE "${TESTFILE}/CMakeTmp/testFortranFlags.f90")
-        FILE(WRITE "${TESTFILE}"
-          "
+          # There is no nice function to do this for FORTRAN, so we must manually
+          # create a test program and check if it compiles with a given flag.
+          SET(TESTFILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}")
+          SET(TESTFILE "${TESTFILE}/CMakeTmp/testFortranFlags.f90")
+          FILE(WRITE "${TESTFILE}"
+            "
 program dummyprog
   i = 5
 end program dummyprog
 ")
-        TRY_COMPILE(FLAG_WORKS ${CMAKE_BINARY_DIR} ${TESTFILE}
-          COMPILE_DEFINITIONS "${flag}" OUTPUT_VARIABLE OUTPUT)
+          TRY_COMPILE(FLAG_WORKS ${CMAKE_BINARY_DIR} ${TESTFILE}
+            COMPILE_DEFINITIONS "${flag}" OUTPUT_VARIABLE OUTPUT)
 
-        # Check that the output message doesn't match any errors
-        FOREACH(rx ${FAIL_REGEX})
-          IF("${OUTPUT}" MATCHES "${rx}")
-            SET(FLAG_WORKS FALSE)
-          ENDIF("${OUTPUT}" MATCHES "${rx}")
-        ENDFOREACH(rx ${FAIL_REGEX})
-      endif(FC_flagcheck)
-    ELSE()
-      MESSAGE(FATAL_ERROR "Unknown language in SET_COMPILE_FLAGS: ${LANG}")
-    ENDIF(LANG STREQUAL "C")
+          # Check that the output message doesn't match any errors
+          FOREACH(rx ${FAIL_REGEX})
+            IF("${OUTPUT}" MATCHES "${rx}")
+              SET(FLAG_WORKS FALSE)
+            ENDIF("${OUTPUT}" MATCHES "${rx}")
+          ENDFOREACH(rx ${FAIL_REGEX})
+        endif(FC_flagcheck)
+      ELSE()
+        MESSAGE(FATAL_ERROR "Unknown language in SET_COMPILE_FLAGS: ${LANG}")
+      ENDIF(LANG STREQUAL "C")
 
-    # If this worked, use these flags, otherwise use other flags
-    IF(FLAG_WORKS)
-      # Append this flag to the end of the list that already exists
-      SET(${FLAGVAR} "${FLAGVAL} ${flag}" CACHE STRING
-        "Set the ${FLAGVAR} flags" FORCE)
+      # If this worked, use these flags, otherwise use other flags
+      IF(FLAG_WORKS)
+        # Append this flag to the end of the list that already exists
+        SET(${FLAGVAR} "${FLAGVAL} ${flag}" CACHE STRING
+          "Set the ${FLAGVAR} flags" FORCE)
+        SET(FLAG_FOUND TRUE)
+        BREAK() # We found something that works, so exit
+      ENDIF(FLAG_WORKS)
+    else()
       SET(FLAG_FOUND TRUE)
-      BREAK() # We found something that works, so exit
-    ENDIF(FLAG_WORKS)
+      BREAK()
+    endif()
   ENDFOREACH(flag ${FLAGLIST})
 
   # Raise an error if no flag was found
