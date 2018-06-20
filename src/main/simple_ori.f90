@@ -3,7 +3,7 @@ module simple_ori
 include 'simple_lib.f08'
 implicit none
 
-public :: ori, test_ori, euler2m
+public :: ori, test_ori, euler2m, m2euler
 private
 
 !>  orientation parameter stuct and operations
@@ -81,9 +81,7 @@ type :: ori
     procedure          :: mirror2d
     procedure          :: transp
     procedure, private :: geodesic_dist
-    procedure, private :: geodesic_dist_scaled
     generic            :: operator(.geod.)   => geodesic_dist
-    generic            :: operator(.geodsc.) => geodesic_dist_scaled
     procedure, private :: euldist
     procedure, private :: inplrotdist
     generic            :: operator(.compose.)     => compeuler
@@ -280,24 +278,16 @@ contains
     end subroutine rnd_euler_1
 
     !>  \brief  for generating a random Euler angle neighbour to o_prev
-    subroutine rnd_euler_2( self, o_prev, athres, proj )
+    subroutine rnd_euler_2( self, o_prev, athres )
         class(ori),        intent(inout) :: self   !< instance
         class(ori),        intent(in)    :: o_prev !< template ori
         real,              intent(in)    :: athres !< angle threshold in degrees
-        logical, optional, intent(in)    :: proj   !< projection only thres or not
         real    :: athres_rad, dist
-        logical :: pproj
-        pproj = .false.
-        if( present(proj) ) pproj = proj
         athres_rad = deg2rad(athres)
         dist = 2.*athres_rad
         do while( dist > athres_rad )
             call self%rnd_euler_1
-            if( pproj )then
-                dist = self.euldist.o_prev
-            else
-                dist = self.geodsc.o_prev
-            endif
+            dist = self.euldist.o_prev
         end do
     end subroutine rnd_euler_2
 
@@ -855,20 +845,12 @@ contains
         rmat2 = euler2m(euls2)
         diffmat = Imat - matmul(rmat1,transpose(rmat2))
         sumsq   = sum(diffmat*diffmat)
-        if( sumsq > 0.0001 )then
+        if( sumsq > 1e-6 )then
             geodesic_dist = sqrt(sumsq)
         else
             geodesic_dist = 0.
         endif
     end function geodesic_dist
-
-    !>  \brief  this is the same metric as above, scaled to [0,pi]
-    !! \param self1,self2 ori class type rotational matrices
-    pure real function geodesic_dist_scaled( self1, self2 )
-        class(ori), intent(in) :: self1, self2
-        real, parameter :: old_max = 2.*sqrt(2.)
-        geodesic_dist_scaled = self1%geodesic_dist(self2)*(pi/old_max)
-    end function geodesic_dist_scaled
 
     ! CLASSIC DISTANCE METRICS
 

@@ -71,7 +71,6 @@ type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(cluster_oris_commander)              :: xcluster_oris
 type(rotmats2oris_commander)              :: xrotmats2oris
 type(txt2project_commander)               :: xtxt2project
 type(project2txt_commander)               :: xproject2txt
@@ -706,15 +705,6 @@ select case(prg)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
 
-    case( 'cluster_oris' )
-        ! for clustering orientations based on geodesic distance
-        keys_required(1) = 'oritab'
-        keys_required(2) = 'ncls'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'oritype'
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:2))
-        call xcluster_oris%execute(cline)
     case( 'rotmats2oris' )
         ! converts a text file (9 records per line) describing rotation matrices into a SIMPLE oritab
         keys_required(1)  = 'infile'

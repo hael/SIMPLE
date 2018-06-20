@@ -11,7 +11,6 @@ use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 implicit none
 
-public :: cluster_oris_commander
 public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
@@ -19,10 +18,6 @@ public :: rotmats2oris_commander
 public :: vizoris_commander
 private
 
-type, extends(commander_base) :: cluster_oris_commander
-  contains
-    procedure :: execute      => exec_cluster_oris
-end type cluster_oris_commander
 type, extends(commander_base) :: make_oris_commander
   contains
     procedure :: execute      => exec_make_oris
@@ -45,43 +40,6 @@ type, extends(commander_base) :: vizoris_commander
 end type vizoris_commander
 
 contains
-
-    !> cluster_oris is a program for clustering orientations based on geodesic distance
-    subroutine exec_cluster_oris( self, cline )
-        use simple_clusterer,   only: cluster_shc_oris
-        class(cluster_oris_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
-        type(parameters)     :: params
-        type(builder)        :: build
-        type(oris)           :: os_class
-        integer              :: icls, iptcl, numlen
-        real                 :: avgd, sdevd, maxd, mind
-        integer, allocatable :: clsarr(:)
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        call cluster_shc_oris(build%spproj_field, params%ncls)
-        ! calculate distance statistics
-        call build%spproj_field%cluster_diststat(avgd, sdevd, maxd, mind)
-        write(*,'(a,1x,f15.6)') 'AVG      GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(avgd)
-        write(*,'(a,1x,f15.6)') 'AVG SDEV GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(sdevd)
-        write(*,'(a,1x,f15.6)') 'AVG MAX  GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(maxd)
-        write(*,'(a,1x,f15.6)') 'AVG MIN  GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(mind)
-        ! generate the class documents
-        numlen = len(int2str(params%ncls))
-        do icls=1,params%ncls
-            call build%spproj_field%get_pinds(icls, 'class', clsarr)
-            if( allocated(clsarr) )then
-                call os_class%new(size(clsarr))
-                do iptcl=1,size(clsarr)
-                    call os_class%set_ori(iptcl, build%spproj_field%get_ori(clsarr(iptcl)))
-                end do
-                call os_class%write('oris_class'//int2str_pad(icls,numlen)//trim(TXT_EXT), [1,size(clsarr)])
-                deallocate(clsarr)
-                call os_class%kill
-            endif
-        end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLUSTER_ORIS NORMAL STOP ****')
-    end subroutine exec_cluster_oris
 
     !> for making SIMPLE orientation/parameter files
     subroutine exec_make_oris( self, cline )

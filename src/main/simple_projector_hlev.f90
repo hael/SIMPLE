@@ -6,9 +6,7 @@ module simple_projector_hlev
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_image,      only: image
-use simple_parameters, only: params_glob
 use simple_projector,  only: projector
-use simple_kbinterpol, only: kbinterpol
 implicit none
 
 contains
@@ -22,8 +20,14 @@ contains
         type(image),       allocatable :: imgs(:)   !< resulting images
         type(image),       allocatable :: imgs_pad(:)
         type(projector)  :: vol_pad
-        integer          :: n, i, ithr
-        call vol_pad%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
+        integer          :: n, i, ithr, ldim(3), boxpd, ldim_pd(3), box
+        real             :: smpd
+        ldim    = vol%get_ldim()
+        box     = ldim(1)
+        smpd    = vol%get_smpd()
+        boxpd   = 2 * round2even(KBALPHA * real(box / 2))
+        ldim_pd = [boxpd,boxpd,boxpd]
+        call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
         call vol_pad%fft
         if( present(top) )then
@@ -31,17 +35,17 @@ contains
         else
             n = o%get_noris()
         endif
-        allocate( imgs(n), imgs_pad(params_glob%nthr), stat=alloc_stat )
+        allocate( imgs(n), imgs_pad(nthr_glob), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('project; simple_projector')
         ! construct thread safe images
         do i=1,n
-            call imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd, wthreads=.false.)
+            call imgs(i)%new([box,box,1], smpd, wthreads=.false.)
         end do
-        do ithr=1,params_glob%nthr
-            call imgs_pad(ithr)%new([params_glob%boxpd,params_glob%boxpd,1], params_glob%smpd, wthreads=.false.)
+        do ithr=1,nthr_glob
+            call imgs_pad(ithr)%new([boxpd,boxpd,1], smpd, wthreads=.false.)
         end do
         ! prepare for projection
-        call vol_pad%expand_cmat(params_glob%alpha)
+        call vol_pad%expand_cmat(KBALPHA)
         write(*,'(A)') '>>> GENERATES PROJECTIONS'
         !$omp parallel do schedule(static) default(shared)&
         !$omp private(i,ithr) proc_bind(close)
@@ -60,7 +64,7 @@ contains
         end do
         !$omp end parallel do
         ! destruct
-        do ithr=1,params_glob%nthr
+        do ithr=1,nthr_glob
             call imgs_pad(ithr)%kill
         end do
         deallocate(imgs_pad)
@@ -69,30 +73,46 @@ contains
     end function reproject
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
-    function rotvol( vol, o,  shvec ) result( rovol )
+    function rotvol( vol, o, shvec ) result( rovol )
         use simple_ori, only: ori
         class(image),   intent(inout) :: vol      !< volume to project
         class(ori),     intent(inout) :: o        !< orientation
         real, optional, intent(in)    :: shvec(3) !< 3D shift vector
         type(projector)  :: vol_pad
         type(image)      :: rovol_pad, rovol
-        integer          :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
-        real             :: loc(3), rmat(3,3)
-        logical          :: l_shvec_present
-        ldim            = vol%get_ldim()
-        ldim_pd         = [params_glob%boxpd,params_glob%boxpd,params_glob%boxpd]
-        l_shvec_present = present(shvec)
-        call vol_pad%new(ldim_pd, params_glob%smpd)
-        call rovol_pad%new(ldim_pd, params_glob%smpd)
-        call rovol_pad%set_ft(.true.)
-        call rovol%new(ldim, params_glob%smpd)
+        integer          :: ldim(3), ldim_pd(3), boxpd
+        real             :: smpd
+        ldim    = vol%get_ldim()
+        smpd    = vol%get_smpd()
+        boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
+        ldim_pd = [boxpd,boxpd,boxpd]
+        call rovol%new(ldim, smpd)
+        call rovol_pad%new(ldim_pd, smpd)
+        call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
         call vol_pad%fft
-        call vol_pad%expand_cmat(params_glob%alpha)
-        lims = vol_pad%loop_lims(2)
-        nyq  = vol_pad%get_lfny(1)
-        rmat = o%get_mat()
+        call vol_pad%expand_cmat(KBALPHA)
         write(*,'(A)') '>>> ROTATING VOLUME'
+        call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
+        call vol_pad%kill_expanded
+        call vol_pad%kill
+    end function rotvol
+
+    !>  \brief  rotates a volume by Euler angle o using Fourier gridding
+    subroutine rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
+        use simple_ori, only: ori
+        class(projector), intent(inout) :: vol_pad
+        class(image),     intent(inout) :: rovol_pad, rovol
+        class(ori),       intent(inout) :: o
+        real, optional,   intent(in)    :: shvec(3)
+        integer          :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3)
+        real             :: loc(3), rmat(3,3)
+        logical          :: l_shvec_present
+        rovol_pad = cmplx(0.,0.)
+        rovol     = 0.
+        lims      = vol_pad%loop_lims(2)
+        nyq       = vol_pad%get_lfny(1)
+        rmat      = o%get_mat()
         !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,loc,logi,phys)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -114,9 +134,6 @@ contains
         !$omp end parallel do
         call rovol_pad%ifft()
         call rovol_pad%clip(rovol)
-        call vol_pad%kill_expanded
-        call vol_pad%kill
-        call rovol_pad%kill
-    end function rotvol
+    end subroutine rotvol_slim
 
 end module simple_projector_hlev

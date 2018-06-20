@@ -3,7 +3,7 @@ module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ori,      only: ori
+use simple_ori, only: ori
 implicit none
 
 public :: oris, test_oris
@@ -160,7 +160,7 @@ type :: oris
     procedure          :: nearest_proj_neighbors
     procedure          :: find_angres
     procedure          :: find_angres_mp
-    procedure          :: find_angres_geod
+    ! procedure          :: find_angres_geod
     procedure          :: extremal_bound
     procedure          :: find_npeaks
     procedure          :: find_npeaks_from_athres
@@ -171,12 +171,12 @@ type :: oris
     procedure          :: mirror3d
     procedure          :: add_shift2class
     procedure          :: corr_oris
-    procedure          :: gen_smat
-    procedure          :: geodesic_dist
+    ! procedure          :: gen_smat
+    ! procedure          :: geodesic_dist
     procedure, private :: diststat_1
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
-    procedure          :: cluster_diststat
+    ! procedure          :: cluster_diststat
     ! DESTRUCTORS
     procedure          :: kill_chash
     procedure          :: kill
@@ -2570,26 +2570,26 @@ contains
     end function find_angres_mp
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
-    function find_angres_geod( self ) result( res )
-        class(oris), intent(in) :: self
-        real                    :: dists(self%n), res, x
-        integer                 :: i, j
-        res = 0.
-        !$omp parallel do default(shared) private(i,j,x,dists) reduction(+:res) proc_bind(close) schedule(static)
-        do j=1,self%n
-            do i=1,self%n
-                if( i == j )then
-                    dists(i) = huge(x)
-                else
-                    dists(i) = self%o(i).geodsc.self%o(j)
-                endif
-            end do
-            call hpsort(dists)
-            res = res + sum(dists(:3))/3. ! average of three nearest neighbors
-        end do
-        !$omp end parallel do
-        res = rad2deg(res/real(self%n))
-    end function find_angres_geod
+    ! function find_angres_geod( self ) result( res )
+    !     class(oris), intent(in) :: self
+    !     real                    :: dists(self%n), res, x
+    !     integer                 :: i, j
+    !     res = 0.
+    !     !$omp parallel do default(shared) private(i,j,x,dists) reduction(+:res) proc_bind(close) schedule(static)
+    !     do j=1,self%n
+    !         do i=1,self%n
+    !             if( i == j )then
+    !                 dists(i) = huge(x)
+    !             else
+    !                 dists(i) = self%o(i).geodsc.self%o(j)
+    !             endif
+    !         end do
+    !         call hpsort(dists)
+    !         res = res + sum(dists(:3))/3. ! average of three nearest neighbors
+    !     end do
+    !     !$omp end parallel do
+    !     res = rad2deg(res/real(self%n))
+    ! end function find_angres_geod
 
     !>  \brief  to find the correlation bound in extremal search
     function extremal_bound( self, thresh, which ) result( score_bound )
@@ -2760,53 +2760,53 @@ contains
     end function corr_oris
 
     !>  \brief  generates a similarity matrix for the oris in self
-    function gen_smat( self ) result( smat )
-        class(oris), intent(in) :: self
-        real, allocatable :: smat(:,:)
-        integer :: i, j
-        allocate( smat(self%n,self%n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk("In: simple_oris :: gen_smat",alloc_stat)
-        smat = 0.
-        !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
-        do i=1,self%n-1
-            do j=i+1,self%n
-                smat(i,j) = -(self%o(i).geod.self%o(j))
-                smat(j,i) = smat(i,j)
-            end do
-        end do
-        !$omp end parallel do
-    end function gen_smat
+    ! function gen_smat( self ) result( smat )
+    !     class(oris), intent(in) :: self
+    !     real, allocatable :: smat(:,:)
+    !     integer :: i, j
+    !     allocate( smat(self%n,self%n), stat=alloc_stat )
+    !     if(alloc_stat.ne.0)call allocchk("In: simple_oris :: gen_smat",alloc_stat)
+    !     smat = 0.
+    !     !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
+    !     do i=1,self%n-1
+    !         do j=i+1,self%n
+    !             smat(i,j) = -(self%o(i).geod.self%o(j))
+    !             smat(j,i) = smat(i,j)
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    ! end function gen_smat
 
     !>  \brief  calculates the average geodesic distance between the input orientation
     !!          and all other orientations in the instance, part_of_set acts as mask
-    real function geodesic_dist( self, o, part_of_set, weights )
-        class(oris),       intent(in) :: self
-        class(ori),        intent(in) :: o
-        logical, optional, intent(in) :: part_of_set(self%n)
-        real,    optional, intent(in) :: weights(self%n)
-        logical, allocatable :: class_part_of_set(:)
-        real,    allocatable :: class_weights(:)
-        integer :: i
-        real    :: dists(self%n)
-        if( present(part_of_set) )then
-            allocate(class_part_of_set(self%n), source=part_of_set)
-        else
-            allocate(class_part_of_set(self%n), source=.true.)
-        endif
-        if( present(weights) )then
-            allocate(class_weights(self%n), source=weights)
-        else
-            allocate(class_weights(self%n), source=1.0)
-        endif
-        dists = 0.
-        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
-        do i=1,self%n
-            dists(i) = self%o(i).geod.o
-        end do
-        !$omp end parallel do
-        geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
-        deallocate(class_part_of_set, class_weights)
-    end function geodesic_dist
+    ! real function geodesic_dist( self, o, part_of_set, weights )
+    !     class(oris),       intent(in) :: self
+    !     class(ori),        intent(in) :: o
+    !     logical, optional, intent(in) :: part_of_set(self%n)
+    !     real,    optional, intent(in) :: weights(self%n)
+    !     logical, allocatable :: class_part_of_set(:)
+    !     real,    allocatable :: class_weights(:)
+    !     integer :: i
+    !     real    :: dists(self%n)
+    !     if( present(part_of_set) )then
+    !         allocate(class_part_of_set(self%n), source=part_of_set)
+    !     else
+    !         allocate(class_part_of_set(self%n), source=.true.)
+    !     endif
+    !     if( present(weights) )then
+    !         allocate(class_weights(self%n), source=weights)
+    !     else
+    !         allocate(class_weights(self%n), source=1.0)
+    !     endif
+    !     dists = 0.
+    !     !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
+    !     do i=1,self%n
+    !         dists(i) = self%o(i).geod.o
+    !     end do
+    !     !$omp end parallel do
+    !     geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
+    !     deallocate(class_part_of_set, class_weights)
+    ! end function geodesic_dist
 
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
@@ -2852,54 +2852,54 @@ contains
     end subroutine diststat_2
 
     !>  \brief  for calculating statistics of geodesic distances within clusters of orientations
-    subroutine cluster_diststat( self, avgd, sdevd, maxd, mind )
-        class(oris), intent(inout) :: self
-        real,        intent(out)   :: avgd, sdevd, maxd, mind
-        integer, allocatable       :: clsarr(:)
-        real,    allocatable       :: dists(:)
-        integer                    :: ncls, icls, iptcl, jptcl, sz, cnt, nobs, n
-        real                       :: avgd_here, sdevd_here, vard_here, mind_here, maxd_here
-        type(ori)                  :: iori, jori
-        logical                    :: err
-        ncls  = self%get_n('class')
-        nobs  = 0
-        avgd  = 0.
-        sdevd = 0.
-        maxd  = 0.
-        mind  = 0.
-        do icls=1,ncls
-            call self%get_pinds(icls, 'class', clsarr)
-            if( allocated(clsarr) )then
-                sz = size(clsarr)
-                n  = (sz*(sz-1))/2
-                allocate( dists(n) )
-                cnt       = 0
-                mind_here = 2.*pi
-                maxd_here = 0.
-                do iptcl=1,sz-1
-                    do jptcl=iptcl+1,sz
-                        cnt        = cnt + 1
-                        iori       = self%get_ori(clsarr(iptcl))
-                        jori       = self%get_ori(clsarr(jptcl))
-                        dists(cnt) = iori.geodsc.jori
-                        if( dists(cnt) < mind_here ) mind_here = dists(cnt)
-                        if( dists(cnt) > maxd_here ) maxd_here = dists(cnt)
-                    end do
-                end do
-                call moment(dists, avgd_here, sdevd_here, vard_here, err)
-                avgd  = avgd  + avgd_here
-                sdevd = sdevd + sdevd_here
-                maxd  = maxd  + maxd_here
-                mind  = mind  + mind_here
-                nobs  = nobs  + 1
-                deallocate( dists, clsarr )
-            endif
-        end do
-        avgd  = avgd/real(nobs)
-        sdevd = sdevd/real(nobs)
-        maxd  = maxd/real(nobs)
-        mind  = mind/real(nobs)
-    end subroutine cluster_diststat
+    ! subroutine cluster_diststat( self, avgd, sdevd, maxd, mind )
+    !     class(oris), intent(inout) :: self
+    !     real,        intent(out)   :: avgd, sdevd, maxd, mind
+    !     integer, allocatable       :: clsarr(:)
+    !     real,    allocatable       :: dists(:)
+    !     integer                    :: ncls, icls, iptcl, jptcl, sz, cnt, nobs, n
+    !     real                       :: avgd_here, sdevd_here, vard_here, mind_here, maxd_here
+    !     type(ori)                  :: iori, jori
+    !     logical                    :: err
+    !     ncls  = self%get_n('class')
+    !     nobs  = 0
+    !     avgd  = 0.
+    !     sdevd = 0.
+    !     maxd  = 0.
+    !     mind  = 0.
+    !     do icls=1,ncls
+    !         call self%get_pinds(icls, 'class', clsarr)
+    !         if( allocated(clsarr) )then
+    !             sz = size(clsarr)
+    !             n  = (sz*(sz-1))/2
+    !             allocate( dists(n) )
+    !             cnt       = 0
+    !             mind_here = 2.*pi
+    !             maxd_here = 0.
+    !             do iptcl=1,sz-1
+    !                 do jptcl=iptcl+1,sz
+    !                     cnt        = cnt + 1
+    !                     iori       = self%get_ori(clsarr(iptcl))
+    !                     jori       = self%get_ori(clsarr(jptcl))
+    !                     dists(cnt) = iori.geodsc.jori
+    !                     if( dists(cnt) < mind_here ) mind_here = dists(cnt)
+    !                     if( dists(cnt) > maxd_here ) maxd_here = dists(cnt)
+    !                 end do
+    !             end do
+    !             call moment(dists, avgd_here, sdevd_here, vard_here, err)
+    !             avgd  = avgd  + avgd_here
+    !             sdevd = sdevd + sdevd_here
+    !             maxd  = maxd  + maxd_here
+    !             mind  = mind  + mind_here
+    !             nobs  = nobs  + 1
+    !             deallocate( dists, clsarr )
+    !         endif
+    !     end do
+    !     avgd  = avgd/real(nobs)
+    !     sdevd = sdevd/real(nobs)
+    !     maxd  = maxd/real(nobs)
+    !     mind  = mind/real(nobs)
+    ! end subroutine cluster_diststat
 
     ! UNIT TEST
 
@@ -3013,7 +3013,7 @@ contains
         call os%spiral
         print *, 'angres:      ', os%find_angres()
         print *, 'angres_mp:      ', os%find_angres_mp()
-        print *, 'angres_geod: ', os%find_angres_geod()
+        ! print *, 'angres_geod: ', os%find_angres_geod()
         write(*,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_oris
 
