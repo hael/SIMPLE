@@ -9,7 +9,6 @@ use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
 use simple_fftw3
 use gnufor2
-
 implicit none
 
 public :: image, test_image
@@ -46,7 +45,6 @@ contains
     procedure          :: window
     procedure          :: window_slim
     procedure          :: win2arr
-    procedure          :: extr_pixels
     procedure          :: corner
     ! I/O
     procedure          :: open
@@ -106,8 +104,6 @@ contains
     procedure          :: subtr_fcomp
     procedure          :: vis
     procedure          :: set_ft
-    ! procedure          :: extr_fcomp
-    procedure          :: packer
     ! CHECKUPS
     procedure          :: exists
     procedure          :: is_2d
@@ -146,7 +142,8 @@ contains
     generic            :: add => add_1, add_2, add_3, add_4, add_5
     procedure, private :: add_workshare_1
     procedure, private :: add_workshare_2
-    generic            :: add_workshare => add_workshare_1, add_workshare_2
+    procedure, private :: add_workshare_3
+    generic            :: add_workshare => add_workshare_1, add_workshare_2, add_workshare_3
     procedure, private :: subtr_1
     procedure, private :: subtr_2
     procedure, private :: subtr_3
@@ -254,10 +251,9 @@ contains
     procedure          :: checkimg4nans
     procedure          :: cure
     procedure          :: loop_lims
-!    procedure          :: comp_addr_phys
-    procedure :: comp_addr_phys1
-    procedure :: comp_addr_phys2
-    generic :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
+    procedure          :: comp_addr_phys1
+    procedure          :: comp_addr_phys2
+    generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
     procedure          :: get_2Dphys_ind_mapping
     procedure          :: corr
     procedure          :: corr_shifted
@@ -355,11 +351,6 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
-    !! \param ldim image dimesions
-    !! \param smpd sampling distance
-    !! \param backgr  constant initial background
-    !! \return  self new image object
-    !!
     function constructor( ldim, smpd, wthreads ) result( self ) !(FAILS W PRESENT GFORTRAN)
         integer,           intent(in) :: ldim(:)
         real,              intent(in) :: smpd
@@ -369,17 +360,7 @@ contains
     end function constructor
 
     !>  \brief  Constructor for simple_image class
-    !!
-    !!\param self this image object
-    !!\param ldim 3D dimensions
-    !!\param smpd sampling distance
-    !!\param backgr constant initial background
-    !!
-    !!\return new image object
     subroutine new( self, ldim, smpd, wthreads )
-        !! have to have a type-bound constructor here because we get a sigbus error with the function construct
-        !! "program received signal sigbus: access to an undefined portion of a memory object."
-        !! this seems to be related to how the cstyle-allocated matrix is referenced by the gfortran compiler
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd
@@ -486,12 +467,6 @@ contains
     end subroutine construct_thread_safe_tmp_imgs
 
     !>  \brief disc constructs a binary disc of given radius and returns the number of 1:s
-    !>
-    !! \param ldim  image dimensions
-    !! \param smpd sampling distance
-    !! \param radius  radius of disc
-    !! \param npix  num of ON bits in mask
-    !!
     subroutine disc( self, ldim, smpd, radius, npix )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
@@ -524,9 +499,6 @@ contains
     end subroutine ring
 
     !>  \brief copy is a constructor that copies the input object
-    !! \param self image object
-    !! \param self_in rhs object
-    !!
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
@@ -537,11 +509,6 @@ contains
     end subroutine copy
 
     !> mic2spec calculates the average powerspectrum over a micrograph
-    !! \param self image object
-    !! \param box boxwidth filter size
-    !! \param speckind
-    !! \return img_out processed image
-    !!
     function mic2spec( self, box, speckind ) result( img_out )
         class(image),     intent(inout) :: self
         integer,          intent(in)    :: box
@@ -669,12 +636,6 @@ contains
     end function boxconv
 
     !>  \brief window extracts a particle image from a box as defined by EMAN 1.9
-    !! \param self_in input image object
-    !! \param coord window coordinates
-    !! \param box boxwidth filter size
-    !! \param self_out return image object
-    !! \param noutside num window pixels outside image
-    !!
     subroutine window( self_in, coord, box, self_out, noutside )
         class(image),      intent(in)    :: self_in
         integer,           intent(in)    :: coord(2), box
@@ -723,12 +684,6 @@ contains
     end subroutine window
 
     !>  window_slim  extracts a particle image from a box as defined by EMAN 1.9
-    !! \param self_in image object
-    !! \param coord x,y coordinates
-    !! \param box  boxwidth filter size
-    !! \param self_out output image object
-    !! \param noutside  num window pixels outside image
-    !!
     subroutine window_slim( self_in, coord, box, self_out, outside )
         class(image), intent(in)    :: self_in
         integer,      intent(in)    :: coord(2), box !< boxwidth filter size
@@ -747,10 +702,6 @@ contains
     end subroutine window_slim
 
     !>  \brief win2arr extracts a small window into an array (circular indexing)
-    !! \param i,j,k window coords
-    !! \param winsz window half-width size (odd)
-    !! \return  pixels index array to pixels in window
-    !!
     function win2arr( self, i, j, k, winsz ) result( pixels )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i, j, k, winsz
@@ -783,29 +734,7 @@ contains
         end do
     end function win2arr
 
-    !>  \brief extr_pixels extracts the pixels under the mask
-    !! \param mskimg
-    !! \return  pixels index array to pixels in mask
-    !!
-    function extr_pixels( self, mskimg ) result( pixels )
-        class(image), intent(in) :: self
-        class(image), intent(in) :: mskimg
-        real, allocatable :: pixels(:)   !< 1D pixel array: self(mskimg==1)
-        if( self%is_ft() ) call simple_stop('only 4 real images; extr_pixels; simple_image')
-        if( self.eqdims.mskimg )then
-            ! pixels = self%packer(mskimg) ! Intel hickup
-            pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>0.5 )
-        else
-            call simple_stop('mask and image of different dims; extr_pixels; simple_image')
-        endif
-    end function extr_pixels
-
     !>  \brief corner extracts a corner of a volume with size box
-    !! \param self_in input image volume
-    !! \param box  size of box
-    !! \param self_out extracted corner of a volume
-    !!
     subroutine corner( self_in, box, self_out )
         class(image), intent(in)    :: self_in
         integer,      intent(in)    :: box
@@ -819,12 +748,6 @@ contains
     ! I/O
 
     !>  \brief  open: for reading 2D images from stack or volumes from volume files
-    !! \param fname   filename of image
-    !! \param ioimg   IO file object
-    !! \param formatchar  image type format (M,F,S)
-    !! \param readhead  get header flag
-    !! \param rwaction  read/write flag
-    !!
     subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
@@ -864,13 +787,6 @@ contains
     end subroutine open
 
     !>  \brief read: for reading 2D images from stack or volumes from volume files
-    !! \param fname            filename of image
-    !! \param i                file index in stack
-    !! \param ioimg            image IO object
-    !! \param formatchar       image type (M,F,S)
-    !! \param readhead         get header info flag
-    !! \param rwaction         read mode flag
-    !!
     subroutine read( self, fname, i, formatchar, readhead )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
@@ -995,11 +911,6 @@ contains
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
-    !! \param fname filename of image
-    !! \param i  file index in stack/part
-    !! \param del_if_exists overwrite if present
-    !! \param formatchar
-    !! \todo fix optional args
     subroutine write( self, fname, i, del_if_exists, formatchar )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
@@ -1129,8 +1040,6 @@ contains
     ! GETTERS/SETTERS
 
     !> \brief get_array_shape  is a getter
-    !! \return  shape array dimensions
-    !!
     pure function get_array_shape( self ) result( shape)
         class(image), intent(in) :: self
         integer :: shape(3)
@@ -1138,8 +1047,6 @@ contains
     end function get_array_shape
 
     !> \brief get_ldim  is a getter
-    !! \return  ldim
-    !!
     pure function get_ldim( self ) result( ldim )
         class(image), intent(in) :: self
         integer :: ldim(3)
@@ -1147,8 +1054,6 @@ contains
     end function get_ldim
 
     !> \brief get_smpd  is a getter
-    !! \return smpd
-    !!
     pure function get_smpd( self ) result( smpd )
         class(image), intent(in) :: self
         real :: smpd
@@ -1156,7 +1061,6 @@ contains
     end function get_smpd
 
     !>  \brief get_nyq get the Nyquist Fourier index
-    !! \return nyq Nyquist Fourier index
     pure function get_nyq( self ) result( nyq )
         class(image), intent(in) :: self
         integer :: nyq
@@ -1164,8 +1068,6 @@ contains
     end function get_nyq
 
     !> \brief get_filtsz  to get the size of the filters
-    !! \return  n size of the filter
-    !!
     pure function get_filtsz( self ) result( n )
         class(image), intent(in) :: self
         integer :: n
@@ -1179,9 +1081,6 @@ contains
     end function get_shconst
 
     !> \brief cyci  cyclic index generation
-    !! \param logi
-    !! \return  inds
-    !!
     function cyci( self, logi ) result( inds )
         class(image), intent(in) :: self
         integer,      intent(in) :: logi(3)
@@ -1199,10 +1098,6 @@ contains
         inds(3) = cyci_1d(lims(3,:), logi(3))
     end function cyci
 
-    !> \brief get  is a getter
-    !! \param logi
-    !! \return  val
-    !!
     function get( self, logi ) result( val )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -1222,9 +1117,6 @@ contains
         val = self%rmat(logi(1),logi(2),logi(3))
     end function get
 
-    !> \brief get_rmat  is a getter
-    !! \return  rmat
-    !!
     function get_rmat( self ) result( rmat )
         class(image), intent(in) :: self
         real, allocatable :: rmat(:,:,:)
@@ -1234,7 +1126,6 @@ contains
         if (alloc_stat /= 0)call allocchk("simple_image::get_rmat ",alloc_stat)
     end function get_rmat
 
-    !! get rmat value at index logi
     function get_rmat_at_1( self, logi ) result( val )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: logi(3)
@@ -1242,7 +1133,6 @@ contains
         val = self%rmat(logi(1),logi(2),logi(3))
     end function get_rmat_at_1
 
-    !! get cmat value at index phys
     elemental pure function get_rmat_at_2( self, i,j,k ) result( val )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: i,j,k
@@ -1251,20 +1141,13 @@ contains
     end function get_rmat_at_2
 
     !>  \brief   get_cmat get the image object's complex matrix
-    !! \return cmat a copy of this image object's cmat
-    !!
     pure function get_cmat( self ) result( cmat )
         class(image), intent(in) :: self
-        !integer :: array_shape(3)
         complex, allocatable :: cmat(:,:,:)
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
-        !! pure function cannot call allocchk
-        !! if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ")
     end function get_cmat
 
     !>  \brief   get_cmatfull get the image object's complex matrix, including index limits
-    !! \return cmat a copy of this image object's cmat
-    !!
     function get_cmatfull( self , llims) result( cmat )
         class(image), intent(in) :: self
         integer, intent(inout), optional :: llims(3,2)
@@ -1282,18 +1165,16 @@ contains
         if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
     end function get_cmatfull
 
-    !! get cmat value at index phys
     pure function get_cmat_at_1( self, phys ) result( comp )
         class(image), intent(in)  :: self
-        integer,      intent(in)  ::  phys(3)
+        integer,      intent(in)  :: phys(3)
         complex :: comp
         comp = self%cmat(phys(1),phys(2),phys(3))
     end function get_cmat_at_1
 
-    !! get cmat value at index phys
     elemental pure function get_cmat_at_2( self, h,k,l ) result( comp )
-        class(image), intent(in)  :: self
-        integer,      intent(in)  :: h,k,l
+        class(image), intent(in) :: self
+        integer,      intent(in) :: h,k,l
         complex :: comp
         comp = self%cmat(h,k,l)
     end function get_cmat_at_2
@@ -1301,18 +1182,18 @@ contains
     pure subroutine set_cmat_1( self, cmat )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
-        self%ft = .true.
+        self%ft   = .true.
         self%cmat = cmat
     end subroutine set_cmat_1
 
     pure subroutine set_cmat_2( self, cval )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cval
-        self%ft = .true.
+        self%ft   = .true.
         self%cmat = cval
     end subroutine set_cmat_2
 
-    !! set comp to cmat at index phys
+    ! set comp to cmat at index phys
     subroutine set_cmat_at_1( self , phys , comp)
         class(image), intent(in) :: self
         integer, intent(in) :: phys(3)
@@ -1339,8 +1220,8 @@ contains
     !> add comp to cmat at index (h,k,l)
     subroutine add_cmat_at_2( self, h, k, l, comp)
         class(image), intent(in) :: self
-        integer, intent(in) :: h,k,l
-        complex, intent(in) :: comp
+        integer,      intent(in) :: h,k,l
+        complex,      intent(in) :: comp
         self%cmat(h,k,l) = self%cmat(h,k,l) + comp
     end subroutine add_cmat_at_2
 
@@ -1396,7 +1277,6 @@ contains
         !$omp end parallel
     end subroutine add_cmats_to_cmats
 
-    ! divide comp by cmat at index phys
     subroutine div_cmat_at_1( self, phys, rval )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
@@ -1408,18 +1288,17 @@ contains
         endif
     end subroutine div_cmat_at_1
 
-    !> div comp to cmat at index h,k,l
     subroutine div_cmat_at_2( self,h,k,l, rval)
         class(image), intent(in) :: self
-        integer, intent(in) :: h,k,l
-        real, intent(in) :: rval
+        integer,      intent(in) :: h,k,l
+        real,         intent(in) :: rval
         if( abs(rval) > 1.e-6 )then
             self%cmat(h,k,l) = self%cmat(h,k,l) / cmplx(rval,0.)
         else
             self%cmat(h,k,l) =cmplx(0.,0.)
         end if
     end subroutine div_cmat_at_2
-    ! divide cmat at index phys by cval
+
     subroutine div_cmat_at_3( self, phys, cval )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
@@ -1431,11 +1310,10 @@ contains
         endif
     end subroutine div_cmat_at_3
 
-    !> div comp to cmat at index h,k,l
     subroutine div_cmat_at_4( self,h,k,l, cval)
         class(image), intent(in) :: self
-        integer, intent(in)      :: h,k,l
-        complex, intent(in)      :: cval
+        integer,      intent(in) :: h,k,l
+        complex,      intent(in) :: cval
         if( abs(cval) > 1.e-6 )then
             self%cmat(h,k,l) = self%cmat(h,k,l) / cval
         else
@@ -1443,55 +1321,45 @@ contains
         end if
     end subroutine div_cmat_at_4
 
-    !! multiply cmat with real k at index phys
     pure subroutine mul_cmat_at_1( self, phys, rval)
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: phys(3)
-        real,              intent(in)    :: rval
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: phys(3)
+        real,         intent(in)    :: rval
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * rval
     end subroutine mul_cmat_at_1
 
-    !! multiply cmat with complex k at index phys
     pure subroutine mul_cmat_at_2( self, phys, cval )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: phys(3)
-        complex,           intent(in)    :: cval
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: phys(3)
+        complex,      intent(in)    :: cval
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cval
     end subroutine mul_cmat_at_2
 
-    !! multiply cmat at index h,k,l by real
     subroutine mul_cmat_at_3( self, h,k,l,rval )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: h,k,l
-        real,              intent(in)    :: rval
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: h,k,l
+        real,         intent(in)    :: rval
         self%cmat(h,k,l) = self%cmat(h,k,l) * rval
     end subroutine mul_cmat_at_3
 
-    !! multiply cmat at index h,k,l by complex
-    subroutine mul_cmat_at_4( self, h,k,l,cval )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: h,k,l
-        complex,           intent(in)    :: cval
+    subroutine mul_cmat_at_4( self, h,k,l, cval )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: h,k,l
+        complex,      intent(in)    :: cval
         self%cmat(h,k,l) = self%cmat(h,k,l) * cval
     end subroutine mul_cmat_at_4
 
-    !> print_cmat
-    !!
     subroutine print_cmat( self )
         class(image), intent(in) :: self
         print *, self%cmat
     end subroutine print_cmat
 
-    !> print_rmat
-    !!
     subroutine print_rmat( self )
         class(image), intent(in) :: self
         print *, self%rmat
     end subroutine print_rmat
 
     !>  \brief  expand_ft is for getting a Fourier plane using the old SIMPLE logics
-    !! \return fplane a copy of this image object's fplane
-    !!
     function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self
         complex, allocatable :: fplane(:,:)
@@ -1514,9 +1382,6 @@ contains
     end function expand_ft
 
     !>  \brief  set image value at position x,y,z
-    !! \param logi coordinates
-    !! \param val new value
-    !!
     subroutine set( self, logi, val )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -1528,8 +1393,6 @@ contains
     end subroutine set
 
     !>  \brief  set (replace) image data with new 3D data
-    !! \param rmat new 3D data
-    !!
     subroutine set_rmat( self, rmat )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rmat(:,:,:)
@@ -1549,8 +1412,6 @@ contains
     end subroutine set_rmat
 
     !>  \brief  set (replace) image data with new 3D data
-    !! \param cmat new 3D complex data
-    !!
     subroutine set_cmat( self, cmat )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cmat(:,:,:)
@@ -1570,8 +1431,6 @@ contains
     end subroutine set_cmat
 
     !> \brief  set_ldim replace image dimensions new 3D size
-    !! \param ldim new 3D dimensions
-    !!
     subroutine set_ldim( self, ldim )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: ldim(3)
@@ -1579,8 +1438,6 @@ contains
     end subroutine set_ldim
 
     !>  \brief set_smpd for setting smpd
-    !! \param smpd  sampling distance
-    !!
     subroutine set_smpd( self, smpd )
         class(image), intent(inout) :: self
         real,         intent(in)    :: smpd
@@ -1588,10 +1445,6 @@ contains
     end subroutine set_smpd
 
     !> \brief get_slice is for getting a slice from a volume
-    !! \param self3d this image object
-    !! \param slice index of slice in image
-    !! \return self2d copy of slice as 2D image
-    !!
     function get_slice( self3d, slice ) result( self2d )
         class(image), intent(in) :: self3d
         integer,      intent(in) :: slice
@@ -1601,10 +1454,6 @@ contains
     end function get_slice
 
     !>  \brief set_slice is for putting a slice into a volume
-    !! \param self3d  this image object new slice as 2D image
-    !! \param slice  index of slice in image
-    !! \param self2d new slice as 2D image
-    !!
     subroutine set_slice( self3d, slice, self2d )
         class(image), intent(in)    :: self2d
         integer,      intent(in)    :: slice
@@ -1613,9 +1462,6 @@ contains
     end subroutine set_slice
 
     !>  \brief get_npix is for getting the number of pixels for serialization
-    !! \param mskrad mask radius
-    !! \return npix num of pixels
-    !!
     function get_npix( self, mskrad ) result( npix )
         class(image), intent(in) :: self
         real,         intent(in) :: mskrad
@@ -1649,10 +1495,6 @@ contains
         endif
     end function get_npix
 
-    !>  \brief   get_lfny
-    !! \param which
-    !! \return fnyl
-    !!
     pure function get_lfny( self, which ) result( fnyl )
         class(image), intent(in) :: self
         integer,      intent(in) :: which
@@ -1660,10 +1502,6 @@ contains
         fnyl = self%fit%get_lfny(which)
     end function get_lfny
 
-    !>  \brief   get_lhp
-    !! \param which
-    !! \return lhp
-    !!
     pure function get_lhp( self, which ) result( hpl )
         class(image), intent(in) :: self
         integer,      intent(in) :: which
@@ -1671,10 +1509,6 @@ contains
         hpl = self%fit%get_lhp(which)
     end function get_lhp
 
-    !>  \brief   get_lp
-    !! \param ind
-    !! \return lp
-    !!
     pure function get_lp( self, ind ) result( lp )
         class(image), intent(in) :: self
         integer,      intent(in) :: ind
@@ -1682,10 +1516,6 @@ contains
         lp = self%fit%get_lp(1, ind)
     end function get_lp
 
-    !>  \brief   get_spat_freq
-    !! \param ind
-    !! \return spat_freq
-    !!
     pure function get_spat_freq( self, ind ) result( spat_freq )
         class(image), intent(in) :: self
         integer,      intent(in) :: ind
@@ -1693,10 +1523,6 @@ contains
         spat_freq = self%fit%get_spat_freq(1, ind)
     end function get_spat_freq
 
-    !>  \brief  get_find
-    !! \param res
-    !! \return  ind
-    !!
     pure function get_find( self, res ) result( ind )
         class(image), intent(in) :: self
         real,         intent(in) :: res
@@ -1704,10 +1530,6 @@ contains
         ind = self%fit%get_find(1, res)
     end function get_find
 
-    !>  \brief   get_clin_lims
-    !! \param lp_dyn
-    !! \return lims
-    !!
     function get_clin_lims( self, lp_dyn ) result( lims )
         class(image), intent(in) :: self
         real,         intent(in) :: lp_dyn
@@ -1716,8 +1538,6 @@ contains
     end function get_clin_lims
 
     !>  \brief  rmat_associated check rmat association
-    !! \return  assoc
-    !!
     function rmat_associated( self ) result( assoc )
         class(image), intent(in) :: self
         logical :: assoc
@@ -1725,8 +1545,6 @@ contains
     end function rmat_associated
 
     !>  \brief cmat_associated check cmat association
-    !! \return  assoc
-    !!
     function cmat_associated( self ) result( assoc )
         class(image), intent(in) :: self
         logical :: assoc
@@ -1734,9 +1552,6 @@ contains
     end function cmat_associated
 
     !>  \brief serialize is for packing/unpacking a serialized image vector for pca analysis
-    !! \param pcavec analysis vector
-    !! \param mskrad mask radius
-    !!
     subroutine serialize( self, pcavec, mskrad )
         class(image),      intent(inout) :: self
         real, allocatable, intent(inout) :: pcavec(:)
@@ -1799,10 +1614,6 @@ contains
     end subroutine serialize
 
     !>  \brief winserialize is for packing/unpacking a serialized image vector for convolutional pca analysis
-    !! \param coord coordinate offset
-    !! \param winsz window size
-    !! \param pcavec analysis vector
-    !!
     subroutine winserialize( self, coord, winsz, pcavec )
         class(image),      intent(inout) :: self
         real, allocatable, intent(inout) :: pcavec(:)
@@ -1857,19 +1668,19 @@ contains
             end do
         endif
 
-    contains
+        contains
 
-        subroutine set_action
-            if( allocated(pcavec) )then
-                if( size(pcavec) /= npix ) call simple_stop('size mismatch mask/npix; winserialize; simple_image')
-                pack = .false.
-            else
-                pack = .true.
-                allocate( pcavec(npix), stat=alloc_stat )
-                if(alloc_stat.ne.0)call allocchk('winserialize; simple_image',alloc_stat)
-                pcavec = 0.
-            endif
-        end subroutine set_action
+            subroutine set_action
+                if( allocated(pcavec) )then
+                    if( size(pcavec) /= npix ) call simple_stop('size mismatch mask/npix; winserialize; simple_image')
+                    pack = .false.
+                else
+                    pack = .true.
+                    allocate( pcavec(npix), stat=alloc_stat )
+                    if(alloc_stat.ne.0)call allocchk('winserialize; simple_image',alloc_stat)
+                    pcavec = 0.
+                endif
+            end subroutine set_action
 
     end subroutine winserialize
 
@@ -1887,10 +1698,6 @@ contains
     end subroutine zero2one
 
     !>  \brief get_fcomp for getting a Fourier component from the compact representation
-    !! \param logi
-    !! \param phys
-    !! \return  comp
-    !!
     pure function get_fcomp( self, logi, phys ) result( comp )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: logi(3), phys(3)
@@ -1900,10 +1707,6 @@ contains
     end function get_fcomp
 
     !> \brief set_fcomp  for setting a Fourier component in the compact representation
-    !! \param logi
-    !! \param phys
-    !! \param comp
-    !!
     subroutine set_fcomp( self, logi, phys, comp )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3), phys(3)
@@ -1918,10 +1721,6 @@ contains
     end subroutine set_fcomp
 
     !> \brief add_fcomp  is for componentwise summation
-    !! \param logi
-    !! \param phys
-    !! \param comp
-    !!
     subroutine add_fcomp( self, logi, phys, comp)
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3), phys(3)
@@ -1936,10 +1735,6 @@ contains
     end subroutine add_fcomp
 
     !> \brief subtr_fcomp  is for componentwise summation
-    !! \param logi
-    !! \param phys
-    !! \param comp
-    !!
     subroutine subtr_fcomp( self, logi, phys, comp )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3), phys(3)
@@ -1954,9 +1749,7 @@ contains
     end subroutine subtr_fcomp
 
     !>  \brief vis is for plotting an image
-    !! \param sect
-    !!
-    subroutine vis( self, sect , geomorsphr)
+    subroutine vis( self, sect, geomorsphr)
         class(image),      intent(in) :: self
         integer, optional, intent(in) :: sect
         logical, optional, intent(in) :: geomorsphr !< geometrical or spherical complex format
@@ -1985,109 +1778,15 @@ contains
     end subroutine vis
 
     !>  \brief  set_ft sets image ft state
-    !! \param is
-    !!
     subroutine set_ft( self, is )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: is
         self%ft = is
     end subroutine set_ft
 
-    !>  \brief extr_fcomp is for extracting a Fourier component at arbitrary
-    !>          position in a 2D transform using windowed sinc interpolation
-    !! \param h,k Fourier coordinates
-    !! \param x,y Image coordinates
-    !! \return  comp
-    !!
-    ! function extr_fcomp( self, h, k, x, y ) result( comp )
-    !     class(image), intent(inout) :: self
-    !     real,         intent(in)    :: h, k, x, y
-    !     complex, allocatable :: comps(:,:)
-    !     complex :: comp
-    !     integer :: win(2,2), i, j, phys(3)
-    !     if( self%ldim(3) > 1 )         call simple_stop('only 4 2D images; extr_fcomp; simple_image')
-    !     if( .not. self%ft )            call simple_stop('image need to be FTed; extr_fcomp; simple_image')
-    !     ! evenness and squareness are checked in the comlin class
-    !     call sqwin_2d(h, k, 1., win)
-    !     allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
-    !     do i=win(1,1),win(1,2)
-    !         do j=win(2,1),win(2,2)
-    !             phys       = self%comp_addr_phys([i,j,0])
-    !             comps(i,j) = self%get_fcomp([i,j,0], phys)
-    !         end do
-    !         comps(i,:) = comps(i,:) * sinc(h-real(i))
-    !     end do
-    !     do i = win(2,1), win(2,2)
-    !         comps(:,i) = comps(:,i) * sinc(k-real(i))
-    !     enddo
-    !     comp = sum(comps)
-    !     deallocate(comps)
-    !     ! origin shift
-    !     if( (abs(x) > TINY) .and. (abs(y) > TINY) )then
-    !         comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
-    !     endif
-    !
-    ! contains
-    !
-    !     !> oshift_here
-    !     !! \param xdim
-    !     !! \param x,y Image coords
-    !     !! \param dx,dy pixel width
-    !     !! \return  comp
-    !     !!
-    !     pure function oshift_here( xdim, x, y, dx, dy ) result( comp )
-    !         integer, intent(in)  :: xdim
-    !         real, intent(in)     :: x, y, dx, dy
-    !         complex              :: comp
-    !         real                 :: arg
-    !         arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
-    !         comp = cmplx(cos(arg),sin(arg))
-    !     end function oshift_here
-    !
-    ! end function extr_fcomp
-
-    !> \brief packer  replaces the pack intrinsic because the Intel compiler bugs out
-    !! \param mskimg
-    !! \return  pixels
-    !!
-    function packer( self, mskimg ) result( pixels )
-        class(image),           intent(in) :: self
-        class(image), optional, intent(in) :: mskimg
-        real, allocatable :: pixels(:)
-        integer :: nsel,i,j,k,cnt
-        if( present(mskimg) )then
-            nsel = count(mskimg%rmat<0.5)
-            allocate(pixels(nsel))
-            cnt = 0
-            do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
-                        if( mskimg%rmat(i,j,k) > 0.5 )then
-                            cnt = cnt + 1
-                            pixels(cnt) = self%rmat(i,j,k)
-                        endif
-                    end do
-                end do
-            end do
-        else
-            nsel = product(self%ldim)
-            allocate(pixels(nsel))
-            cnt = 0
-            do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
-                        cnt = cnt + 1
-                        pixels(cnt) = self%rmat(i,j,k)
-                    end do
-                end do
-            end do
-        endif
-    end function packer
-
     ! CHECKUPS
 
     !>  \brief  Checks for existence
-    !! \return logical flag if image object exists
     pure function exists( self ) result( is )
         class(image), intent(in) :: self
         logical :: is
@@ -2095,21 +1794,18 @@ contains
     end function exists
 
     !>  \brief  Checks whether the image is 2D
-    !! \return logical flag if image object is 2D
     pure logical function is_2d(self)
         class(image), intent(in)  ::  self
         is_2d = count(self%ldim .eq. 1) .eq. 1
     end function is_2d
 
     !>  \brief  Checks whether the image is 3D
-    !! \return logical flag if image object is 3D
     pure logical function is_3d(self)
         class(image), intent(in)  ::  self
         is_3d = .not. any(self%ldim .eq. 1)
     end function is_3d
 
     !>  \brief  checks for even dimensions
-    !! \return logical flag if image object has even dimensions
     pure function even_dims( self ) result( yep )
         class(image), intent(in) :: self
         logical :: yep, test(2)
@@ -2120,7 +1816,6 @@ contains
     end function even_dims
 
     !>  \brief  checks for square dimensions
-    !! \return logical flag if image object has square dimensions
     pure function square_dims( self ) result( yep )
         class(image), intent(in) :: self
         logical :: yep
@@ -2132,10 +1827,6 @@ contains
     end function square_dims
 
     !>  \brief  checks for same dimensions, overloaded as (.eqdims.)
-    !!
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \return logical flag if two image objects have same dimensions
     pure function same_dims_1( self1, self2 ) result( yep )
         class(image), intent(in) :: self1, self2
         logical :: yep, test(3)
@@ -2147,7 +1838,6 @@ contains
     end function same_dims_1
 
     !>  \brief  checks for same dimensions
-    !! \return logical flag if image object has same dimensions as ldim
     pure function same_dims( self1, ldim ) result( yep )
         class(image), intent(in) :: self1
         integer,      intent(in) :: ldim(3) !< dimensions
@@ -2160,10 +1850,6 @@ contains
     end function same_dims
 
     !>  \brief  checks for same sampling distance, overloaded as (.eqsmpd.)
-    !!
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \return logical flag if image objects have same sampling distance
     pure  function same_smpd( self1, self2 ) result( yep )
         class(image), intent(in) :: self1, self2
         logical :: yep
@@ -2175,7 +1861,6 @@ contains
     end function same_smpd
 
     !>  \brief  checks if image is ft
-    !! \return logical flag if image objects have same kind
     pure function is_ft( self ) result( is )
         class(image), intent(in) :: self
         logical :: is
@@ -2185,9 +1870,6 @@ contains
     ! ARITHMETICS
 
     !>  \brief  assign, polymorphic assignment (=)
-    !! \param selfout rhs
-    !! \param selfin lhs
-    !!
     subroutine assign( selfout, selfin )
         class(image), intent(inout) :: selfout
         class(image), intent(in)    :: selfin
@@ -2195,8 +1877,6 @@ contains
     end subroutine assign
 
     !>  \brief assign_r2img real constant to image assignment(=) operation
-    !! \param realin fixed value for image
-    !!
     subroutine assign_r2img( self, realin )
         class(image), intent(inout) :: self
         real,         intent(in)    :: realin
@@ -2205,8 +1885,6 @@ contains
     end subroutine assign_r2img
 
     !>  \brief  assign_c2img  complex constant to image assignment(=) operation
-    !! \param compin fixed value for image
-    !!
     subroutine assign_c2img( self, compin )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: compin
@@ -2215,10 +1893,6 @@ contains
     end subroutine assign_c2img
 
     !>  \brief  is for image addition(+) addition
-    !! \param self1 image object 1
-    !! \param self2  image object 2
-    !! \return lhs, copy of added images
-    !!
     function addition( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
         type(image) :: self
@@ -2235,10 +1909,6 @@ contains
     end function addition
 
     !>  \brief  l1norm_1 is for l1 norm calculation
-    !! \param self1 image object 1
-    !! \param self2 image object 2
-    !! \return  lhs, copy of l1 normed images
-    !!
     function l1norm_1( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
         type(image) :: self
@@ -2258,10 +1928,6 @@ contains
     end function l1norm_1
 
     !>  \brief l1norm_2 is for l1 norm calculation
-    !! \param self1 image object 1
-    !! \param self2 image object 2
-    !! \return  lhs, copy of l1 normed images
-    !!
     function l1norm_2( self1, self2 ) result( l1 )
         class(image), intent(in) :: self1, self2
         real :: l1
@@ -2275,11 +1941,6 @@ contains
     end function l1norm_2
 
     !>  \brief l1weights is for l1 norm weight generation
-    !! \param self1 image object 1
-    !! \param self2 image object 2
-    !! \param nvar normalisation variable
-    !! \return  lhs, copy of l1 normed images
-    !!
     function l1weights( self1, self2, nvar ) result( self )
         class(image),   intent(in) :: self1, self2
         real, optional, intent(in) :: nvar
@@ -2303,9 +1964,6 @@ contains
     end function l1weights
 
     !>  \brief add_1 is for image summation, not overloaded
-    !! \param self_to_add image object
-    !! \param w
-    !!
     subroutine add_1( self, self_to_add, w )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
@@ -2321,11 +1979,6 @@ contains
     end subroutine add_1
 
     !>  \brief add_2 is for componentwise summation, not overloaded
-    !! \param logi image dimensions
-    !! \param comp
-    !! \param phys_in
-    !! \param phys_out
-    !!
     subroutine add_2( self, logi, comp, phys_in, phys_out )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
@@ -2350,9 +2003,6 @@ contains
     end subroutine add_2
 
     !> \brief add_3  is for componentwise summation, not overloaded
-    !! \param rcomp
-    !! \param i,j,k index
-    !!
     subroutine add_3( self, rcomp, i, j, k )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rcomp
@@ -2362,11 +2012,6 @@ contains
     end subroutine add_3
 
     !>  \brief add_4 is for componentwise weighted summation with kernel division, not overloaded
-    !! \param logi coordinates
-    !! \param comp complex additive input (denominator)
-    !! \param w additive input (numerator multiplier)
-    !! \param k componentwise additive input (numerator)
-    !!
     subroutine add_4( self, logi, comp, w, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -2387,7 +2032,6 @@ contains
     end subroutine add_4
 
     !>  \brief  is for adding a constant
-    !! \param c complex additive input
     subroutine add_5( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
@@ -2427,11 +2071,21 @@ contains
         endif
     end subroutine add_workshare_2
 
+    subroutine add_workshare_3( self, self_to_add )
+        class(image),   intent(inout) :: self
+        class(image),   intent(in)    :: self_to_add
+        if( self%ft )then
+            !$omp parallel workshare proc_bind(close)
+            self%cmat = self%cmat + self_to_add%cmat
+            !$omp end parallel workshare
+        else
+            !$omp parallel workshare proc_bind(close)
+            self%rmat = self%rmat + self_to_add%rmat
+            !$omp end parallel workshare
+        endif
+    end subroutine add_workshare_3
+
     !>  \brief subtraction is for image subtraction(-)
-    !! \param self_from lhs
-    !! \param self_to  lhs subtractor
-    !! \return copy of self
-    !!
     function subtraction( self_from, self_to ) result( self )
         class(image), intent(in) :: self_from, self_to
         type(image) :: self
@@ -2447,9 +2101,6 @@ contains
     end function subtraction
 
     !>  \brief subtr_1 is for image subtraction,  not overloaded
-    !! \param self_to_subtr image object
-    !! \param w
-    !!
     subroutine subtr_1( self, self_to_subtr, w )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_subtr
@@ -2473,11 +2124,6 @@ contains
     end subroutine subtr_1
 
     !>  \brief subtr_2 is for componentwise subtraction, not overloaded
-    !! \param logi
-    !! \param comp
-    !! \param phys_in
-    !! \param phys_out
-    !!
     subroutine subtr_2( self, logi, comp, phys_in, phys_out )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
@@ -2502,11 +2148,6 @@ contains
     end subroutine subtr_2
 
     !>  \brief subtr_3 is for componentwise weighted subtraction with kernel division, not overloaded
-    !! \param logi   coordinates
-    !! \param comp   complex subtraction input (denominator)
-    !! \param w      subtraction input (numerator multiplier)
-    !! \param k      componentwise subtraction input (numerator)
-    !!
     subroutine subtr_3( self, logi, comp, w, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -2528,8 +2169,6 @@ contains
     end subroutine subtr_3
 
     !>  \brief subtr_4 is for subtracting a constant from a real image, not overloaded
-    !! \param c constant
-    !!
     subroutine subtr_4( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
@@ -2537,10 +2176,6 @@ contains
     end subroutine subtr_4
 
     !>  \brief multiplication is for image multiplication(*)
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \return  self
-    !!
     function multiplication( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
         type(image) :: self
@@ -2571,6 +2206,7 @@ contains
         real,         intent(in)    :: rval
         self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rval
     end subroutine mul_rmat_at_1
+
     ! elementwise multiplication in real-space
     elemental pure subroutine mul_rmat_at_2( self,i, j, k, rval )
         class(image), intent(inout) :: self
@@ -2580,11 +2216,6 @@ contains
     end subroutine mul_rmat_at_2
 
     !>  \brief mul_1 is for component-wise multiplication of an image with a real constant
-    !! \param logi
-    !! \param rc
-    !! \param phys_in
-    !! \param phys_out
-    !!
     subroutine mul_1( self, logi, rc, phys_in, phys_out )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
@@ -2606,8 +2237,6 @@ contains
     end subroutine mul_1
 
     !>  \brief mul_2 is for  multiplication of an image with a real constant
-    !! \param rc multiplier
-    !!
     subroutine mul_2( self, rc )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rc
@@ -2619,8 +2248,6 @@ contains
     end subroutine mul_2
 
     !>  \brief mul_3 is for multiplication of images
-    !! \param self2mul 3D multiplier
-    !!
     subroutine mul_3( self, self2mul )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2mul
@@ -2642,9 +2269,6 @@ contains
     end subroutine mul_3
 
     !>  \brief mul_4 is for low-pass limited multiplication of images
-    !! \param self2mul 3D multiplier
-    !! \param lp cut off filter frequency
-    !!
     subroutine mul_4( self, self2mul, lp )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2mul
@@ -2675,10 +2299,6 @@ contains
     end subroutine mul_4
 
     !>  \brief division is for image division(/)
-    !! \param self1 lhs numerator
-    !! \param self2 lhs denominator
-    !! \return rhs image copy
-    !!
     function division( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
         type(image) :: self
@@ -2723,8 +2343,6 @@ contains
     end subroutine div_rmat_at_2
 
     !>  \brief div_1 is for dividing image with real constant, not overloaded
-    !! \param c divisor
-    !!
     subroutine div_1( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
@@ -2740,10 +2358,6 @@ contains
     end subroutine div_1
 
     !>  \brief div_2 is for component-wise matrix division of a Fourier transform with a real matrix, k
-    !! \param logi coordinates
-    !! \param k 3D divisor
-    !! \param square logical flag if return image should be squared
-    !!
     subroutine div_2( self, logi, k, square )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -2767,10 +2381,6 @@ contains
     end subroutine div_2
 
     !>  \brief div_3 is for component-wise division of an image with a real number
-    !! \param logi coordinates
-    !! \param k 3D divisor
-    !! \param phys_in
-    !!
     subroutine div_3( self, logi, k, phys_in )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
@@ -2796,8 +2406,6 @@ contains
     end subroutine div_3
 
     !>  \brief div_4 is for division of images
-    !! \param self2div image object divisor
-    !!
     subroutine div_4( self, self2div )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2div
@@ -2847,8 +2455,6 @@ contains
     end subroutine ctf_dens_correct
 
     !>  \brief conjugate is for complex conjugation of a FT
-    !! \return self_out
-    !!
     function conjugate( self ) result ( self_out )
         class(image), intent(in) :: self
         type(image) :: self_out
@@ -2861,7 +2467,6 @@ contains
     end function conjugate
 
     !>  \brief sqpow is for calculating the square power of an image
-    !!
     subroutine sqpow( self )
         class(image), intent(inout) :: self
         if( self%ft )then
@@ -2898,8 +2503,6 @@ contains
     ! BINARY IMAGE METHODS
 
     !>  \brief nforeground counts the number of foreground (white) pixels in a binary image
-    !! \return num of ON pixels
-    !!
     function nforeground( self ) result( n )
         class(image), intent(in) :: self
         integer :: n
@@ -2907,8 +2510,6 @@ contains
     end function nforeground
 
     !>  \brief nbackground counts the number of background (black) pixels in a binary image
-    !! \return num of OFF pixels
-    !!
     function nbackground( self ) result( n )
         class(image), intent(in) :: self
         integer :: n
@@ -2917,8 +2518,6 @@ contains
 
     !>  \brief  is for binarizing an image with given threshold value
     !!          binary normalization (norm_bin) assumed!> bin_1
-    !! \param thres threshold value
-    !!
     subroutine bin_1( self, thres )
         class(image), intent(inout) :: self
         real,         intent(in)    :: thres
@@ -2931,8 +2530,6 @@ contains
     end subroutine bin_1
 
     !>  \brief  bin_2 is for binarizing an image using nr of pixels/voxels threshold
-    !! \param npix
-    !!
     subroutine bin_2( self, npix )
         class(image), intent(inout) :: self
         integer, intent(in)         :: npix
@@ -2941,7 +2538,6 @@ contains
         integer                     :: npixtot
         if( self%ft ) call simple_stop('only for real images; bin_2; simple image')
         npixtot = product(self%ldim)
-        ! forsort = self%packer() ! Intel hickup
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
         thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
@@ -3022,8 +2618,6 @@ contains
     end subroutine bin_kmeans
 
     !>  \brief bin_filament is for creating a binary filament
-    !! \param width_A physical width
-    !!
     subroutine bin_filament( self, width_A )
         class(image), intent(inout) :: self
         real, intent(in)            :: width_A
@@ -3040,9 +2634,6 @@ contains
     end subroutine bin_filament
 
     !>  \brief bin_cylinder  is for creating a binary cyclinder along z-axis
-    !! \param rad radius
-    !! \param height height of cylinder
-    !!
     subroutine bin_cylinder( self, rad, height )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rad, height
@@ -3068,7 +2659,6 @@ contains
     end subroutine bin_cylinder
 
     !>  \brief cendist produces an image with square distance from the centre of the image
-    !!
     subroutine cendist( self )
         class(image), intent(inout) :: self
         real    :: centre(3)
@@ -3176,9 +2766,6 @@ contains
             rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
         call tmp%mask(rmsk, 'soft')
-        ! where( tmp%rmat < 0. )
-        !     tmp%rmat = 0.
-        ! end where
         call tmp%bin_kmeans
         xyz = tmp%masscen()
         call tmp%kill
@@ -3210,7 +2797,6 @@ contains
     end subroutine bin_inv
 
     !>  \brief grow_bin adds one layer of pixels bordering the background in a binary image
-    !! Classical dilation of binary image
     subroutine grow_bin( self )
         class(image), intent(inout) :: self
         integer                     :: i,j,k
@@ -3259,7 +2845,6 @@ contains
     end subroutine grow_bin
 
     !>  \brief shrink_bin removes one layer of pixels bordering the background in a binary image
-    !! Classical erosion of binary image
     subroutine shrink_bin( self )
         class(image), intent(inout) :: self
         integer                     :: i,j,k
@@ -3310,8 +2895,6 @@ contains
     end subroutine shrink_bin
 
     !> \brief grow_bins adds one layer of pixels bordering the background in a binary image
-    !! \param nlayers
-    !! Classical iterative dilation of binary image
     subroutine grow_bins( self, nlayers )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: nlayers
@@ -3384,8 +2967,6 @@ contains
     end subroutine grow_bins
 
     !> \brief shrink_bins removes n layers of pixels bordering the background in a binary image
-    !! \param nlayers
-    !! Classical iterative erosion of binary image
     subroutine shrink_bins( self, nlayers )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: nlayers
@@ -3459,8 +3040,6 @@ contains
     end subroutine shrink_bins
 
     !> binary_dilation wrapper for grow_bin(s)
-    !! \param nlayers number of layers
-    !!
     subroutine binary_dilation(self,nlayers)
         class(image), intent(inout) :: self
         integer, intent(inout),optional :: nlayers
@@ -3472,8 +3051,6 @@ contains
     end subroutine binary_dilation
 
     !> binary_erosion wrapper for shrink_bin(s)
-    !! \param nlayers number of layers
-    !!
     subroutine binary_erosion(self,nlayers)
         class(image), intent(inout) :: self
         integer, intent(inout),optional :: nlayers
@@ -3507,8 +3084,6 @@ contains
     end subroutine binary_closing
 
     !>  \brief cos_edge applies cosine squared edge to a binary image
-    !! \param falloff
-    !!
     subroutine cos_edge( self, falloff )
         class(image), intent(inout) :: self
         integer, intent(in)         :: falloff
@@ -3614,11 +3189,7 @@ contains
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
 
-
     !>  \brief  increments the logi pixel value with incr
-    !! \param logi coordinates
-    !! \param incr increment
-    !!
     subroutine increment( self, logi, incr )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -3675,7 +3246,6 @@ contains
     ! FILTERS
 
     !>  \brief  acf calculates the autocorrelation function of an image
-    !!
     subroutine acf( self )
         class(image), intent(inout) :: self
         if( .not. self%ft )then
@@ -3686,10 +3256,6 @@ contains
     end subroutine acf
 
     !>  \brief ccf calculates the cross-correlation function between two images
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \return  cc
-    !!  calculates thecross-correlation function between two images
     function ccf( self1, self2 ) result( cc )
         class(image), intent(inout) :: self1, self2
         type(image) :: cc
@@ -3705,10 +3271,6 @@ contains
     end function ccf
 
     !>  \brief guinier_bfac  generates the bfactor from the Guinier plot of the unfiltered volume
-    !! \param hp high-pass
-    !! \param lp low-pass
-    !! \return  bfac
-    !!
     function guinier_bfac( self, hp, lp ) result( bfac )
         class(image), intent(inout) :: self
         real, intent(in)            :: hp, lp
@@ -3725,8 +3287,6 @@ contains
     end function guinier_bfac
 
     !>  \brief guinier generates the Guinier plot for a volume, which should be unfiltered
-    !! \return  plot
-    !!
     function guinier( self ) result( plot )
         class(image), intent(inout) :: self
         real, allocatable :: spec(:), plot(:,:)
@@ -3745,10 +3305,6 @@ contains
     end function guinier
 
     !>  \brief spectrum generates the rotationally averaged spectrum of an image
-    !! \param which accepts 'real''power''absreal''absimag''abs''phase''count'
-    !! \param norm normalise result
-    !! \return spec Power spectrum array
-    !!
     subroutine spectrum( self, which, spec, norm)
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -3768,11 +3324,9 @@ contains
             endif
         endif
         lfny = self%get_lfny(1)
-      !  DebugPrint "In simple_image::spectrum lfny", lfny
         if(allocated(spec))deallocate(spec)
         allocate( spec(lfny), counts(lfny), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('spectrum; simple_image',alloc_stat)
-      !  DebugPrint "In simple_image::spectrum spec size", size(spec)
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3895,11 +3449,9 @@ contains
             end where
         endif
         if( didft ) call self%ifft()
-      !  DebugPrint "In simple_image::spectrum done"
     end subroutine spectrum
 
     !> \brief shellnorm for normalising each shell to uniform (=1) power
-    !!
     subroutine shellnorm( self )
         class(image), intent(inout) :: self
         real, allocatable  :: expec_pow(:)
@@ -4130,8 +3682,6 @@ contains
     end subroutine shellnorm_and_apply_filter_2
 
     !> \brief apply_bfac  is for applying bfactor to an image
-    !! \param b
-    !!
     subroutine apply_bfac( self, b )
         class(image), intent(inout) :: self
         real, intent(in)            :: b
@@ -4161,10 +3711,6 @@ contains
     end subroutine apply_bfac
 
     !> \brief bp  is for band-pass filtering an image
-    !! \param hplim
-    !! \param lplim
-    !! \param width
-    !!
     subroutine bp( self, hplim, lplim, width )
         class(image), intent(inout) :: self
         real, intent(in)            :: hplim, lplim
@@ -4214,10 +3760,6 @@ contains
     end subroutine bp
 
     !>  \brief gen_lpfilt is for generating low-pass filter weights
-    !! \param lplim
-    !! \param width
-    !! \return  filter array
-    !!
     function gen_lpfilt( self, lplim, width ) result( filter )
         class(image),   intent(inout) :: self
         real,           intent(in)    :: lplim
@@ -4242,7 +3784,6 @@ contains
     end function gen_lpfilt
 
     !> \brief apply_filter_1  is for application of an arbitrary 1D filter function
-    !! \param filter
     subroutine apply_filter_1( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
@@ -4282,8 +3823,6 @@ contains
     end subroutine apply_filter_1
 
     !> \brief apply_filter_2  is for application of an arbitrary filter function
-    !! \param filter
-    !!
     subroutine apply_filter_2( self, filter )
         class(image), intent(inout) :: self, filter
         real    :: fwght
@@ -4317,7 +3856,6 @@ contains
     end subroutine apply_filter_2
 
     !> \brief apply_filter_1  is for application of an arbitrary 1D filter function
-    !! \param filter
     subroutine apply_filter_serial( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
@@ -4347,8 +3885,6 @@ contains
     end subroutine apply_filter_serial
 
     !> \brief phase_rand  is for randomzing the phases of the FT of an image from lp and out
-    !! \param lp
-    !!
     subroutine phase_rand( self, lp )
         class(image), intent(inout) :: self
         real, intent(in)            :: lp
@@ -4549,7 +4085,6 @@ contains
     ! CALCULATORS
 
     !> \brief square_root  is for calculating the square root of an image
-    !!
     subroutine square_root( self )
         class(image), intent(inout) :: self
         if( self%ft )then
@@ -4591,14 +4126,6 @@ contains
     end function ccpeak_offset
 
     !> \brief stats  is for providing foreground/background statistics
-    !! \param which foreground or background
-    !! \param ave Geometric mean
-    !! \param sdev Standard Deviation
-    !! \param var Variance
-    !! \param msk optional input mask
-    !! \param med median
-    !! \param errout error flag
-    !!
     subroutine stats_1( self, which, ave, sdev, maxv, minv, msk, med, errout )
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -4705,15 +4232,6 @@ contains
     end subroutine stats_1
 
     !> \brief stats  is for providing within mask statistics
-    !! \param mskimg binary mask image
-    !! \param ave Geometric mean of pixels within mask
-    !! \param sdev Standard Deviation of pixels within mask
-    !! \param maxv maximum value within mask
-    !! \param minv minimum value within mask
-    !! \param m optional input mask
-    !! \param med median
-    !! \param errout error flag
-    !!
     subroutine stats_2( self, mskimg, ave, sdev, maxv, minv, med, errout )
         class(image),      intent(inout) :: self
         class(image),      intent(in)    :: mskimg
@@ -4750,7 +4268,6 @@ contains
 
     !>  \brief rmsd for calculating the RMSD of a map
     !! \return  dev root mean squared deviation
-    !!
     function rmsd( self ) result( dev )
         class(image), intent(inout) :: self
         real :: devmat(self%ldim(1),self%ldim(2),self%ldim(3)), dev, avg
@@ -4770,10 +4287,6 @@ contains
 
     !> \brief noisesdev is for estimating the noise variance of an image
     !!          by online estimation of the variance of the background pixels
-    !>
-    !! \param msk mask threshold
-    !! \return  sdev
-    !!
     function noisesdev( self, msk ) result( sdev )
         use simple_online_var, only: online_var
         class(image), intent(inout) :: self
@@ -4816,9 +4329,6 @@ contains
     end function noisesdev
 
     !>  \brief  is for calculating the mean of an image
-    !> mean
-    !! \return  avg
-    !!
     function mean( self ) result( avg )
         class(image), intent(inout) :: self
         real :: avg
@@ -4861,7 +4371,6 @@ contains
     end function contains_nans
 
     !> \brief checkimg4nans  is for checking the numerical soundness of an image
-    !!
     subroutine checkimg4nans( self )
         class(image), intent(in) :: self
         if( self%ft )then
@@ -4872,12 +4381,6 @@ contains
     end subroutine checkimg4nans
 
     !> \brief cure_2  is for checking the numerical soundness of an image and curing it if necessary
-    !! \param maxv
-    !! \param minv
-    !! \param ave
-    !! \param sdev
-    !! \param n_nans
-    !!
     subroutine cure( self, maxv, minv, ave, sdev, n_nans )
         class(image), intent(inout) :: self
         real,         intent(out)   :: maxv, minv, ave, sdev
@@ -4933,10 +4436,6 @@ contains
     end subroutine cure
 
     !>  \brief loop_lims is for determining loop limits for transforms
-    !! \param mode
-    !! \param lp_dyn
-    !! \return  lims
-    !!
     function loop_lims( self, mode, lp_dyn ) result( lims )
         class(image), intent(in)   :: self
         integer, intent(in)        :: mode
@@ -4956,6 +4455,7 @@ contains
         integer                  :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(logi)
     end function comp_addr_phys1
+
     !>  \brief  Convert logical address to physical address. Complex image.
     pure function comp_addr_phys2(self,h,k,m) result(phys)
         class(image), intent(in) :: self
@@ -4963,6 +4463,7 @@ contains
         integer                  :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(h,k,m)
     end function comp_addr_phys2
+
     !>  \brief  generate physical index mapping array
     subroutine get_2Dphys_ind_mapping( self, lims, ind_map )
         class(image), intent(in)  :: self
@@ -4977,12 +4478,6 @@ contains
     end subroutine get_2Dphys_ind_mapping
 
     !>  \brief corr is for correlating two images
-    !! \param self1 input image 1
-    !! \param self2 input image 2
-    !! \param lp_dyn low-pass cut-off freq
-    !! \param hp_dyn high-pass cut-off freq
-    !! \return  r Correlation coefficient
-    !!
     function corr( self1, self2, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self1, self2
         real, optional, intent(in)    :: lp_dyn, hp_dyn
@@ -5047,14 +4542,7 @@ contains
 
     !> \brief is for highly optimized correlation between 2D images, particle is
     !> shifted by shvec so remember to take care of this properly in the calling
-    !> module corr_shifted
-    !! \param self_ref reference image
-    !! \param self_ptcl particle image object
-    !! \param shvec shift vector
-    !! \param lp_dyn  low-pass
-    !! \param hp_dyn  high-pass
-    !! \return  r correlation coefficient
-    !!
+    !> module
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl
         real,           intent(in)    :: shvec(3)
@@ -5112,18 +4600,13 @@ contains
     !!
     function real_corr_1( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
-        real :: diff1!(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        real :: diff2!(self2%ldim(1),self2%ldim(2),self2%ldim(3))
+        real :: diff1
+        real :: diff2
         real :: r, ax, ay, sxx, syy, sxy, npix
         integer :: i,j,k
-        npix  = real(product(self1%ldim))
-        ax    = self1%mean() !sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))) / npix
-        ay    = self2%mean() !sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))) / npix
-        ! diff1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
-        ! diff2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
-        ! sxx   = sum(diff1 * diff1)
-        ! syy   = sum(diff2 * diff2)
-        ! sxy   = sum(diff1 * diff2)
+        npix = real(product(self1%ldim))
+        ax   = self1%mean()
+        ay   = self2%mean()
         !$omp parallel do default(shared) private(i,j,k,diff1,diff2) collapse(3) proc_bind(close) schedule(static) reduction(+:sxx,syy,sxy)
         do i=1,self1%ldim(1)
             do j=1,self1%ldim(2)
@@ -5145,12 +4628,6 @@ contains
     end function real_corr_1
 
     !>  \brief real_corr_2 is for calculating a real-space correlation coefficient between images within a mask
-    !>  Input mask is assumed binarized
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \param maskimg
-    !! \return  r
-    !!
     function real_corr_2( self1, self2, mask ) result( r )
         class(image), intent(inout) :: self1, self2
         logical,      intent(in)    :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
@@ -5175,8 +4652,6 @@ contains
     end function real_corr_2
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
-    !! \param sxx
-    !!
     subroutine prenorm4real_corr_1( self, sxx )
         class(image), intent(inout) :: self
         real,         intent(out)   :: sxx
@@ -5189,8 +4664,6 @@ contains
     end subroutine prenorm4real_corr_1
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
-    !! \param sxx
-    !!
     subroutine prenorm4real_corr_2( self, sxx, mask )
         class(image), intent(inout) :: self
         real,         intent(out)   :: sxx
@@ -5204,11 +4677,6 @@ contains
     end subroutine prenorm4real_corr_2
 
     !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)
-    !! \param self_ref image object
-    !! \param self_ptcl image object
-    !! \param sxx_ref
-    !! \return  r
-    !!
     function real_corr_prenorm_1( self_ref, self_ptcl, sxx_ref ) result( r )
         class(image), intent(inout) :: self_ref, self_ptcl
         real,         intent(in)    :: sxx_ref
@@ -5227,11 +4695,6 @@ contains
     end function real_corr_prenorm_1
 
     !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)
-    !! \param self_ref image object
-    !! \param self_ptcl image object
-    !! \param sxx_ref
-    !! \return  r
-    !!
     function real_corr_prenorm_2( self_ref, self_ptcl, sxx_ref, mask ) result( r )
         class(image), intent(inout) :: self_ref, self_ptcl
         real,         intent(in)    :: sxx_ref
@@ -5251,11 +4714,6 @@ contains
     end function real_corr_prenorm_2
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \param res
-    !! \param corrs
-    !!
     subroutine fsc( self1, self2, corrs )
         class(image), intent(inout) :: self1, self2
         real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
@@ -5293,8 +4751,6 @@ contains
     end subroutine fsc
 
     !> \brief get_nvoxshell is for calculation of voxels per Fourier shell
-    !! \param voxs
-    !!
     subroutine get_nvoxshell( self, voxs )
         class(image)     , intent(inout) :: self
         real, allocatable, intent(inout) :: voxs(:)
@@ -5329,9 +4785,6 @@ contains
     end subroutine get_nvoxshell
 
     !>  \brief get array of resolution steps
-    !> get_res
-    !! \return  res
-    !!
     function get_res( self ) result( res )
         class(image), intent(in) :: self
         real, allocatable        :: res(:)
@@ -5346,11 +4799,6 @@ contains
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-    !> oshift_1
-    !! \param logi index in Fourier domain
-    !! \param shvec origin shift
-    !! \return  comp
-    !!
     function oshift_1( self, logi, shvec ) result( comp )
         class(image), intent(in) :: self
         real,         intent(in) :: logi(3)
@@ -5369,11 +4817,6 @@ contains
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-    !> oshift_2
-    !! \param logi index in Fourier domain
-    !! \param shvec origin shift
-    !! \return  comp
-    !!
     function oshift_2( self, logi, shvec ) result( comp )
         class(image), intent(in) :: self
         integer,      intent(in) :: logi(3)
@@ -5383,11 +4826,6 @@ contains
     end function oshift_2
 
     !>  \brief  returns the real argument transfer matrix components at point logi in a Fourier transform
-    !> gen_argtransf_comp
-    !! \param logi index in Fourier domain
-    !! \param ldim image dimensions
-    !! \return  arg
-    !!
     function gen_argtransf_comp( self, logi, ldim ) result( arg )
         class(image), intent(in)      :: self
         real, intent(in)              :: logi(3)
@@ -5660,40 +5098,6 @@ contains
             med   = (val1+val2+val3+val4+val5+val6+val7+val8+val9+val10+val11+val12) / 12.
         endif
         if(abs(med) > TINY) self%rmat = self%rmat - med
-        ! for the time where we care about modifying the image
-        ! class(image), intent(inout) :: self
-        ! integer :: k, npixels, start
-        ! real, allocatable :: pixels(:)
-        ! real    :: med
-        ! if( self%ldim(3) == 1 )then
-        !     npixels = 2*sum(self%ldim(1:2))
-        !     allocate(pixels(npixels))
-        !     pixels(1:self%ldim(2))                               = self%rmat(1           , :self%ldim(2),1)
-        !     pixels(self%ldim(2)+1:2*self%ldim(2))                = self%rmat(self%ldim(1), :self%ldim(2),1)
-        !     pixels(2*self%ldim(2)+1:2*self%ldim(2)+self%ldim(1)) = self%rmat(:self%ldim(1), 1, 1)
-        !     pixels(2*self%ldim(2)+self%ldim(1)+1:)               = self%rmat(:self%ldim(1), self%ldim(2),1)
-        ! else
-        !     npixels = 4*sum(self%ldim(1:3))
-        !     allocate(pixels(npixels))
-        !     pixels(1:self%ldim(2))                                              = self%rmat(1           , :self%ldim(2),1)
-        !     pixels(self%ldim(2)+1:2*self%ldim(2))                               = self%rmat(self%ldim(1), :self%ldim(2),1)
-        !     pixels(2*self%ldim(2)+1:2*self%ldim(2)+self%ldim(1))                = self%rmat(:self%ldim(1), 1, 1)
-        !     pixels(2*self%ldim(2)+self%ldim(1)+1:2*(self%ldim(2)+self%ldim(1))) = self%rmat(:self%ldim(1), self%ldim(2),1)
-        !     start = 2*(self%ldim(2)+self%ldim(1))
-        !     pixels(start:start+self%ldim(2))                                 = self%rmat(1           , :self%ldim(2),self%ldim(3))
-        !     pixels(start+self%ldim(2)+1:start+2*self%ldim(2))                = self%rmat(self%ldim(1), :self%ldim(2),self%ldim(3))
-        !     pixels(start+2*self%ldim(2)+1:start+2*self%ldim(2)+self%ldim(1)) = self%rmat(:self%ldim(1), 1,self%ldim(3))
-        !     pixels(start+2*self%ldim(2)+self%ldim(1)+1:2*start)              = self%rmat(:self%ldim(1), self%ldim(2),self%ldim(3))
-        !     start = 4*(self%ldim(2)+self%ldim(1))
-        !     pixels(start:start+self%ldim(3))                    = self%rmat(1           ,1,           :self%ldim(3))
-        !     pixels(start+self%ldim(3)+1:start+2*self%ldim(3))   = self%rmat(1           ,self%ldim(2),:self%ldim(3))
-        !     pixels(start+2*self%ldim(3)+1:start+3*self%ldim(3)) = self%rmat(self%ldim(1),1,           :self%ldim(3))
-        !     pixels(start+3*self%ldim(3)+1:)                     = self%rmat(self%ldim(1),self%ldim(2),:self%ldim(3))
-        ! endif
-        ! k = nint(real(npixels)/2.)
-        ! med = selec(k,npixels,pixels)
-        ! if(abs(med) > TINY) self%rmat = self%rmat - med
-        ! deallocate(pixels)
     end subroutine zero_background
 
     subroutine norm_subtr_backgr_pad_fft( self, mskimg, self_out )
@@ -5790,7 +5194,7 @@ contains
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
     !!          I stole it from CTFFIND4 (thanks Alexis for the beautiful re-implementation)
-    subroutine taper_edges(self)
+    subroutine taper_edges( self )
         class(image), intent(inout) :: self
         real, allocatable  :: avg_curr_edge_start(:,:)
         real, allocatable  :: avg_curr_edge_stop(:,:)
@@ -5949,7 +5353,6 @@ contains
 
     !> \brief salt_n_pepper  is for adding salt and pepper noise to an image
     !! \param pos 2D mask
-    !!
     subroutine salt_n_pepper( self, pos )
         class(image), intent(inout) :: self
         logical, intent(in)         :: pos(:,:)
@@ -5971,7 +5374,6 @@ contains
 
     !>  \brief square just a binary square for testing purposes
     !! \param sqrad half width of square
-    !!
     subroutine square( self, sqrad )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: sqrad
@@ -5999,7 +5401,6 @@ contains
 
     !>  \brief  just a corner filling fun for testing purposes
     !! \param sqrad half width of square
-    !!
     subroutine corners( self, sqrad )
         class(image), intent(inout) :: self
         integer, intent(in)         :: sqrad
@@ -6031,7 +5432,6 @@ contains
     !> before_after to generate a before (left) and after (right) image
     !! \param left,right input images
     !! \return ba output montage
-    !!
     function before_after( left, right, mask ) result( ba )
         class(image),      intent(in) :: left, right
         logical, optional, intent(in) :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
@@ -6065,7 +5465,6 @@ contains
 
     !> \brief gauimg  just a Gaussian fun for testing purposes
     !! \param wsz window size
-    !!
     subroutine gauimg( self, wsz , alpha )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: wsz
@@ -6127,7 +5526,6 @@ contains
         self%ft = .false.
     end subroutine gauimg2
 
-
     subroutine gauimg2D( self, xsigma, ysigma )
         class(image), intent(inout) :: self
         real,         intent(in)    :: xsigma, ysigma
@@ -6156,8 +5554,6 @@ contains
         self%ft = .true.
     end subroutine fwd_ft
 
-    !> \brief bwd_ft  backward Fourier transform FFTW3
-    !!
     subroutine bwd_ft( self )
         class(image), intent(inout) :: self
         if( self%ft )then
@@ -6254,7 +5650,6 @@ contains
             end do
         end do
     end subroutine img2ft
-
 
     !> \brief dampens the central cross of a powerspectrum by median filtering
     subroutine dampen_central_cross( self )
@@ -6404,7 +5799,6 @@ contains
     !! \param x position in axis 0
     !! \param y position in axis 1
     !! \param z position in axis 2
-    !!
     subroutine shift( self, shvec )
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(3)
@@ -6457,7 +5851,6 @@ contains
     !! \param inner include cosine edge material
     !! \param width width of inner patch
     !! \param msksum masking sum
-    !!
     subroutine mask( self, mskrad, which, inner, width )
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
@@ -6585,7 +5978,6 @@ contains
     end subroutine mask
 
     !> \brief neg  is for inverting the contrast
-    !!
     subroutine neg( self )
         class(image), intent(inout) :: self
         logical :: didft
@@ -6603,7 +5995,6 @@ contains
     !! \param self_in image object
     !! \param self_out image object
     !! \param backgr
-    !!
     subroutine pad( self_in, self_out, backgr )
         class(image),   intent(inout) :: self_in, self_out
         real, optional, intent(in)    :: backgr
@@ -6661,9 +6052,7 @@ contains
     !> \brief pad_mirr is a constructor that pads the input image to input ldim in real space using mirroring
     !! \param self_in image object
     !! \param self_out image object
-    !!
     subroutine pad_mirr( self_in, self_out )
-        !use simple_winfuns, only: winfuns
         class(image),   intent(inout) :: self_in, self_out
         integer :: starts(3), stops(3)
         integer :: i,j, i_in, j_in
@@ -6718,7 +6107,6 @@ contains
     !!             DO NOT PARALLELISE
     !! \param self_in image object
     !! \param self_out image object
-    !!
     subroutine clip( self_in, self_out )
         class(image), intent(inout) :: self_in, self_out
         real                        :: ratio
@@ -6757,7 +6145,6 @@ contains
 
     !> \brief clip_inplace is a constructor that clips the input image to input ldim
     !! \param ldim
-    !!
     subroutine clip_inplace( self, ldim )
         class(image), intent(inout) :: self
         integer, intent(in)         :: ldim(3)
@@ -6836,7 +6223,6 @@ contains
     !> \brief norm_ext  is for normalization of an image using inputted average and standard deviation
     !! \param avg Average
     !! \param sdev Standard deviation
-    !!
     subroutine norm_ext( self, avg, sdev )
         class(image), intent(inout) :: self
         real, intent(in)            :: avg, sdev
@@ -6851,7 +6237,6 @@ contains
     !> \brief noise_norm  normalizes the image according to the background noise
     !! \param msk Mask value
     !! \param errout error flag
-    !!
     subroutine noise_norm( self, msk, errout )
         class(image),      intent(inout) :: self
         real,              intent(in)    :: msk
@@ -6909,7 +6294,6 @@ contains
     !> \brief radius_norm  normalizes the image based on a central sphere of input radius
     !! \param radius Radius of sphere
     !! \param errout error flag
-    !!
     subroutine radius_norm( self, radius, errout )
         class(image),      intent(inout) :: self
         real,    optional, intent(in)    :: radius
@@ -6930,7 +6314,6 @@ contains
         endif
         if( irad<=0. )call simple_stop('Invalid radius value in rad_norm')
         call maskimg%disc(self%ldim, self%smpd, irad, npix)
-        ! pixels = self%packer(maskimg) ! Intel hickup
         pixels = pack( self%rmat, maskimg%rmat > 0.5 )
         call moment( pixels, ave, sdev, var, err )
         deallocate(pixels)
@@ -6969,7 +6352,6 @@ contains
     !> \brief roavg  is for creating a rotation average of self
     !! \param angstep angular step
     !! \param avg output image rotation average
-    !!
     subroutine roavg( self, angstep, avg, ang_stop )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: angstep
@@ -7006,7 +6388,6 @@ contains
     !! \param shxi shift in x axis
     !! \param shyi shift in y axis
     !! \param self_out optional copy of processed result
-    !!
     subroutine rtsq( self_in, ang, shxi, shyi, self_out )
         class(image),           intent(inout) :: self_in
         real,                   intent(in)    :: ang,shxi,shyi
@@ -7098,7 +6479,6 @@ contains
     !! \param shxi shift in x axis
     !! \param shyi shift in y axis
     !! \param rmat_out is the rotated pixels
-    !!
     subroutine rtsq_serial( self_in, ang, shxi, shyi, rmat_out )
         class(image), intent(inout) :: self_in
         real,         intent(in)    :: ang,shxi,shyi
@@ -7188,8 +6568,7 @@ contains
     !! \param ncured number of corrected points
     !! \param nsigma number of std. dev. to set upper and lower limits
     !! \param deadhot output index of corrected pixels
-    !! \param outliers -
-    !!
+    !! \param outliers
     subroutine cure_outliers( self, ncured, nsigma, deadhot, outliers )
         class(image),      intent(inout) :: self
         integer,           intent(inout) :: ncured
@@ -7313,7 +6692,6 @@ contains
             !$omp end parallel do
             deallocate( patch, padded_image )
         endif
-
         if(retl1norm)then
             l1normdiff = l1norm_2(selfcopy,self)
             call selfcopy%kill()
@@ -7740,7 +7118,6 @@ contains
         end subroutine test_image_local
 
     end subroutine test_image
-
 
     !>  \brief  is a destructor
     subroutine kill( self )

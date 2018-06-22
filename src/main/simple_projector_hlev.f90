@@ -96,6 +96,7 @@ contains
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
         call vol_pad%kill_expanded
         call vol_pad%kill
+        call rovol_pad%kill
     end function rotvol
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding

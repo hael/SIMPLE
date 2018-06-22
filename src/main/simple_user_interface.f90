@@ -122,7 +122,7 @@ type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
-type(simple_program), target :: symsrch
+type(simple_program), target :: symaxis_search
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
@@ -269,7 +269,7 @@ contains
         call new_simulate_subtomogram
         call new_stack
         call new_stackops
-        call new_symsrch
+        call new_symaxis_search
         call new_tseries_track
         call new_update_project
         call new_vizoris
@@ -331,7 +331,7 @@ contains
         prg_ptr_array(50)%ptr2prg => simulate_subtomogram
         prg_ptr_array(51)%ptr2prg => stack
         prg_ptr_array(52)%ptr2prg => stackops
-        prg_ptr_array(53)%ptr2prg => symsrch
+        prg_ptr_array(53)%ptr2prg => symaxis_search
         prg_ptr_array(54)%ptr2prg => tseries_track
         prg_ptr_array(55)%ptr2prg => update_project
         prg_ptr_array(56)%ptr2prg => vizoris
@@ -449,8 +449,8 @@ contains
                 ptr2prg => stack
             case('stackops')
                 ptr2prg => stackops
-            case('symsrch')
-                ptr2prg => symsrch
+            case('symaxis_search')
+                ptr2prg => symaxis_search
             case('tseries_track')
                 ptr2prg => tseries_track
             case('update_project')
@@ -523,7 +523,7 @@ contains
         write(*,'(A)') scale%name
         write(*,'(A)') stack%name
         write(*,'(A)') stackops%name
-        write(*,'(A)') symsrch%name
+        write(*,'(A)') symaxis_search%name
         write(*,'(A)') update_project%name
         write(*,'(A)') vizoris%name
         write(*,'(A)') volops%name
@@ -2329,7 +2329,7 @@ contains
         &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
         &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 2, 0, 0, 0, 0, 2, .true.)                                                     ! # entries in each group
+        &0, 2, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2486,7 +2486,7 @@ contains
         &then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed &
         &before the remaining 80% of the noise (white noise) is added',& ! descr_long
         &'simple_exec',&                                                 ! executable
-        &1, 15, 0, 1, 2, 1, 1, .false.)                                   ! # entries in each group
+        &1, 15, 0, 1, 2, 1, 1, .false.)                                  ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_particles%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
@@ -2627,10 +2627,10 @@ contains
         call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
 
-    subroutine new_symsrch
+    subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION
-        call symsrch%new(&
-        &'symsrch',&                                                                                               ! name
+        call symaxis_search%new(&
+        &'symaxis_search',&                                                                                               ! name
         &'Search for symmetry axis',&                                                                              ! descr_short
         &'is a program for searching for the principal symmetry axis of a volume reconstructed in C1. &
         &The rotational transformation is applied to the oritype field in the project and the project &
@@ -2640,29 +2640,29 @@ contains
         &1, 2, 0, 2, 3, 1, 1, .false.)                                                                             ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call symsrch%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
+        call symaxis_search%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
-        call symsrch%set_input('parm_ios', 1, smpd)
-        call symsrch%set_input('parm_ios', 2, projfile)
-        symsrch%parm_ios(2)%required = .false.
+        call symaxis_search%set_input('parm_ios', 1, smpd)
+        call symaxis_search%set_input('parm_ios', 2, projfile)
+        symaxis_search%parm_ios(2)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
-        call symsrch%set_input('srch_ctrls', 1, pgrp)
-        call symsrch%set_input('srch_ctrls', 2, 'center', 'binary', 'Center input volume', 'Center input volume by its &
+        call symaxis_search%set_input('srch_ctrls', 1, pgrp)
+        call symaxis_search%set_input('srch_ctrls', 2, 'center', 'binary', 'Center input volume', 'Center input volume by its &
         &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls
-        call symsrch%set_input('filt_ctrls', 1, lp)
-        call symsrch%set_input('filt_ctrls', 2, hp)
-        call symsrch%set_input('filt_ctrls', 3, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call symaxis_search%set_input('filt_ctrls', 1, lp)
+        call symaxis_search%set_input('filt_ctrls', 2, hp)
+        call symaxis_search%set_input('filt_ctrls', 3, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
         ! mask controls
-        call symsrch%set_input('mask_ctrls', 1, msk)
+        call symaxis_search%set_input('mask_ctrls', 1, msk)
         ! computer controls
-        call symsrch%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_symsrch
+        call symaxis_search%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_symaxis_search
 
     subroutine new_tseries_track
         ! PROGRAM SPECIFICATION

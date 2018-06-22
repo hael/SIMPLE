@@ -35,7 +35,7 @@ type(import_cavgs_commander)         :: ximport_cavgs
 type(make_pickrefs_commander)        :: xmake_pickrefs
 type(extract_commander)              :: xextract
 type(cluster_cavgs_commander)        :: xcluster_cavgs
-type(symsrch_commander)              :: xsymsrch
+type(symaxis_search_commander)       :: xsymsrch
 type(postprocess_commander)          :: xpostprocess
 
 ! IMAGE PROCESSING
@@ -131,7 +131,7 @@ select case(prg)
     case('cluster_cavgs')
         call cline%parse()
         call xcluster_cavgs%execute(cline)
-    case( 'symsrch' )
+    case( 'symaxis_search' )
         call cline%parse()
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')

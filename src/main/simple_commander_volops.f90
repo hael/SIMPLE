@@ -21,7 +21,8 @@ public :: reproject_commander
 public :: volops_commander
 public :: volume_smat_commander
 public :: dock_volpair_commander
-public :: symsrch_commander
+public :: symaxis_search_commander
+public :: symmetrize_map_commander
 public :: make_pickrefs_commander
 private
 #include "simple_local_flags.inc"
@@ -54,10 +55,14 @@ type, extends(commander_base) :: dock_volpair_commander
   contains
     procedure :: execute      => exec_dock_volpair
 end type dock_volpair_commander
-type, extends(commander_base) :: symsrch_commander
+type, extends(commander_base) :: symaxis_search_commander
   contains
-    procedure :: execute      => exec_symsrch
-end type symsrch_commander
+    procedure :: execute      => exec_symaxis_search
+end type symaxis_search_commander
+type, extends(commander_base) :: symmetrize_map_commander
+  contains
+    procedure :: execute      => exec_symmetrize_map
+end type symmetrize_map_commander
 type, extends(commander_base) :: make_pickrefs_commander
 contains
     procedure :: execute      => exec_make_pickrefs
@@ -306,8 +311,6 @@ contains
     end subroutine exec_postprocess
 
     !> exec_project generate projections from volume
-    !! \param cline command line
-    !!
     subroutine exec_reproject( self, cline )
         use simple_binoris_io, only: binread_nlines
         class(reproject_commander), intent(inout) :: self
@@ -347,8 +350,6 @@ contains
     end subroutine exec_reproject
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
-    !! \param cline commandline
-    !!
     subroutine exec_volops( self, cline )
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -562,13 +563,13 @@ contains
     end subroutine exec_dock_volpair
 
     !> for identification of the principal symmetry axis
-    subroutine exec_symsrch( self, cline )
+    subroutine exec_symaxis_search( self, cline )
         use simple_volpft_symsrch
         use simple_sym,  only: sym
         use simple_ori,  only: ori
         use simple_oris, only: oris
-        class(symsrch_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
+        class(symaxis_search_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
         character(len=32), parameter :: SYMAXISTAB = 'sym_axis'//trim(TXT_EXT)
         character(len=STDLEN)        :: fname_finished
@@ -589,36 +590,24 @@ contains
         call oshift%set(1,'x',shvec(1))
         call oshift%set(1,'y',shvec(2))
         call oshift%set(1,'z',shvec(3))
-        if( params%l_distr_exec .and. params%part.eq.1 )then
-            ! write shifts for distributed execution
-            call oshift%write(trim(SYMSHTAB), [1,1])
-        endif
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! init search object
         call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
         ! search
-        if( params%l_distr_exec )then
-            call volpft_srch4symaxis(symaxis, [params%fromp,params%top])
-        else
-            call volpft_srch4symaxis(symaxis)
-        endif
+        call volpft_srch4symaxis(symaxis)
         call symaxis4write%new(1)
         call symaxis4write%set_ori(1, symaxis)
-        if( params%l_distr_exec )then
-            call symaxis4write%write(params%outfile, [1,1])
-        else
-            call symaxis4write%write(SYMAXISTAB, [1,1])
-            if( cline%defined('projfile') )then
-                call build%spproj%read
-                if( .not. build%spproj%is_virgin_field(params%oritype) )then
-                    ! transfer shift and symmetry to orientations
-                    call syme%new(params%pgrp)
-                    ! rotate the orientations & transfer the 3d shifts to 2d
-                    shvec = -1. * shvec ! the sign is right
-                    call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
-                    call build%spproj%write_segment_inside(params%oritype, params%projfile)
-                endif
+        call symaxis4write%write(SYMAXISTAB, [1,1])
+        if( cline%defined('projfile') )then
+            call build%spproj%read
+            if( .not. build%spproj%is_virgin_field(params%oritype) )then
+                ! transfer shift and symmetry to orientations
+                call syme%new(params%pgrp)
+                ! rotate the orientations & transfer the 3d shifts to 2d
+                shvec = -1. * shvec ! the sign is right
+                call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
+                call build%spproj%write_segment_inside(params%oritype, params%projfile)
             endif
         endif
         ! destruct
@@ -627,9 +616,29 @@ contains
         call symaxis4write%kill
         call syme%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
-        call simple_touch('SYMSRCH_FINISHED', errmsg='In: commander_volops :: exec_symsrch')
-    end subroutine exec_symsrch
+        call simple_end('**** SIMPLE_SYMAXIS_SEARCH NORMAL STOP ****')
+        call simple_touch('SYMAXIS_SEARCH_FINISHED', errmsg='In: commander_volops :: exec_symsrch')
+    end subroutine exec_symaxis_search
+
+    subroutine exec_symmetrize_map( self, cline )
+        use simple_symanalyzer
+        class(symmetrize_map_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        ! init
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        if( .not. cline%defined('outvol') ) params%outvol = 'symmetrized_map'//params%ext
+        ! mask volume
+        call build%vol%read(params%vols(1))
+        call build%vol%mask(params%msk, 'soft')
+        ! symmetrize
+        call symmetrize_map(build%vol, params%pgrp, params%hp, params%lp, build%vol2)
+        ! write
+        call build%vol2%write(trim(params%outvol))
+        ! end gracefully
+        call simple_end('**** SIMPLE_SYMMETRIZE_MAP NORMAL STOP ****')
+    end subroutine exec_symmetrize_map
 
     !> for making picker references
     subroutine exec_make_pickrefs( self, cline )

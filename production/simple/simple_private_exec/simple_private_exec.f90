@@ -58,6 +58,7 @@ type(postprocess_commander)          :: xpostprocess   ! DUPLICATED
 type(reproject_commander)            :: xreproject     ! DUPLICATED
 type(volume_smat_commander)          :: xvolume_smat
 type(dock_volpair_commander)         :: xdock_volpair
+type(symmetrize_map_commander)       :: xsymmetrize_map
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
 type(scale_commander)                :: xscale         ! DUPLICATED
@@ -547,29 +548,8 @@ select case(prg)
         keys_optional(12) = 'inner'
         keys_optional(13) = 'mirr'
         ! set defaults
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:14))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:13))
         call xpostprocess%execute(cline)
-    ! case( 'postprocess' )
-    !     ! for post-processing of volumes
-    !     keys_required(1)  = 'vol1'
-    !     keys_required(2)  = 'smpd'
-    !     keys_required(3)  = 'msk'
-    !     ! set optional keys
-    !     keys_optional(1)  = 'fsc'
-    !     keys_optional(2)  = 'lp'
-    !     keys_optional(3)  = 'mw'
-    !     keys_optional(4)  = 'bfac'
-    !     keys_optional(5)  = 'automsk'
-    !     keys_optional(6)  = 'amsklp'
-    !     keys_optional(7)  = 'edge'
-    !     keys_optional(8)  = 'binwidth'
-    !     keys_optional(9)  = 'thres'
-    !     keys_optional(10) = 'mskfile'
-    !     keys_optional(11) = 'vol_filt'
-    !     keys_optional(12) = 'inner'
-    !     keys_optional(13) = 'mirr'
-    !     call cline%parse_oldschool(keys_required(:3), keys_optional(:13))
-    !     call xpostprocess%execute(cline)
     case( 'reproject' )
         ! for re-projecting a volume using interpolation in Fourier space
         keys_required(1)  = 'vol1'
@@ -615,6 +595,18 @@ select case(prg)
         keys_optional(3) = 'outvol'
         call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
         call xdock_volpair%execute(cline)
+    case( 'symmetrize_map' )
+        ! for finding the symmetry axis and average over the symmetry-related rotations
+        keys_required(1) = 'vol1'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'lp'
+        keys_required(4) = 'msk'
+        keys_required(5) = 'pgrp'
+        ! set optional keys
+        keys_optional(1) = 'hp'
+        keys_optional(2) = 'outvol'
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:2))
+        call xsymmetrize_map%execute(cline)
 
     ! GENERAL IMAGE PROCESSING PROGRAMS
 

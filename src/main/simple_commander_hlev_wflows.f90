@@ -218,7 +218,7 @@ contains
     subroutine exec_initial_3Dmodel( self, cline )
         use simple_commander_distr_wflows, only: refine3D_distr_commander, scale_project_distr_commander
         use simple_oris,                   only: oris
-        use simple_commander_volops,       only: reproject_commander, symsrch_commander
+        use simple_commander_volops,       only: reproject_commander, symaxis_search_commander
         use simple_commander_rec,          only: reconstruct3D_commander
         use simple_parameters,             only: params_glob
         use simple_qsys_env,               only: qsys_env
@@ -236,9 +236,9 @@ contains
         type(refine3D_distr_commander)      :: xrefine3D_distr
         type(scale_project_distr_commander) :: xscale_distr
         ! shared-mem commanders
-        type(symsrch_commander)       :: xsymsrch
-        type(reconstruct3D_commander) :: xreconstruct3D
-        type(reproject_commander)     :: xreproject
+        type(symaxis_search_commander) :: xsymsrch
+        type(reconstruct3D_commander)  :: xreconstruct3D
+        type(reproject_commander)      :: xreproject
         ! command lines
         type(cmdline) :: cline_refine3D_snhc_restart
         type(cmdline) :: cline_refine3D_snhc
@@ -439,9 +439,9 @@ contains
             if( qenv%get_qsys() .eq. 'local' )then
                 call xsymsrch%execute(cline_symsrch)
             else
-                call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMSRCH', 'SYMSRCH_FINISHED')
+                call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMAXIS_SEARCH', 'SYMAXIS_SEARCH_FINISHED')
             endif
-            call del_file('SYMSRCH_FINISHED')
+            call del_file('SYMAXIS_SEARCH_FINISHED')
         endif
         ! prep refinement stage
         call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
