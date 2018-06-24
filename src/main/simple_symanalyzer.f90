@@ -42,6 +42,7 @@ contains
         smpd    = vol_in%get_smpd()
         boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
+        call vol_in%ifft
         call vol_out%new(ldim, smpd)
         call rovol%new(ldim, smpd)
         call rovol_pad%new(ldim_pd, smpd)
@@ -52,10 +53,11 @@ contains
         ! rotate over symmetry related rotation and update average
         do isym=1,nsym
             rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
-            call o%set_euler(m2euler(rmat)) ! does this need to be the transpose ???
+            call o%set_euler(m2euler(rmat))
             call rotvol_slim(vol_pad, rovol_pad, rovol, o)
             call vol_out%add_workshare(rovol)
         end do
+        call vol_out%div(real(nsym))
         ! destruct
         call vol_pad%kill_expanded
         call vol_pad%kill

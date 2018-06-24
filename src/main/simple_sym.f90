@@ -1,13 +1,8 @@
 ! defines protein point-group symmetries
-
 module simple_sym
 include 'simple_lib.f08'
-! use simple_defs
-! use simple_error, only: allocchk, simple_stop
-! use simple_math,  only: rad2deg, hpsort, is_even
-! use simple_rnd,  only: irnd_uni
-use simple_oris,   only: oris
-use simple_ori,   only: ori
+use simple_oris, only: oris
+use simple_ori,  only: ori
 implicit none
 
 public :: sym
@@ -15,20 +10,19 @@ private
 
 type sym
     private
-    type(oris)                    :: e_sym                 !< symmetry eulers
-    character(len=3), allocatable :: subgrps(:)            !< subgroups
-    real                          :: eullims(3,2)= 0.      !< euler angles limits (asymetric unit)
-    integer                       :: n=1                   !< nr of symmetry ops
-    integer                       :: ncsym=1               !< num of order C sym
-    integer                       :: ndsym=1               !< num of order D sym
-    integer                       :: t_or_o=0              !< tetahedral or octahedral symmetry
-    character(len=3)              :: pgrp='c1'             !< point-group symmetry
-    logical                       :: c_or_d=.false.        !< c- or d-symmetry
+    type(oris)                    :: e_sym            !< symmetry eulers
+    character(len=3), allocatable :: subgrps(:)       !< subgroups
+    real                          :: eullims(3,2)= 0. !< euler angles limits (asymetric unit)
+    integer                       :: n=1              !< nr of symmetry ops
+    integer                       :: ncsym=1          !< num of order C sym
+    integer                       :: ndsym=1          !< num of order D sym
+    integer                       :: t_or_o=0         !< tetahedral or octahedral symmetry
+    character(len=3)              :: pgrp='c1'        !< point-group symmetry
+    logical                       :: c_or_d=.false.   !< c- or d-symmetry
   contains
     procedure          :: new
     procedure          :: srchrange
     procedure          :: srchrange_theta
-    procedure          :: which
     procedure          :: get_nsym
     procedure          :: get_pgrp
     procedure          :: apply
@@ -50,7 +44,7 @@ type sym
     procedure, private :: make_o
     procedure, private :: make_i
     procedure, private :: set_subgrps
-    procedure :: kill
+    procedure          :: kill
 end type sym
 
 interface sym
@@ -164,13 +158,6 @@ contains
         class(sym), intent(inout) :: self !< this instance
         srchrange_theta = self%eullims(2,2)
     end function srchrange_theta
-
-    !>  \brief  to check which point-group symmetry
-    pure function which( self ) result( pgrp )
-        class(sym), intent(in) :: self !< this instance
-        character(len=3) :: pgrp        !< sym group string
-        pgrp = self%pgrp
-    end function which
 
     !>  \brief  is a getter
     pure function get_nsym( self ) result( n )
@@ -642,6 +629,7 @@ contains
         endif
 
         contains
+
             !> get even symmetry
             subroutine getevensym( cstr, o )
                 integer,intent(in)           :: o     !< order
