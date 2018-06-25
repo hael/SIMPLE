@@ -11,7 +11,7 @@ implicit none
 public :: strategy2D_stochastic
 private
 
-logical, parameter :: DEBUG   = .false.
+#include "simple_local_flags.inc"
 
 type, extends(strategy2D) :: strategy2D_stochastic
     type(strategy2D_srch) :: s
@@ -36,6 +36,7 @@ contains
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set, do_shc
+        DebugPrint ' in stochastic srch '
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             do_inplsrch   = .true.
             cc_glob       = -1.
@@ -149,7 +150,7 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *, '>>> strategy2D_srch::FINISHED STOCHASTIC SEARCH'
+        if( debug ) print *, '>>> strategy2D_srch::FINISHED STOCHASTIC SEARCH'
     end subroutine srch_stochastic
 
     subroutine kill_stochastic( self )

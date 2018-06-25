@@ -84,7 +84,8 @@ contains
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( params_glob%eo .ne. 'no' )then
-            if( build_glob%spproj_field%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec'
+            if( build_glob%spproj_field%get_nevenodd() == 0 ) &
+                call simple_stop('ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec')
         else
             call build_glob%spproj_field%set_all2single('eo', -1.)
         endif
@@ -240,7 +241,8 @@ contains
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) ) then
                         allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
             case('single')
@@ -252,14 +254,16 @@ contains
                         else
                             allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         endif
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch single",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                           &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch single",alloc_stat)
                     endif
                 end do
             case('hard_single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_hard_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_single",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_single",alloc_stat)
                     endif
                 end do
             case('greedy_single')
@@ -270,7 +274,8 @@ contains
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
             case('multi')
@@ -282,28 +287,32 @@ contains
                         else
                             allocate(strategy3D_multi        :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         endif
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch multi",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch multi",alloc_stat)
                     endif
                 end do
             case('hard_multi')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_hard_multi :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_multi",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_multi",alloc_stat)
                     endif
                 end do
             case('greedy_multi')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_greedy_multi  :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
                     endif
                 end do
             case('cluster','clustersym')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_cluster       :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                             call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster",alloc_stat)
                     endif
                 end do
             case('cluster_snhc')
@@ -336,7 +345,8 @@ contains
         if( DEBUG ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
         ! memoize CTF matrices
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
-            if( build_glob%spproj%get_ctfflag('ptcl3D').ne.'no' ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+            if( build_glob%spproj%get_ctfflag('ptcl3D').ne.'no' )&
+                &call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         else
             ! class averages have no CTF
         endif
@@ -374,9 +384,11 @@ contains
         ! OUTPUT ORIENTATIONS
         select case(trim(params_glob%oritype))
             case('ptcl3D')
-                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
+                call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
+                    &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
             case('cls3D')
-                call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
+                call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
+                    &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
             case DEFAULT
                 write(*,*) 'oritype: ', trim(params_glob%oritype)
                 stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
@@ -516,7 +528,8 @@ contains
                     call preprefvol(cline, s, params_glob%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
-                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%eulspace%get_ori(iref), pftcc, iseven=.false.)
+                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
+                            &build_glob%eulspace%get_ori(iref), pftcc, iseven=.false.)
                     end do
                     !$omp end parallel do
                     ! copy odd volume
@@ -527,7 +540,8 @@ contains
                     call preprefvol( cline, s, params_glob%vols_even(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
-                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
+                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
+                            &build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
                     end do
                     !$omp end parallel do
                 else
@@ -535,7 +549,8 @@ contains
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         ind = (s - 1) * params_glob%nspace + iref
-                        call build_glob%vol%fproject_polar(ind, build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
+                        call build_glob%vol%fproject_polar(ind, build_glob%eulspace%get_ori(iref), &
+                            &pftcc, iseven=.true.)
                         call pftcc%cp_even2odd_ref(ind)
                     end do
                     !$omp end parallel do
@@ -545,7 +560,8 @@ contains
                 call preprefvol( cline, s, params_glob%vols(s), do_center, xyz)
                 !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
-                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
+                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
+                        &build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
                 end do
                 !$omp end parallel do
             endif

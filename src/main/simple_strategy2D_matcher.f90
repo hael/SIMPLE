@@ -13,9 +13,14 @@ implicit none
 public :: cluster2D_exec
 private
 #include "simple_local_flags.inc"
-
+#if _DEBUG
+logical, parameter      :: L_BENCH           = .true.
+logical, parameter      :: L_BENCH_CLUSTER2D = .true.
+#else
 logical, parameter      :: L_BENCH           = .false.
 logical, parameter      :: L_BENCH_CLUSTER2D = .false.
+#endif
+
 type(polarft_corrcalc)  :: pftcc
 integer                 :: nptcls2update
 integer(timer_int_kind) :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
@@ -95,6 +100,7 @@ contains
             end select
             write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
             write(*,'(A,F8.2)') '>>> EXTREMAL THRESHOLD:    ', extr_bound
+            DebugPrint ' cluster2D_exec; extremal time                           ',toc(t_init)
         else
             extr_thresh = 0.
             extr_bound  = -huge(extr_bound)
@@ -124,7 +130,7 @@ contains
             ptcl_mask = .true.
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
         endif
-
+        DebugPrint ' cluster2D_exec;  INDEX SAMPLING                             ', toc(t_init)
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -143,7 +149,7 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
-
+        DebugPrint ' cluster2D_exec;   PREP REFERENCES                           ', toc(t_init)
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
@@ -182,32 +188,33 @@ contains
                 call build_glob%spproj_field%set_all2single('w', 1.0)
             endif
         endif
-
+        DebugPrint ' cluster2D_exec;   SETUP WEIGHTS                             ', toc(t_init)
         ! B-factor
         if( params_glob%shellw.eq.'yes' .and. which_iter >= 3 )then
             call build_glob%spproj_field%calc_bfac_rec
         else
             call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif
-
+        DebugPrint ' cluster2D_exec;    B-factor                                 ', toc(t_init)
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
-
+        DebugPrint ' cluster2D_exec;    READ FOURIER RING CORRELATIONS ', toc(t_init)
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space )
         if( L_BENCH ) rt_init = toc(t_init)
-
+        DebugPrint ' cluster2D_exec;   SET FOURIER INDEX RANGE                   ', rt_init
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
         if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align( which_iter )
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
-
+        DebugPrint ' cluster2D_exec;   GENERATE REFERENCE & PARTICLE POLAR FTs   ', rt_prep_pftcc
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! array allocation for strategy2D
         call prep_strategy2D( ptcl_mask, which_iter )
+        DebugPrint ' cluster2D_exec;     prep_strategy2D                        ',toc(t_init)
         ! switch for polymorphic strategy2D construction
         allocate(strategy2Dsrch(params_glob%fromp:params_glob%top))
         select case(trim(params_glob%neigh))
@@ -232,6 +239,7 @@ contains
                     endif
                 enddo
         end select
+        DebugPrint ' cluster2D_exec;    srch constructed                         ', toc(t_init)
         ! actual construction
         cnt = 0
         do iptcl = params_glob%fromp, params_glob%top
@@ -249,11 +257,14 @@ contains
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif
         end do
+        DebugPrint ' cluster2D_exec;    actual construction                      ', toc(t_init)
         ! memoize CTF matrices
-        if( build_glob%spproj%get_ctfflag('ptcl2D').ne.'no' ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        if( build_glob%spproj%get_ctfflag('ptcl2D').ne.'no' ) &
+            &call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        DebugPrint ' cluster2D_exec;    memoize CTF matrices                     ', toc(t_init)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
-
+        DebugPrint ' cluster2D_exec;    memoize FFTs                             ', toc(t_init)
         ! SEARCH
         if( L_BENCH ) t_align = tic()
         if( L_BENCH_CLUSTER2D )then
@@ -261,15 +272,17 @@ contains
             rt_inpl_sum    = 0.
             rt_tot_sum     = 0.
         endif
+
         !$omp parallel do default(shared) schedule(guided) private(i,iptcl) proc_bind(close)
         do i=1,nptcls2update
            iptcl = pinds(i)
            call strategy2Dsrch(iptcl)%ptr%srch
         end do
         !$omp end parallel do
-
+        DebugPrint ' cluster2D_exec;   strategy2Dsrch ', toc(t_init)
         ! CLEAN-UP
         call clean_strategy2D
+        DebugPrint ' cluster2D_exec;   clean_strategy2D ', toc(t_init)
         call pftcc%kill
         do i=1,nptcls2update
            iptcl = pinds(i)
@@ -278,23 +291,28 @@ contains
         end do
         deallocate( strategy2Dsrch )
         if( L_BENCH ) rt_align = toc(t_align)
+        DebugPrint ' strategy2D_matcher; completed alignment                     ', toc(t_init)
 
         ! OUTPUT ORIENTATIONS
-        call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
+        call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, &
+            &[params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
         params_glob%oritab = params_glob%outfile
-
+        DebugPrint ' strategy2D_matcher;  write to file                          ', toc(t_init)
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
 
         call cavger_transf_oridat( build_glob%spproj )
+        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 1 ', toc(t_init)
         call cavger_assemble_sums( l_partial_sums )
         ! write results to disk
+        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 2  ', toc(t_init)
         call cavger_readwrite_partial_sums('write')
+        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 3 ', toc(t_init)
         call cavger_kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
-
-        ! call qsys_job_finished(  'simple_strategy2D_matcher :: cluster2D_exec')
-        call qsys_job_finished( 'simple_strategy2D_matcher :: cluster2D_exec')
+        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 4 ', toc(t_init)
+        ! call qsys_job_finished( 'simple_strategy2D_matcher :: cluster2D_exec')
+        call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
             doprint = .true.
@@ -335,6 +353,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'in-plane: ', (rt_inpl_sum/rt_tot_sum)         * 100.
             endif
         endif
+        DebugPrint ' strategy2D_matcher;  completed                              ', toc(t_init)
     end subroutine cluster2D_exec
 
     !>  \brief  prepares the polarft corrcalc object for search
@@ -347,7 +366,8 @@ contains
         integer   :: icls, pop, pop_even, pop_odd, imatch, batchsz_max
         logical   :: do_center, has_been_searched
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%ncls,  eoarr=nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
+        call pftcc%new(params_glob%ncls,  eoarr=nint(build_glob%spproj_field%get_all('eo', &
+            &[params_glob%fromp,params_glob%top])))
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         ! this is tro avoid excessive allocation, allocate what is the upper bound on the
