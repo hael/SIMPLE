@@ -280,7 +280,7 @@ contains
         if(status==0) simple_isenv=.true.
     end function simple_isenv
 
-    !> simple_getenv gets the environment variable string and status
+    !> simple_getenv gets the environment variable string and returns status
     function simple_getenv( name , retval, allowfail)  result( status )
         character(len=*),      intent(in)  :: name
         character(len=*),      intent(out) :: retval

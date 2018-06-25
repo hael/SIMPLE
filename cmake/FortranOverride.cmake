@@ -194,7 +194,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 
   set(common   "${preproc} ${dialect} ${target} ${warn}")
 
-  set(warnDebug "-Wall -Wcompare-reals -Wtype-limits -Wuninitialized -Wunused-but-set-parameter -Wimplicit-interface -Wno-unused-dummy-argument -Wno-unused-value")     # extra warning flag
+  set(warnDebug "-Wall -Wcompare-reals -Wtype-limits -Wuninitialized -Wunused-but-set-parameter -Wimplicit-interface -Wno-unused-dummy-argument -Wno-unused-value -Wno-surprising")     # extra warning flag
   set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ${checks}")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow

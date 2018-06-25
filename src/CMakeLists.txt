@@ -36,10 +36,10 @@ file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.[Ff][90][08]" PARENT_SCOP
 message(STATUS "SIMPLE CUDA LIBRARY ${CUDA_src}")
 
 file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
-file(GLOB COMMANER_DISTR_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_distr/*.f[90][08]" PARENT_SCOPE)
-file(GLOB COMMANER_HLEV_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_hlev/*.f[90][08]" PARENT_SCOPE)
-file(GLOB COMMANER_STREAM_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_stream/*.f[90][08]" PARENT_SCOPE)
-file(GLOB COMMANER_STD_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_std/*.f[90][08]" PARENT_SCOPE)
+#file(GLOB COMMANER_DISTR_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_distr/*.f[90][08]" PARENT_SCOPE)
+#file(GLOB COMMANER_HLEV_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_hlev/*.f[90][08]" PARENT_SCOPE)
+#file(GLOB COMMANER_STREAM_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_stream/*.f[90][08]" PARENT_SCOPE)
+#file(GLOB COMMANER_STD_src "${CMAKE_CURRENT_SOURCE_DIR}/commander_std/*.f[90][08]" PARENT_SCOPE)
 file(GLOB JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/jpg/*.f[90][08]" PARENT_SCOPE)
 list(APPEND JPG_src
    "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c"
@@ -78,27 +78,6 @@ list(REMOVE_ITEM SIMPLECORELIB
 #   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_oris.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_oris_minimal.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_oristats.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/ops/simple_fftshifter.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_distr_wflows.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_hlev_wflows.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_stream_wflows.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_imgproc.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_preproc.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_oris.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_refine3D.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_misc.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_cluster2D.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_volops.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_rec.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_mask.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_distr.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_base.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_checks.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_comlin.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_project.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_sim.f90"
-#    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_commander_tseries.f90"
-
       "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_pftcc_shsrch.f90"
       "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_vol_shsrch.f90"
     )

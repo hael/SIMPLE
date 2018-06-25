@@ -210,7 +210,7 @@ contains
     end subroutine slice2recpos
 
     !>  \brief  for translating an image index to record indices in the stack
-    !! \param[out] hedinds,iminds indices in the stack
+    !! \param[out] hedinds,iminds  indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
         class(imgfile),  intent(in)    :: self
         integer,         intent(in)    :: nr
