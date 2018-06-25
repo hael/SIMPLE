@@ -36,7 +36,7 @@ contains
         if (global_debug .and. global_verbose) then
             write (*,*) 'trying stepb = ', stepb, 'fb = ', fb
         end if
-        if ((fb >= fa) .and. (stepb > 0.0_8)) then
+        if ((fb >= fa) .and. (is_gt_zero(stepb))) then
             ! downhill step failed, reduce step-size and try again
             fc = fb
             stepc = stepb
@@ -80,7 +80,7 @@ contains
         du = 0.0_8
         e1 = ((fv - fu) * dw * dw + (fu - fw) * dv * dv)
         e2 = 2.0_8 * ((fv - fu) * dw + (fu - fw) * dv)
-        if (e2 .ne. 0.0_8) then
+        if (.not. is_zero(e2)) then
             du = e1 / e2
         end if
         if ((du > 0.0_8) .and. (du < (stepc - stepb)) .and. (abs(du) < 0.5_8 * old2)) then

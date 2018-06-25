@@ -124,9 +124,12 @@ contains
     procedure, private :: subtraction
     generic :: operator(-) => subtraction
     procedure, private :: addition
-    generic :: operator(+) => addition
+    procedure, private :: addition_const_real
+    generic :: operator(+) => addition, addition_const_real
     procedure, private :: multiplication
-    generic :: operator(*) => multiplication
+    procedure, private :: multiplication_const_real
+    procedure, private :: multiplication_const_int
+    generic :: operator(*) => multiplication, multiplication_const_real, multiplication_const_int
     procedure, private :: division
     generic :: operator(/) => division
     procedure, private :: l1norm_1
@@ -182,6 +185,10 @@ contains
     procedure, private :: div_cmat_at_4
     generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
     procedure          :: sqpow
+    procedure          :: pow_1
+    procedure          :: pow_2
+    generic            :: pow => pow_1, pow_2
+    procedure          :: sq_root
     procedure          :: signswap_aimag
     procedure          :: signswap_real
     ! BINARY IMAGE METHODS
@@ -1909,6 +1916,35 @@ contains
         self%ft = self1%ft
     end function addition
 
+    !>  \brief  is for image addition(+) addition
+    !! \param self1 image object 1
+    !! \param self2  image object 2
+    !! \return lhs, copy of added images
+    !!
+    function addition_const_real( self1, rconst ) result( self )
+        class(image), intent(in) :: self1
+        real, intent(in) :: rconst
+        type(image) :: self
+        call self%new(self1%ldim, self1%smpd)
+        self%rmat = self1%rmat+rconst
+        self%ft = self1%ft
+    end function addition_const_real
+
+    !>  \brief  is for image addition(+) addition
+    !! \param self1 image object 1
+    !! \param self2  image object 2
+    !! \return lhs, copy of added images
+    !!
+    function sq_root( self1 ) result( self )
+        class(image), intent(in) :: self1
+        type(image) :: self
+        call  self%new(self1%ldim, self1%smpd)
+        self%rmat = self1%rmat
+        self%rmat = sqrt(self%rmat)
+        self%ft = self1%ft
+    end function
+
+
     !>  \brief  l1norm_1 is for l1 norm calculation
     function l1norm_1( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
@@ -2163,7 +2199,7 @@ contains
         else
             comp_here = comp
         endif
-        if( abs(k(phys(1),phys(2),phys(3))) > TINY )then
+        if( .not. is_zero(k(phys(1),phys(2),phys(3))) )then
             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) -&
                 &(comp_here/k(phys(1),phys(2),phys(3)))*w
         endif
@@ -2199,6 +2235,32 @@ contains
             call simple_stop('cannot multiply images of different dims; multiplication(*); simple_image')
         endif
     end function multiplication
+
+    function multiplication_const_real( self1, rconst ) result( self )
+        class(image), intent(in) :: self1
+        real,         intent(in) :: rconst
+        type(image) :: self
+        call self%new(self1%ldim, self1%smpd)
+        self%ft = self1%ft
+        if(self1%ft)then
+            self%cmat = self1%cmat*rconst
+        else
+            self%rmat = self1%rmat*rconst
+        endif
+    end function multiplication_const_real
+
+    function multiplication_const_int( self1, iconst ) result( self )
+        class(image), intent(in) :: self1
+        integer,      intent(in) :: iconst
+        type(image) :: self
+        call self%new(self1%ldim, self1%smpd)
+        self%ft = self1%ft
+        if(self1%ft)then
+            self%cmat = self1%cmat*iconst
+        else
+            self%rmat = self1%rmat*iconst
+        endif
+    end function multiplication_const_int
 
     ! elementwise multiplication in real-space
     subroutine mul_rmat_at_1( self, logi, rval )
@@ -2476,6 +2538,30 @@ contains
             self%rmat = self%rmat*self%rmat
         endif
     end subroutine sqpow
+
+    !>  \brief pow is for calculating the power of an image
+    !!
+    function pow_1( self1, rconst ) result (self)
+        class(image), intent(in) :: self1
+        real, intent(in) :: rconst
+        type(image) :: self
+        call self%copy(self1)
+        !$omp parallel workshare proc_bind(close)
+            self%rmat = self%rmat**rconst
+        !$omp end parallel workshare
+        end function pow_1
+
+    !>  \brief pow_2 is for calculating the power of an image
+    !!
+    function pow_2( self1, iconst ) result (self)
+        class(image), intent(in) :: self1
+        integer, intent(in) :: iconst
+        type(image) :: self
+        call self%copy(self1)
+        !$omp parallel workshare proc_bind(close)
+        self%rmat = self%rmat**iconst
+        !$omp end parallel workshare
+    end function pow_2
 
     !>  \brief signswap_aimag is changing the sign of the imaginary part of the Fourier transform
     subroutine signswap_aimag( self )
@@ -3101,6 +3187,8 @@ contains
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat )
         if(alloc_stat /= 0)call allocchk("In simple_image::cos_edge")
         rmat = self%rmat(1:self%ldim(1),:,:)
+        !$omp parallel default(shared) private(i,j,k,is, js, ks, ie, je, ke,il, ir, jl, jr, kl, kr)
+        !$omp do
         do i=1,self%ldim(1)
             is = max(1,i-1)                  ! left neighbour
             ie = min(i+1,self%ldim(1))       ! right neighbour
@@ -3136,6 +3224,9 @@ contains
                 endif
             end do
         end do
+        !$omp end do nowait
+        !$omp end parallel
+
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = rmat
         deallocate(rmat)
     contains
@@ -3143,6 +3234,7 @@ contains
         !> updates neighbours with cosine weight
         subroutine update_mask_2d
             integer :: ii, jj, di_sq, dist_sq
+            !$omp do private(ii, jj, di_sq, dist_sq)
             do ii=il,ir
                 di_sq = (ii-i)**2                 ! 1D squared distance in x dim
                 do jj=jl,jr
@@ -3153,11 +3245,13 @@ contains
                         &rmat(ii,jj,1) = max(local_versine(real(dist_sq)), rmat(ii,jj,1))
                 enddo
             enddo
+            !$omp end do
         end subroutine update_mask_2d
 
         !> updates neighbours with cosine weight
         subroutine update_mask_3d
             integer :: ii, jj, kk, di_sq, dij_sq, dist_sq
+            !$omp do private(ii, jj, kk, di_sq, dij_sq, dist_sq)
             do ii=il,ir
                 di_sq = (ii-i)**2
                 do jj=jl,jr
@@ -3170,6 +3264,7 @@ contains
                     enddo
                 enddo
             enddo
+            !$omp end do
         end subroutine update_mask_3d
 
         !> Local elemental cosine edge function
@@ -3331,6 +3426,7 @@ contains
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
+        !$omp parallel private(h,k,l,sh,phys)
         select case(which)
         case('real')
             do h=lims(1,1),lims(1,2)
@@ -3444,6 +3540,7 @@ contains
             write(*,*) 'Spectrum kind: ', trim(which)
             call simple_stop('Unsupported spectrum kind; simple_image; spectrum', __FILENAME__,__LINE__)
         end select
+        !$omp end parallel
         if( which .ne. 'count' .and. nnorm )then
             where(counts > 0.)
                 spec = spec/counts
@@ -3731,6 +3828,8 @@ contains
         hplim_freq = self%fit%get_find(1,hplim)
         lplim_freq = self%fit%get_find(1,lplim)
         lims = self%fit%loop_lims(2)
+        !$omp parallel do private(h,k,l,freq,phys,w) default(shared)&
+        !$omp collapse(3) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -3757,6 +3856,7 @@ contains
                 end do
             end do
         end do
+        !$omp end parallel do
         if( didft ) call self%ifft()
     end subroutine bp
 

@@ -10,6 +10,23 @@ interface is_a_number
     module procedure is_a_number_2
 end interface
 
+interface is_zero
+    module procedure is_zero_0
+    module procedure is_zero_1
+    module procedure is_zero_2
+end interface is_zero
+
+interface is_gt_zero
+    module procedure is_gt_zero_0
+    module procedure is_gt_zero_1
+    module procedure is_gt_zero_2
+end interface is_gt_zero
+
+interface is_equal
+    module procedure is_equal_1
+    module procedure is_equal_2
+end interface is_equal
+
 interface check4nans3D
     module procedure check4nans3D_1
     module procedure check4nans3D_2
@@ -397,6 +414,54 @@ contains
         logical             :: is
         is = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
     end function is_a_number_2
+
+        !>   to check if val is zero
+    elemental logical function is_zero_0( val )
+        integer, intent(in) :: val  !< query val
+        is_zero_0 = abs(val) < TINY
+    end function is_zero_0
+
+    !>   to check if val is zero
+    elemental logical function is_zero_1( val )
+        real, intent(in) :: val  !< query val
+        is_zero_1 = abs(val) < TINY
+    end function is_zero_1
+
+        !>   to check if val is zero
+    elemental logical function is_zero_2( val )
+        real(8), intent(in) :: val  !< query val
+        is_zero_2 = abs(val) < DTINY
+    end function is_zero_2
+
+    !>   to check if val is zero
+    elemental logical function is_gt_zero_0( val )
+        integer, intent(in) :: val  !< query val
+        is_gt_zero_0 = val > 0
+    end function
+
+    !>   to check if val is zero
+    elemental logical function is_gt_zero_1( val )
+        real, intent(in) :: val  !< query val
+        is_gt_zero_1 = val > TINY
+    end function is_gt_zero_1
+
+    !>   to check if val is zero
+    elemental logical function is_gt_zero_2( val )
+        real(8), intent(in) :: val  !< query val
+        is_gt_zero_2 = val > DTINY
+    end function is_gt_zero_2
+
+    !>   to check if val is zero
+    elemental logical function is_equal_1( val1 , val2)
+        real, intent(in) :: val1, val2  !< query val
+        is_equal_1 = abs(val1-val2) < TINY
+    end function
+
+        !>   to check if val is zero
+    elemental logical function is_equal_2( val1, val2 )
+        real(8), intent(in) :: val1, val2  !< query val
+        is_equal_2 = abs(val1-val2) < DTINY
+    end function is_equal_2
 
     !>   converts string descriptors of c and d pointgroups to euler angle limits
     !! \param  t1,t2,p1,p2  euler angle limits
@@ -2671,11 +2736,11 @@ contains
         angleDist = acos( dot_product(v, w) )
     end function angleDist
 
-    !>
+    !> sort and return 3 lowest
     function min3( rarr ) result(min_3)
         real, intent(in) :: rarr(:)
-        real ::min_3(3)
-        integer :: i, ir, j, l, n
+        real :: min_3(3)
+        integer :: j, n
         real    :: ra
         n = size(rarr)
         if( n < 4)then

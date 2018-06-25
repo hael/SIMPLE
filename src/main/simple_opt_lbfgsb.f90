@@ -810,7 +810,7 @@ contains
                 r(i) = g(i) - r(i)
             end do
             rr = ddot_lbfgsb(n,r,1,r,1)
-            if (stp .eq. one) then
+            if (is_equal(stp , one)) then ! stp.eq.one
                 dr = gd - gdold
                 ddum = -gdold
             else
@@ -1332,7 +1332,7 @@ contains
             !     The indices of the nonzero components of d are now stored
             !       in iorder(1),...,iorder(nbreak) and iorder(nfree),...,iorder(n).
             !       The smallest of the nbreak breakpoints is in t(ibkmin)=bkmin.
-            if (theta .ne. one) then
+            if (.not. is_equal(theta , one) ) then  !theta .ne. one
                 !                   complete the initialization of p for theta not= one.
                 call dscal(col,theta,p(col+1),1)
             end if
@@ -2130,7 +2130,7 @@ contains
             !                           *  *  *
             !
             !     NEOS, November 1994. (Latest revision June 1996.)
-            !     Optimization Technology Center.
+            !     Optimizatino Technology Center.
             !     Argonne National Laboratory and Northwestern University.
             !     Written by
             !                        Ciyou Zhu
@@ -2200,7 +2200,7 @@ contains
                 ifun = ifun + 1
                 nfgv = nfgv + 1
                 iback = ifun - 1
-                if (stp .eq. one) then
+                if (is_equal(stp , one)) then   !stp .eq. one
                     call dcopy(n,z,1,x,1)
                 else
                     do i = 1, n
@@ -2272,7 +2272,7 @@ contains
                 ss(j,col) = ddot_lbfgsb(n,ws(1,pointr),1,d,1)
                 pointr = mod(pointr,m) + 1
             end do
-            if (stp .eq. one) then
+            if  (is_equal(stp , one)) then
                 ss(col,col) = dtd
             else
                 ss(col,col) = stp*stp*dtd
@@ -2547,18 +2547,18 @@ contains
                     !
                     if ( nbd(k).eq.1 ) then         ! lower bounds only
                         x(k) = max( l(k), xk + dk )
-                        if ( x(k).eq.l(k) ) iword = 1
+                        if ( is_equal(x(k),l(k)) ) iword = 1
                     else
                         !
                         if ( nbd(k).eq.2 ) then     ! upper and lower bounds
                             xk   = max( l(k), xk + dk )
                             x(k) = min( u(k), xk )
-                            if ( x(k).eq.l(k) .or. x(k).eq.u(k) ) iword = 1
+                            if ( is_equal(x(k),l(k)) .or. is_equal(x(k),u(k)) ) iword = 1
                         else
                             !
                             if ( nbd(k).eq.3 ) then ! upper bounds only
                                 x(k) = min( u(k), xk + dk )
-                                if ( x(k).eq.u(k) ) iword = 1
+                                if ( is_equal(x(k),u(k)) ) iword = 1
                             end if
                         end if
                     end if
@@ -2578,7 +2578,7 @@ contains
             do i=1, n
                 dd_p  = dd_p + (x(i) - xx(i))*gg(i)
             end do
-            if ( dd_p .gt.zero ) then
+            if ( is_gt_zero(dd_p) ) then
                 call dcopy( n, xp, 1, x, 1 )
             else
                 go to 911
@@ -2840,8 +2840,8 @@ contains
             ! Test for warnings.
             if (brackt .and. (stp .le. stmin .or. stp .ge. stmax)) task = 'WARNING: ROUNDING ERRORS PREVENT PROGRESS'
             if (brackt .and. stmax - stmin .le. xtol*stmax) task = 'WARNING: XTOL TEST SATISFIED'
-            if (stp .eq. stpmax .and. f .le. ftest .and. g .le. gtest) task = 'WARNING: STP = STPMAX'
-            if (stp .eq. stpmin .and. (f .gt. ftest .or. g .ge. gtest)) task = 'WARNING: STP = STPMIN'
+            if ((is_equal(stp ,stpmax)) .and. f .le. ftest .and. g .le. gtest) task = 'WARNING: STP = STPMAX'
+            if ((is_equal(stp ,stpmin)) .and. (f .gt. ftest .or. g .ge. gtest)) task = 'WARNING: STP = STPMIN'
             ! Test for convergence.
             if (f .le. ftest .and. abs(g) .le. gtol*(-ginit)) task = 'CONVERGENCE'
             ! Test for termination.
@@ -3067,7 +3067,7 @@ contains
                 p = (gamma - dp_var) + theta
                 q = (gamma + (dx - dp_var)) + gamma
                 r = p/q
-                if (r .lt. zero .and. gamma .ne. zero) then
+                if (r .lt. zero .and. (.not. is_zero(gamma))) then  !gamma .ne. zero
                     stpc = stp + r*(stx - stp)
                 else if (stp .gt. stx) then
                     stpc = stpmax
@@ -3181,7 +3181,7 @@ contains
             do i = 1, n, incx
                 scale = max(scale, abs(x(i)))
             end do
-            if (scale .eq. 0.0d0) return
+            if (is_zero(scale)) return
             do i = 1, n, incx
                 res = res + (x(i)/scale)**2
             end do
@@ -3200,7 +3200,7 @@ contains
             integer               :: i,ix,iy,m,mp1
             !
             if (n.le.0) return
-            if (da .eq. 0.0d0) return
+            if (is_zero(da) ) return
             if (incx.eq.1.and.incy.eq.1) go to 20
             !
             !        code for unequal increments or equal increments
@@ -3509,7 +3509,7 @@ contains
             !     internal variables
             !
             real(dp) :: temp
-            integer  :: case,j,jj
+            integer  :: cas,j,jj
             !
             !     begin block permitting ...exits to 150
             !
@@ -3517,69 +3517,62 @@ contains
             !
             do info = 1, n
                 !     ......exit
-                if (t(info,info) .eq. 0.0d0) go to 150
+                if (is_zero(t(info,info))) return
             end do
             info = 0
             !
             !        determine the task and go to it.
             !
-            case = 1
-            if (mod(job,10) .ne. 0) case = 2
-            if (mod(job,100)/10 .ne. 0) case = case + 2
-            go to (20,50,80,110), case
+            cas = 1
+            if (mod(job,10) .ne. 0) cas = 2
+            if (mod(job,100)/10 .ne. 0) cas = cas + 2
+            select  case(cas)
             !
             !        solve t*x=b for t lower triangular
             !
-20          continue
-            b(1) = b(1)/t(1,1)
-            if (n .lt. 2) go to 40
-            do j = 2, n
-                temp = -b(j-1)
-                call daxpy(n-j+1,temp,t(j,j-1),1,b(j),1)
-                b(j) = b(j)/t(j,j)
-            end do
-40          continue
-            go to 140
+            case(1)
+                b(1) = b(1)/t(1,1)
+                if (n .lt. 2) return
+                do j = 2, n
+                    temp = -b(j-1)
+                    call daxpy(n-j+1,temp,t(j,j-1),1,b(j),1)
+                    b(j) = b(j)/t(j,j)
+                end do
             !
             !        solve t*x=b for t upper triangular.
             !
-50          continue
-            b(n) = b(n)/t(n,n)
-            if (n .lt. 2) go to 70
-            do jj = 2, n
-                j = n - jj + 1
-                temp = -b(j+1)
-                call daxpy(j,temp,t(1,j+1),1,b(1),1)
-                b(j) = b(j)/t(j,j)
-            end do
-70          continue
-            go to 140
+            case(2)
+                b(n) = b(n)/t(n,n)
+                if (n .lt. 2) return
+                do jj = 2, n
+                    j = n - jj + 1
+                    temp = -b(j+1)
+                    call daxpy(j,temp,t(1,j+1),1,b(1),1)
+                    b(j) = b(j)/t(j,j)
+                end do
             !
             !        solve trans(t)*x=b for t lower triangular.
             !
-80          continue
-            b(n) = b(n)/t(n,n)
-            if (n .lt. 2) go to 100
-            do jj = 2, n
-                j = n - jj + 1
-                b(j) = b(j) - ddot_lbfgsb(jj-1,t(j+1,j),1,b(j+1),1)
-                b(j) = b(j)/t(j,j)
-            end do
-100         continue
-            go to 140
+            case(3)
+                b(n) = b(n)/t(n,n)
+                if (n .lt. 2)return
+                do jj = 2, n
+                    j = n - jj + 1
+                    b(j) = b(j) - ddot_lbfgsb(jj-1,t(j+1,j),1,b(j+1),1)
+                    b(j) = b(j)/t(j,j)
+                end do
             !
             !        solve trans(t)*x=b for t upper triangular.
             !
-110         continue
-            b(1) = b(1)/t(1,1)
-            if (n .lt. 2) go to 130
-            do j = 2, n
-                b(j) = b(j) - ddot_lbfgsb(j-1,t(1,j),1,b(1),1)
-                b(j) = b(j)/t(j,j)
-            end do
-130         continue
-140         continue
-150         continue
+            case(4)
+                b(1) = b(1)/t(1,1)
+                if (n .lt. 2) return
+                do j = 2, n
+                    b(j) = b(j) - ddot_lbfgsb(j-1,t(1,j),1,b(1),1)
+                    b(j) = b(j)/t(j,j)
+                end do
+            end select
+
         end subroutine dtrsl
 
     end subroutine lbfgsb_minimize

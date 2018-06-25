@@ -201,12 +201,12 @@ contains
                         else
                             b=u
                         endif
-                        if(fu.le.fw.or.w.eq.x)then
+                        if((fu.le.fw).or.(is_equal(w,x)))then
                             v=w
                             fv=fw
                             w=u
                             fw=fu
-                        else if(fu.le.fv.or.v.eq.x.or.v.eq.w)then
+                        else if((fu.le.fv).or.(is_equal(v,x)).or.(is_equal(v,w)))then
                             v=u
                             fv=fu
                         endif
@@ -265,14 +265,14 @@ contains
             else if(f.le.fold+ALF*alam*slope)then ! sufficient function decrease
                 return
             else ! backtrack
-                if(alam.eq.1.)then ! first time
+                if(is_equal(alam,1.))then ! first time
                     tmplam=-slope/(2.*(f-fold-slope))
                 else               ! subsequent backtracks
                     rhs1=f-fold-alam*slope
                     rhs2=f2-fold2-alam2*slope
                     a=(rhs1/alam**2-rhs2/alam2**2)/(alam-alam2)
                     b=(-alam2*rhs1/alam**2+alam*rhs2/alam2**2)/(alam-alam2)
-                    if(a.eq.0.)then
+                    if(is_zero(a))then
                         tmplam=-slope/(2.*b)
                     else
                         disc=b*b-3.*a*slope

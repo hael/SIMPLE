@@ -1,11 +1,12 @@
 ! factory pattern class for the SIMPLE optimisers
 module simple_opt_factory
-use simple_optimizer,    only: optimizer
-use simple_opt_spec,     only: opt_spec
- use simple_opt_lbfgsb,  only: opt_lbfgsb
- use simple_opt_simplex, only: opt_simplex
- use simple_opt_bforce,  only: opt_bforce
- use simple_opt_de,      only: opt_de
+include 'simple_lib.f08'
+use simple_optimizer,   only: optimizer
+use simple_opt_spec,    only: opt_spec
+use simple_opt_lbfgsb,  only: opt_lbfgsb
+use simple_opt_simplex, only: opt_simplex
+use simple_opt_bforce,  only: opt_bforce
+use simple_opt_de,      only: opt_de
 
 implicit none
 

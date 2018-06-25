@@ -160,7 +160,7 @@ contains
             integer :: status
             alpha = 0.0_8
             f0 = self%f
-            if ((self%pnorm == 0.0_8) .or. (self%g0norm == 0.0_8) .or. (self%fp0 == 0.0_8)) then
+            if (is_zero(self%pnorm) .or. is_zero(self%g0norm ).or. is_zero(self%fp0)) then
                 status = OPT_STATUS_ERROR
                 return
             end if
@@ -194,7 +194,7 @@ contains
             dgg    = dot_product(self%dg0, self%gradient)
             dxdg   = dot_product(self%dx0, self%dg0)
             dgnorm = norm_2(self%dg0)
-            if (dxdg .ne. 0.0_8) then
+            if (.not. is_zero(dxdg)) then
                 B = dxg / dxdg
                 A = -(1.0_8 + dgnorm * dgnorm / dxdg) * B + dgg / dxdg
             else
@@ -347,12 +347,12 @@ contains
         function wrap_df(alpha) result(res)
             real(dp), intent(in) :: alpha
             real(dp) :: res
-            if (alpha == self%wrapper%df_cache_key) then ! using previously cached df(alpha)
+            if (is_equal(alpha , self%wrapper%df_cache_key)) then ! using previously cached df(alpha)
                 res = self%wrapper%df_alpha
                 return
             end if
             call moveto(alpha)
-            if (alpha .ne. self%wrapper%g_cache_key) then
+            if (.not. is_equal(alpha , self%wrapper%g_cache_key) ) then
                 call spec%eval_df(fun_self, self%wrapper%x_alpha, self%wrapper%g_alpha)
                 self%wrapper%g_cache_key = alpha
             end if
@@ -365,12 +365,14 @@ contains
             real(dp), intent(in) :: alpha
             real(dp), intent(out) :: f, df
             ! Check for previously cached values
-            if ((alpha == self%wrapper%f_cache_key).and.(alpha == self%wrapper%df_cache_key)) then
+            if ( is_equal(alpha , self%wrapper%f_cache_key) .and.&
+                &is_equal(alpha , self%wrapper%df_cache_key) ) then
                 f  = self%wrapper%f_alpha
                 df = self%wrapper%df_alpha
                 return
             end if
-            if ((alpha == self%wrapper%f_cache_key).or.(alpha == self%wrapper%df_cache_key)) then
+            if ( is_equal(alpha, self%wrapper%f_cache_key).or.&
+                &is_equal(alpha, self%wrapper%df_cache_key) ) then
                 f  = wrap_f(alpha)
                 df = wrap_df(alpha)
                 return
@@ -398,7 +400,7 @@ contains
 
         subroutine moveto(alpha)
             real(dp), intent(in) :: alpha
-            if (alpha == self%wrapper%x_cache_key) then ! using previously cached position
+            if (is_zero(alpha - self%wrapper%x_cache_key) ) then ! using previously cached position
                 return
             end if
             ! set x_alpha = x + alpha * p
@@ -500,7 +502,7 @@ contains
                 zmin = zh
                 fmin = fh
             end if
-            if (c > 0.0_8) then ! positive curvature required for a minimum
+            if (is_gt_zero(c)) then ! positive curvature required for a minimum
                 z = -fp0 / c      ! location of minimum
                 if ((z > zl) .and. (z < zh))  then
                     f = f0 + z*(fp0 + z*(f1 - f0 -fp0))
@@ -517,8 +519,8 @@ contains
             real(dp), intent(out) :: x0, x1
             integer :: nsol  ! number of solutions
             real(dp) :: disc, r, sgnb, temp, r1, r2
-            if (a == 0.0_8) then ! Handle linear case
-                if (b == 0.0_8) then
+            if (is_zero(a)) then ! Handle linear case
+                if (is_zero(b)) then
                     nsol = 0
                     return
                 else
@@ -529,7 +531,7 @@ contains
             end if
             disc = b * b - 4.0_8 * a * c
             if (disc > 0.0_8) then
-                if (b == 0.0_8) then
+                if (is_zero(b)) then
                     r = sqrt(-c / a)
                     x0 = -r
                     x1 =  r
@@ -552,7 +554,7 @@ contains
                 end if
                 nsol = 2
                 return
-            else if (disc == 0.0_8) then
+            else if (is_zero(disc)) then
                 x0 = -0.5_8 * b / a
                 x1 = -0.5_8 * b / a
                 nsol = 2

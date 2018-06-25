@@ -55,7 +55,7 @@ contains
         ! test if best point in spec is set
         arezero = .false.
         do i=1,spec%ndim
-            if( spec%x(i) == 0. ) arezero(i) = .true.
+            if( is_zero(spec%x(i)) ) arezero(i) = .true.
         end do
         ! generate initial vector
         if( all(arezero) )then

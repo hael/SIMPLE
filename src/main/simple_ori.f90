@@ -507,12 +507,12 @@ contains
     logical function has_been_searched( self )
         class(ori), intent(inout) :: self
         has_been_searched = .true.
-        if( abs(self%e1get())     > TINY )return
-        if( abs(self%e2get())     > TINY )return
-        if( abs(self%e3get())     > TINY )return
-        if( abs(self%get('corr')) > TINY )return
-        if( abs(self%get('x'))    > TINY )return
-        if( abs(self%get('y'))    > TINY )return
+        if(.not. is_zero(self%e1get()) )return
+        if(.not. is_zero(self%e2get())      )return
+        if(.not. is_zero(self%e3get())      )return
+        if(.not. is_zero(self%get('corr'))  )return
+        if(.not. is_zero(self%get('x'))     )return
+        if(.not. is_zero(self%get('y'))     )return
         has_been_searched = .false.
     end function has_been_searched
 
