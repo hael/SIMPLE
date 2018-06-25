@@ -571,18 +571,18 @@ contains
                     call getevensym('c', self%n/2)
                     call getevensym('d', self%n/2)
                 else
-                    cnt            = cnt+1
+                    cnt            = cnt + 1
                     pgrps(cnt)     = self%pgrp
                     symorders(cnt) = real(self%n)
-                    cnt            = cnt+1
+                    cnt            = cnt + 1
                     pgrps(cnt)     = fmtsymstr('c', self%n/2)
                     symorders(cnt) = real(self%n/2)
-                    cnt            = cnt+1
+                    cnt            = cnt + 1
                     pgrps(cnt)     = 'c2'
                     symorders(cnt) = 2.
                 endif
                 if(self%n > 1)then
-                    cnt            = cnt+1
+                    cnt            = cnt + 1
                     pgrps(cnt)     = 'c1'
                     symorders(cnt) = 1.
                 endif
@@ -594,7 +594,7 @@ contains
             enddo
         else
             if( pgrp.eq.'t' )then
-                cnt      = 5
+                cnt = 5
                 allocate(self%subgrps(cnt))
                 self%subgrps(5) = 'c1'
                 self%subgrps(4) = 'c2'
@@ -602,7 +602,7 @@ contains
                 self%subgrps(2) = 'd2'
                 self%subgrps(1) = 't'
             else if( pgrp.eq.'o' )then
-                cnt      = 9
+                cnt = 9
                 allocate(self%subgrps(cnt))
                 self%subgrps(9) = 'c1'
                 self%subgrps(8) = 'c2'
@@ -614,7 +614,7 @@ contains
                 self%subgrps(2) = 't'
                 self%subgrps(1) = 'o'
             else if( pgrp.eq.'i' )then
-                cnt      = 9
+                cnt = 9
                 allocate(self%subgrps(cnt))
                 self%subgrps(9) = 'c1'
                 self%subgrps(8) = 'c2'
@@ -636,10 +636,10 @@ contains
                 character(len=1), intent(in) :: cstr  !< sym type
                 integer          :: i
                 do i=2,o
-                    if( (mod( o, i).eq.0) )then
-                        cnt = cnt+1
+                    if( (mod(o,i) .eq. 0) )then
+                        cnt = cnt + 1
                         pgrps(cnt) = fmtsymstr(cstr, i)
-                        if(cstr.eq.'c')then
+                        if(cstr .eq. 'c')then
                             symorders(cnt) = real(i)
                         else
                             symorders(cnt) = real(2*i)
@@ -648,8 +648,7 @@ contains
                 enddo
             end subroutine getevensym
 
-            !> format symmetry string
-            !! \param symtype   symmetry type, one char options  c, d, t or i
+            !> format symmetry string, symmetry type, one char options  c, d, t or i
             function fmtsymstr( symtype, iord ) result( ostr )
                 character(len=1), intent(in)  :: symtype
                 integer, intent(in)           :: iord    !< order
@@ -659,7 +658,7 @@ contains
                 write(ostr,'(A1,A2)') symtype, adjustl(ord)
             end function fmtsymstr
 
-        end subroutine set_subgrps
+    end subroutine set_subgrps
 
     !>  \brief  is a destructor
     subroutine kill( self )
