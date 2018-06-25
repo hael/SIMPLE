@@ -587,7 +587,7 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         get_objfun = self%cc_objfun
     end function get_objfun
-    
+
     !>  \brief  checks for existence
     function exists( self ) result( yes )
         class(polarft_corrcalc), intent(in) :: self
@@ -1234,7 +1234,7 @@ contains
         real,                    intent(out)   :: euclids(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: euclids_over_k(:)
-        real(sp) :: sqsum_ref
+        real(sp) :: sqsum_ref, sqsum_ptcl
         integer  :: ithr
         ithr           =  omp_get_thread_num() + 1
         pft_ref        => self%heap_vars(ithr)%pft_ref
