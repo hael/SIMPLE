@@ -13,8 +13,8 @@ private
 
 type sym_stats
     character(len=:), allocatable :: str
-    real,             allocatable :: fsc(:)
-    real :: cc
+    real,             allocatable :: fsc(:), fsc_avg(:), fsc_avg_anti(:)
+    real :: cc, cc_avg, cc_avg_anti
 end type sym_stats
 
 contains
@@ -82,9 +82,9 @@ contains
         real,             intent(in)    :: hp, lp
         type(sym_stats), allocatable :: pgrps(:)
         integer, parameter :: NGRPS = 11
-        integer           :: sz
-        real              :: cc_t, cc_t_anti, cc_o, cc_o_anti, cc_i, cc_i_anti
-        real, allocatable :: fsc_t(:), fsc_t_anti(:), fsc_o(:), fsc_o_anti(:), fsc_i(:), fsc_i_anti(:)
+        integer            :: sz
+        real               :: cc_t, cc_t_anti, cc_o, cc_o_anti, cc_i, cc_i_anti
+        real, allocatable  :: fsc_t(:), fsc_t_anti(:), fsc_o(:), fsc_o_anti(:), fsc_i(:), fsc_i_anti(:)
         ! prepare point-group stats object
         allocate(pgrps(NGRPS))
         pgrps(1)%str  = 'c2'
@@ -129,8 +129,13 @@ contains
         real,             intent(in)    :: hp, lp
         integer,          intent(in)    :: cn_start, cn_stop
         logical,          intent(in)    :: dihedral
-        type(sym_stats), allocatable :: pgrps(:)
-        integer :: ncsyms, nsyms, icsym, cnt, idsym
+        type(sym_stats), allocatable    :: pgrps(:)
+        logical, allocatable :: scoring_groups(:)
+        character(len=3)     :: subgrp
+        type(sym) :: symobj
+        integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring
+        integer   :: nanti, isym, jsym, isub, nsubs, sz
+        real      :: cc_sum
         ! count # symmetries
         ncsyms = cn_stop - cn_start + 1
         if( dihedral )then
@@ -153,6 +158,41 @@ contains
         endif
         ! gather stats
         call eval_point_groups(vol_in, hp, lp, pgrps)
+        allocate(scoring_groups(nsyms), source=.false.)
+        sz = size(pgrps(1)%fsc)
+        do isym=1,nsyms
+            ! make point-group object
+            call symobj%new(pgrps(isym)%str)
+            nsubs = symobj%get_nsubgrp()
+            ! identify scoring groups (and anti-scoring groups)
+            ! all subgroups of the group under consideration are part of the scoring group
+            scoring_groups = .false.
+            do isub=1,nsubs
+                subgrp = symobj%get_subgrp_descr(isub)
+                do jsym=1,nsyms
+                    if( trim(subgrp) .eq. trim(pgrps(jsym)%str) ) scoring_groups(jsym) = .true.
+                end do
+            end do
+            ! calculate average fscs and ccs and their antis
+            if( allocated(pgrps(isym)%fsc_avg) )      deallocate(pgrps(isym)%fsc_avg)
+            if( allocated(pgrps(isym)%fsc_avg_anti) ) deallocate(pgrps(isym)%fsc_avg_anti)
+            allocate(pgrps(isym)%fsc_avg(sz), pgrps(isym)%fsc_avg_anti(sz), source=0.)
+            pgrps(isym)%cc_avg      = 0.
+            pgrps(isym)%cc_avg_anti = 0.
+            do jsym=1,nsyms
+                if( scoring_groups(jsym) )then
+                    pgrps(isym)%cc_avg  = pgrps(isym)%cc_avg  + pgrps(jsym)%cc
+                    pgrps(isym)%fsc_avg = pgrps(isym)%fsc_avg + pgrps(jsym)%fsc
+                else
+                    pgrps(isym)%cc_avg_anti  = pgrps(isym)%cc_avg_anti  + pgrps(jsym)%cc
+                    pgrps(isym)%fsc_avg_anti = pgrps(isym)%fsc_avg_anti + pgrps(jsym)%fsc
+                endif
+            end do
+            nscoring = count(scoring_groups)
+            nanti    = nsyms - nscoring
+            pgrps(isym)%cc_avg      = pgrps(isym)%cc_avg / real(nscoring)
+            pgrps(isym)%cc_avg_anti = pgrps(isym)%cc_avg_anti / real(nanti)
+        end do
     end subroutine eval_c_and_d_point_groups
 
     subroutine eval_point_groups( vol_in, hp, lp, pgrps )

@@ -33,6 +33,7 @@ type sym
     procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
+    procedure          :: get_subgrp_descr
     procedure          :: within_asymunit
     procedure          :: apply_sym_with_shift
     procedure          :: nearest_proj_neighbors
@@ -51,15 +52,15 @@ interface sym
     module procedure constructor
 end interface sym
 
-integer, parameter          :: ntet=12 ! number of tetahedral symmetry operations
-integer, parameter          :: noct=24 ! number of octahedral symmetry operations
-integer, parameter          :: nico=60 ! number of icosahedral symmetry operations
+integer, parameter          :: ntet   = 12 ! # tetahedral symmetry operations
+integer, parameter          :: noct   = 24 ! # octahedral symmetry operations
+integer, parameter          :: nico   = 60 ! # icosahedral symmetry operations
 double precision, parameter :: delta2 = 180.d0
 double precision, parameter :: delta3 = 120.d0
 double precision, parameter :: delta5 = 72.d0
-double precision, parameter :: alpha = 58.282524d0
-double precision, parameter :: beta  = 20.905157d0
-double precision, parameter :: gamma = 54.735611d0
+double precision, parameter :: alpha  = 58.282524d0
+double precision, parameter :: beta   = 20.905157d0
+double precision, parameter :: gamma  = 54.735611d0
 
 contains
 
@@ -192,6 +193,19 @@ contains
         endif
         symobj = sym(self%subgrps(i))
     end function get_subgrp
+
+    !>  \brief  is a getter
+    function get_subgrp_descr( self, i )result( str_descr )
+        class(sym),intent(in) :: self
+        character(len=3)      :: str_descr
+        integer   :: i, n
+        n = size(self%subgrps)
+        if( (i>n).or.(i<1) )then
+            write(*,*)'Index out of bonds on simple_sym; get_subgrp_descr'
+            stop
+        endif
+        str_descr = self%subgrps(i)
+    end function get_subgrp_descr
 
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )
