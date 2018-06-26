@@ -1,28 +1,29 @@
 program simple_test_star_export
 include 'simple_lib.f08'
 use simple_star
-use simple_cmdline,     only: cmdline
-!use simple_parameters, only: parameters
-!use simple_builder,    only: builder
-use simple_sp_project,  only: sp_project
-use simple_oris,        only: oris
-use simple_sp_project,  only: sp_project
-use simple_binoris,     only: binoris
+use simple_cmdline,        only: cmdline
+!use simple_parameters,         only: parameters
+!use simple_builder,          only: builder
+use simple_sp_project,     only: sp_project
+use simple_oris,       only: oris
+use simple_sp_project, only: sp_project
+use simple_binoris,    only: binoris
+use simple_stardoc
+use simple_star_dict,  only:  star_dict
 implicit none
-
+character(len=STDLEN) :: oldCWDfolder,curDir,datestr
+character(len=STDLEN) :: simple_testbench,timestr,folder, fileref, filecompare
+integer(8) :: count1
+integer :: io_stat
 type(sp_project)     :: myproject
 type(binoris)        :: bos
 integer, allocatable :: strlens(:)
 type(star_project) :: s
 ! type(parameters) :: p
-character(len=8)      :: datestr
-character(len=STDLEN) :: folder,  oldCWDfolder, curDir
-integer :: io_stat
-
-call seed_rnd
+type(stardoc) :: sdoc
+type(star_dict) :: sdict
 call date_and_time(date=datestr)
-folder = trim('./SIMPLE_TEST_STAR_'//datestr)
-
+folder = trim('./SIMPLE_TEST_SSIM_'//datestr)
 call simple_mkdir( trim(folder) , status=io_stat)
 if(io_stat/=0) call simple_stop("simple_mkdir failed")
 print *," Changing directory to ", folder
@@ -30,12 +31,29 @@ call simple_chdir( trim(folder),  oldCWDfolder , status=io_stat)
 if(io_stat/=0) call simple_stop("simple_chdir failed")
 call simple_getcwd(curDir)
 print *," Current working directory ", curDir
+count1=tic()
+io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
+
+
+print *,' Testing star_dict'
+call test_stardoc
+call sdict%print_star_dict()
 
 
 
-!call s%export_motion_corrected_micrographs (sp, trim('tmp_mc.star'))
+print *,' Testing directory star_test'
+call system('ls '//trim(adjustl(simple_testbench))//'/star_test')
 
-call exec_cmdline( 'relion_star_loopheader rlnMicrographNameNoDW rlnMicrographName > tmp_mc.star')
+!! Motion Correction
+! call s%export_motion_corrected_micrographs (trim('tmp_mc.star'))
+
+! call create_relion_starfile
+! call sp_project_setup
+
+contains
+
+    subroutine create_relion_starfile
+        call exec_cmdline( 'relion_star_loopheader rlnMicrographNameNoDW rlnMicrographName > tmp_mc.star')
 
 ! Generate STAR files from separate stacks for each micrograph
 ! If the input images are in a separate stack for each micrograph, then one could use the following commands to generate the input STAR file:
@@ -64,10 +82,11 @@ call exec_cmdline( ' relion_star_datablock_stack 2 mic3.mrcs mic3.mrcs 16000 150
 ! call exec_cmdline( 'relion_star_loopheader rlnImageName rlnMicrographName rlnDefocusU rlnDefocusV rlnDefocusAngle rlnVoltage rlnSphericalAberration rlnAmplitudeContrast > all_images.star
 ! call exec_cmdline( 'awk '{if ($1!="C") {print $1"@./my/abs/path/bigstack.mrcs", $8, $9, $10, $11, " 80 2.0 0.1"}  }' < frealign.par >> all_images.star ')
 ! Assuming the voltage is 80kV, the spherical aberration is 2.0 and the amplitude contrast is 0.1. Also, a single stack is assumed called: /my/abs/path/bigstack.mrcs.
+end subroutine create_relion_starfile
 
 
 
-
+    subroutine sp_project_setup
 
 ! prepare stack oris in project
 call myproject%os_stk%new(2)
@@ -135,6 +154,11 @@ call myproject%os_ptcl3D%set_euler(8, [3.,3.,3.])
 call myproject%os_ptcl3D%set_euler(9, [3.,3.,3.])
 print *, 'writing doc3'
 call myproject%write('doc3.simple', [7,9])
+
+
+end subroutine
+
+
 
 
 end program simple_test_star_export

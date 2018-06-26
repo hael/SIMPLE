@@ -13,7 +13,8 @@ contains
     procedure :: readfile
     procedure :: get_ndatalines
     procedure :: get_nrecs_per_line
-
+    procedure :: read
+    procedure :: print_info
     procedure :: export_micrographs
     procedure :: import_micrographs
     procedure :: export_motion_corrected_micrographs
@@ -87,9 +88,19 @@ contains
             nrecs = self%doc%num_data_elements
         endif
        
-
     end function get_nrecs_per_line
-    !
+    subroutine read( self, fname )
+        class(star_project), intent(inout) :: self
+        character(len=*), optional, intent(in)    :: fname
+    end subroutine read
+
+
+    subroutine print_info( self )
+        class(star_project), intent(inout) :: self
+
+    end subroutine print_info
+
+
     subroutine export_micrographs (self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp

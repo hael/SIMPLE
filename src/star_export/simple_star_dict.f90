@@ -2,7 +2,10 @@
 module simple_star_dict
 include 'simple_lib.f08'
 implicit none
+private
+public :: star_dict
 
+integer , parameter   :: MAX_STAR_DICT_ITEMS=100
 type star_dict
     type(chash),              public :: keywords_filename
     type(chash),              public :: keywords_general
@@ -12,6 +15,7 @@ type star_dict
 contains
     procedure :: new
     procedure :: exists
+    procedure :: lookup
     procedure :: star_dict2str
     procedure :: print_star_dict
     procedure :: simple2star
@@ -24,7 +28,7 @@ end type star_dict
 interface star_dict
     module procedure constructor
 end interface
-
+#include "simple_local_flags.inc"
 contains
 
 
@@ -43,11 +47,11 @@ contains
         !! File name keywords and their formats
         self%keywords_filename = chash()
         call self%keywords_filename%new(5)
-        call self%keywords_filename%push('ImageName',          '([0-9]{05})@(Extract|Polish)/job[0-9]{03}/filename.mrc[s]?')
-        call self%keywords_filename%push('MicrographName',     'MotionCorr/job[0-9]{03}/filename.mrc[s]?')
-        call self%keywords_filename%push('MicrographNameNoDW', 'MotionCorr/job[0-9]{03}/filename_noDW.mrc[s]?')
-        call self%keywords_filename%push('OriginalParticleName','Extract/job[0-9]{03}/filename.mrc[s]?')
-        call self%keywords_filename%push('CtfImage',            'Ctffind/job[0-9]{03}/filename.ctf:mrc')
+        call self%keywords_filename%push('ImageName',          'file' ) ! os_mic|os_stk...  '([0-9]{05})@(Extract|Polish)/job[0-9]{03}/filename.mrc[s]?')
+        call self%keywords_filename%push('MicrographName',       'file' ) !  sp_project%os_mic ) ! eg. 'MotionCorr/job[0-9]{03}/filename.mrc[s]?')
+        call self%keywords_filename%push('MicrographNameNoDW',     'file' ) !'MotionCorr/job[0-9]{03}/filename_noDW.mrc[s]?')
+        call self%keywords_filename%push('OriginalParticleName',    'file' ) !'Extract/job[0-9]{03}/filename.mrc[s]?')
+        call self%keywords_filename%push('CtfImage',         'file' ) !       'Ctffind/job[0-9]{03}/filename.ctf:mrc')
 
 
 
@@ -338,6 +342,29 @@ contains
         call self%keywords_class3D%print_key_val_pairs
     end subroutine print_star_dict
 
+!>  \brief  looks up the index of a key value in the chash
+    function lookup( self, key , mode) result( which )
+        class(star_dict),     intent(inout) :: self
+        character(len=*), intent(in) :: key
+        integer, intent(out) :: mode
+        integer :: ikey, which
+        which =-1
+        mode=-1
+        if ( self%keywords_general%isthere(key) )then
+            VerbosePrint ' STAR dictionary lookup '
+            mode=0
+            which = self%keywords_general%lookup(key)
+        elseif( self%keywords_filename%isthere(key) )then
+            VerbosePrint ' STAR dictionary lookup '
+            mode=1
+            which = self%keywords_filename%lookup(key)
+        elseif( self%keywords_class3D%isthere(key) )then
+             mode=2
+             which = self%keywords_class3D%lookup(key)
+         end if
+
+
+    end function lookup
 
     !>  \brief  is a destructor
     subroutine kill( self )

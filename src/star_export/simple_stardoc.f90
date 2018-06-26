@@ -1,65 +1,68 @@
 
 module simple_stardoc
-    include 'simple_lib.f08'
-    implicit none
-    private
-    public :: stardoc
-    type starframes
-        type(hash)  :: htab               !< hash table for the parameters
-        type(chash) :: chtab              !< hash table for the parameter labels
-        integer     :: state
-        logical     :: existence =.false. !< to indicate existence
-    contains
-        procedure :: new_frame
-        procedure :: kill_frame
-    end type starframes
+include 'simple_lib.f08'
+use simple_star_dict, only: star_dict
+implicit none
+private
+public :: stardoc
 
-    interface starframes
-        module procedure constructor_frames
-    end interface starframes
+type starframes
+    type(hash)  :: htab               !< hash table for the parameters
+    type(chash) :: chtab              !< hash table for the parameter labels
+    integer     :: state
+    logical     :: existence =.false. !< to indicate existence
+contains
+    procedure :: new_frame
+    procedure :: kill_frame
+end type starframes
 
-    type stardoc
-        character(len=KEYLEN), allocatable :: param_labels(:)
-        type(str4arr), allocatable         :: data(:)
-        type(starframes), allocatable      :: frames(:)
-        integer,public   :: num_data_elements    = 0
-        integer,public   :: num_data_lines       = 0
-        integer          :: num_frames           = 0  
-        integer          :: num_frame_elements   = 0
-        integer          :: funit
-        logical          :: l_open               =.false.
-        logical          :: existence            =.false. !< to indicate existence
-    contains
-        procedure        :: new
-        procedure,public :: open
-        procedure,public :: close
-        procedure,public :: read_header
-procedure,public         :: read_data_labels
-        procedure        :: write
-        procedure        :: get_r4
-        procedure        :: get_i4
-        procedure        :: get_str
-        !generic         :: get => get_r4, get_i4, get_str
-        procedure        :: put_r4
-        procedure        :: put_i4
-        procedure        :: put_str
-        !generic         :: put => put_r4, put_i4, put_str
-        procedure,public :: kill_doc
-    end type stardoc
+interface starframes
+    module procedure constructor_frames
+end interface starframes
 
-    interface stardoc
-        module procedure constructor
-    end interface stardoc
+type stardoc
+    character(len=KEYLEN), allocatable :: param_labels(:)
+    type(str4arr), allocatable         :: data(:)
+    type(starframes), allocatable      :: frames(:)
+    integer,public   :: num_data_elements    = 0
+    integer,public   :: num_data_lines       = 0
+    integer          :: num_frames           = 0  
+    integer          :: num_frame_elements   = 0
+    integer          :: funit
+    logical          :: l_open               =.false.
+    logical          :: existence            =.false. !< to indicate existence
+contains
+    procedure        :: new
+    procedure,public :: open
+    procedure,public :: close
+    procedure,public :: read_header
+    procedure,public         :: read_data_labels
+    procedure        :: write
+    procedure        :: get_r4
+    procedure        :: get_i4
+    procedure        :: get_str
+    !generic         :: get => get_r4, get_i4, get_str
+    procedure        :: put_r4
+    procedure        :: put_i4
+    procedure        :: put_str
+    !generic         :: put => put_r4, put_i4, put_str
+    procedure,public :: kill_doc
+end type stardoc
+
+interface stardoc
+    module procedure constructor
+end interface stardoc
 integer, parameter :: MIN_STAR_NBYTES = 10 
 
 enum, bind(C) ! STAR_FORMAT
-enumerator :: STAR_MOVIES=1
-enumerator :: STAR_MICROGRAPHS=2
-enumerator :: STAR_CAVGS=3
-enumerator :: STAR_PTCLS=4
+    enumerator :: STAR_MOVIES=1
+    enumerator :: STAR_MICROGRAPHS=2
+    enumerator :: STAR_CAVGS=3
+    enumerator :: STAR_PTCLS=4
 end enum
 
 #include "simple_local_flags.inc"
+integer, parameter :: MAX_STAR_ARGS_PER_LINE=16
 contains
 
     ! CONSTRUCTORS
@@ -82,18 +85,28 @@ contains
         self%chtab = chash()
         self%existence = .true.
     end subroutine new_frame
+
     subroutine new( self, n )
         class(stardoc), intent(inout) :: self
-        integer,     intent(in)    :: n
+        integer,        intent(in)    :: n
         integer :: i
         call self%kill_doc
-        self%num_frame_elements = n
-        allocate( self%frames(n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('new; simple_stardoc',alloc_stat)
-        do i=1,n
-            call self%frames(i)%new_frame
-        end do
-        DebugPrint ' simple_oris::new initiated'
+
+        ! if(allocated(self%frames))then
+        !     if(self%num_frames > 1) then
+        !     do i=1,self%num_frames
+        !         call self%frames(i)%kill_frame
+        !     end do
+        !     endif
+        !     deallocate(self%frames)
+        ! endif
+        ! self%num_frame_elements = n
+        ! allocate( self%frames(n), stat=alloc_stat )
+        ! if(alloc_stat.ne.0)call allocchk('new; simple_stardoc',alloc_stat)
+        ! do i=1,n
+        !     call self%frames(i)%new_frame
+        ! end do
+        DebugPrint ' simple_stardoc::new initiated'
     end subroutine new
 
     subroutine open(self, filename) 
@@ -266,29 +279,31 @@ contains
         character(len=LONGSTRLEN*8) :: starline
         character(len=LONGSTRLEN) :: imagename
         character(len=:), allocatable ::  val,stackfile,state
-        integer  :: i, relionstar, io_stat
+        integer  :: i, io_stat
         real     :: statef, defocus
-        if(self%l_open)call self%close
-        call fopen(relionstar, trim(filename)) !,stat=io_stat)
-        !if(io_stat/=0) call fileiochk("In stardoc; write; unable to open "//trim(filename))
-        write(relionstar,'(A)') ""
-        write(relionstar,'(A)') "data_"
-        write(relionstar,'(A)') ""
-        write(relionstar,'(A)') "loop_"
-        do i=1, self%num_data_elements
-            write(relionstar,'("_rln",A,3x,"#",I0)') self%data(i)%str, i
-        end do
 
+        if(self%l_open)call self%close
+        call fopen(self%funit, trim(filename) ,stat=io_stat)
+        if(io_stat/=0) call fileiochk("In stardoc; write; unable to open "//trim(filename))
+        write(self%funit,'(A)') ""
+        write(self%funit,'(A)') "data_"
+        write(self%funit,'(A)') ""
+        write(self%funit,'(A)') "loop_"
+
+        do i=1, self%num_data_elements
+            write(starfd,'("_rln",A,3x,"#",I0)') trim(self%param_labels(i)), i
+        end do
         do i=1, self%num_frames
             statef = self%frames(i)%state
             if (statef .ne. 0)then
+
                 !! create zero-padded frame number and stackfile
                 imagename=int2str_pad(self%get_i4(i,"frameid"),5)//'@'//&
                     self%get_str(i,"stackfile")//'s'
 
                 stackfile = self%get_str(i,"stackfile")
                 call syslib_symlink(trim(stackfile), trim(stackfile)//'s',status=io_stat)
-                if(io_stat/=0)call simple_stop("in write; StarDoc")
+                if(io_stat/=0)call simple_stop("simple_stardoc::write symlink failed")
 
                 starline =imagename//&
                     &" "//real2str(self%get_r4(i,"kv"))//&
@@ -299,21 +314,97 @@ contains
                     &" "//real2str(self%get_r4(i,"fraca"))//&
                     &" 10000"//&
                     &" "//real2str(self%get_r4(i,"smpd"))
-                write(relionstar,'(A)') starline
+                write(starfd,'(A)') starline
             end if
         end do
-        call fclose(relionstar)
+        call fclose(starfd)
     end subroutine write
+
+    subroutine read(self, filename)
+        class(stardoc), intent(inout) :: self
+        character(len=*),intent(inout) :: filename
+        character(len=LONGSTRLEN*8) :: line
+        character(len=LONGSTRLEN) :: imagename
+        integer :: starfd, io_stat, i, n, endPos, num_labels, elems, iframe, idata
+        character(len=LONGSTRLEN)     :: args(MAX_STAR_ARGS_PER_LINE)
+        logical :: inFrame, inData
+        inData=.false.
+        call fopen(starfd, trim(filename),iostat=io_stat)
+        if(io_stat/=0) call fileiochk("In stardoc; write; unable to open "//trim(filename))
+        self%num_data_elements = 0
+        self%num_frames =0; self%num_frame_elements =0
+        n = 0; num_labels=0
+        do
+            read(starfd, '(A)', iostat=io_stat) line
+            if (io_stat /= 0) exit
+            if(inData)then
+                if (line == "" ) inData=.false.
+                self%num_data_elements=self%num_data_elements+1
+                DebugPrint " Found STAR data line ", line
+            else
+            if (line == "" )cycle
+            if (line == "data_")cycle
+            if (line == "loop_" )then
+                inData=.true.
+                self%num_frames =  self%num_frames +1
+            else if (line(1:4) == "_rln")then
+                DebugPrint " Found STAR label ", line
+                num_labels = num_labels + 1
+            endif
+            endif
+        end do
+        rewind(starfd)
+        print *,' Number of labels: ', num_labels
+        print *,' Number of frames: ',  self%num_frames
+        print *,' Number of data elements: ', self%num_data_elements
+        if(self%num_frames < 1 .or.  num_labels < 1 .or. self%num_data_elements < 1)&
+            call simple_stop(" Star file error -- no frames ")
+        call self%new(self%num_frames)
+        self%num_frame_elements = num_labels
+        inData=.false.
+        n=1; elems=0;iframe=1; idata=1
+        do
+            read(starfd, '(A)', iostat=io_stat) line
+            if (io_stat /= 0) exit
+            if (line == "" )cycle
+            if (line == "data_")cycle
+            if (line == "loop_" )then
+                inData=.true.
+            else if (line(1:4) == "_rln")then
+                endPos = firstBlank(line)
+                if(endPos <= 5) call simple_stop(" Star file error "//trim(line))
+                call self%datatab%push(line(5:endPos), "#"//int2str(n))
+                n = n + 1
+            else
+                ! Data line
+                elems = cntRecsPerLine(line)
+                if(elems /= num_labels ) &
+                    call simple_stop(" Star file error: num elements in line "//int2str(elems)//&
+                    " does not match data req "//int2str(num_labels)//" line:"//trim(line))
+                call parsestr(line,' ',args,elems)
+                do i=1, elems
+                    call self%frames(iframe)%chtab%push(trim(args(i)),int2str(idata))
+                end do
+                idata = idata + 1
+
+            endif
+        end do
+
+        call fclose(starfd)
+    end subroutine read
 
     subroutine putdata(self, strarr)
         class(stardoc), intent(inout) :: self
         character(len=*), intent(in) :: strarr(:)
         integer :: i
         self%num_data_elements = size(strarr)
-        allocate(self%data(self%num_data_elements))
         do i=1, self%num_data_elements
-            allocate(self%data(i)%str, source=strarr(i))
+            call self%datatab%push(strarr(i), int2str(i))
         end do
+        !allocate(self%data(self%num_data_elements))
+        !do i=1, self%num_data_elements
+        !    allocate(self%data(i)%str, source=strarr(i))
+        ! end do
     end subroutine putdata
 
 
@@ -375,6 +466,7 @@ contains
             self%existence = .false.
         endif
     end subroutine kill_frame
+
     !>  \brief  is a destructor
     subroutine kill_doc( self )
         class(stardoc), intent(inout) :: self
