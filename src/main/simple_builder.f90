@@ -366,7 +366,11 @@ contains
             call self%pgrpsyms%nearest_proj_neighbors(self%eulspace, nnn, self%nnmat)
         endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
+        if( params%clsfrcs.eq.'yes' )then
+            ! done later
+        else
+            call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
+        endif
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
         write(*,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'

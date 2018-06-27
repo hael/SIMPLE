@@ -106,8 +106,12 @@ contains
         ! read in movies
         call spproj%read(params%projfile)
         ! DISTRIBUTED EXECUTION
-        params%nptcls = spproj%os_mic%get_noris()
-        if( params%nparts > params%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        params%nptcls = spproj%get_nmovies()
+        if( params%nptcls == 0 )then
+            write(*,*)'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
+            stop 'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
+        endif
+        if( params%nparts > params%nptcls ) stop 'nr of partitions (nparts) must be < number of entries in filetable'
         ! deal with numlen so that length matches JOB_FINISHED indicator files
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
@@ -139,6 +143,13 @@ contains
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
+        ! sanity check
+        call spproj%read_segment(params%oritype, params%projfile)
+        if( spproj%get_nmovies() ==0 )then
+            write(*,*)'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
+            stop 'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
+        endif
+        call spproj%kill
         ! output directory
         output_dir = './'
         ! setup the environment for distributed execution
@@ -249,6 +260,13 @@ contains
         character(len=:), allocatable :: output_dir
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
+        ! sanity check
+        call spproj%read_segment(params%oritype, params%projfile)
+        if( spproj%get_nintgs() ==0 )then
+            write(*,*)'No micrograph to process! simple_commander_distr_wflows::exec_ctf_estimate_distr'
+            stop 'No micrograph to process! simple_commander_distr_wflows::exec_ctf_estimate_distr'
+        endif
+        call spproj%kill
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         params%numlen = len(int2str(params%nparts))
@@ -280,6 +298,13 @@ contains
         character(len=:), allocatable :: output_dir
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
+        ! sanity check
+        call spproj%read_segment(params%oritype, params%projfile)
+        if( spproj%get_nintgs() ==0 )then
+            write(*,*)'No micrograph to process! simple_commander_distr_wflows::exec_pick_distr'
+            stop 'No micrograph to process! simple_commander_distr_wflows::exec_pick_distr'
+        endif
+        call spproj%kill
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         params%numlen = len(int2str(params%nparts))
@@ -350,6 +375,11 @@ contains
         real                      :: frac_srch_space
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_spproj(cline, params)
+        ! sanity check
+        if( build%spproj%get_nptcls() ==0 )then
+            write(*,*)'No particles found! simple_commander_distr_wflows::exec_cluster2D_distr'
+            stop 'No particles found! simple_commander_distr_wflows::exec_cluster2D_distr'
+        endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -565,9 +595,23 @@ contains
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real    :: corr, corr_prev, smpd
         integer :: s, state, iter, iostat, box, i, nfiles
-        logical :: vol_defined, have_oris, do_abinitio, converged, err
+        logical :: vol_defined, have_oris, do_abinitio, converged, err, fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_spproj(cline, params)
+        ! sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                fall_over = build%spproj%get_nptcls() == 0
+            case('cls3D')
+                fall_over = build%spproj%os_out%get_noris() == 0
+        case DEFAULT
+            write(*,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_refine3D_distr'
+        end select
+        if( fall_over )then
+            write(*,*)'No particles found! simple_commander_distr_wflows::exec_refine3D_distr'
+            stop 'No particles found! simple_commander_distr_wflows::exec_refine3D_distr'
+        endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution

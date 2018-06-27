@@ -146,6 +146,11 @@ select case(prg)
     case( 'extract' )
         call cline%parse()
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
+        if( cline%defined('ctf') )then
+            if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
+                stop 'Only CTF=NO/FLIP are allowed'
+            endif
+        endif
         call cline%set('mkdir','yes')
         call xextract%execute(cline)
     case('cluster_cavgs')

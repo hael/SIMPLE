@@ -171,6 +171,10 @@ select case(prg)
         if( .not. cline%defined('refine') ) call cline%set('refine', 'single')
         if( .not. cline%defined('eo')     ) call cline%set('eo',         'no')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',     'yes')
+        if( cline%get_carg('eo').eq.'no' .and. .not.cline%defined('lp') )then
+            write(*,*)'The resolution limit to the alignement should be set with LP=XX or EO=YES'
+            stop 'The resolution limit to the alignement should be set with LP=XX or EO=YES'
+        endif
         call execute_commander(xprime3D_distr, cline)
     case( 'reconstruct3D' )
         call cline%parse()
@@ -185,6 +189,7 @@ select case(prg)
         call cline%parse()
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('eo')        ) call cline%set('eo',        'no')
         call execute_commander(xinitial_3Dmodel, cline)
     case( 'cluster3D' )
         call cline%parse()

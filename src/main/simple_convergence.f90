@@ -33,10 +33,11 @@ end type convergence
 
 contains
 
-    function check_conv2D( self, cline, ncls ) result( converged )
+    function check_conv2D( self, cline, ncls, msk ) result( converged )
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         integer,            intent(in)    :: ncls
+        real,               intent(in)    :: msk
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt
@@ -64,7 +65,7 @@ contains
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
                 ! determine shift bounds
-                params_glob%trs = MSK_FRAC*real(params_glob%msk)
+                params_glob%trs = MSK_FRAC*msk
                 params_glob%trs = max(MINSHIFT,params_glob%trs)
                 params_glob%trs = min(MAXSHIFT,params_glob%trs)
                 ! set shift search flag
@@ -75,7 +76,7 @@ contains
         if( ncls > 1 )then
             converged = .false.
             if( params_glob%l_frac_update )then
-                if( self%mi_joint > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
+                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
             else
                 if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )converged = .true.
             endif
@@ -95,9 +96,10 @@ contains
         endif
     end function check_conv2D
 
-    function check_conv3D( self, cline ) result( converged )
+    function check_conv3D( self, cline, msk ) result( converged )
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
+        real,               intent(in)    :: msk
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt
@@ -135,7 +137,7 @@ contains
             if( .not. cline%defined('trs') .or. &
                 & params_glob%trs <  MINSHIFT )then
                 ! determine shift bounds
-                params_glob%trs = MSK_FRAC*real(params_glob%msk)
+                params_glob%trs = MSK_FRAC*msk
                 params_glob%trs = max(MINSHIFT,params_glob%trs)
                 params_glob%trs = min(MAXSHIFT,params_glob%trs)
                 ! set shift search flag

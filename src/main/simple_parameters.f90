@@ -61,6 +61,7 @@ type :: parameters
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
+    character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
@@ -509,6 +510,7 @@ contains
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)
+        call check_carg('clsfrcs',       self%clsfrcs)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)

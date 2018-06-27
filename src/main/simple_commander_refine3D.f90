@@ -252,14 +252,14 @@ contains
             if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(params%refine,'cluster') )then
                 converged = conv%check_conv_cluster(cline)
             else
-                converged = conv%check_conv3D(cline)
+                converged = conv%check_conv3D(cline, params%msk)
             endif
         else
             select case(params%refine)
             case('cluster','clustersym')
                     converged = conv%check_conv_cluster(cline)
                 case DEFAULT
-                    converged = conv%check_conv3D(cline)
+                    converged = conv%check_conv3D(cline, params%msk)
             end select
         endif
         ! reports convergence, shift activation, resolution update and

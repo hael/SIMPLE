@@ -401,7 +401,11 @@ contains
         ! shell normalization & filter
         if( is3D )then
             if( trim(params_glob%eo) .ne. 'no' )then
-                ifrc = build_glob%eulspace_red%find_closest_proj( build_glob%spproj_field%get_ori(iptcl) )
+                if( trim(params_glob%clsfrcs).eq.'yes' )then
+                    ifrc = nint(build_glob%spproj_field%get(iptcl,'class'))
+                else
+                    ifrc = build_glob%eulspace_red%find_closest_proj( build_glob%spproj_field%get_ori(iptcl) )
+                endif
             else
                 ifrc = 0 ! turns off the matched filter
             endif

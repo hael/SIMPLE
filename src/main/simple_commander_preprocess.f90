@@ -541,6 +541,7 @@ contains
         use simple_image, only: image
         use simple_oris,  only: oris
         use simple_ori,   only: ori
+        use simple_ctf,   only: ctf
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(builder)                 :: build
@@ -549,6 +550,7 @@ contains
         type(nrtxtfile)               :: boxfile
         type(image)                   :: micrograph
         type(ori)                     :: o_mic
+        type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind!, ctfstr!, phplate
         real,             allocatable :: boxdata(:,:)
@@ -677,8 +679,21 @@ contains
             stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
             ! extract windows from integrated movie
             call micrograph%read(mic_name, 1)
+            ! phase-flip micrograph
+            if( cline%defined('ctf') )then
+                if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
+                    ! phase flip micrograph
+                    tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                    call micrograph%edges_norm
+                    call micrograph%fft
+                    call tfun%apply_serial(micrograph, 'flip', ctfparms)
+                    ! update stack ctf flag, mic flag unchanged
+                    ctfparms%ctfflag = CTFFLAG_FLIP
+                endif
+            endif
             ! filter out frequencies lower than the box can express to avoid aliasing
             call micrograph%bp(real(params%box) * params%smpd, 0.)
+            call micrograph%ifft ! need to be here in case it was flipped
             ! write new stack
             cnt = 0
             do iptcl=1,nptcls ! loop over boxes

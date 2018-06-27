@@ -448,7 +448,8 @@ select case(prg)
         keys_optional(24) = 'rrate'
         keys_optional(25) = 'update_frac'
         keys_optional(26) = 'shellw'
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:26))
+        keys_optional(27) = 'clsfrcs'
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:27))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('refine') )then

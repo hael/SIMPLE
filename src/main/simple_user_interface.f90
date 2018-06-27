@@ -1049,7 +1049,7 @@ contains
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                        ! executable
-        &0, 3, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1057,6 +1057,7 @@ contains
         call extract%set_input('parm_ios', 1, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
         call extract%set_input('parm_ios', 2, pcontrast)
         call extract%set_input('parm_ios', 3, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call extract%set_input('parm_ios', 4, 'ctf', 'binary', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls

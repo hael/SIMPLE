@@ -153,7 +153,8 @@ contains
             self%frcs(sstate,proj,:) = frc
         endif
     end subroutine set_frc
-        !> \brief  re-samples a filter array
+
+    !> \brief  re-samples a filter array
     function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
         real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
         real, allocatable :: filt_resamp(:) !< output filter array
@@ -198,7 +199,9 @@ contains
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in frc_getter')
         frc = self%frcs(sstate,proj,:)
-        if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
+        if( phaseplate )then
+            if( any(frc > 0.5) )call phaseplate_correct_fsc(frc, find_plate)
+        endif
         if( hpind_fsc > 0 ) frc(:hpind_fsc) = frc(hpind_fsc + 1)
     end subroutine frc_getter
 

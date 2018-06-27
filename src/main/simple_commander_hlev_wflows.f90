@@ -69,6 +69,11 @@ contains
         call cline%set('mkdir', 'no')
         ! read project file
         call spproj%read(params%projfile)
+        ! sanity checks
+        if( spproj%get_nptcls() == 0 )then
+            write(*,*)'No particles found in project file: ', trim(params%projfile), 'simple_commander_hlev_wflows::exec_cluster2D_autoscale'
+            stop 'No particles found in project file: simple_commander_hlev_wflows::exec_cluster2D_autoscale'
+        endif
         ! delete any previous solution
         if( .not. spproj%is_virgin_field(params%oritype) )then
             ! removes previous cluster2D solution (states are preserved)
@@ -251,6 +256,7 @@ contains
         ! other variables
         character(len=:), allocatable :: stk, orig_stk
         character(len=:), allocatable :: WORK_PROJFILE
+        real,             allocatable :: res(:)
         integer,          allocatable :: states(:)
         type(qsys_env)        :: qenv
         type(parameters)      :: params
@@ -281,11 +287,6 @@ contains
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis
         srch4symaxis = params%pgrp .ne. 'c1'
-        ! set lplims
-        lplims(1) = 20.
-        lplims(2) = 10.
-        if( cline%defined('lpstart') ) lplims(1) = params%lpstart
-        if( cline%defined('lpstop')  ) lplims(2) = params%lpstop
         ! read project & update sampling distance
         call spproj%read(params%projfile)
         ! retrieve cavgs stack & FRCS info
@@ -297,9 +298,23 @@ contains
             ! start from previous 2D
             states = nint(spproj%os_cls2D%get_all('state'))
         endif
+        if( count(states==0) .eq. ncavgs )then
+            write(*,*) 'No class averages detected in project file: ',trim(params%projfile), '; simple_commander_hlev_wflows::initial_3Dmodel'
+            stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
+        endif
         params%smpd = ctfvars%smpd
         orig_stk    = stk
-        if( do_eo )call prep_eo_stks_init
+        ! set lplims
+        lplims(1) = 20.
+        lplims(2) = 10.
+        if( cline%defined('lpstop') ) lplims(2) = params%lpstop
+        if( do_eo )then
+            res       = spproj%os_cls2D%get_all('res')
+            lplims(1) = max(median_nocopy(res), lplims(2))
+            deallocate(res)
+        else
+            if( cline%defined('lpstart') ) lplims(1) = params%lpstart
+        endif
         ! prepare a temporary project file for the class average processing
         allocate(WORK_PROJFILE, source=trim(ORIG_WORK_PROJFILE))
         call del_file(WORK_PROJFILE)
@@ -405,9 +420,10 @@ contains
         call cline_refine3D_refine%set('npeaks',   real(NPEAKS_REFINE))
         if( do_eo )then
             call cline_refine3D_refine%delete('lp')
-            call cline_refine3D_refine%set('eo', 'yes')
+            call cline_refine3D_refine%set('eo',         'yes')
             call cline_refine3D_refine%set('lplim_crit', 0.5)
-            call cline_refine3D_refine%set('lpstop',lplims(2))
+            call cline_refine3D_refine%set('lpstop',     lplims(2))
+            call cline_refine3D_refine%set('clsfrcs',   'yes')
         else
             call cline_refine3D_refine%set('lp', lplims(2))
         endif
@@ -470,8 +486,9 @@ contains
         else
             call work_proj2%add_stk(trim(orig_stk), ctfvars)
             work_proj2%os_ptcl3D = os
+            call work_proj2%os_ptcl3D%set_all('state', real(states))
         endif
-        call work_proj2%os_ptcl3D%set_all('state', real(states)) ! takes care of states
+        call os%kill
         ! naming
         call work_proj2%projinfo%delete_entry('projname')
         call work_proj2%projinfo%delete_entry('projfile')
@@ -529,6 +546,7 @@ contains
             do icls=1,ncavgs
                 call spproj%os_cls3D%set_ori(icls, work_proj2%os_ptcl3D%get_ori(icls))
             enddo
+            call conv_eo(work_proj2%os_ptcl3D)
         else
             spproj%os_cls3D = work_proj2%os_ptcl3D
         endif
@@ -560,53 +578,82 @@ contains
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
             end subroutine set_iter_dependencies
 
-            subroutine prep_eo_stks_init
-                use simple_commander_imgproc, only: filter_commander
-                type(filter_commander) :: xfilter
-                type(cmdline)          :: cline_filter
-                character(len=:), allocatable :: frcs_fname, ext, stk_filt
-                ext = '.'//fname2ext( stk )
+            subroutine prep_eo_stks_refine
+                use simple_ori, only: ori
+                type(ori)                     :: o, o_even, o_odd
+                character(len=:), allocatable :: eostk, ext, frcs_fname
+                integer :: even_ind, odd_ind, state, nprojs, icls
+                call os%delete_entry('lp')
                 call spproj%get_frcs(frcs_fname, 'frc2D')
                 if( trim(frcs_fname).eq.'' )then
                     write(*,*)'The project file does not contain the required information for e/o alignment'
                     stop 'The project file does not contain the required information for e/o alignment'
                 endif
-                stk_filt = add2fbody(trim(stk), trim(ext), '_filt')
-                call cline_filter%set('prg',  'filter')
-                call cline_filter%set('nthr', real(params%nthr))
-                call cline_filter%set('smpd', params%smpd)
-                call cline_filter%set('frcs', trim(frcs_fname))
-                call cline_filter%set('stk',   trim(stk))
-                call cline_filter%set('outstk',trim(stk_filt))
-                call xfilter%execute(cline_filter)
-                deallocate(stk)
-                stk = trim(stk_filt)
-            end subroutine prep_eo_stks_init
-
-            subroutine prep_eo_stks_refine
-                character(len=:), allocatable :: eostk, ext
-                ext = '.'//fname2ext( stk )
-                call os%delete_entry('lp')
-                ! even
-                call os%set_all2single('eo', 0.)
-                call os%set_all2single('stkind', 1.)
+                call cline_refine3D_refine%set('frcs',trim(frcs_fname))
+                ! add stks
+                ext   = '.'//fname2ext( stk )
                 eostk = add2fbody(trim(orig_stk), trim(ext), '_even')
                 call work_proj2%add_stk(eostk, ctfvars)
-                do icls=1,ncavgs
-                    call work_proj2%os_ptcl3D%set_ori(icls, os%get_ori(icls))
-                enddo
-                deallocate(eostk)
-                ! odd
-                call os%set_all2single('eo', 1.)
-                call os%set_all2single('stkind', 2.)
                 eostk = add2fbody(trim(orig_stk), trim(ext), '_odd')
                 call work_proj2%add_stk(eostk, ctfvars)
+                ! update orientations parameters
                 do icls=1,ncavgs
-                    call work_proj2%os_ptcl3D%set_ori(ncavgs+icls, os%get_ori(icls))
+                    even_ind = icls
+                    odd_ind  = ncavgs+icls
+                    o        = os%get_ori(icls)
+                    state    = os%get_state(icls)
+                    call o%set('class', real(icls)) ! for mapping frcs
+                    call o%set('state', real(state))
+                    ! even
+                    o_even = o
+                    call o_even%set('eo', 0.)
+                    call o_even%set('stkind', work_proj2%os_ptcl3D%get(even_ind,'stkind'))
+                    call work_proj2%os_ptcl3D%set_ori(even_ind, o_even)
+                    ! odd
+                    o_odd = o
+                    call o_odd%set('eo', 1.)
+                    call o_odd%set('stkind', work_proj2%os_ptcl3D%get(odd_ind,'stkind'))
+                    call work_proj2%os_ptcl3D%set_ori(odd_ind, o_odd)
                 enddo
+                ! cleanup
+                deallocate(eostk, ext)
+                call o%kill
+                call o_even%kill
+                call o_odd%kill
             end subroutine prep_eo_stks_refine
 
+            subroutine conv_eo( os )
+                use simple_sym, only: sym
+                use simple_ori, only: ori
+                class(oris), intent(inout) :: os
+                type(sym) :: se
+                type(ori) :: o_odd, o_even
+                real      :: avg_euldist, euldist
+                integer   :: icls, ncls
+                call se%new(params%pgrp)
+                avg_euldist = 0.
+                ncls = 0
+                do icls=1,os%get_noris()/2
+                    o_even = os%get_ori(icls)
+                    if( o_even%get_state() == 0 )cycle
+                    ncls    = ncls + 1
+                    o_odd   = os%get_ori(ncavgs+icls)
+                    euldist = rad2deg(o_odd.euldist.o_even)
+                    if( se%get_nsym() > 1 )then
+                        call o_odd%mirror2d
+                        call se%rot_to_asym(o_odd)
+                        euldist = min(rad2deg(o_odd.euldist.o_even), euldist)
+                    endif
+                    avg_euldist = avg_euldist + euldist
+                enddo
+                avg_euldist = avg_euldist/real(ncls)
+                write(*,'(A)')'>>>'
+                write(*,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
+                write(*,'(A)')'>>>'
+            end subroutine conv_eo
+
     end subroutine exec_initial_3Dmodel
+
 
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )

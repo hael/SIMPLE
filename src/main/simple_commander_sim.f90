@@ -102,6 +102,7 @@ contains
         call build%vol%mask(params%msk, 'soft')
         call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
         call build%vol%pad(vol_pad)
+        call vol_pad%fft
         call vol_pad%expand_cmat(params%alpha)
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0

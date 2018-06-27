@@ -1068,6 +1068,9 @@ contains
         call self%os_out%set(ind, 'stkkind', 'single')
         call self%os_out%set(ind, 'imgkind', 'cavg')
         call self%os_out%set(ind, 'ctf',     'no')
+        ! add congruent os_cls2D
+        call self%os_cls2D%new(nptcls)
+        call self%os_cls2D%set_all2single('state',1.)
     end subroutine add_cavgs2os_out
 
     subroutine add_frcs2os_out( self, frc, which_imgkind )
