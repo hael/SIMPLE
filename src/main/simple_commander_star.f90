@@ -33,7 +33,7 @@ contains
     !> convert text (.txt) oris doc to binary (.simple)
     subroutine exec_exportstar_project( self, cline )
         class(export_star_project_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
         type(parameters)  :: params
         type(oris)        :: os
         type(sp_project)  :: spproj
@@ -124,7 +124,7 @@ end if
         use simple_nrtxtfile, only: nrtxtfile
         use simple_binoris_io ! use all in there
         class(import_star_project_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj 
         type(star_project):: starproj
@@ -301,13 +301,13 @@ end if
     subroutine exec_print_star_project_info( self, cline )
         class(print_star_project_info_commander), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        call params%new(cline)
-        call spproj%read(params%projfile)
-        call spproj%print_info
-        call spproj%kill
-        call simple_end('**** PRINT_PROJECT_STAR_INFO NORMAL STOP ****')
+        ! type(parameters) :: params
+        ! type(star_project) :: starproj
+        ! call params%new(cline)
+        ! call starproj%read(params%starfile)
+        ! call starproj%print_info
+        ! call starproj%kill
+        ! call simple_end('**** PRINT_PROJECT_STAR_INFO NORMAL STOP ****')
     end subroutine exec_print_star_project_info
 
 

@@ -33,9 +33,9 @@ type(import_particles_commander)     :: ximport_particles
 type(import_cavgs_commander)         :: ximport_cavgs
 
 ! STAR PROJECT SUPPORT
-type(exportstar_project_commander)      :: xexportstar_project
-type(importstar_project_commander)      :: ximportstar_project
-type(print_star_project_info_commander) :: xprint_star_project_info
+type(export_star_project_commander)   :: xexportstar_project
+type(import_star_project_commander)   :: ximportstar_project
+type(print_star_project_info_commander):: xprint_star_project_info
 
 ! PART OF SP WORKFLOW
 type(make_pickrefs_commander)        :: xmake_pickrefs

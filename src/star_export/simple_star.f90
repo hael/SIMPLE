@@ -66,13 +66,13 @@ contains
         n=0
         if(.not. self%doc%existence) &
             stop ' simple_star ::  get_ndatalines doc unopened '
-        
+
         if( self%doc%num_data_lines == 0) then
-            print *," simple_star :: get_ndatalines no data entries" 
+            print *," simple_star :: get_ndatalines no data entries"
         else
             n= self%doc%num_data_lines
         endif
-       
+
     end function get_ndatalines
 
     function get_nrecs_per_line(self)result(nrecs)
@@ -81,22 +81,22 @@ contains
         nrecs=0
         if(.not. self%doc%existence) &
             stop ' simple_star ::  get_ndatalines doc unopened '
-       
+
         if( self%doc%num_data_elements == 0) then
-            print *," simple_star :: get_ndatalines no data entries" 
+            print *," simple_star :: get_ndatalines no data entries"
         else
             nrecs = self%doc%num_data_elements
         endif
-       
+
     end function get_nrecs_per_line
     subroutine read( self, fname )
-        class(star_project), intent(inout) :: self
-        character(len=*), optional, intent(in)    :: fname
+        class(star_project), intent(inout)     :: self
+        character(len=*), optional, intent(in) :: fname
     end subroutine read
 
 
     subroutine print_info( self )
-        class(star_project), intent(inout) :: self
+        class(star_project), intent(inout)     :: self
 
     end subroutine print_info
 
@@ -107,6 +107,7 @@ contains
         character(len=*), intent(in)       :: filename
         character(len=KEYLEN),allocatable      :: labels(:)
         labels=(/ 'MicrographNameNoDW' /)
+        call self%doc%write(trim(filename), sp, labels)
     end subroutine export_micrographs
     subroutine import_micrographs (self,  sp, filename)
         class(star_project), intent(inout) :: self
@@ -131,6 +132,7 @@ contains
         labels=(/  &
 'MicrographNameNoDW',&
 'MicrographName    '/)
+        call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_motion_corrected_micrographs
     subroutine import_motion_corrected_micrographs (self,  sp, filename)
@@ -174,7 +176,8 @@ contains
             'DetectorPixelSize  ',&
             'CtfFigureOfMerit   ',&
             'CtfMaxResolution   ' /)
-        
+        call self%doc%write(trim(filename), sp, labels)
+
 
     end subroutine export_ctf_estimation
     subroutine import_ctf_estimation (self, sp, filename)
@@ -205,6 +208,7 @@ contains
 'ClassNumber          ',&
 'AutopickFigureOfMerit',&
 'AnglePsi             ' /)
+        call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_autopick
     subroutine import_autopick (self, sp, filename)
@@ -283,7 +287,7 @@ contains
 'MaxValueProbDistribution ',&
 'NrOfSignificantSamples   ',&
 'GroupName                ' /)
-
+        call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_extract_doseweightedptcls
     subroutine import_extract_doseweightedptcls (self, sp, filename)
@@ -368,6 +372,7 @@ contains
 'NrOfFrames               ',&
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage' /)
+        call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_class2D
     subroutine import_class2D (self, sp, filename)
@@ -441,6 +446,7 @@ contains
 'MaxValueProbDistribution ',&
 'NrOfSignificantSamples   ',&
 'GroupName                ' /)
+        call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_class2D_select
     subroutine import_class2D_select (self, sp, filename)
@@ -582,6 +588,7 @@ contains
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage',&
 'RandomSubset             ' /)
+        call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_init3Dmodel
 
@@ -661,6 +668,7 @@ contains
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage',&
 'RandomSubset             ' /)
+        call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_refine3D
     subroutine import_refine3D (self, sp, filename)
@@ -747,6 +755,7 @@ labels=(/ &
 'NrOfFrames               ',&
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage' /)
+call self%doc%write(trim(filename), sp, labels)
 
     end subroutine export_shiny3D
     subroutine import_shiny3D (self, sp, filename)

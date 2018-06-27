@@ -362,8 +362,6 @@ contains
              mode=2
              which = self%keywords_class3D%lookup(key)
          end if
-
-
     end function lookup
 
     !>  \brief  is a destructor

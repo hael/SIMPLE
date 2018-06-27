@@ -2,6 +2,7 @@
 module simple_stardoc
 include 'simple_lib.f08'
 use simple_star_dict, only: star_dict
+
 implicit none
 private
 public :: stardoc
@@ -33,10 +34,11 @@ type stardoc
     logical          :: existence            =.false. !< to indicate existence
 contains
     procedure        :: new
+    procedure        :: read
     procedure,public :: open
     procedure,public :: close
     procedure,public :: read_header
-    procedure,public         :: read_data_labels
+    procedure,public :: read_data_labels
     procedure        :: write
     procedure        :: get_r4
     procedure        :: get_i4

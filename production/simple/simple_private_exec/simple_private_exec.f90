@@ -7,7 +7,6 @@ use simple_commander_checks
 use simple_commander_distr
 use simple_commander_misc
 use simple_commander_imgproc
-use simple_commander_mask
 use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_cluster2D
@@ -42,7 +41,7 @@ type(refine3D_commander)             :: xprime3D
 type(check_3Dconv_commander)         :: xcheck_3Dconv
 
 ! MASK PROGRAMS
-type(resmask_commander)              :: xresmask
+! type(resmask_commander)              :: xresmask
 
 ! RECONSTRUCTION PROGRAMS
 type(volassemble_eo_commander)       :: xvolassemble_eo
