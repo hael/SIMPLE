@@ -20,7 +20,7 @@ private
         procedure :: tocU
         procedure :: nowCU
         procedure :: setup
-        final :: destroy
+        final :: destroy_cuda_timer
     end type timer_cuda
 
     interface timer_cuda
@@ -129,16 +129,15 @@ contains
     end subroutine nowCU
 
     !> \brief timer destructor
-    subroutine destroy(this)
+    subroutine destroy_cuda_timer(this)
         type(timer_cuda), intent(inout) :: this
         integer(KIND(cudaSuccess))  :: istat
         istat= cudaStreamDestroy(this%tStream)
         if (istat .ne. cudaSuccess) call simple_stop(' cuStreamCreate for device 0: Failed')
-
         istat=cudaEventDestroy(this%start_point)
         if (istat .ne. cudaSuccess) call simple_stop(' cudaEventDestroyfor device 0: Failed')
         istat=cudaEventDestroy(this%end_point)
         if (istat .ne. cudaSuccess) call simple_stop(' cudaEventDestroyfor device 0: Failed')
-    end subroutine destroy
+    end subroutine destroy_cuda_timer
 
 end module simple_timer_cuda

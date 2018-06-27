@@ -1,11 +1,12 @@
 module CUDA
-use cuda_h
-use cuda_runtime_h
+use cuda_h              ! include all
+use cuda_runtime_h      ! include all
 implicit none
 contains
 
   subroutine my_cudaErrorCheck( err, b )
-    integer (KIND(cudaSuccess)), intent(in) :: err
+      use, intrinsic :: ISO_C_BINDING
+      integer (KIND(cudaSuccess)), intent(in) :: err
 
     character, pointer :: string_err(:)
     integer :: i

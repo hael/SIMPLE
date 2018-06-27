@@ -3,20 +3,26 @@ include 'simple_lib.f08'
 use, intrinsic :: ISO_C_BINDING
 use CUDA
 implicit none
-
-! public :: check_cuda_device, test_FortCUDA_kernels
+private
+ public :: check_cuda_device, set_cuda_device, get_cuda_property, test_FortCUDA_kernels
 ! private
+ type( cudaDeviceProp ) :: cuda_properties
+ integer                :: cuda_deviceCount
+ integer                :: cuda_currentDevice
 
 ! #include "simple_local_flags.inc"
-
+public ::  cuda_properties, cuda_deviceCount
 contains
 
     subroutine check_cuda_device
+        use CUDA
+        implicit none
         integer :: device
         integer :: deviceCount
         integer :: gpuDeviceCount
         type( cudaDeviceProp ) :: properties
-        integer(c_int) :: cudaResultCode
+        integer(KIND(cudaSuccess)) :: cudaResultCode
+        logical :: pass
         deviceCount=0
         gpuDeviceCount=0
         ! Obtain the device count from the system and check for errors
@@ -24,36 +30,28 @@ contains
         if (cudaResultCode /= cudaSuccess) then
             deviceCount = 0
         end if
-
+        call my_cudaErrorCheck(cudaResultCode, pass)
+        if(pass .eqv. .false.)&
+        call simple_stop("simple_cuda::check_cuda_device CUDA device count failed " )
         ! Check for the device to be an emulator. If not, increment the counter
         do device = 0, deviceCount - 1, 1
             cudaResultCode = cudaGetDeviceProperties(properties, device)
             if (properties%major /= 9999) gpuDeviceCount = gpuDeviceCount + 1
+            call my_cudaErrorCheck(cudaResultCode, pass)
+            if(.not. pass) call simple_stop("simple_cuda::check_cuda_device CUDA device property failed "//int2str(device) )
         end do
-
+        cuda_deviceCount= gpuDeviceCount
         print*, gpuDeviceCount, " GPU CUDA device(s) found"
 
         do device = 0, deviceCount - 1, 1
             print*, "    Cuda device ", device
             cudaResultCode = cudaGetDeviceProperties(properties,device)
-            print*, "    name :", properties%name
-            print*, "    totalGlobablMem:", properties%totalGlobalMem
-            print*, "    sharedMemPerBlock:", properties%sharedMemPerBlock
-            print*, "    regsPerBlock:", properties%regsPerBlock
-            print*, "    warpSize:", properties%warpSize
-            print*, "    memPitch:", properties%memPitch
-            print*, "    maxThreadsPerBlock:", properties%maxThreadsPerBlock
-            print*, "    maxThreadsDim:", properties%maxThreadsDim(1), properties%maxThreadsDim(2), properties%maxThreadsDim(3)
-            print*, "    maxGridSize:", properties%maxGridSize(1), properties%maxGridSize(2), properties%maxGridSize(3)
-            print*, "    clockRate:", properties%clockRate
-            print*, "    totalConstMem:", properties%totalConstMem
-            print*, "    major:", properties%major
-            print*, "    minor:", properties%minor
-            print*, "    textureAlignment:", properties%textureAlignment
-            print*, "    deviceOverlap:", properties%deviceOverlap
-            print*, "    multiProcessorCount:", properties%multiProcessorCount
-        end do
-        print *, " Check CUDA completed "
+             call my_cudaErrorCheck(cudaResultCode, pass)
+             if(.not. pass) call simple_stop("simple_cuda::check_cuda_device CUDA device property failed "//int2str(device) )
+             if(device==0) cuda_properties = properties
+             call print_cuda_properties(properties)
+         end do
+         print *, " Check CUDA completed "
     end subroutine check_cuda_device
 
     subroutine set_cuda_device(d)
@@ -61,50 +59,92 @@ contains
         integer :: device
         integer :: deviceCount
         type( cudaDeviceProp ) :: properties
-        integer(c_int) :: cudaResultCode
-
+        integer(KIND(cudaSuccess)) :: cudaResultCode
+        logical :: pass
         deviceCount=0
         ! Obtain the device count from the system and check for errors
         cudaResultCode = cudaGetDeviceCount(deviceCount)
-        if (cudaResultCode /= cudaSuccess) then
-            call simple_stop( "simple_cuda::set_cuda_device  cudaGetDeviceCount failed ")
+        call my_cudaErrorCheck(cudaResultCode, pass)
+        if(.not. pass) call simple_stop("simple_cuda::set_cuda_device  cudaGetDeviceCount failed ")
 
-        end if
-        if (d >= deviceCount) call simple_stop( "simple_cuda::set_cuda_device index too high ")
+        if (d >= deviceCount) then
+            print *, "simple_cuda::set_cuda_device index too high "
+            return
+        endif
 
         cudaResultCode = cudaGetDeviceProperties(properties, d)
-        if (cudaResultCode /= cudaSuccess) then
-            call simple_stop( "simple_cuda::set_cuda_device cudaGetDeviceProperties failed ")
-        endif
+        call my_cudaErrorCheck(cudaResultCode, pass)
+        if(.not. pass) call simple_stop("simple_cuda::set_cuda_device cudaGetDeviceProperties failed ")
+        cuda_properties = properties
 
         cudaResultCode = cudaSetDevice(d)
-        if (cudaResultCode /= cudaSuccess) then
-            call simple_stop( "simple_cuda::set_cuda_device cudaSetDevice failed ")
-        endif
-
+        call my_cudaErrorCheck(cudaResultCode, pass)
+        if(.not. pass) call simple_stop("simple_cuda::set_cuda_device cudaSetDevice failed ")
+        cuda_currentDevice = d
+        print *, " New CUDA device set successfully ", cuda_currentDevice
+        call print_cuda_properties(cuda_properties)
     end subroutine set_cuda_device
 
-    function get_cuda_property(d) result(properties)
-         integer , intent(in) :: d
+    function get_cuda_property(d,properties) result(pass)
+         integer,                intent(in)  :: d
+         type( cudaDeviceProp ), intent(out) :: properties
          integer :: deviceCount
-         type( cudaDeviceProp ) :: properties
-         integer(c_int) :: cudaResultCode
-
+         integer(KIND(cudaSuccess)) :: cudaResultCode
+         logical :: pass
          deviceCount=0
 
         ! Obtain the device count from the system and check for errors
         cudaResultCode = cudaGetDeviceCount(deviceCount)
-        if (cudaResultCode /= cudaSuccess) then
-            call simple_stop( "simple_cuda::set_cuda_device  cudaGetDeviceCount failed ")
+        call my_cudaErrorCheck(cudaResultCode, pass)
+        if(.not. pass) call simple_stop("simple_cuda::get_cuda_device  cudaGetDeviceCount failed ")
 
+        if (d >= deviceCount) then
+            print *, "simple_cuda::get_cuda_device index too high "
+            pass=.false.
+            return
         end if
-        if (d >= deviceCount) call simple_stop( "simple_cuda::set_cuda_device index too high ")
 
         cudaResultCode = cudaGetDeviceProperties(properties, d)
-        if (cudaResultCode /= cudaSuccess) then
-            call simple_stop( "simple_cuda::set_cuda_device cudaGetDeviceProperties failed ")
-        endif
+        call my_cudaErrorCheck(cudaResultCode, pass)
+        if(.not. pass) call simple_stop("simple_cuda::get_cuda_device cudaGetDeviceProperties failed ")
+
     end function get_cuda_property
+
+    subroutine print_cuda_properties(properties)
+        type( cudaDeviceProp ), intent(in) :: properties
+        print*, "    name :", properties%name
+            print*, "    totalGlobablMem          :", properties%totalGlobalMem
+            print*, "    sharedMemPerBlock        :", properties%sharedMemPerBlock
+            print*, "    regsPerBlock             :", properties%regsPerBlock
+            print*, "    warpSize                 :", properties%warpSize
+            print*, "    memPitch                 :", properties%memPitch
+            print*, "    maxThreadsPerBlock       :", properties%maxThreadsPerBlock
+            print*, "    maxThreadsDim            :", properties%maxThreadsDim
+            print*, "    maxGridSize              :", properties%maxGridSize
+            print*, "    wclockRate               :", properties%clockRate
+            print*, "    wtotalConstMem           :", properties%totalConstMem
+            print*, "    wmajor                   :", properties%major
+            print*, "    wminor                   :", properties%minor
+            print*, "    wtextureAlignment        :", properties%textureAlignment
+            print*, "    wdeviceOverlap           :", properties%deviceOverlap
+            print*, "    wmultiProcessorCount     :", properties%multiProcessorCount
+
+            print*, "    kernelExecTimeoutEnabled :", properties%kernelExecTimeoutEnabled
+            print*, "    integrated               :", properties%integrated
+            print*, "    canMapHostMemory         :", properties%canMapHostMemory
+            print*, "    computeMode              :", properties%computeMode
+            print*, "    maxTexture1D             :", properties%maxTexture1D
+            print*, "    maxTexture2D(2)          :", properties%maxTexture2D
+            print*, "    maxTexture3D(3)          :", properties%maxTexture3D
+            print*, "    maxTexture2DArray(3)     :", properties%maxTexture2DArray
+            print*, "    surfaceAlignment         :", properties%surfaceAlignment
+            print*, "    concurrentKernels        :", properties%concurrentKernels
+            print*, "    ECCEnabled               :", properties%ECCEnabled
+            print*, "    pciBusID                 :", properties%pciBusID
+            print*, "    pciDeviceID              :", properties%pciDeviceID
+     !       print*, "    cudaReserved__(22)       :", properties%22)
+
+        end subroutine print_cuda_properties
 
 
     subroutine test_FortCUDA_kernels (arg)
