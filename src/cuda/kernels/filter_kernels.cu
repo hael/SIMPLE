@@ -44,9 +44,23 @@ const float *s, const float factor
 
 }
 
-void gauss_ElementwiseKernel(
-        float s, float pi, float *u, float *v, float *w, float *z
+__global__ void gaussElementwiseKernel(
+      const float s, const float *u, const float *v, const float *w, float *z, int N )
+{
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+   if ( i < N ) {
+ z[i] = exp(-2 * (PI ^ 2) * (u[i] ^ 2 + v[i] ^ 2 + w[i] ^ 2) * (s^2));
+ }
+}
 
 
-        "z[i] = exp(-2 * (pi ^ 2) * (u[i] ^ 2 + v[i] ^ 2 + w[i] ^ 2) * (s^2))",
-        "normal_combination")
+
+extern "C"
+{
+  void  gaussKernel_(float *A, float *B, float *C, float *Z, float *s, dim3 *dimGrid, dim3 *dimBlk,
+                   int N, cudaStream_t *stream)
+  {
+    gaussElementwiseKernel<<<*dimGrid, *dimBlk, 0, *stream>>>(*s,A, B, C, Z, N);
+  }
+
+}

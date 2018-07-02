@@ -66,12 +66,12 @@ extern "C"
   {
     vecAddInt<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
   }
-  void vecaddconst_int(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
+  void vecaddconst_int_(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
                  int N, cudaStream_t *stream)
   {
     vecAddConstInt<<<*dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);
   }
-  void vecaddconst_float(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
+  void vecaddconst_float_(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
                    int N, cudaStream_t *stream)
   {
     vecAddConstFloat<<<*dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);

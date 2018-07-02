@@ -1,97 +1,96 @@
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-  module cuda_h
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+module cuda_h
+    !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     use, intrinsic :: ISO_C_BINDING
     use cuda_unknowns
 
     implicit none
 
     enum, bind(C) !:: CUctx_flags_enum
-      enumerator :: CU_CTX_SCHED_AUTO=0
-      enumerator :: CU_CTX_SCHED_SPIN=1
-      enumerator :: CU_CTX_SCHED_YIELD=2
-      enumerator :: CU_CTX_SCHED_MASK=3
-      enumerator :: CU_CTX_BLOCKING_SYNC=4
-      enumerator :: CU_CTX_MAP_HOST=8
-      enumerator :: CU_CTX_LMEM_RESIZE_TO_MAX=16
-      enumerator :: CU_CTX_FLAGS_MASK=31
+        enumerator :: CU_CTX_SCHED_AUTO=0
+        enumerator :: CU_CTX_SCHED_SPIN=1
+        enumerator :: CU_CTX_SCHED_YIELD=2
+        enumerator :: CU_CTX_SCHED_MASK=3
+        enumerator :: CU_CTX_BLOCKING_SYNC=4
+        enumerator :: CU_CTX_MAP_HOST=8
+        enumerator :: CU_CTX_LMEM_RESIZE_TO_MAX=16
+        enumerator :: CU_CTX_FLAGS_MASK=31
     end enum ! CUctx_flags_enum
 
     enum, bind(C) !:: CUevent_flags_enum
-      enumerator :: CU_EVENT_DEFAULT=0
-      enumerator :: CU_EVENT_BLOCKING_SYNC=1
+        enumerator :: CU_EVENT_DEFAULT=0
+        enumerator :: CU_EVENT_BLOCKING_SYNC=1
     end enum ! CUevent_flags_enum
 
     enum, bind(C) !:: CUarray_format_enum
-      enumerator :: CU_AD_FORMAT_UNSIGNED_INT8=1
-      enumerator :: CU_AD_FORMAT_UNSIGNED_INT16=2
-      enumerator :: CU_AD_FORMAT_UNSIGNED_INT32=3
-      enumerator :: CU_AD_FORMAT_SIGNED_INT8=8
-      enumerator :: CU_AD_FORMAT_SIGNED_INT16=9
-      enumerator :: CU_AD_FORMAT_SIGNED_INT32=10
-      enumerator :: CU_AD_FORMAT_HALF=16
-      enumerator :: CU_AD_FORMAT_FLOAT=32
+        enumerator :: CU_AD_FORMAT_UNSIGNED_INT8=1
+        enumerator :: CU_AD_FORMAT_UNSIGNED_INT16=2
+        enumerator :: CU_AD_FORMAT_UNSIGNED_INT32=3
+        enumerator :: CU_AD_FORMAT_SIGNED_INT8=8
+        enumerator :: CU_AD_FORMAT_SIGNED_INT16=9
+        enumerator :: CU_AD_FORMAT_SIGNED_INT32=10
+        enumerator :: CU_AD_FORMAT_HALF=16
+        enumerator :: CU_AD_FORMAT_FLOAT=32
     end enum ! CUarray_format_enum
 
     enum, bind(C) !:: CUaddress_mode_enum
-      enumerator :: CU_TR_ADDRESS_MODE_WRAP=0
-      enumerator :: CU_TR_ADDRESS_MODE_CLAMP=1
-      enumerator :: CU_TR_ADDRESS_MODE_MIRROR=2
+        enumerator :: CU_TR_ADDRESS_MODE_WRAP=0
+        enumerator :: CU_TR_ADDRESS_MODE_CLAMP=1
+        enumerator :: CU_TR_ADDRESS_MODE_MIRROR=2
     end enum ! CUaddress_mode_enum
 
     enum, bind(C) !:: CUfilter_mode_enum
-      enumerator :: CU_TR_FILTER_MODE_POINT=0
-      enumerator :: CU_TR_FILTER_MODE_LINEAR=1
+        enumerator :: CU_TR_FILTER_MODE_POINT=0
+        enumerator :: CU_TR_FILTER_MODE_LINEAR=1
     end enum ! CUfilter_mode_enum
 
     enum, bind(C) !:: CUdevice_attribute_enum
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK=1
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X=2
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y=3
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z=4
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X=5
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y=6
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z=7
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK=8
-      enumerator :: CU_DEVICE_ATTRIBUTE_SHARED_MEMORY_PER_BLOCK=8
-      enumerator :: CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY=9
-      enumerator :: CU_DEVICE_ATTRIBUTE_WARP_SIZE=10
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_PITCH=11
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK=12
-      enumerator :: CU_DEVICE_ATTRIBUTE_REGISTERS_PER_BLOCK=12
-      enumerator :: CU_DEVICE_ATTRIBUTE_CLOCK_RATE=13
-      enumerator :: CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT=14
-      enumerator :: CU_DEVICE_ATTRIBUTE_GPU_OVERLAP=15
-      enumerator :: CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT=16
-      enumerator :: CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT=17
-      enumerator :: CU_DEVICE_ATTRIBUTE_INTEGRATED=18
-      enumerator :: CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY=19
-      enumerator :: CU_DEVICE_ATTRIBUTE_COMPUTE_MODE=20
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_WIDTH=21
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_WIDTH=22
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_HEIGHT=23
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_WIDTH=24
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_HEIGHT=25
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_DEPTH=26
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_ARRAY_WIDTH=27
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_ARRAY_HEIGHT=28
-      enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_ARRAY_NUMSLICES=29
-      enumerator :: CU_DEVICE_ATTRIBUTE_SURFACE_ALIGNMENT=30
-      enumerator :: CU_DEVICE_ATTRIBUTE_CONCURRENT_KERNELS=31
-      enumerator :: CU_DEVICE_ATTRIBUTE_ECC_ENABLED=32
-      enumerator :: CU_DEVICE_ATTRIBUTE_PCI_BUS_ID=33
-      enumerator :: CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID=34
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK=1
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X=2
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y=3
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z=4
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X=5
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y=6
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z=7
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK=8
+        enumerator :: CU_DEVICE_ATTRIBUTE_SHARED_MEMORY_PER_BLOCK=8
+        enumerator :: CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY=9
+        enumerator :: CU_DEVICE_ATTRIBUTE_WARP_SIZE=10
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_PITCH=11
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK=12
+        enumerator :: CU_DEVICE_ATTRIBUTE_REGISTERS_PER_BLOCK=12
+        enumerator :: CU_DEVICE_ATTRIBUTE_CLOCK_RATE=13
+        enumerator :: CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT=14
+        enumerator :: CU_DEVICE_ATTRIBUTE_GPU_OVERLAP=15
+        enumerator :: CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT=16
+        enumerator :: CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT=17
+        enumerator :: CU_DEVICE_ATTRIBUTE_INTEGRATED=18
+        enumerator :: CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY=19
+        enumerator :: CU_DEVICE_ATTRIBUTE_COMPUTE_MODE=20
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_WIDTH=21
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_WIDTH=22
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_HEIGHT=23
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_WIDTH=24
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_HEIGHT=25
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE3D_DEPTH=26
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_ARRAY_WIDTH=27
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_ARRAY_HEIGHT=28
+        enumerator :: CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE2D_ARRAY_NUMSLICES=29
+        enumerator :: CU_DEVICE_ATTRIBUTE_SURFACE_ALIGNMENT=30
+        enumerator :: CU_DEVICE_ATTRIBUTE_CONCURRENT_KERNELS=31
+        enumerator :: CU_DEVICE_ATTRIBUTE_ECC_ENABLED=32
+        enumerator :: CU_DEVICE_ATTRIBUTE_PCI_BUS_ID=33
+        enumerator :: CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID=34
     end enum ! CUdevice_attribute_enum
-
     enum, bind(C) !:: CUfunction_attribute_enum
-      enumerator :: CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK=0
-      enumerator :: CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES=1
-      enumerator :: CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES=2
-      enumerator :: CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES=3
-      enumerator :: CU_FUNC_ATTRIBUTE_NUM_REGS=4
-      enumerator :: CU_FUNC_ATTRIBUTE_PTX_VERSION=5
-      enumerator :: CU_FUNC_ATTRIBUTE_BINARY_VERSION=6
-      enumerator :: CU_FUNC_ATTRIBUTE_MAX
+        enumerator :: CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK=0
+        enumerator :: CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES=1
+        enumerator :: CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES=2
+        enumerator :: CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES=3
+        enumerator :: CU_FUNC_ATTRIBUTE_NUM_REGS=4
+        enumerator :: CU_FUNC_ATTRIBUTE_PTX_VERSION=5
+        enumerator :: CU_FUNC_ATTRIBUTE_BINARY_VERSION=6
+        enumerator :: CU_FUNC_ATTRIBUTE_MAX
     end enum ! CUfunction_attribute_enum
 
     enum, bind(C) !:: CUfunc_cache_enum
