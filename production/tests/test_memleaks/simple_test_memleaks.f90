@@ -302,11 +302,11 @@ program simple_test_memleaks
 implicit none
 
 call static_intrinsic_leaks_raiser
-    !call static_dynamic_intrinsic_leaks_raiser
-    !call dynamic_intrinsic_leaks_raiser
-    !call polymorphic_leaks_raiser
-    !call inherit_leaks_raiser
-    !call multiple_inheritance_leaks_raiser
+ call static_dynamic_intrinsic_leaks_raiser
+    call dynamic_intrinsic_leaks_raiser
+    ! call polymorphic_leaks_raiser
+    ! call inherit_leaks_raiser
+    ! call multiple_inheritance_leaks_raiser
     contains
 
     subroutine  static_intrinsic_leaks_raiser

@@ -24,7 +24,7 @@ contains
         real(8) ddot
 
         integer nthr,i,nsec,j
-        if (openacc_version > 201306 .and. openmp_version > 201511) then
+        if (openacc_version >= 201306 .and. openmp_version >= 201511) then
             ! Max at 4 threads for now
             nthr = omp_get_max_threads()
             if (nthr .gt. 4) nthr = 4
@@ -51,7 +51,7 @@ contains
 #ifdef PGI
             !$omp parallel private(i,j,z)
 #else
-            !acc parallel private(i,j,z)
+            !$acc parallel private(i,j,z)
 #endif
             do
                 i = omp_get_thread_num() + 1
@@ -86,7 +86,7 @@ contains
         real, dimension(:,:) :: c(n_size,n_size)
         integer i,j,k
         print *,"test_oacc_omp_matrixmul: ACC matmul"
-#if defined(_OPENACC)
+
         if(openacc_version >= 201306)then
             !     Initialize matrices (values differ from C version)
             do i=1, n_size
@@ -112,9 +112,6 @@ contains
         else
             print *,"test_oacc_omp_matrixmul: OPENACC version not supported ", openacc_version
         end if
-#else
-        print *,"test_oacc_omp_matrixmul: OPENACC not supported."
-#endif
 
     end subroutine test_oacc_omp_matrixmul
 
@@ -124,7 +121,7 @@ contains
         integer :: td(4)=(/16,64,256,1024/)
         real, allocatable, dimension(:,:) :: a, b, c
         real :: tmp, secs
- print *,"test_oacc_omp_matrixmul2: "
+        print *,"test_oacc_omp_matrixmul2: "
         call system_clock(count_max=count_max, count_rate=count_rate)
 
         n = 100

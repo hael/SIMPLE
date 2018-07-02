@@ -4,38 +4,46 @@ program simple_test_openacc
     use openacc
     use simple_oacc_vecadd
     use simple_oacc_omp
+    use simple_rbc
     implicit none
 
-#ifndef _OPENACC
-    write(*,*) " _OPENACC not defined use -fopenacc in FFLAGS or enable USE_OPENACC in cmake build"
-#else
+!#ifndef OPENACC
+!    write(*,*) " _OPENACC not defined use -fopenacc in FFLAGS or enable USE_OPENACC in cmake build"
+!#else
     !!  warning "C Preprocessor got here!"  _OPENACC
-    write(*,'(a,1x,i0)')"OpenACC preprocessor version:",  _OPENACC
-#endif
+!    write(*,'(a,1x,i0)')"OpenACC preprocessor version:",  _OPENACC
+!#endif
 
 
-#ifdef  _OPENACC
+#ifdef OPENACC
     print *,' simple_test_openacc OpenACC is enabled '
     print *,' OpenACC version : ', openacc_version
-    call  saxpy_test_omp
-    call  saxpy_test_acc
+    
+     call test_oacc_basics
+     call test_oacc_vecadd
+     call test_oacc_vecadd_nocopy
 
-    call test_pi_omp
-    call test_pi_openacc
-    call test_matrix_mul_omp
-    call test_matrix_mul_openacc
+     call test_oacc_omp_matrixmul
+     call test_oacc_omp_matrixmul2
+     call test_gang_static_addition
+     call test_nested1
+     call test_nested2
+     !call test_oacc_omp
+!     call test_oacc_reduction
+     
+     call run_rbc_serial
+     call run_rbc_omp
+     call run_rbc_oacc
 
-    call test_oacc_basics
-    call test_oacc_vecadd
-    call test_oacc_vecadd_nocopy
+     ! call test_matrix_mul_omp
+!      call test_matrix_mul_openacc
+!     call  saxpy_test_omp
+!     call  saxpy_test_acc
 
-    call test_oacc_omp_matrixmul
-    call test_oacc_omp_matrixmul2
-    call test_gang_static_addition
-    call test_nested1
-    call test_nested2
-    call test_oacc_omp
-    call test_oacc_reduction
+!     call test_pi_omp
+!     call test_pi_openacc
+    
+
 #else
     print *,' simple_test_openacc OpenACC is disabled '
 #endif
@@ -159,11 +167,11 @@ contains
     subroutine saxpy_test_omp
         !$use omp_lib
         implicit none
-        integer, parameter :: dp = selected_real_kind(15)
-        integer, parameter :: ip = selected_int_kind(15)
-        integer(ip) :: i,n
-        real(dp),dimension(:),allocatable :: x, y
-        real(dp) :: a,start_time, end_time
+!        integer, parameter :: dp = selected_real_kind(15)
+!        integer, parameter :: ip = selected_int_kind(15)
+        integer(8) :: i,n
+        real(8),dimension(:),allocatable :: x, y
+        real(8) :: a,start_time, end_time
         n=500000000
         allocate(x(n),y(n))
         !$omp parallel sections
@@ -173,13 +181,13 @@ contains
         y = 1.0
         !$omp end parallel sections
         a = 2.0
-         start_time = omp_get_wtime() !call cpu_time(start_time)
+         start_time = omp_get_wtime()
         !$omp parallel do default(shared) private(i)
         do i = 1, n
             y(i) = y(i) + a * x(i)
         end do
         !$omp end parallel do
-         end_time = omp_get_wtime()!call cpu_time(end_time)
+         end_time = omp_get_wtime()
         deallocate(x,y)
         print *, 'SAXPY Time (OpenMP): ', end_time - start_time, 'in secs'
     end subroutine saxpy_test_omp
@@ -187,9 +195,9 @@ contains
     subroutine saxpy_test_acc
         use omp_lib
         implicit none
-        integer :: i,n
-        real,dimension(:),allocatable :: x, y
-        real :: a,start_time, end_time
+        integer(8) :: i,n
+        real(8),dimension(:),allocatable :: x, y
+        real(8) :: a,start_time, end_time
         n=500000000
         allocate(x(n),y(n))
         a = 2.0
@@ -201,11 +209,12 @@ contains
         y(:) = 1.0
         !$acc end parallel
         start_time = omp_get_wtime()
-        !$acc parallel loop
+        !$acc parallel 
         do i = 1, n
             y(i) = y(i) + a * x(i)
         end do
-        !$acc end parallel loop
+      !  y=a*x+y
+        !$acc end parallel
         end_time = omp_get_wtime()
         !$acc end data
         deallocate(x,y)
@@ -256,7 +265,7 @@ contains
         step = 1.d0/float(n)
         ! call date_and_time(VALUES=value)
         ! start_time = float(value(6)*60) + float(value(7)) + float(value(8))/1000d0
-start_time = omp_get_wtime()
+        start_time = omp_get_wtime()
         !$acc data copyin(step) copyout(sumpi)
         !$acc parallel loop private(x) reduction(+:sumpi)
         do i = 0, n
@@ -280,20 +289,17 @@ start_time = omp_get_wtime()
 
     subroutine test_matrix_mul_omp
         !$use omp_lib
-        implicit none
-        integer, parameter :: dp = selected_real_kind(14)
-        integer :: i,j,k
+      integer :: i,j,k
         integer, parameter :: nra=1500, nca=2000, ncb=1000
-        real(dp) :: a(nra,nca) , b(nca,ncb) , c(nra,ncb)
-        real(dp) :: flops, sum
-        real(dp) :: init_time, start_time, end_time
+        real(8) :: a(nra,nca) , b(nca,ncb) , c(nra,ncb)
+        real(8) :: flops, tmp, mean
+        real(8) :: init_time, start_time, end_time
         integer :: c1, c2, c3, cr
         integer, dimension(8) :: value
-        flops = 2d0 * float(nra) * float(nca) * float(ncb)
+        flops = 2.d0 * real(nra) * real(nca) * real(ncb)
         init_time = omp_get_wtime()
-        !call date_and_time(VALUES=value)
-        !init_time = float(value(6)*60) + float(value(7)) + float(value(8))/1000d0
-        c = 0d0
+  
+        c = 0.d0
         do i = 1,nra
             do j = 1,nca
                 a(i,j) = i + j
@@ -304,45 +310,44 @@ start_time = omp_get_wtime()
                 b(i,j) = i * j
             end do
         end do
-        !call date_and_time(VALUES=value)
-        !start_time = float(value(6)*60) + float(value(7)) + float(value(8))/1000d0
+  
         start_time = omp_get_wtime()
-        !$omp parallel do private(sum)
+        !$omp parallel do private(i,j,k,tmp)
         do j = 1, nca
             do k = 1, ncb
-                sum = 0d0
+                tmp = 0.d0
+                !$omp parallel do reduction(+:tmp)
                 do i = 1, nra
-                    sum = sum + a(i,j) * b(j,k)
+                    tmp = tmp + a(i,j) * b(j,k)
                 end do
-                c(i,k) = sum
+                !$omp end parallel do
+                c(i,k) = tmp
             end do
         end do
         !$omp end parallel do
-        ! call date_and_time(VALUES=value)
-        ! end_time = float(value(6)*60) + float(value(7)) + float(value(8))/1000d0
+  
         end_time = omp_get_wtime()
-        print '(a,f6.3,a,f6.3,a,f7.3)', 'OpenMP Init Time: ', start_time - init_time, &
+mean = sum(sum(c,2),1)/ real(nra*nca)
+        print '(a,f6.3,a,f6.3,a,f7.3,a,f7.3)', 'OpenMP Init Time: ', start_time - init_time, &
             ' Calc Time: ', end_time - start_time, &
-            ' GFlops: ', 1d-9 * flops/(end_time - start_time)
+            ' GFlops: ', 1d-9 * flops/(end_time - start_time), ' sum ', mean
     end subroutine test_matrix_mul_omp
 
     subroutine test_matrix_mul_openacc
         implicit none
-        integer, parameter :: dp = selected_real_kind(14)
+     !   integer, parameter :: dp = selected_real_kind(8)
         integer :: i,j,k
         integer, parameter :: nra=1500, nca=2000, ncb=1000
-        real(dp) :: a(nra,nca) , b(nca,ncb) , c(nra,ncb)
-        real(dp) :: flops, sum
-        real(dp) :: init_time, start_time, end_time
+        real(8) :: a(nra,nca) , b(nca,ncb) , c(nra,ncb)
+        real(8) :: flops, tmp, mean
+        real(8) :: init_time, start_time, end_time
         integer :: c1, c2, c3, cr
         integer, dimension(8) :: value
-        flops = 2d0 * float(nra) * float(nca) * float(ncb)
+        flops = 2d0 * real(nra) * real(nca) * real(ncb)
         init_time = omp_get_wtime()
         !$acc data create(a,b,c)
-        ! call date_and_time(VALUES=value)
-        ! init_time = float(value(6)*60) + float(value(7)) + float(value(8))/1000d0
 
-        c = 0d0
+        c = 0.d0
         do i = 1,nra
             do j = 1,nca
                 a(i,j) = i + j
@@ -353,29 +358,25 @@ start_time = omp_get_wtime()
                 b(i,j) = i * j
             end do
         end do
-        ! call date_and_time(VALUES=value)
-        ! start_time = float(value(6)*60) + float(value(7)) + float(value(8))/1000d0
         start_time = omp_get_wtime()
-        !$acc parallel loop private(sum)
+        !$acc parallel loop private(i,j,k,tmp)
         do j = 1, nca
             do k = 1, ncb
-                sum = 0d0
-                !$acc loop reduction(+:sum)
+                tmp = 0.d0
+                !$acc loop reduction(+:tmp)
                 do i = 1, nra
-                    sum = sum + a(i,j) * b(j,k)
+                    tmp = tmp + a(i,j) * b(j,k)
                 end do
-                c(i,k) = sum
+                c(i,k) = tmp
             end do
         end do
         !$acc end parallel loop
-        ! call date_and_time(VALUES=value)
-        ! end_time = float(value(6)*60) + float(value(7)) + float(value(8))/1000d0
         !$acc end data
-
          end_time = omp_get_wtime()
-        print '(a,f6.3,a,f6.3,a,f7.3)', 'OpenACC Init Time: ', start_time - init_time, &
+         mean = sum(sum(c,2),1)/ real(nra*nca)
+        print '(a,f6.3,a,f6.3,a,f7.3,a,f7.3)', 'OpenACC Init Time: ', start_time - init_time, &
             ' Calc Time: ', end_time - start_time, &
-            ' GFlops: ', 1d-9 * flops/(end_time - start_time)
+            ' GFlops: ', 1d-9 * flops/(end_time - start_time), ' sum ', mean
     end subroutine test_matrix_mul_openacc
 
 end program simple_test_openacc

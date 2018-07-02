@@ -30,56 +30,56 @@ program simple_test_sort
 !     call random_seed(put = seedx)
 !#endif
      t1=0.;t2=0.;t3=0.;t4=0.
-!     do n=8,31
-!         nA = 2_8**n
-!         if(nA > nmax) exit
-!         allocate (A(nA))
-!         call make_data(A,nA)
-!         call system_clock(count1)
-!         call hpsort(A)
-!         call system_clock(count2)
-!         t1 = real(count2-count1)/(real(rate))
-!         ! write (*,*) "First and last in sorted list"
-!         ! write (*,*) A(1), A(nA)
-!         ! write (*,*) "Execution time in seconds:"
-!         ! write (*,*) real(count2-count1)/real(rate)
+    do n=31,8,-1
+        nA = 2_8**n
+        if(nA > nmax) exit
+        allocate (A(nA))
+        call make_data(A,nA)
+        call system_clock(count1)
+        call hpsort(A)
+        call system_clock(count2)
+        t1 = real(count2-count1)/(real(rate))
+        ! write (*,*) "First and last in sorted list"
+        ! write (*,*) A(1), A(nA)
+        ! write (*,*) "Execution time in seconds:"
+        ! write (*,*) real(count2-count1)/real(rate)
 
-!          deallocate(A)
-!         allocate (A(nA))
-!         call make_data(A,nA)
-!         !    write (*,*) "Qsort"
-!         call system_clock(count1)
-!         call qsort(A)
-!         call system_clock(count2)
-!         t2 = real(count2-count1)/(real(rate))
+         deallocate(A)
+        allocate (A(nA))
+        call make_data(A,nA)
+        !    write (*,*) "Qsort"
+        call system_clock(count1)
+        call qsort(A)
+        call system_clock(count2)
+        t2 = real(count2-count1)/(real(rate))
 
-!         ! write (*,*) "First and last in sorted list"
-!         ! write (*,*) A(1), A(nA)
-!         ! write (*,*) "Execution time in seconds:"
-!         ! write (*,*) real(count2-count1)/real(rate)
-!         !  t2=real(count2-count1)/real(rate)
-!         deallocate(A)
-!         allocate (A(nA))
-!         allocate(Aind(nA))
-!         call make_data(A,nA)
-!         Aind = (/(i, i=1, nA )/)
-!         !    write (*,*) "Qsort C"
-!         call system_clock(count1)
-!         call sortp_1r4(INT(nA,4),Aind,A)
-!         call system_clock(count2)
-!         t3 = real(count2-count1)/real(rate)
-!         deallocate(Aind)
-!         deallocate(A)
-!         allocate (A(nA))
-!         call make_data(A,nA)
-!         !    write (*,*) "Multi-threaded Qsort & Merge"
-!         call system_clock(count1)
-!         call MTSort(A,nA,"Ascending")   ! Missing optional 4th argument means use all available threads.  To specify, add 4th argument.
-!         call system_clock(count2)
-!         t4 = real(count2-count1)/(real(rate))
-!         deallocate(A)
-!         print *,nA,t1,t2,t3,t4
-!     end do
+        ! write (*,*) "First and last in sorted list"
+        ! write (*,*) A(1), A(nA)
+        ! write (*,*) "Execution time in seconds:"
+        ! write (*,*) real(count2-count1)/real(rate)
+        !  t2=real(count2-count1)/real(rate)
+        deallocate(A)
+        allocate (A(nA))
+        allocate(Aind(nA))
+        call make_data(A,nA)
+        Aind = (/(i, i=1, nA )/)
+        !    write (*,*) "Qsort C"
+        call system_clock(count1)
+        call sortp_1r4(INT(nA,4),Aind,A)
+        call system_clock(count2)
+        t3 = real(count2-count1)/real(rate)
+        deallocate(Aind)
+        deallocate(A)
+        allocate (A(nA))
+        call make_data(A,nA)
+        !    write (*,*) "Multi-threaded Qsort & Merge"
+        call system_clock(count1)
+        call MTSort(A,nA,"Ascending")   ! Missing optional 4th argument means use all available threads.  To specify, add 4th argument.
+        call system_clock(count2)
+        t4 = real(count2-count1)/(real(rate))
+        deallocate(A)
+        print *,nA,t1,t2,t3,t4
+    end do
 
 !     !! ITERATIONS
 !     n=12

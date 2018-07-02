@@ -297,12 +297,12 @@ if (USE_OPENACC)
     "-acc"
     "/acc"
     )
+  add_definitions("-DOPENACC")  ## FIXME above
 endif()
 #endif()
 #include(FindOpenMP_Fortran)
 
-# if(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-# else()
+
 if (USE_OPENMP)
  # message(STATUS " in USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
   # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
