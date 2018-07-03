@@ -214,7 +214,7 @@ contains
     end subroutine exec_preprocess_stream
 
     subroutine exec_cluster2D_stream_distr( self, cline )
-        use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander!,scale_project_distr_commander
+        use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander
         use simple_image,                  only: image
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
@@ -236,7 +236,7 @@ contains
         character(len=:),       allocatable :: spproj_list_fname, stk
         character(len=STDLEN)               :: str_iter, refs_glob
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
-        integer :: iter, origproj_time, orig_box, box, nptcls_glob, ncls_glob, tnow, iproj, n_new_spprojs
+        integer :: iter, origproj_time, orig_box, box, nptcls_glob, ncls_glob, tnow, iproj, n_new_spprojs, ind
         integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_spprojs, n_spprojs_prev
         logical :: do_autoscale, work_proj_has_changed
         ! seed the random number generator
@@ -253,7 +253,12 @@ contains
         call cline%set('mkdir','no')
         do_autoscale  = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
-        allocate(spproj_list_fname, source=trim(params%dir_target)//trim(STREAM_SPPROJFILES))
+        ind = len_trim(params%dir_target)
+        if( params%dir_target(ind:ind).eq.'/' )then
+            allocate(spproj_list_fname, source=trim(params%dir_target)//trim(STREAM_SPPROJFILES))
+        else
+            allocate(spproj_list_fname, source=trim(params%dir_target)//'/'//trim(STREAM_SPPROJFILES))
+        endif
         ! init command-lines
         cline_cluster2D  = cline
         cline_make_cavgs = cline
@@ -358,7 +363,6 @@ contains
             endif
             ! CLUSTER2D
             call cline_cluster2D%delete('endit')
-            call cline_cluster2D%set('ncls',    real(ncls_glob))
             call cline_cluster2D%set('startit', real(iter))
             call cline_cluster2D%set('maxits',  real(iter))
             call cline_cluster2D%set('ncls',    real(ncls_glob))
@@ -371,6 +375,7 @@ contains
                  call cline_cluster2D%set('objfun', 'ccres')
             endif
             ! execute
+            params_glob%nptcls = nptcls_glob
             call xcluster2D_distr%execute(cline_cluster2D)
             work_proj_has_changed = .false.
             ! update

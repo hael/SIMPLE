@@ -870,11 +870,11 @@ contains
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
         &'simple_distr_exec',&                                               ! executable
-        &2, 2, 0, 13, 7, 3, 2, .true.)                                       ! # entries in each group
+        &2, 2, 0, 11, 7, 3, 2, .true.)                                       ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .true., '')
-        call cluster3D_refine%set_input('img_ios', 2, 'vollist', 'file', 'List of reference volumes files', 'List (.txt file) of reference volumes for the different states', 'e.g. refvols.txt', .true., '')
+        call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .false., '')
+        call cluster3D_refine%set_input('img_ios', 2, 'vollist', 'file', 'List of reference volumes files', 'List (.txt file) of reference volumes for the different states', 'e.g. refvols.txt', .false., '')
         ! parameter input/output
         call cluster3D_refine%set_input('parm_ios', 1,  'state', 'num', 'State to refine', 'Index of state to refine', 'give state index', .false., 1.)
         call cluster3D_refine%set_input('parm_ios', 2, mkdir_)
@@ -892,12 +892,8 @@ contains
         call cluster3D_refine%set_input('srch_ctrls', 8, pgrp)
         call cluster3D_refine%set_input('srch_ctrls', 9, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
         &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false., 200.)
-        call cluster3D_refine%set_input('srch_ctrls', 10, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
-        '# states to reconstruct', .false., 1.0)
-        call cluster3D_refine%set_input('srch_ctrls', 11, objfun)
-        call cluster3D_refine%set_input('srch_ctrls', 12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
-        &clustersym){no}', '(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
-        call cluster3D_refine%set_input('srch_ctrls', 13, neigh)
+        call cluster3D_refine%set_input('srch_ctrls', 10, objfun)
+        call cluster3D_refine%set_input('srch_ctrls', 11, neigh)
         ! filter controls
         call cluster3D_refine%set_input('filt_ctrls', 1, hp)
         call cluster3D_refine%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

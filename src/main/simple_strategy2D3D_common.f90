@@ -135,7 +135,7 @@ contains
                     endif
                     ! set highest Fourier index for coarse grid search
                     if( str_has_substr(params_glob%refine,'cluster') )then
-                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.8)
+                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
                     else
                         kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
                     endif
