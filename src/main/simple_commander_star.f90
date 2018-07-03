@@ -30,13 +30,16 @@ end type
 contains
 
     !> convert text (.txt) oris doc to binary (.simple)
-    subroutine exec_exportstar_project( self, cline )
+    subroutine exec_exportstar_project( self, cline , starfile)
         class(exportstar_project_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        type(parameters) :: params
-        type(oris)       :: os
-        type(sp_project) :: spproj
-        integer          :: noris, ppos
+        character(len=*), inent(inout),optional:: starfile
+        type(parameters)  :: params
+        type(oris)        :: os
+        type(sp_project)  :: spproj
+        type(star_project):: starproj
+        character(len=:),allocatable :: this_starfile
+        integer           :: noris, ppos
         call params%new(cline)
         if( params%starfile == 'NONE')then
             ppos = scan(trim(params%projfile),".", BACK= .true.)
@@ -45,6 +48,55 @@ contains
             end if
             params%starfile = params%projfile(1:ppos)//'star'
         endif
+        if( params%export_type  == 'NONE')then
+           write (*,*) " exportstar_project must have a valid export_type."
+           write (*,*) " Accepted values are micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post or all."
+           write (*,*) "    micrographs:    for non-dose weighted micrographs"
+           write (*,*) "    mcmicrographs:  for motion-corrected, dose weighted micrographs"
+           write (*,*) "    ctf_estimation: for ctf estimation and micrographs"
+
+           write (*,*) "    class2d:   for 2D class averages"
+           write (*,*) "    select:    for selected 2D class averages"
+
+           write (*,*) "    init3dmodel: for initial particles"
+           write (*,*) "    extract:   for extract dose-weighted particles"
+           write (*,*) "    refine3d:  for refined 3D particles"
+           write (*,*) "    post:      for post-processing"
+
+ call simple_stop( " exportstar_project failed due to incorrect export_type arg")
+end if
+        if(present(starfile))then
+           allocate(this_starfile, source=trim(starfile))
+        else
+           allocate(this_starfile, source=trim(params%starfile))
+        end if
+
+        call starproj%prepare(spproj,  this_starfile)
+        select case(params%export_type)
+        case('micrographs')
+           call  starproj%export_micrographs(spproj,  params%starfile)
+        case('mcmicrographs')
+           call  starproj%export_motion_corrected_micrographs(spproj,  params%starfile)
+        case('ctf_estimation')
+           call starproj%export_ctf_estimation(spproj,  params%starfile)
+        case('select')
+            call starproj%export_class2D_select(spproj,  params%starfile)
+        case('extract')
+           call starproj%export_extract_doseweightedptcls(spproj,  params%starfile)
+        case('class2d')
+           call starproj%export_class2D(spproj,  params%starfile)
+        case('initmodel')
+           call starproj%export_init3Dmodel(spproj,  params%starfile)
+        case('refine3d')
+           call starproj%export_class3D(spproj,  params%starfile)
+        case('post')
+           call starproj%export_shiny3D(spproj,  params%starfile)
+        case('all')
+           call starproj%export_all(spproj,  params%starfile)
+        case default
+           call simple_stop( " exportstar_project must have a valid export_type. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
+       end select
+
 
         noris = nlines(params%oritab)
         call os%new(noris)
@@ -54,8 +106,7 @@ contains
         endif
         call spproj%set_sp_oris(params%oritype, os)
         ! Convert Simple's single-particle project file to STAR
-        call spproj%write(params%projfile)
-
+        call spproj%write(params%starfile)
 
         call spproj%kill
         call simple_end('**** EXPORTSTAR_PROJECT NORMAL STOP ****')
@@ -68,14 +119,19 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        character(len=*),allocatable :: starfiles(:)
         call params%new(cline)
         if( params%starfile == 'NONE')&
             call simple_stop( " importstar_project must have input file, starfile=<filename>")
-        if(.not. file_exists(params%starfile))&
-            call simple_stop( " importstar_project must have a valid input file, starfile=<filename>")
-
+        if(is_dir(params%starfile))then
+           call simple_list_files(trim(params%starfile)//'*.star', starfiles)
+        else if(file_exists(params%starfile))then
+           allocate(starfiles(1), source=trim(params%starfile))
+        else
+           call simple_stop( " importstar_project must have a valid input file, starfile=<filename|directory>")
+        endif
         ! Import STAR filename
-
+        
         ! Copy to SIMPLE's project format
 
         call spproj%read_segment(params%oritype, params%projfile)

@@ -150,6 +150,7 @@ type :: parameters
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
+    character(len=STDLEN) :: export_type=''       !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
@@ -399,7 +400,7 @@ contains
         class(parameters), target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         logical,         optional, intent(in)    :: silent
-        character(len=LONGSTRLEN), allocatable   :: sp_files(:)
+        character(len=LONGSTRLEN), allocatable   :: sp_files(:), starstr
         character(len=:),          allocatable   :: stk_part_fname_sc, phaseplate, ctfflag
         character(len=:),          allocatable   :: debug_local, verbose_local
         logical                       :: vol_defined(MAXS)
@@ -474,6 +475,7 @@ contains
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)
+        call check_carg('export_type',    self%export_type)
         call check_carg('fbody',          self%fbody)
         call check_carg('for3D',          self%for3D)
         call check_carg('ft2img',         self%ft2img)
@@ -567,6 +569,7 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
+        call check_file('starfile',       self%starfile)
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
