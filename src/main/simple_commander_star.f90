@@ -30,24 +30,31 @@ end type
 contains
 
     !> convert text (.txt) oris doc to binary (.simple)
-    subroutine exec_exportstar_project( self, cline , starfile)
+    subroutine exec_exportstar_project( self, cline )
         class(exportstar_project_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        character(len=*), inent(inout),optional:: starfile
         type(parameters)  :: params
         type(oris)        :: os
         type(sp_project)  :: spproj
         type(star_project):: starproj
         character(len=:),allocatable :: this_starfile
-        integer           :: noris, ppos
+        integer           :: noris, ppos,iostat
         call params%new(cline)
         if( params%starfile == 'NONE')then
             ppos = scan(trim(params%projfile),".", BACK= .true.)
             if ( ppos <= 0 )then
                 call simple_stop( " exportstar_project must be within a valid SIMPLE project. Projfile failed.")
             end if
-            params%starfile = params%projfile(1:ppos)//'star'
-        endif
+            allocate(this_starfile, source=params%projfile(1:ppos)//'star')
+        else
+            allocate(this_starfile, source=trim(params%starfile))
+        end if
+        ! create backup in case the starfile exists
+        if(file_exists(this_starfile))then 
+            iostat= simple_rename(trim(this_starfile),&
+                trim(this_starfile)//"-bkup")
+        end if
+
         if( params%export_type  == 'NONE')then
            write (*,*) " exportstar_project must have a valid export_type."
            write (*,*) " Accepted values are micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post or all."
@@ -65,13 +72,10 @@ contains
 
  call simple_stop( " exportstar_project failed due to incorrect export_type arg")
 end if
-        if(present(starfile))then
-           allocate(this_starfile, source=trim(starfile))
-        else
-           allocate(this_starfile, source=trim(params%starfile))
-        end if
-
+        !! Prepare project
         call starproj%prepare(spproj,  this_starfile)
+     
+        ! Use export type to define export output variables
         select case(params%export_type)
         case('micrographs')
            call  starproj%export_micrographs(spproj,  params%starfile)
@@ -98,18 +102,18 @@ end if
        end select
 
 
-        noris = nlines(params%oritab)
-        call os%new(noris)
-        call os%read(params%oritab)
-        if( file_exists(params%projfile) )then
-            call spproj%read(params%projfile)
-        endif
-        call spproj%set_sp_oris(params%oritype, os)
-        ! Convert Simple's single-particle project file to STAR
-        call spproj%write(params%starfile)
+       noris = nlines(params%oritab)
+       call os%new(noris)
+       call os%read(params%oritab)
+       if( file_exists(params%projfile) )then
+           call spproj%read(params%projfile)
+       endif
+       call spproj%set_sp_oris(params%oritype, os)
+       ! Convert Simple's single-particle project file to STAR
+       call spproj%write(params%starfile)
 
-        call spproj%kill
-        call simple_end('**** EXPORTSTAR_PROJECT NORMAL STOP ****')
+       call spproj%kill
+       call simple_end('**** EXPORTSTAR_PROJECT NORMAL STOP ****')
 
     end subroutine exec_exportstar_project
 
@@ -119,14 +123,18 @@ end if
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        character(len=*),allocatable :: starfiles(:)
+        character(len=LONGSTRLEN),allocatable :: starfiles(:)
+        integer :: nStarfiles
         call params%new(cline)
         if( params%starfile == 'NONE')&
             call simple_stop( " importstar_project must have input file, starfile=<filename>")
-        if(is_dir(params%starfile))then
+        if(dir_exists(params%starfile))then
            call simple_list_files(trim(params%starfile)//'*.star', starfiles)
+           nStarfiles = size(starfiles)
         else if(file_exists(params%starfile))then
-           allocate(starfiles(1), source=trim(params%starfile))
+           allocate(starfiles(1))
+           starfiles(1)=trim(params%starfile)
+           nStarfiles=1
         else
            call simple_stop( " importstar_project must have a valid input file, starfile=<filename|directory>")
         endif

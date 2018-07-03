@@ -15,7 +15,9 @@ type(binoris)        :: bos
 integer, allocatable :: strlens(:)
 type(star_project) :: s
 ! type(parameters) :: p
-call s%export_motion_corrected_micrographs (trim('tmp_mc.star'))
+
+!call s%export_motion_corrected_micrographs (sp, trim('tmp_mc.star'))
+
 call exec_cmdline( 'relion_star_loopheader rlnMicrographNameNoDW rlnMicrographName > tmp_mc.star')
 
 ! Generate STAR files from separate stacks for each micrograph
@@ -45,7 +47,6 @@ call exec_cmdline( ' relion_star_datablock_stack 2 mic3.mrcs mic3.mrcs 16000 150
 ! call exec_cmdline( 'relion_star_loopheader rlnImageName rlnMicrographName rlnDefocusU rlnDefocusV rlnDefocusAngle rlnVoltage rlnSphericalAberration rlnAmplitudeContrast > all_images.star
 ! call exec_cmdline( 'awk '{if ($1!="C") {print $1"@./my/abs/path/bigstack.mrcs", $8, $9, $10, $11, " 80 2.0 0.1"}  }' < frealign.par >> all_images.star ')
 ! Assuming the voltage is 80kV, the spherical aberration is 2.0 and the amplitude contrast is 0.1. Also, a single stack is assumed called: /my/abs/path/bigstack.mrcs.
-
 
 
 
@@ -117,11 +118,6 @@ call myproject%os_ptcl3D%set_euler(8, [3.,3.,3.])
 call myproject%os_ptcl3D%set_euler(9, [3.,3.,3.])
 print *, 'writing doc3'
 call myproject%write('doc3.simple', [7,9])
-
-
-
-
-
 
 
 end program simple_test_star_export
