@@ -85,7 +85,7 @@ contains
         n_movies = 0
         fail_cnt = 0
         ! builds files array
-        call simple_list_files(trim(self%watch_dir)//'/*.mrc*', farray)
+        call simple_list_files(trim(self%watch_dir)//'/*.mrc '//trim(self%watch_dir)//'/*.mrcs', farray)
         if( .not.allocated(farray) )return ! nothing to report
         ! absolute paths
         n_lsfiles = size(farray)

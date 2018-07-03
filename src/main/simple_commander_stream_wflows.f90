@@ -36,8 +36,8 @@ contains
         class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: SHORTTIME = 30   ! folder watched every minute
-        integer,                   parameter   :: LONGTIME  = 10
+        integer,                   parameter   :: SHORTTIME = 60   ! folder watched every minute
+        integer,                   parameter   :: LONGTIME  = 600
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(moviewatcher)                     :: movie_buff
@@ -78,7 +78,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(stream=.true. )
         ! movie watcher init
-        movie_buff = moviewatcher(longtime, prev_movies)
+        movie_buff = moviewatcher(LONGTIME, prev_movies)
         ! start watching
         prev_stacksz = 0
         nmovies      = 0
@@ -222,7 +222,7 @@ contains
         integer,          parameter   :: SHIFTSRCH_PTCLSLIM  = 2000  ! # of ptcls required to turn on shift search
         integer,          parameter   :: SHIFTSRCH_ITERLIM   = 5     ! # of iterations prior to turn on shift search
         integer,          parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
-        integer,          parameter   :: WAIT_WATCHER        = 10    ! seconds prior to new stack detection
+        integer,          parameter   :: WAIT_WATCHER        = 60    ! seconds prior to new stack detection
         integer,          parameter   :: MAXNCLS             = 1000  ! maximum # of classes
         integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         type(parameters)                    :: params
