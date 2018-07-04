@@ -228,7 +228,6 @@ contains
         type(parameters)                    :: params
         type(cluster2D_distr_commander)     :: xcluster2D_distr
         type(make_cavgs_distr_commander)    :: xmake_cavgs
-        !type(scale_project_distr_commander) :: xscale_distr
         type(cmdline)                       :: cline_cluster2D, cline_make_cavgs
         type(sp_project)                    :: orig_proj, work_proj, stream_proj
         type(ctfparams)                     :: ctfvars
@@ -248,7 +247,14 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call cline%set('stream','yes') ! only for parameters determination
         call params%new(cline)
-        if( .not.file_exists(params%projfile) )stop 'Project does not exist!'
+        if( .not.file_exists(params%projfile) )then
+            write(*,*) 'Project does not exist:', trim(params%projfile)
+            stop 'Project does not exist'
+        endif
+        if( .not.file_exists(params%dir_target) )then
+            write(*,*) 'Folder does not exist:', trim(params%dir_target)
+            stop 'Folder does not exist!'
+        endif
         call cline%set('stream','no') ! was only for parameters determination
         call cline%set('mkdir','no')
         do_autoscale  = params%autoscale.eq.'yes'
@@ -270,9 +276,7 @@ contains
         call cline_cluster2D%set('projfile', trim(WORK_PROJFILE))
         call cline_cluster2D%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
         call cline_make_cavgs%set('prg',    'make_cavgs')
-        call cline_make_cavgs%set('refs',   'cavgs_final'//params%ext)
         call cline_make_cavgs%delete('autoscale')
-        call cline_make_cavgs%set('projfile', trim(WORK_PROJFILE))
         ! wait for the first stacks
         nptcls_glob = 0
         do
@@ -290,9 +294,8 @@ contains
                             call stream_proj%kill
                         enddo
                     endif
-                    if( nptcls_glob > nptcls_glob_prev )then
-                        write(*,'(A,I8)')'>>> PARTICLES COUNT: ', nptcls_glob
-                    endif
+                    write(*,*)'>>> PARTICLES COUNT: ', nptcls_glob, ' at: ',cast_time_char(tnow)
+                    call flush(6)
                     if( nptcls_glob > params%ncls_start * params%nptcls_per_cls )then
                         exit ! Enough particles to initiate cluster2D
                     endif
@@ -438,6 +441,7 @@ contains
         ! cleanup
         call qsys_cleanup
         ! updates original project
+        n_spprojs_prev = n_spprojs
         call update_orig_proj
         ! class averages at original sampling
         if ( do_autoscale )then
@@ -456,7 +460,7 @@ contains
 
             subroutine update_orig_proj
                 call orig_proj%read(params%projfile)
-                do iproj=1,n_spprojs
+                do iproj=n_spprojs_prev+1,n_spprojs
                     call stream_proj%read(spproj_list(iproj))
                     stk     = stream_proj%get_stkname(1)
                     ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)

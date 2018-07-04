@@ -4,7 +4,7 @@ program simple_test_openacc
     use openacc
     use simple_oacc_vecadd
     use simple_oacc_omp
-    use simple_rbc
+    !use simple_rbc
     implicit none
 
 !#ifndef OPENACC
