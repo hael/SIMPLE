@@ -45,7 +45,7 @@ __global__ void kernelMulConstantComplex(complex *g_a, const complex b)
 
 extern "C"
 {
-  void ompVecAddConstantInt(int *A, int *B, int N)
+  void ompvecaddconstantint_(int *A, int *B, int N)
                             //dim3 *dimGrid, dim3 *dimBlk,
                             //int N, cudaStream_t *stream)
   {

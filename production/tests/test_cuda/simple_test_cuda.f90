@@ -45,7 +45,7 @@ program simple_test_cuda
 
     call check_cuda_device
     !  call set_cuda_device(0)
-    !  call test_FortCUDA_kernels(0.)
+    call test_cuda_precision( error_found)
 
     write (*,'(A)') 'SIMPLE_CUDA timer setup'
     ctimer = timer_cuda()
@@ -62,8 +62,8 @@ program simple_test_cuda
     call ctimer%kill_()
 
 
-
-call test_fortran_mul2dComplex_kernels
+    !  call test_FortCUDA_kernels(0.)
+    call test_fortran_mul2dComplex_kernels
 
     ! #if defined(PGI)
     !     use simple_cuda_tests

@@ -433,7 +433,7 @@ contains
             call system_clock(t3)
             ! Do the same computation with CUDA.
             ! Fortran -> C -> CUDA ->C ->Fortran
-            call Kernelmul2DComplex(c,c,c2,N,M,64)
+            call kernelmul2dcomplex(c,c,c2,N,M,64)
             call system_clock(t4)
             cutime = cutime + REAL(t4-t3)/REAL(crate)
 
