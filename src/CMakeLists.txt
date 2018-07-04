@@ -28,9 +28,13 @@ list(APPEND FILEIO_src
     )
 file(GLOB OPERATORS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
 list(APPEND OPERATORS_src
-    "${CMAKE_CURRENT_SOURCE_DIR}/ops/simple_kbinterpol_memo.c"
-    )
+  "${CMAKE_CURRENT_SOURCE_DIR}/ops/simple_kbinterpol_memo.c"
+  )
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
+list(REMOVE_ITEM  UTILS_src
+  #   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_btree.f90"
+  "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_parallel_bsearch.f90"
+  )
 file(GLOB STAR_src "${CMAKE_CURRENT_SOURCE_DIR}/star_export/*.f90" PARENT_SCOPE)
 file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.[Ff][90][08]" PARENT_SCOPE)
 message(STATUS "SIMPLE CUDA LIBRARY ${CUDA_src}")
@@ -74,7 +78,8 @@ endif()
 # Remove unused files here
 ##########################################################################
 list(REMOVE_ITEM SIMPLECORELIB
-#   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_btree.f90"
+  #   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_btree.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_parallel_bsearch.f90"
 #   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_oris.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_oris_minimal.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_oristats.f90"
@@ -121,16 +126,16 @@ set_target_properties(${SIMPLELIB}
 
 
 if(USE_CUDA)
+  file(GLOB CUKERNELS_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/*.cu" PARENT_SCOPE)
   if(BUILD_SHARED_LIBS)
-  CUDA_ADD_LIBRARY( cuda_kernels ${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/c_kernels.cu  ${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/cublas_fortran.cu
-
+    CUDA_ADD_LIBRARY( cuda_kernels  ${CUKERNELS_src}
     OPTIONS DEBUG -g
     RELEASE --use_fast_math
     RELWITHDEBINFO --use_fast_math;-g
     MINSIZEREL --use_fast_math
     )
 else()
-  CUDA_ADD_LIBRARY( cuda_kernels ${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/c_kernels.cu  ${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/cublas_fortran.cu
+  CUDA_ADD_LIBRARY( cuda_kernels   ${CUKERNELS_src}
     STATIC
     OPTIONS DEBUG -g
     RELEASE --use_fast_math
