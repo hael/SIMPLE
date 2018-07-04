@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include <cuComplex.h>
+#include "cuComplex.h"
 #include "cuda.h"
 
 
@@ -46,60 +46,9 @@ __global__ void  mul2DFloat(float *in1,float *in2, float *out, int Nsize, int Ms
 */
 extern "C"
 {
-#define KERNELMUL2DFLOAT kernelMul2DFloat_
-void kernelMul2DFloat(float *a, float *b, float *c, int *Np, int *Ns, int *Bsize)
-{
-  int block_size=*Bsize;
-  cuFloat *a_d,*b_d,*c_d;
-  int N=*Np;int M=*Ns;
-  cudaSetDevice(0);
-
-  /* Allocate complex array on device */
-   cudaMalloc ((void **) &a_d , sizeof(cuFloat)*N*M );
-   cudaMalloc ((void **) &b_d , sizeof(cuFloat)*N*M );
-   cudaMalloc ((void **) &c_d , sizeof(cuFloat)*N*M );
-  // if(cudaGetLastError() != cudaSuccess){
-  // printf("%s\n",cudaGetErrorString(cudaGetLastError()));
-  // exit(1);
-  // }
-
-  /* Copy array from host memory to device memory */
-  cudaMemcpy( a_d, a,  sizeof(cuFloat)*N*M   ,cudaMemcpyHostToDevice);
-  cudaMemcpy( b_d, b,  sizeof(cuFloat)*N*M   ,cudaMemcpyHostToDevice);
-  // if( cudaMemcpy( a_d, a,  sizeof(cuFloatComplex)*N*M   ,cudaMemcpyHostToDevice) != cudaSuccess){
-  // printf("%s\n",cudaGetErrorString(cudaGetLastError()));
-  // exit(1);
-  // }
-
-  /* Compute execution configuration */
-   dim3 dimBlock(block_size, 8);
-   dim3 dimGrid ; //(N/dimBlock.x);
-   dimGrid.x = (N + dimBlock.x - 1) / dimBlock.x;
-   dimGrid.y = (M + dimBlock.y - 1) / dimBlock.y;
 
 
-   if( N*N % block_size != 0 ) dimGrid.x+=1;
-
-  /* Execute the kernel */
-   mul2DFloat<<<dimGrid,dimBlock>>>(a_d,b_d,c_d,N,M);
-  if( cudaGetLastError()!= cudaSuccess){
-    printf("%s\n",cudaGetErrorString(cudaGetLastError()));
-    exit(1);
-  }
-
-  /* Copy the result back */
-  cudaMemcpy( c, c_d, sizeof(cuFloatComplex)*N*M,cudaMemcpyDeviceToHost);
-  // if( cudaGetLastError()!= cudaSuccess){
-  // printf("%s\n",cudaGetErrorString(cudaGetLastError()));
-  // exit(1);
-  // }
-
-  /* Free memory on the device */
-  cudaFree(a_d, b_d, c_d);
-
-  return;
-}
-#define KERNELMUL2DCOMPLEX kernelMul2DComplex_
+// C=A*B
 void kernelmul2dcomplex_(cuFloatComplex *a, cuFloatComplex *b, cuFloatComplex *c, int *Np, int *Ns, int *Bsize)
 {
   int block_size=*Bsize;
@@ -148,6 +97,62 @@ void kernelmul2dcomplex_(cuFloatComplex *a, cuFloatComplex *b, cuFloatComplex *c
 
   /* Free memory on the device */
   cudaFree(a_d);
+  cudaFree(b_d);
+
+  return;
+}
+
+// C=A*B
+void kernelmul2dfloat_(float *a, float *b, float *c, int *Np, int *Ns, int *Bsize)
+{
+  int block_size=*Bsize;
+  float *a_d,*b_d;
+  int N=*Np;int M=*Ns;
+  cudaSetDevice(0);
+
+  /* Allocate complex array on device */
+   cudaMalloc ((void **) &a_d , sizeof(float)*N*M );
+   cudaMalloc ((void **) &b_d , sizeof(float)*N*M );
+
+  // if(cudaGetLastError() != cudaSuccess){
+  // printf("%s\n",cudaGetErrorString(cudaGetLastError()));
+  // exit(1);
+  // }
+
+  /* Copy array from host memory to device memory */
+  cudaMemcpy( a_d, a,  sizeof(float)*N*M   ,cudaMemcpyHostToDevice);
+  cudaMemcpy( b_d, b,  sizeof(float)*N*M   ,cudaMemcpyHostToDevice);
+  // if( cudaMemcpy( a_d, a,  sizeof(float)*N*M   ,cudaMemcpyHostToDevice) != cudaSuccess){
+  // printf("%s\n",cudaGetErrorString(cudaGetLastError()));
+  // exit(1);
+  // }
+
+  /* Compute execution configuration */
+   dim3 dimBlock(block_size, 8);
+   dim3 dimGrid ; //(N/dimBlock.x);
+   dimGrid.x = (N + dimBlock.x - 1) / dimBlock.x;
+   dimGrid.y = (M + dimBlock.y - 1) / dimBlock.y;
+
+
+   if( N*N % block_size != 0 ) dimGrid.x+=1;
+
+  /* Execute the kernel */
+   mul2DFloat<<<dimGrid,dimBlock>>>(a_d,b_d,b_d,N,M);
+  if( cudaGetLastError()!= cudaSuccess){
+    printf("%s\n",cudaGetErrorString(cudaGetLastError()));
+    exit(1);
+  }
+
+  /* Copy the result back */
+  cudaMemcpy( c, b_d, sizeof(float)*N*M,cudaMemcpyDeviceToHost);
+  // if( cudaGetLastError()!= cudaSuccess){
+  // printf("%s\n",cudaGetErrorString(cudaGetLastError()));
+  // exit(1);
+  // }
+
+  /* Free memory on the device */
+  cudaFree(a_d);
+  cudaFree(b_d);
 
   return;
 }
