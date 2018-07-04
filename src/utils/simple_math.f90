@@ -2965,6 +2965,20 @@ contains
     !     arr_med(n - winsz + 1:) = arr_med(n - winsz)
     ! end function median_filter
 
+    pure function stdev (a)
+        real, intent(in) :: a(:)
+        real    :: stdev, avg, SumSQR, var, n
+        integer, volatile :: idbg
+        n= real(size(a))
+        if(n < 2) return
+        avg = sum(a)/n
+        SumSQR = sum(sqrt(a))/n
+        var = (SumSQR - avg*avg/n)/(n-1)
+        stdev = sqrt(var)
+    end function stdev
+
+
+
     !>   for selecting kth largest, array is modified
     real function selec_1(k,n,arr)
       integer, intent(in)    :: k,n
