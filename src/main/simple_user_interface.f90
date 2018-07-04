@@ -805,7 +805,7 @@ contains
         &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
-        '(yes|no){yes}', .false., 'yes')
+        '(yes|no){no}', .false., 'no')
         call cluster2D_stream%set_input('filt_ctrls', 5, weights2D)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, msk)

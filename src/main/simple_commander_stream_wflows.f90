@@ -224,7 +224,7 @@ contains
         integer,          parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,          parameter   :: WAIT_WATCHER        = 60    ! seconds prior to new stack detection
         integer,          parameter   :: MAXNCLS             = 1000  ! maximum # of classes
-        integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
+        integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 900   ! 10mins, Frequency at which the original project file should be updated
         type(parameters)                    :: params
         type(cluster2D_distr_commander)     :: xcluster2D_distr
         type(make_cavgs_distr_commander)    :: xmake_cavgs
@@ -237,7 +237,7 @@ contains
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
         integer :: iter, origproj_time, orig_box, box, nptcls_glob, ncls_glob, tnow, iproj, n_new_spprojs, ind
         integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_spprojs, n_spprojs_prev
-        logical :: do_autoscale, work_proj_has_changed
+        logical :: do_autoscale, work_proj_has_changed, wait_for_new_ptcls
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -247,6 +247,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call cline%set('stream','yes') ! only for parameters determination
         call params%new(cline)
+        ! sanity
         if( .not.file_exists(params%projfile) )then
             write(*,*) 'Project does not exist:', trim(params%projfile)
             stop 'Project does not exist'
@@ -257,7 +258,8 @@ contains
         endif
         call cline%set('stream','no') ! was only for parameters determination
         call cline%set('mkdir','no')
-        do_autoscale  = params%autoscale.eq.'yes'
+        ! init
+        do_autoscale = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
         ind = len_trim(params%dir_target)
         if( params%dir_target(ind:ind).eq.'/' )then
@@ -265,6 +267,8 @@ contains
         else
             allocate(spproj_list_fname, source=trim(params%dir_target)//'/'//trim(STREAM_SPPROJFILES))
         endif
+        ! for microscopes that don't work too good
+        if(.not.cline%defined('time_inactive'))params%time_inactive = 24*3600
         ! init command-lines
         cline_cluster2D  = cline
         cline_make_cavgs = cline
@@ -294,7 +298,7 @@ contains
                             call stream_proj%kill
                         enddo
                     endif
-                    write(*,*)'>>> PARTICLES COUNT: ', nptcls_glob, ' at: ',cast_time_char(tnow)
+                    write(*,*)'>>> PARTICLES COUNT: ', nptcls_glob, ' : ',cast_time_char(simple_gettime())
                     call flush(6)
                     if( nptcls_glob > params%ncls_start * params%nptcls_per_cls )then
                         exit ! Enough particles to initiate cluster2D
@@ -308,7 +312,6 @@ contains
         work_proj%projinfo = orig_proj%projinfo
         work_proj%compenv  = orig_proj%compenv
         if( orig_proj%jobproc%get_noris()>0 ) work_proj%jobproc = orig_proj%jobproc
-        call orig_proj%kill()
         call work_proj%projinfo%delete_entry('projname')
         call work_proj%projinfo%delete_entry('projfile')
         call work_proj%update_projinfo(cline_cluster2D) ! name change
@@ -348,10 +351,15 @@ contains
         do iproj=1,n_spprojs
             call stream_proj%read(spproj_list(iproj))
             ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
+            ! updates original project, assumed empty
+            call orig_proj%add_stk(stk_list(iproj), ctfvars)
+            ! update current project
             if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
             call work_proj%add_stk(stk_list(iproj), ctfvars)
         enddo
         call work_proj%write
+        call orig_proj%write
+        call orig_proj%kill
         ! MAIN LOOP
         nptcls_glob    = work_proj%get_nptcls()
         ncls_glob      = nint(real(nptcls_glob) / real(params%nptcls_per_cls))
@@ -359,11 +367,8 @@ contains
         origproj_time  = last_injection
         do iter = 1, 999
             str_iter  = int2str_pad(iter,3)
-            tnow      = simple_gettime()
-            if(tnow-last_injection > params%time_inactive)then
-                write(*,*)'>>> TIME LIMIT WITHOUT NEW PARTICLES REACHED'
-                exit
-            endif
+            ! time handling
+            if( is_timeout(simple_gettime()) )exit
             ! CLUSTER2D
             call cline_cluster2D%delete('endit')
             call cline_cluster2D%set('startit', real(iter))
@@ -381,18 +386,38 @@ contains
             params_glob%nptcls = nptcls_glob
             call xcluster2D_distr%execute(cline_cluster2D)
             work_proj_has_changed = .false.
+            wait_for_new_ptcls    = .false.
+            if( cline_cluster2D%defined('converged') )then
+                wait_for_new_ptcls = (cline_cluster2D%get_carg('converged').eq.'yes')
+                call cline_cluster2D%set('converged','no')
+            endif
             ! update
             call work_proj%kill
             call work_proj%read(trim(WORK_PROJFILE))
-            ! current refernce file name
+            ! current references file name
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
             ! remap zero-population classes
             call remap_empty_classes
-            ! user termination
+            ! termination and pause
+            do while( file_exists(trim(PAUSE_STREAM)) )
+                if( file_exists(trim(TERM_STREAM)) ) exit
+                write(*,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
+                call simple_sleep(WAIT_WATCHER)
+            enddo
             if( file_exists(trim(TERM_STREAM)) )then
-                write(*,'(A)')'>>> TERMINATING CLUSTER2D STREAM'
+                write(*,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',cast_time_char(simple_gettime())
                 exit
             endif
+            ! wait for new images if 2D run is considered converged
+            tnow = simple_gettime()
+            do while( wait_for_new_ptcls )
+                if( is_timeout(tnow) )exit
+                write(*,'(A,A)')'>>> WAITING FOR NEW PARTICLES ',cast_time_char(simple_gettime())
+                call simple_sleep(WAIT_WATCHER)
+                if( is_file_open(spproj_list_fname) )cycle
+                if( nlines(spproj_list_fname) > n_spprojs )wait_for_new_ptcls = .false.
+            enddo
+            if( is_timeout(tnow) )exit
             ! handles whether new individual project files have appeared
             if( .not.is_file_open(spproj_list_fname) )then
                 n_spprojs_prev = n_spprojs
@@ -421,11 +446,11 @@ contains
                     nptcls_glob      = work_proj%get_nptcls()
                     ncls_glob_prev   = ncls_glob
                     ncls_glob        = min(MAXNCLS, nint(real(nptcls_glob) / params%nptcls_per_cls))
-                    write(*,'(A,I8)')'>>> NEW PARTICLES COUNT: ', nptcls_glob
+                    write(*,'(A,I8,A,A)')'>>> NEW PARTICLES COUNT: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
                     ! remap in case of increased number of classes
                     call map_new_ptcls
                     last_injection = simple_gettime()
-                endif
+                    endif
             endif
             ! updates document
             if( work_proj_has_changed )call work_proj%write()
@@ -458,7 +483,21 @@ contains
 
         contains
 
+            logical function is_timeout( time_now )
+                integer, intent(in) :: time_now
+                is_timeout = .false.
+                if(time_now-last_injection > params%time_inactive)then
+                    write(*,*)'>>> TIME LIMIT WITHOUT NEW IMAGES REACHED: ',cast_time_char(time_now)
+                    is_timeout = .true.
+                else if(time_now-last_injection > 3600)then
+                    write(*,*)'>>> OVER ONE HOUR WITHOUT NEW PARTICLES: ',cast_time_char(time_now)
+                    call flush(6)
+                endif
+                return
+            end function is_timeout
+
             subroutine update_orig_proj
+                ! assumes work_proj is to correct dimension
                 call orig_proj%read(params%projfile)
                 do iproj=n_spprojs_prev+1,n_spprojs
                     call stream_proj%read(spproj_list(iproj))

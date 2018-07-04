@@ -469,7 +469,10 @@ contains
                     call job_descr%set('trs', trim(str) )
                 endif
             endif
-            if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==params%maxits ) exit
+            if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==params%maxits )then
+                if( cline_check_2Dconv%get_carg('converged').eq.'yes' )call cline%set('converged','yes')
+                exit
+            endif
         end do
         call qsys_cleanup
         ! report the last iteration on exit
