@@ -39,6 +39,7 @@ type :: chash
     !< GETTERS
     procedure          :: isthere
     procedure          :: lookup
+    procedure          :: reverselookup
     procedure, private :: get_1
     procedure, private :: get_2
     generic            :: get => get_1, get_2
@@ -295,6 +296,23 @@ contains
             endif
         end do
     end function lookup
+
+
+    !>  \brief  looks up the index of a value in the chash
+    !!* Warning* this will get the first occurance of the value
+    !! 
+    function reverselookup( self, key ) result( which )
+        class(chash),     intent(in) :: self
+        character(len=*), intent(in) :: key
+        integer :: ikey, which
+        which = 0
+        do ikey=1,self%chash_index
+            if( trim(key) .eq. trim(self%values(ikey)%str) )then
+                which = ikey
+                return
+            endif
+        end do
+    end function reverselookup
 
     !>  \brief  gets a value in the chash
     function get_1( self, key ) result( val )

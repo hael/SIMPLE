@@ -7,7 +7,7 @@ implicit none
 type star_project
 contains
     procedure :: prepare
-
+    procedure :: readfile
     procedure :: export_micrographs
     procedure :: import_micrographs
     procedure :: export_motion_corrected_micrographs
@@ -34,12 +34,25 @@ contains
     procedure :: export_all
 end type star_project
 
+enum, bind(C) ! STAR_FORMAT
+enumerator :: STAR_MOVIES=1
+enumerator :: STAR_MICROGRAPHS=2
+enumerator :: STAR_CAVGS=3
+enumerator :: STAR_PTCLS=4
+end enum
+
+
 contains
     subroutine prepare(self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(in)       :: filename
     end subroutine prepare
+  subroutine readfile(self, sp, filename)
+        class(star_project), intent(inout) :: self
+        class(sp_project), intent(inout)   :: sp
+        character(len=*), intent(in)       :: filename
+    end subroutine readfile
 
     !
     subroutine export_micrographs (self, sp, filename)

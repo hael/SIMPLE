@@ -14,6 +14,8 @@ contains
     procedure :: exists
     procedure :: star_dict2str
     procedure :: print_star_dict
+    procedure :: simple2star
+    procedure :: star2simple
     procedure :: write
     procedure :: read
     procedure :: kill
@@ -51,53 +53,56 @@ contains
 
         !! General keywords
         self%keywords_general = chash()
-        call self%keywords_general%new(33)
+        call self%keywords_general%new(34)
         call self%keywords_general%push('AmplitudeContrast',                 'fraca')   !!cmd_dict/params::fraca
-        !Euler angle definitions are according to the Heymann, Chagoyen and Belnap (2005) standard:
-        ! The first rotation is denoted by phi or rot and is around the Z-axis.
-        ! The second rotation is called theta or tilt and is around the new Y-axis.
-        ! The third rotation is denoted by psi and is around the new Z axis
+        !! Euler angle definitions are according to the Heymann, Chagoyen and Belnap (2005) standard:
+        !! The first rotation is denoted by phi or rot and is around the Z-axis.
+        !! The second rotation is called theta or tilt and is around the new Y-axis.
+        !! The third rotation is denoted by psi and is around the new Z axis
         call self%keywords_general%push('AnglePsi',                          'e3')   !! imghead: gamma or psi2
         call self%keywords_general%push('AngleRot',                          'e1')   !! imghead: theta
-        call self%keywords_general%push('AngleTilt',                         'e2')     !! imghead phi
+        call self%keywords_general%push('AngleTilt',                         'e2')   !! imghead phi
 
-        call self%keywords_general%push('AutopickFigureOfMerit',             '?')    !!
-        call self%keywords_general%push('AverageNrOfFrames',                 '?')    !!
-        call self%keywords_general%push('ClassNumber',                       '?')    !!
+        ! call self%keywords_general%push('AutopickFigureOfMerit',             '?')    !!
+        ! call self%keywords_general%push('AverageNrOfFrames',                 '?')    !!
+        ! call self%keywords_general%push('ClassNumber',                       '?')    !!
+       
 
-        !  Symmetry libraries have been copied from XMIPP. As such, with the exception of tetrahedral symmetry, they
-        !  comply with the Heymann, Chagoyen and Belnap (2005) standard:
+        !!  Symmetry libraries have been copied from XMIPP. As such, with the exception of
+        !!  tetrahedral symmetry, they comply with the Heymann, Chagoyen and Belnap (2005) standard:
 
-        ! Symmetry Group     Notation    Origin                       Orientation
-        ! Asymmetric          C1         User-defined                  User-defined
-        ! Cyclic              C<n>       On symm axis, Z user-defined  Symm axis on Z
-        ! Dihedral            D<n>       Intersection of symm axes     principle symm axis on Z, 2-fold on X
-        ! Tetrahedral         T          Intersection of symm axes     3-fold axis on Z (deviating from Heymann et al!)
-        ! Octahedral          O          Intersection of symm axes     4-fold axes on X, Y, Z
-        ! Icosahedral         I<n>       Intersection of symm axes     ++
-        ! ++ Multiple settings of the icosahedral symmetry group have been implemented:
+        !! Symmetry Group     Notation    Origin                       Orientation
+        !! Asymmetric          C1         User-defined                  User-defined
+        !! Cyclic              C<n>       On symm axis, Z user-defined  Symm axis on Z
+        !! Dihedral            D<n>       Intersection of symm axes     principle symm axis on Z, 2-fold on X
+        !! Tetrahedral         T          Intersection of symm axes     3-fold axis on Z (deviating from Heymann et al!)
+        !! Octahedral          O          Intersection of symm axes     4-fold axes on X, Y, Z
+        !! Icosahedral         I<n>       Intersection of symm axes     ++
+        !! ++ Multiple settings of the icosahedral symmetry group have been implemented:
 
-        ! I1: No-crowther 222 setting (=standard in Heymann et al): 2-fold axes on X,Y,Z. With the positive Z pointing
-        ! at the viewer, the front-most 5-fold vertices are in YZ plane, and the front-most 3-fold axes are in the XZ
-        ! plane.
+        !! I1: No-crowther 222 setting (=standard in Heymann et al): 2-fold axes on X,Y,Z. With the
+        !! positive Z pointing at the viewer, the front-most 5-fold vertices are in YZ plane, and
+        !! the front-most 3-fold axes are in the XZ plane.
 
-        ! I2: Crowther 222 setting: 2-fold axes on X,Y,Z. With the positive Z pointing at the viewer, the front-most
-        ! 5-fold vertices are in XZ plane, and the front-most 3-fold axes are in the YZ plane.
+        !! I2: Crowther 222 setting: 2-fold axes on X,Y,Z. With the positive Z pointing at the
+        !! viewer, the front-most 5-fold vertices are in XZ plane, and the front-most 3-fold axes
+        !! are in the YZ plane.
+        
+        !! I3: 52-setting (as in SPIDER?): 5-fold axis on Z and 2-fold on Y. With the positive Z
+        !! pointing at the viewer and without taken into account the 5-fold vertex in Z, there is
+        !! one of the front-most 5-fold vertices in -XZ plane
 
-        ! I3: 52-setting (as in SPIDER?): 5-fold axis on Z and 2-fold on Y. With the positive Z pointing at the viewer
-        ! and without taken into account the 5-fold vertex in Z, there is one of the front-most 5-fold vertices in -XZ
-        ! plane
+        !! I4: Alternative 52 setting: with the positive Z pointing at the viewer and without taken
+        !! into account the 5-fold vertices in Z, there is one of the front-most 5-fold vertices in
+        !! +XZ plane.  In case of doubt, a list of all employed symmetry operators may be printed to
+        !! screen using the command (for example for the D7 group): reline_refine --sym D7
+        !! --print_symmetry_ops.
 
-        ! I4: Alternative 52 setting: with the positive Z pointing at the viewer and without taken into account the
-        ! 5-fold vertices in Z, there is one of the front-most 5-fold vertices in +XZ plane.
-
-        ! In case of doubt, a list of all employed symmetry operators may be printed to screen using the command (for
-        ! example for the D7 group): reline_refine --sym D7 --print_symmetry_ops.
-
-        call self%keywords_general%push('CoordinateX',                       'x')    !!  imghead
+        call self%keywords_general%push('CoordinateX',                       'x')    !!  imghead - only for importing boxes
         call self%keywords_general%push('CoordinateY',                       'y')    !!  imghead
-        call self%keywords_general%push('CtfBfactor',                        '?')     !! cmd_dict
-        call self%keywords_general%push('CtfFigureOfMerit',                  '?')     !!
+        !  call self%keywords_general%push('CtfBfactor',                        '')     !! cmd_dict
+        !  call self%keywords_general%push('CtfFigureOfMerit',                  '')     !!
+        call self%keywords_general%push('CtfMaxResolution',                  'ctfres')     !!
         call self%keywords_general%push('CtfScalefactor',                    'scale') !!cmd_dict/
         call self%keywords_general%push('DefocusAngle',                      'angast')
         call self%keywords_general%push('DefocusU',                          'dfx')  !! dfmax
@@ -105,27 +110,27 @@ contains
         call self%keywords_general%push('DetectorPixelSize',                 'smpd') !! ??
         call self%keywords_general%push('GroupName',                         '')
         call self%keywords_general%push('GroupNumber',                       '')
-        call self%keywords_general%push('LogLikeliContribution',             '')
-        call self%keywords_general%push('Magnification',                     '')
-        call self%keywords_general%push('MaxValueProbDistribution',          '')
-        call self%keywords_general%push('MovieFramesRunningAverage',         '')
-        call self%keywords_general%push('NormCorrection',                    'norm')  !! cmd_dict::norm
-        call self%keywords_general%push('NrOfFrames',                        '')
-        call self%keywords_general%push('NrOfSignificantSamples',            '?')
+        ! call self%keywords_general%push('LogLikeliContribution',             '')
+        ! call self%keywords_general%push('Magnification',                     '')
+        ! call self%keywords_general%push('MaxValueProbDistribution',          '')
+        ! call self%keywords_general%push('MovieFramesRunningAverage',         '')
+        ! call self%keywords_general%push('NormCorrection',                    'norm')  !! cmd_dict::norm
+        ! call self%keywords_general%push('NrOfFrames',                        '')
+        ! call self%keywords_general%push('NrOfSignificantSamples',            '?')
         call self%keywords_general%push('OriginX',                           'x')
         call self%keywords_general%push('OriginY',                           'y')
-        call self%keywords_general%push('PhaseShift',                        '?')
-        call self%keywords_general%push('RandomSubset',                      '?')
+        call self%keywords_general%push('PhaseShift',                        '')
+        ! call self%keywords_general%push('RandomSubset',                      '?')
         call self%keywords_general%push('SphericalAberration',               'cs') !! cmd_dict
         call self%keywords_general%push('Voltage',                           'kv') !! cmd_dict
 
 
         !! Class3D data_model general
-        call self%keywords_general%new(43)
+        call self%keywords_class3D%new(43)
         call self%keywords_class3D%push('ReferenceDimensionality ',          '')
         call self%keywords_class3D%push('DataDimensionality ',               '')
         call self%keywords_class3D%push('OriginalImageSize',                 '')
-        call self%keywords_class3D%push('CurrentResolution',                 '')
+        call self%keywords_class3D%push('CurrentResolution',                 'lp')
         call self%keywords_class3D%push('CurrentImageSize',                  '')
         call self%keywords_class3D%push('PaddingFactor',                     '')
         call self%keywords_class3D%push('IsHelix',                           '')
@@ -213,16 +218,27 @@ contains
    !      real(kind=4), allocatable :: vals(:)
    !      vals = self%htab%get_values()
    !  end function hash_vals
-   ! !>  \brief  check for presence of key in the star_dict hash
-   !  function isthere( self, key ) result( found )
-   !      class(star_dict),       intent(inout) :: self
-   !      character(len=*), intent(in)    :: key
-   !      logical :: hash_found, chash_found, found
-   !      hash_found  = self%htab%isthere(key)
-   !      chash_found = self%chtab%isthere(key)
-   !      found = .false.
-   !      if( hash_found .or. chash_found ) found = .true.
-   !  end function isthere
+   !>  \brief  check for presence of key in the star_dict hash
+    function isthere( self, starkey ) result( found )
+        class(star_dict),       intent(inout) :: self
+        character(len=*), intent(inout)    :: starkey
+        logical :: filename_found, general_found, found
+        integer :: which
+        found=.false.
+        which =  self%keywords_general%lookup(trim(starkey))
+        if(which /= 0 )then
+            found = .true.
+            
+        else
+            which =  self%keywords_filename%lookup(trim(starkey))
+            if(which /= 0 )then
+                 found = .true.
+            
+            !else
+                !    if((self%keywords_class3D%isthere(starkey))then
+             endif
+         endif
+    end function isthere
 
     !>  \brief  writes orientation info
     subroutine write( self, fhandle )
@@ -247,6 +263,49 @@ contains
         ! isthere(3) = self%htab%isthere('e3')
 
     end subroutine read
+
+     !> \brief for looking up a key
+    function star2simple( self, starkey ) result( val )
+        class(star_dict),  intent(in) :: self
+        character(len=*), intent(inout) :: starkey
+        integer ::  which
+        character(len=:), allocatable :: val
+        which =  self%keywords_general%lookup(trim(starkey))
+        if(which /= 0 )then
+            val = self%keywords_general%get(which)
+        else
+            which =  self%keywords_filename%lookup(trim(starkey))
+            if(which /= 0 )then
+                val = self%keywords_general%get(which)
+            else
+                !    if((self%keywords_class3D%isthere(starkey))then
+                print *,"simple_star_dict::  STAR token ", trim(starkey), " not supported "
+            end if
+        end if
+
+    end function star2simple
+    !> \brief for looking up a value in the keywork hashs
+    !! *Warning* the reverse lookup will have issues if there is not a
+    !! one-to-one mapping of the SIMPLE-STAR keywords
+    !! 
+    function simple2star( self, simplekey ) result( val )
+        class(star_dict),   intent(in) :: self
+        character(len=*), intent(inout) :: simplekey
+        integer :: which
+        character(len=:), allocatable :: val
+        which =  self%keywords_general%reverselookup(trim(simplekey))
+        if(which /= 0 )then
+            val = self%keywords_general%get_key(which)
+        else
+            which =  self%keywords_filename%reverselookup(trim(simplekey))
+            if(which /= 0 )then
+                val = self%keywords_general%get_key(which)
+            else
+                !    if((self%keywords_class3D%isthere(simplekey))then
+                print *,"simple_star_dict:: SIMPLE token ", trim(simplekey), " not supported "
+            end if
+        end if
+    end function simple2star
 
     function star_dict2str (self ) result (str)
         class(star_dict), intent(inout) :: self
