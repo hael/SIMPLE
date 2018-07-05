@@ -1,13 +1,19 @@
 !! Importing and exporting Relion Star-formatted files to/from SIMPLE
 module simple_star
 include 'simple_lib.f08'
+use simple_stardoc
 use simple_sp_project
-implicit none
 
+implicit none
+private
 type star_project
+    type(stardoc) :: doc
 contains
     procedure :: prepare
     procedure :: readfile
+    procedure :: get_ndatalines
+    procedure :: get_nrecs_per_line
+
     procedure :: export_micrographs
     procedure :: import_micrographs
     procedure :: export_motion_corrected_micrographs
@@ -16,7 +22,6 @@ contains
     procedure :: import_ctf_estimation
     procedure :: export_autopick
     procedure :: import_autopick
-
     procedure :: export_extract_doseweightedptcls
     procedure :: import_extract_doseweightedptcls
     procedure :: export_class2D
@@ -30,36 +35,66 @@ contains
     procedure :: import_refine3D
     procedure :: export_shiny3D
     procedure :: import_shiny3D
-
     procedure :: export_all
+
+    procedure :: kill
 end type star_project
 
-enum, bind(C) ! STAR_FORMAT
-enumerator :: STAR_MOVIES=1
-enumerator :: STAR_MICROGRAPHS=2
-enumerator :: STAR_CAVGS=3
-enumerator :: STAR_PTCLS=4
-end enum
 
-
+public :: star_project
 contains
     subroutine prepare(self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(in)       :: filename
+        character(len=*), intent(inout)       :: filename
+        if( .not. file_exists(trim(filename)) )then
+            write(*,*) 'file: ', trim(filename)
+            stop 'does not exist in cwd;  simple_star :: prepare '
+        endif
+        call self%doc%open(filename)
     end subroutine prepare
-  subroutine readfile(self, sp, filename)
+    subroutine readfile(self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(in)       :: filename
     end subroutine readfile
 
+    function get_ndatalines(self) result(n)
+        class(star_project), intent(inout) :: self
+        integer :: n
+        n=0
+        if(.not. self%doc%existence) &
+            stop ' simple_star ::  get_ndatalines doc unopened '
+        
+        if( self%doc%num_data_lines == 0) then
+            print *," simple_star :: get_ndatalines no data entries" 
+        else
+            n= self%doc%num_data_lines
+        endif
+       
+    end function get_ndatalines
+
+    function get_nrecs_per_line(self)result(nrecs)
+        class(star_project), intent(inout) :: self
+        integer :: nrecs
+        nrecs=0
+        if(.not. self%doc%existence) &
+            stop ' simple_star ::  get_ndatalines doc unopened '
+       
+        if( self%doc%num_data_elements == 0) then
+            print *," simple_star :: get_ndatalines no data entries" 
+        else
+            nrecs = self%doc%num_data_elements
+        endif
+       
+
+    end function get_nrecs_per_line
     !
     subroutine export_micrographs (self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(in)       :: filename
-        character(len=19),allocatable:: labels(:)
+        character(len=KEYLEN),allocatable      :: labels(:)
         labels=(/ 'MicrographNameNoDW' /)
     end subroutine export_micrographs
     subroutine import_micrographs (self,  sp, filename)
@@ -81,7 +116,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(in) :: filename
-        character(len=19),allocatable:: labels(:)
+        character(len=KEYLEN),allocatable:: labels(:)
         labels=(/  &
 'MicrographNameNoDW',&
 'MicrographName    '/)
@@ -115,7 +150,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=20),allocatable:: labels(:)
+        character(len=KEYLEN),allocatable:: labels(:)
         labels=(/  'MicrographName     ',&
             'CtfImage           ',&
             'DefocusU           ',&
@@ -152,7 +187,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=22), allocatable:: labels(:)
+        character(len=KEYLEN), allocatable:: labels(:)
         labels=(/ &
 'CoordinateX          ',&
 'CoordinateY          ',&
@@ -206,7 +241,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=26), allocatable:: labels(:)
+        character(len=KEYLEN), allocatable:: labels(:)
         labels=(/ &
 'CoordinateX              ',&
 'CoordinateY              ',&
@@ -288,7 +323,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=26), allocatable:: labels(:)
+        character(len=KEYLEN), allocatable:: labels(:)
         labels=(/ &
 'MicrographName           ',&
 'CoordinateX              ',&
@@ -366,7 +401,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=26), allocatable:: labels(:)
+        character(len=KEYLEN), allocatable:: labels(:)
         labels=(/ &
 'MicrographName           ',&
 'CoordinateX              ',&
@@ -501,7 +536,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=26), allocatable :: labels(:)
+        character(len=KEYLEN), allocatable :: labels(:)
         labels=(/ &
 'MicrographName           ',&
 'CoordinateX              ',&
@@ -580,7 +615,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=26), allocatable :: labels(:)
+        character(len=KEYLEN), allocatable :: labels(:)
         labels=(/ &
 'MicrographName           ',&
 'CoordinateX              ',&
@@ -667,7 +702,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
-        character(len=26), allocatable :: labels(:)
+        character(len=KEYLEN), allocatable :: labels(:)
 labels=(/ &
 'MicrographName           ',&
 'CoordinateX              ',&
@@ -715,4 +750,10 @@ labels=(/ &
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
     end subroutine export_all
+
+    subroutine kill(self)
+        class(star_project), intent(inout):: self
+        call self%doc%kill_doc
+    end subroutine kill
+
 end module simple_star

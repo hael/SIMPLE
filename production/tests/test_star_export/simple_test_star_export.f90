@@ -1,13 +1,13 @@
 program simple_test_star_export
 include 'simple_lib.f08'
 use simple_star
-use simple_cmdline,        only: cmdline
-!use simple_parameters,         only: parameters
-!use simple_builder,          only: builder
-use simple_sp_project,     only: sp_project
-use simple_oris,       only: oris
-use simple_sp_project, only: sp_project
-use simple_binoris,    only: binoris
+use simple_cmdline,     only: cmdline
+!use simple_parameters, only: parameters
+!use simple_builder,    only: builder
+use simple_sp_project,  only: sp_project
+use simple_oris,        only: oris
+use simple_sp_project,  only: sp_project
+use simple_binoris,     only: binoris
 implicit none
 
 type(sp_project)     :: myproject
@@ -15,6 +15,23 @@ type(binoris)        :: bos
 integer, allocatable :: strlens(:)
 type(star_project) :: s
 ! type(parameters) :: p
+character(len=8)      :: datestr
+character(len=STDLEN) :: folder,  oldCWDfolder, curDir
+integer :: io_stat
+
+call seed_rnd
+call date_and_time(date=datestr)
+folder = trim('./SIMPLE_TEST_STAR_'//datestr)
+
+call simple_mkdir( trim(folder) , status=io_stat)
+if(io_stat/=0) call simple_stop("simple_mkdir failed")
+print *," Changing directory to ", folder
+call simple_chdir( trim(folder),  oldCWDfolder , status=io_stat)
+if(io_stat/=0) call simple_stop("simple_chdir failed")
+call simple_getcwd(curDir)
+print *," Current working directory ", curDir
+
+
 
 !call s%export_motion_corrected_micrographs (sp, trim('tmp_mc.star'))
 

@@ -129,10 +129,11 @@ end if
         type(star_project):: starproj
         type(ctfparams)  :: ctfvars
         type(oris)       :: os
+        character(len=LONGSTRLEN),allocatable :: line(:)
         character(len=LONGSTRLEN),allocatable :: starfiles(:)
         character(len=:),      allocatable :: phaseplate, boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        integer :: nStarfiles,istar
+        integer :: nStarfiles,istar,i, ndatlines,nrecs, nboxf, nmovf
         logical :: l_starfile
         call params%new(cline)
         ! parameter input management
@@ -163,6 +164,19 @@ end if
        !! Read existing SIMPLE project
        call spproj%read(params%projfile)
        call starproj%prepare( spproj, starfiles(1))
+       ndatlines = starproj%get_ndatalines()
+       nrecs     = starproj%get_nrecs_per_line()
+
+       if(nrecs == 0)then
+           print *," Unable to read header records in STAR file."
+           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
+       end if
+        if(ndatlines == 0)then
+           print *," Unable to read data line records in STAR file."
+           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
+       end if
+       
+!! vvvvv TODO vvvvv
 
 !!******* Import movies + ctf_estimation
        if( cline%defined('phaseplate') )then
@@ -207,73 +221,72 @@ end if
             end do
         end if
 !! ***** Class averages
-        call spproj%add_cavgs2os_out(params%stk, params%smpd)
+!        call spproj%add_cavgs2os_out(params%stk, params%smpd)
 
 !! ******  Import boxes
-        ! get boxfiles into os_mic
-        call read_filetable(params%boxtab, boxfnames)
-        nboxf   = size(boxfnames)
-        nos_mic = spproj%os_mic%get_noris()
-        if( nboxf /= nos_mic )then
-            write(*,*) '# boxfiles       : ', nboxf
-            write(*,*) '# os_mic entries : ', nos_mic
-            stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
-        endif
-        do i=1,nos_mic
-            call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
-            call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
-        end do
-!! ******  Import import particles
-        ndatlines = starproj%get_ndatalines()
-        nrecs     = starproj%get_nrecs_per_line()
+        ! ! get boxfiles into os_mic
+        ! call read_filetable(params%boxtab, boxfnames)
+        ! nboxf   = size(boxfnames)
+        ! nos_mic = spproj%os_mic%get_noris()
+        ! if( nboxf /= nos_mic )then
+        !     write(*,*) '# boxfiles       : ', nboxf
+        !     write(*,*) '# os_mic entries : ', nos_mic
+        !     stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
+        ! endif
+        ! do i=1,nos_mic
+        !     call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+        !     call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
+        ! end do
+!! ******  Import  particles
+      
  if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'commander_project :: exec_extract_ptcls'
+                stop 'commander_starproject :: exec_extract_ptcls'
             endif
-  call os%new(ndatlines)
-allocate( line(nrecs) )
-            do i=1,ndatlines
-                call starproj%readNextDataLine(line)
-  select case(params%dfunit)
-                    case( 'A' )
-                        line(1) = line(1)/1.0e4
-                        if( nrecs > 1 )  line(2) = line(2)/1.0e4
-                    case( 'microns' )
-                        ! nothing to do
-                    case DEFAULT
-                        stop 'unsupported dfunit; commander_project :: exec_extract_ptcls'
-                end select
-                select case(params%angastunit)
-                    case( 'radians' )
-                        if( nrecs == 3 ) line(3) = rad2deg(line(3))
-                    case( 'degrees' )
-                        ! nothing to do
-                    case DEFAULT
-                        stop 'unsupported angastunit; commander_project :: exec_extract_ptcls'
-                end select
-                select case(params%phshiftunit)
-                    case( 'radians' )
-                        ! nothing to do
-                    case( 'degrees' )
-                        if( nrecs == 4 ) line(4) = deg2rad(line(4))
-                    case DEFAULT
-                        stop 'unsupported phshiftunit; commander_project :: exec_extract_ptcls'
-                end select
- call os%set(i, 'dfx', line(1))
-                if( nrecs > 1 )then
-                    call os%set(i, 'dfy', line(2))
-                    call os%set(i, 'angast', line(3))
-                endif
-                if( nrecs > 3 )then
-                    call os%set(i, 'phshift', line(4))
-                endif
-            end do
+!   call os%new(ndatlines)
+! allocate( line(nrecs) )
+!             do i=1,ndatlines
+!                 call starproj%readNextDataLine(line)
+!                 select case(params%dfunit)
+!                     case( 'A' )
+!                         line(1) = line(1)/1.0e4
+!                         if( nrecs > 1 )  line(2) = line(2)/1.0e4
+!                     case( 'microns' )
+!                         ! nothing to do
+!                     case DEFAULT
+!                         stop 'unsupported dfunit; commander_project :: exec_extract_ptcls'
+!                 end select
+!                 select case(params%angastunit)
+!                     case( 'radians' )
+!                         if( nrecs == 3 ) line(3) = rad2deg(line(3))
+!                     case( 'degrees' )
+!                         ! nothing to do
+!                     case DEFAULT
+!                         stop 'unsupported angastunit; commander_project :: exec_extract_ptcls'
+!                 end select
+!                 select case(params%phshiftunit)
+!                     case( 'radians' )
+!                         ! nothing to do
+!                     case( 'degrees' )
+!                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
+!                     case DEFAULT
+!                         stop 'unsupported phshiftunit; commander_project :: exec_extract_ptcls'
+!                 end select
+!  call os%set(i, 'dfx', line(1))
+!                 if( nrecs > 1 )then
+!                     call os%set(i, 'dfy', line(2))
+!                     call os%set(i, 'angast', line(3))
+!                 endif
+!                 if( nrecs > 3 )then
+!                     call os%set(i, 'phshift', line(4))
+!                 endif
+!             end do
 
 
         ! Import STAR filename
-        do istar=1, nStarfiles
-             call starproj%read(starfiles(i), spproj, params)
-        end do
+        ! do istar=1, nStarfiles
+        !      call starproj%read(starfiles(i), spproj, params)
+        ! end do
 
         ! Copy to SIMPLE's project format
 
