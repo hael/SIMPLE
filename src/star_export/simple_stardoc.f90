@@ -176,12 +176,23 @@ contains
                 if (lenstr == 0 )cycle ! empty line
                 if ( line(1:5) == "data_")then !! e.g. data_
                     DebugPrint " Found STAR 'data_*' in header ", line
+                    !! Quick string length comparison 
                     if(lenstr == len_trim("data_pipeline_general"))then
                         print *," Found STAR 'data_pipeline_general' header -- Not supported "
                         exit
                     else if(lenstr == len_trim("data_pipeline_processes"))then
                         print *," Found STAR 'data_pipeline_processes' header -- Not supported "
                         exit
+                    else if(lenstr == len_trim("data_sampling_general"))then
+                        print *," Found STAR 'data_sampling_general' header -- Not supported "
+                        exit
+                    else if(lenstr == len_trim("data_optimiser_general"))then
+                       print *," Found STAR 'data_optimiser_general' header -- Not supported "
+                       exit
+                   else if(lenstr == len_trim("data_model_general"))then
+                      print *," Found STAR 'data_model_general' header -- Not supported "
+                      exit
+
                     end if
                     !!otherwise
                     cycle
