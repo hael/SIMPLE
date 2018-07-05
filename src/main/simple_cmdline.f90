@@ -17,7 +17,6 @@ type cmdarg
     real                          :: rarg=0.
 contains
     procedure :: new
-    final     :: destructor
 end type cmdarg
 interface cmdarg
     module procedure constructor
@@ -70,14 +69,6 @@ contains
         if(present(carg)) allocate(self%carg, source=carg)
         if(present(rarg)) self%rarg = rarg
     end subroutine new
-
-    subroutine destructor(self)
-        type(cmdarg) :: self
-        if(allocated(self%carg)) deallocate(self%carg)
-        if(allocated(self%key)) deallocate(self%key)
-    end subroutine destructor
-
-
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self )
@@ -319,7 +310,7 @@ contains
     subroutine set_3( self, cmarg )
         class(cmdline),   intent(inout) :: self
         type(cmdarg), intent(in)    :: cmarg
-        integer :: which, n
+        integer :: which
      !   do n=1,size(cmarg)
             which = self%lookup(cmarg%key)
             if( which == 0 )then

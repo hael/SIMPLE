@@ -66,7 +66,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(58)
+type(simple_prg_ptr) :: prg_ptr_array(60)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -88,6 +88,8 @@ type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
 type(simple_program), target :: import_particles
+type(simple_program), target :: importstar_project
+type(simple_program), target :: exportstar_project
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -149,6 +151,7 @@ type(simple_input_param) :: deftab
 type(simple_input_param) :: dfmin
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfstep
+type(simple_input_param) :: export_type
 type(simple_input_param) :: frac
 type(simple_input_param) :: focusmsk
 type(simple_input_param) :: hp
@@ -193,6 +196,7 @@ type(simple_input_param) :: shellw
 type(simple_input_param) :: sherr
 type(simple_input_param) :: smpd
 type(simple_input_param) :: startit
+type(simple_input_param) :: starfile
 type(simple_input_param) :: stk
 type(simple_input_param) :: stktab
 type(simple_input_param) :: time_per_image
@@ -227,6 +231,7 @@ contains
         call new_ctf_estimate
         call new_ctfops
         call new_extract
+        call new_exportstar_project
         call new_filter
         call new_fsc
         call new_info_image
@@ -236,6 +241,7 @@ contains
         call new_import_cavgs
         call new_import_movies
         call new_import_particles
+        call new_importstar_project
         call new_make_cavgs
         call new_make_oris
         call new_make_pickrefs
@@ -291,54 +297,56 @@ contains
         prg_ptr_array(8)%ptr2prg  => ctf_estimate
         prg_ptr_array(9)%ptr2prg  => ctfops
         prg_ptr_array(10)%ptr2prg => extract
-        prg_ptr_array(11)%ptr2prg => filter
-        prg_ptr_array(12)%ptr2prg => fsc
-        prg_ptr_array(13)%ptr2prg => info_image
-        prg_ptr_array(14)%ptr2prg => info_stktab
-        prg_ptr_array(15)%ptr2prg => initial_3Dmodel
-        prg_ptr_array(16)%ptr2prg => import_boxes
-        prg_ptr_array(17)%ptr2prg => import_cavgs
-        prg_ptr_array(18)%ptr2prg => import_movies
-        prg_ptr_array(19)%ptr2prg => import_particles
-        prg_ptr_array(20)%ptr2prg => make_cavgs
-        prg_ptr_array(21)%ptr2prg => make_oris
-        prg_ptr_array(22)%ptr2prg => make_pickrefs
-        prg_ptr_array(23)%ptr2prg => mask
-        prg_ptr_array(24)%ptr2prg => motion_correct
-        prg_ptr_array(25)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(26)%ptr2prg => new_project
-        prg_ptr_array(27)%ptr2prg => normalize_
-        prg_ptr_array(28)%ptr2prg => orisops
-        prg_ptr_array(29)%ptr2prg => oristats
-        prg_ptr_array(30)%ptr2prg => pick
-        prg_ptr_array(31)%ptr2prg => postprocess
-        prg_ptr_array(32)%ptr2prg => powerspecs
-        prg_ptr_array(33)%ptr2prg => preprocess
-        prg_ptr_array(34)%ptr2prg => preprocess_stream
-        prg_ptr_array(35)%ptr2prg => print_fsc
-        prg_ptr_array(36)%ptr2prg => print_magic_boxes
-        prg_ptr_array(37)%ptr2prg => print_project_info
-        prg_ptr_array(38)%ptr2prg => print_project_field
-        prg_ptr_array(39)%ptr2prg => reproject
-        prg_ptr_array(40)%ptr2prg => reconstruct3D
-        prg_ptr_array(41)%ptr2prg => refine3D
-        prg_ptr_array(42)%ptr2prg => refine3D_init
-        prg_ptr_array(43)%ptr2prg => scale
-        prg_ptr_array(44)%ptr2prg => scale_project
-        prg_ptr_array(45)%ptr2prg => select_
-        prg_ptr_array(46)%ptr2prg => shift
-        prg_ptr_array(47)%ptr2prg => simulate_movie
-        prg_ptr_array(48)%ptr2prg => simulate_noise
-        prg_ptr_array(49)%ptr2prg => simulate_particles
-        prg_ptr_array(50)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(51)%ptr2prg => stack
-        prg_ptr_array(52)%ptr2prg => stackops
-        prg_ptr_array(53)%ptr2prg => symaxis_search
-        prg_ptr_array(54)%ptr2prg => symmetry_test
-        prg_ptr_array(55)%ptr2prg => tseries_track
-        prg_ptr_array(56)%ptr2prg => update_project
-        prg_ptr_array(57)%ptr2prg => vizoris
-        prg_ptr_array(58)%ptr2prg => volops
+        prg_ptr_array(11)%ptr2prg => exportstar_project
+        prg_ptr_array(12)%ptr2prg => filter
+        prg_ptr_array(13)%ptr2prg => fsc
+        prg_ptr_array(14)%ptr2prg => info_image
+        prg_ptr_array(15)%ptr2prg => info_stktab
+        prg_ptr_array(16)%ptr2prg => initial_3Dmodel
+        prg_ptr_array(17)%ptr2prg => import_boxes
+        prg_ptr_array(18)%ptr2prg => import_cavgs
+        prg_ptr_array(19)%ptr2prg => import_movies
+        prg_ptr_array(20)%ptr2prg => import_particles
+        prg_ptr_array(21)%ptr2prg => importstar_project
+        prg_ptr_array(22)%ptr2prg => make_cavgs
+        prg_ptr_array(23)%ptr2prg => make_oris
+        prg_ptr_array(24)%ptr2prg => make_pickrefs
+        prg_ptr_array(25)%ptr2prg => mask
+        prg_ptr_array(26)%ptr2prg => motion_correct
+        prg_ptr_array(27)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(28)%ptr2prg => new_project
+        prg_ptr_array(29)%ptr2prg => normalize_
+        prg_ptr_array(30)%ptr2prg => orisops
+        prg_ptr_array(31)%ptr2prg => oristats
+        prg_ptr_array(32)%ptr2prg => pick
+        prg_ptr_array(33)%ptr2prg => postprocess
+        prg_ptr_array(34)%ptr2prg => powerspecs
+        prg_ptr_array(35)%ptr2prg => preprocess
+        prg_ptr_array(36)%ptr2prg => preprocess_stream
+        prg_ptr_array(37)%ptr2prg => print_fsc
+        prg_ptr_array(38)%ptr2prg => print_magic_boxes
+        prg_ptr_array(39)%ptr2prg => print_project_info
+        prg_ptr_array(40)%ptr2prg => print_project_field
+        prg_ptr_array(41)%ptr2prg => reproject
+        prg_ptr_array(42)%ptr2prg => reconstruct3D
+        prg_ptr_array(43)%ptr2prg => refine3D
+        prg_ptr_array(44)%ptr2prg => refine3D_init
+        prg_ptr_array(45)%ptr2prg => scale
+        prg_ptr_array(46)%ptr2prg => scale_project
+        prg_ptr_array(47)%ptr2prg => select_
+        prg_ptr_array(48)%ptr2prg => shift
+        prg_ptr_array(49)%ptr2prg => simulate_movie
+        prg_ptr_array(50)%ptr2prg => simulate_noise
+        prg_ptr_array(51)%ptr2prg => simulate_particles
+        prg_ptr_array(52)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(53)%ptr2prg => stack
+        prg_ptr_array(54)%ptr2prg => stackops
+        prg_ptr_array(55)%ptr2prg => symaxis_search
+        prg_ptr_array(56)%ptr2prg => symmetry_test
+        prg_ptr_array(57)%ptr2prg => tseries_track
+        prg_ptr_array(58)%ptr2prg => update_project
+        prg_ptr_array(59)%ptr2prg => vizoris
+        prg_ptr_array(60)%ptr2prg => volops
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -366,6 +374,8 @@ contains
                 ptr2prg => ctfops
             case('extract')
                 ptr2prg => extract
+            case('exportstar_project')
+                ptr2prg => exportstar_project
             case('filter')
                 ptr2prg => filter
             case('fsc')
@@ -384,6 +394,8 @@ contains
                 ptr2prg => import_movies
             case('import_particles')
                 ptr2prg => import_particles
+            case('importstar_project')
+                ptr2prg => importstar_project
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -497,6 +509,7 @@ contains
         write(*,'(A)') cluster_cavgs%name
         write(*,'(A)') convert%name
         write(*,'(A)') ctfops%name
+        write(*,'(A)') exportstar_project%name
         write(*,'(A)') extract%name
         write(*,'(A)') filter%name
         write(*,'(A)') fsc%name
@@ -506,6 +519,7 @@ contains
         write(*,'(A)') import_cavgs%name
         write(*,'(A)') import_movies%name
         write(*,'(A)') import_particles%name
+        write(*,'(A)') importstar_project%name
         write(*,'(A)') make_oris%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
@@ -635,6 +649,8 @@ contains
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
+        call set_param(starfile,       'starfile',       'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
+        call set_param(export_type,    'export_type',    'str',   'STAR-format export type', 'Which STAR-formatted file type', 'e.g. micrographs or class2d or refine3d', .false., '')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1028,7 +1044,8 @@ contains
         call ctfops%set_input('img_ios', 2, outstk)
         ! parameter input/output
         call ctfops%set_input('parm_ios', 1, smpd)
-        call ctfops%set_input('parm_ios', 2, 'neg', 'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call ctfops%set_input('parm_ios', 2, 'neg', 'binary', 'Invert contrast','Invert contrast(yes|no){no}',&
+            '(yes|no){no}', .false., 'no')
         call ctfops%set_input('parm_ios', 3, oritab)
         call ctfops%set_input('parm_ios', 4, deftab)
         ! alternative inputs
@@ -1037,7 +1054,8 @@ contains
         ! <empty>
         ! filter controls
         call ctfops%set_input('filt_ctrls', 1, ctf)
-        call ctfops%set_input('filt_ctrls', 2, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
+        call ctfops%set_input('filt_ctrls', 2, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', &
+            'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1245,7 +1263,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call import_boxes%set_input('parm_ios', 1, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
+        call import_boxes%set_input('parm_ios', 1, 'boxtab', 'file', 'List of box files', &
+            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1349,6 +1368,78 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_import_particles
+
+    subroutine new_importstar_project
+        ! PROGRAM SPECIFICATION
+        call importstar_project%new(&
+        &'importstar_project',&                                       ! name
+        &'Import STAR project ',&                                     ! descr_short
+        &'is a program for importing STAR-formatted EM project files to the project and saving as SIMPLE project',&
+        &'simple_exec',&                                            ! executable
+        &0, 13, 2, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call importstar_project%set_input('parm_ios', 1, smpd)
+        call importstar_project%set_input('parm_ios', 2, kv)
+        call importstar_project%set_input('parm_ios', 3, cs)
+        call importstar_project%set_input('parm_ios', 4, fraca)
+        call importstar_project%set_input('parm_ios', 5, ctf)
+        call importstar_project%set_input('parm_ios', 6, phaseplate)
+        call importstar_project%set_input('parm_ios', 7, oritab)
+        call importstar_project%set_input('parm_ios', 8, deftab)
+        call importstar_project%set_input('parm_ios', 9, 'plaintexttab', 'file', 'Plain text file of input parameters',&
+        'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', 'e.g. params.txt', .false., '')
+        call importstar_project%set_input('parm_ios', 10, 'dfunit', 'binary', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
+        call importstar_project%set_input('parm_ios', 11, 'angastunit', 'binary', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
+        call importstar_project%set_input('parm_ios', 12, 'phshiftunit', 'binary', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
+        ! alternative inputs
+        call importstar_project%set_input('alt_ios', 1, 'stktab', 'file', 'List of per-micrograph particle stacks',&
+        &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
+        call importstar_project%set_input('alt_ios', 2, 'stk', 'file', 'Stack of particles',&
+            &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
+        call importstar_project%set_input('parm_ios', 13, 'starfile', 'file', 'Plain text file of input parameters',&
+            'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', 'e.g. params.txt', .false., '')
+        importstar_project%parm_ios(13)%required = .true.
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_importstar_project
+
+
+    subroutine new_exportstar_project
+        ! PROGRAM SPECIFICATION
+        call exportstar_project%new(&
+        &'exportstar_project',&                                       ! name
+        &'Import STAR project ',&                                     ! descr_short
+        &'is a program for importing STAR-formatted EM project files to the project and saving as SIMPLE project',&
+        &'simple_exec',&                                            ! executable
+        &0, 2, 0, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call exportstar_project%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted project filename for export',&
+            'Export filename (*.star) with STAR-formatting', 'e.g. myproj.star', .false., '')
+        call exportstar_project%set_input('parm_ios', 2, 'export_type', 'str', 'Export type for STAR project',&
+            'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. micrographs or class2D', .false., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_exportstar_project
+
+
 
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION
@@ -2902,7 +2993,7 @@ contains
 
             subroutine set( arr, i )
                 integer,                  intent(in)    :: i
-                type(simple_input_param), intent(inout) :: arr(i)
+                type(simple_input_param), intent(inout) :: arr(:)
                 allocate(arr(i)%key,               source=trim(key))
                 allocate(arr(i)%keytype,           source=trim(keytype))
                 allocate(arr(i)%descr_short,       source=trim(descr_short))
@@ -2944,8 +3035,8 @@ contains
         contains
 
             subroutine set( arr, i )
-                type(simple_input_param), intent(inout) :: arr(i)
                 integer,                  intent(in)  :: i
+                type(simple_input_param), intent(inout) :: arr(:)
                 allocate(arr(i)%key,               source=trim(key))
                 allocate(arr(i)%keytype,           source=trim(keytype))
                 allocate(arr(i)%descr_short,       source=trim(descr_short))
@@ -2985,8 +3076,8 @@ contains
         contains
 
             subroutine set( arr, i )
-                type(simple_input_param), intent(inout) :: arr(i)
                 integer,                  intent(in)  :: i
+                type(simple_input_param), intent(inout) :: arr(:)
                 allocate(arr(i)%key,               source=trim(param%key))
                 allocate(arr(i)%keytype,           source=trim(param%keytype))
                 allocate(arr(i)%descr_short,       source=trim(param%descr_short))

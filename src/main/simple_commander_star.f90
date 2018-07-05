@@ -10,28 +10,29 @@ use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters
 implicit none
 
-public :: exportstar_project_commander
-public :: importstar_project_commander
+public :: export_star_project_commander
+public :: import_star_project_commander
 public :: print_star_project_info_commander
 private
 
-type, extends(commander_base) :: exportstar_project_commander
+type, extends(commander_base) :: export_star_project_commander
   contains
     procedure :: execute      => exec_exportstar_project
-end type
-type, extends(commander_base) :: importstar_project_commander
+end type export_star_project_commander
+type, extends(commander_base) :: import_star_project_commander
   contains
     procedure :: execute      => exec_importstar_project
-end type
+end type import_star_project_commander
 type, extends(commander_base) ::  print_star_project_info_commander
   contains
     procedure :: execute      => exec_print_star_project_info
-end type
+end type print_star_project_info_commander
+
 contains
 
     !> convert text (.txt) oris doc to binary (.simple)
     subroutine exec_exportstar_project( self, cline )
-        class(exportstar_project_commander), intent(inout) :: self
+        class(export_star_project_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters)  :: params
         type(oris)        :: os
@@ -50,7 +51,7 @@ contains
             allocate(this_starfile, source=trim(params%starfile))
         end if
         ! create backup in case the starfile exists
-        if(file_exists(this_starfile))then 
+        if(file_exists(this_starfile))then
             iostat= simple_rename(trim(this_starfile),&
                 trim(this_starfile)//"-bkup")
         end if
@@ -74,7 +75,7 @@ contains
 end if
         !! Prepare project
         call starproj%prepare(spproj,  this_starfile)
-     
+
         ! Use export type to define export output variables
         select case(params%export_type)
         case('micrographs')
@@ -122,7 +123,7 @@ end if
         use simple_oris,      only: oris
         use simple_nrtxtfile, only: nrtxtfile
         use simple_binoris_io ! use all in there
-        class(importstar_project_commander), intent(inout) :: self
+        class(import_star_project_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj 
