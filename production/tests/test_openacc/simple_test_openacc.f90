@@ -31,9 +31,9 @@ program simple_test_openacc
      !call test_oacc_omp
 !     call test_oacc_reduction
      
-     call run_rbc_serial
-     call run_rbc_omp
-     call run_rbc_oacc
+     ! call run_rbc_serial
+     ! call run_rbc_omp
+     ! call run_rbc_oacc
 
      ! call test_matrix_mul_omp
 !      call test_matrix_mul_openacc
