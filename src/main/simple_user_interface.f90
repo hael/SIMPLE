@@ -66,7 +66,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(57)
+type(simple_prg_ptr) :: prg_ptr_array(58)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -123,6 +123,7 @@ type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
+type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
@@ -270,6 +271,7 @@ contains
         call new_stack
         call new_stackops
         call new_symaxis_search
+        call new_symmetry_test
         call new_tseries_track
         call new_update_project
         call new_vizoris
@@ -332,10 +334,11 @@ contains
         prg_ptr_array(51)%ptr2prg => stack
         prg_ptr_array(52)%ptr2prg => stackops
         prg_ptr_array(53)%ptr2prg => symaxis_search
-        prg_ptr_array(54)%ptr2prg => tseries_track
-        prg_ptr_array(55)%ptr2prg => update_project
-        prg_ptr_array(56)%ptr2prg => vizoris
-        prg_ptr_array(57)%ptr2prg => volops
+        prg_ptr_array(54)%ptr2prg => symmetry_test
+        prg_ptr_array(55)%ptr2prg => tseries_track
+        prg_ptr_array(56)%ptr2prg => update_project
+        prg_ptr_array(57)%ptr2prg => vizoris
+        prg_ptr_array(58)%ptr2prg => volops
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -451,6 +454,8 @@ contains
                 ptr2prg => stackops
             case('symaxis_search')
                 ptr2prg => symaxis_search
+            case('symmetry_test')
+                ptr2prg => symmetry_test
             case('tseries_track')
                 ptr2prg => tseries_track
             case('update_project')
@@ -524,6 +529,7 @@ contains
         write(*,'(A)') stack%name
         write(*,'(A)') stackops%name
         write(*,'(A)') symaxis_search%name
+        write(*,'(A)') symmetry_test%name
         write(*,'(A)') update_project%name
         write(*,'(A)') vizoris%name
         write(*,'(A)') volops%name
@@ -2627,7 +2633,7 @@ contains
     subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION
         call symaxis_search%new(&
-        &'symaxis_search',&                                                                                               ! name
+        &'symaxis_search',&                                                                                        ! name
         &'Search for symmetry axis',&                                                                              ! descr_short
         &'is a program for searching for the principal symmetry axis of a volume reconstructed in C1. &
         &The rotational transformation is applied to the oritype field in the project and the project &
@@ -2660,6 +2666,42 @@ contains
         ! computer controls
         call symaxis_search%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symaxis_search
+
+    subroutine new_symmetry_test
+        ! PROGRAM SPECIFICATION
+        call symmetry_test%new(&
+        &'symmetry_test',&                                                                                            ! name
+        &'Statistical test for symmetry',&                                                                            ! descr_short
+        &'is a program that implements a statistical test for point-group symmetry. &
+        &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry.',& ! descr long
+        &'simple_exec',&                                                                                              ! executable
+        &1, 1, 0, 5, 3, 1, 1, .false.)                                                                                ! # entries in each group
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call symmetry_test%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
+        & 'input volume e.g. vol_C1.mrc', .true., '')
+        ! parameter input/output
+        call symmetry_test%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call symmetry_test%set_input('srch_ctrls', 1, 'cn_start', 'num', 'Rotational symmetry order start index', 'Rotational symmetry order start index', 'give start index', .false., 1.)
+        call symmetry_test%set_input('srch_ctrls', 2, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
+        call symmetry_test%set_input('srch_ctrls', 3, 'center', 'binary', 'Center input volume', 'Center input volume by its &
+        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call symmetry_test%set_input('srch_ctrls', 4, 'dihedral', 'binary', 'Search for dihedral symmetries', 'Search for dihedral symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call symmetry_test%set_input('srch_ctrls', 5, 'platonic', 'binary', 'Search for platonic symmetries', 'Search for platonic symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! filter controls
+        call symmetry_test%set_input('filt_ctrls', 1, lp)
+        call symmetry_test%set_input('filt_ctrls', 2, hp)
+        call symmetry_test%set_input('filt_ctrls', 3, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        ! mask controls
+        call symmetry_test%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call symmetry_test%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_symmetry_test
 
     subroutine new_tseries_track
         ! PROGRAM SPECIFICATION

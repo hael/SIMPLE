@@ -33,15 +33,16 @@ type(import_particles_commander)     :: ximport_particles
 type(import_cavgs_commander)         :: ximport_cavgs
 
 ! STAR PROJECT SUPPORT
-type(exportstar_project_commander)   :: xexportstar_project
-type(importstar_project_commander)   :: ximportstar_project
-type(print_star_project_info_commander):: xprint_star_project_info
+type(exportstar_project_commander)      :: xexportstar_project
+type(importstar_project_commander)      :: ximportstar_project
+type(print_star_project_info_commander) :: xprint_star_project_info
 
 ! PART OF SP WORKFLOW
 type(make_pickrefs_commander)        :: xmake_pickrefs
 type(extract_commander)              :: xextract
 type(cluster_cavgs_commander)        :: xcluster_cavgs
 type(symaxis_search_commander)       :: xsymsrch
+type(symmetry_test_commander)        :: xsymtst
 type(postprocess_commander)          :: xpostprocess
 
 ! IMAGE PROCESSING
@@ -123,6 +124,7 @@ select case(prg)
         call ximport_cavgs%execute(cline)
 
     ! STAR SUPPORT
+
     case( 'exportstar_project' )
         call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
@@ -161,6 +163,11 @@ select case(prg)
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call xsymsrch%execute( cline )
+    case( 'symmetry_test' )
+        call cline%parse()
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
+        call xsymtst%execute( cline )
     case( 'postprocess' )
         call cline%parse()
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')

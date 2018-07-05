@@ -23,6 +23,7 @@ public :: volume_smat_commander
 public :: dock_volpair_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
+public :: symmetry_test_commander
 public :: make_pickrefs_commander
 private
 #include "simple_local_flags.inc"
@@ -63,6 +64,10 @@ type, extends(commander_base) :: symmetrize_map_commander
   contains
     procedure :: execute      => exec_symmetrize_map
 end type symmetrize_map_commander
+type, extends(commander_base) :: symmetry_test_commander
+  contains
+    procedure :: execute      => exec_symmetry_test
+end type symmetry_test_commander
 type, extends(commander_base) :: make_pickrefs_commander
 contains
     procedure :: execute      => exec_make_pickrefs
@@ -576,7 +581,7 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(ori)        :: symaxis
-        type(oris)       :: oshift, symaxis4write
+        type(oris)       :: symaxis4write
         type(sym)        :: syme
         real             :: shvec(3)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
@@ -585,11 +590,6 @@ contains
         call build%vol%read(params%vols(1))
         shvec = 0.
         if( params%center.eq.'yes' ) shvec = build%vol%center(params%cenlp,params%msk)
-        ! stash shifts
-        call oshift%new(1)
-        call oshift%set(1,'x',shvec(1))
-        call oshift%set(1,'y',shvec(2))
-        call oshift%set(1,'z',shvec(3))
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! init search object
@@ -612,7 +612,6 @@ contains
         endif
         ! destruct
         call symaxis%kill
-        call oshift%kill
         call symaxis4write%kill
         call syme%kill
         ! end gracefully
@@ -639,6 +638,31 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRIZE_MAP NORMAL STOP ****')
     end subroutine exec_symmetrize_map
+
+    subroutine exec_symmetry_test( self, cline )
+        use simple_symanalyzer
+        class(symmetry_test_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        real :: shvec(3)
+        ! init
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        ! center volume
+        call build%vol%read(params%vols(1))
+        shvec = 0.
+        if( params%center.eq.'yes' ) shvec = build%vol%center(params%cenlp,params%msk)
+        ! mask volume
+        call build%vol%mask(params%msk, 'soft')
+        ! run test
+        if( params%platonic .eq. 'yes' )then
+            call eval_platonic_point_groups(build%vol, params%hp, params%lp)
+        else
+            call eval_c_and_d_point_groups(build%vol, params%hp, params%lp, params%cn_start, params%cn_stop, params%dihedral .eq. 'yes')
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
+    end subroutine exec_symmetry_test
 
     !> for making picker references
     subroutine exec_make_pickrefs( self, cline )

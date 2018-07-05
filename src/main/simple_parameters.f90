@@ -30,6 +30,7 @@ type :: parameters
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: cure='no'
     character(len=3)      :: dev='no'             !< development flag for experimental code(yes|no){no}
+    character(len=3)      :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
     character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
     character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
@@ -59,6 +60,7 @@ type :: parameters
     character(len=3)      :: pad='no'
     character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
+    character(len=3)      :: platonic='no'        !< platonic symmetry or not(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
     character(len=3)      :: clsfrcs='no'
@@ -190,6 +192,8 @@ type :: parameters
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
+    integer :: cn_start=1          !< rotational symmetry order start index{1}
+    integer :: cn_stop=10          !< rotational symmetry order stop index{10}
     integer :: corner=0            !< corner size(in pixels){0}
     integer :: cube=0              !< side size(in pixels){0}
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
@@ -467,6 +471,7 @@ contains
         call check_carg('doalign',        self%doalign)
         call check_carg('dockmode',       self%dockmode)
         call check_carg('dev',            self%dev)
+        call check_carg('dihedral',       self%dihedral)
         call check_carg('dopca',          self%dopca)
         call check_carg('doprint',        self%doprint)
         call check_carg('dryrun',         self%dryrun)
@@ -590,6 +595,8 @@ contains
         call check_iarg('boxconvsz',      self%boxconvsz)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
+        call check_iarg('cn_start',       self%cn_start)
+        call check_iarg('cn_stop',        self%cn_stop)
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
