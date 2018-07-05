@@ -505,7 +505,6 @@ contains
         end select
     end subroutine add_single_movie
 
-    ! subroutine add_movies( self, filetab, smpd, kv, cs, fraca, phaseplate )
     subroutine add_movies( self, filetab, ctfvars )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: filetab

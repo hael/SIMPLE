@@ -67,6 +67,7 @@ type :: ori
     procedure          :: ori2chash
     procedure          :: chash2ori
     procedure          :: get_ctfvars
+    procedure          :: set_ctfvars
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print_ori
@@ -594,6 +595,33 @@ contains
         ctfvars%angast  = self%get('angast')
         ctfvars%phshift = self%get('phshift')
     end function get_ctfvars
+
+    subroutine set_ctfvars(self, ctfvars)
+        class(ori),       intent(inout) :: self
+        class(ctfparams), intent(in)    :: ctfvars
+        character(len=:), allocatable :: ctfstr, phplate
+        call self%set('smpd',  ctfvars%smpd)
+        select case( ctfvars%ctfflag )
+            case(CTFFLAG_NO)
+                call self%set('ctf', 'no')
+            case(CTFFLAG_YES)
+                call self%set('ctf', 'yes')
+            case(CTFFLAG_FLIP)
+                call self%set('ctf', 'flip')
+        end select
+        call self%set('cs',    ctfvars%cs)
+        call self%set('kv',    ctfvars%kv)
+        call self%set('fraca', ctfvars%fraca)
+        if( ctfvars%l_phaseplate )then
+            call self%set('phaseplate', 'yes')
+            call self%set('phshift', ctfvars%phshift)
+        else
+            call self%set('phaseplate', 'no')
+        endif
+        call self%set('dfx', ctfvars%dfx)
+        call self%set('dfy', ctfvars%dfy)
+        call self%set('angast', ctfvars%angast)
+    end subroutine set_ctfvars
 
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )

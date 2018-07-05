@@ -216,6 +216,8 @@ contains
     subroutine exec_cluster2D_stream_distr( self, cline )
         use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander
         use simple_image,                  only: image
+        use simple_oris,                   only: oris
+        use simple_ori,                    only: ori
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         character(len=:), allocatable :: WORK_PROJFILE
@@ -231,6 +233,8 @@ contains
         type(cmdline)                       :: cline_cluster2D, cline_make_cavgs
         type(sp_project)                    :: orig_proj, work_proj, stream_proj
         type(ctfparams)                     :: ctfvars
+        type(oris)                          :: os_stk
+        type(ori)                           :: o_stk
         character(LONGSTRLEN),  allocatable :: spproj_list(:), stk_list(:)
         character(len=:),       allocatable :: spproj_list_fname, stk
         character(len=STDLEN)               :: str_iter, refs_glob
@@ -340,26 +344,32 @@ contains
         call cline_cluster2D%set('box',      real(box))
         call cline_cluster2D%set('msk',      real(msk))
         call stream_proj%kill
-        ! assemble work project file
+        ! prep for new stacks
         allocate(stk_list(n_spprojs))
+        call os_stk%new(n_spprojs) ! for original project stktab import
         do iproj=1,n_spprojs
             call stream_proj%read(spproj_list(iproj))
+            o_stk           = stream_proj%os_stk%get_ori(1)
+            ctfvars         = stream_proj%get_ctfparams('ptcl2D', 1)
             stk             = stream_proj%get_stkname(1)
             stk_list(iproj) = trim(stk)
+            call o_stk%set_ctfvars(ctfvars)
+            call os_stk%set_ori(iproj, o_stk)
+            call os_stk%print_(iproj)
         enddo
-        call scale_stks( stk_list )
-        do iproj=1,n_spprojs
-            call stream_proj%read(spproj_list(iproj))
-            ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
-            ! updates original project, assumed empty
-            call orig_proj%add_stk(stk_list(iproj), ctfvars)
-            ! update current project
-            if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
-            call work_proj%add_stk(stk_list(iproj), ctfvars)
-        enddo
-        call work_proj%write
+        ! updates original project
+        call write_filetable('stktab.txt', stk_list)
+        call orig_proj%add_stktab('stktab.txt', os_stk)
         call orig_proj%write
         call orig_proj%kill
+        ! scale & updates stack list
+        call scale_stks( stk_list )
+        ! updates current project
+        call write_filetable('stktab.txt', stk_list)
+        call os_stk%set_all2single('smpd', smpd)
+        call work_proj%add_stktab('stktab.txt', os_stk)
+        call work_proj%write
+        call del_file('stktab.txt')
         ! MAIN LOOP
         nptcls_glob    = work_proj%get_nptcls()
         ncls_glob      = nint(real(nptcls_glob) / real(params%nptcls_per_cls))
@@ -410,9 +420,9 @@ contains
             endif
             ! wait for new images if 2D run is considered converged
             tnow = simple_gettime()
+            if( wait_for_new_ptcls )write(*,'(A,A)')'>>> WAITING FOR NEW PARTICLES ',cast_time_char(tnow)
             do while( wait_for_new_ptcls )
                 if( is_timeout(tnow) )exit
-                write(*,'(A,A)')'>>> WAITING FOR NEW PARTICLES ',cast_time_char(simple_gettime())
                 call simple_sleep(WAIT_WATCHER)
                 if( is_file_open(spproj_list_fname) )cycle
                 if( nlines(spproj_list_fname) > n_spprojs )wait_for_new_ptcls = .false.
