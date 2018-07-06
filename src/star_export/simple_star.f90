@@ -57,7 +57,7 @@ contains
     subroutine readfile(self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(in)       :: filename
+        character(len=*), intent(inout)       :: filename
     end subroutine readfile
 
     function get_ndatalines(self) result(n)
@@ -91,7 +91,7 @@ contains
     end function get_nrecs_per_line
     subroutine read( self, fname )
         class(star_project), intent(inout)     :: self
-        character(len=*), optional, intent(in) :: fname
+        character(len=*), optional, intent(inout) :: fname
     end subroutine read
 
 
@@ -104,15 +104,15 @@ contains
     subroutine export_micrographs (self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(in)       :: filename
+        character(len=*), intent(inout)       :: filename
         character(len=KEYLEN),allocatable      :: labels(:)
         labels=(/ 'MicrographNameNoDW' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
     end subroutine export_micrographs
     subroutine import_micrographs (self,  sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(in) :: filename
+        character(len=*), intent(inout) :: filename
     end subroutine import_micrographs
 
     !! Motion Correct: Simple/Unblur/MotionCorr2
@@ -127,18 +127,18 @@ contains
     subroutine export_motion_corrected_micrographs (self,  sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(in) :: filename
+        character(len=*), intent(inout) :: filename
         character(len=KEYLEN),allocatable:: labels(:)
         labels=(/  &
 'MicrographNameNoDW',&
 'MicrographName    '/)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_motion_corrected_micrographs
     subroutine import_motion_corrected_micrographs (self,  sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(in) :: filename
+        character(len=*), intent(inout) :: filename
     end subroutine import_motion_corrected_micrographs
 
     !! CTF Estimation: Simple/GCTF/CTFFIND4
@@ -176,7 +176,7 @@ contains
             'DetectorPixelSize  ',&
             'CtfFigureOfMerit   ',&
             'CtfMaxResolution   ' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
 
     end subroutine export_ctf_estimation
@@ -208,7 +208,7 @@ contains
 'ClassNumber          ',&
 'AutopickFigureOfMerit',&
 'AnglePsi             ' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_autopick
     subroutine import_autopick (self, sp, filename)
@@ -287,7 +287,7 @@ contains
 'MaxValueProbDistribution ',&
 'NrOfSignificantSamples   ',&
 'GroupName                ' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_extract_doseweightedptcls
     subroutine import_extract_doseweightedptcls (self, sp, filename)
@@ -372,7 +372,7 @@ contains
 'NrOfFrames               ',&
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D
     subroutine import_class2D (self, sp, filename)
@@ -446,7 +446,7 @@ contains
 'MaxValueProbDistribution ',&
 'NrOfSignificantSamples   ',&
 'GroupName                ' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D_select
     subroutine import_class2D_select (self, sp, filename)
@@ -588,7 +588,7 @@ contains
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage',&
 'RandomSubset             ' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_init3Dmodel
 
@@ -668,7 +668,7 @@ contains
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage',&
 'RandomSubset             ' /)
-        call self%doc%write(trim(filename), sp, labels)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_refine3D
     subroutine import_refine3D (self, sp, filename)
@@ -755,7 +755,7 @@ labels=(/ &
 'NrOfFrames               ',&
 'AverageNrOfFrames        ',&
 'MovieFramesRunningAverage' /)
-call self%doc%write(trim(filename), sp, labels)
+call self%doc%write(filename, sp, labels)
 
     end subroutine export_shiny3D
     subroutine import_shiny3D (self, sp, filename)

@@ -27,7 +27,7 @@ type stardoc
     type(starframes), allocatable      :: frames(:)
     integer,public   :: num_data_elements    = 0
     integer,public   :: num_data_lines       = 0
-    integer          :: num_frames           = 0  
+    integer          :: num_frames           = 0
     integer          :: num_frame_elements   = 0
     integer          :: funit
     logical          :: l_open               =.false.
@@ -54,7 +54,7 @@ end type stardoc
 interface stardoc
     module procedure constructor
 end interface stardoc
-integer, parameter :: MIN_STAR_NBYTES = 10 
+integer, parameter :: MIN_STAR_NBYTES = 10
 
 enum, bind(C) ! STAR_FORMAT
     enumerator :: STAR_MOVIES=1
@@ -111,7 +111,7 @@ contains
         DebugPrint ' simple_stardoc::new initiated'
     end subroutine new
 
-    subroutine open(self, filename) 
+    subroutine open(self, filename)
         class(stardoc), intent(inout) :: self
         character(len=*),intent(inout) :: filename
         integer :: io_stat, tmpunit,filesz
@@ -123,7 +123,7 @@ contains
             &status='UNKNOWN', form='UNFORMATTED', iostat=io_stat)
         if(io_stat/=0)call fileiochk('star_doc ; open '//trim(filename), io_stat)
         self%funit  = tmpunit
-        self%l_open = .true. 
+        self%l_open = .true.
         self%existence =.true.
 
         ! check size
@@ -150,7 +150,7 @@ contains
             self%l_open = .false.
         end if
     end subroutine close
-    subroutine read_header(self) 
+    subroutine read_header(self)
         class(stardoc), intent(inout) :: self
         integer          :: n,ios,lenstr
         character(len=LINE_MAX_LEN) :: line ! 8192
@@ -191,7 +191,7 @@ contains
                 if (lenstr == 0 )cycle ! empty line
                 if ( line(1:5) == "data_")then !! e.g. data_
                     DebugPrint " Found STAR 'data_*' in header ", line
-                    !! Quick string length comparison 
+                    !! Quick string length comparison
                     if(lenstr == len_trim("data_pipeline_general"))then
                         print *," Found STAR 'data_pipeline_general' header -- Not supported "
                         exit
@@ -272,7 +272,7 @@ contains
         endif
     end subroutine read_data_labels
 
-    subroutine  write(self, sp, vars, filename)
+    subroutine  write(self, filename, sp, vars)
         use simple_sp_project
         class(stardoc), intent(inout) :: self
         class(sp_project), intent(inout) :: sp
@@ -285,7 +285,7 @@ contains
         real     :: statef, defocus
 
         if(self%l_open)call self%close
-        call fopen(self%funit, trim(filename) ,stat=io_stat)
+        call fopen(self%funit, trim(filename) ,iostat=io_stat)
         if(io_stat/=0) call fileiochk("In stardoc; write; unable to open "//trim(filename))
         write(self%funit,'(A)') ""
         write(self%funit,'(A)') "data_"
@@ -293,7 +293,7 @@ contains
         write(self%funit,'(A)') "loop_"
 
         do i=1, self%num_data_elements
-            write(starfd,'("_rln",A,3x,"#",I0)') trim(self%param_labels(i)), i
+            write(self%funit,'("_rln",A,3x,"#",I0)') trim(self%param_labels(i)), i
         end do
         do i=1, self%num_frames
             statef = self%frames(i)%state
@@ -316,10 +316,9 @@ contains
                     &" "//real2str(self%get_r4(i,"fraca"))//&
                     &" 10000"//&
                     &" "//real2str(self%get_r4(i,"smpd"))
-                write(starfd,'(A)') starline
+                write(self%funit,'(A)') starline
             end if
         end do
-        call fclose(starfd)
     end subroutine write
 
     subroutine read(self, filename)
@@ -375,7 +374,7 @@ contains
             else if (line(1:4) == "_rln")then
                 endPos = firstBlank(line)
                 if(endPos <= 5) call simple_stop(" Star file error "//trim(line))
-                call self%datatab%push(line(5:endPos), "#"//int2str(n))
+                !call self%datatab%push(line(5:endPos), "#"//int2str(n))
                 n = n + 1
             else
                 ! Data line
@@ -401,7 +400,7 @@ contains
         integer :: i
         self%num_data_elements = size(strarr)
         do i=1, self%num_data_elements
-            call self%datatab%push(strarr(i), int2str(i))
+            !call self%datatab%push(strarr(i), int2str(i))
         end do
         !allocate(self%data(self%num_data_elements))
         !do i=1, self%num_data_elements

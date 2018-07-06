@@ -36,8 +36,10 @@ io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
 
 
 print *,' Testing star_dict'
-call test_stardoc
+
 call sdict%print_star_dict()
+
+! call test_stardoc
 
 print *,' Testing directory star_test'
 call system('ls '//trim(adjustl(simple_testbench))//'/star_test')

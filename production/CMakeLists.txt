@@ -82,7 +82,8 @@ if(NOT USE_OPENMP)
  list(REMOVE_ITEM TESTDIRS "tests/test_omp")
 endif()
 if(NOT USE_MPI)
- list(REMOVE_ITEM TESTDIRS "tests/test_mpi")
+  list(REMOVE_ITEM TESTDIRS "tests/test_mpi"
+    "tests/test_mpimp_benchmark")
 endif()
 
 # if(USE_OPENACC)
