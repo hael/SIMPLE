@@ -13,8 +13,8 @@ private
 
 type sym_stats
     character(len=:), allocatable :: str
-    real,             allocatable :: fsc(:), fsc_avg(:), fsc_avg_anti(:)
-    real :: cc, cc_avg, cc_avg_anti, score
+    real,             allocatable :: fsc(:)
+    real :: cc, cc_avg, score
 end type sym_stats
 
 contains
@@ -77,12 +77,12 @@ contains
         call symobj%kill
     end subroutine symmetrize_map
 
-    subroutine eval_platonic_point_groups( vol_in, hp, lp )
+    subroutine eval_platonic_point_groups( vol_in, msk, hp, lp )
         class(projector), intent(inout) :: vol_in
-        real,             intent(in)    :: hp, lp
+        real,             intent(in)    :: msk, hp, lp
         type(sym_stats), allocatable :: pgrps(:)
         integer, parameter :: NGRPS = 11
-        integer            :: sz, isym, inds(3), iisym
+        integer            :: filtsz, isym, inds(3), iisym
         real               :: scores(3)
         ! prepare point-group stats object
         allocate(pgrps(NGRPS))
@@ -98,39 +98,20 @@ contains
         pgrps(10)%str = 'o'
         pgrps(11)%str = 'i'
         ! gather stats
-        call eval_point_groups(vol_in, hp, lp, pgrps)
-        ! calculate cc-based scores and anti-scores
-        pgrps(9)%cc_avg       = pgrps(1)%cc + pgrps(2)%cc  + pgrps(5)%cc  + pgrps(9)%cc / 4.
-        pgrps(9)%cc_avg_anti  = pgrps(3)%cc + pgrps(4)%cc  + pgrps(6)%cc  + pgrps(7)%cc +&
-                              & pgrps(8)%cc + pgrps(10)%cc + pgrps(11)%cc / 7.
-        pgrps(9)%score        = pgrps(9)%cc_avg / abs(pgrps(9)%cc_avg_anti)
-        scores(1)             = pgrps(9)%score
-        pgrps(10)%cc_avg      = pgrps(1)%cc + pgrps(2)%cc  + pgrps(3)%cc  + pgrps(5)%cc +&
-                              & pgrps(6)%cc + pgrps(7)%cc  + pgrps(9)%cc  + pgrps(10)%cc / 8.
-        pgrps(10)%cc_avg_anti = pgrps(4)%cc + pgrps(8)%cc  + pgrps(11)%cc / 3.
-        pgrps(10)%score       = pgrps(10)%cc_avg / abs(pgrps(10)%cc_avg_anti)
-        scores(2)             = pgrps(10)%score
-        pgrps(11)%cc_avg      = pgrps(1)%cc + pgrps(2)%cc  + pgrps(4)%cc  + pgrps(5)%cc +&
-                              & pgrps(6)%cc + pgrps(8)%cc  + pgrps(9)%cc  + pgrps(11)%cc / 8.
-        pgrps(11)%cc_avg_anti = pgrps(3)%cc + pgrps(7)%cc  + pgrps(10)%cc / 3.
-        pgrps(11)%score       = pgrps(11)%cc_avg / abs(pgrps(11)%cc_avg_anti)
-        scores(3)             = pgrps(11)%score
-        ! calculate fsc-based scores and anti-scores
-        sz = size(pgrps(1)%fsc)
-        do isym=9,11
-            if( allocated(pgrps(isym)%fsc_avg) )      deallocate(pgrps(isym)%fsc_avg)
-            if( allocated(pgrps(isym)%fsc_avg_anti) ) deallocate(pgrps(isym)%fsc_avg_anti)
-            allocate(pgrps(isym)%fsc_avg(sz), pgrps(isym)%fsc_avg_anti(sz), source=0.)
-        end do
-        pgrps(9)%fsc_avg       = pgrps(1)%fsc + pgrps(2)%fsc  + pgrps(5)%fsc  + pgrps(9)%fsc / 4.
-        pgrps(9)%fsc_avg_anti  = pgrps(3)%fsc + pgrps(4)%fsc  + pgrps(6)%fsc  + pgrps(7)%fsc +&
-                               & pgrps(8)%fsc + pgrps(10)%fsc + pgrps(11)%fsc / 7.
-        pgrps(10)%fsc_avg      = pgrps(1)%fsc + pgrps(2)%fsc  + pgrps(3)%fsc  + pgrps(5)%fsc +&
-                               & pgrps(6)%fsc + pgrps(7)%fsc  + pgrps(9)%fsc  + pgrps(10)%fsc / 8.
-        pgrps(10)%fsc_avg_anti = pgrps(4)%fsc + pgrps(8)%fsc  + pgrps(11)%fsc / 3.
-        pgrps(11)%fsc_avg      = pgrps(1)%fsc + pgrps(2)%fsc  + pgrps(4)%fsc  + pgrps(5)%fsc +&
-                               & pgrps(6)%fsc + pgrps(8)%fsc  + pgrps(9)%fsc  + pgrps(11)%fsc / 8.
-        pgrps(11)%fsc_avg_anti = pgrps(3)%fsc + pgrps(7)%fsc  + pgrps(10)%fsc / 3.
+        call eval_point_groups(vol_in, msk, hp, lp, pgrps)
+        ! calculate cc-based scores
+        pgrps(9)%cc_avg  = pgrps(1)%cc + pgrps(2)%cc  + pgrps(5)%cc  + pgrps(9)%cc / 4.
+        pgrps(9)%score   = max(0.,median(pgrps(9)%fsc))
+        scores(1)        = pgrps(9)%score
+        pgrps(10)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(3)%cc  + pgrps(5)%cc +&
+                         & pgrps(6)%cc + pgrps(7)%cc  + pgrps(9)%cc  + pgrps(10)%cc / 8.
+        pgrps(10)%score  = max(0.,median(pgrps(10)%fsc))
+
+        scores(2)        = pgrps(10)%score
+        pgrps(11)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(4)%cc  + pgrps(5)%cc +&
+                         & pgrps(6)%cc + pgrps(8)%cc  + pgrps(9)%cc  + pgrps(11)%cc / 8.
+        pgrps(11)%score  = max(0.,median(pgrps(11)%fsc))
+        scores(3)        = pgrps(11)%score
         ! produce ranked output
         inds(1) = 9
         inds(2) = 10
@@ -139,25 +120,26 @@ contains
         call reverse(inds)
         do isym=1,3
             iisym = inds(isym)
-            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:', pgrps(iisym)%str,&
-            &'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg
+            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym,&
+            &'POINT-GROUP:', pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:',&
+            &pgrps(iisym)%cc_avg
         end do
     end subroutine eval_platonic_point_groups
 
-    subroutine eval_c_and_d_point_groups( vol_in, hp, lp, cn_start, cn_stop, dihedral )
+    subroutine eval_c_and_d_point_groups( vol_in, msk, hp, lp, cn_start, cn_stop, dihedral )
         class(projector), intent(inout) :: vol_in
-        real,             intent(in)    :: hp, lp
+        real,             intent(in)    :: msk, hp, lp
         integer,          intent(in)    :: cn_start, cn_stop
         logical,          intent(in)    :: dihedral
         type(sym_stats), allocatable    :: pgrps(:)
         logical, allocatable :: scoring_groups(:)
         integer, allocatable :: inds(:)
-        real,    allocatable :: scores(:)
+        real,    allocatable :: scores(:), res(:)
         character(len=3)     :: subgrp
         type(sym) :: symobj
-        integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring
-        integer   :: nanti, isym, jsym, isub, nsubs, sz, iisym
-        real      :: cc_sum
+        integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j
+        integer   :: isym, jsym, ksym, isub, nsubs, filtsz, iisym, fnr
+        real      :: cc_sum, smpd
         ! count # symmetries
         ncsyms = cn_stop - cn_start + 1
         if( dihedral )then
@@ -180,16 +162,19 @@ contains
             end do
             write(*,'(a)') '>>> TESTING DIHEDRAL SYMMETRIES'
         endif
+        ! get resolution array and smpd for FSC analysis
+        res    = vol_in%get_res()
+        smpd   = vol_in%get_smpd()
+        filtsz = vol_in%get_filtsz()
         ! gather stats
-        call eval_point_groups(vol_in, hp, lp, pgrps)
+        call eval_point_groups(vol_in, msk, hp, lp, pgrps)
         allocate(scoring_groups(nsyms), inds(nsyms), scores(nsyms))
         scoring_groups = .false.
-        sz = size(pgrps(1)%fsc)
         do isym=1,nsyms
             ! make point-group object
             call symobj%new(pgrps(isym)%str)
             nsubs = symobj%get_nsubgrp()
-            ! identify scoring groups (and anti-scoring groups)
+            ! identify scoring groups
             ! all subgroups of the group under consideration are part of the scoring group
             scoring_groups = .false.
             do isub=1,nsubs
@@ -198,27 +183,16 @@ contains
                     if( trim(subgrp) .eq. trim(pgrps(jsym)%str) ) scoring_groups(jsym) = .true.
                 end do
             end do
-            ! calculate average fscs and ccs and their antis
-            if( allocated(pgrps(isym)%fsc_avg) )      deallocate(pgrps(isym)%fsc_avg)
-            if( allocated(pgrps(isym)%fsc_avg_anti) ) deallocate(pgrps(isym)%fsc_avg_anti)
-            allocate(pgrps(isym)%fsc_avg(sz), pgrps(isym)%fsc_avg_anti(sz), source=0.)
-            pgrps(isym)%cc_avg      = 0.
-            pgrps(isym)%cc_avg_anti = 0.
+            pgrps(isym)%cc_avg = 0.
             do jsym=1,nsyms
                 if( scoring_groups(jsym) )then
                     pgrps(isym)%cc_avg  = pgrps(isym)%cc_avg  + pgrps(jsym)%cc
-                    pgrps(isym)%fsc_avg = pgrps(isym)%fsc_avg + pgrps(jsym)%fsc
-                else
-                    pgrps(isym)%cc_avg_anti  = pgrps(isym)%cc_avg_anti  + pgrps(jsym)%cc
-                    pgrps(isym)%fsc_avg_anti = pgrps(isym)%fsc_avg_anti + pgrps(jsym)%fsc
                 endif
             end do
-            nscoring = count(scoring_groups)
-            nanti    = nsyms - nscoring
-            pgrps(isym)%cc_avg      = pgrps(isym)%cc_avg / real(nscoring)
-            pgrps(isym)%cc_avg_anti = pgrps(isym)%cc_avg_anti / real(nanti)
-            pgrps(isym)%score       = pgrps(isym)%cc_avg / abs(pgrps(isym)%cc_avg_anti)
-            scores(isym)            = pgrps(isym)%score
+            nscoring           = count(scoring_groups)
+            pgrps(isym)%cc_avg = pgrps(isym)%cc_avg / real(nscoring)
+            pgrps(isym)%score  = max(0.,median(pgrps(isym)%fsc))
+            scores(isym)       = pgrps(isym)%score
         end do
         ! produce ranked output
         inds = (/(isym,isym=1,nsyms)/)
@@ -226,14 +200,24 @@ contains
         call reverse(inds)
         do isym=1,nsyms
             iisym = inds(isym)
-            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:', pgrps(iisym)%str,&
-            &'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg
+            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
+            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg
         end do
+        call fopen(fnr, status='replace', file='symmetry_test_fscs.txt', action='write')
+        do isym=1,nsyms
+            iisym = inds(isym)
+            write(fnr,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
+            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg
+            do j=1,size(res)
+               write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', pgrps(iisym)%fsc(j)
+            end do
+        end do
+        call fclose(fnr)
     end subroutine eval_c_and_d_point_groups
 
-    subroutine eval_point_groups( vol_in, hp, lp, pgrps )
+    subroutine eval_point_groups( vol_in, msk, hp, lp, pgrps )
         class(projector), intent(inout) :: vol_in
-        real,             intent(in)    :: hp, lp
+        real,             intent(in)    :: msk, hp, lp
         type(sym_stats),  intent(inout) :: pgrps(:)
         type(projector) :: vol_pad
         type(image)     :: rovol_pad, rovol, vol_asym_aligned2axis, vol_sym
@@ -254,7 +238,7 @@ contains
         ! make outputs
         call vol_sym%new(ldim, smpd)
         call vol_asym_aligned2axis%new(ldim, smpd)
-        filtsz = vol_sym%get_filtsz()
+        filtsz = vol_in%get_filtsz()
         ! intermediate vols
         call rovol%new(ldim, smpd)
         call rovol_pad%new(ldim_pd, smpd)
@@ -269,14 +253,18 @@ contains
             ! rotate input (non-symmetrized) volume to symmetry axis
             call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
             call vol_asym_aligned2axis%write('vol_c1_aligned_'//trim(pgrps(igrp)%str)//'.mrc')
+            call vol_asym_aligned2axis%mask(msk, 'soft')
             ! generate symmetrized volume
             call symaverage
             call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
+            call vol_sym%mask(msk, 'soft')
             ! calculate a correlation coefficient
             pgrps(igrp)%cc = vol_sym%corr(vol_asym_aligned2axis, lp_dyn=lp, hp_dyn=hp)
             ! calculate FSC
             if( allocated(pgrps(igrp)%fsc) ) deallocate(pgrps(igrp)%fsc)
-            allocate(pgrps(igrp)%fsc(filtsz))
+            allocate(pgrps(igrp)%fsc(filtsz), source=0.)
+            call vol_sym%fft
+            call vol_asym_aligned2axis%fft
             call vol_sym%fsc(vol_asym_aligned2axis, pgrps(igrp)%fsc)
         end do
         ! destruct
