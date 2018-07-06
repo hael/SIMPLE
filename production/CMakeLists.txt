@@ -85,6 +85,7 @@ if(NOT USE_MPI)
   list(REMOVE_ITEM TESTDIRS "tests/test_mpi"
     "tests/test_mpimp_benchmark")
 endif()
+ list(REMOVE_ITEM TESTDIRS "tests/test_mpimp_benchmark")
 
 # if(USE_OPENACC)
 #   message(STATUS "Searching for BLAS to test OpenACC")

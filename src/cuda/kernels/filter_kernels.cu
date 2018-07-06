@@ -1,6 +1,9 @@
 
-#include "cuda.h"
+
 #include <stdio.h>
+#include "cuda.h"
+#include "cuda_runtime_api.h"
+
 
 __global__ void gauss3DFTconvolve(float *dest, const float *src, const int *matSize, const float *s, const float factor )
 {
@@ -26,33 +29,33 @@ __global__ void gauss3DFTconvolve(float *dest, const float *src, const int *matS
 
 }
 
-/* __global__ void gaussElementwiseKernel( */
-/*       const float s, const float *u, const float *v, const float *w, float *z, int N ) */
-/* { */
-/*   const double TWOPISQ = 19.739208802178716; */
-/*   unsigned long int i = threadIdx.x + blockIdx.x * blockDim.x; */
-/*   if ( i < N ){ */
-/*     double x =  (u[i] ^ 2 + v[i] ^ 2 + w[i] ^ 2) * (s^2); */
-/*     z[i] = (float) exp( -( TWOPISQ * x) ); */
-/*    } */
-/* } */
+__global__ void gaussElementwiseKernel(
+     const float *u, const float *v, const float *w, float *z,  const float s, int N )
+{
+  const double TWOPISQ = 19.739208802178716;
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+  if ( i < N ){
+    double x =  (u[i]*u[i] + v[i]* v[i] + w[i]*w[i]) * (s*s);
+    z[i] = (float) exp( -( TWOPISQ * x) );
+   }
+}
 
 
 
 extern "C"
 {
-/* #define GAUSSKERNEL gausskernel_ */
-/*   void  gausskernel(float *A, float *B, float *C, float *Z, float *s, dim3 *dimGrid, dim3 *dimBlk, */
-/*                    int N, cudaStream_t *stream) */
-/*   { */
-/*     gaussElementwiseKernel<<<*dimGrid, *dimBlk, 0, *stream>>>(*s,A, B, C, Z, N); */
-/*   } */
+#define GAUSSKERNELELEMENTWISE gausskernelelementwise_
+void  gausskernelelementwise(float *A, float *B, float *C, float *Z, float *s, dim3 *dimGrid, dim3 *dimBlk,
+                  int N, cudaStream_t *stream)
+{
+  gaussElementwiseKernel<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, C, Z,*s, N);
+}
 #define GAUSSCONVOLUTION3D gaussconvolution3d_
-  void  gaussconvolution3d(float *A, float *B,  float *sigma, dim3 *dimGrid, dim3 *dimBlk,
-                   int* N, cudaStream_t *stream)
-  {
-    gauss3DFTconvolve<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, N, sigma, 1.0);
-  }
+void  gaussconvolution3d(float *A, float *B,  float *sigma, dim3 *dimGrid, dim3 *dimBlk,
+                         int* N, cudaStream_t *stream)
+{
+  gauss3DFTconvolve<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, N, sigma, 1.0);
+}
 
 
 }

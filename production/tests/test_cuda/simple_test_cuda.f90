@@ -63,6 +63,8 @@ program simple_test_cuda
 
 
     !  call test_FortCUDA_kernels(0.)
+    call test_fortran_mul1dComplex_kernels
+    call test_fortran_squaremul2dComplex_kernels
     call test_fortran_mul2dComplex_kernels
 
     ! #if defined(PGI)
