@@ -701,8 +701,9 @@ select case(prg)
         keys_required(1) = 'stk'
         keys_required(2) = 'stk2'
         keys_required(3) = 'smpd'
+        keys_required(4) = 'msk'
         keys_optional(1) = 'lp'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:1))
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
         call xstk_corr%execute(cline)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS

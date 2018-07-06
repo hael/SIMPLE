@@ -299,14 +299,22 @@ contains
     subroutine exec_stk_corr( self, cline )
         class(stk_corr_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer          :: i
+        type(parameters)     :: params
+        type(builder)        :: build
+        logical, allocatable :: l_mask(:,:,:)
+        integer :: i
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        build%img = 1.
+        call build%img%mask(params%msk, 'hard')
+        l_mask = build%img%bin2logical()
         do i=1,params%nptcls
             call build%img%read(params%stk, i)
             call build%img_copy%read(params%stk2, i)
             if( cline%defined('lp') )then
+                call build%img%norm
+                call build%img_copy%norm
+                call build%img%mask(params%msk, 'soft')
+                call build%img_copy%mask(params%msk, 'soft')
                 call build%img%fft
                 call build%img_copy%fft
                 call build%img%bp(0.,params%lp)
@@ -314,7 +322,7 @@ contains
                 call build%img%ifft
                 call build%img_copy%ifft
             endif
-            write(*,'(I6,F8.3)')i,build%img%corr(build%img_copy)
+            write(*,'(I6,F8.3)')i,build%img%real_corr(build%img_copy, l_mask)
         enddo
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')

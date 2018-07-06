@@ -37,6 +37,7 @@ contains
         use simple_strategy2D_greedy,     only: strategy2D_greedy
         use simple_strategy2D_neigh,      only: strategy2D_neigh
         use simple_strategy2D_stochastic, only: strategy2D_stochastic
+        use simple_strategy2D_stochasticneigh, only: strategy2D_stochasticneigh
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         integer, allocatable  :: prev_pops(:), pinds(:), w_pinds(:)
@@ -221,7 +222,11 @@ contains
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. update_cnt == 1 )then
                             allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
-                            allocate(strategy2D_stochastic      :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            if(params_glob%refine.eq.'stochneigh')then
+                                allocate(strategy2D_stochasticneigh :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            else
+                                allocate(strategy2D_stochastic      :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            endif
                         endif
                         if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
                     endif
