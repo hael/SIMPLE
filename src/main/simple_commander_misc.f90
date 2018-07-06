@@ -22,6 +22,7 @@ public :: print_fsc_commander
 public :: print_magic_boxes_commander
 public :: res_commander
 public :: shift_commander
+public :: stk_corr_commander
 private
 #include "simple_local_flags.inc"
 
@@ -57,6 +58,11 @@ type, extends(commander_base) :: shift_commander
   contains
     procedure :: execute       => exec_shift
 end type shift_commander
+type, extends(commander_base) :: stk_corr_commander
+  contains
+    procedure :: execute       => exec_stk_corr
+end type stk_corr_commander
+
 
 contains
 
@@ -288,5 +294,31 @@ contains
         call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), build%spproj, build%spproj_field, [1,params%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
+
+    !> for converting between SPIDER and MRC formats
+    subroutine exec_stk_corr( self, cline )
+        class(stk_corr_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        integer          :: i
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        do i=1,params%nptcls
+            call build%img%read(params%stk, i)
+            call build%img_copy%read(params%stk2, i)
+            if( cline%defined('lp') )then
+                call build%img%fft
+                call build%img_copy%fft
+                call build%img%bp(0.,params%lp)
+                call build%img_copy%bp(0.,params%lp)
+                call build%img%ifft
+                call build%img_copy%ifft
+            endif
+            write(*,'(I6,F8.3)')i,build%img%corr(build%img_copy)
+        enddo
+        ! end gracefully
+        call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
+    end subroutine exec_stk_corr
+
 
 end module simple_commander_misc

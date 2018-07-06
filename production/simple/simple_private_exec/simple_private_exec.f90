@@ -70,6 +70,7 @@ type(cluster_smat_commander)         :: xcluster_smat
 type(intgpeaks_commander)            :: xintgpeaks
 type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
+type(stk_corr_commander)             :: xstk_corr
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(rotmats2oris_commander)              :: xrotmats2oris
@@ -695,6 +696,14 @@ select case(prg)
         keys_required(3) = 'box'
         call cline%parse_oldschool(keys_required(:3))
         call xres%execute(cline)
+    case( 'stk_corr' )
+        ! for checking the low-pass resolution limit for a given Fourier index
+        keys_required(1) = 'stk'
+        keys_required(2) = 'stk2'
+        keys_required(3) = 'smpd'
+        keys_optional(1) = 'lp'
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:1))
+        call xstk_corr%execute(cline)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
 

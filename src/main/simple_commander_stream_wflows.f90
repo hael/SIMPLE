@@ -355,7 +355,6 @@ contains
             stk_list(iproj) = trim(stk)
             call o_stk%set_ctfvars(ctfvars)
             call os_stk%set_ori(iproj, o_stk)
-            call os_stk%print_(iproj)
         enddo
         ! updates original project
         call write_filetable('stktab.txt', stk_list)
@@ -399,7 +398,7 @@ contains
             wait_for_new_ptcls    = .false.
             if( cline_cluster2D%defined('converged') )then
                 wait_for_new_ptcls = (cline_cluster2D%get_carg('converged').eq.'yes')
-                call cline_cluster2D%set('converged','no')
+                call cline_cluster2D%delete('converged')
             endif
             ! update
             call work_proj%kill
@@ -466,7 +465,7 @@ contains
             if( work_proj_has_changed )call work_proj%write()
             ! update original project
             if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
-                write(*,*)'UPDATING PROJECT FILE: ', trim(params%projfile)
+                write(*,'(A,A)')'>>> UPDATING PROJECT FILE ', trim(params%projfile)
                 call update_orig_proj
                 origproj_time = simple_gettime()
             endif

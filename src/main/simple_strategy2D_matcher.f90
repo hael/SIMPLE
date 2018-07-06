@@ -33,10 +33,10 @@ contains
         use simple_strategy2D3D_common,   only: set_bp_range2d
         use simple_strategy2D,            only: strategy2D
         use simple_strategy2D_srch,       only: strategy2D_spec
+        use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
         use simple_strategy2D_greedy,     only: strategy2D_greedy
         use simple_strategy2D_neigh,      only: strategy2D_neigh
         use simple_strategy2D_stochastic, only: strategy2D_stochastic
-        use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         integer, allocatable  :: prev_pops(:), pinds(:), w_pinds(:)
@@ -219,9 +219,9 @@ contains
                     if( ptcl_mask(iptcl) )then
                         update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. update_cnt == 1 )then
-                            allocate(strategy2D_greedy     :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
-                            allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            allocate(strategy2D_stochastic      :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         endif
                         if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
                     endif
@@ -233,9 +233,9 @@ contains
             if( ptcl_mask(iptcl) )then
                 cnt = cnt + 1
                 ! search spec
-                strategy2Dspec%iptcl      =  iptcl
-                strategy2Dspec%iptcl_map  =  cnt
-                strategy2Dspec%extr_bound =  extr_bound
+                strategy2Dspec%iptcl      = iptcl
+                strategy2Dspec%iptcl_map  = cnt
+                strategy2Dspec%extr_bound = extr_bound
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif
