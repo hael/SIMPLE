@@ -19,26 +19,26 @@ type :: pftcc_shsrch_grad
     integer                   :: maxits       = 100     !< max # iterations
     logical                   :: shbarr       = .true.  !< shift barrier constraint or not
     integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
-    real                      :: max_shift    = 0.      !< maximal shift
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
+    real                      :: max_shift    = 0.      !< maximal shift
+    logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
   contains
-    procedure          :: new         => grad_shsrch_new
-    procedure          :: set_indices => grad_shsrch_set_indices
-    procedure          :: minimize    => grad_shsrch_minimize
-    procedure          :: kill        => grad_shsrch_kill
-    procedure, private :: grad_shsrch_set_costfun
+    procedure :: new         => grad_shsrch_new
+    procedure :: set_indices => grad_shsrch_set_indices
+    procedure :: minimize    => grad_shsrch_minimize
+    procedure :: kill        => grad_shsrch_kill
 end type pftcc_shsrch_grad
 
 contains
 
-    !> Shift search constructor
-    subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits )
+    subroutine grad_shsrch_new( self, lims, lims_init, shbarrier, maxits, opt_angle )
         use simple_opt_factory, only: opt_factory
         class(pftcc_shsrch_grad),   intent(inout) :: self           !< instance
         real,                       intent(in)    :: lims(:,:)      !< limits for barrier constraint
         real,             optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
         character(len=*), optional, intent(in)    :: shbarrier      !< shift barrier constraint or not
         integer,          optional, intent(in)    :: maxits         !< maximum iterations
+        logical,          optional, intent(in)    :: opt_angle      !< optimise in-plane angle with callback flag
         type(opt_factory) :: opt_fact
         ! flag the barrier constraint
         self%shbarr = .true.
@@ -47,6 +47,8 @@ contains
         endif
         self%maxits = 100
         if( present(maxits) ) self%maxits = maxits
+        self%opt_angle = .true.
+        if( present(opt_angle) ) self%opt_angle = opt_angle
         ! make optimizer spec
         call self%ospec%specify('lbfgsb', 2, ftol=1e-1, gtol=1e-3, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
@@ -54,16 +56,12 @@ contains
         call opt_fact%new(self%ospec, self%nlopt)
         ! get # rotations
         self%nrots = pftcc_glob%get_nrots()
-        call self%grad_shsrch_set_costfun
-    end subroutine grad_shsrch_new
-
-    subroutine grad_shsrch_set_costfun( self )
-        class(pftcc_shsrch_grad), intent(inout) :: self
+        ! set costfun pointers
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
-        self%ospec%opt_callback => grad_shsrch_optimize_angle_wrapper
-    end subroutine grad_shsrch_set_costfun
+        if( self%opt_angle ) self%ospec%opt_callback => grad_shsrch_optimize_angle_wrapper
+    end subroutine grad_shsrch_new
 
     function grad_shsrch_costfun( self, vec, D ) result( cost )
         class(*), intent(inout) :: self
@@ -136,12 +134,7 @@ contains
         end select
     end subroutine grad_shsrch_optimize_angle_wrapper
 
-    !> shsrch_set_indices Set indicies for shift search
-    !! \param ref reference
-    !! \param ptcl particle index
-    !! \param rot rotational index
-    !! \param state current state
-    !!
+    !> set indicies for shift search
     subroutine grad_shsrch_set_indices( self, ref, ptcl )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(in)    :: ref, ptcl
@@ -152,40 +145,60 @@ contains
     !> minimisation routine
     function grad_shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
-        integer,                  intent(out)   :: irot
+        integer,                  intent(inout) :: irot
         real    :: corrs(self%nrots), cxy(3)
         real    :: lowest_cost, lowest_cost_overall, lowest_shift(2)
         integer :: loc(1), i, lowest_rot
         logical :: found_better
         found_better      = .false.
-        call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-        loc               = maxloc(corrs)
-        self%cur_inpl_idx = loc(1)
-        lowest_cost_overall = -corrs(self%cur_inpl_idx)
-        ! shift search / in-plane rot update
-        do i = 1,self%max_evals
-            call self%nlopt%minimize(self%ospec, self, lowest_cost)
+        if( self%opt_angle )then
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-            loc = maxloc(corrs)
-            if( loc(1) == self%cur_inpl_idx ) exit
+            loc               = maxloc(corrs)
             self%cur_inpl_idx = loc(1)
-        end do
-        ! update best
-        lowest_cost = -corrs(self%cur_inpl_idx)
-        if( lowest_cost < lowest_cost_overall )then
-            found_better        = .true.
-            lowest_cost_overall = lowest_cost
-            lowest_rot          = self%cur_inpl_idx
-            lowest_shift        = self%ospec%x
-        endif
-        if( found_better )then
-            irot    =   lowest_rot           ! in-plane index
-            cxy(1)  = - lowest_cost_overall  ! correlation
-            cxy(2:) =   lowest_shift         ! shift
-            ! rotate the shift vector to the frame of reference
-            cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc_glob%get_rot(irot)))
+            lowest_cost_overall = -corrs(self%cur_inpl_idx)
+            ! shift search / in-plane rot update
+            do i = 1,self%max_evals
+                call self%nlopt%minimize(self%ospec, self, lowest_cost)
+                call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+                loc = maxloc(corrs)
+                if( loc(1) == self%cur_inpl_idx ) exit
+                self%cur_inpl_idx = loc(1)
+            end do
+            ! update best
+            lowest_cost = -corrs(self%cur_inpl_idx)
+            if( lowest_cost < lowest_cost_overall )then
+                found_better        = .true.
+                lowest_cost_overall = lowest_cost
+                lowest_rot          = self%cur_inpl_idx
+                lowest_shift        = self%ospec%x
+            endif
+            if( found_better )then
+                irot    =   lowest_rot           ! in-plane index
+                cxy(1)  = - lowest_cost_overall  ! correlation
+                cxy(2:) =   lowest_shift         ! shift
+                ! rotate the shift vector to the frame of reference
+                cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc_glob%get_rot(irot)))
+            else
+                irot = 0 ! to communicate that a better solution was not found
+            endif
         else
-            irot = 0 ! to communicate that a better solution was not found
+            self%cur_inpl_idx   = irot
+            lowest_cost_overall = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [0.d0,0.d0], self%cur_inpl_idx)
+            ! shift search
+            call self%nlopt%minimize(self%ospec, self, lowest_cost)
+            if( lowest_cost < lowest_cost_overall )then
+                found_better        = .true.
+                lowest_cost_overall = lowest_cost
+                lowest_shift        = self%ospec%x
+            endif
+            if( found_better )then
+                cxy(1)  = - lowest_cost_overall  ! correlation
+                cxy(2:) =   lowest_shift         ! shift
+                ! rotate the shift vector to the frame of reference
+                cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc_glob%get_rot(irot)))
+            else
+                irot = 0 ! to communicate that a better solution was not found
+            endif
         endif
     end function grad_shsrch_minimize
 
