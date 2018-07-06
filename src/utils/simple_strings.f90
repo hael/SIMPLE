@@ -612,18 +612,18 @@ contains
               else
                   kq = 1
                   do k=1,max(len_trim(p),len_trim(q))
-                      if( UpperCase(p(k:k)) == UpperCase(q(k:k)) )then
+                      if( UpperCaseFirst(p(k:k)) == UpperCaseFirst(q(k:k)) )then
                           cycle
                       else
                           kq = k
                           exit
                       end if
                   end do
-                  lexLess = UpperCase(p(kq:kq)) < UpperCase(q(kq:kq))
+                  lexLess = UpperCaseFirst(p(kq:kq)) < UpperCaseFirst(q(kq:kq))
               end if
           end function strComp
 
-          function UpperCase( letter ) result( L )
+          function UpperCaseFirst( letter ) result( L )
               character(len=*), intent (in) :: letter
               character(len=1)              :: L
               character(len=26), parameter  :: Lower = "abcdefghijklmnopqrstuvwxyz"
@@ -635,7 +635,7 @@ contains
               else
                   L = letter
               end if
-          end function UpperCase
+          end function UpperCaseFirst
 
     end subroutine lexSort
 
