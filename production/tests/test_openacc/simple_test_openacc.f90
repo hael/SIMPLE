@@ -4,7 +4,7 @@ program simple_test_openacc
     use openacc
     use simple_oacc_vecadd
     use simple_oacc_omp
-    !use simple_rbc
+    use simple_rbc
     implicit none
 
 !#ifndef OPENACC
@@ -18,7 +18,7 @@ program simple_test_openacc
 #ifdef OPENACC
     print *,' simple_test_openacc OpenACC is enabled '
     print *,' OpenACC version : ', openacc_version
-    
+
      call test_oacc_basics
      call test_oacc_vecadd
      call test_oacc_vecadd_nocopy
@@ -30,10 +30,10 @@ program simple_test_openacc
      call test_nested2
      !call test_oacc_omp
 !     call test_oacc_reduction
-     
-     ! call run_rbc_serial
-     ! call run_rbc_omp
-     ! call run_rbc_oacc
+
+     call run_rbc_serial
+     call run_rbc_omp
+     call run_rbc_oacc
 
      ! call test_matrix_mul_omp
 !      call test_matrix_mul_openacc
@@ -42,7 +42,7 @@ program simple_test_openacc
 
 !     call test_pi_omp
 !     call test_pi_openacc
-    
+
 
 #else
     print *,' simple_test_openacc OpenACC is disabled '
@@ -209,7 +209,7 @@ contains
         y(:) = 1.0
         !$acc end parallel
         start_time = omp_get_wtime()
-        !$acc parallel 
+        !$acc parallel
         do i = 1, n
             y(i) = y(i) + a * x(i)
         end do
@@ -253,7 +253,7 @@ contains
     end subroutine test_pi_omp
 
     subroutine test_pi_openacc
-        !$use openacc
+        !$ use openacc
         implicit none
         integer, parameter :: dp=selected_real_kind(14)
         integer, parameter :: ip=selected_int_kind(15)
@@ -289,7 +289,7 @@ contains
 
     subroutine test_matrix_mul_omp
         !$use omp_lib
-      integer :: i,j,k
+        integer :: i,j,k
         integer, parameter :: nra=1500, nca=2000, ncb=1000
         real(8) :: a(nra,nca) , b(nca,ncb) , c(nra,ncb)
         real(8) :: flops, tmp, mean
@@ -298,7 +298,7 @@ contains
         integer, dimension(8) :: value
         flops = 2.d0 * real(nra) * real(nca) * real(ncb)
         init_time = omp_get_wtime()
-  
+
         c = 0.d0
         do i = 1,nra
             do j = 1,nca
@@ -310,7 +310,7 @@ contains
                 b(i,j) = i * j
             end do
         end do
-  
+
         start_time = omp_get_wtime()
         !$omp parallel do private(i,j,k,tmp)
         do j = 1, nca
@@ -325,9 +325,9 @@ contains
             end do
         end do
         !$omp end parallel do
-  
+
         end_time = omp_get_wtime()
-mean = sum(sum(c,2),1)/ real(nra*nca)
+        mean = sum(sum(c,2),1)/ real(nra*nca)
         print '(a,f6.3,a,f6.3,a,f7.3,a,f7.3)', 'OpenMP Init Time: ', start_time - init_time, &
             ' Calc Time: ', end_time - start_time, &
             ' GFlops: ', 1d-9 * flops/(end_time - start_time), ' sum ', mean

@@ -61,7 +61,8 @@ program simple_test_cuda
     print *, " CUDA Event timer 2",ctimer%tocU(ev2)
     call ctimer%kill_()
 
-
+    write (*,*)""
+    write (*,'(A)') 'TESTING CUDA FORTRAN KERNELS'
     !  call test_FortCUDA_kernels(0.)
     call test_fortran_mul1dComplex_kernels
     call test_fortran_squaremul2dComplex_kernels
