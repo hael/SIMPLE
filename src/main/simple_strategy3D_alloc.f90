@@ -178,15 +178,16 @@ contains
     end subroutine prep_strategy3D
 
     subroutine clean_strategy3D
-        if( allocated(s3D%proj_space_euls)  ) deallocate(s3D%proj_space_euls)
-        if( allocated(s3D%proj_space_shift) ) deallocate(s3D%proj_space_shift)
-        if( allocated(s3D%proj_space_corrs) ) deallocate(s3D%proj_space_corrs)
+        if( allocated(s3D%proj_space_euls)     ) deallocate(s3D%proj_space_euls)
+        if( allocated(s3D%proj_space_shift)    ) deallocate(s3D%proj_space_shift)
+        if( allocated(s3D%proj_space_corrs)    ) deallocate(s3D%proj_space_corrs)
         if( allocated(s3D%proj_space_refinds)  ) deallocate(s3D%proj_space_refinds)
-        if( allocated(s3D%proj_space_state) ) deallocate(s3D%proj_space_state)
-        if( allocated(s3D%proj_space_proj)  ) deallocate(s3D%proj_space_proj)
-        if( allocated(s3D%prev_proj)        ) deallocate(s3D%prev_proj)
-        if( allocated(s3D%srch_order)       ) deallocate(s3D%srch_order)
-        if( allocated(s3D%state_exists)     ) deallocate(s3D%state_exists)
+        if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
+        if( allocated(s3D%proj_space_state)    ) deallocate(s3D%proj_space_state)
+        if( allocated(s3D%proj_space_proj)     ) deallocate(s3D%proj_space_proj)
+        if( allocated(s3D%prev_proj)           ) deallocate(s3D%prev_proj)
+        if( allocated(s3D%srch_order)          ) deallocate(s3D%srch_order)
+        if( allocated(s3D%state_exists)        ) deallocate(s3D%state_exists)
     end subroutine clean_strategy3D
 
 end module simple_strategy3D_alloc

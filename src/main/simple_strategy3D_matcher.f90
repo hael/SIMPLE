@@ -3,7 +3,7 @@ module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_strategy3D_alloc  ! singleton s3D
+use simple_strategy3D_alloc ! singleton s3D
 use simple_timer
 use simple_qsys_funs,                only: qsys_job_finished
 use simple_binoris_io,               only: binwrite_oritab
@@ -300,9 +300,9 @@ contains
             if( ptcl_mask(iptcl) )then
                 cnt = cnt + 1
                 ! search spec
-                strategy3Dspec%iptcl       =  iptcl
-                strategy3Dspec%iptcl_map   =  cnt
-                strategy3Dspec%szsn        =  params_glob%szsn
+                strategy3Dspec%iptcl     =  iptcl
+                strategy3Dspec%iptcl_map =  cnt
+                strategy3Dspec%szsn      =  params_glob%szsn
                 strategy3Dspec%extr_score_thresh =  extr_score_thresh
                 if( allocated(het_mask) )  strategy3Dspec%do_extr =  het_mask(iptcl)
                 if( allocated(symmat) )    strategy3Dspec%symmat  => symmat
@@ -467,12 +467,11 @@ contains
         logical   :: do_center, has_been_searched
         nrefs             = params_glob%nspace * params_glob%nstates
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
-        ! must be done here since params_glob%kfromto is dynamically set based on FSC from previous round
-        ! or based on dynamic resolution limit update
+        ! must be done here since params_glob%kfromto is dynamically set
         if( params_glob%eo .ne. 'no' )then
-            call pftcc%new(nrefs,  ptcl_mask, nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
+            call pftcc%new(nrefs, ptcl_mask, nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
         else
-            call pftcc%new(nrefs,  ptcl_mask)
+            call pftcc%new(nrefs, ptcl_mask)
         endif
 
         ! PREPARATION OF REFERENCES IN PFTCC

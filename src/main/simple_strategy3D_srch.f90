@@ -6,10 +6,10 @@ use simple_ori,                only: ori
 use simple_sym,                only: sym
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad ! gradient-based search over all df:s
-use simple_strategy3D_alloc    ! singleton s3D
 use simple_polarft_corrcalc,   only: pftcc_glob
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
+use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
 public :: strategy3D_srch, strategy3D_spec
@@ -54,6 +54,7 @@ type strategy3D_srch
     real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
     logical                  :: neigh         = .false.   !< nearest neighbour refinement flag
     logical                  :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
+    logical                  :: dowinpl       = .true.    !< 2 indicate weights over in-planes as well as projection dirs
     logical                  :: exists        = .false.   !< 2 indicate existence
   contains
     procedure :: new
@@ -75,22 +76,23 @@ contains
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%iptcl      =  spec%iptcl
-        self%iptcl_map  =  spec%iptcl_map
-        self%nstates    =  params_glob%nstates
-        self%nprojs     =  params_glob%nspace
-        self%nrefs      =  self%nprojs*self%nstates
-        self%nrots      =  round2even(twopi*real(params_glob%ring2))
-        self%npeaks     =  npeaks
-        self%nbetter    =  0
-        self%nrefs_eval =  0
-        self%nsym       =  build_glob%pgrpsyms%get_nsym()
-        self%doshift    =  params_glob%l_doshift
-        self%neigh      =  params_glob%neigh == 'yes'
-        self%nnn_static =  params_glob%nnn
-        self%nnn        =  params_glob%nnn
-        self%nnnrefs    =  self%nnn*self%nstates
-        self%kstop_grid =  params_glob%kstop_grid
+        self%iptcl      = spec%iptcl
+        self%iptcl_map  = spec%iptcl_map
+        self%nstates    = params_glob%nstates
+        self%nprojs     = params_glob%nspace
+        self%nrefs      = self%nprojs*self%nstates
+        self%nrots      = round2even(twopi*real(params_glob%ring2))
+        self%npeaks     = npeaks
+        self%nbetter    = 0
+        self%nrefs_eval = 0
+        self%nsym       = build_glob%pgrpsyms%get_nsym()
+        self%doshift    = params_glob%l_doshift
+        self%neigh      = params_glob%neigh == 'yes'
+        self%nnn_static = params_glob%nnn
+        self%nnn        = params_glob%nnn
+        self%nnnrefs    = self%nnn*self%nstates
+        self%kstop_grid = params_glob%kstop_grid
+        self%dowinpl    = npeaks /= 1
         ! multiple states
         if( self%nstates == 1 )then
             self%npeaks_grid = GRIDNPEAKS
@@ -116,7 +118,7 @@ contains
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-            &shbarrier=params_glob%shbarrier, maxits=MAXITS)
+            &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.not. self%dowinpl)
         ! create all df:s search object
         call self%grad_orisrch_obj%new
         self%exists = .true.
@@ -126,7 +128,7 @@ contains
     subroutine prep4srch( self, nnmat, target_projs )
         use simple_combinatorics, only: merge_into_disjoint_set
         class(strategy3D_srch), intent(inout) :: self
-        integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
+        integer, optional,      intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
         real      :: corrs(self%nrots)
         type(ori) :: o_prev
         real      :: corr, bfac
@@ -176,8 +178,8 @@ contains
 
     subroutine greedy_subspace_srch( self, grid_projs, target_projs )
         class(strategy3D_srch), intent(inout) :: self
-        integer,             intent(in)    :: grid_projs(:)
-        integer,             intent(inout) :: target_projs(:)
+        integer,                intent(in)    :: grid_projs(:)
+        integer,                intent(inout) :: target_projs(:)
         real      :: inpl_corrs(self%nrots), corrs(self%nrefs)
         integer   :: iref, isample, nrefs, ntargets, cnt, istate
         integer   :: state_cnt(self%nstates), iref_state
@@ -257,7 +259,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         type(ori) :: o
         real      :: cxy(3)
-        integer   :: i, ref, irot, cnt
+        integer   :: i, j, ref, irot, cnt
         logical   :: found_better
         if( DOCONTINUOUS )then
             ! BFGS over all df:s
@@ -284,25 +286,43 @@ contains
                     if( irot > 0 )then
                         ! irot > 0 guarantees improvement found, update solution
                         s3D%proj_space_euls(self%iptcl_map, ref,1, 3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%iptcl_map,ref,1)   = cxy(1)
-                        s3D%proj_space_shift(self%iptcl_map,ref,1,:) = cxy(2:3)
+                        s3D%proj_space_corrs(self%iptcl_map,ref,1)    = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref,1,:)  = cxy(2:3)
                     endif
                 endif
             end do
         else
             if( self%doshift )then
-                ! BFGS over shifts with in-plane rot exhaustive callback
-                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                    ref = s3D%proj_space_refinds(self%iptcl_map, i)
-                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        ! irot > 0 guarantees improvement found, update solution
-                        s3D%proj_space_euls( self%iptcl_map,ref,1,3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%iptcl_map,ref,1)   = cxy(1)
-                        s3D%proj_space_shift(self%iptcl_map,ref,1,:) = cxy(2:3)
-                    endif
-                end do
+                if( self%dowinpl )then
+                    ! BFGS over shifts only
+                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                        ref = s3D%proj_space_refinds(self%iptcl_map, i)
+                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                        do j=1,MAXNINPLPEAKS
+                            irot = s3D%proj_space_inplinds(self%iptcl_map, j)
+                            cxy  = self%grad_shsrch_obj%minimize(irot=irot)
+                            if( irot > 0 )then
+                                ! irot > 0 guarantees improvement found, update solution
+                                s3D%proj_space_euls( self%iptcl_map,ref,j,3) = 360. - pftcc_glob%get_rot(irot)
+                                s3D%proj_space_corrs(self%iptcl_map,ref,j)   = cxy(1)
+                                s3D%proj_space_shift(self%iptcl_map,ref,j,:) = cxy(2:3)
+                            endif
+                        end do
+                    end do
+                else
+                    ! BFGS over shifts with in-plane rot exhaustive callback
+                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                        ref = s3D%proj_space_refinds(self%iptcl_map, i)
+                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                        cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                        if( irot > 0 )then
+                            ! irot > 0 guarantees improvement found, update solution
+                            s3D%proj_space_euls( self%iptcl_map,ref,1,3) = 360. - pftcc_glob%get_rot(irot)
+                            s3D%proj_space_corrs(self%iptcl_map,ref,1)   = cxy(1)
+                            s3D%proj_space_shift(self%iptcl_map,ref,1,:) = cxy(2:3)
+                        endif
+                    end do
+                endif
             endif
             DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
         endif
@@ -321,7 +341,7 @@ contains
         else
             call build_glob%spproj_field%reject(self%iptcl)
         endif
-        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED CALC_CORR'
+        DebugPrint '>>> STRATEGY3D_SRCH :: FINISHED CALC_CORR'
     end subroutine calc_corr
 
     subroutine store_solution( self, ind, ref, inpl_inds, corrs )
