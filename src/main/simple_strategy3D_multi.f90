@@ -37,8 +37,8 @@ contains
 
     subroutine srch_multi( self )
         class(strategy3D_multi), intent(inout) :: self
-        integer :: iref,isample,nrefs,target_projs(self%s%npeaks_grid), loc(1), inpl_ind
-        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
+        integer :: iref,isample,nrefs,target_projs(self%s%npeaks_grid)
+        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             if( self%s%neigh )then
@@ -57,15 +57,15 @@ contains
             ! initialize, ctd
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
-            s3D%proj_space_corrs(self%s%iptcl_map,:) = -1.
+            s3D%proj_space_corrs(self%s%iptcl_map,:,:) = -1.
             do isample=1,nrefs
                 iref = s3D%srch_order(self%s%iptcl_map,isample) ! set the stochastic reference index
                 call per_ref_srch                           ! actual search
                 if( self%s%nbetter >= self%s%npeaks ) exit  ! exit condition
             end do
             ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:)
-            call hpsort(corrs,s3D%proj_space_inds(self%s%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:,1)
+            call hpsort(corrs,s3D%proj_space_refinds(self%s%iptcl_map,:))
             call self%s%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%oris_assign
@@ -77,18 +77,18 @@ contains
         contains
 
             subroutine per_ref_srch
+                integer :: loc(3)
                 if( s3D%state_exists( s3D%proj_space_state(self%s%iptcl_map,iref) ) )then
-                    ! In-plane correlations
+                    ! calculate in-plane correlations
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    loc       = maxloc(inpl_corrs)   ! greedy in-plane
-                    inpl_ind  = loc(1)               ! in-plane angle index
-                    inpl_corr = inpl_corrs(inpl_ind) ! max in plane correlation
-                    call self%s%store_solution(iref, iref, inpl_ind, inpl_corr)
+                    ! identify the 3 top scoring in-planes
+                    loc = max3loc(inpl_corrs)
+                    call self%s%store_solution(iref, iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
                     ! update nbetter to keep track of how many improving solutions we have identified
                     if( self%s%npeaks == 1 )then
-                        if( inpl_corr > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                        if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                     else
-                        if( inpl_corr >= self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                        if( inpl_corrs(loc(1)) >= self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                     endif
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs_eval + 1
@@ -102,18 +102,19 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_multi), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks), ws(self%s%npeaks), state_ws(self%s%nstates)
+        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS), state_ws(self%s%nstates)
         real      :: wcorr, frac, ang_sdev, dist_inpl, euldist
-        integer   :: best_loc(1), neff_states, state
-        logical   :: included(self%s%npeaks)
+        integer   :: best_loc(1), neff_states, state, npeaks_all
+        logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
+        npeaks_all = self%s%npeaks * MAXNINPLPEAKS
         ! extract peak info
-        call extract_peaks( self%s, corrs, state )
+        call extract_peaks(self%s, corrs, state)
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights(self%s, npeaks_all, corrs, params_glob%tau, ws, included, best_loc, wcorr )
         ! state reweighting
-        call states_reweight( self%s, corrs, ws, state_ws, included, state, best_loc, wcorr )
+        call states_reweight(self%s, npeaks_all, corrs, ws, state_ws, included, state, best_loc, wcorr)
         ! angular standard deviation
-        ang_sdev = estimate_ang_sdev( self%s, best_loc )
+        ang_sdev = estimate_ang_sdev(self%s, best_loc)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )

@@ -93,19 +93,19 @@ real, parameter :: KBALPHA                 = sqrt(2.0) !< interpolation alpha (o
 real, parameter :: RECWINSZ                = 1.5       !< half-window size for 3D reconstruction
 
 ! real constants that control search and convergence
-real, parameter    :: FRAC_SH_LIM             = 80.0      !< at what frac to turn on the shift search
-real, parameter    :: FRAC_INTERPOL           = 60.0      !< at what frac to turn on the gridding interpolation (2D)
-real, parameter    :: EXTRINITHRESH           = 0.5       !< initial randomization threshold for extremal search
-real, parameter    :: EXTRTHRESH_CONST        = 0.2       !< threshold for factorial decay in extremal search
-real, parameter    :: LP2SMPDFAC              = 0.4125    !< low-pass limit scaling constant
-real, parameter    :: LP2SMPDFAC2D            = 0.4       !< low-pass limit scaling constant
-real, parameter    :: NPEAKSATHRES            = 12.0      !< angular threshold for determining npeaks (PRIME3D)
-real, parameter    :: SHC_INPL_TRSHWDTH       = 2.0       !< shift search halfwidht (pixels)
-real, parameter    :: TAU_DEFAULT             = 0.005     !< controls the sharpeness of the orientation weight distribution
-                                                          !! smaller number means sharper distribution
-integer, parameter :: MAX_EXTRLIM2D           = 15        !< maximum # of iterations for which 2D extremal opt is performed
-real,    parameter :: SOFTMAXW_THRESH         = 0.01      !< threshold for orientations softmax weights
-real,    parameter :: BSC                     = 20.       !< for shell reconstruction b-factor calculation
+real, parameter    :: FRAC_SH_LIM          = 80.0      !< at what frac to turn on the shift search
+real, parameter    :: FRAC_INTERPOL        = 60.0      !< at what frac to turn on the gridding interpolation (2D)
+real, parameter    :: EXTRINITHRESH        = 0.5       !< initial randomization threshold for extremal search
+real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
+real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
+real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
+real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
+real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
+real, parameter    :: TAU_DEFAULT          = 0.005     !< controls the sharpeness of the orientation weight distribution
+                                                       !! smaller number means sharper distribution
+integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
+real,    parameter :: SOFTMAXW_THRESH      = 0.01      !< threshold for orientations softmax weights
+real,    parameter :: BSC                  = 20.       !< for shell reconstruction b-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -115,12 +115,14 @@ integer, parameter :: SPECWMINPOP          = 2000      !< minimum population for
 integer, parameter :: GRIDNPEAKS           = 3         !< # peaks to consider in angular grid search (PRIME3D)
 integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
 integer, parameter :: MAXNPEAKS            = 40        !< maximum # peaks to be assigned weights (PRIME3D)
+integer, parameter :: MAXNINPLPEAKS        = 3         !< maximum # in-plane peaks to be associated with each projection direction
 integer, parameter :: MAX_NSPACE           = 5000      !< maximum # of projection directions (PRIME3D)
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: HETNREPEATS          = 1         !< # repeats het_ensemble
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: NPDIRS_SUBSPACE      = 800       !< # projection directions in subspace search refine=neigh
+
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-averaging in 3D

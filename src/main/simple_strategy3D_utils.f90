@@ -11,15 +11,15 @@ contains
 
     subroutine extract_peaks( s, corrs, state )
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(out)   :: corrs(s%npeaks)
+        real,                   intent(out)   :: corrs(s%npeaks * MAXNINPLPEAKS)
         integer, optional,      intent(out)   :: state
-        integer :: ipeak, cnt, ref
+        integer :: ipeak, cnt, ref, inpl
         real    :: shvec(2)
         logical :: state_present
         state_present = present(state)
+        cnt = 0
         do ipeak = 1, s%npeaks
-            cnt = s%nrefs - s%npeaks + ipeak
-            ref = s3D%proj_space_inds(s%iptcl_map, cnt)
+            ref = s3D%proj_space_refinds(s%iptcl_map, s%nrefs - s%npeaks + ipeak)
             if( ref < 1 .or. ref > s%nrefs )then
                 print *, 'ref: ', ref
                 stop 'ref index out of bound; strategy3D_utils :: extract_peaks'
@@ -31,38 +31,41 @@ contains
                     stop 'strategy3D_utils :: extract_peak'
                 endif
             endif
-            ! add shift
-            shvec = s%prev_shvec
-            if( s%doshift )shvec = shvec + s3D%proj_space_shift(s%iptcl_map,ref,1:2)
-            where( abs(shvec) < 1e-6 ) shvec = 0.
-            ! transfer to solution set
-            corrs(ipeak) = s3D%proj_space_corrs(s%iptcl_map,ref)
-            if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
-            if( state_present )then
-                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', real(state))
-            else
-                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', 1.)
-            endif
-            call s3D%o_peaks(s%iptcl)%set(ipeak, 'proj',  real(s3D%proj_space_proj(s%iptcl_map,ref)))
-            call s3D%o_peaks(s%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
-            call s3D%o_peaks(s%iptcl)%set_euler(ipeak, s3D%proj_space_euls(s%iptcl_map,ref,1:3))
-            call s3D%o_peaks(s%iptcl)%set_shift(ipeak, shvec)
+            do inpl=1,MAXNINPLPEAKS
+                cnt = cnt + 1
+                ! add shift
+                shvec = s%prev_shvec
+                if( s%doshift ) shvec = shvec + s3D%proj_space_shift(s%iptcl_map,ref,inpl,1:2)
+                where( abs(shvec) < 1e-6 ) shvec = 0.
+                ! transfer to solution set
+                corrs(cnt) = s3D%proj_space_corrs(s%iptcl_map,ref,inpl)
+                if( corrs(cnt) < 0. ) corrs(cnt) = 0.
+                if( state_present )then
+                    call s3D%o_peaks(s%iptcl)%set(cnt, 'state', real(state))
+                else
+                    call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
+                endif
+                call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',  real(s3D%proj_space_proj(s%iptcl_map,ref)))
+                call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',  corrs(cnt))
+                call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%iptcl_map,ref,inpl,1:3))
+                call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)
+            end do
         enddo
     end subroutine extract_peaks
 
+    ! assumes hard orientation assignment. Hence inpl=1
     subroutine prob_select_peak( s, tau, updatecnt )
         class(strategy3D_srch), intent(inout) :: s
         real,                   intent(in)    :: tau, updatecnt
         real    :: corrs(s%npeaks), shvecs(s%npeaks,2), euls(s%npeaks,3), pvec(s%npeaks)
-        integer :: cnt, inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
+        integer :: inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
         integer :: prob_peak, ipeak, rank, loc(1)
         real    :: bound, rnd, dists(s%npeaks), arg4softmax(s%npeaks)
         do ipeak = 1, s%npeaks
             ! stash peak index
             inds(ipeak) = ipeak
             ! stash reference index
-            cnt = s%nrefs - s%npeaks + ipeak
-            refs(ipeak) = s3D%proj_space_inds(s%iptcl_map, cnt)
+            refs(ipeak) = s3D%proj_space_refinds(s%iptcl_map, s%nrefs - s%npeaks + ipeak)
             if( refs(ipeak) < 1 .or. refs(ipeak) > s%nrefs )then
                 print *, 'refs(ipeak): ', refs(ipeak)
                 stop 'refs(ipeak) index out of bound; strategy3D_utils :: prob_select_peak'
@@ -79,15 +82,15 @@ contains
             endif
             ! stash shift (obtained with vector addition)
             shvecs(ipeak,:) = s%prev_shvec
-            if( s%doshift ) shvecs(ipeak,:) = shvecs(ipeak,:) + s3D%proj_space_shift(s%iptcl_map,refs(ipeak),1:2)
+            if( s%doshift ) shvecs(ipeak,:) = shvecs(ipeak,:) + s3D%proj_space_shift(s%iptcl_map,refs(ipeak),1,1:2)
             where( abs(shvecs(ipeak,:)) < 1e-6 ) shvecs(ipeak,:) = 0.
             ! stash corr
-            corrs(ipeak) = s3D%proj_space_corrs(s%iptcl_map,refs(ipeak))
+            corrs(ipeak) = s3D%proj_space_corrs(s%iptcl_map,refs(ipeak),1)
             if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
             ! stash proj index
             projs(ipeak) = s3D%proj_space_proj(s%iptcl_map,refs(ipeak))
             ! stash Euler
-            euls(ipeak,:) = s3D%proj_space_euls(s%iptcl_map,refs(ipeak),1:3)
+            euls(ipeak,:) = s3D%proj_space_euls(s%iptcl_map,refs(ipeak),1,1:3)
         end do
         if( updatecnt < 5.0 )then
             ! multinomal peak selection
@@ -127,18 +130,19 @@ contains
         call s3D%o_peaks(s%iptcl)%set_shift(1,    shvecs(prob_peak,:))
     end subroutine prob_select_peak
 
-    subroutine corrs2softmax_weights( s, corrs, tau, ws, included, best_loc, wcorr )
+    subroutine corrs2softmax_weights( s, n, corrs, tau, ws, included, best_loc, wcorr )
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: corrs(s%npeaks), tau
-        real,                   intent(out)   :: ws(s%npeaks), wcorr
-        logical,                intent(out)   :: included(s%npeaks)
+        integer,                intent(in)    :: n
+        real,                   intent(in)    :: corrs(n), tau
+        real,                   intent(out)   :: ws(n), wcorr
+        logical,                intent(out)   :: included(n)
         integer,                intent(out)   :: best_loc(1)
         type(ori) :: o, o_best
-        real      :: dists(s%npeaks), arg4softmax(s%npeaks), ang_dist, inpl_dist
-        real      :: ang_weights(s%npeaks), ang_lim
+        real      :: dists(n), arg4softmax(n), ang_dist, inpl_dist
+        ! real      :: ang_weights(n), ang_lim
         integer   :: ipeak
-        if( s%npeaks == 1 )then
+        if( n == 1 )then
             best_loc(1)  = 1
             ws(1)        = 1.
             included(1)  = .true.
@@ -146,26 +150,29 @@ contains
             wcorr        = corrs(1)
         else
             best_loc = maxloc(corrs)
+
+            ! REMOVED 4 NOW. HE 180709
             ! reweighting according to angular distance to best peak
-            ang_lim = deg2rad( build_glob%pgrpsyms%srchrange_theta()/2. )
-            o_best  = s3D%o_peaks(s%iptcl)%get_ori(best_loc(1))
-            do ipeak = 1,s%npeaks
-                if( ipeak == best_loc(1) )then
-                    ang_weights(ipeak) = 1.0
-                    cycle
-                endif
-                if( trim(build_glob%pgrpsyms%get_pgrp()).eq.'c1' )then
-                    ang_dist = s3D%o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
-                else
-                    call build_glob%pgrpsyms%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
-                    ang_dist = deg2rad( ang_dist )
-                endif
-                if( ang_dist > ang_lim )then
-                    ang_weights(ipeak) = 0.
-                else
-                    ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
-                endif
-            enddo
+            ! ang_lim = deg2rad( build_glob%pgrpsyms%srchrange_theta()/2. )
+            ! o_best  = s3D%o_peaks(s%iptcl)%get_ori(best_loc(1))
+            ! do ipeak = 1,n
+            !     if( ipeak == best_loc(1) )then
+            !         ang_weights(ipeak) = 1.0
+            !         cycle
+            !     endif
+            !     if( trim(build_glob%pgrpsyms%get_pgrp()).eq.'c1' )then
+            !         ang_dist = s3D%o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
+            !     else
+            !         call build_glob%pgrpsyms%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
+            !         ang_dist = deg2rad( ang_dist )
+            !     endif
+            !     if( ang_dist > ang_lim )then
+            !         ang_weights(ipeak) = 0.
+            !     else
+            !         ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
+            !     endif
+            ! enddo
+
             ! convert correlations to distances
             dists = 1.0 - corrs
             ! scale distances with TAU
@@ -175,11 +182,11 @@ contains
             ! subtract maxval of negative distances for numerical stability
             arg4softmax = arg4softmax - maxval(arg4softmax)
             ! calculate softmax weights
-            ws = exp(arg4softmax) * ang_weights
+            ws = exp(arg4softmax) !* ang_weights
             ! normalise
             ws = ws / sum(ws)
             ! threshold weights
-            included   = (ws >= SOFTMAXW_THRESH)
+            included = (ws >= SOFTMAXW_THRESH)
             s%npeaks_eff = count(included)
             where( .not. included ) ws = 0.
             ! weighted corr
@@ -189,17 +196,18 @@ contains
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
     end subroutine corrs2softmax_weights
 
-    subroutine states_reweight( s, corrs, ws, state_ws, included, state, best_loc, wcorr )
+    subroutine states_reweight( s, n, corrs, ws, state_ws, included, state, best_loc, wcorr )
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(out)   :: corrs(s%npeaks)
-        real,                   intent(inout) :: ws(s%npeaks)
+        integer,                intent(in)    :: n
+        real,                   intent(out)   :: corrs(n)
+        real,                   intent(inout) :: ws(n)
         real,                   intent(out)   :: state_ws(s%nstates), wcorr
-        logical,                intent(inout) :: included(s%npeaks)
+        logical,                intent(inout) :: included(n)
         integer,                intent(out)   :: state, best_loc(1)
-        integer :: istate, loc(1), ipeak, states(s%npeaks)
-        if( s%npeaks > 1 .and. s%nstates > 1 )then
+        integer :: istate, loc(1), ipeak, states(n)
+        if( n > 1 .and. s%nstates > 1 )then
             ! states weights
-            do ipeak = 1, s%npeaks
+            do ipeak = 1, n
                 corrs(ipeak)  = s3D%o_peaks(s%iptcl)%get(ipeak,'corr')
                 states(ipeak) = nint(s3D%o_peaks(s%iptcl)%get(ipeak,'state'))
             enddo
@@ -216,7 +224,7 @@ contains
             best_loc = maxloc(ws)
             ! weighted corr
             wcorr    = sum(ws*corrs, mask=included)
-            ! update npeaks individual weights
+            ! update individual weights
             call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
         endif
     end subroutine states_reweight
@@ -227,22 +235,23 @@ contains
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: best_loc(1)
         real       :: ang_sdev, dist, inpl_dist
-        integer    :: ipeak
+        integer    :: ipeak, npeaks
         type(ori)  :: osym
         type(oris) :: sym_os
         ang_sdev = 0.
+        npeaks   = s3D%o_peaks(s%iptcl)%get_noris()
         if( trim(build_glob%pgrpsyms%get_pgrp()).eq.'c1' )then
-            ang_sdev = s3D%o_peaks(s%iptcl)%ang_sdev(s%nstates, s%npeaks)
+            ang_sdev = s3D%o_peaks(s%iptcl)%ang_sdev(s%nstates, npeaks)
         else
-            if( s%npeaks > 2 )then
+            if( npeaks > 2 )then
                 sym_os = s3D%o_peaks(s%iptcl)
-                do ipeak = 1, s%npeaks
+                do ipeak = 1, npeaks
                     if( ipeak == best_loc(1) )cycle
                     call build_glob%pgrpsyms%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(best_loc(1)),&
                         &s3D%o_peaks(s%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
                     call sym_os%set_ori(ipeak, osym)
                 enddo
-                ang_sdev = sym_os%ang_sdev(s%nstates, s%npeaks)
+                ang_sdev = sym_os%ang_sdev(s%nstates, npeaks)
             endif
         endif
     end function estimate_ang_sdev

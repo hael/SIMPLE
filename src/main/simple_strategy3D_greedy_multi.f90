@@ -30,15 +30,15 @@ contains
     subroutine new_greedy_multi( self, spec, npeaks )
         class(strategy3D_greedy_multi), intent(inout) :: self
         class(strategy3D_spec),         intent(inout) :: spec
-        integer,                   intent(in)    :: npeaks
+        integer,                        intent(in)    :: npeaks
         call self%s%new( spec, npeaks )
         self%spec = spec
     end subroutine new_greedy_multi
 
     subroutine srch_greedy_multi( self )
         class(strategy3D_greedy_multi), intent(inout) :: self
-        integer :: iref,isample,nrefs,target_projs(self%s%npeaks_grid), inpl_ind(1), state
-        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
+        integer :: iref, isample,nrefs,target_projs(self%s%npeaks_grid), state
+        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             if( self%s%neigh )then
                 ! for neighbour modes we do a coarse grid search first
@@ -53,7 +53,7 @@ contains
                 call self%s%prep4srch()
                 nrefs = self%s%nrefs
             endif
-            s3D%proj_space_corrs(self%s%iptcl_map,:) = -1.
+            s3D%proj_space_corrs(self%s%iptcl_map,:,:) = -1.
             ! search
             do isample=1,nrefs
                 iref =  s3D%srch_order(self%s%iptcl_map,isample) ! set the reference index
@@ -62,8 +62,8 @@ contains
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = nrefs
             ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:)
-            call hpsort(corrs, s3D%proj_space_inds(self%s%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:,1)
+            call hpsort(corrs, s3D%proj_space_refinds(self%s%iptcl_map,:))
             ! take care of the in-planes
             call self%s%inpl_srch
             ! prepare weights & orientation
@@ -76,12 +76,15 @@ contains
         contains
 
             subroutine per_ref_srch
+                integer :: loc(3)
                 state = s3D%proj_space_state(self%s%iptcl_map,iref)
-                if(  s3D%state_exists(state) )then
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs) ! In-plane correlations
-                    inpl_ind   = maxloc(inpl_corrs)                          ! greedy in-plane index
-                    inpl_corr  = inpl_corrs(inpl_ind(1))                     ! max in plane correlation
-                    call self%s%store_solution(iref, iref, inpl_ind(1), inpl_corr)
+                if( s3D%state_exists(state) )then
+                    ! calculate in-plane correlations
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    ! identify the 3 top scoring in-planes
+                    loc = max3loc(inpl_corrs)
+                    ! stash
+                    call self%s%store_solution(iref, iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
                 endif
             end subroutine per_ref_srch
 
@@ -92,23 +95,24 @@ contains
         use simple_oris, only: oris
         class(strategy3D_greedy_multi), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks), ws(self%s%npeaks), state_ws(self%s%nstates)
+        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS), state_ws(self%s%nstates)
         real      :: wcorr, frac, ang_sdev, dist_inpl, euldist
-        integer   :: best_loc(1), neff_states, state
-        logical   :: included(self%s%npeaks)
+        integer   :: best_loc(1), neff_states, state, npeaks_all
+        logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
+        npeaks_all = self%s%npeaks * MAXNINPLPEAKS
         ! extract peak info
-        call extract_peaks( self%s, corrs, state )
+        call extract_peaks(self%s, corrs, state)
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights(self%s, npeaks_all, corrs, params_glob%tau, ws, included, best_loc, wcorr)
         ! state reweighting
-        call states_reweight( self%s, corrs, ws, state_ws, included, state, best_loc, wcorr )
+        call states_reweight(self%s, npeaks_all, corrs, ws, state_ws, included, state, best_loc, wcorr )
         ! angular standard deviation
-        ang_sdev = estimate_ang_sdev( self%s, best_loc )
+        ang_sdev = estimate_ang_sdev(self%s, best_loc)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! generate convergence stats
-        call convergence_stats_multi( self%s, best_loc, euldist )
+        call convergence_stats_multi(self%s, best_loc, euldist)
         ! fraction of search space scanned
         neff_states = count(s3D%state_exists)
         if( self%s%neigh )then
@@ -124,14 +128,14 @@ contains
         endif
         call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
-        call build_glob%spproj_field%set_euler(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
-        call build_glob%spproj_field%set_shift(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
+        call build_glob%spproj_field%set_euler(self%s%iptcl,        s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
+        call build_glob%spproj_field%set_shift(self%s%iptcl,        s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
         call build_glob%spproj_field%set(self%s%iptcl, 'state',     real(state))
         call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',      wcorr)
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call build_glob%spproj_field%set(self%s%iptcl, 'ow',         s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow')  )
-        call build_glob%spproj_field%set(self%s%iptcl, 'proj',       s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
+        call build_glob%spproj_field%set(self%s%iptcl, 'ow',        s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow')  )
+        call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call build_glob%spproj_field%set(self%s%iptcl, 'sdev',      ang_sdev)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint  '>>> STRATEGY3D_GREEDY_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'

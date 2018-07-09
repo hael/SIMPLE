@@ -24,14 +24,15 @@ contains
         use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_sdev, convergence_stats_single
         class(strategy3D_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
+        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS)
         real      :: wcorr, frac,  ang_sdev, dist_inpl, euldist
-        integer   :: best_loc(1)
-        logical   :: included(self%s%npeaks)
+        integer   :: best_loc(1), npeaks_all
+        logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
+        npeaks_all = self%s%npeaks * MAXNINPLPEAKS
         ! extract peak info
         call extract_peaks( self%s, corrs )
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights(self%s, npeaks_all, corrs, params_glob%tau, ws, included, best_loc, wcorr )
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances

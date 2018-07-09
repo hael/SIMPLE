@@ -28,7 +28,7 @@ contains
         integer   :: best_loc(1)
         ! extract peak info
         updatecnt = build_glob%spproj_field%get(self%s%iptcl, 'updatecnt')
-        call prob_select_peak( self%s, params_glob%tau, updatecnt )
+        call prob_select_peak(self%s, params_glob%tau, updatecnt)
         best_loc(1) = 1 ! by definition
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&

@@ -178,13 +178,13 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         integer,             intent(in)    :: grid_projs(:)
         integer,             intent(inout) :: target_projs(:)
-        real      :: inpl_corrs(self%nrots), corrs(self%nrefs), inpl_corr
+        real      :: inpl_corrs(self%nrots), corrs(self%nrefs)
         integer   :: iref, isample, nrefs, ntargets, cnt, istate
-        integer   :: state_cnt(self%nstates), iref_state, inpl_ind(1)
+        integer   :: state_cnt(self%nstates), iref_state
         if( build_glob%spproj_field%get_state(self%iptcl) > 0 )then
             ! initialize
             target_projs = 0
-            s3D%proj_space_corrs(self%iptcl_map,:) = -1.
+            s3D%proj_space_corrs(self%iptcl_map,:,:) = -1.
             nrefs = size(grid_projs)
             ! search
             do isample = 1, nrefs
@@ -195,8 +195,8 @@ contains
                 end do
             end do
             ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%iptcl_map,:)
-            call hpsort(corrs, s3D%proj_space_inds(self%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%iptcl_map,:,1) ! 1 is the top ranking in-plane corr
+            call hpsort(corrs, s3D%proj_space_refinds(self%iptcl_map,:))
             ! return target points
             ntargets = size(target_projs)
             cnt      = 1
@@ -204,25 +204,25 @@ contains
             if( self%nstates == 1 )then
                 ! Single state
                 do isample=self%nrefs,self%nrefs - ntargets + 1,-1
-                    if( target_projs(1) == s3D%proj_space_inds(self%iptcl_map,isample) )then
+                    if( target_projs(1) == s3D%proj_space_refinds(self%iptcl_map,isample) )then
                         ! direction is already in target set
                     else
                         cnt = cnt + 1
-                        target_projs(cnt) = s3D%proj_space_inds(self%iptcl_map,isample)
+                        target_projs(cnt) = s3D%proj_space_refinds(self%iptcl_map,isample)
                         if( cnt == ntargets ) exit
                     endif
                 end do
             else
                 ! Multiples states
-                state_cnt = 1                                            ! previous always part of the targets
+                state_cnt = 1                                                   ! previous always part of the targets
                 do isample = self%nrefs, 1, -1
-                    if( cnt >= self%npeaks_grid )exit                    ! all that we need
-                    iref_state = s3D%proj_space_inds(self%iptcl_map,isample) ! reference index to multi-state space
+                    if( cnt >= self%npeaks_grid )exit                           ! all that we need
+                    iref_state = s3D%proj_space_refinds(self%iptcl_map,isample) ! reference index to multi-state space
                     istate     = ceiling(real(iref_state)/real(self%nprojs))
-                    iref       = iref_state - (istate-1)*self%nprojs     ! reference index to single state space
+                    iref       = iref_state - (istate-1)*self%nprojs            ! reference index to single state space
                     if( .not.s3D%state_exists(istate) )cycle
-                    if( any(target_projs == iref) )cycle                 ! direction is already set
-                    if( state_cnt(istate) >= GRIDNPEAKS )cycle           ! state is already filled
+                    if( any(target_projs == iref) )cycle                        ! direction is already set
+                    if( state_cnt(istate) >= GRIDNPEAKS )cycle                  ! state is already filled
                     cnt = cnt + 1
                     target_projs(cnt) = iref
                     state_cnt(istate) = state_cnt(istate) + 1
@@ -236,12 +236,18 @@ contains
         contains
 
             subroutine per_ref_srch
+                integer :: loc(3)
                 if( s3D%state_exists(istate) )then
-                    call pftcc_glob%gencorrs(iref, self%iptcl, self%kstop_grid, inpl_corrs) ! In-plane correlations
-                    inpl_ind   = maxloc(inpl_corrs)                       ! greedy in-plane
-                    inpl_corr  = inpl_corrs(inpl_ind(1))                  ! max in plane correlation
-                    s3D%proj_space_corrs(self%iptcl_map,iref) = inpl_corr ! stash in-plane correlation for sorting
-                    s3D%proj_space_inds(self%iptcl_map,iref)  = iref      ! stash the index for sorting
+                    ! calculate in-plane correlations
+                    call pftcc_glob%gencorrs(iref, self%iptcl, self%kstop_grid, inpl_corrs)
+                    ! identify the 3 top scoring in-planes
+                    loc = max3loc(inpl_corrs)
+                    ! stash in-plane correlations for sorting
+                    s3D%proj_space_corrs(self%iptcl_map,iref,:) = [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))]
+                    ! stash the reference index for sorting
+                    s3D%proj_space_refinds(self%iptcl_map,iref) = iref
+                    ! stash the in-plane indices
+                    s3D%proj_space_inplinds(self%iptcl_map,:)   = loc
                 endif
             end subroutine per_ref_srch
 
@@ -259,17 +265,17 @@ contains
             cnt = 0
             do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                 cnt = cnt + 1
-                ref = s3D%proj_space_inds(self%iptcl_map, i)
+                ref = s3D%proj_space_refinds(self%iptcl_map, i)
                 if( cnt <= CONTNPEAKS )then
                     ! continuous refinement over all df:s
-                    call o%set_euler(s3D%proj_space_euls(self%iptcl_map,ref,:))
+                    call o%set_euler(s3D%proj_space_euls(self%iptcl_map,ref,1,:))
                     call o%set_shift([0.,0.])
                     call self%grad_orisrch_obj%set_particle(self%iptcl)
                     cxy = self%grad_orisrch_obj%minimize(o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
                     if( found_better )then
-                        s3D%proj_space_euls(self%iptcl_map, ref, :) = o%get_euler()
-                        s3D%proj_space_corrs(self%iptcl_map,ref)    = cxy(1)
-                        s3D%proj_space_shift(self%iptcl_map,ref,:)  = cxy(2:3)
+                        s3D%proj_space_euls(self%iptcl_map, ref, 1,:) = o%get_euler()
+                        s3D%proj_space_corrs(self%iptcl_map,ref, 1)   = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref, 1,:) = cxy(2:3)
                     endif
                 else
                     ! refinement of in-plane rotation (discrete) & shift (continuous)
@@ -277,9 +283,9 @@ contains
                     cxy = self%grad_shsrch_obj%minimize(irot=irot)
                     if( irot > 0 )then
                         ! irot > 0 guarantees improvement found, update solution
-                        s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
-                        s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
+                        s3D%proj_space_euls(self%iptcl_map, ref,1, 3) = 360. - pftcc_glob%get_rot(irot)
+                        s3D%proj_space_corrs(self%iptcl_map,ref,1)   = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref,1,:) = cxy(2:3)
                     endif
                 endif
             end do
@@ -287,14 +293,14 @@ contains
             if( self%doshift )then
                 ! BFGS over shifts with in-plane rot exhaustive callback
                 do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                    ref = s3D%proj_space_inds(self%iptcl_map, i)
+                    ref = s3D%proj_space_refinds(self%iptcl_map, i)
                     call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
                     cxy = self%grad_shsrch_obj%minimize(irot=irot)
                     if( irot > 0 )then
                         ! irot > 0 guarantees improvement found, update solution
-                        s3D%proj_space_euls(self%iptcl_map, ref,3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%iptcl_map,ref)   = cxy(1)
-                        s3D%proj_space_shift(self%iptcl_map,ref,:) = cxy(2:3)
+                        s3D%proj_space_euls( self%iptcl_map,ref,1,3) = 360. - pftcc_glob%get_rot(irot)
+                        s3D%proj_space_corrs(self%iptcl_map,ref,1)   = cxy(1)
+                        s3D%proj_space_shift(self%iptcl_map,ref,1,:) = cxy(2:3)
                     endif
                 end do
             endif
@@ -318,13 +324,17 @@ contains
         DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED CALC_CORR'
     end subroutine calc_corr
 
-    subroutine store_solution( self, ind, ref, inpl_ind, corr )
+    subroutine store_solution( self, ind, ref, inpl_inds, corrs )
         class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ind, ref, inpl_ind
-        real,                   intent(in)    :: corr
-        s3D%proj_space_inds(self%iptcl_map,ind)   = ref
-        s3D%proj_space_euls(self%iptcl_map,ref,3) = 360. - pftcc_glob%get_rot(inpl_ind)
-        s3D%proj_space_corrs(self%iptcl_map,ref)  = corr
+        integer,                intent(in)    :: ind, ref, inpl_inds(MAXNINPLPEAKS)
+        real,                   intent(in)    :: corrs(MAXNINPLPEAKS)
+        integer :: inpl
+        s3D%proj_space_refinds(self%iptcl_map,ind) = ref
+        s3D%proj_space_inplinds(self%iptcl_map,:)  = inpl_inds
+        do inpl=1,MAXNINPLPEAKS
+            s3D%proj_space_euls(self%iptcl_map,ref,inpl,3) = 360. - pftcc_glob%get_rot(inpl_inds(inpl))
+        end do
+        s3D%proj_space_corrs(self%iptcl_map,ref,:) = corrs
     end subroutine store_solution
 
     subroutine kill( self )

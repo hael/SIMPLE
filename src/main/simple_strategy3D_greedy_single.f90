@@ -25,21 +25,22 @@ contains
         use simple_oris, only: oris
         class(strategy3D_greedy_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
+        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS)
         real      :: wcorr, frac, ang_sdev, dist_inpl, euldist
-        integer   :: best_loc(1)
-        logical   :: included(self%s%npeaks)
+        integer   :: best_loc(1), npeaks_all
+        logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
+        npeaks_all = self%s%npeaks * MAXNINPLPEAKS
         ! extract peak info
-        call extract_peaks( self%s, corrs )
+        call extract_peaks(self%s, corrs)
         ! stochastic weights
-        call corrs2softmax_weights( self%s, corrs, params_glob%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights(self%s, npeaks_all, corrs, params_glob%tau, ws, included, best_loc, wcorr)
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev( self%s, best_loc )
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             & s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! generate convergence stats
-        call convergence_stats_single( self%s, best_loc, euldist )
+        call convergence_stats_single(self%s, best_loc, euldist)
         ! fraction of search space scanned
         if( self%s%neigh )then
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nnn)

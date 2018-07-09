@@ -37,14 +37,14 @@ contains
 
     subroutine srch_snhc_single( self )
         class(strategy3D_snhc_single), intent(inout) :: self
-        integer :: iref, isample, loc(1), inpl_ind
-        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots), inpl_corr
+        integer :: iref, isample
+        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! initialize
             call self%s%prep4srch
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
-            s3D%proj_space_corrs(self%s%iptcl_map,:) = -1.
+            s3D%proj_space_corrs(self%s%iptcl_map,:,:) = -1.
             ! search
             do isample=1,self%spec%szsn
                 iref = s3D%srch_order(self%s%iptcl_map,isample) ! set the stochastic reference index
@@ -52,8 +52,8 @@ contains
             end do
             self%s%nrefs_eval = self%spec%szsn
             ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:)
-            call hpsort(corrs, s3D%proj_space_inds(self%s%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:,1)
+            call hpsort(corrs, s3D%proj_space_refinds(self%s%iptcl_map,:))
             ! output
             call self%oris_assign
         else
@@ -64,11 +64,13 @@ contains
         contains
 
             subroutine per_ref_srch
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs) ! In-plane correlations
-                loc        = maxloc(inpl_corrs)               ! greedy in-plane
-                inpl_ind   = loc(1)                           ! in-plane angle index
-                inpl_corr  = inpl_corrs(inpl_ind)             ! max in plane correlation
-                call self%s%store_solution(iref, iref, inpl_ind, inpl_corr)
+                integer :: loc(3)
+                ! calculate in-plane correlations
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                ! identify the 3 top scoring in-planes
+                loc = max3loc(inpl_corrs)
+                ! stash
+                call self%s%store_solution(iref, iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
             end subroutine per_ref_srch
 
     end subroutine srch_snhc_single
@@ -80,19 +82,19 @@ contains
         real       :: dist_inpl, corr, frac, euldist, bfac
         integer    :: ref, roind
         ! orientation parameters
-        ref = s3D%proj_space_inds(self%s%iptcl_map, self%s%nrefs)
+        ref = s3D%proj_space_refinds(self%s%iptcl_map, self%s%nrefs)
         if( ref < 1 .or. ref > self%s%nrefs )then
             print *, 'ref: ', ref
             write(*,*)'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
             stop 'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
         endif
-        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%iptcl_map, ref, 3))
+        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%iptcl_map,ref,1,3))
         ! transfer to solution set
-        corr = max(0., s3D%proj_space_corrs(self%s%iptcl_map,ref))
+        corr = max(0., s3D%proj_space_corrs(self%s%iptcl_map,ref,1))
         call s3D%o_peaks(self%s%iptcl)%set(1, 'state', 1.)
         call s3D%o_peaks(self%s%iptcl)%set(1, 'proj',  real(s3D%proj_space_proj(self%s%iptcl_map,ref)))
         call s3D%o_peaks(self%s%iptcl)%set(1, 'corr',  corr)
-        call s3D%o_peaks(self%s%iptcl)%set_euler(1, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call s3D%o_peaks(self%s%iptcl)%set_euler(1, s3D%proj_space_euls(self%s%iptcl_map,ref,1,1:3))
         call s3D%o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
         call s3D%o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
         ! B factor
@@ -124,7 +126,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
         call build_glob%spproj_field%set(self%s%iptcl, 'sdev',      0.)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
-        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,ref,1:3))
+        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,ref,1,1:3))
         call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single

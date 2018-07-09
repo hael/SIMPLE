@@ -2664,7 +2664,7 @@ contains
 
     !>
     function min3( rarr ) result(min_3)
-        real, intent(inout) :: rarr(:)
+        real, intent(in) :: rarr(:)
         real ::min_3(3)
         integer :: i, ir, j, l, n
         real    :: ra
@@ -2675,7 +2675,6 @@ contains
         end if
         min_3 = rarr(:3)
         call hpsort(min_3)
-
         do j=4,n
             if(rarr(j) < min_3(3))then
                 ra = rarr(j)
@@ -2691,6 +2690,44 @@ contains
             end if
         end do
     end function min3
+
+    function max3loc( rarr ) result( loc )
+        real, intent(in) :: rarr(:)
+        real :: x, arr(3), val
+        integer :: loc(3), i, sz
+        sz  = size(rarr)
+        loc = [0,0,0]
+        if( sz == 1 )then
+            loc = [1,0,0]
+        else if( sz == 2 )then
+            if( rarr(1) >= rarr(2) )then
+                loc = [1,2,0]
+            else
+                loc = [2,1,0]
+            endif
+        else
+            loc = [1,2,3]
+            arr = rarr(:3)
+            call hpsort(arr, loc)
+            call reverse(loc)
+            if( sz == 3 ) return
+            do i=4,sz
+                val = rarr(i)
+                if( val > rarr(loc(1)) )then
+                    loc = [i,loc(1),loc(2)]
+                    cycle
+                endif
+                if( val > rarr(loc(2)) )then
+                    loc = [loc(1),i,loc(3)]
+                    cycle
+                endif
+                if( val > rarr(loc(3)) )then
+                    loc = [loc(1),loc(2),i]
+                    cycle
+                endif
+            end do
+        endif
+    end function max3loc
 
     !>   selecting the size(rheap) largest
     ! subroutine hpsel_1( rarr, rheap )
