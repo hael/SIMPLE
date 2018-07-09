@@ -1,0 +1,45 @@
+.viewer #cavgs,#mic,#fits {
+	height: calc(80vh - 75px);
+	display: flex;
+	flex-direction: column;
+}
+
+.scrollmenu {
+	display: none;
+	height: 300px;
+}
+
+#cavgs,#ptclsviewer,#mic,#fits .thumbnails {
+	overflow-y: scroll;
+	overflow-x: hidden;
+}
+
+#cavgs .viewptcls {
+	position: relative;
+	bottom: 32px;
+	left: 0px;
+}
+
+#ptclsviewer .scrollmenu {
+	display: none;
+	height: 300px;
+}
+
+.viewer #ptclsviewer {
+	position: absolute;
+	top: 100px;
+	width: 80vw;
+	left: 5vw;
+	background-color: white;
+	border-radius: 6px;
+	padding: 10px;
+	height: 60vh;
+	display: none;
+}
+
+.viewer #ptcls {
+	height: calc(60vh - 75px);
+	display: flex;
+	flex-direction: column;
+}
+

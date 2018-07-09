@@ -1,0 +1,39 @@
+#viewwindowbody table{
+	width: 96vw;
+    margin-left: 2vw;
+    height: calc(100vh - 192px);
+    overflow: auto;
+    display: block;
+    font-size: 14px;
+    border-collapse: collapse;
+}
+
+#viewwindowbody table td:nth-child(4){
+	width: 100%;
+}
+
+#viewwindowbody table td:nth-child(5){
+	text-align: center;
+}
+
+#viewwindowbody table td{
+	padding-left: 10px;
+}
+
+#viewwindowbody table tr:nth-child(odd){
+	background-color: #D4DAED;
+}
+
+#viewwindowbody table tr:hover{
+	background-color: lightgrey;
+}
+
+#viewwindowbody table select{
+	background-image: url("../img/gear.png");
+	background-repeat: no-repeat;
+	width: 20px;
+	background-color: transparent;
+	border: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+}

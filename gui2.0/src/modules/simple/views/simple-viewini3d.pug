@@ -1,0 +1,24 @@
+div
+	h="View Initial 3D Model"
+	img#closebutton(
+		src="img/close.png"
+		onclick="viewer.hide()"
+	)
+
+select
+	each iteration, index in iterations
+		option(
+			onclick="simple.viewIni3dIteration('" + folder + "/" + iteration + "', true)"
+		)=index
+	if final
+		option(
+			onclick="simple.viewIni3dIteration('" + folder + "/rec_final.mrc', true)"
+		)="Final"
+label(
+	for="pproc"
+	)="Show Post Processed"
+input#pproc(
+	type="checkbox"
+)
+
+div#inivol

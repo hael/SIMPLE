@@ -1,0 +1,30 @@
+div
+	h="Task Selector"
+	img#closebutton(
+		src="img/close.png"
+		onclick="taskselector.hide()"
+	)
+
+div#taskselect
+	table#moduleselect
+		each task in tasks
+			tr(
+				onclick="taskselector.showModule(this, \'" + task['modulename'] + "\')"
+			)
+				td=task['moduletitle']
+
+	table#moduletasks
+		each task in tasks
+			each subtask in task['tasks']
+				tr(
+					data-module=task['modulename']
+					onclick="taskselector.showTask(this, \'" + subtask['name'] + "\', \'" + subtask['descr_short'] + "\' )"
+				)
+					td=subtask['name']
+		
+	div#modulehelp
+	
+div#selectorbuttons
+	button(onclick="taskselector.select()")="Start"
+
+	

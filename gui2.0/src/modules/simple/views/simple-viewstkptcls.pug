@@ -1,0 +1,49 @@
+each ptcl,index in ptcls
+	div.thumbnail
+		div.dynimgcontainer
+			img.dynimg(
+				data-frame=ptcl[0]
+				data-path=ptcl[1]
+			)
+					
+div.viewertoolbar
+	div
+		label(for='contrast') Contrast:
+		input#contrast(
+			type="range"
+			min="0"
+			max="200"
+			step="1"
+			value="100"
+			oninput="viewer.modifyImages('ptclsviewer')"
+		)
+	div
+		label(for='brightness') Brightness:
+		input#brightness(
+			type="range"
+			min="0"
+			max="200"
+			step="1"
+			value="100"
+			oninput="viewer.modifyImages('ptclsviewer')"
+		)
+	div
+		label(for='zoom') Zoom:
+		input#zoom(
+			type="range"
+			min="0.2"
+			max="2"
+			step="0.1"
+			value="1"
+			oninput="viewer.modifyImages('ptclsviewer')"
+		)
+	div
+		label(for='scale') Scale:
+		input#scale(
+			type="range"
+			min="50"
+			max="400"
+			step="10"
+			value="200"
+			oninput="viewer.scaleImages('ptclsviewer')"
+		)

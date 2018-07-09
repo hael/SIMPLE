@@ -1,0 +1,45 @@
+div
+	h="Task Selector"
+	img#closebutton(
+		src="img/close.png"
+		onclick="taskselector.hide()"
+	)
+
+div
+	p.inputlabel="Input File or Folder"
+	div
+		input#inputpath(type="text")
+		img(
+			src="img/folder.png"
+			onclick="browser.show({buttons : [{ name : 'select', action : 'taskselector.refineTasks'}], path : '/tmp', gauze : false})"
+		)
+
+div
+	div.tasklist
+		b.tasklisttitle="Package"
+		each module in tasks
+			div(
+				onclick="taskselector.refineTasks('" + module['moduletitle'] +"')"
+			)=module['moduletitle']
+	div.tasklist
+		b.tasklisttitle="Task"
+		div.tasklisttasks
+			each module in tasks
+				each task in module['tasks']
+					div.task(
+						data-module=module['moduletitle']
+						data-modulename=module['modulename']
+						data-task=task['name']
+						data-description=task['descr_short']
+						onclick="taskselector.select(this)"
+					)=task['name']
+				div.showalltasks(
+					onclick="taskselector.showAllTasks('" + module['moduletitle'] +"')"
+				)="Show All"
+				
+div
+	p.inputlabel="Description"
+	div#taskdescription
+
+div#selectorbuttons
+	button(onclick="tasksetup.show()")="Select"

@@ -1,0 +1,55 @@
+div
+	h="File Selector"
+	img#closebutton(
+		src="img/close.png"
+		onclick="browser.hide()"
+	)
+
+div
+	p.inputlabel="Folder"
+	input#sourcefolder(type="text" value=path)
+
+table
+	tr(
+		onclick="browser.stepUp(\'" + path + "\')"
+	)
+		td
+			img.folderimage(
+				src="img/folder.png"
+			)
+		td=".."
+	each folder in folders
+		tr(
+			onclick="browser.stepDown(\'" + path + "/" + folder + "\')"
+		)
+			td
+				img.folderimage(src="img/folder.png")
+			td(
+				data-path=path + "/" + folder
+				style="width:100%"
+			)=folder
+			
+	each file in files
+		tr.filerow(
+			onclick="browser.select(\'" + path + "/" + file + "\', this)"
+		)
+			td
+			td(
+				style="width:100%"
+			)=file
+		
+div
+	p.inputlabel="Filter"	
+	input#filter(
+		type="text"
+		value=filter
+	)
+
+div#selectorbuttons
+	each button in buttons
+		if (button['name'] == "view2d")		
+			button(onclick=button['action'])="View 2D"
+		if (button['name'] == "view3d")				
+			button(onclick=button['action'])="View 3D"
+		if (button['name'] == "select")
+			button(onclick="browser.hide();" + button['action']+"()")="Select"

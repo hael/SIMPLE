@@ -1,0 +1,13 @@
+div
+	h="Logfile Viewer"
+	img#closebutton(
+		src="img/close.png"
+		onclick="history2.hideLog()"
+	)
+	
+div
+	pre=data
+
+div#selectorbuttons
+	button(onclick="history2.hideLog()")="OK"
+

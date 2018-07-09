@@ -1,0 +1,21 @@
+div
+	h="View 3D"
+	img#closebutton(
+		src="img/close.png"
+		onclick="viewer.hide()"
+	)
+
+div#view3dpane
+	div#litemol
+	
+	div.viewertoolbar
+		div
+			label(for='sigma') Sigma:
+			input#sigma(
+				type="range"
+				min="0"
+				max="10"
+				step="0.1"
+				value="1"
+				onchange="viewer.updateIsoSurface(this.value)"
+			)

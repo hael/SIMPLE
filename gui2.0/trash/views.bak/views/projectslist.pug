@@ -1,0 +1,5 @@
+each project in projects
+	option(
+		value=project['history']
+		onclick="project.selectProject('" + project['id'] + "','" + project['name'] + "','" + project['history'] + "','" + project['folder'] + "')" 
+	)=project['name']

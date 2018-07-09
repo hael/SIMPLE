@@ -1,0 +1,113 @@
+div
+	h="View Particles"
+	img#closebutton(
+		src="img/close.png"
+		onclick="viewer.hide()"
+	)
+div#ptcls
+	div.thumbnails
+		each ptcl,index in ptcls
+			div.thumbnail(
+				data-x=ptcl[3]
+				data-y=ptcl[4]
+				data-dfx=ptcl[5]
+				data-dfy=ptcl[6]
+				data-angast=ptcl[7]
+				data-bfac=ptcl[10]
+				onclick="simple.lightPlot2Dptcl('" + index + "')"
+			)
+				div.dynimgcontainer
+					img.dynimg(
+						data-frame=ptcl[8]
+						data-path=ptcl[9]
+					)
+					
+	div.scrollmenu#plot
+		h="Plot"
+		label(
+			for="plottype"
+		)="Type"
+		select#plottype
+			option(
+				value="ptcl:x:scatter"
+			)="Particle vs X Translation"
+			option(
+				value="ptcl:y:scatter"
+			)="Particle vs Y Translation"
+			option(
+				value="ptcl:dfx:scatter"
+			)="Particle vs X Defocus"
+			option(
+				value="ptcl:dfy:scatter"
+			)="Particle vs Y Defocus"
+			option(
+				value="ptcl:angast:scatter"
+			)="Particle vs Astigmatism Angle"
+			option(
+				value="ptcl:bfac:scatter"
+			)="Particle vs B Factor"
+			option(
+				value="bfac:x:scatter"
+			)="B Factor vs X Translation"
+			option(
+				value="bfac:y:scatter"
+			)="B Factor vs Y Translation"
+			option(
+				value="bfac:dfx:scatter"
+			)="B Factor vs X Defocus"
+			option(
+				value="bfac:dfy:scatter"
+			)="B Factor vs Y Defocus"
+			option(
+				value="bfac:angast:scatter"
+			)="B Factor vs Astigmatism Angle"
+		button(
+			onclick="simple.plot2Dptcls('ptclsviewer')"
+		)="Apply"
+		div#ptcls2Dchart
+
+div.viewertoolbar
+	div
+		label(for='contrast') Contrast:
+		input#contrast(
+			type="range"
+			min="0"
+			max="200"
+			step="1"
+			value="100"
+			oninput="viewer.modifyImages('ptclsviewer')"
+		)
+	div
+		label(for='brightness') Brightness:
+		input#brightness(
+			type="range"
+			min="0"
+			max="200"
+			step="1"
+			value="100"
+			oninput="viewer.modifyImages('ptclsviewer')"
+		)
+	div
+		label(for='zoom') Zoom:
+		input#zoom(
+			type="range"
+			min="0.2"
+			max="2"
+			step="0.1"
+			value="1"
+			oninput="viewer.modifyImages('ptclsviewer')"
+		)
+	div
+		label(for='scale') Scale:
+		input#scale(
+			type="range"
+			min="50"
+			max="400"
+			step="10"
+			value="200"
+			oninput="viewer.scaleImages('ptclsviewer')"
+		)
+	div
+		button(
+			onclick="viewer.toggleScrollMenu('ptclsviewer', 'plot')"
+		)="Plot"

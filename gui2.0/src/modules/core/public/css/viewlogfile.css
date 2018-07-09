@@ -1,0 +1,39 @@
+.viewlogfile {
+	width: 36vw;
+	font-size: 11px;
+	position: absolute;
+	left: calc(50vw - 18vw);
+	top: 200px;
+	background-color: white;
+	padding: 10px;
+	z-index: 4;
+	border-radius: 6px;
+}
+
+
+.viewlogfile h{
+	font-weight: bold;
+	font-size: 14px;
+}
+
+.viewlogfile button{
+	width: 80px;
+	border-radius: 8px;
+	border-style: none;
+	font-size: 12px;
+	height: 30px;
+	margin-top: 5px;
+}
+
+.viewlogfile #selectorbuttons{
+	display: flex;
+	justify-content: space-between;
+	margin-left: 20%;
+	margin-right: 20%;
+}
+
+.viewlogfile #closebutton {
+	height: 12px;
+	float: right;
+}
+

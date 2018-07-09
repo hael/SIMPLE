@@ -1,0 +1,34 @@
+div
+	h="Folder Selector"
+	img#closebutton(
+		src="img/close.png"
+		onclick="fileselector.hide()"
+	)
+
+div
+	p.inputlabel="Folder"
+	input#sourcefolder(type="text" value=path)
+
+table
+	tr(
+		onclick="fileselector.requestFolderUp(\'" + path + "\')"
+	)
+		td
+			img.folderimage(
+				src="img/folder.png"
+			)
+		td=".."
+	each folder in folders
+		tr(
+			onclick="fileselector.folderRequest(\'" + path + "/" + folder + "\'); fileselector.selection = \'" + path + "/" + folder + "\'"
+		)
+			td
+				img.folderimage(src="img/folder.png")
+			td(
+				data-path=path + "/" + folder
+				style="width:100%"
+			)=folder
+
+div#selectorbuttons
+	button(onclick="fileselector.performAction()")="Select"
+	

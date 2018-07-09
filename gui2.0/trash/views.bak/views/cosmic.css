@@ -1,0 +1,7 @@
+#headerimage {
+	background-image: url("img/COSMIC-logo.png");
+	background-repeat: no-repeat;
+	display: block;
+	background-size: auto 90%; 
+	background-position: center; 
+}

@@ -1,0 +1,62 @@
+div
+	h="View 2D"
+	img#closebutton(
+		src="img/close.png"
+		onclick="viewer.hide()"
+	)
+
+div#frames
+	- var index = 0
+	while index < thumbcount
+		div.thumbnail
+			div.dynimgcontainer
+				img.dynimg(
+					data-path=path
+					data-frame=index
+				)
+		- index++
+	div.viewertoolbar
+		div
+			label(for='contrast') Contrast:
+			input#contrast(
+				type="range"
+				min="0"
+				max="200"
+				step="1"
+				value="100"
+				oninput="viewer.modifyImages()"
+			)
+		div
+			label(for='brightness') Brightness:
+			input#brightness(
+				type="range"
+				min="0"
+				max="200"
+				step="1"
+				value="100"
+				oninput="viewer.modifyImages()"
+			)
+		div
+			label(for='zoom') Zoom:
+			input#zoom(
+				type="range"
+				min="0.2"
+				max="2"
+				step="0.1"
+				value="1"
+				oninput="viewer.modifyImages()"
+			)
+		div
+			label(for='scale') Scale:
+			input#scale(
+				type="range"
+				min="50"
+				max="400"
+				step="10"
+				value="200"
+				oninput="viewer.scaleImages()"
+			)
+		div
+			button(
+				onclick=""
+			)="Save"

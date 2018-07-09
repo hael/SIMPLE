@@ -1,0 +1,159 @@
+mixin folder(key)
+	tr
+		td=key['descr_short']
+		td
+			input.argument(
+				id="key"+key['key']
+				data-key=key['key']
+				type="text"
+			)
+		td
+			img(
+				src="img/folder.png"
+				onclick="browser.show({buttons : [{ name : 'select', action : 'browser.setValue(\"key" +key['key'] + "\")'}], path : '/tmp', gauze : false})"
+			)
+		td
+			img(
+				src="img/help.png"
+				onclick="taskselector.showHelp(" + key['descr_long'] + ")"
+			)
+			
+mixin text(key)
+	tr
+		td=key['descr_short']
+		td
+			input.argument(
+				id="key"+key['key']
+				type="text"
+			)
+		td
+		td
+			img(
+				src="img/help.png"
+				onclick="taskselector.showHelp(" + key['descr_long'] + ")"
+			)
+		
+mixin number(key)
+	tr
+		td=key['descr_short']
+		td
+			input.argument(
+				id="key"+key['key']
+				type="text"
+			)
+		td
+		td
+			img(
+				src="img/help.png"
+				onclick="taskselector.showHelp(" + key['descr_long'] + ")"
+			)
+
+div
+	h="Create New Project"
+	img#closebutton(
+		src="img/close.png"
+		onclick="taskselector.hide()"
+	)
+
+div.inputpage.inputpageactive
+	h="Project Information"
+	table
+		+text({
+			"key": "name",
+			"descr_short": "Project Name",
+			"descr_long": "Name of the new project",
+			"descr_placeholder": "e.g. betagalactosidase",
+			"required": true
+		})
+		+text({
+			"key": "description",
+			"descr_short": "Project Description",
+			"descr_long": "Description of the new project",
+			"descr_placeholder": "e.g. processing of betagalactosidase data from Titan Krios",
+			"required": false
+		})
+		+folder({
+			"key": "folder",
+			"descr_short": "Project Folder",
+			"descr_long": "Folder to place output of tasks within",
+			"descr_placeholder": "e.g. /home/joebloggs/betagal",
+			"required": true
+		})
+		+text({
+			"key": "name",
+			"descr_short": "Project Name",
+			"descr_long": "Name of the new project",
+			"descr_placeholder": "e.g. betagalactosidase",
+			"required": true
+		})
+	button(
+		onclick="tasksetup.changepage(1)"
+	)="Next"
+	
+div.inputpage
+	h="Queuing System Information"
+	table
+		+text({
+			"key": "user_email",
+			"descr_short": "Email address",
+			"descr_long": "Email address for sending job reports from queuing system",
+			"descr_placeholder": "e.g. myname@uni.edu",
+			"required": true
+		})
+		+text({
+			"key": "job_memory_per_task",
+			"descr_short": "Task Memory",
+			"descr_long": "Memory per task",
+			"descr_placeholder": "e.g. 32000",
+			"required": false
+		})
+		+text({
+			"key": "qsys_partition",
+			"descr_short": "Queue Parition",
+			"descr_long": "Name of the queuing system partition",
+			"descr_placeholder": "eclipse",
+			"required": false
+		})
+		+text({
+			"key": "qsys_qos",
+			"descr_short": "Queue QOS",
+			"descr_long": "Quality of service",
+			"descr_placeholder": "normal",
+			"required": false
+		})
+		+text({
+			"key": "qsys_reservation",
+			"descr_short": "Queue Reservation",
+			"descr_long": "Reservation name",
+			"descr_placeholder": "reserved",
+			"required": false
+		})
+		+text({
+			"key": "time_per_image",
+			"descr_short": "Task Time",
+			"descr_long": "Maximum time per task",
+			"descr_placeholder": "e.g. 3600",
+			"required": false
+		})
+		+text({
+			"key": "user_account",
+			"descr_short": "Queue User Account",
+			"descr_long": "User account",
+			"descr_placeholder": "e.g. Account084",
+			"required": false
+		})
+		+text({
+			"key": "user_project",
+			"descr_short": "Queue Project Account",
+			"descr_long": "Project Account",
+			"descr_placeholder": "e.g. Project001",
+			"required": false
+		})
+		
+	button(
+		onclick="tasksetup.changepage(0)"
+	)="Back"
+
+	button(
+		onclick="projectselector.createProject()"
+	)="Create"
