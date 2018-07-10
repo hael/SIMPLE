@@ -51,7 +51,7 @@ contains
         else if( str_has_substr(fname_diag, INTGMOV_SUFFIX) )then
             fname_diag = swap_suffix(fname_diag, '_ctf_estimate_diag', INTGMOV_SUFFIX)
         endif
-        fname_diag = trim(dir_out)//'/'//trim(fname_diag)//trim(JPG_EXT)
+        fname_diag = filepath(dir_out,trim(fname_diag)//trim(JPG_EXT))
         ! fitting
         call ctf_estimate_init(pspec_all, pspec_lower, pspec_upper, ctfvars%smpd, ctfvars%kv,&
             &ctfvars%cs, ctfvars%fraca, [params_glob%dfmin,params_glob%dfmax],&

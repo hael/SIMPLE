@@ -102,7 +102,7 @@ contains
             l_pick = .false.
         endif
         ! output directories
-        output_dir = './'
+        output_dir = PATH_HERE
         ! read in movies
         call spproj%read(params%projfile)
         ! DISTRIBUTED EXECUTION
@@ -151,7 +151,7 @@ contains
         endif
         call spproj%kill
         ! output directory
-        output_dir = './'
+        output_dir = PATH_HERE
         ! setup the environment for distributed execution
         call qenv%new
         ! prepare job description
@@ -272,7 +272,7 @@ contains
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! output directory
-        output_dir = './'
+        output_dir = PATH_HERE
         ! setup the environment for distributed execution
         call qenv%new
         ! prepare job description
@@ -310,7 +310,7 @@ contains
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! output directory
-        output_dir = './'
+        output_dir = PATH_HERE
         ! setup the environment for distributed execution
         call qenv%new
         ! prepare job description
@@ -556,7 +556,7 @@ contains
             vol = 'startvol_state01'//params%ext
         endif
         ! splitting
-        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
+        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
@@ -595,10 +595,11 @@ contains
         integer,                   allocatable :: state_pops(:)
         character(len=STDLEN) :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
         character(len=STDLEN) :: vol_iter_odd, str, str_iter, optlp_file
-        character(len=STDLEN) :: str_state, fsc_file, volassemble_output
-        real    :: corr, corr_prev, smpd
-        integer :: s, state, iter, iostat, box, i, nfiles
-        logical :: vol_defined, have_oris, do_abinitio, converged, err, fall_over
+        character(len=STDLEN) :: str_state, fsc_file
+        character(len=LONGSTRLEN) :: volassemble_output
+        real                  :: corr, corr_prev, smpd
+        integer               :: i, s, state, iter, iostat, box, nfiles
+        logical               :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
@@ -620,7 +621,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new
         ! splitting
-        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
+        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
         cline_refine3D_init       = cline
@@ -680,7 +681,7 @@ contains
                     stop 'simple_commander_distr_wflows ::  exec_refine3D_distr'
                 endif
                 do i=1,nfiles
-                    target_name = './'//basename(trim(list(i)))
+                    target_name = PATH_HERE//basename(trim(list(i)))
                     call syslib_copy_file(trim(list(i)), target_name)
                 end do
             endif
@@ -892,7 +893,10 @@ contains
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         type(chash)                        :: job_descr
         integer                            :: state
+        integer(timer_int_kind)            :: treconstruct3D, tsplit
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        DebugPrint 'in exec_reconstruct3D_distr:'
+        treconstruct3D = tic()
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)
         ! set mkdir to no (to avoid nested directory structure)
@@ -901,8 +905,11 @@ contains
         call qenv%new
         call cline%gen_job_descr(job_descr)
         ! splitting
-        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
+        tsplit=tic()
+        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
+        DebugPrint 'in exec_reconstruct3D_distr: splitting stack                 ',toc(tsplit)
         ! eo partitioning
+
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then
                 if( params%tseries .eq. 'yes' )then
@@ -913,8 +920,11 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
             endif
         endif
+        DebugPrint 'in exec_reconstruct3D_distr: eo partitioning    accum secs   ',toc(treconstruct3D)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        !call qenv%gen_scripts_and_schedule_optimised_jobs(job_descr)
+        DebugPrint 'in exec_reconstruct3D_distr: qenv scheduling   accum secs    ',toc(treconstruct3D)
         ! assemble volumes
         ! this is for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) )
@@ -928,6 +938,7 @@ contains
             call cline_volassemble%set('prg', 'volassemble')
         endif
         ! parallel assembly
+        DebugPrint 'in exec_reconstruct3D_distr: parallel assembly accum secs    ',toc(treconstruct3D)
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
             if( params%eo .ne. 'no' )then
@@ -939,6 +950,7 @@ contains
             call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                 &script_name='simple_script_state'//trim(str_state))
         end do
+        DebugPrint 'in exec_reconstruct3D_distr: Completed in total time         ',toc(treconstruct3D), ' secs'
         call qsys_watcher(state_assemble_finished)
         ! termination
         call qsys_cleanup
@@ -1003,7 +1015,7 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
 
-    subroutine exec_scale_project_distr( self, cline )
+    recursive subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(scale_project_distr_commander) :: xscale_distr
@@ -1045,8 +1057,8 @@ contains
         if( gen_sc_project )then
             ! make new project & scales
             smpd_target = max(smpd, smpd * real(box)/real(params%newbox))
-            call simple_mkdir('../stack_parts_sc')
-            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale, dir='../stack_parts_sc')
+            call simple_mkdir(PATH_PARENT//'stack_parts_sc')
+            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale, dir=PATH_PARENT//'stack_parts_sc')
             newbox = nint(cline_scale%get_rarg('newbox'))
             if( newbox == box )then
                 write(*,*)'Inconsistent input dimensions: from ',box,' to ',newbox

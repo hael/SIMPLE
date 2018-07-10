@@ -292,15 +292,15 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call params%new(cline)
-        if( file_exists('./'//trim(params%projname)) )then
+        if( file_exists(PATH_HERE//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
             write(*,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
             stop 'ABORTING... commander_project :: new_project'
         endif
         ! make project directory
-        call simple_mkdir('./'//trim(params%projname))
+        call simple_mkdir(PATH_HERE//trim(params%projname))
         ! change to project directory
-        call simple_chdir('./'//trim(params%projname))
+        call simple_chdir(PATH_HERE//trim(params%projname))
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
@@ -318,13 +318,13 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call params%new(cline)
-        if( .not. file_exists('./'//trim(params%projname)) )then
+        if( .not. file_exists(PATH_HERE//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' does not exist in cwd: ', trim(params%cwd)
             write(*,*) 'Use program new_project to create a new project from scratch'
             stop 'ABORTING... commander_project :: update_project'
         endif
         ! change to project directory
-        call simple_chdir('./'//trim(params%projname))
+        call simple_chdir(PATH_HERE//trim(params%projname))
         ! read project
         call spproj%read(trim(params%projfile))
         ! update project info

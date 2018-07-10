@@ -44,6 +44,6 @@ command = 'simple_test_srch vol1=cubes.mrc msk='//int2str(msk)//&
     & ' smpd='//real2str(smpd)//' verbose=no'
 call exec_cmdline( trim(command) )
 ! end
-call simple_chdir('../')
+call simple_chdir(PATH_PARENT)
 call simple_end('**** SIMPLE_TEST_INSTALL NORMAL STOP ****')
 end program simple_test_install

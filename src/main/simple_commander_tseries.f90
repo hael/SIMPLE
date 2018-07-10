@@ -245,8 +245,8 @@ contains
             call progress(cnt,ntot)
             call os%new(params%chunksz)
             call simple_mkdir('tseries_chunk'//int2str_pad(cnt,numlen))
-            allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//params%ext)
-            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//trim(TXT_EXT))
+            stkname = filepath(PATH_HERE,'tseries_chunk'//int2str_pad(cnt,numlen),'imgs'//params%ext)
+            oriname = filepath('tseries_chunk'//int2str_pad(cnt,numlen),'oris'//trim(TXT_EXT))
             call del_file( stkname )
             call del_file( oriname )
             cnt2 = 0

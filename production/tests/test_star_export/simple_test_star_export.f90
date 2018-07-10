@@ -23,7 +23,7 @@ type(star_project) :: s
 type(stardoc) :: sdoc
 type(star_dict) :: sdict
 call date_and_time(date=datestr)
-folder = trim('./SIMPLE_TEST_SSIM_'//datestr)
+folder = PATH_HERE//'SIMPLE_TEST_SSIM_'//trim(datestr)
 call simple_mkdir( trim(folder) , status=io_stat)
 if(io_stat/=0) call simple_stop("simple_mkdir failed")
 print *," Changing directory to ", folder
@@ -42,7 +42,7 @@ call sdict%print_star_dict()
 ! call test_stardoc
 
 print *,' Testing directory star_test'
-call system('ls '//trim(adjustl(simple_testbench))//'/star_test')
+call system('ls '//trim(adjustl(simple_testbench))//PATH_SEPARATOR//'star_test')
 
 !! Motion Correction
 ! call s%export_motion_corrected_micrographs (trim('tmp_mc.star'))

@@ -81,7 +81,7 @@ contains
             call spproj%write_segment_inside(params%oritype)
         endif
         ! splitting
-        call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
+        call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! general options planning
         if( params%l_autoscale )then
             ! this workflow executes two stages of CLUSTER2D
@@ -299,7 +299,8 @@ contains
             states = nint(spproj%os_cls2D%get_all('state'))
         endif
         if( count(states==0) .eq. ncavgs )then
-            write(*,*) 'No class averages detected in project file: ',trim(params%projfile), '; simple_commander_hlev_wflows::initial_3Dmodel'
+            write(*,*) 'No class averages detected in project file: ',trim(params%projfile), &
+                '; simple_commander_hlev_wflows::initial_3Dmodel'
             stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
         endif
         params%smpd = ctfvars%smpd
@@ -1234,7 +1235,7 @@ contains
             ! name & directory
             projname         = 'state_'//trim(int2str_pad(state,2))
             projfiles(state) = trim(projname)//trim(METADATA_EXT)
-            dirs(state)      = trim(int2str(state))//'_refine3D/'
+            dirs(state)      = trim(int2str(state))//'_refine3D'
             ! command line
             cline_refine3D(state) = cline
             call cline_refine3D(state)%set('prg',     'refine3D')
@@ -1268,7 +1269,7 @@ contains
             params_glob%nstates = 1
             params_glob%state   = 1
             call xrefine3D_distr%execute(cline_refine3D(state))
-            call simple_chdir('..')
+            call simple_chdir(PATH_PARENT)
             ! renames volumes and updates in os_out
             call stash_state(state)
         enddo
@@ -1282,7 +1283,7 @@ contains
             if( state_pops(state) == 0 )cycle
             if( l_singlestate .and. state.ne.single_state )cycle
             ! transfer orientations
-            call spproj%read_segment(params%oritype, trim(dirs(state))//trim(projfiles(state)))
+            call spproj%read_segment(params%oritype, filepath(dirs(state),projfiles(state)))
             do iptcl=1,params%nptcls
                 if( master_states(iptcl)==state )then
                     call spproj_master%os_ptcl3D%set_ori(iptcl, spproj%os_ptcl3D%get_ori(iptcl))
@@ -1315,25 +1316,25 @@ contains
                 do it = 1,final_it
                     str_iter = '_iter'//int2str_pad(it,3)
                     ! volume
-                    src  = trim(dirs(s))//trim(VOL_FBODY)//one//str_iter//params%ext
+                    src  = filepath( dirs(s),trim(VOL_FBODY)//one//str_iter//params%ext)
                     dest = trim(VOL_FBODY)//str_state//str_iter//params%ext
                     stat = simple_rename(src, dest)
                     ! post_processed volume
-                    src  = trim(dirs(s))//trim(VOL_FBODY)//one//str_iter//trim(PPROC_SUFFIX)//params%ext
+                    src  = filepath( dirs(s), trim(VOL_FBODY)//one//str_iter//trim(PPROC_SUFFIX)//params%ext)
                     dest = trim(VOL_FBODY)//str_state//str_iter//trim(PPROC_SUFFIX)//params%ext
                     stat = simple_rename(src, dest)
                     ! e/o
                     if( params%eo.ne.'no')then
                         ! e/o
-                        src  = trim(dirs(s))//trim(VOL_FBODY)//one//str_iter//'_even'//params%ext
+                        src  = filepath( dirs(s), trim(VOL_FBODY)//one//str_iter//'_even'//params%ext)
                         dest = trim(VOL_FBODY)//str_state//str_iter//'_even'//params%ext
                         stat = simple_rename(src, dest)
-                        src  = trim(dirs(s))//trim(VOL_FBODY)//one//str_iter//'_odd'//params%ext
+                        src  = filepath( dirs(s), trim(VOL_FBODY)//one//str_iter//'_odd'//params%ext)
                         dest = trim(VOL_FBODY)//str_state//str_iter//'_odd'//params%ext
                         stat = simple_rename(src, dest)
                         ! FSC
                         str_iter = '_ITER'//int2str_pad(it,3)
-                        src  = trim(dirs(s))//'RESOLUTION_STATE'//one//str_iter
+                        src  = filepath( dirs(s), 'RESOLUTION_STATE'//one//str_iter)
                         dest = 'RESOLUTION_STATE'//str_state//str_iter
                         stat = simple_rename(src, dest)
                     endif
@@ -1343,11 +1344,11 @@ contains
                 src = trim(VOL_FBODY)//str_state//str_iter//params%ext
                 call spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol')
                 if( params%eo.ne.'no')then
-                    src  = trim(dirs(s))//trim(FSC_FBODY)//one//BIN_EXT
+                    src  = filepath( dirs(s), trim(FSC_FBODY)//one//BIN_EXT)
                     dest = trim(FSC_FBODY)//str_state//BIN_EXT
                     stat = simple_rename(src, dest)
                     call spproj_master%add_fsc2os_out(trim(dest), s, params%box)
-                    src  = trim(dirs(s))//trim(ANISOLP_FBODY)//one//params%ext
+                    src  = filepath( dirs(s), trim(ANISOLP_FBODY)//one//params%ext)
                     dest = trim(ANISOLP_FBODY)//str_state//params%ext
                     stat = simple_rename(src, dest)
                     call  spproj_master%add_vol2os_out(trim(dest), params%smpd, s, 'vol_filt')

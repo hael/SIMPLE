@@ -181,7 +181,7 @@ contains
             enddo
             ! output
             fbody = trim(get_fbody(trim(params%pdbfile), 'pdb'))
-            csv_name = './'//trim(adjustl(fbody))//'_intg.csv'
+            csv_name = PATH_HERE//trim(adjustl(fbody))//'_intg.csv'
             call fopen(fnr, FILE=csv_name, STATUS='REPLACE', action='WRITE', iostat=file_stat)
             call fileiochk('commander_misc; exec_intgpeaks ', file_stat)
             do i = 1, natoms

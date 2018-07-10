@@ -98,10 +98,10 @@ contains
             stop 'No movie to process!'
         endif
         ! output directories & naming
-        output_dir_ctf_estimate   = './'
-        output_dir_motion_correct = './'
+        output_dir_ctf_estimate   = PATH_HERE
+        output_dir_motion_correct = PATH_HERE
         if( l_pick )then
-            output_dir_picker  = './'
+            output_dir_picker  = PATH_HERE
         endif
         if( params%stream.eq.'yes' )then
             output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
@@ -315,7 +315,7 @@ contains
             endif
         endif
         ! output directory & names
-        output_dir = './'
+        output_dir = PATH_HERE
         if( cline%defined('fbody') )then
             fbody = trim(params%fbody)
         else
@@ -387,7 +387,7 @@ contains
             stop 'No integrated micrograph to process!'
         endif
         ! output directory
-        output_dir = './'
+        output_dir = PATH_HERE
         ! parameters & loop range
         if( params%stream .eq. 'yes' )then
             ! determine loop range
@@ -492,7 +492,7 @@ contains
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
-        output_dir = './'
+        output_dir = PATH_HERE
         ! parameters & loop range
         if( params%stream .eq. 'yes' )then
             ! determine loop range
@@ -562,7 +562,7 @@ contains
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
-        output_dir = './'
+        output_dir = PATH_HERE
         if( params%stream.eq.'yes' )output_dir = DIR_EXTRACT
         ! read in integrated movies
         call spproj%read_segment(params%oritype, params_glob%projfile)
@@ -765,23 +765,24 @@ contains
         if( spproj%get_nintgs() == 0 )then
             stop 'No micrograph to process!'
         endif
-        ! command lines
-        cline_extract = cline
-        call cline_extract%set('dir', trim(output_dir_extract)) !! output_dir_extract may be used uninitialized
-        call cline_extract%set('pcontrast', params%pcontrast)
-        if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
-        call cline%delete('box')
-        call cline_extract%delete('box_extract')
-        ! output directories & naming
+        ! output directories
         if( params%stream.eq.'yes' )then
             output_dir_picker  = trim(DIR_PICKER)
             output_dir_extract = trim(DIR_EXTRACT)
             call simple_mkdir(output_dir_picker)
             call simple_mkdir(output_dir_extract)
         else
-            output_dir_picker  = './'
-            output_dir_extract = './'
+            output_dir_picker  = PATH_HERE
+            output_dir_extract = PATH_HERE
         endif
+        ! command lines
+        cline_extract = cline
+        call cline_extract%set('dir', trim(output_dir_extract))
+        call cline_extract%set('pcontrast', params%pcontrast)
+        if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
+        call cline%delete('box')
+        call cline_extract%delete('box_extract')
+         ! file name
         if( cline%defined('fbody') )then
             fbody = trim(params%fbody)
         else

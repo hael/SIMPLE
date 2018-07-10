@@ -814,14 +814,14 @@ contains
                 idir          = find_next_int_dir_prefix(self%cwd)
                 self%exec_dir = int2str(idir)//'_'//trim(self%prg)
                 ! make execution directory
-                call simple_mkdir('./'//trim(self%exec_dir))
+                call simple_mkdir(PATH_HERE//trim(self%exec_dir))
                 ! change to execution directory directory
-                call simple_chdir('./'//trim(self%exec_dir))
+                call simple_chdir(PATH_HERE//trim(self%exec_dir))
                 if( self%sp_required )then
                     ! copy the project file from upstairs
-                    call syslib_copy_file(trim(self%projfile), './'//basename(self%projfile))
+                    call syslib_copy_file(trim(self%projfile), PATH_HERE//basename(self%projfile))
                     ! update the projfile/projname
-                    self%projfile = './'//basename(self%projfile)
+                    self%projfile = PATH_HERE//basename(self%projfile)
                     call simple_full_path(trim(self%projfile), absname, 'simple_parameters::new')
                     self%projfile = absname
                     self%projname = get_fbody(basename(self%projfile), 'simple')
@@ -872,8 +872,8 @@ contains
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
-            if( self%dir_movies(1:1).ne.'/' )self%dir_movies = '../'//trim(self%dir_movies)
-            if( self%dir_target(1:1).ne.'/' )self%dir_target = '../'//trim(self%dir_target)
+            if( self%dir_movies(1:1).ne.PATH_SEPARATOR )self%dir_movies = PATH_PARENT//trim(self%dir_movies)
+            if( self%dir_target(1:1).ne.PATH_SEPARATOR )self%dir_target = PATH_PARENT//trim(self%dir_target)
         endif
         ! project file segment
         if( cline%defined('oritype') )then
@@ -1286,7 +1286,7 @@ contains
                 key = 'vol'//int2str(i)
                 if( cline%defined(key) )then
                     vol = trim(cline%get_carg(key))
-                    if( vol(1:1).eq.'/' )then
+                    if( vol(1:1).eq.PATH_SEPARATOR )then
                         ! already in absolute path format
                         call check_file(key, self%vols(i), notAllowed='T')
                         if( .not. file_exists(self%vols(i)) )then
@@ -1297,7 +1297,7 @@ contains
                         if( self%mkdir .eq. 'yes' )then
                             ! with respect to parent folder
                             ! needs to be done here because not part of the check_file list
-                            vol = '../'//trim(vol)
+                            vol = PATH_PARENT//trim(vol)
                             call cline%set(key, vol)
                         endif
                         call check_file(key, self%vols(i), notAllowed='T')
@@ -1323,8 +1323,8 @@ contains
                 character(len=:), allocatable :: abs_name
                 integer                       :: nl, fnr, i, io_stat
                 filename = cline%get_carg('vollist')
-                if( filename(1:1).ne.'/' )then
-                    if( self%mkdir.eq.'yes' ) filename = '../'//trim(filename)
+                if( filename(1:1).ne.PATH_SEPARATOR )then
+                    if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
                 endif
                 nl = nlines(filename)
                 call fopen(fnr, file=filename, iostat=io_stat)
@@ -1346,8 +1346,8 @@ contains
                 character(len=:), allocatable :: abs_name
                 integer                       :: nl, fnr, i, io_stat
                 filename = cline%get_carg('msklist')
-                if( filename(1:1).ne.'/' )then
-                    if( self%mkdir.eq.'yes' ) filename = '../'//trim(filename)
+                if( filename(1:1).ne.PATH_SEPARATOR )then
+                    if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
                 endif
                 nl = nlines(filename)
                 call fopen(fnr, file=filename, iostat=io_stat)

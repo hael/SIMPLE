@@ -320,7 +320,7 @@ contains
     end subroutine exec_normalize
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
-    subroutine exec_scale( self, cline )
+    recursive subroutine exec_scale( self, cline )
         use simple_procimgfile, only: resize_imgfile_double, resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
         use simple_image,       only: image
         use simple_qsys_funs,   only: qsys_job_finished
@@ -420,7 +420,7 @@ contains
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
                 if( cline%defined('dir_target') )then
-                    fname = trim(params%dir_target)//'/'//add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX)
+                    fname = filepath(params%dir_target,add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX))
                 else
                     fname = add2fbody(trim(filenames(ifile)), params%ext, '_sc')
                 endif

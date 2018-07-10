@@ -18,7 +18,8 @@ contains
         ! read
         call volprojobj%read(volfname)
         ! clip
-        if( params_glob%boxmatch < params_glob%box ) call volprojobj%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
+        if( params_glob%boxmatch < params_glob%box ) &
+            call volprojobj%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
         ! mask
         call volprojobj%mask(params_glob%msk,'soft')
         ! FT

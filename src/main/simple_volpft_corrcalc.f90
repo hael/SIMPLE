@@ -103,7 +103,7 @@ contains
         class(projector), target, intent(in)    :: vol
         real,                     intent(in)    :: hp, lp, alpha
         integer    :: ispace, k
-        real       :: vec(3), eullims(3,2), rmat(3,3)
+        real       :: vec(3), rmat(3,3)
         type(ori)  :: e
         type(sym) :: ico
         call self%kill

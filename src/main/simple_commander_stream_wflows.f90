@@ -63,15 +63,15 @@ contains
         ! check for previously processed movies
         call spproj%get_movies_table(prev_movies)
         ! output directories
-        output_dir = './'
-        output_dir_ctf_estimate   = trim(output_dir)//trim(DIR_CTF_ESTIMATE)
-        output_dir_motion_correct = trim(output_dir)//trim(DIR_MOTION_CORRECT)
+        output_dir = PATH_HERE
+        output_dir_ctf_estimate   = filepath(output_dir, DIR_CTF_ESTIMATE)
+        output_dir_motion_correct = filepath(output_dir, DIR_MOTION_CORRECT)
         call simple_mkdir(output_dir)
         call simple_mkdir(output_dir_ctf_estimate)
         call simple_mkdir(output_dir_motion_correct)
         if( l_pick )then
-            output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-            output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
+            output_dir_picker  = filepath(output_dir, DIR_PICKER)
+            output_dir_extract = filepath(output_dir, DIR_EXTRACT)
             call simple_mkdir(output_dir_picker)
             call simple_mkdir(output_dir_extract)
         endif
@@ -266,10 +266,10 @@ contains
         do_autoscale = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
         ind = len_trim(params%dir_target)
-        if( params%dir_target(ind:ind).eq.'/' )then
-            allocate(spproj_list_fname, source=trim(params%dir_target)//trim(STREAM_SPPROJFILES))
+        if( params%dir_target(ind:ind).eq.PATH_HERE )then
+            spproj_list_fname = filepath(params%dir_target, STREAM_SPPROJFILES)
         else
-            allocate(spproj_list_fname, source=trim(params%dir_target)//'/'//trim(STREAM_SPPROJFILES))
+            spproj_list_fname = filepath(params%dir_target, STREAM_SPPROJFILES)
         endif
         ! for microscopes that don't work too good
         if(.not.cline%defined('time_inactive'))params%time_inactive = 24*3600
@@ -547,7 +547,7 @@ contains
                 call qsys_cleanup
                 do istk=1,size(stk_fnames)
                     fname            = add2fbody(stk_fnames(istk), params%ext, SCALE_SUFFIX)
-                    stk_fnames(istk) = trim(SCALE_DIR)//trim(basename(fname))
+                    stk_fnames(istk) = filepath(SCALE_DIR, basename(fname))
                 enddo
                 call del_file(SCALE_FILETAB)
             end subroutine scale_stks
@@ -675,15 +675,15 @@ contains
         params_glob%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
         if( .not.file_exists(params%projfile) )stop 'Project does not exist!'
-        allocate(spproj_list_fname, source=trim(params%dir_target)//trim(STREAM_SPPROJFILES))
+        spproj_list_fname = filepath(params%dir_target,STREAM_SPPROJFILES)
         ! read project info
         call orig_proj%read(params%projfile)
         ! setup the environment for distributed execution
         call qenv%new(stream=.true.)
         ! output directories
-        output_dir = './'
-        output_dir_picker  = trim(output_dir)//trim(DIR_PICKER)
-        output_dir_extract = trim(output_dir)//trim(DIR_EXTRACT)
+        output_dir = PATH_HERE
+        output_dir_picker  = filepath(output_dir, DIR_PICKER)
+        output_dir_extract = filepath(output_dir, DIR_EXTRACT)
         call simple_mkdir(output_dir)
         call simple_mkdir(output_dir_picker)
         call simple_mkdir(output_dir_extract)
@@ -712,7 +712,7 @@ contains
                         ! copy projects and add to processing stack
                         do iproj = n_spprojs_prev+1, n_spprojs
                             call stream_proj%read(spproj_list(iproj))
-                            projfname  = './'//trim(basename(spproj_list(iproj)))
+                            projfname  = filepath(PATH_HERE, basename(spproj_list(iproj)))
                             call stream_proj%write(projfname)
                             call cline_pick_extract%set('projfile', trim(projfname))
                             call qenv%qscripts%add_to_streaming( cline_pick_extract )

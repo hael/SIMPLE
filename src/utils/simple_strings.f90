@@ -56,7 +56,7 @@ contains
             return
         endif
         ! check if string contains / -> directory
-        i = index(str, '/')
+        i = index(str, PATH_SEPARATOR)
         if( i /= 0 )then
             allocate(format, source='dir')
             return

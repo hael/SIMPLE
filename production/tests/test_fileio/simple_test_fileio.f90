@@ -130,7 +130,7 @@ program simple_test_fileio
 
     write(*,*)'>>> Testing Read/Write accuracy (floats)'
     call test_readwrite_accuracy
-    call simple_chdir('../')
+    call simple_chdir(PATH_PARENT)
     call simple_end('**** SIMPLE_TEST_FILEIO NORMAL STOP ****')
 
 

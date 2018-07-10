@@ -96,7 +96,7 @@ contains
         type(ori)  :: symaxis
         type(oris) :: espace
         type(oris) :: cand_axes
-        integer    :: ffromto(2), ntot, inpl, iproj, iproj_best, err
+        integer    :: ffromto(2), ntot, inpl, iproj, iproj_best
         integer    :: inpl_best, istop, ithr, iloc, n_inpls
         real       :: eul(3), corr_best, cost
         logical    :: distr_exec
@@ -207,8 +207,8 @@ contains
         real    :: cc, rmat(3,3)
         complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace)
         complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace)
-        real    :: sqsum_targets(nsym), eul_swap(3), sqsum_sum
-        integer :: isym, jsym
+        real    :: sqsum_targets(nsym), sqsum_sum
+        integer :: isym
         sum_of_sym_targets = cmplx(0.,0.)
         do isym=1,nsym
             ! extracts Fourier component distribution @ symaxis @ symop isym
