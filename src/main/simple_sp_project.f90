@@ -932,16 +932,17 @@ contains
         box  = nint(orig_stk%get('box'))
         call img%new([box,box,1], smpd)
         if( present(dir) )then
-            tmp_dir = trim(dir) // '/tmp_stacks/'
+            tmp_dir = filepath(dir,'tmp_stacks')
         else
             call simple_getcwd(cwd)
-            tmp_dir = trim(cwd) // '/tmp_stacks/'
+            tmp_dir = filepath(cwd,'tmp_stacks')
         endif
         call simple_mkdir(trim(tmp_dir))
         write(*,'(a)') '>>> SPLITTING STACK INTO PARTS'
         do istk = 1,nparts
+
             call progress(istk,nparts)
-            allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
+            stkpart = filepath(tmp_dir,'stack_part'//int2str_pad(istk,numlen)//EXT)
             cnt = 0
             do iptcl = parts(istk,1), parts(istk,2)
                 cnt = cnt + 1
@@ -954,15 +955,15 @@ contains
         call img%kill
         call self%os_stk%new(nparts)
         if( present(dir) )then
-            call simple_mkdir(trim(dir)//'/'//trim(STKPARTSDIR), status=status)
+            call simple_mkdir(trim(dir)//path_separator//trim(STKPARTSDIR), status=status)
         else
             call simple_mkdir(trim(STKPARTSDIR), status=status)
         endif
         do istk = 1,nparts
             ! file stuff
-            allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
+            stkpart = filepath(tmp_dir,'stack_part'//int2str_pad(istk,numlen)//EXT)
             if( present(dir) )then
-                allocate(dest_stkpart, source=trim(dir)//'/'//trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+                allocate(dest_stkpart, source=trim(dir)//PATH_SEPARATOR//trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             else
                 allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             endif
@@ -1033,7 +1034,7 @@ contains
     subroutine add_scale_tag( self, dir )
         class(sp_project),          intent(inout) :: self
         character(len=*), optional, intent(in)    :: dir
-        character(len=:), allocatable :: ext, newname, stkname, abs_dir
+        character(len=:), allocatable :: ext, newname, stkname, abs_dir, nametmp
         character(len=4) :: ext_out
         integer :: imic, nmics
         nmics = self%os_stk%get_noris()
@@ -1052,7 +1053,8 @@ contains
             if(present(dir))then
                 call simple_mkdir(trim(dir))
                 call simple_full_path(dir, abs_dir, 'sp_project :: add_scale_tag')
-                newname = trim(abs_dir)//'/'//basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
+                nametmp = basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
+                newname = filepath(abs_dir, nametmp)
             else
                 newname = add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX))
             endif
@@ -1831,7 +1833,7 @@ contains
         call cline_scale%set('scale',    scale_factor)
         call cline_scale%set('projfile', projfile)
         call cline_scale%set('smpd',     smpd_sc)
-        if(present(dir))call cline_scale%set('dir_target',trim(dir)//'/')
+        if(present(dir))call cline_scale%set('dir_target',trim(dir)//path_separator)
         if( box == box_sc )then
             ! no scaling
             new_projfile = trim(projfile)
@@ -1856,7 +1858,7 @@ contains
         call cline%delete('projfile')
         call self%update_projinfo( cline )
         if(present(dir))then
-            call self%add_scale_tag(dir=trim(dir)//'/')
+            call self%add_scale_tag(dir=trim(dir)//path_separator)
         else
             call self%add_scale_tag
         endif
