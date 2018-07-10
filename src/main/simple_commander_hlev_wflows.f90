@@ -707,11 +707,7 @@ contains
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
             case DEFAULT
-                if( .not.cline%defined('refine') )then
-                    call cline_refine3D1%set('refine', 'cluster')
-                else
-                    call cline_refine3D1%set('refine', trim(params%refine))
-                endif
+                call cline_refine3D1%set('refine', trim(params%refine))
         end select
         call cline_refine3D1%delete('neigh')
         call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization

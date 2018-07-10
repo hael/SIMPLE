@@ -37,7 +37,7 @@ contains
         use simple_strategy2D_greedy,     only: strategy2D_greedy
         use simple_strategy2D_neigh,      only: strategy2D_neigh
         use simple_strategy2D_stochastic, only: strategy2D_stochastic
-        use simple_strategy2D_stochasticneigh, only: strategy2D_stochasticneigh
+        use simple_strategy2D_snhc,       only: strategy2D_snhc
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         integer, allocatable  :: prev_pops(:), pinds(:), w_pinds(:)
@@ -222,10 +222,10 @@ contains
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. update_cnt == 1 )then
                             allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
-                            if(params_glob%refine.eq.'stochneigh')then
-                                allocate(strategy2D_stochasticneigh :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            if(params_glob%refine.eq.'snhc')then
+                                allocate(strategy2D_snhc       :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                             else
-                                allocate(strategy2D_stochastic      :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                                allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                             endif
                         endif
                         if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
@@ -240,7 +240,11 @@ contains
                 ! search spec
                 strategy2Dspec%iptcl      = iptcl
                 strategy2Dspec%iptcl_map  = cnt
-                strategy2Dspec%extr_bound = extr_bound
+                if( params_glob%refine.eq.'snhc' )then
+                    strategy2Dspec%extr_bound = extr_thresh
+                else
+                    strategy2Dspec%extr_bound = extr_bound
+                endif
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif

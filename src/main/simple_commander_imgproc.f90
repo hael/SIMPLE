@@ -176,11 +176,13 @@ contains
 
     subroutine exec_filter( self, cline )
         use simple_procimgfile, only:bp_imgfile, real_filter_imgfile, phase_rand_imgfile, matchfilt_imgfile
+        use simple_estimate_ssnr, only: fsc2optlp
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        real             :: width
+        real,             allocatable :: fsc(:), optlp(:), res(:)
+        real             :: width, fsc05, fsc0143
         width = 10.
         if( cline%defined('stk') )then
             ! 2D
@@ -233,6 +235,22 @@ contains
                     if( .not. cline%defined('winsz') )&
                         call simple_stop('need winsz input for real-space filtering; commander_imgproc :: exec_filter')
                     call build%vol%real_space_filter(nint(params%winsz), params%real_filter)
+                else if( cline%defined('vol_filt') )then
+                    if( .not.file_exists(params%vol_filt)) stop 'Cannot find volume filter (vol_filt)'
+                    call build%vol2%read(params%vol_filt)
+                    call build%vol%fft
+                    call build%vol%apply_filter(build%vol2)
+                    call build%vol2%kill
+                    call build%vol%ifft
+                else if( cline%defined('fsc') )then
+                    if( .not.file_exists(params%fsc)) stop 'Cannot find FSC filter (vol_filt)'
+                    ! resolution & optimal low-pass filter from FSC
+                    fsc   = file2rarr(params%fsc)
+                    optlp = fsc2optlp(fsc)
+                    res   = build%vol%get_res()
+                    call get_resolution( fsc, res, fsc05, fsc0143 )
+                    where(res < TINY) optlp = 0.
+                    call build%vol%apply_filter(optlp)
                 else
                     stop 'Nothing to do!'
                 endif
