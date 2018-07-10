@@ -798,7 +798,7 @@ contains
             ncls          = 0
             l_is_class    = .true.
             l_hard_assign = .true.
-            exists        = .false.
+            cavger_exists = .false.
         endif
     end subroutine cavger_kill
 
