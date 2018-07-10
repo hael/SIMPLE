@@ -235,7 +235,6 @@ contains
         integer, parameter :: STATE=1, MAXITS_SNHC_RESTART=3
         integer, parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE= 2500
         integer, parameter :: NRESTARTS=5
-        integer, parameter :: NPEAKS_INIT=6, NPEAKS_REFINE=1
         character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE = 'initial_3Dmodel_tmpproj.simple'
         ! distributed commanders
         type(refine3D_distr_commander)      :: xrefine3D_distr
@@ -391,7 +390,6 @@ contains
         call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
         call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//params%ext)
         call cline_refine3D_init%set('lp',       lplims(1))
-        call cline_refine3D_init%set('npeaks',   real(NPEAKS_INIT))
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
@@ -402,8 +400,8 @@ contains
             call cline_refine3D_init%set('pgrp', 'c1')
             ! symsrch
             call qenv%new(exec_bin='simple_exec')
-            call cline_symsrch%set('msk', msk)
-            call cline_symsrch%set('smpd', work_proj1%get_smpd())
+            call cline_symsrch%set('msk',      msk)
+            call cline_symsrch%set('smpd',     work_proj1%get_smpd())
             call cline_symsrch%set('projfile', trim(WORK_PROJFILE))
             call cline_symsrch%set('cenlp',    CENLP)
             call cline_symsrch%set('hp',       params%hp)
@@ -417,7 +415,6 @@ contains
         call cline_refine3D_refine%set('box',      real(orig_box))
         call cline_refine3D_refine%set('maxits',   real(MAXITS_REFINE))
         call cline_refine3D_refine%set('refine',   'single')
-        call cline_refine3D_refine%set('npeaks',   real(NPEAKS_REFINE))
         if( do_eo )then
             call cline_refine3D_refine%delete('lp')
             call cline_refine3D_refine%set('eo',         'yes')

@@ -47,7 +47,7 @@ contains
         type(builder)    :: build
         integer :: npeaks
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        npeaks = min(10,build%eulspace%find_npeaks(params%lp, params%moldiam))
+        npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
         write(*,'(A,1X,I4)') '>>> NPEAKS:', npeaks
         ! end gracefully
         call simple_end('**** SIMPLE_NPEAKS NORMAL STOP ****')

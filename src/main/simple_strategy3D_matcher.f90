@@ -101,11 +101,7 @@ contains
                 ! command line overrides
                 if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
             case DEFAULT
-                if( params_glob%eo .ne. 'no' )then
-                    npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
-                else
-                    npeaks = min(10,build_glob%eulspace%find_npeaks(params_glob%lp, params_glob%moldiam))
-                endif
+                npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                 ! command line overrides
                 if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
         end select

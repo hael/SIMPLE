@@ -162,7 +162,7 @@ type :: oris
     procedure          :: find_angres_mp
     ! procedure          :: find_angres_geod
     procedure          :: extremal_bound
-    procedure          :: find_npeaks
+    ! procedure          :: find_npeaks
     procedure          :: find_npeaks_from_athres
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
@@ -2635,31 +2635,31 @@ contains
     end function extremal_bound
 
     !>  \brief  to find the neighborhood size for weighted orientation assignment
-    function find_npeaks( self, res, moldiam ) result( npeaks )
-        class(oris), intent(in) :: self
-        real,        intent(in) :: res, moldiam
-        real                    :: dists(self%n), tres, npeaksum
-        integer                 :: i, j, npeaks
-        tres = atan(res/(moldiam/2.))
-        npeaksum = 0.
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(j,i,dists) reduction(+:npeaksum)
-        do j=1,self%n
-            do i=1,self%n
-                dists(i) = self%o(i).euldist.self%o(j)
-            end do
-            call hpsort(dists)
-            do i=1,self%n
-                if( dists(i) <= tres )then
-                    npeaksum = npeaksum + 1.
-                else
-                    exit
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        npeaks = nint(npeaksum/real(self%n)) ! nr of peaks is average of peaksum
-    end function find_npeaks
+    ! function find_npeaks( self, res, moldiam ) result( npeaks )
+    !     class(oris), intent(in) :: self
+    !     real,        intent(in) :: res, moldiam
+    !     real                    :: dists(self%n), tres, npeaksum
+    !     integer                 :: i, j, npeaks
+    !     tres = atan(res/(moldiam/2.))
+    !     npeaksum = 0.
+    !     !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+    !     !$omp private(j,i,dists) reduction(+:npeaksum)
+    !     do j=1,self%n
+    !         do i=1,self%n
+    !             dists(i) = self%o(i).euldist.self%o(j)
+    !         end do
+    !         call hpsort(dists)
+    !         do i=1,self%n
+    !             if( dists(i) <= tres )then
+    !                 npeaksum = npeaksum + 1.
+    !             else
+    !                 exit
+    !             endif
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    !     npeaks = nint(npeaksum/real(self%n)) ! nr of peaks is average of peaksum
+    ! end function find_npeaks
 
     !>  \brief  find number of peaks from angular threshold
     function find_npeaks_from_athres( self, athres ) result( npeaks )

@@ -936,7 +936,9 @@ contains
             tmp_dir = trim(cwd) // '/tmp_stacks/'
         endif
         call simple_mkdir(trim(tmp_dir))
+        write(*,'(a)') '>>> SPLITTING STACK INTO PARTS'
         do istk = 1,nparts
+            call progress(istk,nparts)
             allocate(stkpart, source=tmp_dir//'stack_part'//int2str_pad(istk,numlen)//EXT)
             cnt = 0
             do iptcl = parts(istk,1), parts(istk,2)
@@ -1131,7 +1133,7 @@ contains
         call self%os_out%set(ind, 'fsc',     trim(fsc_abspath))
         call self%os_out%set(ind, 'imgkind', 'fsc')
         call self%os_out%set(ind, 'state',   real(state))
-        call self%os_out%set(ind, 'box',   real(box))
+        call self%os_out%set(ind, 'box',     real(box))
     end subroutine add_fsc2os_out
 
     subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind )
