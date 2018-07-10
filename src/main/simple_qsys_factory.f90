@@ -16,7 +16,7 @@ type :: qsys_factory
   contains
     procedure :: new
     procedure :: kill
-end type
+end type qsys_factory
 
 contains
 

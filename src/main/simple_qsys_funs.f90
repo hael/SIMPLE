@@ -15,7 +15,6 @@ contains
     subroutine qsys_cleanup(  )
         use simple_parameters, only: params_glob
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
-        integer :: istate, iter
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
@@ -66,7 +65,7 @@ contains
         character(len=STDLEN), intent(in)    :: fnames(:)
         integer, optional,     intent(in)    :: wtime
         integer, parameter   :: MAXITS=20000
-        integer              :: wwtime, nfiles, ifile, nlogic, i
+        integer              :: wwtime, nfiles, ifile, i
         logical              :: doreturn, fexists
         wwtime = SHORTTIME
         if( present(wtime) ) wwtime = wtime

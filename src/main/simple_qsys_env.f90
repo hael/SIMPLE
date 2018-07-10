@@ -21,11 +21,12 @@ type :: qsys_env
     procedure :: new
     procedure :: exists
     procedure :: gen_scripts_and_schedule_jobs
+    procedure :: gen_scripts_and_schedule_optimised_jobs
     procedure :: exec_simple_prg_in_queue
     procedure :: get_qsys
     procedure :: kill
 end type qsys_env
-
+#include "simple_local_flags.inc"
 contains
 
     subroutine new( self, stream, numlen, exec_bin )
@@ -89,9 +90,9 @@ contains
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         if(present(exec_bin))then
-            self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/'//trim(exec_bin)
+             self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin',trim(exec_bin), nonalloc=.true.)
         else
-            self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_private_exec'
+             self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin','simple_private_exec', nonalloc=.true.)
         endif
         if( present(numlen) )then
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
@@ -122,6 +123,41 @@ contains
         outfile_body=algnfbody, part_params=part_params)
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs
+
+    subroutine gen_scripts_and_schedule_optimised_jobs( self, job_descr, part_params, algnfbody )
+        class(qsys_env)            :: self
+        class(chash)               :: job_descr
+        class(chash),     optional :: part_params(params_glob%nparts)
+        character(len=*), optional :: algnfbody
+        character(len=:),allocatable :: cmd
+        integer :: nthr_master, nthr_new, sysstat
+
+        if( self%qdescr%get('qsys_name').eq.'local' )then
+              DebugPrint ' In gen_scripts_and_schedule_optimised_jobs'
+              call qsys_cleanup()
+              nthr_master = params_glob%nthr
+              nthr_new = MAX(1,CEILING( REAL(params_glob%nthr) / REAL(params_glob%nparts) ) )
+              DebugPrint ' In gen_scripts_and_schedule_optimised_jobs;  ', self%qdescr%get('qsys_name')
+
+              print *, '>>> ADJUSTING THREADS ',nthr_master ,' TO NTHR PER NPARTS ', nthr_new
+              call self%qdescr%set('job_cpus_per_task', int2str(nthr_new))
+              params_glob%nthr=nthr_new
+
+        !     call self%qscripts%generate_optimised_scripts(job_descr, params_glob%ext, self%qdescr,&
+        !         outfile_body=algnfbody, part_params=part_params)
+             cmd = filepath(trim(adjustl(CWD_GLOB)), 'distr_simple_sh')
+        ! !    call execute_command_line(trim(cmd), wait=.true., exitstat=sysstat)
+        !     if(sysstat /= 0) then
+        !          print *, ' distr_simple_sh returned an error'
+        !      endif
+             params_glob%nthr=nthr_master
+         else
+             ! call qsys_cleanup()
+             ! call self%qscripts%generate_scripts(job_descr, trim(params_glob%ext), self%qdescr,&
+             !     outfile_body=algnfbody, part_params=part_params)
+             ! call self%qscripts%schedule_jobs
+         endif
+    end subroutine gen_scripts_and_schedule_optimised_jobs
 
     subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator, script_name )
         use simple_cmdline,   only: cmdline

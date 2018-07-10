@@ -45,7 +45,7 @@ contains
         call self%env%push('job_memory_per_task',   '#SBATCH --mem')
         call self%env%push('job_time',              '#SBATCH --time')
         ! standard error & output folder
-        stderrout = './'//trim(STDERROUT_DIR)
+        stderrout = PATH_HERE//trim(STDERROUT_DIR)
         call simple_mkdir(stderrout)
     end subroutine new_slurm_env
 
