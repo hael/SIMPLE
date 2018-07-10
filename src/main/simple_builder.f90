@@ -137,6 +137,8 @@ contains
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical :: read_spproj
+        integer(timer_int_kind) :: t1
+        t1=tic()
         ! create object for orientations
         ! b%a is now a pointer to a field in b%spproj
         select case(params%spproj_iseg)
@@ -182,6 +184,7 @@ contains
         endif
         if( .not. associated(build_glob) ) build_glob => self
         write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
+        DebugPrint ' build_spproj took                                           ', toc(t1), ' secs'
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d )
@@ -190,7 +193,10 @@ contains
         class(cmdline),         intent(inout) :: cline
         logical, optional,      intent(in)    :: do3d
         integer :: lfny, cyc_lims(3,2)
-        logical :: ddo3d, fforce_ctf
+        logical :: ddo3d
+        integer(timer_int_kind) ::t1
+        DebugPrint   'in build_general_tbox'
+        t1= tic()
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -198,7 +204,7 @@ contains
         call self%pgrpsyms%new(trim(params%pgrp))
         params%nsym    = self%pgrpsyms%get_nsym()
         params%eullims = self%pgrpsyms%srchrange()
-        DebugPrint   'did setup symmetry functionality'
+        DebugPrint   'did setup symmetry functionality                           ', toc()
         ! build spproj
         call self%build_spproj(params, cline)
         ! states exception
@@ -207,36 +213,37 @@ contains
                 write(*,'(a)') 'WARNING, your input doc has multiple states but NSTATES is not given'
             endif
         endif
-        DebugPrint 'created & filled object for orientations'
+        DebugPrint 'created & filled object for orientations                     ', toc()
         ! generate discrete projection direction spaces
         call self%eulspace%new(params%nspace)
         call self%eulspace%spiral(params%nsym, params%eullims)
         call self%eulspace_red%new(NSPACE_REDUCED)
         call self%eulspace_red%spiral(params%nsym, params%eullims)
         ! create angular subspace
-        self%grid_projs = self%eulspace%create_proj_subspace(NPDIRS_SUBSPACE, params%nsym, params%eullims)
-        DebugPrint 'generated discrete projection direction space'
+        DebugPrint   'build_general_tbox: create angular subspace                ', toc()
+        self%grid_projs = self%eulspace%create_proj_subspace_3(NPDIRS_SUBSPACE, params%nsym, params%eullims)
+        DebugPrint 'build_general_tbox: projection direction space               ', toc()
         if( params%box > 0 )then
             ! build image objects
             ! box-sized ones
             call self%img%new([params%box,params%box,1],params%smpd,                 wthreads=.false.)
             call self%img_match%new([params%boxmatch,params%boxmatch,1],params%smpd, wthreads=.false.)
             call self%img_copy%new([params%box,params%box,1],params%smpd,  wthreads=.false.)
-            DebugPrint   'did build box-sized image objects'
+            DebugPrint   'did build box-sized image objects                      ', toc()
             ! for thread safety in the image class
             call self%img%construct_thread_safe_tmp_imgs(params%nthr)
             ! boxmatch-sized ones
             call self%img_tmp%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
             call self%img_msk%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
             call self%mskimg%new([params%boxmatch, params%boxmatch, 1],params%smpd,  wthreads=.false.)
-            DebugPrint  'did build boxmatch-sized image objects'
+            DebugPrint  'did build boxmatch-sized image objects                  ', toc()
             ! boxpd-sized ones
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             if( ddo3d )then
                 call self%vol%new([params%box,params%box,params%box], params%smpd)
                 call self%vol2%new([params%box,params%box,params%box], params%smpd)
             endif
-            DebugPrint  'did build boxpd-sized image objects'
+            DebugPrint  'did build boxpd-sized image objects                     ', toc()
             ! build arrays
             lfny       = self%img%get_lfny(1)
             cyc_lims   = self%img_pad%loop_lims(3)
@@ -249,12 +256,14 @@ contains
             endif
             DebugPrint   'did set default values'
         endif
+        DebugPrint 'build_general_tbox: generated images                         ', toc()
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
+        DebugPrint ' build_general_tbox took                                     ', toc(t1), ' secs'
     end subroutine build_general_tbox
 
     subroutine kill_general_tbox( self )
@@ -285,13 +294,19 @@ contains
     subroutine build_rec_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
+        integer(timer_int_kind):: t
+        t= tic()
         call self%kill_rec_tbox
+        DebugPrint ' build_rec_tbox kill_rec_tbox                                ', toc(t), ' secs'
         call self%recvol%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
+        DebugPrint ' build_rec_tbox new                                          ', toc(t), ' secs'
         call self%recvol%alloc_rho(self%spproj)
+        DebugPrint ' build_rec_tbox alloc_rho                                    ', toc(t), ' secs'
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%rec_tbox_exists = .true.
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
+        DebugPrint ' build_rec_tbox took                                         ', toc(t), ' secs'
     end subroutine build_rec_tbox
 
     subroutine kill_rec_tbox( self )
