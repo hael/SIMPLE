@@ -232,7 +232,7 @@ contains
     function estimate_lp_for_align( self, state ) result( lp )
         class(projection_frcs), intent(in)  :: self
         integer, optional,      intent(in)  :: state
-        real    :: lplims(self%nprojs)
+        real    :: lplims(self%nprojs),lp3(3)
         integer :: sstate, iproj
         real    :: lp, res_frc05, res_frc0143
         sstate = 1
@@ -243,9 +243,9 @@ contains
             call self%bound_res(self%frcs(sstate,iproj,:), res_frc05, res_frc0143)
             lplims(iproj) = res_frc0143
         end do
-        call hpsort(lplims)
+        lp3= min3(lplims)
         ! return median of top three clusters
-        lp = median(lplims(1:3))
+        lp = median(lp3 )
     end function estimate_lp_for_align
 
     ! I/O

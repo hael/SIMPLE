@@ -7,7 +7,8 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: make_pattern_stack, acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
+!public :: make_pattern_stack
+public ::acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
 contains
 
     !>  \brief  is for raising exception
@@ -24,87 +25,87 @@ contains
         endif
     end subroutine raise_exception
 
-    !>  \brief  is for making a stack of normalized vectors for PCA analysis
-    !! \param fnameStack,fnamePatterns filenames for stacka and pattern
-    subroutine make_pattern_stack( fnameStack, fnamePatterns, mskrad, D, recsz, avg, otab, hfun )
-        character(len=*),            intent(in)    :: fnameStack, fnamePatterns
-        real,                        intent(in)    :: mskrad       !< mask radius
-        integer,                     intent(out)   :: D, recsz     !< record size
-        real, allocatable, optional, intent(out)   :: avg(:)       !< frame stack average
-        class(oris),       optional, intent(inout) :: otab         !< oris table
-        character(len=*),  optional, intent(in)    :: hfun         !< which normalise pca vec
-        type(image)        :: img
-        real, allocatable  :: pcavec(:)
-        real               :: x, y
-        integer            :: n, fnum, ier, i, ldim(3)
-        logical            :: err
-        call find_ldim_nptcls(fnameStack, ldim, n)
-        ldim(3) = 1
-        call raise_exception( n, ldim, 'make_pattern_stack' )
-        ! build and initialise objects
-        call img%new(ldim,1.)
-        D = img%get_npix(mskrad)
-        allocate(pcavec(D), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 1', alloc_stat)
-        pcavec = 0.
-        inquire(iolength=recsz) pcavec
-        deallocate(pcavec)
-        if( present(avg) )then
-            allocate(avg(D), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 2', alloc_stat)
-            avg = 0.
-        endif
-        ! extract patterns and write to file
-        call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
-             access='direct', form='unformatted', recl=recsz, iostat=ier)
-        call fileiochk('make_pattern_stack; simple_procimgfile', ier)
-        write(*,'(a)') '>>> MAKING PATTERN STACK'
-        do i=1,n
-            call progress(i,n)
-            call img%read(fnameStack, i)
-            if( present(otab) )then
-                ! shift image
-                call img%fft()
-                x = otab%get(i, 'x')
-                y = otab%get(i, 'y')
-                call img%shift([-x,-y,0.])
-                ! rotate image
-                call img%ifft()
-                call img%rtsq(-otab%e3get(i), 0., 0.)
-            else
-                if( img%is_ft() ) call img%ifft()
-            endif
-            call img%serialize(pcavec, mskrad)
-            err = .false.
-            if( present(hfun) )then
-                call normalize_sigm(pcavec)
-            else
-                call normalize(pcavec, err)
-            endif
-            if( err ) write(*,'(a,i7)') 'WARNING: variance zero! image nr: ', i
-            if( present(avg) ) avg = avg+pcavec
-            write(fnum,rec=i) pcavec
-            if( debug .or. global_debug )then
-                call check4nans(pcavec)
-                call img%serialize(pcavec, mskrad)
-                call img%write('unserialized.spi', i)
-            endif
-            deallocate(pcavec)
-        end do
-        if( present(avg) )then
-            avg = avg/real(n)
-            allocate(pcavec(D), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 3', alloc_stat)
-            do i=1,n
-                read(fnum,rec=i) pcavec
-                pcavec = pcavec-avg
-                write(fnum,rec=i) pcavec
-            end do
-            deallocate(pcavec)
-        endif
-        call fclose(fnum,errmsg='make_pattern_stack; simple_procimgfile')
-        call img%kill
-    end subroutine make_pattern_stack
+    ! !>  \brief  is for making a stack of normalized vectors for PCA analysis
+    ! !! \param fnameStack,fnamePatterns filenames for stacka and pattern
+    ! subroutine make_pattern_stack( fnameStack, fnamePatterns, mskrad, D, recsz, avg, otab, hfun )
+    !     character(len=*),            intent(in)    :: fnameStack, fnamePatterns
+    !     real,                        intent(in)    :: mskrad       !< mask radius
+    !     integer,                     intent(out)   :: D, recsz     !< record size
+    !     real, allocatable, optional, intent(out)   :: avg(:)       !< frame stack average
+    !     class(oris),       optional, intent(inout) :: otab         !< oris table
+    !     character(len=*),  optional, intent(in)    :: hfun         !< which normalise pca vec
+    !     type(image)        :: img
+    !     real, allocatable  :: pcavec(:)
+    !     real               :: x, y
+    !     integer            :: n, fnum, ier, i, ldim(3)
+    !     logical            :: err
+    !     call find_ldim_nptcls(fnameStack, ldim, n)
+    !     ldim(3) = 1
+    !     call raise_exception( n, ldim, 'make_pattern_stack' )
+    !     ! build and initialise objects
+    !     call img%new(ldim,1.)
+    !     D = img%get_npix(mskrad)
+    !     allocate(pcavec(D), stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 1', alloc_stat)
+    !     pcavec = 0.
+    !     inquire(iolength=recsz) pcavec
+    !     deallocate(pcavec)
+    !     if( present(avg) )then
+    !         allocate(avg(D), stat=alloc_stat)
+    !         if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 2', alloc_stat)
+    !         avg = 0.
+    !     endif
+    !     ! extract patterns and write to file
+    !     call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
+    !          access='direct', form='unformatted', recl=recsz, iostat=ier)
+    !     call fileiochk('make_pattern_stack; simple_procimgfile', ier)
+    !     write(*,'(a)') '>>> MAKING PATTERN STACK'
+    !     do i=1,n
+    !         call progress(i,n)
+    !         call img%read(fnameStack, i)
+    !         if( present(otab) )then
+    !             ! shift image
+    !             call img%fft()
+    !             x = otab%get(i, 'x')
+    !             y = otab%get(i, 'y')
+    !             call img%shift([-x,-y,0.])
+    !             ! rotate image
+    !             call img%ifft()
+    !             call img%rtsq(-otab%e3get(i), 0., 0.)
+    !         else
+    !             if( img%is_ft() ) call img%ifft()
+    !         endif
+    !         call img%serialize(pcavec, mskrad)
+    !         err = .false.
+    !         if( present(hfun) )then
+    !             call normalize_sigm(pcavec)
+    !         else
+    !             call normalize(pcavec, err)
+    !         endif
+    !         if( err ) write(*,'(a,i7)') 'WARNING: variance zero! image nr: ', i
+    !         if( present(avg) ) avg = avg+pcavec
+    !         write(fnum,rec=i) pcavec
+    !         if( debug .or. global_debug )then
+    !             call check4nans(pcavec)
+    !             call img%serialize(pcavec, mskrad)
+    !             call img%write('unserialized.spi', i)
+    !         endif
+    !         deallocate(pcavec)
+    !     end do
+    !     if( present(avg) )then
+    !         avg = avg/real(n)
+    !         allocate(pcavec(D), stat=alloc_stat)
+    !         if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 3', alloc_stat)
+    !         do i=1,n
+    !             read(fnum,rec=i) pcavec
+    !             pcavec = pcavec-avg
+    !             write(fnum,rec=i) pcavec
+    !         end do
+    !         deallocate(pcavec)
+    !     endif
+    !     call fclose(fnum,errmsg='make_pattern_stack; simple_procimgfile')
+    !     call img%kill
+    ! end subroutine make_pattern_stack
 
     !>   make_avg_imgfile is for making an average of the entire stack
     !! \param fname stack filename

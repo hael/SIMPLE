@@ -554,17 +554,15 @@ contains
     end function get_ref_pft
 
     !>  \brief  checks for existence
-    function exists( self ) result( yes )
+    logical function exists( self )
         class(polarft_corrcalc), intent(in) :: self
-        logical :: yes
-        yes = self%existence
+        exists = self%existence
     end function exists
 
-    function ptcl_iseven( self, iptcl ) result( is )
+    logical function ptcl_iseven( self, iptcl )
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iptcl
-        logical :: is
-        is = self%iseven(self%pinds(iptcl))
+        ptcl_iseven = self%iseven(self%pinds(iptcl))
     end function ptcl_iseven
 
     ! PRINTERS/VISUALISERS
@@ -1637,7 +1635,7 @@ contains
         complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp1(:,:), pft_ref_tmp2(:,:), shmat(:,:), pft_dref(:,:,:)
         real(dp),    pointer :: argmat(:,:)
         real(dp),    pointer :: fdf_T1(:,:), fdf_T2(:,:)
-        real(dp) :: corrk, sqsumk_ref, sqsumk_ptcl, fdf_yk
+        real(dp) :: sqsumk_ref, sqsumk_ptcl, fdf_yk
         real(dp) :: bfac_weight, denomk
         integer  :: ithr, k, j
         ithr    =  omp_get_thread_num() + 1
@@ -1805,7 +1803,7 @@ contains
         integer,                 intent(in)    :: irot
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: argmat(:,:)
-        real(sp) :: cc, corr
+        real(sp) :: cc
         integer  :: ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -1836,7 +1834,7 @@ contains
         integer,                 intent(in)    :: irot
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:)
         real(dp),    pointer :: argmat(:,:)
-        real(dp) :: cc, corr
+        real(dp) :: cc
         integer  :: ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref_8

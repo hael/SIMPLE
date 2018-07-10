@@ -61,11 +61,15 @@ end interface
 interface hardedge
     module procedure hardedge_1
     module procedure hardedge_2
+    module procedure hardedge_3
+    module procedure hardedge_4
 end interface
 
 interface hardedge_inner
     module procedure hardedge_inner_1
     module procedure hardedge_inner_2
+    module procedure hardedge_inner_3
+    module procedure hardedge_inner_4
 end interface
 
 !interface peakfinder
@@ -661,6 +665,14 @@ contains
         endif
     end function cyci_1d
 
+    !>  as per cyci_1d, assumes lower limit is 1
+    pure function cyci_1d_static( ulim, i ) result( ind )
+        integer, intent(in) :: ulim, i !< input vars upper limit and index
+        integer :: ind ! return index
+        ind = merge(ulim+i, i , i<1)
+        ind = merge(i-ulim,ind ,i>ulim)
+    end function cyci_1d_static
+
     !>   4 shifting variables
     subroutine shft(a,b,c,d)
         real, intent(out)   :: a   !< new pos 1
@@ -944,11 +956,26 @@ contains
         if( x * x + y * y + z * z > mskrad * mskrad ) w = 0.
     end function hardedge_2
 
+   pure function hardedge_3( x, y, mskrad ) result( w )
+        integer,intent(in) :: x, y
+        real, intent(in)   :: mskrad
+        real :: w
+        w = 1.
+        if( real(x * x + y * y) > mskrad * mskrad ) w = 0.
+    end function hardedge_3
+    !!
+    pure function hardedge_4( x, y, z, mskrad ) result( w )
+        integer,intent(in) :: x, y, z
+        real, intent(in)   :: mskrad
+        real :: w
+        w = 1.
+        if( real(x * x + y * y + z * z) > mskrad * mskrad ) w = 0.
+    end function hardedge_4
+
+
+
     !>   two-dimensional hard edge
     !! \f$r < \sqrt{x^2+y^2}\f$.
-    !! \param x x position
-    !! \param y y position
-    !! \param mskrad masking radius
     !! \return w on or off
     !!
     pure function hardedge_inner_1( x, y, mskrad ) result( w )
@@ -958,19 +985,27 @@ contains
         if( x * x + y * y > mskrad * mskrad ) w = 1.
     end function hardedge_inner_1
 
+    pure function hardedge_inner_2( x, y, mskrad ) result( w )
+        integer,intent(in) :: x, y
+        real, intent(in) ::mskrad
+        real :: w
+        w = 0.
+        if( real(x * x + y * y) > mskrad * mskrad ) w = 1.
+    end function hardedge_inner_2
     !>   three-dimensional hard edge
-    !! \f$r < \sqrt{ x^2+y^2+z^2 }\f$.
-    !! \param x x position
-    !! \param y y position
-    !! \param z z position
-    !! \param mskrad masking radius
-    !! \return w on or off
-    !!
-    pure function hardedge_inner_2( x, y, z, mskrad ) result( w )
+    pure function hardedge_inner_3( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
         real :: w
         w = 0.
         if( x * x + y * y + z * z > mskrad * mskrad ) w = 1.
+    end function hardedge_inner_3
+
+    pure function hardedge_inner_4( x, y, z, mskrad ) result( w )
+        integer,intent(in) :: x, y,z
+        real, intent(in) ::mskrad
+        real :: w
+        w = 0.
+        if( real(x * x + y * y + z * z) > mskrad * mskrad ) w = 1.
     end function
 
     !>   low-end one-dimensional gaussian edge
@@ -2736,7 +2771,7 @@ contains
         angleDist = acos( dot_product(v, w) )
     end function angleDist
 
-    !> sort and return 3 lowest
+    !> sort and return the 3 lowest
     function min3( rarr ) result(min_3)
         real, intent(in) :: rarr(:)
         real :: min_3(3)
@@ -2764,6 +2799,7 @@ contains
             end if
         end do
     end function min3
+
 
     function max3loc( rarr ) result( loc )
         real, intent(in) :: rarr(:)
@@ -2802,6 +2838,29 @@ contains
             end do
         endif
     end function max3loc
+
+    !> sort and return the n lowest
+    function minn( rarr, n ) result(min_n)
+        real,    intent(in) :: rarr(:)
+        integer, intent(in) :: n
+        real :: min_n(n)
+        integer :: j, nr
+        real    :: ra
+        nr = size(rarr)
+        if( nr < 4)then
+            min_n(:nr) = rarr
+            return
+        end if
+        min_n = rarr(:n)
+        call hpsort(min_n)
+
+        do j=4,nr
+            if(rarr(j) < min_n(n))then
+                min_n(n) = rarr(j)
+                call hpsort(min_n)
+            end if
+        end do
+    end function minn
 
     !>   selecting the size(rheap) largest
     ! subroutine hpsel_1( rarr, rheap )
@@ -3030,7 +3089,7 @@ contains
     !     arr_med(n - winsz + 1:) = arr_med(n - winsz)
     ! end function median_filter
 
-    pure function stdev (a)
+    function stdev (a)
         real, intent(in) :: a(:)
         real    :: stdev, avg, SumSQR, var, n
         integer, volatile :: idbg
