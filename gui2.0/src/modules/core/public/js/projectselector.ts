@@ -23,6 +23,11 @@ class ProjectSelector {
 			.then (json => {
 				this.pselement.innerHTML = json.html
 			})
+		setInterval(() => {
+			if(this.selectedtable != undefined){
+				this.refreshHistory()
+			}
+		}, 20000);
 		
 	}
 	
@@ -39,6 +44,19 @@ class ProjectSelector {
 			.then ((json) => {
 				document.getElementById('viewwindowtitle').innerHTML = "Project - " + name
 				document.getElementById('viewwindowtitle').setAttribute('title', description)
+				this.viewwindowbody.innerHTML = json.html
+			})
+	}
+	
+	refreshHistory(){
+		var request = {
+			mod : "core",
+			fnc : "projectHistory",
+			arg : {history : this.selectedtable}
+		}
+		postAjaxPromise(request)
+			.then(response => response.json())
+			.then ((json) => {
 				this.viewwindowbody.innerHTML = json.html
 			})
 	}
@@ -66,6 +84,13 @@ class ProjectSelector {
 		request['arg']['keys'] = {}
 		var args = document.getElementsByClassName('argument') as HTMLCollectionOf<HTMLInputElement>
 		for(var argument of args){
+			if(argument.parentElement.parentElement.className == "required" && argument.value == ""){
+				argument.style.borderColor = "red"
+				setTimeout(() => { 
+					argument.style.borderColor = null
+				}, 1000)
+				return
+			}
 			if(argument.checked){
 				request['arg']['keys'][argument.id] = "true"
 			} else {
@@ -76,6 +101,17 @@ class ProjectSelector {
 			return response.text()
 		}).then(function(html) {
 			alert("Project Created")
+			taskselector.hide()
+			var request = {
+				mod : "core",
+				fnc : "projectSelector",
+				arg : {}
+			}
+			return postAjaxPromise(request)
+		})
+		.then(response => response.json())
+		.then (json => {
+			this.pselement.innerHTML = json.html
 		})
 	}
 	

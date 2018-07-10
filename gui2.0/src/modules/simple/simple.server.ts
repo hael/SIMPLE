@@ -120,7 +120,8 @@ class Module {
 		arg['view'] = ""
 	
 		if(type == "cluster2D") {
-			arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"view2d\" }"
+		//	arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"view2d\" }"
+			arg['view'] = {mod : "simple", fnc : "view2d"}
 		}else if(type == "initial_3Dmodel") {
 			arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"viewini3d\" }"
 		}else if(type == "import_movies") {

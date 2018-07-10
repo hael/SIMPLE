@@ -1,13 +1,13 @@
 class Browser {
 	
 	private popup
-	private	gauze
+	//private	gauze
 	private args
 	public selection
 	
 	constructor() {
 		this.popup = document.getElementById('browserpopup')
-		this.gauze = document.getElementById('gauze')
+	//	this.gauze = document.getElementById('gauze')
 	}
 	
 	show(args){
@@ -27,9 +27,9 @@ class Browser {
 		postAjaxPromise(request)
 			.then(response => response.json())
 			.then ((json) => {
-				if(this.args['gauze']){
-					this.gauze.style.display = "block"
-				}
+				//if(this.args['gauze']){
+				//	this.gauze.style.display = "block"
+				//}
 				this.popup.innerHTML = json.html
 				this.popup.className = "browser"
 				document.getElementById('sourcefolder').addEventListener("keyup", (event) => {
@@ -68,9 +68,9 @@ class Browser {
 	hide() {
 		this.popup.innerHTML = ""
 		this.popup.className = "popup"
-		if(this.args['gauze']){
-			this.gauze.style.display = "none"
-		}
+		//if(this.args['gauze']){
+		//	this.gauze.style.display = "none"
+		//}
 	}
 	
 	select(filename, element) {

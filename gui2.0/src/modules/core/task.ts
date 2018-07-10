@@ -58,10 +58,7 @@ export default class Task{
 	}
 	
 	createNew(arg){
-		//var query = "INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + arg['view'] + "', '" + arg['type'] + "')"
-		var cleanarg = arg
-		cleanarg.view = ""
-		var query = "INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type) VALUES ('joe','joe','" + JSON.stringify(cleanarg) + "','running', '" + arg['view'] + "', '" + arg['type'] + "')"
+		var query = "INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "')"
 
 		var jobfolder
 		var jobid 

@@ -1,4 +1,4 @@
-.browser {
+.browser #browser{
 	width: 36vw;
 	font-size: 11px;
 	position: absolute;
@@ -67,4 +67,15 @@
 
 .browser tr:nth-child(odd) {
 	background: #E5E9F5;
+}
+
+.browser #browsergauze{
+        position: fixed;
+        top: 0px;
+        left: 0px;
+        width: 100vw;
+        height: 100vh;
+        background-color: black;
+        opacity: 0.2;
+        z-index: 2;
 }

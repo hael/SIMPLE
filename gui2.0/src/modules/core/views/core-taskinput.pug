@@ -146,6 +146,55 @@ div
 	)
 
 div.inputaccordion
+	div.inputpage
+		div.inputheader
+			h="job parameters"
+			img.advancedbutton(
+				src="img/gear.png"
+				onclick="tasksetup.toggleAdvanced(this)"
+			)
+		table
+			tr
+				td="Job Name"
+				td
+					input(
+						id="jobname"
+						type="text"
+					)
+				td
+				td
+					img(
+						src="img/help.png"
+						onclick="taskselector.showHelp('Identifier for the job')"
+					)
+			tr
+				td="Job Description"
+				td
+					input(
+						id="jobdescription"
+						type="text"
+					)
+				td
+				td
+					img(
+						src="img/help.png"
+						onclick="taskselector.showHelp('Description of the job')"
+					)
+			tr
+				td="Input File"
+				td
+					input(
+						id="inputpath"
+						type="text"
+						value=taskarray['inputpath']
+						disabled
+					)
+				td
+				td
+					img(
+						src="img/help.png"
+						onclick="taskselector.showHelp('Input file')"
+					)
 	each page, index in taskarray['pages']
 		div.inputpage(
 			id="inputpage" + index

@@ -26,7 +26,11 @@ class TaskSelector {
 	}
 	
 	show(){
-		this.refresh()
+		if(projectselector.selectedtable != undefined){
+			this.refresh()
+		} else {
+			alert("Please select a project first!")
+		}
 	}
 
 	showHelp(text){
@@ -155,6 +159,8 @@ class TaskSetup {
 		var mod = document.getElementById('mod') as HTMLInputElement
 		var type = document.getElementById('type') as HTMLInputElement
 		var inputpath = document.getElementById('inputpath') as HTMLInputElement
+		var jobname = document.getElementById('jobname') as HTMLInputElement
+		var jobdescription = document.getElementById('jobdescription') as HTMLInputElement
 		request['fnc'] = "execute"
 		request['mod'] = mod.value
 		request['arg'] = {}
@@ -165,8 +171,17 @@ class TaskSetup {
 		request['arg']['type'] = type.value
 		request['arg']['projectfolder'] = projectselector.selectedfolder
 		request['arg']['inputpath'] = inputpath.value
+		request['arg']['name'] = jobname.value
+		request['arg']['description'] = jobdescription.value
 		var args = document.getElementsByClassName('argument') as HTMLCollectionOf<HTMLInputElement>
 		for(var argument of args){
+			if(argument.parentElement.parentElement.className == "required" && argument.value == ""){
+				argument.style.borderColor = "red"
+				setTimeout(() => { 
+					argument.style.borderColor = null
+				}, 1000)
+				return
+			}
 			if(argument.checked){
 				request['arg']['keys'][argument.id] = "true"
 			} else {
@@ -175,8 +190,11 @@ class TaskSetup {
 		}
 		postAjaxPromise(request).then(function(response){
 			return response.text()
-		}).then(function(html) {
+		}).then((html) => {
 			alert("Job Started")
+		}).then(() =>{
+			taskselector.hide()
+			projectselector.refreshHistory()
 		})
 	}
 	

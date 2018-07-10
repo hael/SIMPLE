@@ -1,7 +1,6 @@
-rm -r build
-rm -r dist
-
-tsc
+if [ -d dist ]; then
+	rm -r dist
+fi
 
 mkdir -p dist
 mkdir -p dist/views
@@ -41,4 +40,3 @@ cat external/Chartist/dist/chartist.min.js >> dist/public/js/index.js
 cat external/Chartist/dist/chartist.min.css >> dist/public/css/index.css
 
 cp simple.sqlite dist/
-./dist/bin/simple 
