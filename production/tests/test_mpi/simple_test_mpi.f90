@@ -6,12 +6,17 @@
 
 program simple_test_mpi
     include 'simple_lib.f08'
+#ifdef INTEL
+    use mpi
+#else
     use mpi_f08
+#endif
+
     implicit none
     integer ierr, rank
 
     call MPI_INIT ( ierr )
-    call MPI_COMM_RANK(MPI_COMM_WORLD, rank)
+    call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
     call hello
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call hello_usempif08
@@ -26,23 +31,21 @@ program simple_test_mpi
 contains
 
     subroutine hello
-        use mpi_f08
         integer :: rank,  ierr
-        call MPI_COMM_RANK(MPI_COMM_WORLD, rank)
+        call MPI_COMM_RANK(MPI_COMM_WORLD, rank,ierr)
         print *, "Hello world, ", rank
 
     end subroutine hello
 
     subroutine hello_usempif08
-        use mpi_f08
         implicit none
-        integer :: rank, size, len
+        integer :: rank, size, len, ierr
         character(len=MPI_MAX_LIBRARY_VERSION_STRING) :: version
 
         !        call MPI_INIT()
-        call MPI_COMM_RANK(MPI_COMM_WORLD, rank)
-        call MPI_COMM_SIZE(MPI_COMM_WORLD, size)
-        call MPI_GET_LIBRARY_VERSION(version, len)
+        call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
+        call MPI_COMM_SIZE(MPI_COMM_WORLD, size, ierr)
+        call MPI_GET_LIBRARY_VERSION(version, len,ierr)
 
         write(*, '("Hello, world, I am ", i2, " of ", i2, ": ", a)') &
             rank, size, version
@@ -52,16 +55,15 @@ contains
 
 
     subroutine ring
-        use mpi_f08
         implicit none
-        integer :: rank, size, tag, next, from, i, message
+        integer :: rank, size, tag, next, from, i, message, ierr
 
 
         ! Start up MPI
 
         !  call MPI_INIT()
-        call MPI_COMM_RANK(MPI_COMM_WORLD, rank)
-        call MPI_COMM_SIZE(MPI_COMM_WORLD, size)
+        call MPI_COMM_RANK(MPI_COMM_WORLD, rank,ierr)
+        call MPI_COMM_SIZE(MPI_COMM_WORLD, size,ierr)
 
         ! Calculate the rank of the next process in the ring.  Use the modulus
         ! operator so that the last process "wraps around" to rank zero.
@@ -121,7 +123,7 @@ contains
 
 
     subroutine block_distribution
-        use mpi_f08
+
         implicit none
         integer, parameter                            :: dp = selected_real_kind(15,307)
         integer(8), parameter :: array_size = 1000000
