@@ -910,7 +910,7 @@ contains
         if(present(glob))then
             allocate(thisglob, source=trim(glob)//c_null_char)
         else
-            allocate(thisglob, source='./*'//c_null_char)
+            allocate(thisglob, source=path_here//'*'//c_null_char) ! "./*" default
         endif
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char

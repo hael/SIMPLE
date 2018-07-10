@@ -147,7 +147,7 @@ end function
 subroutine test_args()
     type(args) :: as
     character(len=LONGSTRLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, cwd, bpath
-    integer               :: funit, n, i,io_stat, status, length1, length2
+    integer               :: funit, n, i,io_stat, status
     integer, allocatable  :: buff(:)
     character(len=*),parameter :: varlist = 'simple_varlist.txt'
     write(*,'(a)') '**info(simple_args_unit_test): testing it all'
@@ -166,25 +166,25 @@ subroutine test_args()
     if( .not. dir_exists(SIMPLE_BUILD_PATH) .and. (.not. dir_exists(trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'))) then
     call simple_stop(\"In simple_args::test_args SIMPLE_BUILD_PATH  not found\")
     else
-        bpath= trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'
+        bpath= trim(adjustl(SIMPLE_BUILD_PATH))//path_separator//'lib/simple'
     endif
     print *, 'Simple varlist directory ', trim(adjustl(bpath))
 
     print *, 'appending varlist '
-    vfilename = trim(adjustl(bpath))//trim(adjustl(varlist))
+    vfilename = trim(adjustl(bpath))//path_separator//trim(adjustl(varlist))
     vfilename = trim(adjustl(vfilename))
     print *, 'varlist: ', trim(adjustl(vfilename))
     write(*,'(a,a)') '**info(simple_args_unit_test): checking varlist file ',trim(adjustl(vfilename))
     if(.not. file_exists(vfilename))then
         print *,' varlist not in lib/simple/,  checking lib64/simple'
-        vfilename = trim(adjustl(SIMPLE_BUILD_PATH))//'/lib64/simple'//trim(adjustl(varlist))
+        vfilename = trim(adjustl(SIMPLE_BUILD_PATH))//path_separator//'lib64/simple'//path_separator//trim(adjustl(varlist))
         vfilename = trim(adjustl(vfilename))
         print *, 'varlist: ', trim(adjustl(vfilename))
         write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
         call simple_file_stat(vfilename,status,buff)
         if(status /= 0)then
             print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
-            call execute_command_line('cd '//trim(adjustl(spath))//'src/main &&'//'simple_args_varlist.p', wait=.true.)
+            call execute_command_line('cd '//trim(adjustl(spath))//path_separator//'src/main &&'//'simple_args_varlist.p', wait=.true.)
             call simple_file_stat(vfilename,status,buff)
             if(status /= 0)then
                 print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'

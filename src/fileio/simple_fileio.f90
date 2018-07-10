@@ -12,6 +12,11 @@ interface fclose
     module procedure fclose_2
 end interface fclose
 
+interface filepath
+    module procedure filepath_1
+    module procedure filepath_2
+end interface filepath
+
 integer, parameter :: MAX_UNIT_NUMBER = 1000
 
 contains
@@ -456,7 +461,7 @@ contains
         character(len=:), allocatable :: new_fname
         integer :: length, pos
         length = len_trim(fname)
-        pos = scan(fname(1:length),'/',back=.true.)
+        pos = scan(fname(1:length),PATH_SEPARATOR,back=.true.)
         if( pos == 0 )then
             allocate(new_fname, source=trim(fname))
         else
@@ -469,9 +474,9 @@ contains
         character(len=*), intent(in)  :: fname !< abs filename
         character(len=:), allocatable :: path
         integer :: pos
-        pos = scan(fname,'/',back=.true.)
+        pos = scan(fname,path_separator,back=.true.)
         if( pos == 0 )then
-            allocate(path, source='./')
+            allocate(path, source=path_here)
         else
             allocate(path, source=trim(fname(:pos)))
         endif
@@ -515,6 +520,82 @@ contains
             endif
         end do
     end function make_filenames
+
+    !> concatenate strings together to with '/' to create a filename
+    !! input args are restricted to STDLEN after trimming
+    !! for allocatable character results
+    function filepath_1(p1, p2,p3,p4) result( fname )! , arg3, arg4) result( fname )
+        character(len=*),  intent(in)           :: p1
+        character(len=*),  intent(in)           :: p2
+        character(len=*),  intent(in), optional :: p3
+        character(len=*),  intent(in), optional :: p4
+        character(len=:), allocatable     :: fname
+        character(len=STDLEN)      :: s1,s2,s3,s4
+        integer :: endpos1,endpos2,endpos3,endpos4
+        s1 = trim(adjustl(p1))
+        endpos1 = len_trim(s1)
+        s2 = trim(adjustl(p2))
+        endpos2 = len_trim(s2)
+        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
+        if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
+
+        if(present(p4))then
+            s3 = trim(adjustl(p3))
+            endpos3 = len_trim(s3)
+            s4 = trim(adjustl(p4))
+            endpos4 = len_trim(s4)
+            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
+            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
+                &PATH_SEPARATOR//s3(1:endpos3)//PATH_SEPARATOR//s4(1:endpos4))
+        else if(present(p3))then
+            s3 = trim(adjustl(p3))
+            endpos3 = len_trim(s3)
+            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
+                &PATH_SEPARATOR//s3(1:endpos3))
+        else
+            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2))
+        endif
+    end function filepath_1
+
+    !> concatenate strings together to create a filename similar to filepath_1 above
+    !! for non-allocatable character results
+    function filepath_2(p1, p2, p3, p4, nonalloc ) result(fname) ! , arg3, arg4) result( fname )
+        character(len=*),  intent(in)           :: p1
+        character(len=*),  intent(in)           :: p2
+        character(len=*),  intent(in), optional :: p3
+        character(len=*),  intent(in), optional :: p4
+        logical :: nonalloc
+        character(len=STDLEN)      :: s1,s2,s3,s4 , fname
+        integer :: endpos1,endpos2,endpos3,endpos4
+        s1 = trim(adjustl(p1))
+        endpos1 = len_trim(s1)
+        s2 = trim(adjustl(p2))
+        endpos2 = len_trim(s2)
+        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
+        if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
+
+        if(present(p4))then
+            s3 = trim(adjustl(p3))
+            endpos3 = len_trim(s3)
+            s4 = trim(adjustl(p4))
+            endpos4 = len_trim(s4)
+            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
+            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
+                &PATH_SEPARATOR//s3(1:endpos3)//PATH_SEPARATOR//s4(1:endpos4)
+        else if(present(p3))then
+            s3 = trim(adjustl(p3))
+            endpos3 = len_trim(s3)
+            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
+                &PATH_SEPARATOR//s3(1:endpos3)
+        else
+            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)
+        endif
+    end function filepath_2
+
 
     !> \brief  is for deleting consecutively numbered files with padded number strings
     subroutine del_files( body, n, ext, numlen, suffix )

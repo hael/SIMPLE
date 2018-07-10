@@ -14,6 +14,7 @@
     integer, parameter :: FC_GNU_COMPILER = 0
     integer, parameter :: OS_LINUX = 1
     integer, parameter :: OS_MACOSX = 0
+    integer, parameter :: OS_WINDOWS = -1
 #ifdef MACOSX
     integer, parameter :: OS_PLATFORM =  OS_MACOSX
 #else
@@ -35,14 +36,30 @@
 #else
 # error 'Compiler must be GNU, Intel or PGI'
 #endif
-
+#ifdef WIN32
+character, parameter        :: PATH_SEPARATOR  = "\\"        ! double backslash generates only one character
+character(len=2), parameter :: PATH_HERE       = ".\\"
+character(len=3), parameter :: PATH_PARENT     = "..\\"
+character(len = *), parameter :: system_type   = "windows"
+character(len = *), parameter :: rmdir_force   = "deltree /s"
+character(len = *), parameter :: bg_cmd_prefix = ""
+character(len = *), parameter :: bg_cmd_suffix = ""
+character(len = 1), parameter :: redirect      = ">"
+character(len = *), parameter :: tempdir       = "c:\\TEMP\\"
+character(len = *), parameter :: temp_filelist = "__simple_filelist__"
+character(len = *), parameter :: ls_command    = "dir  "
+character(len = *), parameter :: list_subdirs  = "dir /a:d"
+#else
+character, parameter        :: PATH_SEPARATOR  = "/"
+character(len=2), parameter :: PATH_HERE       = "./"
+character(len=3), parameter :: PATH_PARENT     = "../"
 character(len = *), parameter :: system_type   = "unix"
-character(len = *), parameter :: dir_separator = "/"
 character(len = *), parameter :: rmdir_force   = "/bin/rm --dir --force --recursive --preserve-root"
 character(len = *), parameter :: bg_cmd_prefix = "nohup"
-character(len = *), parameter :: bg_cmd_suffix = "&"
-character(len = *), parameter :: redirect      = ">"
+character(len = 1), parameter :: bg_cmd_suffix = "&"
+character(len = 1), parameter :: redirect      = ">"
 character(len = *), parameter :: tempdir       = "/tmp/"
 character(len = *), parameter :: temp_filelist = "__simple_filelist__"
 character(len = *), parameter :: ls_command    = "/bin/ls "
 character(len = *), parameter :: list_subdirs  = "find . -maxdepth 1 -type d -print0"
+#endif
