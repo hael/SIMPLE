@@ -559,8 +559,8 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
-        call cline_reproject%set('vol1',     'rec_final'//params%ext)
-        call cline_reproject%set('oritab',   'final_oris.txt')
+        call cline_reproject%set('vol1',   'rec_final_pproc'//params%ext)
+        call cline_reproject%set('oritab', 'final_oris.txt')
         call xreproject%execute(cline_reproject)
         ! end gracefully
         call spproj%kill
@@ -646,7 +646,6 @@ contains
                 avg_euldist = avg_euldist/real(ncls)
                 write(*,'(A)')'>>>'
                 write(*,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
-                write(*,'(A)')'>>>'
             end subroutine conv_eo
 
     end subroutine exec_initial_3Dmodel

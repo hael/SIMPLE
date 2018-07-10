@@ -572,9 +572,11 @@ contains
                         endif
                     endif
                 end do
+                !!!!!!!! TAKE THIS OUT TO TURN OFF LOW-PASS LIMITED REC !!!!!!!!!!!!!!!!! 
                 ! do istate = 1, params_glob%nstates
                 !     if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
                 ! end do
+                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 deallocate(resarr)
             case DEFAULT
                 lplim_rec = params_glob%lp

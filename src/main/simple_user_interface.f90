@@ -740,7 +740,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 5, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('srch_ctrls', 6, 'dyncls', 'binary', 'Dynamic reallocation of clusters', 'Dynamic reallocation of clusters &
-        &that fall below a minimum population by randomization(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &that fall below a minimum population by randomization(yes|no){yes}', '(yes|no){no}', .false., 'no')
         call cluster2D%set_input('srch_ctrls', 7, maxits)
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
         call cluster2D%set_input('srch_ctrls', 9, frac)

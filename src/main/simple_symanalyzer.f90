@@ -82,6 +82,7 @@ contains
         real,             intent(in)    :: msk, hp, lp
         type(sym_stats), allocatable :: pgrps(:)
         integer, parameter :: NGRPS = 11
+        real, allocatable  :: zscores(:)
         integer            :: filtsz, isym, inds(3), iisym
         real               :: scores(3)
         ! prepare point-group stats object
@@ -112,6 +113,8 @@ contains
                          & pgrps(6)%cc + pgrps(8)%cc  + pgrps(9)%cc  + pgrps(11)%cc / 8.
         pgrps(11)%score  = max(0.,median(pgrps(11)%fsc))
         scores(3)        = pgrps(11)%score
+        ! calculate Z-scores
+        zscores = robust_z_scores(scores)
         ! produce ranked output
         inds(1) = 9
         inds(2) = 10
@@ -120,9 +123,9 @@ contains
         call reverse(inds)
         do isym=1,3
             iisym = inds(isym)
-            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym,&
+            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym,&
             &'POINT-GROUP:', pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:',&
-            &pgrps(iisym)%cc_avg
+            &pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
         end do
     end subroutine eval_platonic_point_groups
 
@@ -134,7 +137,7 @@ contains
         type(sym_stats), allocatable    :: pgrps(:)
         logical, allocatable :: scoring_groups(:)
         integer, allocatable :: inds(:)
-        real,    allocatable :: scores(:), res(:)
+        real,    allocatable :: scores(:), res(:), zscores(:)
         character(len=3)     :: subgrp
         type(sym) :: symobj
         integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j
@@ -194,20 +197,22 @@ contains
             pgrps(isym)%score  = max(0.,median(pgrps(isym)%fsc))
             scores(isym)       = pgrps(isym)%score
         end do
+        ! calculate Z-scores
+        zscores = robust_z_scores(scores)
         ! produce ranked output
         inds = (/(isym,isym=1,nsyms)/)
         call hpsort(scores, inds)
         call reverse(inds)
         do isym=1,nsyms
             iisym = inds(isym)
-            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
-            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg
+            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
+            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
         end do
         call fopen(fnr, status='replace', file='symmetry_test_fscs.txt', action='write')
         do isym=1,nsyms
             iisym = inds(isym)
-            write(fnr,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
-            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg
+            write(fnr,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
+            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
             do j=1,size(res)
                write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', pgrps(iisym)%fsc(j)
             end do

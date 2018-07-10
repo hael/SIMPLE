@@ -37,7 +37,7 @@ type :: parameters
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dryrun='no'          !< no 3D search and reconstruction, for profiling only
-    character(len=3)      :: dyncls='yes'         !< dynamic class update(yes|no){yes}
+    character(len=3)      :: dyncls='no'          !< dynamic class update(yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
