@@ -68,7 +68,7 @@ type, extends(image) :: reconstructor
 end type reconstructor
 
 #include "simple_local_flags.inc"
-
+integer(timer_int_kind) :: trec
 contains
 
     ! CONSTRUCTORS
@@ -709,7 +709,8 @@ contains
         integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
-        DebugPrint ' In reconstructor;rec'
+        trec=tic()
+        DebugPrint ' In reconstructor;rec '
         ! make the images
         call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
@@ -717,7 +718,8 @@ contains
         ! zero the Fourier volume and rho
         call self%reset
         call self%reset_exp
-        write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
+        DebugPrint ' In reconstructor;rec prep done                              ', toc(trec)
+        write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION '
         statecnt = 0
         cnt      = 0
         do i=1,params_glob%nptcls
@@ -731,12 +733,15 @@ contains
                 endif
             endif
         end do
+        DebugPrint ' In reconstructor;rec KB done                                ', toc(trec)
         if( present(part) )then
             return
         else
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
             call self%compress_exp
+            DebugPrint ' In reconstructor;rec compress_exp done                  ', toc(trec)
             call self%sampl_dens_correct
+            DebugPrint ' In reconstructor;rec sampl_dens_correct done            ', toc(trec)
         endif
         call self%ifft()
         call img%kill
@@ -746,7 +751,7 @@ contains
         if( params_glob%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
-
+         DebugPrint ' In reconstructor;rec Completed in                          ', toc(trec) , ' secs'
         contains
 
             !> \brief  the density reconstruction functionality

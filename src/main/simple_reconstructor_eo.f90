@@ -67,6 +67,7 @@ type :: reconstructor_eo
     procedure          :: kill
 end type reconstructor_eo
 
+#include "simple_local_flags.inc"
 contains
 
     ! CONSTRUCTOR
@@ -432,6 +433,7 @@ contains
         type(image)      :: img, img_pad, mskimg
         type(ctfparams)  :: ctfvars
         integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
+        DebugPrint ' In reconstructor_eo; eorec_distr'
         ! stash global state index
         state_glob = state
         ! make the images

@@ -29,6 +29,8 @@ contains
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
         integer :: s
+        integer(timer_int_kind) :: t1
+        t1=tic()
         ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         do s=1,params_glob%nstates
@@ -60,14 +62,17 @@ contains
             endif
             deallocate(fbody)
         end do
+        DebugPrint ' exec_rec took ', toc(t1), ' secs'
         write(*,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
         call qsys_job_finished(  'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
     subroutine exec_eorec_distr( fbody_in )
         character(len=*), optional, intent(in)    :: fbody_in
-        character(len=:), allocatable :: fbody, fname
+        character(len=:), allocatable :: fbody
         integer :: s
+        integer(timer_int_kind) :: t1
+        t1=tic()
         if( .not. params_glob%l_distr_exec ) stop 'eo .ne. no not supported here, use simple_distr_exec!'
         ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
@@ -82,7 +87,8 @@ contains
             call build_glob%eorecvol%eorec_distr( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, fbody=fbody)
             deallocate(fbody)
         end do
-        call qsys_job_finished(  'simple_rec_master :: exec_eorec')
+        call qsys_job_finished( 'simple_rec_master :: exec_eorec')
+        DebugPrint ' exec_eorec_distr took ', toc(t1), ' secs'
         write(*,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
     end subroutine exec_eorec_distr
 
