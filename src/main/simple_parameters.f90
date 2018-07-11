@@ -188,7 +188,7 @@ type :: parameters
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
-    integer :: cc_objfun=1         !< objective function(1:cc|2:ccres|3:euclid)
+    integer :: cc_objfun=OBJFUN_CC !< objective function(1:cc|2:ccres|3:euclid)
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
@@ -1247,11 +1247,11 @@ contains
         ! objective function used in prime2D/3D
         select case(trim(self%objfun))
             case('cc')
-                self%cc_objfun = 1
+                self%cc_objfun = OBJFUN_CC
             case('ccres')
-                self%cc_objfun = 2
+                self%cc_objfun = OBJFUN_RES
             case('euclid')
-                self%cc_objfun = 3
+                self%cc_objfun = OBJFUN_EUCLID
             case DEFAULT
                 write(*,*) 'objfun flag: ', trim(self%objfun)
                 stop 'unsupported objective function; parameters :: new'

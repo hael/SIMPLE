@@ -78,7 +78,6 @@ type :: polarft_corrcalc
     integer                          :: winsz      = 0        !< size of moving window in correlation calculations
     integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
     integer                          :: kfromto(2) = 0        !< Fourier index range
-    integer                          :: cc_objfun  = 1        !< objective function(1:cc|2:ccres|3:euclid)
     real(sp)                         :: smpd       = 0.       !< sampling distance
     integer,             allocatable :: pinds(:)              !< index array (to reduce memory when frac_update < 1)
     real(sp),            allocatable :: ptcl_bfac_weights(:,:)!< B-factor per particle array for weighting of the correlation
@@ -123,7 +122,6 @@ type :: polarft_corrcalc
     procedure          :: get_roind
     procedure          :: get_coord
     procedure          :: get_ref_pft
-    procedure          :: get_objfun
     procedure          :: exists
     procedure          :: ptcl_iseven
     ! PRINTERS/VISUALISERS
@@ -256,17 +254,13 @@ contains
         if(alloc_stat/=0)call allocchk("Inv_resarrsq failed allocation; simple_polarft_corrcalc ; new")
         self%inv_resarrsq = self%smpd * real(self%ldim(1)) / real((/(k,k=self%kfromto(1),self%kfromto(2))/))
         self%inv_resarrsq = -1. / (4.*self%inv_resarrsq*self%inv_resarrsq)
-        select case(trim(params_glob%objfun))
-            case('cc')
-                self%cc_objfun = 1
-            case('ccres')
-                self%cc_objfun = 2
+        select case(params_glob%cc_objfun)
+            case (OBJFUN_CC, OBJFUN_EUCLID)
+            case (OBJFUN_RES)
                 allocate(self%ptcl_bfac_weights(self%kfromto(1):self%kfromto(2), 1:self%nptcls),&
                     &self%ptcl_bfac_norms(1:self%nptcls))
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
-            case('euclid')
-                self%cc_objfun = 3
             case DEFAULT
                 write(*,*) 'unsupported objective function: ', trim(params_glob%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'
@@ -582,12 +576,6 @@ contains
         if(alloc_stat.ne.0)call allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
-    !>  \brief  returns the objective function flag
-    integer function get_objfun( self )
-        class(polarft_corrcalc), intent(in) :: self
-        get_objfun = self%cc_objfun
-    end function get_objfun
-
     !>  \brief  checks for existence
     function exists( self ) result( yes )
         class(polarft_corrcalc), intent(in) :: self
@@ -685,9 +673,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         real,                    intent(in)    :: bfac
-        if( self%cc_objfun == 1 )then
+        if( params_glob%cc_objfun == OBJFUN_CC )then
             ! nothing to do
-        else if ( self%cc_objfun == 2 ) then
+        else if ( params_glob%cc_objfun == OBJFUN_RES ) then
             self%ptcl_bfac_weights(:,self%pinds(iptcl)) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
             where( self%ptcl_bfac_weights(:,self%pinds(iptcl)) < TINY) self%ptcl_bfac_weights(:,self%pinds(iptcl)) = 0.
             self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(:,self%pinds(iptcl)))
@@ -1288,11 +1276,11 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
-        if     ( self%cc_objfun == 1 )then
+        if     ( params_glob%cc_objfun == OBJFUN_CC )then
             call self%gencorrs_cc_1(iref, iptcl, cc)
-        else if( self%cc_objfun == 2 )then
+        else if( params_glob%cc_objfun == OBJFUN_RES )then
             call self%gencorrs_resnorm_1(iref, iptcl, cc)
-        else if( self%cc_objfun == 3 )then
+        else if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             call self%gencorrs_euclid_1(iref, iptcl, cc)
         end if
     end subroutine gencorrs_1
@@ -1301,11 +1289,11 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
         real,                    intent(out)   :: cc(self%nrots)
-        if     ( self%cc_objfun == 1 )then
+        if     ( params_glob%cc_objfun == OBJFUN_CC )then
             call self%gencorrs_cc_2(iref, iptcl, kstop, cc)
-        else if( self%cc_objfun == 2 )then
+        else if( params_glob%cc_objfun == OBJFUN_RES )then
             call self%gencorrs_resnorm_2(iref, iptcl, kstop, cc)
-        else if( self%cc_objfun == 3 )then
+        else if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             call self%gencorrs_euclid_2(iref, iptcl, kstop, cc)
         end if
     end subroutine gencorrs_2
@@ -1315,11 +1303,11 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
-        if     ( self%cc_objfun == 1 )then
+        if     ( params_glob%cc_objfun == OBJFUN_CC )then
             call self%gencorrs_cc_3(iref, iptcl, shvec, cc)
-        else if( self%cc_objfun == 2 )then
+        else if( params_glob%cc_objfun == OBJFUN_RES )then
             call self%gencorrs_resnorm_3(iref, iptcl, shvec, cc)
-        else if( self%cc_objfun == 3 )then
+        else if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             call self%gencorrs_euclid_3(iref, iptcl, shvec, cc)
         end if
     end subroutine gencorrs_3
@@ -1330,11 +1318,11 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp)                               :: cc
-        if     ( self%cc_objfun == 1 )then
+        if     ( params_glob%cc_objfun == OBJFUN_CC )then
             cc = self%gencorr_cc_for_rot_8( iref, iptcl, shvec, irot )
-        else if( self%cc_objfun == 2 )then
+        else if( params_glob%cc_objfun == OBJFUN_RES )then
             cc = self%gencorr_resnorm_for_rot_8( iref, iptcl, shvec, irot )
-        else if( self%cc_objfun == 3 ) then
+        else if( params_glob%cc_objfun == OBJFUN_EUCLID ) then
             cc = self%gencorr_euclid_for_rot_8( iref, iptcl, shvec, irot )
         end if
     end function gencorr_for_rot_8
@@ -1570,11 +1558,11 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: f, grad(2)
-        if     ( self%cc_objfun == 1 )then
+        if     ( params_glob%cc_objfun == OBJFUN_CC )then
             call self%gencorr_cc_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
-        else if( self%cc_objfun == 2)then
+        else if( params_glob%cc_objfun == OBJFUN_RES)then
             call self%gencorr_resnorm_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
-        else if( self%cc_objfun == 3)then
+        else if( params_glob%cc_objfun == OBJFUN_EUCLID)then
             call self%gencorr_euclid_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
         end if
     end subroutine gencorr_grad_for_rot_8
@@ -1811,11 +1799,11 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: grad(2)
-        if     ( self%cc_objfun == 1 )then
+        if     ( params_glob%cc_objfun == OBJFUN_CC )then
             call self%gencorr_cc_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
-        else if( self%cc_objfun == 2 )then
+        else if( params_glob%cc_objfun == OBJFUN_RES )then
             call self%gencorr_resnorm_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
-        else if( self%cc_objfun == 3 )then
+        else if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             call self%gencorr_euclid_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
         end if
     end subroutine gencorr_grad_only_for_rot_8

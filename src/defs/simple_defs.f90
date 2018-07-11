@@ -62,6 +62,11 @@ enum, bind(c)
     enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2
 end enum
 
+! Objective function
+enum, bind(c)
+    enumerator :: OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2
+end enum
+
 ! type for CTF parameters
 type :: ctfparams
     integer :: ctfflag = 0

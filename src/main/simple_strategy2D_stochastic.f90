@@ -5,6 +5,7 @@ use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
+use simple_parameters,       only: params_glob
 implicit none
 
 public :: strategy2D_stochastic
@@ -41,7 +42,7 @@ contains
             glob_best_set = .false.
             call self%s%prep4srch
             ! objective function based logics for performing extremal search
-            if( pftcc_glob%get_objfun() == 2 )then
+            if( params_glob%cc_objfun == OBJFUN_RES )then
                 ! based on b-factor for objfun=ccres (the lower the better)
                 do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_bfac < self%spec%extr_bound)
             else
