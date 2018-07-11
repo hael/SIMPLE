@@ -524,6 +524,7 @@ contains
     !> concatenate strings together to with '/' to create a filename
     !! input args are restricted to STDLEN after trimming
     !! for allocatable character results
+    !! e.g. fname = filepath('dir1',trim(dirfixed), diralloc, file//ext )
     function filepath_1(p1, p2,p3,p4) result( fname )! , arg3, arg4) result( fname )
         character(len=*),  intent(in)           :: p1
         character(len=*),  intent(in)           :: p2
@@ -531,31 +532,46 @@ contains
         character(len=*),  intent(in), optional :: p4
         character(len=:), allocatable     :: fname
         character(len=STDLEN)      :: s1,s2,s3,s4
-        integer :: endpos1,endpos2,endpos3,endpos4
+        integer :: endpos1,endpos2,endpos3,endpos4,startpos2,startpos3,startpos4
+        startpos2=1;startpos3=1;startpos4=1
         s1 = trim(adjustl(p1))
         endpos1 = len_trim(s1)
+        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg too small")
+        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
+        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg cannot be / ")
         s2 = trim(adjustl(p2))
         endpos2 = len_trim(s2)
-        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
+        if(endpos2<1) call simple_stop("simple_fileio::filepath_1 second arg too small")
         if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
+        if(endpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be / ")
+        if(s2(1:1)==PATH_SEPARATOR) startpos2 = 2
+        if(endpos2-startpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be "//trim(s2))
 
-        if(present(p4))then
+        if(present(p3))then
             s3 = trim(adjustl(p3))
             endpos3 = len_trim(s3)
+            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg too small")
+            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg cannot be /")
+            if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
+            if(endpos3-startpos3==0) call simple_stop("simple_fileio::filepath_1 third arg cannot be "//trim(s3))
+
+        end if
+        if(present(p4))then
             s4 = trim(adjustl(p4))
             endpos4 = len_trim(s4)
-            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg too small")
             if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
-                &PATH_SEPARATOR//s3(1:endpos3)//PATH_SEPARATOR//s4(1:endpos4))
+            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg  cannot be /")
+            if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
+            if(endpos4-startpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg cannot be "//trim(s4))
+            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4))
         else if(present(p3))then
-            s3 = trim(adjustl(p3))
-            endpos3 = len_trim(s3)
-            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
-            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
-                &PATH_SEPARATOR//s3(1:endpos3))
+            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                &PATH_SEPARATOR//s3(startpos3:endpos3))
         else
-            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2))
+            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2))
         endif
     end function filepath_1
 
@@ -568,31 +584,48 @@ contains
         character(len=*),  intent(in), optional :: p4
         logical :: nonalloc
         character(len=STDLEN)      :: s1,s2,s3,s4 , fname
-        integer :: endpos1,endpos2,endpos3,endpos4
+        integer :: endpos1,endpos2,endpos3,endpos4,startpos2,startpos3,startpos4
+        startpos2=1;startpos3=1;startpos4=1
         s1 = trim(adjustl(p1))
         endpos1 = len_trim(s1)
+        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg too small")
+        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
+        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg cannot be / ")
         s2 = trim(adjustl(p2))
         endpos2 = len_trim(s2)
-        if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
+        if(endpos2<1) call simple_stop("simple_fileio::filepath_1 second arg too small")
         if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
-
-        if(present(p4))then
+        if(endpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be / ")
+        if(s2(1:1)==PATH_SEPARATOR) startpos2 = 2
+        if(endpos2-startpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be "//trim(s2))
+        if(present(p3))then
             s3 = trim(adjustl(p3))
             endpos3 = len_trim(s3)
+            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg too small")
+            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg cannot be /")
+            if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
+            if(endpos3-startpos3==0) call simple_stop("simple_fileio::filepath_1 third arg cannot be "//trim(s3))
+        end if
+        if(present(p4))then
             s4 = trim(adjustl(p4))
             endpos4 = len_trim(s4)
-            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
+            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg too small")
             if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
-                &PATH_SEPARATOR//s3(1:endpos3)//PATH_SEPARATOR//s4(1:endpos4)
+            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg  cannot be /")
+            if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
+            if(endpos4-startpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg cannot be "//trim(s4))
+            !! concatenate four pathnames
+            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4)
         else if(present(p3))then
-            s3 = trim(adjustl(p3))
-            endpos3 = len_trim(s3)
-            if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
-            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)//&
-                &PATH_SEPARATOR//s3(1:endpos3)
+           !! concatenate three pathnames
+           fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                &PATH_SEPARATOR//s3(startpos3:endpos3)
         else
-            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(1:endpos2)
+           !! concatenate two pathnames
+           fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos4:endpos2)
+
         endif
     end function filepath_2
 
