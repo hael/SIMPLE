@@ -80,8 +80,9 @@ contains
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
-        ! stack splitting
-        call spproj%split_stk(params%nparts, dir='..')
+        ! splitting
+        call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
+        ! general options planning
         if( params%l_autoscale )then
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
@@ -332,7 +333,7 @@ contains
         if(params%nparts == 1 )then
             call work_proj1%write()
         else
-            call work_proj1%split_stk(params%nparts)
+            call work_proj1%split_stk(params%nparts, .false.)
         endif
         ! down-scale
         orig_box     = work_proj1%get_box()
@@ -500,7 +501,7 @@ contains
             if(params%nparts == 1)then
                 call work_proj2%write()
             else
-                call work_proj2%split_stk(params%nparts)
+                call work_proj2%split_stk(params%nparts, .false.)
             endif
         endif
         call work_proj2%kill

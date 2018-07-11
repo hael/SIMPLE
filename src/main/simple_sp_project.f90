@@ -897,16 +897,18 @@ contains
     end subroutine add_stktab
 
     !>  Only commits to disk when a change to the project is made
-    subroutine split_stk( self, nparts, dir )
+    subroutine split_stk( self, nparts, update_parent, dir )
         use simple_map_reduce, only: split_nobjs_even
         use simple_image,      only: image
         class(sp_project),          intent(inout) :: self
         integer,                    intent(in)    :: nparts
+        logical,                    intent(in)    :: update_parent
         character(len=*), optional, intent(in)    :: dir
         character(len=4),   parameter :: EXT = '.mrc'
+        type(sp_project)              :: parent_proj
         type(image)                   :: img
         type(ori)                     :: orig_stk
-        character(len=:), allocatable :: stk, tmp_dir, imgkind, stkpart, dest_stkpart
+        character(len=:), allocatable :: stk, tmp_dir, imgkind, stkpart, dest_stkpart, projname
         character(len=STDLEN) :: cwd
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer :: nptcls, nptcls_part, numlen, status
@@ -984,6 +986,19 @@ contains
         enddo
         call self%write
         call simple_rmdir(tmp_dir)
+        ! update parent project file
+        if( update_parent )then
+            if( .not.self%projinfo%isthere('projname') )return
+            call self%projinfo%getter(1, 'projname', projname)
+            projname = '../'//trim(projname)//'.simple'
+            if( .not. file_exists(projname) )return
+            call parent_proj%read(projname)
+            if( parent_proj%os_stk%get_noris() /= 1 )return
+            parent_proj%os_stk    = self%os_stk
+            parent_proj%os_ptcl2D = self%os_ptcl2D
+            parent_proj%os_ptcl3D = self%os_ptcl3D
+            call parent_proj%write(projname)
+        endif
     end subroutine split_stk
 
     function get_stkname( self, imic ) result( stkname )

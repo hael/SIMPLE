@@ -376,7 +376,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
-        if( build%spproj%get_nptcls() ==0 )then
+        if( build%spproj%get_nptcls() == 0 )then
             write(*,*)'No particles found! simple_commander_distr_wflows::exec_cluster2D_distr'
             stop 'No particles found! simple_commander_distr_wflows::exec_cluster2D_distr'
         endif
@@ -386,6 +386,8 @@ contains
         call qenv%new
         ! prepare job description
         call cline%gen_job_descr(job_descr)
+        ! splitting
+        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'))
         ! prepare command lines from prototype master
         cline_check_2Dconv = cline
         cline_cavgassemble = cline
@@ -394,8 +396,6 @@ contains
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_make_cavgs%set('prg',   'make_cavgs')
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
-        ! splitting
-        call build%spproj%split_stk(params%nparts)
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs' // params%ext
@@ -556,7 +556,7 @@ contains
             vol = 'startvol_state01'//params%ext
         endif
         ! splitting
-        call build%spproj%split_stk(params%nparts, dir='..')
+        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
@@ -619,6 +619,8 @@ contains
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
         call qenv%new
+        ! splitting
+        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
         cline_refine3D_init       = cline
@@ -643,9 +645,6 @@ contains
             call cline_volassemble%delete( trim(vol) )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        DebugPrint ' In exec_refine3D_distr; begin splitting'
-        ! splitting
-        call build%spproj%split_stk(params%nparts, dir='..')
         DebugPrint ' In exec_refine3D_distr; begin starting models'
         ! GENERATE STARTING MODELS & ORIENTATIONS
         if( params%continue .eq. 'yes' )then
@@ -902,7 +901,7 @@ contains
         call qenv%new
         call cline%gen_job_descr(job_descr)
         ! splitting
-        call build%spproj%split_stk(params%nparts, dir='..')
+        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir='..')
         ! eo partitioning
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then
