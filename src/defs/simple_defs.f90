@@ -8,7 +8,7 @@ use simple_defs_fname
 implicit none
 integer,  parameter :: ascii        = selected_char_kind ("ascii")
 integer,  parameter :: ucs4         = selected_char_kind ('ISO_10646')
-integer,  parameter :: MAXS         = 99   !< maximum number of states
+integer,  parameter :: MAXS         = 99 !< maximum number of states
 integer,  parameter :: short        = selected_int_kind(4)
 integer,  parameter :: long         = selected_int_kind(9)
 integer,  parameter :: longer       = selected_int_kind(16)

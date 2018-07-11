@@ -2692,7 +2692,7 @@ contains
         call symmetry_test%set_input('srch_ctrls', 3, 'center', 'binary', 'Center input volume', 'Center input volume by its &
         &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call symmetry_test%set_input('srch_ctrls', 4, 'dihedral', 'binary', 'Search for dihedral symmetries', 'Search for dihedral symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call symmetry_test%set_input('srch_ctrls', 5, 'platonic', 'binary', 'Search for platonic symmetries', 'Search for platonic symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call symmetry_test%set_input('srch_ctrls', 5, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
         call symmetry_test%set_input('filt_ctrls', 1, lp)
         call symmetry_test%set_input('filt_ctrls', 2, hp)

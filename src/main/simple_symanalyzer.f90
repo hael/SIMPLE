@@ -8,7 +8,7 @@ use simple_sym,            only: sym
 use simple_ori,            only: ori, m2euler
 implicit none
 
-public :: symmetrize_map, eval_platonic_point_groups, eval_c_and_d_point_groups
+public :: symmetrize_map, symmetry_tester
 private
 
 type sym_stats
@@ -77,63 +77,63 @@ contains
         call symobj%kill
     end subroutine symmetrize_map
 
-    subroutine eval_platonic_point_groups( vol_in, msk, hp, lp )
-        class(projector), intent(inout) :: vol_in
-        real,             intent(in)    :: msk, hp, lp
-        type(sym_stats), allocatable :: pgrps(:)
-        integer, parameter :: NGRPS = 11
-        real, allocatable  :: zscores(:)
-        integer            :: filtsz, isym, inds(3), iisym
-        real               :: scores(3)
-        ! prepare point-group stats object
-        allocate(pgrps(NGRPS))
-        pgrps(1)%str  = 'c2'
-        pgrps(2)%str  = 'c3'
-        pgrps(3)%str  = 'c4'
-        pgrps(4)%str  = 'c5'
-        pgrps(5)%str  = 'd2'
-        pgrps(6)%str  = 'd3'
-        pgrps(7)%str  = 'd4'
-        pgrps(8)%str  = 'd5'
-        pgrps(9)%str  = 't'
-        pgrps(10)%str = 'o'
-        pgrps(11)%str = 'i'
-        ! gather stats
-        call eval_point_groups(vol_in, msk, hp, lp, pgrps)
-        ! calculate cc-based scores
-        pgrps(9)%cc_avg  = pgrps(1)%cc + pgrps(2)%cc  + pgrps(5)%cc  + pgrps(9)%cc / 4.
-        pgrps(9)%score   = max(0.,median(pgrps(9)%fsc))
-        scores(1)        = pgrps(9)%score
-        pgrps(10)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(3)%cc  + pgrps(5)%cc +&
-                         & pgrps(6)%cc + pgrps(7)%cc  + pgrps(9)%cc  + pgrps(10)%cc / 8.
-        pgrps(10)%score  = max(0.,median(pgrps(10)%fsc))
+    ! subroutine eval_platonic_point_groups( vol_in, msk, hp, lp )
+    !     class(projector), intent(inout) :: vol_in
+    !     real,             intent(in)    :: msk, hp, lp
+    !     type(sym_stats), allocatable :: pgrps(:)
+    !     integer, parameter :: NGRPS = 11
+    !     real, allocatable  :: zscores(:)
+    !     integer            :: filtsz, isym, inds(3), iisym
+    !     real               :: scores(3)
+    !     ! prepare point-group stats object
+    !     allocate(pgrps(NGRPS))
+    !     pgrps(1)%str  = 'c2'
+    !     pgrps(2)%str  = 'c3'
+    !     pgrps(3)%str  = 'c4'
+    !     pgrps(4)%str  = 'c5'
+    !     pgrps(5)%str  = 'd2'
+    !     pgrps(6)%str  = 'd3'
+    !     pgrps(7)%str  = 'd4'
+    !     pgrps(8)%str  = 'd5'
+    !     pgrps(9)%str  = 't'
+    !     pgrps(10)%str = 'o'
+    !     pgrps(11)%str = 'i'
+    !     ! gather stats
+    !     call eval_point_groups(vol_in, msk, hp, lp, pgrps)
+    !     ! calculate cc-based scores
+    !     pgrps(9)%cc_avg  = pgrps(1)%cc + pgrps(2)%cc  + pgrps(5)%cc  + pgrps(9)%cc / 4.
+    !     pgrps(9)%score   = max(0.,median(pgrps(9)%fsc))
+    !     scores(1)        = pgrps(9)%score
+    !     pgrps(10)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(3)%cc  + pgrps(5)%cc +&
+    !                      & pgrps(6)%cc + pgrps(7)%cc  + pgrps(9)%cc  + pgrps(10)%cc / 8.
+    !     pgrps(10)%score  = max(0.,median(pgrps(10)%fsc))
+    !
+    !     scores(2)        = pgrps(10)%score
+    !     pgrps(11)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(4)%cc  + pgrps(5)%cc +&
+    !                      & pgrps(6)%cc + pgrps(8)%cc  + pgrps(9)%cc  + pgrps(11)%cc / 8.
+    !     pgrps(11)%score  = max(0.,median(pgrps(11)%fsc))
+    !     scores(3)        = pgrps(11)%score
+    !     ! calculate Z-scores
+    !     zscores = robust_z_scores(scores)
+    !     ! produce ranked output
+    !     inds(1) = 9
+    !     inds(2) = 10
+    !     inds(3) = 11
+    !     call hpsort(scores, inds)
+    !     call reverse(inds)
+    !     do isym=1,3
+    !         iisym = inds(isym)
+    !         write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym,&
+    !         &'POINT-GROUP:', pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:',&
+    !         &pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
+    !     end do
+    ! end subroutine eval_platonic_point_groups
 
-        scores(2)        = pgrps(10)%score
-        pgrps(11)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(4)%cc  + pgrps(5)%cc +&
-                         & pgrps(6)%cc + pgrps(8)%cc  + pgrps(9)%cc  + pgrps(11)%cc / 8.
-        pgrps(11)%score  = max(0.,median(pgrps(11)%fsc))
-        scores(3)        = pgrps(11)%score
-        ! calculate Z-scores
-        zscores = robust_z_scores(scores)
-        ! produce ranked output
-        inds(1) = 9
-        inds(2) = 10
-        inds(3) = 11
-        call hpsort(scores, inds)
-        call reverse(inds)
-        do isym=1,3
-            iisym = inds(isym)
-            write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym,&
-            &'POINT-GROUP:', pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:',&
-            &pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
-        end do
-    end subroutine eval_platonic_point_groups
-
-    subroutine eval_c_and_d_point_groups( vol_in, msk, hp, lp, cn_start, cn_stop, dihedral )
+    subroutine symmetry_tester( vol_in, msk, hp, lp, cn_start, cn_stop, dihedral, platonic )
         class(projector), intent(inout) :: vol_in
         real,             intent(in)    :: msk, hp, lp
         integer,          intent(in)    :: cn_start, cn_stop
-        logical,          intent(in)    :: dihedral
+        logical,          intent(in)    :: dihedral, platonic
         type(sym_stats), allocatable    :: pgrps(:)
         logical, allocatable :: scoring_groups(:)
         integer, allocatable :: inds(:)
@@ -150,6 +150,19 @@ contains
         else
             nsyms = ncsyms
         endif
+        if( platonic )then
+            if( cn_start > 2 .or. cn_stop < 5 )then
+                write(*,*) 'ERROR! cn range must include rotational symmetries from orders 2-5 when searching for Platonic groups'
+                write(*,*) 'Set cn_start = 2 and cn_stop > 5 on command line'
+                stop 'simple_symanalyzer :: eval_point_groups'
+            endif
+            if( .not. dihedral )then
+                write(*,*) 'ERROR! search must include dihedral symmetries when searching for Platonic groups'
+                write(*,*) 'Set dihedral = yes on command line '
+                stop 'simple_symanalyzer :: eval_point_groups'
+            endif
+            nsyms = nsyms + 3
+        endif
         write(*,'(a,1x,i2,1x,a,1x,i2)') '>>> TESTING C-SYMMETRIES FROM', cn_start, 'TO', cn_stop
         ! prepare point-group stats object
         allocate(pgrps(nsyms))
@@ -164,6 +177,12 @@ contains
                 pgrps(cnt)%str = 'd'//int2str(idsym)
             end do
             write(*,'(a)') '>>> TESTING DIHEDRAL SYMMETRIES'
+        endif
+        if( platonic )then
+            pgrps(cnt + 1)%str = 't'
+            pgrps(cnt + 2)%str = 'o'
+            pgrps(cnt + 3)%str = 'i'
+            write(*,'(a)') '>>> TESTING PLATONIC SYMMETRIES'
         endif
         ! get resolution array and smpd for FSC analysis
         res    = vol_in%get_res()
@@ -218,7 +237,7 @@ contains
             end do
         end do
         call fclose(fnr)
-    end subroutine eval_c_and_d_point_groups
+    end subroutine symmetry_tester
 
     subroutine eval_point_groups( vol_in, msk, hp, lp, pgrps )
         class(projector), intent(inout) :: vol_in

@@ -495,11 +495,7 @@ contains
         call work_proj2%update_projinfo(cline)
         ! split
         if( do_eo )then
-            if(params%nparts <= 2)then
-                call work_proj2%write()
-            else
-                call work_proj2%split_stk(params%nparts)
-            endif
+            call work_proj2%write()
         else
             if(params%nparts == 1)then
                 call work_proj2%write()

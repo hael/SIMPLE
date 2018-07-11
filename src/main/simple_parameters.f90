@@ -514,6 +514,7 @@ contains
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
+        call check_carg('platonic',       self%platonic)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)

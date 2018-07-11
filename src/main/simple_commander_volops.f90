@@ -655,11 +655,8 @@ contains
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! run test
-        if( params%platonic .eq. 'yes' )then
-            call eval_platonic_point_groups(build%vol, params%msk, params%hp, params%lp)
-        else
-            call eval_c_and_d_point_groups(build%vol, params%msk, params%hp, params%lp, params%cn_start, params%cn_stop, params%dihedral .eq. 'yes')
-        endif
+        call symmetry_tester(build%vol, params%msk, params%hp, params%lp, params%cn_start,&
+        params%cn_stop, params%dihedral .eq. 'yes', params%platonic .eq. 'yes')
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test
