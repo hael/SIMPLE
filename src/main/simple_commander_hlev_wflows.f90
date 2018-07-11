@@ -162,7 +162,7 @@ contains
             call spproj%kill
             scale_stage2 = cline_scale2%get_rarg('scale')
             scaling      = trim(projfile_sc) /= params%projfile
-            if( scaling )call xscale_distr%execute( cline_scale2 )
+            if( scaling ) call xscale_distr%execute( cline_scale2 )
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(projfile_sc))
             call xcluster2D_distr%execute(cline_cluster2D_stage2)
@@ -400,6 +400,7 @@ contains
             call cline_refine3D_init%set('pgrp', 'c1')
             ! symsrch
             call qenv%new(exec_bin='simple_exec')
+            call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
             call cline_symsrch%set('msk',      msk)
             call cline_symsrch%set('smpd',     work_proj1%get_smpd())
             call cline_symsrch%set('projfile', trim(WORK_PROJFILE))
