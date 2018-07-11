@@ -429,7 +429,7 @@ contains
                             dists(j) = 0.
                         else
                             rj = os_rmats(j,:,:)
-                            dists(j) = min(dists(j), angleDist(matmul(zvec,rsym),matmul(zvec,rj)))
+                            dists(j) = min(dists(j), vector_angle_norm(matmul(zvec,rsym),matmul(zvec,rj)))
                         endif
                     enddo
                 enddo

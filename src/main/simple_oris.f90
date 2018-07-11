@@ -3067,7 +3067,7 @@ contains
         !$omp proc_bind(close)
         do i=1,self%n
             do j=1,self%n
-                dists(j) =  angleDist(onormals(i,:),onormals(j,:))
+                dists(j) =  vector_angle_norm(onormals(i,:),onormals(j,:))
             end do
             rnpeaks = rnpeaks + real(count(dists <= radthresh))
         end do
@@ -3276,7 +3276,7 @@ contains
         !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(guided)
         do i=1,self%n-1
             do j=i+1,self%n
-                dists(i) =  angleDist(onormals(i,:),onormals(j,:))
+                dists(i) =  vector_angle_norm(onormals(i,:),onormals(j,:))
                  if( dists(i) < mind ) mind = dists(i)
                  if( dists(i) > maxd ) maxd = dists(i)
                  sumd = sumd+dists(i)
@@ -3307,7 +3307,7 @@ contains
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)&
         !$omp reduction(+:sumd) reduction(min:mind) reduction(max:maxd)
          do i=1,self1%n
-            dists(i) = angleDist(onormals1(i,:),onormals2(i,:)) ! (self1%o(i).euldist.self2%o(i))
+            dists(i) = vector_angle_norm(onormals1(i,:),onormals2(i,:)) ! (self1%o(i).euldist.self2%o(i))
             if( dists(i) < mind ) mind = dists(i)
             if( dists(i) > maxd ) maxd = dists(i)
             sumd = sumd+dists(i)

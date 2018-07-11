@@ -2766,10 +2766,11 @@ contains
     !! magnitude of v and w must equal 1
     !! \theta = \arccos \frac {\mathbf v \cdot \mathbf w}{\left\Vert{\mathbf v}\right\Vert \left\Vert{\mathbf w}\right\Vert}
     !! by definition of the cosine formula for dot product.
-    pure real function angleDist(v, w)
+    !! This function assumes the input vectors are normals!!
+    pure real function vector_angle_norm(v, w)
         real, dimension(3), intent(in) :: v,w
         angleDist = acos( dot_product(v, w) )
-    end function angleDist
+    end function
 
     !> sort and return the 3 lowest
     function min3( rarr ) result(min_3)
