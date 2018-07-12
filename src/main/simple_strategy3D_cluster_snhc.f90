@@ -90,10 +90,8 @@ contains
     !             ! evaluate correlations
     !             do state=1,self%s%nstates
     !                 if( avail(state) .or. state==self%s%prev_state )then
-    !                     ! dual resolution limit scheme:
-    !                     ! state assignement employs correlations up to kstop_grid
     !                     iref = (state-1) * self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
-    !                     call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%kstop_grid, corrs_inpl)
+    !                     call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
     !                     ! corrs(state) = corrs_inpl(self%s%prev_roind)
     !                     corrs(state) = maxval(corrs_inpl)
     !                 endif
@@ -156,10 +154,10 @@ contains
     subroutine srch_cluster3D_snhc( self )
         use simple_rnd, only: shcloc, irnd_uni
         class(strategy3D_cluster_snhc),   intent(inout) :: self
-        integer :: iproj, iref, state
+        integer :: iproj, iref, state, ran_state
         real    :: corrs(self%s%nstates), corrs_inpl(self%s%nrots)
         real    :: shvec(2), corr, mi_state, frac, mi_inpl, mi_proj, bfac
-        logical :: do_snhc, do_greedy_inpl
+        logical :: do_snhc, do_greedy_inpl, avail(self%s%nstates)
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
             ! local prep
@@ -175,9 +173,11 @@ contains
             self%s%specscore = pftcc_glob%specscore(self%s%prev_ref, self%s%iptcl, self%s%prev_roind)
             ! search decisions
             self%s%prev_corr = build_glob%spproj_field%get(self%s%iptcl, 'corr')
-            do_snhc          = self%s%prev_corr < self%spec%extr_score_thresh
-            do_greedy_inpl   = .not.self%spec%do_extr
+            do_snhc          = self%spec%do_extr .and. self%s%prev_corr < self%spec%extr_score_thresh
+            !do_greedy_inpl   = .not.self%spec%do_extr
             !do_snhc        = ran3() < self%spec%extr_score_thresh
+            !write(*,*)self%s%iptcl, self%spec%extr_score_thresh, do_snhc
+            do_greedy_inpl = .false.
             ! do_greedy_inpl = self%spec%extr_score_thresh < 0.02
             ! evaluate all correlations
             corrs = -1.
@@ -189,24 +189,57 @@ contains
                 ! replaced corrs(state) = corrs_inpl(self%s%prev_roind) with:
                 corrs(state) = maxval(corrs_inpl)
             enddo
-            self%s%prev_corr  = corrs(self%s%prev_state)
+            self%s%prev_corr = corrs(self%s%prev_state)
             ! make moves
             mi_state = 0.
             mi_inpl  = 1.
             mi_proj  = 1.
             if( do_snhc )then
                 ! state randomization
-                state = irnd_uni(self%s%nstates)
-                do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
-                    state = irnd_uni(self%s%nstates)
+                avail = s3D%state_exists
+                avail(self%s%prev_state) = .false.
+                ran_state = irnd_uni(self%s%nstates)
+                do while(.not.avail(ran_state))
+                    ran_state = irnd_uni(self%s%nstates)
                 enddo
-                corr = corrs(state)
-                self%s%nrefs_eval = 1
+                state = ran_state
+                corr  = corrs(state)
+                if( corr > self%s%prev_corr )then
+                    ! accept
+                    self%s%nrefs_eval = 1
+                else
+                    if( count(avail) == 0 )then
+                        self%s%nrefs_eval = 1
+                    else
+                        avail(state) = .false.
+                        ran_state    = irnd_uni(self%s%nstates)
+                        do while(.not.avail(ran_state))
+                            ran_state = irnd_uni(self%s%nstates)
+                        enddo
+                        if(corrs(ran_state) > corr)then
+                            state = ran_state
+                            corr  = corrs(state)
+                        endif
+                        self%s%nrefs_eval = 2
+                    endif
+                endif
+                ! state randomization
+                ! state = irnd_uni(self%s%nstates)
+                ! do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
+                !     state = irnd_uni(self%s%nstates)
+                ! enddo
+                ! corr = corrs(state)
+                ! self%s%nrefs_eval = 1
             else
                 ! SHC state optimization
-                state             = shcloc(self%s%nstates, corrs, self%s%prev_corr)
-                corr              = corrs(state)
-                self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
+                if( .not.self%spec%do_extr .or. ran3() > 0.5 )then
+                    state = maxloc(corrs, dim=1)
+                    self%s%nrefs_eval = self%s%nstates
+                else
+                    state = shcloc(self%s%nstates, corrs, self%s%prev_corr)
+                    self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
+                endif
+                corr = corrs(state)
                 if( self%s%prev_state .eq. state ) mi_state = 1.
                 if( do_greedy_inpl )then
                     ! greedy moves after extremal optimization complete

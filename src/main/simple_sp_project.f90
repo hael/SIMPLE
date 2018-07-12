@@ -998,6 +998,7 @@ contains
             parent_proj%os_ptcl2D = self%os_ptcl2D
             parent_proj%os_ptcl3D = self%os_ptcl3D
             call parent_proj%write(projname)
+            call parent_proj%kill
         endif
     end subroutine split_stk
 

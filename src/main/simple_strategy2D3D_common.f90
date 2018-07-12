@@ -151,7 +151,7 @@ contains
                 ! set high-pass Fourier index limit
                 params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
                 ! re-set the low-pass limit
-                params_glob%lp     = calc_lowpass_lim(params_glob%kstop, params_glob%boxmatch, params_glob%smpd)                    
+                params_glob%lp     = calc_lowpass_lim(params_glob%kstop, params_glob%boxmatch, params_glob%smpd)
                 params_glob%lp_dyn = params_glob%lp
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case('no')
@@ -162,7 +162,7 @@ contains
                     params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
                 params_glob%kstop = params_glob%kfromto(2)
-                if( params_glob%refine.eq.'euclid') then          
+                if( params_glob%refine.eq.'euclid') then
                     params_glob%kfromto(2) = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
                 endif
                 params_glob%lp_dyn = params_glob%lp
@@ -204,6 +204,7 @@ contains
             params_glob%lp_dyn = lplim
             call build_glob%spproj_field%set_all2single('lp',lplim)
         endif
+        params_glob%kstop = params_glob%kfromto(2)
         DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
 
@@ -559,7 +560,7 @@ contains
                         endif
                     endif
                 end do
-                !!!!!!!! TAKE THIS OUT TO TURN OFF LOW-PASS LIMITED REC !!!!!!!!!!!!!!!!! 
+                !!!!!!!! TAKE THIS OUT TO TURN OFF LOW-PASS LIMITED REC !!!!!!!!!!!!!!!!!
                 ! do istate = 1, params_glob%nstates
                 !     if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
                 ! end do
