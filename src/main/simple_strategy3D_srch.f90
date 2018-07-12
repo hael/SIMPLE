@@ -32,7 +32,6 @@ type strategy3D_srch
     integer, allocatable     :: nnvec(:)                  !< nearest neighbours indices
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: iptcl_map     = 0         !< index in pre-allocated 2D arrays
-    integer                  :: kstop_grid    = 0         !< Frequency limit of first coarse grid search
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
     integer                  :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
     integer                  :: nstates       = 0         !< # states
@@ -91,7 +90,6 @@ contains
         self%nnn_static = params_glob%nnn
         self%nnn        = params_glob%nnn
         self%nnnrefs    = self%nnn*self%nstates
-        self%kstop_grid = params_glob%kstop_grid
         self%dowinpl    = npeaks /= 1
         ! multiple states
         if( self%nstates == 1 )then
@@ -241,7 +239,7 @@ contains
                 integer :: loc(3)
                 if( s3D%state_exists(istate) )then
                     ! calculate in-plane correlations
-                    call pftcc_glob%gencorrs(iref, self%iptcl, self%kstop_grid, inpl_corrs)
+                    call pftcc_glob%gencorrs(iref, self%iptcl, inpl_corrs)
                     ! identify the 3 top scoring in-planes
                     loc = max3loc(inpl_corrs)
                     ! stash in-plane correlations for sorting

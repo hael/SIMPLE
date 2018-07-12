@@ -184,7 +184,7 @@ contains
             do state = 1, self%s%nstates
                 if( .not. s3D%state_exists(state) ) cycle
                 iref = (state-1) * self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%kstop_grid, corrs_inpl)
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                 ! to somewhat take account for alignment errors due to state mixing
                 ! replaced corrs(state) = corrs_inpl(self%s%prev_roind) with:
                 corrs(state) = maxval(corrs_inpl)

@@ -69,10 +69,7 @@ contains
                     do isym = 1, self%s%nsym
                         iproj = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
                         iref  = (state-1) * self%s%nprojs + iproj
-                        ! dual resolution limit scheme:
-                        ! state assignement employs correlations up to kstop_grid
-                        ! image alignment to state employs correlations up to kfromto(2)
-                        call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%kstop_grid, corrs_inpl)
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                         corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
                     enddo
                     loc              = maxloc(corrs_sym)
@@ -81,10 +78,7 @@ contains
                     sym_projs(state) = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
                 else
                     iref = (state-1) * self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
-                    ! dual resolution limit scheme:
-                    ! state assignement employs correlations up to kstop_grid
-                    ! image alignment to state employs correlations up to kfromto(2)
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, self%s%kstop_grid, corrs_inpl)
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                     ! replaced:
                     ! corrs(state) = corrs_inpl(self%s%prev_roind)
                     ! with:

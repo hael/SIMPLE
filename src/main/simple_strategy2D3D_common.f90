@@ -77,8 +77,6 @@ contains
         integer               :: s, loc(1), lp_ind, kstop_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
-        logical               :: kstop_grid_set
-        kstop_grid_set = .false.
         select case(params_glob%eo)
             case('yes','aniso')
                 ! check all fsc_state*.bin exist
@@ -128,19 +126,13 @@ contains
                     else
                         lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                     endif
-                    ! low pass limit
+                    ! interpolation limit is NOT Nyqvist in correlation search
                     params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), params_glob%boxmatch, params_glob%smpd)
                     if( params_glob%kfromto(2) == 1 )then
                         call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
                     endif
                     ! set highest Fourier index for coarse grid search
-                    if( str_has_substr(params_glob%refine,'cluster') )then
                         kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
-                    else
-                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
-                    endif
-                    params_glob%kstop_grid = calc_fourier_index(resarr(kstop_ind), params_glob%boxmatch, params_glob%smpd)
-                    kstop_grid_set         = .true.
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
                     params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
@@ -154,18 +146,12 @@ contains
                 if( cline%defined('lpstop') )then
                     params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
+                ! low-pass limit equals interpolation limit for correlation search
+                params_glob%kstop = params_glob%kfromto(2)
                 ! set high-pass Fourier index limit
                 params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
-                if( params_glob%kfromto(2)-params_glob%kfromto(1) <= 2 )then
-                    if( params_glob%hpind_fsc > 0 )then
-                        params_glob%kfromto(2) = params_glob%kfromto(1) + 3
-                    else
-                        write(*,*) 'fromto:', params_glob%kfromto(1), params_glob%kfromto(2)
-                        stop 'resolution range too narrow; set_bp_range; simple_strategy2D3D_common'
-                    endif
-                endif
                 ! re-set the low-pass limit
-                params_glob%lp     = calc_lowpass_lim(params_glob%kfromto(2), params_glob%boxmatch, params_glob%smpd)
+                params_glob%lp     = calc_lowpass_lim(params_glob%kstop, params_glob%boxmatch, params_glob%smpd)                    
                 params_glob%lp_dyn = params_glob%lp
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case('no')
@@ -175,14 +161,15 @@ contains
                 if( cline%defined('lpstop') )then
                     params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
+                params_glob%kstop = params_glob%kfromto(2)
+                if( params_glob%refine.eq.'euclid') then          
+                    params_glob%kfromto(2) = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
+                endif
                 params_glob%lp_dyn = params_glob%lp
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case DEFAULT
                 call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
         end select
-        ! set highest Fourier index for coarse grid search
-        if( .not. kstop_grid_set ) params_glob%kstop_grid = params_glob%kfromto(2)
-        params_glob%kstop_grid = min(params_glob%kstop_grid, params_glob%kfromto(2))
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
 

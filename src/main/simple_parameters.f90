@@ -211,7 +211,7 @@ type :: parameters
     integer :: jptcl=1
     integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
-    integer :: kstop_grid=0
+    integer :: kstop=0
     integer :: ldim(3)=0
     integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
