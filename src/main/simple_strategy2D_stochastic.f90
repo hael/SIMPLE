@@ -36,7 +36,7 @@ contains
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set, do_shc
-        DebugPrint ' in stochastic srch '
+!        DebugPrint ' in stochastic srch '
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             do_inplsrch   = .true.
             cc_glob       = -1.

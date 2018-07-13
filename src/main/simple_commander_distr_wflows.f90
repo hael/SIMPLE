@@ -922,8 +922,8 @@ contains
         endif
         DebugPrint 'in exec_reconstruct3D_distr: eo partitioning    accum secs   ',toc(treconstruct3D)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr)
-        !call qenv%gen_scripts_and_schedule_optimised_jobs(job_descr)
+        !call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        call qenv%gen_shm_scripts_and_schedule_jobs(job_descr)
         DebugPrint 'in exec_reconstruct3D_distr: qenv scheduling   accum secs    ',toc(treconstruct3D)
         ! assemble volumes
         ! this is for parallel volassemble over states
@@ -953,7 +953,7 @@ contains
         DebugPrint 'in exec_reconstruct3D_distr: Completed in total time         ',toc(treconstruct3D), ' secs'
         call qsys_watcher(state_assemble_finished)
         ! termination
-        call qsys_cleanup
+        if(qenv%qscripts%l_suppress_errors) call qsys_cleanup
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 
@@ -1030,7 +1030,7 @@ contains
         character(len=STDLEN) :: filetab
         integer, allocatable  :: parts(:,:)
         real                  :: smpd, smpd_target
-        integer               :: istk, ipart, nparts, nstks, cnt, partsz, box, newbox
+        integer               :: istk, ipart, nparts, nstks, cnt, partsz, box, newbox, iostatus
         logical               :: gen_sc_project
         ! mkdir=yes: a new *_sc project + stacks are generated
         ! mkdir=no : only stacks are scaled
@@ -1057,8 +1057,9 @@ contains
         if( gen_sc_project )then
             ! make new project & scales
             smpd_target = max(smpd, smpd * real(box)/real(params%newbox))
-            call simple_mkdir(PATH_PARENT//'stack_parts_sc')
-            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale, dir=PATH_PARENT//'stack_parts_sc')
+            call simple_mkdir(filepath(PATH_PARENT,'stack_parts_sc'), errmsg="commander_distr_wflows::exec_scale_project_distr ")
+            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale,&
+                dir=filepath(PATH_PARENT,'stack_parts_sc'))
             newbox = nint(cline_scale%get_rarg('newbox'))
             if( newbox == box )then
                 write(*,*)'Inconsistent input dimensions: from ',box,' to ',newbox

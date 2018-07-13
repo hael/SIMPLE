@@ -113,8 +113,8 @@ print *, '>>> Syslib function Test 1c: simple_getcwd/getcwd '
 call simple_getcwd (cur_working_dir)
 print *, '      CWD:', cur_working_dir
 
-print *, '>>> Syslib function Test 1d: simple_full_path / canonicalize_file_name'
-call simple_full_path("./", aname,'simple_test_syslib')
+print *, '>>> Syslib function Test 1d: abspath / canonicalize_file_name'
+call abspath(PATH_HERE, aname,'simple_test_syslib')
 print *,'      absolute path "./": ', trim(aname)
 if(allocated(aname)) deallocate(aname)
 

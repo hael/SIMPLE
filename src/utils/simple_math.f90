@@ -665,7 +665,7 @@ contains
         endif
     end function cyci_1d
 
-    !>  as per cyci_1d, assumes lower limit is 1
+    !>  as per cyci_1d, assumes lower limit equals 1
     pure function cyci_1d_static( ulim, i ) result( ind )
         integer, intent(in) :: ulim, i !< input vars upper limit and index
         integer :: ind ! return index
@@ -785,7 +785,7 @@ contains
     function sinc( x ) result( r )
         real, intent(in) :: x       !< input (radians)
         real             :: r, arg
-        if( abs(x) < 0.00000001 ) then
+        if( abs(x) < 1e-8 ) then
             r = 1.
         else
             arg = pi*x
@@ -925,6 +925,18 @@ contains
             myabs = y*sqrt(1.+frac*frac)
         endif
     end function mycabs
+
+    pure function nextPow2(v) result(w)
+        integer, intent(in) :: v
+        integer :: w
+        w = v - 1
+        w = IOR(w, ISHFT(w,-1))
+        w = IOR(w, ISHFT(w,-2))
+        w = IOR(w, ISHFT(w,-4))
+        w = IOR(w, ISHFT(w,-8))
+        w = IOR(w, ISHFT(w,-16))
+        w = w + 1
+    end function nextPow2
 
     ! edge functions
 
@@ -2762,14 +2774,15 @@ contains
         end do
     end subroutine hpsort_5
 
-    !>  angle between two non-zero vectors in R^n
+    !> Vector angle between two non-zero vectors in R^n
     !! magnitude of v and w must equal 1
     !! \theta = \arccos \frac {\mathbf v \cdot \mathbf w}{\left\Vert{\mathbf v}\right\Vert \left\Vert{\mathbf w}\right\Vert}
     !! by definition of the cosine formula for dot product.
     !! This function assumes the input vectors are normals!!
-    pure real function vector_angle_norm(v, w)
+    pure function vector_angle_norm(v, w) result(eulerdist)
         real, dimension(3), intent(in) :: v,w
-        angleDist = acos( dot_product(v, w) )
+        real :: eulerdist
+        eulerdist = acos( dot_product(v, w) )
     end function
 
     !> sort and return the 3 lowest

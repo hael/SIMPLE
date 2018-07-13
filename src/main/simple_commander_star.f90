@@ -217,7 +217,7 @@ end if
                 stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
             endif
             do i=1,nmovf
-                call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+                call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
                 call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         end if
@@ -235,7 +235,7 @@ end if
         !     stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
         ! endif
         ! do i=1,nos_mic
-        !     call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+        !     call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
         !     call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
         ! end do
 !! ******  Import  particles

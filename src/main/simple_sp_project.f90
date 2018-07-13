@@ -468,7 +468,7 @@ contains
         endif
         ! update ori
         call os_ptr%new(1)
-        call simple_full_path(moviename, fname, 'simple_sp_project::add_single_movie')
+        call abspath(moviename, fname, 'simple_sp_project::add_single_movie')
         call find_ldim_nptcls(trim(fname), ldim, nframes)
         if( nframes <= 0 )then
             write(*,*) 'WARNING! # frames in movie ', trim(fname), ' <= zero, ommitting'
@@ -536,7 +536,7 @@ contains
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call simple_full_path(movienames(cnt), moviename, 'simple_sp_project::add_movies')
+            call abspath(movienames(cnt), moviename, 'simple_sp_project::add_movies')
             call find_ldim_nptcls(trim(moviename), ldim, nframes)
             if( nframes <= 0 )then
                 write(*,*) 'WARNING! # frames in movie ', trim(moviename), ' <= zero, ommitting'
@@ -626,7 +626,7 @@ contains
         integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer :: i, fromp, top
         ! full path and existence check
-        call simple_full_path(stk, stk_abspath, 'sp_project :: add_stk')
+        call abspath(stk, stk_abspath, 'sp_project :: add_stk')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
@@ -736,7 +736,7 @@ contains
         call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
         call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
         ! full path and existence check
-        call simple_full_path(stk, stk_abspath, 'sp_project :: add_single_stk')
+        call abspath(stk, stk_abspath, 'sp_project :: add_single_stk')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
@@ -805,7 +805,7 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            call simple_full_path(stknames(istk), stk_abspath, 'sp_project :: add_stktab')
+            call abspath(stknames(istk), stk_abspath, 'sp_project :: add_stktab')
             stknames(istk) = trim(stk_abspath)
             o_stk          = os%get_ori(istk)
             ! logical dimension management
@@ -932,17 +932,17 @@ contains
         box  = nint(orig_stk%get('box'))
         call img%new([box,box,1], smpd)
         if( present(dir) )then
-            tmp_dir = filepath(dir,'tmp_stacks')
+            tmp_dir = filepath(trim(dir),'tmp_stacks')
         else
             call simple_getcwd(cwd)
-            tmp_dir = filepath(cwd,'tmp_stacks')
+            tmp_dir = filepath(trim(cwd),'tmp_stacks')
         endif
-        call simple_mkdir(trim(tmp_dir))
+        call simple_mkdir(trim(tmp_dir),errmsg="sp_project::split_stk")
         write(*,'(a)') '>>> SPLITTING STACK INTO PARTS'
         do istk = 1,nparts
 
             call progress(istk,nparts)
-            stkpart = filepath(tmp_dir,'stack_part'//int2str_pad(istk,numlen)//EXT)
+            stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
             cnt = 0
             do iptcl = parts(istk,1), parts(istk,2)
                 cnt = cnt + 1
@@ -955,21 +955,21 @@ contains
         call img%kill
         call self%os_stk%new(nparts)
         if( present(dir) )then
-            call simple_mkdir(trim(dir)//path_separator//trim(STKPARTSDIR), status=status)
+           call simple_mkdir(filepath(trim(dir),trim(STKPARTSDIR)),errmsg="sp_project::split_stk")
         else
-            call simple_mkdir(trim(STKPARTSDIR), status=status)
+           call simple_mkdir(trim(STKPARTSDIR),errmsg="sp_project::split_stk")
         endif
         do istk = 1,nparts
             ! file stuff
-            stkpart = filepath(tmp_dir,'stack_part'//int2str_pad(istk,numlen)//EXT)
+            stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
             if( present(dir) )then
-                allocate(dest_stkpart, source=trim(dir)//PATH_SEPARATOR//trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+               dest_stkpart = filepath(trim(dir),trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             else
                 allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             endif
             status = simple_rename(trim(stkpart), trim(dest_stkpart))
             deallocate(stkpart)
-            call simple_full_path(dest_stkpart, stkpart, 'sp_project :: split_stk')
+            call abspath(dest_stkpart, stkpart, 'sp_project :: split_stk')
             nptcls_part = parts(istk,2) - parts(istk,1) + 1
             ! set original before overriding
             call self%os_stk%set_ori(istk, orig_stk)
@@ -986,12 +986,12 @@ contains
             deallocate(stkpart, dest_stkpart)
         enddo
         call self%write
-        call simple_rmdir(tmp_dir)
+        call simple_rmdir(tmp_dir,errmsg="sp_project::split_stk")
         ! update parent project file
         if( update_parent )then
             if( .not.self%projinfo%isthere('projname') )return
             call self%projinfo%getter(1, 'projname', projname)
-            projname = '../'//trim(projname)//'.simple'
+            projname = filepath(PATH_PARENT,trim(projname)//'.simple')
             if( .not. file_exists(projname) )return
             call parent_proj%read(projname)
             if( parent_proj%os_stk%get_noris() /= 1 )return
@@ -1051,10 +1051,10 @@ contains
                     call simple_stop('This file format is not supported by SIMPLE; simple_sp_project::add_scale_tag')
             end select
             if(present(dir))then
-                call simple_mkdir(trim(dir))
-                call simple_full_path(dir, abs_dir, 'sp_project :: add_scale_tag')
+                call simple_mkdir(trim(dir),errmsg="sp_project::add_scale_tag")
+                call abspath(dir, abs_dir, 'sp_project :: add_scale_tag')
                 nametmp = basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
-                newname = filepath(abs_dir, nametmp)
+                newname = filepath(trim(abs_dir), trim(nametmp))
             else
                 newname = add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX))
             endif
@@ -1072,7 +1072,7 @@ contains
         character(len=:), allocatable :: stk_abspath
         integer :: ldim(3), nptcls, ind
         ! full path and existence check
-        call simple_full_path(stk, stk_abspath, 'sp_project :: add_cavgs2os_out')
+        call abspath(stk, stk_abspath, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         ! add os_out entry
@@ -1105,7 +1105,7 @@ contains
                 stop 'sp_project :: add_frcs2os_out'
         end select
         ! full path and existence check
-        call simple_full_path(frc, frc_abspath, 'sp_project :: add_frcs2os_out')
+        call abspath(frc, frc_abspath, 'sp_project :: add_frcs2os_out')
         ! add os_out entry
         call self%add_entry2os_out(which_imgkind, ind)
         ! fill-in field
@@ -1120,7 +1120,7 @@ contains
         character(len=:), allocatable :: fsc_abspath, imgkind
         integer :: i, ind, n_os_out
         ! full path and existence check
-        call simple_full_path(fsc, fsc_abspath, 'sp_project :: add_fsc2os_out')
+        call abspath(fsc, fsc_abspath, 'sp_project :: add_fsc2os_out')
         ! add os_out entry
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
@@ -1169,7 +1169,7 @@ contains
                 stop 'sp_project :: add_vol2os_out'
         end select
         ! full path and existence check
-        call simple_full_path(vol, vol_abspath, 'sp_project :: add_vol2os_out')
+        call abspath(vol, vol_abspath, 'sp_project :: add_vol2os_out')
         ! find_dimension of inputted volume
         call find_ldim_nptcls(vol_abspath, ldim, ifoo)
         ! check if field is empty

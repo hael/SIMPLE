@@ -12,9 +12,13 @@ integer, parameter :: SHORTTIME = 3
 
 contains
 
-    subroutine qsys_cleanup(  )
+    subroutine qsys_cleanup( flag  )
         use simple_parameters, only: params_glob
+        logical, optional, intent(in) :: flag
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
+        logical :: nokeep
+        nokeep=.true.
+        if(present(flag))nokeep=flag
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
@@ -24,14 +28,14 @@ contains
         call del_file('SYMSRCH')
         call del_file(trim(TERM_STREAM))
         ! state numbered files
-        call del_files('VOLASSEMBLE_FINISHED_STATE', params_glob%nstates, numlen=NUMLEN_STATE)
-        call del_files('simple_script_state',        params_glob%nstates, numlen=NUMLEN_STATE)
+        call del_files('VOLASSEMBLE_FINISHED_STATE',     params_glob%nstates, numlen=NUMLEN_STATE)
+        if(nokeep)call del_files('simple_script_state',  params_glob%nstates, numlen=NUMLEN_STATE)
         ! part numbered files
-        call del_files('OUT',                        params_glob%nparts)
-        call del_files('algndoc_',                   params_glob%nparts, ext=trim(METADATA_EXT))
-        call del_files('unidoc_',                    params_glob%nparts, ext=trim(METADATA_EXT))
-        call del_files('JOB_FINISHED_',              params_glob%nparts)
-        call del_files('distr_simple_script_',       params_glob%nparts)
+        call del_files('OUT',                            params_glob%nparts)
+        call del_files('algndoc_',                       params_glob%nparts, ext=trim(METADATA_EXT))
+        call del_files('unidoc_',                        params_glob%nparts, ext=trim(METADATA_EXT))
+        call del_files('JOB_FINISHED_',                  params_glob%nparts)
+        if(nokeep)call del_files('distr_simple_script_', params_glob%nparts)
     end subroutine qsys_cleanup
 
     !>  Writes the JOB_FINISHED_* file to mark end of computing unit job

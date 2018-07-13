@@ -77,7 +77,7 @@ contains
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
         character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
-        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
+        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out, iostatus
         logical :: l_pick
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -106,13 +106,13 @@ contains
         if( params%stream.eq.'yes' )then
             output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
             output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
-            call simple_mkdir(output_dir_ctf_estimate)
-            call simple_mkdir(output_dir_motion_correct)
+            call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_preprocess :: preprocess; "
+            call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
             if( l_pick )then
                 output_dir_picker  = trim(DIR_PICKER)
                 output_dir_extract = trim(DIR_EXTRACT)
-                call simple_mkdir(output_dir_picker)
-                call simple_mkdir(output_dir_extract)
+                call simple_mkdir(output_dir_picker, errmsg="commander_preprocess :: preprocess; "
+                call simple_mkdir(output_dir_extract, errmsg="commander_preprocess :: preprocess;"
             endif
         endif
         if( cline%defined('fbody') )then
@@ -751,7 +751,7 @@ contains
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
-        integer :: fromto(2), imic, ntot, nptcls_out, state
+        integer :: fromto(2), imic, ntot, nptcls_out, state, iostatus
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters
@@ -769,8 +769,8 @@ contains
         if( params%stream.eq.'yes' )then
             output_dir_picker  = trim(DIR_PICKER)
             output_dir_extract = trim(DIR_EXTRACT)
-            call simple_mkdir(output_dir_picker)
-            call simple_mkdir(output_dir_extract)
+            call simple_mkdir(output_dir_picker,errmsg="commander_preprocess :: preprocess;  ")
+            call simple_mkdir(output_dir_extract,errmsg="commander_preprocess :: preprocess;  ")
         else
             output_dir_picker  = PATH_HERE
             output_dir_extract = PATH_HERE

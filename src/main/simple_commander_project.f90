@@ -291,6 +291,7 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        integer          :: iostatus
         call params%new(cline)
         if( file_exists(PATH_HERE//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
@@ -298,9 +299,9 @@ contains
             stop 'ABORTING... commander_project :: new_project'
         endif
         ! make project directory
-        call simple_mkdir(PATH_HERE//trim(params%projname))
+        call simple_mkdir(filepath(PATH_HERE,trim(params%projname)), errmsg="commander_project :: new_project;")
         ! change to project directory
-        call simple_chdir(PATH_HERE//trim(params%projname))
+        call simple_chdir(filepath(PATH_HERE,trim(params%projname)), errmsg="commander_project :: new_project;")
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
@@ -317,6 +318,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        integer          :: iostatus
         call params%new(cline)
         if( .not. file_exists(PATH_HERE//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' does not exist in cwd: ', trim(params%cwd)
@@ -324,7 +326,7 @@ contains
             stop 'ABORTING... commander_project :: update_project'
         endif
         ! change to project directory
-        call simple_chdir(PATH_HERE//trim(params%projname))
+        call simple_chdir(filepath(PATH_HERE,trim(params%projname)),errmsg="commander_project :: update_project;")
         ! read project
         call spproj%read(trim(params%projfile))
         ! update project info
@@ -395,7 +397,7 @@ contains
                 stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
             endif
             do i=1,nmovf
-                call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+                call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
                 call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         endif
@@ -430,7 +432,7 @@ contains
             stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
         endif
         do i=1,nos_mic
-            call simple_full_path(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+            call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
             call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
         end do
         ! write project file

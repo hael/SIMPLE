@@ -8,7 +8,7 @@ implicit none
 public :: qsys_ctrl
 private
 
-integer, parameter          :: SHORTTIME = 3
+integer, parameter          :: SHORTTIME = 1
 
 type qsys_ctrl
     private
@@ -32,7 +32,7 @@ type qsys_ctrl
     integer                        :: cline_stacksz          = 0 !< size of stack of command lines, for streaming only
     logical                        :: stream    = .false.        !< stream flag
     logical                        :: existence = .false.        !< indicates existence
-    logical                        :: l_suppress_errors = .false. !< generate output_<scriptname> log files set to false
+    logical,public                 :: l_suppress_errors = .false. !< generate output_<scriptname> log files set to false
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -46,7 +46,7 @@ type qsys_ctrl
     procedure          :: set_jobs_status
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
-    procedure          :: generate_optimised_scripts
+    procedure          :: generate_scripts_new
     procedure, private :: generate_script_1
     procedure, private :: generate_script_2
     generic            :: generate_script => generate_script_2
@@ -198,9 +198,9 @@ contains
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
         character(len=4),           intent(in)    :: ext
-        class(chash),               intent(in)    :: q_descr
-        character(len=*), optional, intent(in)    :: outfile_body
-        class(chash),     optional, intent(in)    :: part_params(:)
+        class(chash),               intent(inout) :: q_descr
+        character(len=*), optional, intent(inout) :: outfile_body
+        class(chash),     optional, intent(inout) :: part_params(:)
         character(len=:), allocatable :: outfile_body_local, key, val
         integer :: ipart, iadd
         logical :: part_params_present
@@ -245,20 +245,19 @@ contains
 
 
         !>  \brief  public script generator
-    subroutine generate_optimised_scripts( self, job_descr, ext, q_descr, outfile_body, part_params )
-        class(qsys_ctrl),           intent(inout) :: self
-        class(chash),               intent(inout) :: job_descr
-        character(len=4),           intent(in)    :: ext
-        class(chash),               intent(in)    :: q_descr
-        character(len=*), optional, intent(in)    :: outfile_body
-        class(chash),     optional, intent(in)    :: part_params(:)
+    subroutine generate_scripts_new( self, job_descr, q_descr, part_params ) ! , outfile_body
+        class(qsys_ctrl) :: self
+        class(chash)     :: job_descr
+        class(chash)     :: q_descr
+        !character(len=*), optional, intent(inout) :: outfile_body
+        class(chash),     optional :: part_params(:)
         character(len=:), allocatable :: outfile_body_local, key, val
         integer :: ipart, iadd, kunit, ios !, nthr_master, nthr_new
         logical :: part_params_present
         character(len=512) :: io_msg
-        if( present(outfile_body) )then
-            allocate(outfile_body_local, source=trim(outfile_body))
-        endif
+!        if( present(outfile_body) )then
+!            allocate(outfile_body_local, source=trim(outfile_body))
+!        endif
         part_params_present = present(part_params)
         call fopen(kunit, file='distr_simple_sh', iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_optimised_scripts; Error when opening file for writing: '//&
@@ -270,9 +269,9 @@ contains
             call job_descr%set('top',     int2str(self%parts(ipart,2)))
             call job_descr%set('part',    int2str(ipart))
             call job_descr%set('nparts',  int2str(self%nparts_tot))
-            if( allocated(outfile_body_local) )then
-                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//trim(METADATA_EXT))
-            endif
+!            if( allocated(outfile_body_local) )then
+!                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//trim(METADATA_EXT))
+!            endif
             if( part_params_present  )then
                 do iadd=1,part_params(ipart)%size_of()
                     key = part_params(ipart)%get_key(iadd)
@@ -293,15 +292,15 @@ contains
         write(kunit,'(a)') 'exit '
         call fclose(kunit,errmsg='simple_qsys_ctrl :: generate_optimised_scripts; Error when closing file')
         ios =  simple_chmod('./distr_simple_sh', '+x')
-
+        if(ios/=0) call simple_stop("simple_qsys_ctrl :: generate_optimised_scripts; Error when chmodding file distr_simple_sh")
         call job_descr%delete('fromp')
         call job_descr%delete('top')
         call job_descr%delete('part')
         call job_descr%delete('nparts')
-        if( allocated(outfile_body_local) )then
-            call job_descr%delete('outfile')
-            deallocate(outfile_body_local)
-        endif
+!        if( allocated(outfile_body_local) )then
+!            call job_descr%delete('outfile')
+!            deallocate(outfile_body_local)
+!        endif
         if( part_params_present  )then
             do iadd=1,part_params(1)%size_of()
                 key = part_params(1)%get_key(iadd)
@@ -310,7 +309,7 @@ contains
         endif
         ! when we generate the scripts we also reset the number of available computing units
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
-    end subroutine generate_optimised_scripts
+    end subroutine generate_scripts_new
 
     !>  \brief  private part script generator
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
@@ -440,26 +439,25 @@ contains
 
         do ipart=self%fromto_part(1),self%fromto_part(2)
             if( submit_or_not(ipart) )then
-                script_name = trim(adjustl(self%script_names(ipart)))
+                script_name = filepath(PATH_HERE, trim(adjustl(self%script_names(ipart))))
                 !!!!!!!!!!!
-                if( .not.file_exists(PATH_HERE//trim(script_name)))then
+                if( .not.file_exists(trim(script_name)))then
                     write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
                 endif
                 !!!!!!!!!!!!
                 select type( pmyqsys => self%myqsys )
                 class is(qsys_local)
                     if(self%l_suppress_errors)then
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//PATH_HERE//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
+                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
+                            &trim(script_name)//' '//SUPPRESS_MSG//'&'
                     else
-                !            qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//&
-                !                &' > JOB'//trim(adjustl(int2str(ipart)))//'.out 2> JOB'//&
-                !                &trim(adjustl(int2str(ipart)))//'.err &'
-
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//PATH_HERE//trim(adjustl(script_name))//&
-                            &' 2>&1 | tee output_'//trim(adjustl(script_name))//'.out  &'
+                       qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
+                            &trim(script_name)//&
+                            &' 2>&1 | tee output_'//trim(adjustl(script_name(3:)))//'.out  &'
                     endif
                 class DEFAULT
-                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//PATH_HERE//trim(adjustl(script_name))
+                    qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
+                        &trim(script_name)
                 end select
                 call exec_cmdline(trim(adjustl(qsys_cmd)))
             endif
@@ -482,16 +480,14 @@ contains
         character(len=*), intent(in)    :: script_name
         character(len=STDLEN) :: cmd
         integer :: pid
-        if( .not.file_exists('./'//trim(script_name)))then
+        if( .not.file_exists(filepath(PATH_HERE,trim(script_name))))then
             write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
         endif
         select type( pmyqsys => self%myqsys )
             type is (qsys_local)
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(CWD_GLOB))&
-                &//path_separator//trim(adjustl(script_name))//' '//SUPPRESS_MSG//'&'
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//filepath(trim(CWD_GLOB),trim(script_name))//' '//SUPPRESS_MSG//'&'
             class DEFAULT
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(CWD_GLOB))&
-                &//path_separator//trim(adjustl(script_name))
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//filepath(trim(CWD_GLOB),trim(script_name))
         end select
         ! execute the command
         call exec_cmdline(trim(cmd))

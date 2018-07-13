@@ -525,7 +525,7 @@ contains
     !! input args are restricted to STDLEN after trimming
     !! for allocatable character results
     !! e.g. fname = filepath('dir1',trim(dirfixed), diralloc, file//ext )
-    function filepath_1(p1, p2,p3,p4) result( fname )! , arg3, arg4) result( fname )
+    function filepath_1(p1, p2,p3, p4) result( fname )! , arg3, arg4) result( fname )
         character(len=*),  intent(in)           :: p1
         character(len=*),  intent(in)           :: p2
         character(len=*),  intent(in), optional :: p3
@@ -583,7 +583,8 @@ contains
         character(len=*),  intent(in), optional :: p3
         character(len=*),  intent(in), optional :: p4
         logical :: nonalloc
-        character(len=STDLEN)      :: s1,s2,s3,s4 , fname
+        character(len=STDLEN)      :: s1,s2,s3,s4
+        character(len=LONGSTRLEN)  ::fname
         integer :: endpos1,endpos2,endpos3,endpos4,startpos2,startpos3,startpos4
         startpos2=1;startpos3=1;startpos4=1
         s1 = trim(adjustl(p1))

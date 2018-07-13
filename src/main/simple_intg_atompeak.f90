@@ -137,7 +137,6 @@ contains
         enddo
         ! output
         fbody = trim(get_fbody(trim(fname), trim('pdb')))
-        !fbody = './'//trim(adjustl(fbody))//'_peaks'
         call mol%new(peak_cnt)
         do i = 1, peak_cnt
             call mol%set_chain(i, 'A')

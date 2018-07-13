@@ -420,7 +420,7 @@ contains
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
                 if( cline%defined('dir_target') )then
-                    fname = filepath(params%dir_target,add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX))
+                    fname = filepath(trim(params%dir_target),add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX))
                 else
                     fname = add2fbody(trim(filenames(ifile)), params%ext, '_sc')
                 endif

@@ -4103,7 +4103,6 @@ contains
         ! memoize wfun vals & normalisation constant
         norm = 0.
         cnt  = 0
-        print *, 'Real filter 1'
         if( self%ldim(3) == 1 )then
             do i=-winsz,winsz
                 do j=-winsz,winsz
@@ -4137,7 +4136,6 @@ contains
             endif
         endif
         ! make the output image
-        print *, 'Real filter 2'
         call img_filt%new(self%ldim, self%smpd)
         ! filter
         if( self%ldim(3) == 1 )then
@@ -4231,10 +4229,8 @@ contains
                 call simple_stop('unknown filter type; simple_image :: real_space_filter')
             end select
         endif
-         print *, 'Real filter 3'
         call self%copy(img_filt)
         call img_filt%kill()
-         print *, 'Real filter 4'
     end subroutine real_space_filter
 
 

@@ -204,7 +204,7 @@ contains
         call self%pgrpsyms%new(trim(params%pgrp))
         params%nsym    = self%pgrpsyms%get_nsym()
         params%eullims = self%pgrpsyms%srchrange()
-        DebugPrint   'did setup symmetry functionality                           ', toc()
+        DebugPrint ' did setup symmetry functionality                            ', toc()
         ! build spproj
         call self%build_spproj(params, cline)
         ! states exception
@@ -213,37 +213,37 @@ contains
                 write(*,'(a)') 'WARNING, your input doc has multiple states but NSTATES is not given'
             endif
         endif
-        DebugPrint 'created & filled object for orientations                     ', toc()
+        DebugPrint ' created & filled object for orientations                    ', toc()
         ! generate discrete projection direction spaces
         call self%eulspace%new(params%nspace)
         call self%eulspace%spiral(params%nsym, params%eullims)
         call self%eulspace_red%new(NSPACE_REDUCED)
         call self%eulspace_red%spiral(params%nsym, params%eullims)
         ! create angular subspace
-        DebugPrint   'build_general_tbox: create angular subspace                ', toc()
+        DebugPrint ' build_general_tbox: create angular subspace                 ', toc()
         self%grid_projs = self%eulspace%create_proj_subspace_3(NPDIRS_SUBSPACE, params%nsym, params%eullims)
-        DebugPrint 'build_general_tbox: projection direction space               ', toc()
+        DebugPrint ' build_general_tbox: projection direction space              ', toc()
         if( params%box > 0 )then
             ! build image objects
             ! box-sized ones
             call self%img%new([params%box,params%box,1],params%smpd,                 wthreads=.false.)
             call self%img_match%new([params%boxmatch,params%boxmatch,1],params%smpd, wthreads=.false.)
             call self%img_copy%new([params%box,params%box,1],params%smpd,  wthreads=.false.)
-            DebugPrint   'did build box-sized image objects                      ', toc()
+            DebugPrint ' did build box-sized image objects                           ', toc()
             ! for thread safety in the image class
             call self%img%construct_thread_safe_tmp_imgs(params%nthr)
             ! boxmatch-sized ones
             call self%img_tmp%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
             call self%img_msk%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
             call self%mskimg%new([params%boxmatch, params%boxmatch, 1],params%smpd,  wthreads=.false.)
-            DebugPrint  'did build boxmatch-sized image objects                  ', toc()
+            DebugPrint ' did build boxmatch-sized image objects                      ', toc()
             ! boxpd-sized ones
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             if( ddo3d )then
                 call self%vol%new([params%box,params%box,params%box], params%smpd)
                 call self%vol2%new([params%box,params%box,params%box], params%smpd)
             endif
-            DebugPrint  'did build boxpd-sized image objects                     ', toc()
+            DebugPrint ' did build boxpd-sized image objects                         ', toc()
             ! build arrays
             lfny       = self%img%get_lfny(1)
             cyc_lims   = self%img_pad%loop_lims(3)
@@ -254,16 +254,16 @@ contains
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 params%amsklp = self%img%get_lp(self%img%get_find(params%lp)-2)
             endif
-            DebugPrint   'did set default values'
+            DebugPrint ' did set default values'
         endif
-        DebugPrint 'build_general_tbox: generated images                         ', toc()
+        DebugPrint ' build_general_tbox: generated images                        ', toc()
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
-        DebugPrint ' build_general_tbox took                                     ', toc(t1), ' secs'
+        DebugPrint ' build_general_tbox took                                     ', toc(t1), ' secs total'
     end subroutine build_general_tbox
 
     subroutine kill_general_tbox( self )

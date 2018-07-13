@@ -47,7 +47,7 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)              :: movie
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, iostatus
         logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('numlen', real(5))
@@ -64,16 +64,16 @@ contains
         call spproj%get_movies_table(prev_movies)
         ! output directories
         output_dir = PATH_HERE
-        output_dir_ctf_estimate   = filepath(output_dir, DIR_CTF_ESTIMATE)
-        output_dir_motion_correct = filepath(output_dir, DIR_MOTION_CORRECT)
-        call simple_mkdir(output_dir)
-        call simple_mkdir(output_dir_ctf_estimate)
-        call simple_mkdir(output_dir_motion_correct)
+        output_dir_ctf_estimate   = filepath(trim(output_dir), trim(DIR_CTF_ESTIMATE))
+        output_dir_motion_correct = filepath(trim(output_dir), trim(DIR_MOTION_CORRECT))
+        call simple_mkdir(output_dir,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
+        call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
+        call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         if( l_pick )then
-            output_dir_picker  = filepath(output_dir, DIR_PICKER)
-            output_dir_extract = filepath(output_dir, DIR_EXTRACT)
-            call simple_mkdir(output_dir_picker)
-            call simple_mkdir(output_dir_extract)
+            output_dir_picker  = filepath(trim(output_dir), trim(DIR_PICKER))
+            output_dir_extract = filepath(trim(output_dir), trim(DIR_EXTRACT))
+            call simple_mkdir(output_dir_picker,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
+            call simple_mkdir(output_dir_extract,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         endif
         ! setup the environment for distributed execution
         call qenv%new(stream=.true. )
@@ -165,7 +165,7 @@ contains
                     do i=1,n_spprojs
                         cline_mov       = completed_jobs_clines(i)
                         fname           = trim(cline_mov%get_carg('projfile'))
-                        call simple_full_path(fname, abs_fname, 'preprocess_stream :: update_projects_list 1')
+                        call abspath(fname, abs_fname, 'preprocess_stream :: update_projects_list 1')
                         fnames(n_old+i) = trim(abs_fname)
                         deallocate(abs_fname)
                     enddo
@@ -175,7 +175,7 @@ contains
                     do i=1,n_spprojs
                         cline_mov = completed_jobs_clines(i)
                         fname     = trim(cline_mov%get_carg('projfile'))
-                        call simple_full_path(fname, abs_fname, 'preprocess_stream :: update_projects_list 2')
+                        call abspath(fname, abs_fname, 'preprocess_stream :: update_projects_list 2')
                         fnames(i) = trim(abs_fname)
                         deallocate(abs_fname)
                     enddo
@@ -265,12 +265,8 @@ contains
         ! init
         do_autoscale = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
-        ind = len_trim(params%dir_target)
-        if( params%dir_target(ind:ind).eq.PATH_HERE )then
-            spproj_list_fname = filepath(params%dir_target, STREAM_SPPROJFILES)
-        else
-            spproj_list_fname = filepath(params%dir_target, STREAM_SPPROJFILES)
-        endif
+        ! filepath creates spproj_list_fname with checks
+        spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ! for microscopes that don't work too good
         if(.not.cline%defined('time_inactive'))params%time_inactive = 24*3600
         ! init command-lines
@@ -532,7 +528,7 @@ contains
                 integer        :: istk
                 if( .not.do_autoscale )return
                 if( .not.allocated(stk_fnames) )return
-                call simple_mkdir(SCALE_DIR)
+                call simple_mkdir(SCALE_DIR, errmsg= "commander_stream_wflows:: cluster2D_stream_distr scale_stks")
                 call qenv%new
                 call cline_scale%set('prg',        'scale')
                 call cline_scale%set('smpd',       orig_smpd)
@@ -547,7 +543,7 @@ contains
                 call qsys_cleanup
                 do istk=1,size(stk_fnames)
                     fname            = add2fbody(stk_fnames(istk), params%ext, SCALE_SUFFIX)
-                    stk_fnames(istk) = filepath(SCALE_DIR, basename(fname))
+                    stk_fnames(istk) = filepath(trim(SCALE_DIR), basename(fname))
                 enddo
                 call del_file(SCALE_FILETAB)
             end subroutine scale_stks
@@ -675,18 +671,18 @@ contains
         params_glob%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
         if( .not.file_exists(params%projfile) )stop 'Project does not exist!'
-        spproj_list_fname = filepath(params%dir_target,STREAM_SPPROJFILES)
+        spproj_list_fname = filepath(trim(params%dir_target),trim(STREAM_SPPROJFILES))
         ! read project info
         call orig_proj%read(params%projfile)
         ! setup the environment for distributed execution
         call qenv%new(stream=.true.)
         ! output directories
         output_dir = PATH_HERE
-        output_dir_picker  = filepath(output_dir, DIR_PICKER)
-        output_dir_extract = filepath(output_dir, DIR_EXTRACT)
-        call simple_mkdir(output_dir)
-        call simple_mkdir(output_dir_picker)
-        call simple_mkdir(output_dir_extract)
+        output_dir_picker  = filepath(trim(output_dir), trim(DIR_PICKER))
+        output_dir_extract = filepath(trim(output_dir), trim(DIR_EXTRACT))
+        call simple_mkdir(trim(output_dir),errmsg="commander_stream_wflows :: exec_pick_extract_stream_distr;  ")
+        call simple_mkdir(trim(output_dir_picker),errmsg="commander_stream_wflows :: exec_pick_extract_stream_distr;  ")
+        call simple_mkdir(trim(output_dir_extract),errmsg="commander_stream_wflows :: exec_pick_extract_stream_distr;  ")
         ! init command-lines
         cline_pick_extract = cline
         call cline_pick_extract%set('prg', 'pick_extract')

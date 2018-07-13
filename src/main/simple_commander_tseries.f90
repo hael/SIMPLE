@@ -244,7 +244,7 @@ contains
             cnt    = cnt + 1
             call progress(cnt,ntot)
             call os%new(params%chunksz)
-            call simple_mkdir('tseries_chunk'//int2str_pad(cnt,numlen))
+            call simple_mkdir('tseries_chunk'//int2str_pad(cnt,numlen),errmsg="commander_tseries::exec_tseries_split")
             stkname = filepath(PATH_HERE,'tseries_chunk'//int2str_pad(cnt,numlen),'imgs'//params%ext)
             oriname = filepath('tseries_chunk'//int2str_pad(cnt,numlen),'oris'//trim(TXT_EXT))
             call del_file( stkname )

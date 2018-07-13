@@ -107,7 +107,7 @@ contains
             scale_stage1 = cline_scale1%get_rarg('scale')
             scaling      = trim(projfile_sc) /= trim(params%projfile)
             if( scaling )then
-                call simple_mkdir(STKPARTSDIR)
+               call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
                 call xscale_distr%execute( cline_scale1 )
                 ! scale references
                 if( cline%defined('refs') )then
@@ -343,7 +343,7 @@ contains
         do_autoscale = do_autoscale .and. smpd_target > work_proj1%get_smpd()
         if( do_autoscale )then
             deallocate(WORK_PROJFILE)
-            call simple_mkdir(STKPARTSDIR)
+            call simple_mkdir(STKPARTSDIR,errmsg="commander_hlev_wflows :: exec_initial_3Dmodel;  ")
             call work_proj1%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale, dir=trim(STKPARTSDIR))
             scale_factor = cline_scale%get_rarg('scale')
             box          = nint(cline_scale%get_rarg('newbox'))
@@ -1269,7 +1269,7 @@ contains
             params_glob%nstates = 1
             params_glob%state   = 1
             call xrefine3D_distr%execute(cline_refine3D(state))
-            call simple_chdir(PATH_PARENT)
+            call simple_chdir(PATH_PARENT,errmsg="commander_hlev_wflows :: exec_cluster3D_refine;")
             ! renames volumes and updates in os_out
             call stash_state(state)
         enddo

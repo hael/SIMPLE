@@ -272,7 +272,7 @@ contains
                 call assemble(params%vols(s), trim(rho_name))
                 deallocate(fbody)
             end do
-             DebugPrint ' In exec_volassemble; assemble done                     ', toc()
+            DebugPrint ' In exec_volassemble; assemble done                     ', toc()
             if( params%nstates == 1 .and. cline%defined('outvol') )then
                 recvolname = trim(params%outvol)
             else

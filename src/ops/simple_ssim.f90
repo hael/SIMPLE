@@ -22,40 +22,27 @@ contains
         type(image) ::  contrast, luminance,  structure, sigma1, sigma2
         integer :: w(3), winsz
         integer :: ldim(3) , nChan
-        verbose=.true.
+        verbose=.false.
         nChan = 1
         w = (/ 1, 1, 1 /)
-        print *," In ssim "
+        VerbosePrint " In ssim "
         if(present(weighting)) w = weighting
         ldim = img1%get_ldim()
-        print *," size of images ", ldim
+        VerbosePrint " size of images ", ldim
         nChan=ldim(3)
 
-
         call mu1%new([ldim(1), ldim(2), nChan ], smpd=1.)
-
         call mu2%new([ldim(1), ldim(2), nChan ], 1.)
-
         call mu1_sq%new([ldim(1), ldim(2), nChan ],1.)
-
         call mu2_sq%new([ldim(1), ldim(2), nChan ],1.)
-
         call mu1_mu2%new([ldim(1), ldim(2), nChan ],1.)
-
-
         call sigma1_sq%new([ldim(1), ldim(2), nChan ],1.)
-
         call sigma2_sq%new([ldim(1), ldim(2), nChan ],1.)
-
         call sigma12%new([ldim(1), ldim(2), nChan ],1.)
-
+        call ssim_temp%new([ldim(1), ldim(2), nChan ],1.)
         allocate( temp1(ldim(1), ldim(2), nChan ))
-
         allocate( temp2(ldim(1), ldim(2), nChan ))
-
         allocate( temp3(ldim(1), ldim(2), nChan ))
-
-        call  ssim_temp%new([ldim(1), ldim(2), nChan ],1.)
 
         VerbosePrint "SSIM allocated "
         winsz = 3
@@ -63,16 +50,16 @@ contains
         ! omp parallel workshare
         ! omp section
         img1_sq =  img1%pow(2)
- VerbosePrint "SSIM img1^2 "
+        VerbosePrint "SSIM img1^2 "
         ! omp section
- img2_sq = img2%pow(2)
-  VerbosePrint "SSIM img2^2 "
+        img2_sq = img2%pow(2)
+        VerbosePrint "SSIM img2^2 "
         ! omp section
         mu1 =img1
         call mu1%real_space_filter(winsz, 'average')
-         VerbosePrint "SSIM mu1 filter "
+        VerbosePrint "SSIM mu1 filter "
         mu1_sq= mu1 * mu1
-         VerbosePrint "SSIM mu1 "
+        VerbosePrint "SSIM mu1 "
         ! omp section
         mu2 = img2
         call mu2%real_space_filter(winsz, 'average')
@@ -148,8 +135,6 @@ contains
         temp3 = temp1 * temp2
         !omp end parallel workshare
 
-
-
         VerbosePrint "SSIM temps"
         !omp parallel sections
         !omp section
@@ -158,8 +143,6 @@ contains
         temp2 =(sigma1_sq%get_rmat() + sigma2_sq%get_rmat() + C2)
         ! ((mu1_sq + mu2_sq + C1).*(sigma1_sq + sigma2_sq + C2))
         !omp end parallel sections
-
-
 
         !omp parallel workshare
         temp1 = temp2 * temp1

@@ -85,13 +85,14 @@ contains
         n_movies = 0
         fail_cnt = 0
         ! builds files array
-        call simple_list_files(trim(self%watch_dir)//'/*.mrc '//trim(self%watch_dir)//'/*.mrcs', farray)
+        call simple_list_files(trim(self%watch_dir)//PATH_SEPARATOR//'*.mrc '//&
+             &trim(self%watch_dir)//PATH_SEPARATOR//'*.mrcs', farray)
         if( .not.allocated(farray) )return ! nothing to report
         ! absolute paths
         n_lsfiles = size(farray)
         do i = 1, n_lsfiles
             fname = trim(adjustl(farray(i)))
-            call simple_full_path(fname, abs_fname, 'movie_watcher :: watch')
+            call abspath(fname, abs_fname, 'movie_watcher :: watch')
             farray(i) = trim(adjustl(abs_fname))
             deallocate(abs_fname)
         enddo

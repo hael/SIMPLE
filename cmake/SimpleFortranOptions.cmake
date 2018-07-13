@@ -43,6 +43,11 @@ else()
   set(C_DIALECT c)
 endif()
 
+message(STATUS "Making sure your MPI Fortran compiler enables the USE_MPI flag")
+if(Fortran_COMPILER_NAME MATCHES "mpi*")
+  set(USE_MPI ON)
+endif()
+
 message(STATUS "Making sure your Fortran compiler points to the correct binary")
 if(Fortran_COMPILER_NAME MATCHES "gfortran*")
   execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
@@ -393,6 +398,7 @@ if(USE_MPI)
     endforeach()
     foreach(mpi_mod_paths ${mpi_f08_mod_path})
       link_directories(${mpi_mod_paths})
+      include_directories(SYSTEM ${mpi_mod_paths})
     endforeach()
     foreach(mpi_exe_flags ${MPI_COMPILE_FLAGS}  ${MPI_LINK_FLAGS} ${MPI_LIBRARIES})
       #/ME  strip udev from linker list, this allows for full static compilation
@@ -406,6 +412,7 @@ if(USE_MPI)
   else(MPI_Fortran_FOUND)
     message(FATAL_ERROR "Unable to find MPI -- mpif90 and libraries were not found in system paths")
   endif(MPI_Fortran_FOUND)
+
 endif(USE_MPI)
 
 

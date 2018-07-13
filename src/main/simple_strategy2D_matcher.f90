@@ -111,7 +111,8 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         if( l_frac_update )then
             allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-            call build_glob%spproj_field%sample4update_and_incrcnt2D(params_glob%ncls, [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+            call build_glob%spproj_field%sample4update_and_incrcnt2D(params_glob%ncls, &
+                [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
             ! correct convergence stats
             do iptcl=params_glob%fromp,params_glob%top
                 if( .not. ptcl_mask(iptcl) )then

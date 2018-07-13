@@ -404,7 +404,7 @@ contains
         class(parameters), target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         logical,         optional, intent(in)    :: silent
-        character(len=LONGSTRLEN), allocatable   :: sp_files(:), starstr
+        character(len=LONGSTRLEN), allocatable   :: sp_files(:)
         character(len=:),          allocatable   :: stk_part_fname_sc, phaseplate, ctfflag
         character(len=:),          allocatable   :: debug_local, verbose_local
         logical                       :: vol_defined(MAXS)
@@ -800,7 +800,7 @@ contains
         ! put a full path on projfile
         if( self%projfile .ne. '' )then
             if( file_exists(self%projfile) )then
-                call simple_full_path(trim(self%projfile), absname, 'simple_parameters::new')
+                call abspath(trim(self%projfile), absname, 'simple_parameters::new')
                 self%projfile = absname
                 self%projname = get_fbody(basename(self%projfile), 'simple')
             endif
@@ -814,15 +814,15 @@ contains
                 idir          = find_next_int_dir_prefix(self%cwd)
                 self%exec_dir = int2str(idir)//'_'//trim(self%prg)
                 ! make execution directory
-                call simple_mkdir(PATH_HERE//trim(self%exec_dir))
+                call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new")
                 ! change to execution directory directory
-                call simple_chdir(PATH_HERE//trim(self%exec_dir))
+                call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new")
                 if( self%sp_required )then
                     ! copy the project file from upstairs
-                    call syslib_copy_file(trim(self%projfile), PATH_HERE//basename(self%projfile))
+                    call syslib_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
                     ! update the projfile/projname
-                    self%projfile = PATH_HERE//basename(self%projfile)
-                    call simple_full_path(trim(self%projfile), absname, 'simple_parameters::new')
+                    self%projfile = filepath(PATH_HERE, basename(self%projfile))
+                    call abspath(trim(self%projfile), absname, 'simple_parameters::new')
                     self%projfile = absname
                     self%projname = get_fbody(basename(self%projfile), 'simple')
                     ! cwd of SP-project will be updated in the builder
@@ -1305,7 +1305,7 @@ contains
                             write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
                             stop
                         else
-                            call simple_full_path(self%vols(i), abs_fname, 'parameters :: check_vol', check_exists=.false.)
+                            call abspath(self%vols(i), abs_fname, 'parameters :: check_vol', check_exists=.false.)
                             if( len_trim( abs_fname) > LONGSTRLEN )then
                                 write(*,*)'Argument too long: ',trim( abs_fname)
                                 stop 'simple_parameters :: new :: check_vol'
@@ -1333,7 +1333,7 @@ contains
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call simple_full_path(name, abs_name, 'parameters :: read_vols', check_exists=.false.)
+                        call abspath(name, abs_name, 'parameters :: read_vols', check_exists=.false.)
                         self%vols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1347,7 +1347,7 @@ contains
                 integer                       :: nl, fnr, i, io_stat
                 filename = cline%get_carg('msklist')
                 if( filename(1:1).ne.PATH_SEPARATOR )then
-                    if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
+                    if( self%mkdir.eq.'yes' )  filename = PATH_PARENT//trim(filename)
                 endif
                 nl = nlines(filename)
                 call fopen(fnr, file=filename, iostat=io_stat)
@@ -1356,7 +1356,7 @@ contains
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call simple_full_path(name, abs_name, 'parameters :: read_masks', check_exists=.false.)
+                        call abspath(name, abs_name, 'parameters :: read_masks', check_exists=.false.)
                         self%mskvols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1419,7 +1419,7 @@ contains
                     end select
                     if( file_exists(var) )then
                         ! updates name to include absolute path
-                        call simple_full_path(var, abspath_file, 'parameters :: check_file', check_exists=.false.)
+                        call abspath(var, abspath_file, 'parameters :: check_file', check_exists=.false.)
                         if( len_trim(abspath_file) > LONGSTRLEN )then
                             write(*,*)'Argument too long: ',trim(abspath_file)
                             stop 'simple_parameters :: new :: checkfile'

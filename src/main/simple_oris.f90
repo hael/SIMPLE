@@ -1680,8 +1680,8 @@ contains
         !$omp end parallel do
 
         deallocate(normals,e_space_normals, dists)
-        DebugPrint " in set_projs done ",toc()
-        DebugPrint " in set_projs total time ", toc(t1), ' secs'
+        DebugPrint " in set_projs done                                           ",toc()
+        DebugPrint " in set_projs total time                                     ",toc(t1), ' secs'
     end subroutine set_projs
 
     !>  \brief  is a setter
@@ -2780,12 +2780,12 @@ contains
         t1=tic()
         DebugPrint " in create_proj_subspace_3 "
         call suboris%new(nsub)
-        DebugPrint " in create_proj_subspace_3 suboris created ",toc()
+        DebugPrint " in create_proj_subspace_3 suboris created                   ",toc()
         call suboris%spiral(nsym, eullims)
-        DebugPrint " in create_proj_subspace_3 suboris spiral ",toc()
+        DebugPrint " in create_proj_subspace_3 suboris spiral                    ",toc()
         allocate( subspace_projs(nsub) ,  stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_3, module: simple_oris',alloc_stat)
-        DebugPrint " in create_proj_subspace_3 getting normals ",toc()
+        DebugPrint " in create_proj_subspace_3 getting normals                   ",toc()
 
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
@@ -2798,7 +2798,7 @@ contains
         end do
         !$omp end parallel do
 
-        DebugPrint " in create_proj_subspace_3 got normals",toc()
+        DebugPrint " in create_proj_subspace_3 got normals                       ",toc()
 
         !$omp parallel do default(shared) private(i,isub) schedule(static) proc_bind(close)
         do isub=1,nsub
@@ -2810,8 +2810,8 @@ contains
         end do
         !$omp end parallel do
 
-        DebugPrint " in create_proj_subspace_3 done",toc()
-        DebugPrint " in create_proj_subspace_3 total time ",toc(t1)
+        DebugPrint " in create_proj_subspace_3 done                              ",toc()
+        DebugPrint " in create_proj_subspace_3 total time                        ",toc(t1)
     end function create_proj_subspace_3
 
     !>  \brief  method for discretization of the projection directions

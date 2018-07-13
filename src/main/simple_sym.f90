@@ -412,8 +412,8 @@ contains
             n_os = os_asym_unit%get_noris()
             allocate( nnmat(n_os,k), dists(n_os), inds(n_os), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_sym")
-            esym_rmats= self%e_sym%get_all_mats()
-            os_rmats = os_asym_unit%get_all_mats()
+            esym_rmats= self%e_sym%get_all_rmats()
+            os_rmats = os_asym_unit%get_all_rmats()
             !$omp parallel do default(shared) private(i,dists,rasym,isym, rsym, j, rj,inds) proc_bind(close)
             do i = 1, n_os
                 dists = pi
