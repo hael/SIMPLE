@@ -120,6 +120,122 @@ module simple_cuda_kernels
 contains
 
 
+
+    !>  \brief corr is for correlating two images
+    function corr_cuda( self1, self2, lp_dyn, hp_dyn ) result( r )
+      use simple_image, only: image
+      type(image),   intent(inout) :: self1, self2
+      real, optional, intent(in)    :: lp_dyn, hp_dyn
+      complex, allocatable :: cmat1(:,:,:), cmat2(:,:,:), vec1(:), vec2(:)
+      integer, allocatable :: bpmask(:,:,:)
+      real    :: r, sumasq, sumbsq
+      integer :: h, k, l, phys(3), lims(3,2),ldim(3), sqarg, sqlp, sqhp, npoints, npointsNP2
+      logical :: didft1, didft2
+      integer(kind=timer_int_kind) :: t1,t2
+        r = 0.
+#ifdef USING_CUDA
+        t1=tic()
+        sumasq = 0.
+        sumbsq = 0.
+        if( self1.eqdims.self2 )then
+            didft1 = .false.
+            if( .not. self1%is_ft() )then
+                call self1%fft()
+                didft1 = .true.
+            endif
+            didft2 = .false.
+            if( .not. self2%is_ft() )then
+                call self2%fft()
+                didft2 = .true.
+            endif
+
+            if( present(lp_dyn) )then
+                lims = self1%loop_lims(1,lp_dyn)
+            else
+                lims = self1%loop_lims(2) ! Nyqvist default low-pass limit
+            endif
+            sqlp = (maxval(lims(:,2)))**2
+            if( present(hp_dyn) )then
+                sqhp = max(2,self1%get_find(hp_dyn))**2
+            else
+                sqhp = 2 ! index 2 default high-pass limit
+            endif
+            ldim=self1%get_ldim()
+            allocate(cmat1(1:ldim(1),1:ldim(2),1:ldim(3)),cmat2(1:ldim(1),1:ldim(2),1:ldim(3)))
+            allocate(bpmask(1:ldim(1),1:ldim(2),1:ldim(3)))
+            bpmask=0
+
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,sqarg,phys)&
+            !$omp  schedule(static) proc_bind(close)
+            do h=lims(1,1),lims(1,2)
+               do k=lims(2,1),lims(2,2)
+                  do l=lims(3,1),lims(3,2)
+                     sqarg = h*h + k*k + l*l
+                     if( sqarg <= sqlp .and. sqarg >= sqhp  )then
+                        phys = self1%comp_addr_phys(h,k,l)
+                        bpmask(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = 1
+                        cmat1(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = self1%get_cmat_at(phys(1),phys(2),phys(3))
+                        cmat2(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = self2%get_cmat_at(phys(1),phys(2),phys(3))
+                     else
+                        cmat1(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = cmplx(0.,0.)
+                        cmat2(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = cmplx(0.,0.)
+                     endif
+                  enddo
+               enddo
+            enddo
+            !$omp end parallel do
+
+            npoints =sum(sum(sum(bpmask,3),2),1)
+            print *," Number of valid points ",npoints, ", in ", product(ldim)
+            npointsNP2 = nextPow2(npoints)
+            print *," Number of valid points (nextpow of 2)",npointsNP2
+            allocate(vec1(npointsNP2), source=cmplx(0.,0.))
+            allocate(vec2(npointsNP2), source=cmplx(0.,0.))
+            vec1=pack(cmat1,MASK=bpmask.ne.0, VECTOR=vec1)
+            vec2=pack(cmat2,MASK=bpmask.ne.0, VECTOR=vec2)
+            print *, " corr_cuda initialisation ", toc(t1)
+            t2 = tic()
+            !! Single pass
+            !           call kernelcrosscorr(cmat1, cmat2, ldim(1),ldim(2), sqlp, sqhp, )
+
+            !! Stages
+            call kernelrcorr(cmat1,cmat2, r, ldim, sqlp, sqhp, 64,8)
+            print *, " corr_cuda r correlation ",r, toc(t2)
+            call kernelsumcsq(cmat1, sumasq, ldim, 64, 8 )
+            print *, " corr_cuda A sum squared ", sumasq, toc()
+            call kernelsumcsq(cmat2, sumbsq, ldim, 64, 8 )
+            print *, " corr_cuda A sum squared ",sumbsq,  toc()
+
+
+            if( sumasq < TINY .or. sumbsq < TINY )then
+                r = 0.
+            else
+                r = r / sqrt(sumasq * sumbsq)
+            endif
+
+            print *, " Image corr ", r, " took ", toc(t2)
+
+         else
+            write(*,*) 'self1%ldim:', self1%get_ldim()
+            write(*,*) 'self2%ldim:', self2%get_ldim()
+            call simple_stop('images to be correlated need to have same dimensions; corr; simple_image')
+         endif
+         if(allocated(cmat1)) deallocate(cmat1)
+         if(allocated(cmat2)) deallocate(cmat2)
+         if(allocated(bpmask)) deallocate(bpmask)
+         if(allocated(vec1)) deallocate(vec1)
+         if(allocated(vec2)) deallocate(vec2)
+
+#else
+         print *, " CUDA corr in image class not available for this build"
+#endif
+    end function corr_cuda
+
+
+
+
+
+
     subroutine test_FortCUDA_kernels (arg)
         implicit none
         real, intent(in) :: arg

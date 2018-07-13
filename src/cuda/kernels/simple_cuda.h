@@ -12,7 +12,7 @@
                 msg, cudaGetErrorString(__err), \
                 __FILE__, __LINE__); \
             fprintf(stderr, "*** FAILED - ABORTING\n"); \
-            return 1; \
+            return ; \
         } \
     } while (0)
 

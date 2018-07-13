@@ -24,33 +24,33 @@
 #include "cuda.h"
 #include <stdio.h>
 
-__global__ void vec_Add_Int( const int *A, const int *B, int *C, int N )
+__global__ void vec_Add_Int(const int *A, const int *B, int *C, int N)
 {
-  int i = threadIdx.x + blockIdx.x * blockDim.x;
-  if ( i < N ) {
-    C[i] = A[i] + B[i];
-  }
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if(i < N) {
+        C[i] = A[i] + B[i];
+    }
 }
-__global__ void vec_Add_Float( const float *A, const float *B, float *C, int N )
+__global__ void vec_Add_Float(const float *A, const float *B, float *C, int N)
 {
-  int i = threadIdx.x + blockIdx.x * blockDim.x;
-  if ( i < N ) {
-    C[i] = A[i] + B[i];
-  }
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if(i < N) {
+        C[i] = A[i] + B[i];
+    }
 }
-__global__ void vec_Add_ConstInt( const int *A, const int B, int *C, int N )
+__global__ void vec_Add_ConstInt(const int *A, const int B, int *C, int N)
 {
-  int i = threadIdx.x + blockIdx.x * blockDim.x;
-  if ( i < N ) {
-    C[i] = A[i] + B;
-  }
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if(i < N) {
+        C[i] = A[i] + B;
+    }
 }
-__global__ void vec_Add_ConstFloat( const float *A, const float B, float *C, int N )
+__global__ void vec_Add_ConstFloat(const float *A, const float B, float *C, int N)
 {
-  int i = threadIdx.x + blockIdx.x * blockDim.x;
-  if ( i < N ) {
-    C[i] = A[i] + B;
-  }
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if(i < N) {
+        C[i] = A[i] + B;
+    }
 }
 
 
@@ -61,24 +61,24 @@ __global__ void vec_Add_ConstFloat( const float *A, const float B, float *C, int
 
 extern "C"
 {
-  void vecaddfloat(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
+    void vecaddfloat(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
+                     int N, cudaStream_t *stream)
+    {
+        vec_Add_Float <<< *dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
+    }
+    void vecaddint(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
                    int N, cudaStream_t *stream)
-  {
-    vec_Add_Float<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
-  }
-  void vecaddint(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
-                 int N, cudaStream_t *stream)
-  {
-    vec_Add_Int<<<*dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
-  }
-  void vecaddconstint(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
-                 int N, cudaStream_t *stream)
-  {
-    vec_Add_ConstInt<<<*dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);
-  }
-  void vecaddconstfloat(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
-                   int N, cudaStream_t *stream)
-  {
-    vec_Add_ConstFloat<<<*dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);
-  }
+    {
+        vec_Add_Int <<< *dimGrid, *dimBlk, 0, *stream>>>(A, B, C, N);
+    }
+    void vecaddconstint(int *A, int *B, int *C, dim3 *dimGrid, dim3 *dimBlk,
+                        int N, cudaStream_t *stream)
+    {
+        vec_Add_ConstInt <<< *dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);
+    }
+    void vecaddconstfloat(float *A, float *B, float *C, dim3 *dimGrid, dim3 *dimBlk,
+                          int N, cudaStream_t *stream)
+    {
+        vec_Add_ConstFloat <<< *dimGrid, *dimBlk, 0, *stream>>>(A, *B, C, N);
+    }
 }
