@@ -1254,10 +1254,10 @@ contains
     end subroutine simple_dump_mem_usage
 
     subroutine abspath (infile, absolute_name, errmsg, check_exists)
-        character(len=*),              intent(in)    :: infile
-        character(len=:), allocatable, intent(out)   :: absolute_name
-        character(len=*), optional,    intent(in)    :: errmsg
-        logical,          optional,    intent(inout) :: check_exists
+        character(len=*),              intent(in)  :: infile
+        character(len=:), allocatable, intent(out) :: absolute_name
+        character(len=*), optional,    intent(in)  :: errmsg
+        logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                          :: cstring
         character(len=LINE_MAX_LEN), target  :: fstr
         character(kind=c_char,len=STDLEN)    :: infilename_c
