@@ -24,8 +24,7 @@ program simple_test_mpi
     call ring
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call block_distribution
-    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-     call MPI_FINALIZE ( ierr )
+    call MPI_FINALIZE ( ierr )
     stop
 
 contains
@@ -137,8 +136,6 @@ contains
         call MPI_COMM_SIZE ( MPI_COMM_WORLD, num_procs, ierr )
 
         if( my_id == num_procs - 1 )then
-            call block_distribution_serial
-            call block_distribution_openmp
             print *, " MPI block distribution test "
             time1 = MPI_Wtime()
         end if
@@ -174,6 +171,9 @@ contains
             print *, a( array_size )
             print *, 'Elapsed real time = ', time2 - time1, 'second(s)'
             print *, 'Sum ', sum(a)
+
+            call block_distribution_openmp
+            call block_distribution_serial
         end if
         call MPI_BARRIER( MPI_COMM_WORLD, ierr )
         ! call MPI_FINALIZE ( ierr )
