@@ -159,7 +159,7 @@ contains
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         call write_boxfile
         ! returns absolute path
-        call abspath(boxname, abs_boxname, 'simple_picker::exec_picker')
+        call simple_abspath(boxname, abs_boxname, 'simple_picker::exec_picker')
         boxname_out = trim(abs_boxname)
     end subroutine exec_picker
 

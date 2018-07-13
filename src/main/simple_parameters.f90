@@ -800,7 +800,7 @@ contains
         ! put a full path on projfile
         if( self%projfile .ne. '' )then
             if( file_exists(self%projfile) )then
-                call abspath(trim(self%projfile), absname, 'simple_parameters::new')
+                call simple_abspath(trim(self%projfile), absname, 'simple_parameters::new')
                 self%projfile = absname
                 self%projname = get_fbody(basename(self%projfile), 'simple')
             endif
@@ -822,7 +822,7 @@ contains
                     call syslib_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
                     ! update the projfile/projname
                     self%projfile = filepath(PATH_HERE, basename(self%projfile))
-                    call abspath(trim(self%projfile), absname, 'simple_parameters::new')
+                    call simple_abspath(trim(self%projfile), absname, 'simple_parameters::new')
                     self%projfile = absname
                     self%projname = get_fbody(basename(self%projfile), 'simple')
                     ! cwd of SP-project will be updated in the builder
@@ -1305,7 +1305,7 @@ contains
                             write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
                             stop
                         else
-                            call abspath(self%vols(i), abs_fname, 'parameters :: check_vol', check_exists=.false.)
+                            call simple_abspath(self%vols(i), abs_fname, 'parameters :: check_vol', check_exists=.false.)
                             if( len_trim( abs_fname) > LONGSTRLEN )then
                                 write(*,*)'Argument too long: ',trim( abs_fname)
                                 stop 'simple_parameters :: new :: check_vol'
@@ -1419,7 +1419,7 @@ contains
                     end select
                     if( file_exists(var) )then
                         ! updates name to include absolute path
-                        call abspath(var, abspath_file, 'parameters :: check_file', check_exists=.false.)
+                        call simple_abspath(var, abspath_file, 'parameters :: check_file', check_exists=.false.)
                         if( len_trim(abspath_file) > LONGSTRLEN )then
                             write(*,*)'Argument too long: ',trim(abspath_file)
                             stop 'simple_parameters :: new :: checkfile'

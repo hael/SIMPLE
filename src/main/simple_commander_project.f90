@@ -397,7 +397,7 @@ contains
                 stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
             endif
             do i=1,nmovf
-                call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+                call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
                 call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         endif
@@ -432,7 +432,7 @@ contains
             stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
         endif
         do i=1,nos_mic
-            call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+            call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
             call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
         end do
         ! write project file

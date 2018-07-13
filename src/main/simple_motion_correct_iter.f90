@@ -114,17 +114,17 @@ contains
         call img_jpg%write_jpg(self%moviename_thumb, quality=90)
         ! report to ori object
         call orientation%set('smpd',   ctfvars%smpd)
-        call abspath(moviename, fname, 'simple_motion_correct_iter::iterate')
+        call simple_abspath(moviename, fname, 'simple_motion_correct_iter::iterate')
         call orientation%set('movie',  trim(fname))
-        call abspath(self%moviename_intg, fname,'simple_motion_correct_iter::iterate' )
+        call simple_abspath(self%moviename_intg, fname,'simple_motion_correct_iter::iterate' )
         call orientation%set('intg',   trim(fname))
-        call abspath(self%moviename_forctf, fname, 'simple_motion_correct_iter::iterate')
+        call simple_abspath(self%moviename_forctf, fname, 'simple_motion_correct_iter::iterate')
         call orientation%set('forctf', trim(fname))
-        call abspath(self%moviename_thumb, fname, 'simple_motion_correct_iter::iterate')
+        call simple_abspath(self%moviename_thumb, fname, 'simple_motion_correct_iter::iterate')
         call orientation%set('thumb',  trim(fname))
         call orientation%set('imgkind', 'mic')
         if( cline%defined('tof') )then
-            call abspath(self%moviename_intg_frames, fname, 'simple_motion_correct_iter::iterate')
+            call simple_abspath(self%moviename_intg_frames, fname, 'simple_motion_correct_iter::iterate')
             call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         endif
         ! destruct

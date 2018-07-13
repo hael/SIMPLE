@@ -597,7 +597,7 @@ contains
         endif
         if(allocated(targetdir))deallocate(targetdir)
         check_exists=.true.
-        call abspath (trim(newd), targetdir, eemsg, check_exists)
+        call simple_abspath (trim(newd), targetdir, eemsg, check_exists)
 
         write(*,*) " In simple_syslib chdir changing to target dir "//trim(targetdir)
 #ifdef INTEL
@@ -1253,7 +1253,7 @@ contains
         !  omp end critical
     end subroutine simple_dump_mem_usage
 
-    subroutine abspath (infile, absolute_name, errmsg, check_exists)
+    subroutine simple_abspath (infile, absolute_name, errmsg, check_exists)
         character(len=*),              intent(in)  :: infile
         character(len=:), allocatable, intent(out) :: absolute_name
         character(len=*), optional,    intent(in)  :: errmsg
@@ -1286,6 +1286,6 @@ contains
         else
             allocate(absolute_name, source=trim(infile))
         end if
-    end subroutine abspath
+    end subroutine simple_abspath
 
 end module simple_syslib

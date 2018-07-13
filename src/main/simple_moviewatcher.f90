@@ -92,7 +92,7 @@ contains
         n_lsfiles = size(farray)
         do i = 1, n_lsfiles
             fname = trim(adjustl(farray(i)))
-            call abspath(fname, abs_fname, 'movie_watcher :: watch')
+            call simple_abspath(fname, abs_fname, 'movie_watcher :: watch')
             farray(i) = trim(adjustl(abs_fname))
             deallocate(abs_fname)
         enddo

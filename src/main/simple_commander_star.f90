@@ -126,7 +126,7 @@ end if
         class(import_star_project_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters) :: params
-        type(sp_project) :: spproj 
+        type(sp_project) :: spproj
         type(star_project):: starproj
         type(ctfparams)  :: ctfvars
         type(oris)       :: os
@@ -176,7 +176,7 @@ end if
            print *," Unable to read data line records in STAR file."
            call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
        end if
-       
+
 !! vvvvv TODO vvvvv
 
 !!******* Import movies + ctf_estimation
@@ -217,7 +217,7 @@ end if
                 stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
             endif
             do i=1,nmovf
-                call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+                call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
                 call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         end if
@@ -239,7 +239,7 @@ end if
         !     call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
         ! end do
 !! ******  Import  particles
-      
+
  if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 write(*,*) 'unsupported nr of rec:s in plaintexttab'
                 stop 'commander_starproject :: exec_extract_ptcls'
