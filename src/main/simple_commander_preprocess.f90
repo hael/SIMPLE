@@ -106,13 +106,13 @@ contains
         if( params%stream.eq.'yes' )then
             output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
             output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
-            call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_preprocess :: preprocess; "
+            call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_preprocess :: preprocess; ")
             call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
             if( l_pick )then
                 output_dir_picker  = trim(DIR_PICKER)
                 output_dir_extract = trim(DIR_EXTRACT)
-                call simple_mkdir(output_dir_picker, errmsg="commander_preprocess :: preprocess; "
-                call simple_mkdir(output_dir_extract, errmsg="commander_preprocess :: preprocess;"
+                call simple_mkdir(output_dir_picker, errmsg="commander_preprocess :: preprocess; ")
+                call simple_mkdir(output_dir_extract, errmsg="commander_preprocess :: preprocess;")
             endif
         endif
         if( cline%defined('fbody') )then
