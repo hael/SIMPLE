@@ -214,11 +214,11 @@ end interface
 contains
 
     !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline, waitflag, suppress_errors,exitstat)
-        character(len=*),  intent(in) :: cmdline
-        logical, optional, intent(in) :: waitflag, suppress_errors
+    subroutine exec_cmdline( cmdline, waitflag, suppress_errors, exitstat)
+        character(len=*),  intent(in)  :: cmdline
+        logical, optional, intent(in)  :: waitflag, suppress_errors
         integer, optional, intent(out) :: exitstat
-        character(len=:), allocatable :: cmdstr, tmp
+        character(len=:), allocatable  :: cmdstr, tmp
         character(len=100) ::errmsg
         integer ::  cstat, exec_stat
         logical :: l_doprint, wwait, l_suppress_errors
@@ -461,7 +461,7 @@ contains
         logical :: l_print, currently_opened
         integer :: funit
         character(len=STDLEN) :: io_message
-        l_print = .true.
+        l_print = .false.
         currently_opened=.false.
 #if defined(GNU)
         allocate(buffer(13), source=0)
@@ -516,11 +516,9 @@ contains
         allocate(d1,source=trim(adjustl(dname))//achar(0))
         status = isdir(trim(d1), len_trim(d1))
         deallocate(d1)
-        print *," Status ", status
         if (status == 1) then
             dir_exists = .true.
-            !            print *, " isdir status ", status
-           call simple_file_stat( trim(adjustl(dname)), status, buffer, .true. )
+           call simple_file_stat( trim(adjustl(dname)), status, buffer, .false. )
            if(global_debug)then
                 print *, " status ", status
                 print *, " file mode ", buffer(3)

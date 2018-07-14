@@ -21,7 +21,7 @@ type :: qsys_env
     procedure :: new
     procedure :: exists
     procedure :: gen_scripts_and_schedule_jobs
-    procedure :: gen_shm_scripts_and_schedule_jobs
+    ! procedure :: gen_shm_scripts_and_schedule_jobs
     procedure :: exec_simple_prg_in_queue
     procedure :: get_qsys
     procedure :: kill
@@ -124,42 +124,38 @@ contains
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs
 
-    !! Multi-processor shared memory scripts
-    subroutine gen_shm_scripts_and_schedule_jobs( self, job_descr, part_params , algnfbody )
-        class(qsys_env)            :: self
-        class(chash)               :: job_descr
-        class(chash),     optional :: part_params(:)
-        character(len=*), optional :: algnfbody
-        character(len=STDLEN) :: cmd
-        integer :: nthr_master, nthr_new, sysstat
-
-#if defined(GNU) &&  __GNUC__ < 8
-        call qsys_cleanup
-        !             DebugPrint ' In gen_scripts_and_schedule_optimised_jobs'
-        !! review number of threads
-        nthr_master = params_glob%nthr
-        nthr_new = MAX(1,CEILING( REAL(params_glob%nthr) / REAL(params_glob%nparts) ) )
-        DebugPrint ' In gen_scripts_and_schedule_optimised_jobs;  ', self%qdescr%get('qsys_name')
-
-        print *, '>>> ADJUSTING THREADS ',nthr_master ,' TO NTHR PER NPARTS ', nthr_new
-        call self%qdescr%set('job_cpus_per_task', int2str(nthr_new))
-        params_glob%nthr=nthr_new
-
-        !! condense jobs
-        call self%qscripts%generate_scripts_new(job_descr, q_descr=self%qdescr, part_params=part_params)! , outfile_body=algnfbody
-        !! Run job
-        cmd = filepath(trim(CWD_GLOB), 'distr_simple_sh', nonalloc=.true.)
-        call exec_cmdline(trim(adjustl(cmd)), waitflag=.true., exitstat=sysstat)
-        if(sysstat /= 0) then
-           print *, ' distr_simple_sh returned an error'
-        endif
-        !! go back to previous nthr
-        params_glob%nthr=nthr_master
-#else
-        call self% gen_scripts_and_schedule_jobs(job_descr, part_params)
-#endif
-
-      end subroutine gen_shm_scripts_and_schedule_jobs
+!     !! Multi-processor shared memory scripts
+!     subroutine gen_shm_scripts_and_schedule_jobs( self, job_descr, part_params , algnfbody )
+!         class(qsys_env)            :: self
+!         class(chash)               :: job_descr
+!         class(chash),     optional :: part_params(:)
+!         character(len=*), optional :: algnfbody
+!         character(len=STDLEN) :: cmd
+!         integer :: nthr_master, nthr_new, sysstat
+! #if defined(GNU) &&  __GNUC__ < 8
+!         call qsys_cleanup
+!         !             DebugPrint ' In gen_scripts_and_schedule_optimised_jobs'
+!         !! review number of threads
+!         nthr_master = params_glob%nthr
+!         nthr_new = MAX(1,CEILING( REAL(params_glob%nthr) / REAL(params_glob%nparts) ) )
+!         DebugPrint ' In gen_scripts_and_schedule_optimised_jobs;  ', self%qdescr%get('qsys_name')
+!         !print *, '>>> ADJUSTING THREADS ',nthr_master ,' TO NTHR PER NPARTS ', nthr_new
+!         call self%qdescr%set('job_cpus_per_task', int2str(nthr_new))
+!         params_glob%nthr=nthr_new
+!         !! condense jobs
+!         call self%qscripts%generate_scripts_new(job_descr, q_descr=self%qdescr, part_params=part_params)! , outfile_body=algnfbody
+!         !! Run job
+!         cmd = filepath(trim(CWD_GLOB), 'distr_simple_sh', nonalloc=.true.)
+!         call exec_cmdline(trim(adjustl(cmd)), waitflag=.true., exitstat=sysstat)
+!         if(sysstat /= 0) then
+!            print *, ' distr_simple_sh returned an error'
+!         endif
+!         !! go back to previous nthr
+!         params_glob%nthr=nthr_master
+! #else
+!         call self% gen_scripts_and_schedule_jobs(job_descr, part_params)
+! #endif
+!       end subroutine gen_shm_scripts_and_schedule_jobs
 
     subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator, script_name )
         use simple_cmdline,   only: cmdline
