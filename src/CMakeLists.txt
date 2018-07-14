@@ -35,6 +35,12 @@ list(REMOVE_ITEM  UTILS_src
   #   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_btree.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_parallel_bsearch.f90"
   )
+if (NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+ list(REMOVE_ITEM  UTILS_src
+   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_intel_qsort.f90"
+  )
+endif()
+
 file(GLOB STAR_src "${CMAKE_CURRENT_SOURCE_DIR}/star_export/*.f90" PARENT_SCOPE)
 file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.[Ff][90][08]" PARENT_SCOPE)
 message(STATUS "SIMPLE CUDA LIBRARY ${CUDA_src}")
@@ -127,6 +133,11 @@ set_target_properties(${SIMPLELIB}
 
 if(USE_CUDA)
   file(GLOB CUKERNELS_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/*.cu" PARENT_SCOPE)
+  if(NOT CUDA_TOOLKIT_SDK_DIR)
+    list(REMOVE_ITEM CUKERNELS_src
+      "${CMAKE_CURRENT_SOURCE_DIR}/cuda/kernels/blockreduction.cu"
+      )
+  endif()
   if(BUILD_SHARED_LIBS)
     CUDA_ADD_LIBRARY( cuda_kernels  ${CUKERNELS_src}
     OPTIONS DEBUG -g

@@ -536,7 +536,7 @@ contains
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call abspath(movienames(cnt), moviename, 'simple_sp_project::add_movies')
+            call simple_abspath(movienames(cnt), moviename, 'simple_sp_project::add_movies')
             call find_ldim_nptcls(trim(moviename), ldim, nframes)
             if( nframes <= 0 )then
                 write(*,*) 'WARNING! # frames in movie ', trim(moviename), ' <= zero, ommitting'
@@ -626,7 +626,7 @@ contains
         integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer :: i, fromp, top
         ! full path and existence check
-        call abspath(stk, stk_simple_abspath, 'sp_project :: add_stk')
+        call simple_abspath(stk, stk_abspath, 'sp_project :: add_stk')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then

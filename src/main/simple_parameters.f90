@@ -862,7 +862,7 @@ contains
         if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box  = self%ldim(1)
-            DebugPrint 'found logical dimension of volume: ', self%ldim
+        DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
         ! no stack given,not vol given, get ldim from mskfile if present
         if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then
@@ -981,8 +981,8 @@ contains
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
-                    DebugPrint 'found logical dimension of stack: ', lfoo
-                    DebugPrint 'found nr of ptcls from stack: ', self%nptcls
+DebugPrint 'found logical dimension of stack: ', lfoo
+DebugPrint 'found nr of ptcls from stack: ', self%nptcls
                 endif
             else
                 write(*,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', trim(self%stk)
@@ -998,7 +998,7 @@ contains
                 if( .not. cline%defined('box') )then
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo)
                     self%ldim(3) = 1
-                    DebugPrint 'found logical dimension of refs: ', self%ldim
+DebugPrint 'found logical dimension of refs: ', self%ldim
                     self%box = self%ldim(1)
                 endif
             else
@@ -1175,7 +1175,7 @@ contains
         if( file_exists(self%refs) )then
             ! get number of particles from stack
             call find_ldim_nptcls(self%refs, lfoo, ncls)
-            DebugPrint 'found ncls from refs: ', ncls
+DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls )then
                     write(*,*)'ncls in ',trim(self%refs),' : ',ncls
@@ -1333,7 +1333,7 @@ contains
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call abspath(name, abs_name, 'parameters :: read_vols', check_exists=.false.)
+                        call simple_abspath(name, abs_name, 'parameters :: read_vols', check_exists=.false.)
                         self%vols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1356,7 +1356,7 @@ contains
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call abspath(name, abs_name, 'parameters :: read_masks', check_exists=.false.)
+                        call simple_abspath(name, abs_name, 'parameters :: read_masks', check_exists=.false.)
                         self%mskvols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1428,7 +1428,7 @@ contains
                         call cline%set(file,trim(var))
                         deallocate(abspath_file)
                     endif
-                    DebugPrint trim(file), '=', trim(var)
+ DebugPrint trim(file), '=', trim(var)
                 endif
             end subroutine check_file
 
@@ -1473,7 +1473,7 @@ contains
                 character(len=*), intent(inout) :: var
                 if( cline%defined(carg) )then
                     var = cline%get_carg(carg)
-                    DebugPrint trim(carg), '=', trim(var)
+DebugPrint trim(carg), '=', trim(var)
                 endif
             end subroutine check_carg
 
@@ -1482,7 +1482,7 @@ contains
                 integer,          intent(out) :: var
                 if( cline%defined(iarg) )then
                     var = nint(cline%get_rarg(iarg))
-                    DebugPrint trim(iarg), '=', var
+DebugPrint trim(iarg), '=', var
                 endif
             end subroutine check_iarg
 
@@ -1491,7 +1491,7 @@ contains
                 real, intent(out) :: var
                 if( cline%defined(rarg) )then
                     var = cline%get_rarg(rarg)
-                    DebugPrint trim(rarg), '=', var
+DebugPrint trim(rarg), '=', var
                 endif
             end subroutine check_rarg
 
@@ -1502,7 +1502,7 @@ contains
                         else
                             call find_ldim_nptcls(self%stk, self%ldim, ifoo)
                             self%ldim(3) = 1
-                            DebugPrint 'found logical dimension of stack: ', self%ldim
+DebugPrint 'found logical dimension of stack: ', self%ldim
                             self%box     = self%ldim(1)
                         endif
                     else

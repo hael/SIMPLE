@@ -427,6 +427,7 @@ if(USE_CUDA)
   else()
     find_package(Threads)
     find_package(CUDA)
+
     if(CUDA_FOUND)
       message(STATUS " CUDA Found ")
       set(EXTRA_LIBS ${EXTRA_LIBS}  ${CUDA_LIBRARIES})
@@ -444,6 +445,11 @@ if(USE_CUDA)
         set(CUDA_VERBOSE_BUILD ON)
         set(CUDA_NVCC_FLAGS -g ${CUDA_NVCC_FLAGS})
       endif()
+
+      if( CUDA_TOOLKIT_ROOT_DIR )
+        CUDA_INCLUDE_DIRECTORIES( ${CUDA_TOOLKIT_ROOT_DIR} )
+      endif()
+
     else()
       set(USE_CUDA OFF)
       unset (CUDA_INCLUDE_DIRS CACHE)
@@ -584,7 +590,10 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   ## INTEL fortran
   #
   #############################################
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -I${MKLROOT}/include/intel64/lp64 -I${MKLROOT}/include/  -assume source_include -diag-enable=openmp,vec,par,error  -diag-disable=warn -sox -qoverride-limits -I${INTEL_DIR}/include/${INTEL_TARGET_ARCH}")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -I${MKLROOT}/include/intel64/lp64 -I${MKLROOT}/include/  -assume source_include -diag-enable=openmp,vec,par,error   -I${INTEL_DIR}/include/${INTEL_TARGET_ARCH}")
+  if(INTEL_OMP_OVERRIDE)
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -sox -qoverride-limits  -diag-disable=warn")
+endif()
   # -diag-file-append=diagnostics.txt
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")

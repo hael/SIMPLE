@@ -364,7 +364,7 @@ contains
             &                  index, iwhere, indx2, task, &
             &                  csave, lsave, isave, dsave)
             implicit none
-            character :: task*60, csave*60
+            character(len=60) :: task, csave
             logical   :: lsave(4)
             integer   :: n, m, nbd(n), index(n)
             integer   :: iwhere(n), indx2(n), isave(23)
@@ -541,7 +541,7 @@ contains
             !
             !     ************
             logical   :: prjctd,cnstnd,boxed,updatd,wrk
-            character :: word*3
+            character(len=3) :: word
             integer   :: i,k,nintol,itfile,iback,nskip
             integer   :: head,col,iter,itail,iupdat
             integer   :: nseg,nfgv,info,ifun
@@ -1528,7 +1528,7 @@ contains
         end subroutine cmprlb
 
         subroutine errclb(n, m, factr, l, u, nbd, task, info, k)
-            character :: task*60
+            character(len=60) :: task
             integer   :: n, m, info, k, nbd(n)
             real(dp)  :: factr, l(n), u(n)
             !     ************
@@ -2105,7 +2105,7 @@ contains
             &                  z, stp, dnorm, dtd, xstep, stpmx, iter, ifun, &
             &                  iback, nfgv, info, task, boxed, cnstnd, csave, &
             &                  isave, dsave)
-            character :: task*60, csave*60
+            character(len=60) :: task, csave
             logical   :: boxed, cnstnd
             integer   :: n, iter, ifun, iback, nfgv, info
             integer   :: nbd(n), isave(2)
@@ -2634,7 +2634,7 @@ contains
 
         subroutine dcsrch(f,g,stp,ftol,gtol,xtol,stpmin,stpmax, &
             &             task,isave,dsave)
-            character*(*) :: task
+            character(len=*), intent(inout) :: task
             integer       :: isave(2)
             real(dp)      :: f,g,stp,ftol,gtol,xtol,stpmin,stpmax
             real(dp)      :: dsave(13)

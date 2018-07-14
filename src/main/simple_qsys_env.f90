@@ -128,13 +128,12 @@ contains
     subroutine gen_shm_scripts_and_schedule_jobs( self, job_descr, part_params , algnfbody )
         class(qsys_env)            :: self
         class(chash)               :: job_descr
-        class(chash),     optional :: part_params(self%nparts)
+        class(chash),     optional :: part_params(:)
         character(len=*), optional :: algnfbody
         character(len=STDLEN) :: cmd
         integer :: nthr_master, nthr_new, sysstat
 
-#ifdef GNU
-#if  __GNUC__ < 8
+#if defined(GNU) &&  __GNUC__ < 8
         call qsys_cleanup
         !             DebugPrint ' In gen_scripts_and_schedule_optimised_jobs'
         !! review number of threads
@@ -147,7 +146,7 @@ contains
         params_glob%nthr=nthr_new
 
         !! condense jobs
-        call self%qscripts%generate_scripts_new(job_descr, self%qdescr, part_params)! , outfile_body=algnfbody
+        call self%qscripts%generate_scripts_new(job_descr, q_descr=self%qdescr, part_params=part_params)! , outfile_body=algnfbody
         !! Run job
         cmd = filepath(trim(CWD_GLOB), 'distr_simple_sh', nonalloc=.true.)
         call exec_cmdline(trim(adjustl(cmd)), waitflag=.true., exitstat=sysstat)
@@ -157,37 +156,9 @@ contains
         !! go back to previous nthr
         params_glob%nthr=nthr_master
 #else
-
-        !! condense jobs
-!        call self%qscripts%generate_scripts_new(job_descr, self%qdescr, part_params)!, algnfbody
-        !! Run job
-!        cmd = filepath(CWD_GLOB, 'distr_simple_sh', nonalloc=.true.)
-!        call exec_cmdline(trim(adjustl(cmd)), waitflag=.true., exitstat=sysstat)
-!        if(sysstat /= 0) then
-!           print *, ' distr_simple_sh returned an error'
-!        endif
-
-        call qsys_cleanup
-        call self%qscripts%generate_scripts(job_descr, trim(params_glob%ext), self%qdescr,&
-              part_params=part_params)
-        call self%qscripts%schedule_jobs
-
-
+        call self% gen_scripts_and_schedule_jobs(job_descr, part_params)
 #endif
 
-#else
-        call qsys_cleanup
-        !! condense jobs
-        call self%qscripts%generate_scripts_new(job_descr, &
-             self%qdescr, part_params)!, algnfbody
-        !! Run job
-        cmd = filepath(trim(CWD_GLOB), 'distr_simple_sh', nonalloc=.true.)
-        call exec_cmdline(trim(adjustl(cmd)), waitflag=.true., exitstat=sysstat)
-        if(sysstat /= 0) then
-           print *, ' distr_simple_sh returned an error'
-        endif
-#endif
-!        if(allocated(cmd)) deallocate(cmd)
       end subroutine gen_shm_scripts_and_schedule_jobs
 
     subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator, script_name )

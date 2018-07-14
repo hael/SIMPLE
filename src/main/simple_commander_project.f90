@@ -299,9 +299,9 @@ contains
             stop 'ABORTING... commander_project :: new_project'
         endif
         ! make project directory
-        call simple_mkdir(filepath(PATH_HERE,trim(params%projname)), errmsg="commander_project :: new_project;")
+        call simple_mkdir(trim(params%projname), errmsg="commander_project :: new_project;")
         ! change to project directory
-        call simple_chdir(filepath(PATH_HERE,trim(params%projname)), errmsg="commander_project :: new_project;")
+        call simple_chdir(trim(params%projname), errmsg="commander_project :: new_project;")
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment

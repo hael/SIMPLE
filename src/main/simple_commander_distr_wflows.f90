@@ -907,7 +907,7 @@ contains
         ! splitting
         tsplit=tic()
         call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
-        DebugPrint 'in exec_reconstruct3D_distr: splitting stack                 ',toc(tsplit)
+        DebugPrint ' splitting stack                 ',toc(tsplit)
         ! eo partitioning
 
         if( params%eo .ne. 'no' )then
@@ -920,11 +920,11 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
             endif
         endif
-        DebugPrint 'in exec_reconstruct3D_distr: eo partitioning    accum secs   ',toc(treconstruct3D)
+        DebugPrint ' eo partitioning    accum secs   ',toc(treconstruct3D)
         ! schedule
-        !call qenv%gen_scripts_and_schedule_jobs(job_descr)
-        call qenv%gen_shm_scripts_and_schedule_jobs(job_descr)
-        DebugPrint 'in exec_reconstruct3D_distr: qenv scheduling   accum secs    ',toc(treconstruct3D)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        !call qenv%gen_shm_scripts_and_schedule_jobs(job_descr)
+        DebugPrint ' qenv scheduling   accum secs    ',toc(treconstruct3D)
         ! assemble volumes
         ! this is for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) )
@@ -938,7 +938,7 @@ contains
             call cline_volassemble%set('prg', 'volassemble')
         endif
         ! parallel assembly
-        DebugPrint 'in exec_reconstruct3D_distr: parallel assembly accum secs    ',toc(treconstruct3D)
+        DebugPrint ' parallel assembly accum secs    ',toc(treconstruct3D)
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
             if( params%eo .ne. 'no' )then
@@ -950,7 +950,7 @@ contains
             call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                 &script_name='simple_script_state'//trim(str_state))
         end do
-        DebugPrint 'in exec_reconstruct3D_distr: Completed in total time         ',toc(treconstruct3D), ' secs'
+        DebugPrint ' Completed in total time         ',toc(treconstruct3D), ' secs'
         call qsys_watcher(state_assemble_finished)
         ! termination
         if(qenv%qscripts%l_suppress_errors) call qsys_cleanup

@@ -218,22 +218,23 @@ contains
         character(len=*),  intent(in) :: cmdline
         logical, optional, intent(in) :: waitflag, suppress_errors
         integer, optional, intent(out) :: exitstat
-        character(len=:), allocatable :: cmdmsg, tmp,  cmsg
+        character(len=:), allocatable :: cmdstr, tmp
+        character(len=100) ::errmsg
         integer ::  cstat, exec_stat
         logical :: l_doprint, wwait, l_suppress_errors
         l_doprint = .false.
         wwait     = .true.
         if( present(waitflag)        ) wwait = waitflag
         if( present(suppress_errors) ) l_suppress_errors = suppress_errors
-        allocate(cmsg, source=trim(adjustl(cmdline)))
         if( l_suppress_errors )then
-            allocate(tmp, source=cmsg//' '//SUPPRESS_MSG)
-            cmsg = trim(tmp)
+            allocate(cmdstr, source=trim(adjustl(cmdline))//' '//SUPPRESS_MSG)
+        else
+            allocate(cmdstr, source=trim(adjustl(cmdline)))
         endif
-        call execute_command_line(trim(adjustl(cmsg)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmdmsg)
-        if( .not. l_suppress_errors ) call raise_sys_error( cmsg, exec_stat, cstat, cmdmsg )
+        call execute_command_line(trim(adjustl(cmdstr)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=errmsg)
+        if( .not. l_suppress_errors ) call raise_sys_error( cmdstr, exec_stat, cstat, errmsg )
         if( l_doprint )then
-            write(*,*) 'command            : ', cmsg
+            write(*,*) 'command            : ', cmdstr
             write(*,*) 'status of execution: ', exec_stat
         endif
         if(present(exitstat))exitstat=exec_stat
@@ -646,7 +647,7 @@ contains
         character(kind=c_char, len=:), allocatable :: path
         character(len=STDLEN) :: tmpdir
         integer :: io_status, lenstr, cstart
-        logical :: dir_e, ignore_here,  dir_p, qq
+        logical :: ignore_here,  dir_p, qq
         ! check input arg
         tmpdir = trim(adjustl(dir))
         lenstr = len_trim(tmpdir)
@@ -657,23 +658,22 @@ contains
             print *,"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
         endif
         !
-
         ignore_here = .false.
         io_status=0
-        inquire(file=trim(tmpdir), exist=dir_e)
-        if(.not. dir_e) then
+        if(.not. dir_exists(trim(adjustl(tmpdir)))) then
             ! prepare path for C function
             allocate(path, source=trim(tmpdir)//c_null_char)
-! #ifdef INTEL
+!#ifdef INTEL
+!            io_status=1
 !             qq = makedirqq(trim(adjustl(path)))
-!             if(.not. qq) call simple_error_check(io_status, &
-!                     "syslib:: makedirqq failed creating "//trim(path))
-! #else
+!             if(.not. qq) call simple_error_check(IERRNO(), &
+!                 "syslib:: makedirqq failed creating "//trim(path))
+!             io_status=0
+!#else
             io_status = makedir(trim(adjustl(path)))
-
 !#endif
-            inquire(file=trim(adjustl(path)), exist=dir_e)
-            if(.not. dir_e) then
+!            inquire(file=trim(adjustl(path)), exist=dir_e)
+            if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 print *," syslib:: simple_mkdir failed to create "//trim(path)
 
@@ -681,6 +681,10 @@ contains
 
                     if(io_status /= 0) call simple_error_check(io_status, &
                         "syslib:: simple_mkdir failed to create "//trim(path))
+                endif
+            else
+                if(global_verbose)then
+                    print *," Directory ", trim(path), " created."
                 endif
             endif
             deallocate(path)

@@ -195,12 +195,12 @@ contains
 
     !>  \brief  public script generator
     subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params )
-        class(qsys_ctrl),           intent(inout) :: self
-        class(chash),               intent(inout) :: job_descr
-        character(len=4),           intent(in)    :: ext
-        class(chash),               intent(inout) :: q_descr
-        character(len=*), optional, intent(inout) :: outfile_body
-        class(chash),     optional, intent(inout) :: part_params(:)
+        class(qsys_ctrl)          :: self
+        class(chash)              :: job_descr
+        character(len=4)          :: ext
+        class(chash)              :: q_descr
+        character(len=*), optional :: outfile_body
+        class(chash),     optional :: part_params(:)
         character(len=:), allocatable :: outfile_body_local, key, val
         integer :: ipart, iadd
         logical :: part_params_present
