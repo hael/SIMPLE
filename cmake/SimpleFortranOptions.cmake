@@ -50,9 +50,11 @@ endif()
 
 message(STATUS "Making sure your Fortran compiler points to the correct binary")
 if(Fortran_COMPILER_NAME MATCHES "gfortran*")
+message(STATUS "Making sure your Fortran compiler points to the correct binary")
   execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_FC_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+    message(STATUS " GFORTRAN version: ${ACTUAL_FC_TARGET}")
   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file (
@@ -62,14 +64,17 @@ if(Fortran_COMPILER_NAME MATCHES "gfortran*")
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
       )
-    if(NOT EXIST "${CMAKE_Fortran_COMPILER}")
+    if(NOT EXISTS "${CMAKE_Fortran_COMPILER}")
       message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} --
 ${CLANG_FATAL_MSG}")
     endif()
+    message(STATUS " GFORTRAN replaced with ${CMAKE_Fortran_COMPILER")
+
   endif()
-
-
-get_filename_component(FORTRAN_PARENT_DIR ${CMAKE_Fortran_COMPILER} PATH)
+endif()
+get_filename_component(GFORTRAN_ABSPATH ${CMAKE_Fortran_COMPILER} REALPATH)
+message(STATUS "FORTRAN ABSPATH ${GFORTRAN_ABSPATH}")
+get_filename_component(FORTRAN_PARENT_DIR ${GFORTRAN_ABSPATH} DIRECTORY)
 message(STATUS "FORTRAN_PARENT_DIR ${FORTRAN_PARENT_DIR}")
 
 message(STATUS "Making sure your C compiler points to the correct binary")
@@ -77,17 +82,25 @@ message(STATUS "Making sure your C compiler points to the correct binary")
   execute_process(COMMAND ${CMAKE_C_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_C_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+  message(STATUS " GCC version: ${ACTUAL_C_TARGET}")
+
   if(ACTUAL_C_TARGET MATCHES "Clang|clang")
-    message(STATUS "WARNING gcc points to Clang -- Trying other paths, starting with ${FORTRAN_PARENT_DIR}")
+    message(STATUS "WARNING gcc points to Clang -- Attempting other paths, starting with ${FORTRAN_PARENT_DIR}")
     find_file (
-      CMAKE_C_COMPILER
-      NAMES gcc- gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc8 gcc7 gcc6 gcc5 gcc4.9
-      PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /usr/bin
+      CMAKE_C_COMPILER_NEW
+      NAMES gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc8 gcc7 gcc6 gcc5 gcc4.9
+      HINTS ${FORTRAN_PARENT_DIR}
+      PATHS  /sw/bin /usr/local/bin /opt/local/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gcc preprocessor, starting with ${FORTRAN_PARENT_DIR} "
-      )
-    if(NOT EXIST "${CMAKE_C_COMPILER}")
-      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_C_COMPILER} --
+      NO_CMAKE_PATH NO_DEFAULT_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH     
+)
+    message (STATUS " Found ${CMAKE_C_COMPILER_NEW}")
+    if(EXISTS "${CMAKE_C_COMPILER_NEW}")
+    set(CMAKE_C_COMPILER "${CMAKE_C_COMPILER_NEW}" CACHE FILEPATH "GNU gcc compiler " FORCE)
+    message(STATUS "C compiler points to ${CMAKE_C_COMPILER}")
+else()
+      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_C_COMPILER_NEW} --
 ${CLANG_FATAL_MSG}")
     endif()
   endif()
@@ -97,20 +110,25 @@ message(STATUS "Making sure your C++ compiler points to the correct binary")
   execute_process(COMMAND ${CMAKE_CXX_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_CXX_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+    message(STATUS " G++ version: ${ACTUAL_CXX_TARGET}")
   if(ACTUAL_CXX_TARGET MATCHES "Clang|clang")
     message(STATUS "WARNING g++ points to Clang -- Trying other paths")
     find_file (
-      CMAKE_CXX_COMPILER
-      NAMES g++- g++-8 g++-7 g++-6 g++-5 g++-4.9 g++8 g++7 g++6 g++5 g++4.9 g++
+      CMAKE_CXX_COMPILER_NEW
+      NAMES g++- g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++8 g++7 g++6 g++5 g++4.9 g++
       PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /usr/bin
       DOC "Searching for GNU g++ preprocessor "
+NO_DEFAULT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
       )
-    if(NOT EXIST "${CMAKE_C_COMPILER}")
-      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_C_COMPILER} --
+    if(EXISTS "${CMAKE_CXX_COMPILER_NEW}")
+    set(CMAKE_CXX_COMPILER "${CMAKE_CXX_COMPILER_NEW}" CACHE FILEPATH "GNU C++ COMPILER" FORCE)
+    message(STATUS "C++ compiler points to ${CMAKE_CXX_COMPILER}")
+else()
+      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_CXX_COMPILER} --
 ${CLANG_FATAL_MSG}")
     endif()
   endif()
-endif()
+
 
 message(STATUS "Making sure your preprocessor points to the correct binary")
 if(TMP_CPP_COMPILER MATCHES "cpp*")
@@ -133,6 +151,9 @@ ${CLANG_FATAL_MSG}")
 endif()
 endif()
 set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
+
+
+
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
 

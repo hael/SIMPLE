@@ -20,7 +20,7 @@ if(NOT $ENV{CPP} STREQUAL "")
 else()
   find_file (CMAKE_CPP_COMPILER_NAMES
     NAMES cpp- cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
-    PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
+    PATHS /sw/bin /usr/local/bin /opt/local/bin /usr/bin
     #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
     DOC "GNU cpp preprocessor "
     #  [NO_DEFAULT_PATH]
@@ -37,9 +37,11 @@ else()
   endif()
   set(ENV{CPP} ${CMAKE_CPP_COMPILER_NAMES})
 endif()
+
 enable_language(Fortran C CXX)
 include(CMakeDetermineFortranCompiler)
 include(CMakeDetermineCompiler)
+
 
 
 # Try to identify the ABI and configure it into CMakeFortranCompiler.cmake
