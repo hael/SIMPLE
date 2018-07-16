@@ -9,20 +9,21 @@
 module simple_qsort
 implicit none
 private
-public :: qsort
+public :: qsortf
 private :: partition
 
- public :: quicksort_m_sp, quicksort_m_dp
+public :: quicksort_m_sp, quicksort_m_dp
 contains
 
-recursive subroutine qsort(A)
+
+recursive subroutine qsortf(A)
   real, intent(in out), dimension(:) :: A
   integer(8) :: iq
 
   if(size(A) > 1) then
      call partition(A, iq)
-     call qsort(A(:iq-1))
-     call qsort(A(iq:))
+     call qsortf(A(:iq-1))
+     call qsortf(A(iq:))
   endif
 end subroutine
 
@@ -61,8 +62,6 @@ subroutine partition(A, marker)
      endif
   end do
 end subroutine partition
-
-
 
 
 recursive subroutine quicksort_m_dp(a, lo0, hi)

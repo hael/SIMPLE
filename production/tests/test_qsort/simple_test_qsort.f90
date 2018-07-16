@@ -6,6 +6,9 @@ program simple_test_sort
     use simple_qsort_mt
     use simple_qsort
     use simple_qsort_c, only: sortp_1r4
+#ifdef INTEL
+    use simple_intel_qsort
+#endif
     implicit none
     real(8) :: startt, stopt
     integer (8), parameter :: nmax =  10000000
@@ -20,7 +23,7 @@ program simple_test_sort
     integer, dimension(33) :: seed8
     integer (8) :: n,nA
     integer (4) :: m,nAsp
-    real :: t1, t2, t3, t4,  t1min, t2min, t3min, t4min, t2m
+    real :: t1, t2, t3, t4,  t1min, t2min, t3min, t4min, t2m, t5
     seedx = (/ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 /)
     seed8 = (/ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,&
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,1, 2, 3, 4, 5, 6, 7, 8, 9 /)
@@ -55,7 +58,7 @@ program simple_test_sort
         call make_data4(A,nAsp)
         !    write (*,*) "Qsort"
         call system_clock(count1)
-        call qsort(A)
+        call qsortf(A)
         call system_clock(count2)
         t2 = real(count2-count1)/(real(rate))
         deallocate(A)
@@ -74,6 +77,16 @@ program simple_test_sort
         ! write (*,*) real(count2-count1)/real(rate)
         !  t2=real(count2-count1)/real(rate)
         deallocate(A)
+#ifdef INTEL
+        allocate (A(nAsp))
+        call make_data4(A,nAsp)
+        !    write (*,*) "Qsort"
+        call system_clock(count1)
+        call qsort_intel_real(A)
+        call system_clock(count2)
+        t5 = real(count2-count1)/(real(rate))
+        deallocate(A)
+#endif
 
 
         allocate (A(nAsp))
@@ -97,17 +110,11 @@ program simple_test_sort
         t4 = real(count2-count1)/(real(rate))
         deallocate(A)
 
-        if (t1 < t2 .and. t1< t2m .and. t1<t3 .and. t1<t4 )then
-            write(*,*) nAsp, format_str(trim(real2str(t1)),C_RED), t2, t2m, t3, t4
-        else  if (t2 < t1 .and. t2< t2m .and. t2<t3 .and. t2<t4 )then
-            write(*,*)nAsp,t1, format_str(trim(real2str(t2)),C_RED), t2m, t3, t4
-        else if (t2m < t2 .and. t2m< t1 .and. t2m<t3 .and. t2m<t4 )then
-            write(*,*)nAsp, t1, t2, format_str(trim(real2str(t2m)),C_RED), t3, t4
-        else if (t3 < t2 .and. t3< t2m .and. t3<t1 .and. t1<t4 )then
-            write(*,*)nAsp, t1, t2, t2m, format_str(trim(real2str(t3)),C_RED), t4
-        else
-            write(*,*)nAsp, t1, t2, t2m, t3, format_str(trim(real2str(t4)),C_RED)
-        end if
+#ifdef INTEL
+        call print_table(INT(nAsp,8), t1, t2, t2m, t3, t4, t5)
+#else
+        call print_table(INT(nAsp,8), t1, t2, t2m, t3, t4)
+#endif
     end do
 
     ! !! ITERATIONS
@@ -138,7 +145,7 @@ program simple_test_sort
     ! do i=1,it_max
     !     call make_data4(A,nAsp)
     !     call system_clock(count1)
-    !     call qsort(A)
+    !     call qsortf(A)
     !     call system_clock(count2)
     !     t2 = t2+real(count2-count1)
     ! end do
@@ -223,7 +230,7 @@ program simple_test_sort
     call system_clock(count3)
     do i=1,nAsp
         call system_clock(count1)
-        call qsort(B(:,i))
+        call qsortf(B(:,i))
         call system_clock(count2)
         if(real(count2-count1) < t2min) t2min = (real(count2-count1))
         t2 = t2+real(count2-count1)
@@ -457,7 +464,7 @@ program simple_test_sort
         call make_data8(A,nA)
         !    write (*,*) "Qsort"
         call system_clock(count1)
-        call qsort(A)
+        call qsortf(A)
         call system_clock(count2)
         t2 = real(count2-count1)/(real(rate))
         deallocate(A)
@@ -476,6 +483,17 @@ program simple_test_sort
         ! write (*,*) real(count2-count1)/real(rate)
         !  t2=real(count2-count1)/real(rate)
         deallocate(A)
+
+#ifdef INTEL
+        allocate (A(nAsp))
+        call make_data4(A,nAsp)
+        !    write (*,*) "Qsort"
+        call system_clock(count1)
+        call qsort_intel_double(A)
+        call system_clock(count2)
+        t5 = real(count2-count1)/(real(rate))
+        deallocate(A)
+#endif
 
 
         allocate (A(nA))
@@ -499,17 +517,12 @@ program simple_test_sort
         t4 = real(count2-count1)/(real(rate))
         deallocate(A)
 
-        if (t1 < t2 .and. t1< t2m .and. t1<t3 .and. t1<t4 )then
-            write(*,*) nA, format_str(trim(real2str(t1)),C_RED), t2, t2m, t3, t4
-        else  if (t2 < t1 .and. t2< t2m .and. t2<t3 .and. t2<t4 )then
-            write(*,*)nA,t1, format_str(trim(real2str(t2)),C_RED), t2m, t3, t4
-        else if (t2m < t2 .and. t2m< t1 .and. t2m<t3 .and. t2m<t4 )then
-            write(*,*)nA, t1, t2, format_str(trim(real2str(t2m)),C_RED), t3, t4
-        else if (t3 < t2 .and. t3< t2m .and. t3<t1 .and. t1<t4 )then
-            write(*,*)nA, t1, t2, t2m, format_str(trim(real2str(t3)),C_RED), t4
-        else
-            write(*,*)nA, t1, t2, t2m, t3, format_str(trim(real2str(t4)),C_RED)
-        end if
+#ifdef INTEL
+        call print_table(nA, t1, t2, t2m, t3, t4, t5)
+#else
+        call print_table(nA, t1, t2, t2m, t3, t4)
+#endif
+
     end do
 
     ! !! ITERATIONS
@@ -540,7 +553,7 @@ program simple_test_sort
     ! do i=1,it_max
     !     call make_data8(A,nA)
     !     call system_clock(count1)
-    !     call qsort(A)
+    !     call qsortf(A)
     !     call system_clock(count2)
     !     t2 = t2+real(count2-count1)
     ! end do
@@ -625,7 +638,7 @@ program simple_test_sort
     call system_clock(count3)
     do i=1,nA
         call system_clock(count1)
-        call qsort(B(:,i))
+        call qsortf(B(:,i))
         call system_clock(count2)
         if(real(count2-count1) < t2min) t2min = (real(count2-count1))
         t2 = t2+real(count2-count1)
@@ -832,24 +845,6 @@ program simple_test_sort
  !  write (*,*) "Execution time in seconds: total ", real(count4-count3)/real(rate), " eff mean ", real(count4-count3)/real(nA*rate)
     deallocate(B)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 contains
 
     subroutine make_data8(A,nA)
@@ -885,5 +880,49 @@ contains
         end do
 
     end subroutine make_data4
+
+    subroutine print_table(nA, t1, t2, t2m, t3, t4, t5)
+        integer(8) :: nA
+        real :: t1, t2, t3, t4, t2m
+        real, optional :: t5
+
+        write(*,'(I15,1x)', advance='no') nA
+        if (t1 < t2 .and. t1< t2m .and. t1<t3 .and. t1<t4 )then
+            write(*,'(a15)', advance='no') format_str(trim(real2str(t1)),C_RED)
+        else
+            write(*,'(ES15.8)', advance='no') t1
+        endif
+        if (t2 < t1 .and. t2< t2m .and. t2<t3 .and. t2<t4 )then
+            write(*,'(a15)', advance='no') format_str(trim(real2str(t2)),C_RED)
+        else
+            write(*,'(ES15.8)', advance='no') t2
+        endif
+        if (t2m < t2 .and. t2m< t1 .and. t2m<t3 .and. t2m<t4 )then
+            write(*,'(a15)', advance='no') format_str(trim(real2str(t2m)),C_RED)
+        else
+            write(*,'(ES15.8)', advance='no') t2m
+        endif
+        if (t3 < t2 .and. t3< t2m .and. t3<t1 .and. t1<t4 )then
+            write(*,'(a15)', advance='no') format_str(trim(real2str(t3)),C_RED)
+        else
+            write(*,'(ES15.8)', advance='no') t3
+        endif
+        if (t4 < t1 .and. t4< t2 .and. t4<t2m .and. t4<t3 )then
+            write(*,'(a15)', advance='no') format_str(trim(real2str(t4)),C_RED)
+        else
+            write(*,'(ES15.8)', advance='no') t4
+        endif
+        if(present(t5))then
+            if (t5 < t1 .and. t5< t2 .and. t5<t2m .and. t5<t3 .and. t5<t4 )then
+                write(*,'(a15)', advance='no') format_str(trim(real2str(t5)),C_RED)
+            else
+                write(*,'(ES15.8)', advance='no') t5
+            endif
+        endif
+        write(*,*) ""
+
+    end subroutine print_table
+
+
 
 end program simple_test_sort
