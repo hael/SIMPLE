@@ -67,6 +67,7 @@ end program TestOpenMP
 ")
     SET (MACRO_CHECK_FUNCTION_DEFINITIONS
       "-DOpenMP_FLAG_DETECTED ${CMAKE_REQUIRED_FLAGS}")
+
     #try_compile(OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
     #  ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
     #  COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
@@ -81,17 +82,27 @@ end program TestOpenMP
          COMPILE_OUTPUT_VARIABLE OUTPUT
          RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
     IF (OpenMP_FLAG_DETECTED)
-        FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
+       FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
              "Determining if the Fortran compiler supports OpenMP passed with "
              "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n")
-        SET (OpenMP_FLAG_DETECTED 1)
+       SET (OpenMP_FLAG_DETECTED 1)
        # IF (OpenMP_RUN_FAILED)
        #     MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
        # ENDIF (OpenMP_RUN_FAILED)
-        SET (OMP_NUM_PROCS ${OMP_NUM_PROCS_INTERNAL} CACHE
-             STRING "Number of processors OpenMP may use" FORCE)
-        SET (OpenMP_Fortran_FLAGS_INTERNAL "${FLAG}")
-        BREAK ()
+       STRING(REGEX MATCH "^[^0-9]*$" OMP_ERROR "${OMP_NUM_PROCS_INTERNAL}")
+       if ("${OMP_ERROR} " STREQUAL " ")
+         SET (OMP_NUM_PROCS ${OMP_NUM_PROCS_INTERNAL} CACHE
+           STRING "Number of processors OpenMP may use" FORCE)
+         SET (OpenMP_Fortran_FLAGS_INTERNAL "${FLAG}")
+       else()
+         message(STATUS " OMP NUM PROCS ERROR ${OMP_ERROR}" )
+         STRING(REGEX REPLACE ".* \([0-9]+\)$" "\\1" OMP_NUM_PROCS_INTERNAL "${OMP_NUM_PROCS_INTERNAL}")
+         message(STATUS " OMP NUM PROCS OUTPUT set to ${OMP_NUM_PROCS_INTERNAL}" )
+         SET (OMP_NUM_PROCS ${OMP_NUM_PROCS_INTERNAL} CACHE
+           STRING "Number of processors OpenMP may use" FORCE)
+         SET (OpenMP_Fortran_FLAGS_INTERNAL "${FLAG}")
+       endif()
+       BREAK ()
       ELSE ()
         FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
              "Determining if the Fortran compiler supports OpenMP failed with "
