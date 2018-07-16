@@ -188,7 +188,7 @@ type :: parameters
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
-    integer :: cc_objfun=OBJFUN_CC !< objective function(1:cc|2:ccres|3:euclid)
+    integer :: cc_objfun=OBJFUN_CC !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)

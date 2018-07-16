@@ -32,7 +32,7 @@ type qsys_ctrl
     integer                        :: cline_stacksz          = 0 !< size of stack of command lines, for streaming only
     logical                        :: stream    = .false.        !< stream flag
     logical                        :: existence = .false.        !< indicates existence
-    logical,public                 :: l_suppress_errors = .false. !< generate output_<scriptname> log files set to false
+    logical,public                 :: l_suppress_errors = .true. !< generate output_<scriptname> log files set to false
   contains
     ! CONSTRUCTOR
     procedure          :: new

@@ -49,14 +49,14 @@ logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
 logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
-logical                        :: cavger_exists = .false.       !< to flag instance existence
+logical                        :: exists        = .false.       !< to flag instance existence
 
 integer, parameter      :: BATCHTHRSZ = 50
 logical, parameter      :: L_BENCH    = .false.
 integer(timer_int_kind) :: t_batch_loop, t_gridding, t_tot
 real(timer_int_kind)    :: rt_batch_loop, rt_gridding, rt_tot
 character(len=STDLEN)   :: benchfname
-#include "simple_local_flags.inc"
+
 contains
 
     !>  \brief  is a constructor
@@ -121,7 +121,7 @@ contains
             call ctfsqsums_merged(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
         end do
         ! flag existence
-        cavger_exists = .true.
+        exists = .true.
     end subroutine cavger_new
 
     ! setters/getters
@@ -295,7 +295,6 @@ contains
         else
             call init_cavgs_sums
         endif
-        DebugPrint ' in avger_assemble_sums frac update'
         kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
         zero   = cmplx(0.,0.)
         wdim   = kbwin%get_wdim()
@@ -317,7 +316,6 @@ contains
                 if( batchsz > batchsz_max ) batchsz_max = batchsz
             end do
         end do
-        DebugPrint ' in avger_assemble_sums class loop'
         if( allocated(batches) ) deallocate(batches)
         ! pre-allocations
         allocate(batch_imgs(batchsz_max), cgrid_imgs(batchsz_max),&
@@ -334,8 +332,6 @@ contains
         cyc_lims   = cgrid_imgs(1)%loop_lims(3)
         cmat_even  = cgrid_imgs(1)%get_cmat()
         cmat_odd   = cgrid_imgs(1)%get_cmat()
-        call cls_imgsum_even%new(ldim_pd, params_glob%smpd)
-        call cls_imgsum_odd%new(ldim_pd, params_glob%smpd)
         nyq        = cgrid_imgs(1)%get_lfny(1)
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                   rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
@@ -347,7 +343,6 @@ contains
             t_tot         = tic()
         endif
         cnt_progress = 0
-        DebugPrint ' in avger_assemble_sums start cls loop '
         ! class loop
         do icls=1,ncls
             cnt_progress = cnt_progress + 1
@@ -363,10 +358,7 @@ contains
             rho_odd   = 0.
             ! batch planning
             nbatches = ceiling(real(icls_pop)/real(params_glob%nthr*BATCHTHRSZ))
-            !$ allocate(batches(icls_pop,2), stat=alloc_stat)
-            !$ if(alloc_stat.ne.0)call allocchk("In simple_classaverager::assemble_sums prealloc batches",alloc_stat)
             batches  = split_nobjs_even(icls_pop, nbatches)
-            !DebugPrint ' in cavger_assemble_sums start batch loop, ', nbatches, ' class' , icls
             ! batch loop, prep
             do batch=1,nbatches
                 ! prep batch
@@ -381,7 +373,6 @@ contains
                 ! batch particles loop
                 if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                 if( L_BENCH ) t_gridding = tic()
-                 DebugPrint ' in cavger_assemble_sums start omp loop  class#' , icls, ' batch size ', batchsz
                 !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
                 !$omp private(i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,sh,win,logi,phys,phys_cmat,cyc1,cyc2,w,incr)
                 ! batch loop, direct Fourier interpolation
@@ -430,8 +421,6 @@ contains
                     ! rotation
                     mat = rotmat2d( -precs(iprec)%e3s(iori) )
                     ! Fourier components loop
-                    !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close)&
-                    !$omp private(h,k,loc,sh,win,phys_cmat,w,incr,l,m,logi,phys)
                     do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             sh = nint(hyp(real(h),real(k)))
@@ -455,18 +444,18 @@ contains
                             enddo
                             w = pw * w / sum(w)
                             ! point of addition
-                            phys_cmat = cgrid_imgs(i)%comp_addr_phys(h,k,0)
+                            phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])
                             select case(precs(iprec)%eo)
                                 case(0,-1)
                                     ! interpolation
                                     do l=1,wdim
                                         do m=1,wdim
                                             if( w(l,m) < TINY ) cycle
-!                                            logi       = [cyc1(l), cyc2(m), 0]
-                                            phys       = cgrid_imgs(i)%comp_addr_phys(cyc1(l), cyc2(m), 0)
+                                            logi       = [cyc1(l), cyc2(m), 0]
+                                            phys       = cgrid_imgs(i)%comp_addr_phys(logi)
                                             cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
                                                 cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
-                                                &cgrid_imgs(i)%get_cmat_at(phys(1),phys(2),1) * w(l,m)
+                                                &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
                                         end do
                                     end do
                                 case(1)
@@ -474,24 +463,23 @@ contains
                                     do l=1,wdim
                                         do m=1,wdim
                                             if( w(l,m) < TINY ) cycle
-!                                            logi       = [cyc1(l), cyc2(m), 0]
-                                            phys       = cgrid_imgs(i)%comp_addr_phys(cyc1(l), cyc2(m), 0)
+                                            logi       = [cyc1(l), cyc2(m), 0]
+                                            phys       = cgrid_imgs(i)%comp_addr_phys(logi)
                                             cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
                                                 cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
-                                                &cgrid_imgs(i)%get_cmat_at(phys(1),phys(2),1) * w(l,m)
+                                                &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
                                         end do
                                     end do
                             end select
                         end do
                     end do
-                    !$omp end parallel do
                 enddo
                 !$omp end parallel do
                 if( L_BENCH ) rt_gridding = rt_gridding + toc(t_gridding)
             enddo ! batch loop
             ! put back cmats
-            call cls_imgsum_even%set_ft(.true.)
-            call cls_imgsum_odd%set_ft(.true.)
+            call cls_imgsum_even%new(ldim_pd, params_glob%smpd)
+            call cls_imgsum_odd%new(ldim_pd, params_glob%smpd)
             call cls_imgsum_even%set_cmat(cmat_even)
             call cls_imgsum_odd%set_cmat(cmat_odd)
             ! real space & clipping
@@ -773,7 +761,7 @@ contains
     !>  \brief  is a destructor
     subroutine cavger_kill
         integer ::  icls, iprec
-        if( cavger_exists )then
+        if( exists )then
             do icls=1,ncls
                 call cavgs_even(icls)%kill
                 call cavgs_odd(icls)%kill
@@ -798,7 +786,7 @@ contains
             ncls          = 0
             l_is_class    = .true.
             l_hard_assign = .true.
-            cavger_exists = .false.
+            exists        = .false.
         endif
     end subroutine cavger_kill
 

@@ -175,7 +175,7 @@ contains
                         &do_extr = .true.
                 else
                     iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)))
-                    if( which_iter==1 .or.(frac_srch_space <= 90. .and. params_glob%extr_iter <= iextr_lim) )&
+                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim) )&
                         &do_extr = .true.
                 endif
                 if( do_extr )then

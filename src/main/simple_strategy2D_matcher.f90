@@ -86,16 +86,16 @@ contains
         endif
 
         ! EXTREMAL LOGICS
-        if( l_extr  )then
+        if( l_extr )then
             ! factorial decay, -2 because first step is always greedy
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(params_glob%extr_iter-2)
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
             select case(params_glob%cc_objfun)
-                case(1)
+                case(OBJFUN_CC)
                     extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
-                case(2)
+                case(OBJFUN_RES)
                     extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'bfac')
-                case(3)
+                case(OBJFUN_EUCLID)
                     extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
             end select
             write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh

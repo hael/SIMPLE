@@ -302,7 +302,8 @@ contains
         call params%new(cline)
         call spproj%read(params%projfile)
         ! sanity check
-        if( spproj%get_nmovies() == 0 )then
+        nmovies = spproj%get_nmovies()
+        if( nmovies == 0 )then
             stop 'No movie to process!'
         endif
         if( params%scale > 1.05 )then
@@ -340,7 +341,7 @@ contains
             call spproj%os_mic%getter(1, 'movie', moviename)
             call find_ldim_nptcls(moviename, lfoo, nframes)
             ! calculate time_per_frame
-            params%time_per_frame = params%exp_time/real(nframes*nmovies) !! nmovies initialized
+            params%time_per_frame = params%exp_time/real(nframes*nmovies)
         endif
         ! align
         frame_counter = 0
