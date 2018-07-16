@@ -183,7 +183,7 @@ contains
             arg4softmax = arg4softmax - maxval(arg4softmax)
             ! calculate softmax weights
             ws = exp(arg4softmax) !* ang_weights
-            ! corrs < TINY => ws = 0.
+            ! corrs <= TINY => ws = 0.
             where( corrs <= TINY ) ws = 0.
             ! normalise
             ws = ws / sum(ws)

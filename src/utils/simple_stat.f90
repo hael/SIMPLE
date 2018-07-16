@@ -577,7 +577,7 @@ contains
         ddev     = median(dmat(i_median,:))
     end subroutine dev_from_dmat
 
-    ! SPECIAL FUNCTIONS
+    ! ROBUST STATISTICS
 
     ! median absolute deviation
     ! calculated as the median of absolute deviations of the data points
@@ -605,5 +605,13 @@ contains
         med = median(x)
         allocate(z_scores(size(x)), source=(x - med) / mad_gau(x, med))
     end function robust_z_scores
+
+    subroutine robust_normalization( x )
+        real, intent(inout) :: x(:) ! data points
+        real :: med, dev
+        med = median(x)
+        dev = mad_gau(x, med)
+        x   = (x - med) / dev
+    end subroutine robust_normalization
 
 end module simple_stat
