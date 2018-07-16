@@ -116,7 +116,7 @@ real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
-real, parameter    :: TAU_DEFAULT          = 0.005     !< controls the sharpeness of the orientation weight distribution
+real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution
                                                        !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH      = 0.01      !< threshold for orientations softmax weights
