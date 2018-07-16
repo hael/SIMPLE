@@ -48,6 +48,9 @@ SET (OpenMP_Fortran_FLAG_CANDIDATES
     #Empty, if compiler automatically accepts openmp
      " "
      )
+if(APPLE)
+message(STATUS " Testing OpenMP affinity <<<<<<<<>>>>>>>")
+endif()
 
 IF (DEFINED OpenMP_Fortran_FLAGS)
     SET (OpenMP_Fortran_FLAG_CANDIDATES)
@@ -67,20 +70,24 @@ end program TestOpenMP
 ")
     SET (MACRO_CHECK_FUNCTION_DEFINITIONS
       "-DOpenMP_FLAG_DETECTED ${CMAKE_REQUIRED_FLAGS}")
-
-    #try_compile(OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
-    #  ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
-    #  COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
-    #  CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
-    #  COMPILE_OUTPUT_VARIABLE OUTPUT
-    #  RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
-
+if(APPLE)
+    try_compile(OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
+      ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
+      COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
+      CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
+      COMPILE_OUTPUT_VARIABLE OUTPUT
+      RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
+else()
      TRY_RUN (OpenMP_RUN_FAILED OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
          ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
          COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
          CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
          COMPILE_OUTPUT_VARIABLE OUTPUT
          RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
+endif()
+if(APPLE)
+message(STATUS ">>>>>>><<<<< Testing OpenMP affinity ${OMP_NUM_PROCS_INTERNAL}")
+endif()
     IF (OpenMP_FLAG_DETECTED)
        FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
              "Determining if the Fortran compiler supports OpenMP passed with "
@@ -90,6 +97,10 @@ end program TestOpenMP
        #     MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
        # ENDIF (OpenMP_RUN_FAILED)
        STRING(REGEX MATCH "^[^0-9]*$" OMP_ERROR "${OMP_NUM_PROCS_INTERNAL}")
+if(APPLE)
+message(STATUS " Testing OpenMP affinity ${OMP_ERROR}")
+endif()
+
        if ("${OMP_ERROR} " STREQUAL " ")
          SET (OMP_NUM_PROCS ${OMP_NUM_PROCS_INTERNAL} CACHE
            STRING "Number of processors OpenMP may use" FORCE)
