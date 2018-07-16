@@ -387,51 +387,38 @@ contains
 
     function corrs2weights( corrs ) result( weights )
         real, intent(in)  :: corrs(:) !< correlation input
-        real, allocatable :: weights(:), corrs_copy(:), expnegdists(:)
+        real, allocatable :: weights(:), corrs_copy(:)
         real, parameter   :: THRESHOLD=1.5
-        real    :: maxminratio, normfac, corrmax, corrmin
-        integer :: icorr, ncorrs
+        real    :: maxminratio, corrmax, corrmin
+        integer :: ncorrs
         ncorrs = size(corrs)
-        allocate(weights(ncorrs), expnegdists(ncorrs),stat=alloc_stat)
+        allocate(weights(ncorrs), stat=alloc_stat)
         if(alloc_stat /= 0) call allocchk("In: corrs2weights; simple_stat 1" , alloc_stat)
-        weights     = 0.
-        allocate( corrs_copy(ncorrs), source=corrs,stat=alloc_stat)
+        weights = 0.
+        allocate(corrs_copy(ncorrs), source=corrs,stat=alloc_stat)
         if(alloc_stat /= 0) call allocchk("In: corrs2weights; simple_stat 2" , alloc_stat)
-        expnegdists = 0.
-        corrmax     = maxval(corrs_copy)
-        if( corrmax < 0. )then
+        corrmax = maxval(corrs_copy)
+        if( corrmax <= 0. )then
             ! weighting does not make sense, put them all to 1/ncorrs
-            weights = 1./real(ncorrs)
+            weights = 1. / real(ncorrs)
             return
         endif
-        corrmin = minval(corrs_copy, mask=corrs_copy > TINY)
-        maxminratio = corrmax/corrmin
+        ! remove negatives to prevent corrs around zero to recieve any weight power
+        where( corrs_copy <= 0. ) corrs_copy = 0.
+        corrmin     = minval(corrs_copy, mask=corrs_copy > TINY)
+        maxminratio = corrmax / corrmin
         if( maxminratio >= THRESHOLD )then
            ! min/max normalise the correlations
            call normalize_sigm(corrs_copy)
         endif
         ! calculate the exponential of the negative distances
-        ! so that when diff==0 the weights are maximum and when
-        ! diff==corrmax the weights are minimum
-        do icorr=1,ncorrs
-            if( corrs_copy(icorr) >= 0. )then
-                expnegdists(icorr) = exp(-(1.-corrs_copy(icorr)))
-            else
-                expnegdists(icorr) = 0.
-            endif
-        end do
-        ! calculate weight normalisation factor
-        normfac = sum(expnegdists)
-        ! normalise and set weights where corrs==0 to 0
-        do icorr=1,ncorrs
-            if( corrs_copy(icorr) > TINY )then
-                weights(icorr) = expnegdists(icorr)/normfac
-            else
-                weights(icorr) = 0.
-            endif
-        end do
-        if(allocated(corrs_copy)) deallocate(corrs_copy)
-        if(allocated(expnegdists)) deallocate(expnegdists)
+        where( corrs_copy > TINY )
+            weights = exp(-(1. - corrs_copy))
+        else where
+            weights = 0.
+        end where
+        ! normalize weights
+        weights = weights / sum(weights)
     end function corrs2weights
 
     ! integer STUFF

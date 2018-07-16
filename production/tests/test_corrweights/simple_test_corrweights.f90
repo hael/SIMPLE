@@ -53,5 +53,4 @@ contains
         ws = ws / sum(ws)
     end subroutine corrs2w_softmax
 
-
 end program simple_test_corrweights

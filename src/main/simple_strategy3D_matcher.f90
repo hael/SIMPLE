@@ -113,11 +113,7 @@ contains
 
         ! SETUP WEIGHTS
         if( params_glob%weights3D.eq.'yes' )then
-            if( params_glob%nptcls <= SPECWMINPOP )then
-                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-            else
-                call build_glob%spproj_field%calc_spectral_weights(params_glob%frac)
-            endif
+            call build_glob%spproj_field%calc_spectral_weights
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif

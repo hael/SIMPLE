@@ -92,13 +92,7 @@ contains
         endif
         ! setup weights in case the 2D was run without them (specscore will still be there)
         if( params%weights2D.eq.'yes' )then
-            if( params%nptcls <= SPECWMINPOP )then
-                call build%spproj_field%set_all2single('w', 1.0)
-            else
-                ! frac is one by default in cluster2D (no option to set frac)
-                ! so spectral weighting is done over all images
-                call build%spproj_field%calc_spectral_weights(1.0)
-            endif
+            call build%spproj_field%calc_spectral_weights
         else
             t2=tic()
             call build%spproj_field%set_all2single('w', 1.0)

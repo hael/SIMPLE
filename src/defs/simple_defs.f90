@@ -126,7 +126,6 @@ real,    parameter :: BSC                  = 20.       !< for shell reconstructi
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)
 integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
-integer, parameter :: SPECWMINPOP          = 2000      !< minimum population for spectral weighting (PRIME2D/3D)
 integer, parameter :: GRIDNPEAKS           = 3         !< # peaks to consider in angular grid search (PRIME3D)
 integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
 integer, parameter :: MAXNPEAKS            = 40        !< maximum # peaks to be assigned weights (PRIME3D)

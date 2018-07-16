@@ -155,32 +155,27 @@ contains
         ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
         if( params_glob%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
-            if( params_glob%nptcls <= SPECWMINPOP )then
-                call build_glob%spproj_field%set_all2single('w', 1.0)
+            if( params_glob%weights2D .eq. 'yes' .and. which_iter > 3 )then
+                call build_glob%spproj_field%get_pops(prev_pops, 'class', consider_w=.true., maxn=params_glob%ncls)
             else
-                if( params_glob%weights2D .eq. 'yes' .and. which_iter > 3 )then
-                    call build_glob%spproj_field%get_pops(prev_pops, 'class', consider_w=.true., maxn=params_glob%ncls)
-                else
-                    call build_glob%spproj_field%get_pops(prev_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
-                endif
-                ! frac is one by default in cluster2D (no option to set frac)
-                ! so spectral weighting is done over all images
-                call build_glob%spproj_field%calc_spectral_weights(1.0)
-                if( any(prev_pops == 0) )then
-                    ! now ensuring the spectral re-ranking does not re-populates
-                    ! zero-populated classes, for congruence with empty cavgs
-                    do icls = 1, params_glob%ncls
-                        if( prev_pops(icls) > 0 ) cycle
-                        call build_glob%spproj_field%get_pinds(icls, 'class', w_pinds, consider_w=.false.)
-                        if( .not.allocated(w_pinds) )cycle
-                        do iptcl = 1, size(w_pinds)
-                            call build_glob%spproj_field%set(w_pinds(iptcl), 'w', 0.)
-                        enddo
-                        deallocate(w_pinds)
-                    enddo
-                endif
-                deallocate(prev_pops)
+                call build_glob%spproj_field%get_pops(prev_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
             endif
+            ! spectral weighting
+            call build_glob%spproj_field%calc_spectral_weights
+            if( any(prev_pops == 0) )then
+                ! now ensuring the spectral re-ranking does not re-populates
+                ! zero-populated classes, for congruence with empty cavgs
+                do icls = 1, params_glob%ncls
+                    if( prev_pops(icls) > 0 ) cycle
+                    call build_glob%spproj_field%get_pinds(icls, 'class', w_pinds, consider_w=.false.)
+                    if( .not.allocated(w_pinds) )cycle
+                    do iptcl = 1, size(w_pinds)
+                        call build_glob%spproj_field%set(w_pinds(iptcl), 'w', 0.)
+                    enddo
+                    deallocate(w_pinds)
+                enddo
+            endif
+            deallocate(prev_pops)
         else
             ! defaults to frac, done by class
             if( which_iter > 3 )then

@@ -203,13 +203,7 @@ contains
                 ncls  = build%spproj_field%get_n('class')
                 ! setup weights
                 if( params%weights2D.eq.'yes' )then
-                    if( noris <= SPECWMINPOP )then
-                        call build%spproj_field%set_all2single('w', 1.0)
-                    else
-                        ! frac is one by default in prime2D (no option to set frac)
-                        ! so spectral weighting is done over all images
-                        call build%spproj_field%calc_spectral_weights(1.0)
-                    endif
+                    call build%spproj_field%calc_spectral_weights
                 else
                     ! defaults to unitary weights
                     call build%spproj_field%set_all2single('w', 1.0)
@@ -242,11 +236,7 @@ contains
                 noris = build%spproj_field%get_noris()
                 ! setup weights
                 if( params%weights3D.eq.'yes' )then
-                    if( noris <= SPECWMINPOP )then
-                        call build%spproj_field%calc_hard_weights(params%frac)
-                    else
-                        call build%spproj_field%calc_spectral_weights(params%frac)
-                    endif
+                    call build%spproj_field%calc_spectral_weights
                 else
                     call build%spproj_field%calc_hard_weights(params%frac)
                 endif

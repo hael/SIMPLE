@@ -2551,22 +2551,23 @@ contains
     end function order_cls
 
     !>  \brief  calculates spectral particle weights
-    subroutine calc_spectral_weights( self, frac )
+    subroutine calc_spectral_weights( self )
         class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
         integer           :: i, nstates, istate, cnt, mystate
-        real, allocatable :: weights(:), specscores(:)
-        call self%calc_hard_weights( frac )
-        if( self%isthere('specscore') )then
+        real, allocatable :: weights(:), corrs(:)
+        logical           :: specscore_isthere, corr_isthere
+        specscore_isthere = self%isthere('specscore')
+        corr_isthere      = self%isthere('corr')
+        if( specscore_isthere .or. corr_isthere )then
             nstates = self%get_n('state')
             if( nstates > 1 )then
                 do istate=1,nstates
-                    specscores = self%get_arr('specscore', state=istate)
-                    weights    = self%get_arr('w',         state=istate)
-                    where( weights < 0.5 )
-                        specscores = 0.
-                    end where
-                    weights = corrs2weights(specscores)
+                    if( specscore_isthere )then
+                        corrs = self%get_arr('specscore', state=istate)
+                    else
+                        corrs = self%get_arr('corr', state=istate)
+                    endif
+                    weights = corrs2weights(corrs)
                     cnt = 0
                     do i=1,self%n
                         mystate = nint(self%o(i)%get('state'))
@@ -2577,20 +2578,28 @@ contains
                             call self%o(i)%set('w', 0.0)
                         endif
                     enddo
-                    deallocate(specscores,weights)
+                    deallocate(corrs,weights)
                 enddo
             else
-                specscores = self%get_all('specscore')
-                weights    = self%get_all('w')
-                where( weights < 0.5 )
-                    specscores = 0.
-                end where
-                weights = corrs2weights(specscores)
+                if( specscore_isthere )then
+                    corrs = self%get_all('specscore')
+                else
+                    corrs = self%get_all('corr')
+                endif
+                weights = corrs2weights(corrs)
                 do i=1,self%n
-                    call self%o(i)%set('w', weights(i))
+                    mystate = nint(self%o(i)%get('state'))
+                    if( mystate == 0 )then
+                        call self%o(i)%set('w', 0.0)
+                    else
+                        call self%o(i)%set('w', weights(i))
+                    endif
                 end do
-                deallocate(specscores,weights)
+                deallocate(corrs,weights)
             endif
+        else
+            write(*,*) 'ERROR! neither specscore nor corr set. Cannot calculate spectral weights'
+            stop 'simple_oris :: calc_spectral_weights'
         endif
     end subroutine calc_spectral_weights
 
