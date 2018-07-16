@@ -85,9 +85,6 @@ else()
          COMPILE_OUTPUT_VARIABLE OUTPUT
          RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
 endif()
-if(APPLE)
-message(STATUS ">>>>>>><<<<< Testing OpenMP affinity ${OMP_NUM_PROCS_INTERNAL}")
-endif()
     IF (OpenMP_FLAG_DETECTED)
        FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
              "Determining if the Fortran compiler supports OpenMP passed with "
@@ -97,9 +94,6 @@ endif()
        #     MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
        # ENDIF (OpenMP_RUN_FAILED)
        STRING(REGEX MATCH "^[^0-9]*$" OMP_ERROR "${OMP_NUM_PROCS_INTERNAL}")
-if(APPLE)
-message(STATUS " Testing OpenMP affinity ${OMP_ERROR}")
-endif()
 
        if ("${OMP_ERROR} " STREQUAL " ")
          SET (OMP_NUM_PROCS ${OMP_NUM_PROCS_INTERNAL} CACHE
