@@ -2,7 +2,8 @@
 module simple_star
 include 'simple_lib.f08'
 use simple_stardoc
-use simple_sp_project
+use simple_sp_project, only: sp_project
+use simple_parameters, only: params_glob
 
 implicit none
 private
@@ -37,7 +38,6 @@ contains
     procedure :: export_shiny3D
     procedure :: import_shiny3D
     procedure :: export_all
-
     procedure :: kill
 end type star_project
 
@@ -87,8 +87,8 @@ contains
         else
             nrecs = self%doc%num_data_elements
         endif
-
     end function get_nrecs_per_line
+
     subroutine read( self, fname )
         class(star_project), intent(inout)     :: self
         character(len=*), optional, intent(inout) :: fname
@@ -97,7 +97,6 @@ contains
 
     subroutine print_info( self )
         class(star_project), intent(inout)     :: self
-
     end subroutine print_info
 
 
@@ -123,7 +122,6 @@ contains
     !! _rlnMicrographName #2
     !! [#1 MotionCorr/job026/Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729_noDW.mrc] [#2 MotionCorr/job026/ Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729.mrc]
     !! ...
-
     subroutine export_motion_corrected_micrographs (self,  sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
@@ -177,7 +175,6 @@ contains
             'CtfFigureOfMerit   ',&
             'CtfMaxResolution   ' /)
         call self%doc%write(filename, sp, labels)
-
 
     end subroutine export_ctf_estimation
     subroutine import_ctf_estimation (self, sp, filename)
@@ -770,6 +767,55 @@ call self%doc%write(filename, sp, labels)
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
     end subroutine export_all
+
+
+
+    integer function exporttype2star( exporttype )
+        character(len=*),  intent(in) :: exporttype
+        !select case(trim(exporttype))
+        ! match oritype equivalent for star export type    
+        !case('movies') ! movies
+        if(index(trim(exporttype), 'movie')/=0 )then
+            exporttype2star = MOV_STAR
+        !case('mic':'micrographs': 'mcmicrographs':'ctf_estimation') ! movies
+        else if( index(trim(exporttype), 'mic')/=0 .or. &
+            index(trim(exporttype), 'ctf')/=0) then
+            exporttype2star = MIC_STAR
+!         case('stk':'select')           ! micrographs with selected boxes
+        else if(index(trim(exporttype), 'select')/=0) then
+            exporttype2star = STK_STAR
+!         case('ptcl2D':'extract')
+       else if(index(trim(exporttype), 'extract')/=0) then
+             exporttype2star = PTCL2D_STAR
+!         case('cls2D': 'class2d')             ! class averages
+       else if(trim(exporttype), 'class2D')/=0) then
+             exporttype2star = CLS2D_STAR
+!         case('cls3D': 'init3dmodel')
+       else if(index(trim(exporttype), 'init3d')/=0) then
+             exporttype2star = CLS3D_STAR
+!         case('ptcl3D':'refine3d')            ! 3D particles
+       else if(index(trim(exporttype), 'refine3')/=0) then
+             exporttype2star = PTCL3D_STAR
+!         case('out': 'post')
+       else if(index(trim(exporttype), 'post')/=0) then
+             exporttype2star = OUT_STAR
+!         case('projinfo': 'all')
+       else if(index(trim(exporttype), 'all')/=0 .or. &
+           index(trim(exporttype), 'projinfo')/=0) then
+             exporttype2star = PROJINFO_STAR
+!         case DEFAULT
+         else
+            stop 'unsupported exporttype flag; star project :: exporttype2star'
+!        end select
+        end if
+    end function exporttype2star
+
+
+
+
+
+
+
 
     subroutine kill(self)
         class(star_project), intent(inout):: self

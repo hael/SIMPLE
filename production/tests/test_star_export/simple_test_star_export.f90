@@ -23,7 +23,7 @@ type(star_project) :: s
 type(stardoc) :: sdoc
 type(star_dict) :: sdict
 call date_and_time(date=datestr)
-folder = PATH_HERE//'SIMPLE_TEST_SSIM_'//trim(datestr)
+folder = 'SIMPLE_TEST_SSIM_'//trim(datestr)
 call simple_mkdir( trim(folder) , status=io_stat)
 if(io_stat/=0) call simple_stop("simple_mkdir failed")
 print *," Changing directory to ", folder

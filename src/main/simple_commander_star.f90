@@ -7,7 +7,7 @@ use simple_sp_project,     only: sp_project
 use simple_star,           only: star_project
 use simple_oris,           only: oris
 use simple_binoris_io,     only: binread_nlines, binread_oritab
-use simple_parameters,     only: parameters
+use simple_parameters,     only: parameters, params_glob
 implicit none
 
 public :: export_star_project_commander
@@ -56,28 +56,31 @@ contains
                 trim(this_starfile)//"-bkup")
         end if
 
-        if( params%export_type  == 'NONE')then
-           write (*,*) " exportstar_project must have a valid export_type."
+        if( params%startype  == 'NONE')then
+           write (*,*) " exportstar_project must have a valid startype."
            write (*,*) " Accepted values are micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post or all."
+           write (*,*) "    movies:         for raw micrographs"
            write (*,*) "    micrographs:    for non-dose weighted micrographs"
            write (*,*) "    mcmicrographs:  for motion-corrected, dose weighted micrographs"
            write (*,*) "    ctf_estimation: for ctf estimation and micrographs"
 
-           write (*,*) "    class2d:   for 2D class averages"
-           write (*,*) "    select:    for selected 2D class averages"
+           write (*,*) "    class2d:        for 2D class averages"
+           write (*,*) "    select:         for selected 2D class averages"
 
-           write (*,*) "    init3dmodel: for initial particles"
-           write (*,*) "    extract:   for extract dose-weighted particles"
-           write (*,*) "    refine3d:  for refined 3D particles"
-           write (*,*) "    post:      for post-processing"
+           write (*,*) "    init3dmodel:    for initial particles"
+           write (*,*) "    extract:        for extract dose-weighted particles"
+           write (*,*) "    refine3d:       for refined 3D particles"
+           write (*,*) "    post:           for post-processing"
 
- call simple_stop( " exportstar_project failed due to incorrect export_type arg")
-end if
+           call simple_stop( " exportstar_project failed due to incorrect startype arg")
+        end if
         !! Prepare project
         call starproj%prepare(spproj,  this_starfile)
 
         ! Use export type to define export output variables
-        select case(params%export_type)
+        select case(params%startype)
+        case('movies')
+           call  starproj%export_micrographs(spproj,  params%starfile)
         case('micrographs')
            call  starproj%export_micrographs(spproj,  params%starfile)
         case('mcmicrographs')
@@ -90,7 +93,7 @@ end if
            call starproj%export_extract_doseweightedptcls(spproj,  params%starfile)
         case('class2d')
            call starproj%export_class2D(spproj,  params%starfile)
-        case('initmodel')
+        case('init3dmodel')
            call starproj%export_init3Dmodel(spproj,  params%starfile)
         case('refine3d')
            call starproj%export_class3D(spproj,  params%starfile)
@@ -99,7 +102,7 @@ end if
         case('all')
            call starproj%export_all(spproj,  params%starfile)
         case default
-           call simple_stop( " exportstar_project must have a valid export_type. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
+           call simple_stop( " exportstar_project must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
        end select
 
 
@@ -118,7 +121,7 @@ end if
 
     end subroutine exec_exportstar_project
 
-    !> convert binary (.simple) oris doc to text (.txt)
+    !> for importing STAR formatted project files to *.simple
     subroutine exec_importstar_project( self, cline )
         use simple_oris,      only: oris
         use simple_nrtxtfile, only: nrtxtfile
@@ -135,21 +138,15 @@ end if
         character(len=:),      allocatable :: phaseplate, boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         integer :: nStarfiles,istar,i, ndatlines,nrecs, nboxf, nmovf
-        logical :: l_starfile
+        logical :: l_starfile, inputted_boxtab
         call params%new(cline)
         ! parameter input management
         l_starfile = cline%defined('starfile')
-        ! project file management
-        if( .not. file_exists(trim(params%projfile)) )then
-           write(*,*) 'Project file: ', trim(params%projfile), ' does not exist!'
-           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
-        endif
-        if( params%starfile == 'NONE')then
+        if( .not. l_starfile)then
             write(*,*) 'Star project file argument empty or not set, e.g. starfile=<filename> or <directory>'
             call simple_stop( "ERROR! exec_importstar_project ")
         end if
-
-        if(dir_exists(params%starfile))then
+         if(dir_exists(params%starfile))then
            call simple_list_files(trim(params%starfile)//'*.star', starfiles)
            nStarfiles = size(starfiles)
            write(*,*) " Importing star project :", nStarfiles, " found "
@@ -161,9 +158,17 @@ end if
            write(*,*) " Importing star project must have a valid input file, starfile=<filename|directory>"
            call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
        endif
+        inputted_boxtab = cline%defined('boxtab')
 
-       !! Read existing SIMPLE project
-       call spproj%read(params%projfile)
+        ! project file management
+        if( .not. file_exists(trim(params%projfile)) )then
+           write(*,*) 'Project file: ', trim(params%projfile), ' does not exist!'
+           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
+        endif
+        !! Read existing SIMPLE project
+        call spproj%read(params%projfile)
+
+       ! Prepare STAR project module
        call starproj%prepare( spproj, starfiles(1))
        ndatlines = starproj%get_ndatalines()
        nrecs     = starproj%get_nrecs_per_line()
@@ -221,6 +226,9 @@ end if
                 call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         end if
+
+
+
 !! ***** Class averages
 !        call spproj%add_cavgs2os_out(params%stk, params%smpd)
 
@@ -238,12 +246,13 @@ end if
         !     call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
         !     call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
         ! end do
+
 !! ******  Import  particles
 
- if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-                write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'commander_starproject :: exec_extract_ptcls'
-            endif
+        if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
+           write(*,*) 'unsupported nr of rec:s in plaintexttab'
+           stop 'commander_starproject :: exec_extract_ptcls'
+        endif
 !   call os%new(ndatlines)
 ! allocate( line(nrecs) )
 !             do i=1,ndatlines

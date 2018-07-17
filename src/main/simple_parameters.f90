@@ -152,7 +152,7 @@ type :: parameters
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
-    character(len=STDLEN) :: export_type=''       !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
+    character(len=STDLEN) :: startype=''       !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
@@ -480,7 +480,7 @@ contains
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)
-        call check_carg('export_type',    self%export_type)
+        call check_carg('startype',       self%startype)
         call check_carg('fbody',          self%fbody)
         call check_carg('for3D',          self%for3D)
         call check_carg('ft2img',         self%ft2img)

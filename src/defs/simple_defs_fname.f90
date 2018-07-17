@@ -69,4 +69,10 @@ enum, bind(c)
     enumerator :: MIC_SEG=1, STK_SEG=2, PTCL2D_SEG=3, CLS2D_SEG=4, CLS3D_SEG=5,&
     &PTCL3D_SEG=6, OUT_SEG=7, PROJINFO_SEG=11, JOBPROC_SEG=12, COMPENV_SEG=13, GENERIC_SEG=6
 end enum
+! export (to STAR) type enumeration
+enum, bind(c)
+    enumerator :: MOV_STAR=0, MIC_STAR=1, STK_STAR=2, PTCL_STAR=3, CLSAVG_STAR=4,&
+    &OUT_STAR=7, PROJINFO_STAR=11, GENERIC_STAR=3
+end enum
+
 end module simple_defs_fname
