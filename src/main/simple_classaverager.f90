@@ -49,14 +49,14 @@ logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
 logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
-logical                        :: exists        = .false.       !< to flag instance existence
+logical                        :: cavger_exists = .false.       !< to flag instance existence
 
 integer, parameter      :: BATCHTHRSZ = 50
 logical, parameter      :: L_BENCH    = .false.
 integer(timer_int_kind) :: t_batch_loop, t_gridding, t_tot
 real(timer_int_kind)    :: rt_batch_loop, rt_gridding, rt_tot
 character(len=STDLEN)   :: benchfname
-
+#include "simple_local_flags.inc"
 contains
 
     !>  \brief  is a constructor
@@ -121,7 +121,7 @@ contains
             call ctfsqsums_merged(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
         end do
         ! flag existence
-        exists = .true.
+        cavger_exists = .true.
     end subroutine cavger_new
 
     ! setters/getters
@@ -374,7 +374,7 @@ contains
                 if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                 if( L_BENCH ) t_gridding = tic()
                 !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
-                !$omp private(i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,sh,win,logi,phys,phys_cmat,cyc1,cyc2,w,incr)
+                !$omp private(i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,sh,win,phys,phys_cmat,cyc1,cyc2,w,incr)
                 ! batch loop, direct Fourier interpolation
                 do i=1,batchsz
                     iprec = iprecs(batches(batch,1) + i - 1)
@@ -444,18 +444,17 @@ contains
                             enddo
                             w = pw * w / sum(w)
                             ! point of addition
-                            phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])
+                            phys_cmat = cgrid_imgs(i)%comp_addr_phys(h,k,0)
                             select case(precs(iprec)%eo)
                                 case(0,-1)
                                     ! interpolation
                                     do l=1,wdim
                                         do m=1,wdim
                                             if( w(l,m) < TINY ) cycle
-                                            logi       = [cyc1(l), cyc2(m), 0]
-                                            phys       = cgrid_imgs(i)%comp_addr_phys(logi)
+                                            phys       = cgrid_imgs(i)%comp_addr_phys(cyc1(l), cyc2(m), 0)
                                             cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
                                                 cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
-                                                &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
+                                                &cgrid_imgs(i)%get_cmat_at(phys(1),phys(2),phys(3)) * w(l,m)
                                         end do
                                     end do
                                 case(1)
@@ -463,11 +462,10 @@ contains
                                     do l=1,wdim
                                         do m=1,wdim
                                             if( w(l,m) < TINY ) cycle
-                                            logi       = [cyc1(l), cyc2(m), 0]
-                                            phys       = cgrid_imgs(i)%comp_addr_phys(logi)
+                                            phys       = cgrid_imgs(i)%comp_addr_phys(cyc1(l), cyc2(m), 0)
                                             cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
                                                 cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
-                                                &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
+                                                &cgrid_imgs(i)%get_cmat_at(phys(1),phys(2),phys(3)) * w(l,m)
                                         end do
                                     end do
                             end select
@@ -761,7 +759,7 @@ contains
     !>  \brief  is a destructor
     subroutine cavger_kill
         integer ::  icls, iprec
-        if( exists )then
+        if( cavger_exists )then
             do icls=1,ncls
                 call cavgs_even(icls)%kill
                 call cavgs_odd(icls)%kill
@@ -786,7 +784,7 @@ contains
             ncls          = 0
             l_is_class    = .true.
             l_hard_assign = .true.
-            exists        = .false.
+            cavger_exists = .false.
         endif
     end subroutine cavger_kill
 

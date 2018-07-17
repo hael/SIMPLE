@@ -17,6 +17,13 @@ program simple_omp_test
 include 'simple_lib.f08'
 use simple_timer_omp_test
 use simple_test_omp_basics
+
+#ifdef OPENMP_VERSION
+#if OPENMP_VERSION >= 201511
+use simple_test_omp45
+#endif
+#endif
+
 implicit none
 include 'omp_lib.h'
 
@@ -62,6 +69,14 @@ call exec_OpenMP_timer_test(be_verbose)
 call date_and_time(TIME=timestr)
 stoptime = str2real(timestr)
 write(*,'(a,1x,f9.2)') '<<< intrinsic date_and_time elapsed (s): ', stoptime - starttime
+
+
+#ifdef OPENMP_VERSION
+#if OPENMP_VERSION >= 201511
+call test_omp_affinity
+call test_omp_cancellation
+#endif
+#endif
 
 
 

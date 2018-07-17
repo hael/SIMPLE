@@ -38,7 +38,7 @@ program simple_test_sort
 
     t1=0.;t2=0.;t3=0.;t4=0.;t2m=0.
     write(*,*) "   M       HPSORT            QSORT     RecursiveQsort      C-QSORT         MT-QSORT"
-    do m=31,6,-1
+    do m=25,6,-1
         nAsp = INT(2**m,4) + 1
         if(nAsp > nmax) cycle
         allocate (A(nAsp));allocate ( Aind(nAsp))
@@ -444,7 +444,7 @@ program simple_test_sort
 
     t1=0.;t2=0.;t3=0.;t4=0.;t2m=0.
     write(*,*) "   M       HPSORT            QSORT     RecursiveQsort      C-QSORT         MT-QSORT"
-    do n=31,6,-1
+    do n=25,6,-1
         nA = 2_8**n - 1_8
         if(nA > nmax) cycle
         allocate (A(nA));allocate ( Aind(nA))
@@ -632,7 +632,7 @@ program simple_test_sort
     deallocate(B, Aind)
 
     allocate (B(nA,nA))
-    t2=0.
+    t2=0.; t2min=huge(0.)
     write (*,*) "Qsort"
     call random_number(B)
     call system_clock(count3)
@@ -676,7 +676,7 @@ program simple_test_sort
 
     allocate (B(nA,nA))
     allocate(Aind(nA))
-    t3=0.
+    t3=0.;t3min=huge(0.)
     write (*,*) "Qsort C"
     call random_number(B)
     call system_clock(count3)
@@ -793,7 +793,7 @@ program simple_test_sort
 !    t2=0.
     write (*,*) "Quicksort (microbenchmark) with OpenMP row-mode"
     call random_number(B)
-    t2=0.;t2min=huge(0.)
+    t3=0.;t3min=huge(0.)
     call system_clock(count3)
     !$omp parallel do private(i)  reduction(+:t2) reduction(min:t2min)
     do i=1, nA
@@ -803,15 +803,15 @@ program simple_test_sort
  !       call system_clock(count2)
         !       t2 = t2+real(count2-count1)
         stopt= omp_get_wtime()
-        t2 = t2+real(stopt-startt)
-        if(real(stopt-startt) < t2min) t2min = (real(stopt-startt))
+        t3 = t3+real(stopt-startt)
+        if(real(stopt-startt) < t3min) t3min = (real(stopt-startt))
     end do
     !$omp end parallel do
     call system_clock(count4)
-        t2 = t2/(real(nA))
+        t3 = t3/(real(nA))
     write (*,*) "First and last in sorted list"
     write (*,*) B(1,1), B(nA,nA)
-   write (*,*) "Execution time in seconds: mean ", t4, " min ", t4min, &
+   write (*,*) "Execution time in seconds: mean ", t3, " min ", t3min, &
         " eff mean ", real(count4-count3)/real(nA*rate)," total ", real(count4-count3)/real(rate)
    !   write (*,*) "Execution time in seconds: total ", real(count4-count3)/real(rate), " eff mean ", real(count4-count3)/real(nA*rate)
     deallocate(B)
@@ -820,7 +820,7 @@ program simple_test_sort
 !    t2=0.
     write (*,*) "Quicksort (microbenchmark) with OpenMP column-mode"
     call random_number(B)
-    t2=0.;t2min=huge(0.)
+    t4=0.;t4min=huge(0.)
     call system_clock(count3)
     !$omp parallel do private(i)
     do i=1, nA
@@ -828,8 +828,8 @@ program simple_test_sort
         startt= omp_get_wtime()
         call quicksort_m_dp(B(i,:), 1_8, nA)
         stopt= omp_get_wtime()
-        t2 = t2+real(stopt-startt)
-        if(real(stopt-startt) < t2min) t2min = (real(stopt-startt))
+        t4 = t4+real(stopt-startt)
+        if(real(stopt-startt) < t4min) t4min = (real(stopt-startt))
  !       call system_clock(count2)
  !       t2 = t2+real(count2-count1)
  !       if(real(count2-count1) < t2min) t2min = (real(count2-count1))
@@ -837,7 +837,7 @@ program simple_test_sort
     !$omp end parallel do
     call system_clock(count4)
     !    t2 = t2/(real(nA*rate))
-      t2 = t2/(real(nA))
+      t4 = t4/(real(nA))
     write (*,*) "First and last in sorted list"
     write (*,*) B(1,1), B(nA,nA)
    write (*,*) "Execution time in seconds: mean ", t4, " min ", t4min, &
@@ -882,41 +882,55 @@ contains
     end subroutine make_data4
 
     subroutine print_table(nA, t1, t2, t2m, t3, t4, t5)
+        use simple_ansi_ctrls
         integer(8) :: nA
         real :: t1, t2, t3, t4, t2m
         real, optional :: t5
-
+        character(len=:), allocatable :: redc
+        character(len=:), allocatable :: rede
+        redc=achar(27)//'[31m'
+        rede=achar(27)//'[0m'
         write(*,'(I15,1x)', advance='no') nA
         if (t1 < t2 .and. t1< t2m .and. t1<t3 .and. t1<t4 )then
-            write(*,'(a15)', advance='no') format_str(trim(real2str(t1)),C_RED)
+        !    write(*,'(a15)', advance='no') format_str(trim(real2str(t1)),C_RED)
+            !1write(*,'(ES15.8,"*",1x)', advance='no') t1
+            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t1,rede
         else
-            write(*,'(ES15.8)', advance='no') t1
+            write(*,'(ES15.8,2x)', advance='no') t1
         endif
         if (t2 < t1 .and. t2< t2m .and. t2<t3 .and. t2<t4 )then
-            write(*,'(a15)', advance='no') format_str(trim(real2str(t2)),C_RED)
+            !write(*,'(a15)', advance='no') format_str(trim(real2str(t2)),C_RED)
+            !write(*,'(ES15.8,"*",1x)', advance='no') t2
+            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t2,rede
         else
-            write(*,'(ES15.8)', advance='no') t2
+            write(*,'(ES15.8,2x)', advance='no') t2
         endif
         if (t2m < t2 .and. t2m< t1 .and. t2m<t3 .and. t2m<t4 )then
-            write(*,'(a15)', advance='no') format_str(trim(real2str(t2m)),C_RED)
+        !    write(*,'(a15)', advance='no') format_str(trim(real2str(t2m)),C_RED)
+            !write(*,'(ES15.8,"*",1x)', advance='no') t2m
+            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t2m,rede
         else
-            write(*,'(ES15.8)', advance='no') t2m
+            write(*,'(ES15.8,2x)', advance='no') t2m
         endif
         if (t3 < t2 .and. t3< t2m .and. t3<t1 .and. t1<t4 )then
-            write(*,'(a15)', advance='no') format_str(trim(real2str(t3)),C_RED)
+        !    write(*,'(a15)', advance='no') format_str(trim(real2str(t3)),C_RED)
+            !write(*,'(ES15.8,"*",1x)', advance='no') t3
+            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t3,rede
         else
-            write(*,'(ES15.8)', advance='no') t3
+            write(*,'(ES15.8,2x)', advance='no') t3
         endif
         if (t4 < t1 .and. t4< t2 .and. t4<t2m .and. t4<t3 )then
-            write(*,'(a15)', advance='no') format_str(trim(real2str(t4)),C_RED)
+            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t4,rede !format_str(trim(real2str(t4)),C_RED)
+           ! write(*,'(ES15.8,"*",1x)', advance='no') t4
         else
-            write(*,'(ES15.8)', advance='no') t4
+            write(*,'(ES15.8,2x)', advance='no') t4
         endif
         if(present(t5))then
             if (t5 < t1 .and. t5< t2 .and. t5<t2m .and. t5<t3 .and. t5<t4 )then
-                write(*,'(a15)', advance='no') format_str(trim(real2str(t5)),C_RED)
+        !        write(*,'(a15)', advance='no') format_str(trim(real2str(t5)),C_RED)
+                write(*,'(ES15.8,"*",1x)', advance='no') t5
             else
-                write(*,'(ES15.8)', advance='no') t5
+                write(*,'(ES15.8),2x', advance='no') t5
             endif
         endif
         write(*,*) ""

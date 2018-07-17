@@ -135,7 +135,7 @@ contains
         end do
         pops   = ceninfo%get_all('pop')
         popmin = minval(pops)
-           popmax = maxval(pops)
+        popmax = maxval(pops)
         popmed = median(pops)
         call moment(pops, popave, popsdev, popvar, err)
         write(*,'(a,1x,f8.2)') '>>> MINIMUM POPULATION    ', popmin

@@ -119,8 +119,63 @@ ENDFOREACH (FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
 SET (OpenMP_Fortran_FLAGS "${OpenMP_Fortran_FLAGS_INTERNAL}"
      CACHE STRING "Fortran compiler flags for OpenMP parallelism")
 
+
+   UNSET (OpenMP_Version_DETECTED CACHE)
+   MESSAGE (STATUS "Try OpenMP version")
+
+    FILE (WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMPVersion.f90 "
+program TestOpenMPVersion
+   use omp_lib
+write(*,'(I6)',ADVANCE='NO') openmp_version()
+end program TestOpenMPVersion
+")
+
+if(APPLE)
+    try_compile(OpenMP_Version_DETECTED ${CMAKE_BINARY_DIR}
+      ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMPVersion.f90
+      COMPILE_DEFINITIONS ${OpenMP_Fortran_FLAGS}
+      CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
+      COMPILE_OUTPUT_VARIABLE OUTPUT
+      RUN_OUTPUT_VARIABLE OMP_VERSION_INTERNAL)
+else()
+     TRY_RUN (OpenMP_RUN_FAILED OpenMP_Version_DETECTED ${CMAKE_BINARY_DIR}
+         ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMPVersion.f90
+         COMPILE_DEFINITIONS ${OpenMP_Fortran_FLAGS}
+         CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
+         COMPILE_OUTPUT_VARIABLE OUTPUT
+         RUN_OUTPUT_VARIABLE OMP_VERSION_INTERNAL)
+endif()
+    IF (OpenMP_Version_DETECTED)
+       FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
+             "Determining the Fortran compiler version of OpenMP passed with "
+             "the following output:\n${OMP_VERSION_INTERNAL}\n\n")
+       SET (OpenMP_Version_DETECTED 1)
+       # IF (OpenMP_RUN_FAILED)
+       #     MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
+       # ENDIF (OpenMP_RUN_FAILED)
+       STRING(REGEX MATCH "^[^0-9]*$" OMP_ERROR "${OMP_VERSION_INTERNAL}")
+
+       if ("${OMP_ERROR} " STREQUAL " ")
+         SET (OpenMP_Fortran_VERSION ${OMP_VERSION_INTERNAL}  CACHE
+           STRING " OpenMP version " FORCE)
+       else()
+         message(STATUS " OMP VERSION ERROR ${OMP_ERROR}" )
+         STRING(REGEX REPLACE ".* \([0-9]+\)$" "\\1" OMP_VERSION_INTERNAL "${OMP_VERSION_INTERNAL}")
+         message(STATUS " OMP NUM PROCS OUTPUT set to ${OMP_VERSION_INTERNAL}" )
+         SET (OpenMP_Fortran_VERSION ${OMP_VERSION_INTERNAL} CACHE
+           STRING " OpenMP version" FORCE)
+       endif()
+       BREAK ()
+      ELSE ()
+        FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
+             "Determining the Fortran compiler version of OpenMP failed with "
+             "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n")
+        SET (OpenMP_Version_DETECTED 0)
+    ENDIF (OpenMP_Version_DETECTED)
+
+
 # handle the standard arguments for FIND_PACKAGE
 FIND_PACKAGE_HANDLE_STANDARD_ARGS (OpenMP_Fortran DEFAULT_MSG
     OpenMP_Fortran_FLAGS)
 
-MARK_AS_ADVANCED(OpenMP_Fortran_FLAGS)
+MARK_AS_ADVANCED(OpenMP_Fortran_FLAGS, OpenMP_Fortran_VERSION)

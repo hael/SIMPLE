@@ -110,21 +110,21 @@ contains
         t2=tic()
         ! create class averager
         call cavger_new('class')
-        DebugPrint ' exec_make_cavgs cavger                                      ', toc(t2)
+        DebugPrint ' exec_make_cavgs cavger                                     ', toc(t2)
         ! transfer ori data to object
         call cavger_transf_oridat(build%spproj)
-        DebugPrint ' exec_make_cavgs cavger transf_oridat                        ', toc(t2)
+        DebugPrint ' exec_make_cavgs cavger transf_oridat                       ', toc(t2)
         ! standard cavg assembly
         call cavger_assemble_sums( .false. )
-        DebugPrint ' exec_make_cavgs cavger assemble_sums                        ', toc(t2)
+        DebugPrint ' exec_make_cavgs cavger assemble_sums                       ', toc(t2)
         ! write sums
         call cavger_readwrite_partial_sums('write')
-        DebugPrint ' exec_make_cavgs cavger readwrite_partial_sums               ', toc(t2)
+        DebugPrint ' exec_make_cavgs cavger readwrite_partial_sums              ', toc(t2)
         call qsys_job_finished(  'simple_commander_cluster2D :: exec_make_cavgs' )
         call cavger_kill
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
-        DebugPrint ' exec_make_cavgs total time                                  ', toc(t1)
+        DebugPrint ' exec_make_cavgs total time                                 ', toc(t1)
     end subroutine exec_make_cavgs
 
      subroutine exec_cluster2D( self, cline )
@@ -139,7 +139,7 @@ contains
         call cline%set('oritype', 'ptcl2D')
         t2=tic()
         call build%init_params_and_build_strategy2D_tbox(cline, params)
-        DebugPrint ' exec_cluster2D init and build                               ', toc(t2)
+        DebugPrint ' exec_cluster2D init and build                              ', toc(t2)
         t2=tic()
         if( cline%defined('refs') )then
             call find_ldim_nptcls(params%refs, lfoo, ncls_from_refs)
@@ -147,7 +147,7 @@ contains
             if( params%ncls /=  ncls_from_refs ) stop 'nrefs /= inputted ncls'
         endif
         startit = 1
-        DebugPrint ' exec_cluster2D refs                                         ', toc(t2)
+        DebugPrint ' exec_cluster2D refs                                        ', toc(t2)
         t2=tic()
         if( cline%defined('startit') )startit = params%startit
         if( startit == 1 )call build%spproj_field%clean_updatecnt
@@ -156,11 +156,11 @@ contains
         if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         t2=tic()
         call cluster2D_exec( cline, startit) ! partition or not, depending on 'part'
-        DebugPrint ' exec_cluster2D exec time                                    ', toc(t2)
+        DebugPrint ' exec_cluster2D exec time                                   ', toc(t2)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
-        DebugPrint ' exec_cluster2D total time                                   ', toc(t1)
+        DebugPrint ' exec_cluster2D total time                                  ', toc(t1)
      end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )

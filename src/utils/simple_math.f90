@@ -3087,192 +3087,552 @@ contains
         endif
     end function median_nocopy
 
-    ! function median_filter( arr, percen ) result( arr_med )
-    !     real, intent(in)  :: arr(:), percen
-    !     real, allocatable :: arr_med(:)
-    !     integer :: n, winsz, i, ileft, iright
-    !     n     = size(arr)
-    !     allocate( arr_med(n) )
-    !     winsz = round2even( (percen / 100.) * real(n) ) / 2
-    !     do i=winsz + 1,n - winsz
-    !         ileft  = i - winsz
-    !         iright = i + winsz
-    !         arr_med(i) = median(arr(ileft:iright))
-    !     end do
-    !     arr_med(:winsz) = arr_med(winsz + 1)
-    !     arr_med(n - winsz + 1:) = arr_med(n - winsz)
-    ! end function median_filter
+    !http://www.stat.cmu.edu/~ryantibs/median/
+    ! Some sample Fortran code for the binapprox algorithm.
 
-    function stdev (a)
-        real, intent(in) :: a(:)
-        real    :: stdev, avg, SumSQR, var, n
-        integer, volatile :: idbg
-        n= real(size(a))
-        if(n < 2) return
-        avg = sum(a)/n
-        SumSQR = sum(sqrt(a))/n
-        var = (SumSQR - avg*avg/n)/(n-1)
-        stdev = sqrt(var)
-    end function stdev
+    real function bapprox(n,x)
+      integer n
+      real x(n)
+      integer i,bottom,counts(0:1000),bin,k,j,count,medbin
+      real mu,sigma,scalefac,leftend,rghtend
 
+      !     Compute the mean and standard deviation
+      mu = sum(x)/n
+      sigma = sqrt(dot_product(x-mu,x-mu)/n)
 
+      !     Bin x across the interval [mu-sigma, mu+sigma]
+      bottom = 0
+      counts = 0
+      scalefac = 1000/(2*sigma)
+      leftend = mu-sigma
+      rghtend = mu+sigma
 
-    !>   for selecting kth largest, array is modified
-    real function selec_1(k,n,arr)
-      integer, intent(in)    :: k,n
-      real,    intent(inout) :: arr(n)
-      integer :: i,ir,j,l,mid
-      real    :: a,temp
-      l = 1
-      ir = n
- 2    if (ir-l.le.1) then
-         if (ir-1.eq.1) then
-            if (arr(ir).lt.arr(l)) then
-               temp = arr(l)
-               arr(l) = arr(ir)
-               arr(ir) = temp
-            endif
+      do  i = 1,n
+         if (x(i).lt.leftend) then
+            bottom = bottom+1
+         else if (x(i).lt.rghtend) then
+            bin = int((x(i)-leftend) * scalefac)
+            counts(bin) = counts(bin)+1
          endif
-         selec_1 = arr(k)
-         return
+      end do
+      !     If n is odd
+      if (mod(n,2).eq.1) then
+         !        Find the bin that contains the median
+         k = (n+1)/2
+         count = bottom
+         do  i = 0,1000
+            count = count+counts(i)
+            if (count.ge.k) then
+               bapprox = (i+0.5)/scalefac + leftend
+               return
+            endif
+         end do
+         !     If n is even
       else
-         mid = (l+ir)/2
-         temp = arr(mid)
-         arr(mid) = arr(l+1)
-         arr(l+1) = temp
-         if (arr(l).gt.arr(ir)) then
+         !        Find the bins that contain the medians
+         k = n/2
+         count = bottom
+         do  i = 0,1000
+            count = count+counts(i)
+            if (count.ge.k) then
+               j = i
+               do while  (count.eq.k)
+                  j = j+1
+                  count = count+counts(j)
+               end do
+               bapprox = (i+j+1)/(2*scalefac) + leftend
+               return
+            endif
+         end do
+      endif
+    end function bapprox
+
+! http://www.stat.cmu.edu/~ryantibs/median/binmedian.f
+    real function bmedian_orig(n,x)
+        integer n
+        real x(n)
+        integer i,bottom,counts(0:1000),bin,k,count,medbin,r,oldbin,j
+        real mu,sigma,scalefac,leftend,rghtend,a,oldscale,oldleft
+        logical samepts;
+
+        !     Compute the mean and standard deviation
+        mu = sum(x)/n
+        sigma = sqrt(dot_product(x-mu,x-mu)/n)
+
+        !     Bin x across the interval [mu-sigma, mu+sigma]
+        bottom = 0
+        counts = 0
+        scalefac = 1000/(2*sigma)
+        leftend = mu-sigma
+        rghtend = mu+sigma
+
+        do 1 i = 1,n
+            if (x(i).lt.leftend) then
+                bottom = bottom+1
+            else if (x(i).lt.rghtend) then
+                bin = int((x(i)-leftend) * scalefac)
+                counts(bin) = counts(bin)+1
+            endif
+1       continue
+
+        !     If n is odd
+        if (mod(n,2).eq.1) then
+            k = (n+1)/2
+            r = 1
+
+            !        Beginning of recursive step:
+            !        Find the bin that contains the median, and the order
+            !        of the median within that bin
+2           count = bottom
+            do 3 i = 0,1000
+                count = count+counts(i)
+                if (count.ge.k) then
+                    medbin = i
+                    k = k - (count-counts(i))
+                    goto 4
+                endif
+3           continue
+
+4           bottom = 0
+            counts = 0
+            oldscale = scalefac
+            oldleft = leftend
+            scalefac = 1000*oldscale
+            leftend = medbin/oldscale + oldleft
+            rghtend = (medbin+1)/oldscale + oldleft
+
+            !        Determine which points map to medbin, and put
+            !        them in spots r,...n
+            i = r
+            r = n+1
+5           if (i.lt.r) then
+                oldbin = int((x(i)-oldleft) * oldscale)
+
+                if (oldbin.eq.medbin) then
+                    r = r-1
+                    !              Swap x(i) and x(r)
+                    a = x(i)
+                    x(i) = x(r)
+                    x(r) = a
+
+                    !              Re-bin on a finer scale
+                    if (x(r).lt.leftend) then
+                        bottom = bottom+1
+                    else if (x(r).lt.rghtend) then
+                        bin = int((x(r)-leftend) * scalefac)
+                        counts(bin) = counts(bin)+1
+                    endif
+                else
+                    i = i+1
+                endif
+                goto 5
+            endif
+
+            !        Stop if all points in medbin are the same
+            samepts = .TRUE.
+            do 6 i = r+1,n
+                if (x(i).ne.x(r)) then
+                    samepts = .FALSE.
+                    goto 7
+                endif
+6           continue
+7           if (samepts) then
+                bmedian_orig = x(r)
+                return
+            endif
+
+            !        Stop if there's <= 20 points left
+            if ((n+1-r).le.20) then
+                goto 8
+            endif
+            goto 2
+
+            !        Perform insertion sort on the remaining points,
+            !        and then pick the kth smallest
+8           do 9 i = r+1,n
+                a = x(i)
+                do 10 j = i-1,r,-1
+                    if (x(j).lt.a) goto 11
+                    x(j+1) = x(j)
+10              continue
+                j = r-1
+11              x(j+1) = a
+9           continue
+
+            bmedian_orig = x(r-1+k)
+            return
+
+        !     If n is even
+        else
+            bmedian_orig = 0
+            return
+        endif
+     end function
+
+     !     Some sample Fortran code for the binmedian algorithm.
+     !     Note: I haven't written the code for n even yet.
+     real function bmedian(n,x)
+    integer n
+    real x(n)
+    integer i,bottom,counts(0:1000),bin,k,count,medbin,r,oldbin,j
+    real mu,sigma,scalefac,leftend,rghtend,a,oldscale,oldleft
+    logical samepts;
+
+    !     Compute the mean and standard deviation
+    mu = sum(x)/n
+    sigma = sqrt(dot_product(x-mu,x-mu)/n)
+    !     Bin x across the interval [mu-sigma, mu+sigma]
+    bottom = 0
+    counts = 0
+    scalefac = 1000/(2*sigma)
+    leftend = mu-sigma
+    rghtend = mu+sigma
+
+    do  i = 1,n
+        if (x(i).lt.leftend) then
+            bottom = bottom+1
+        else if (x(i).lt.rghtend) then
+            bin = int((x(i)-leftend) * scalefac)
+            counts(bin) = counts(bin)+1
+        endif
+    end do
+    !     If n is odd
+    if (mod(n,2).eq.1) then
+        k = (n+1)/2
+        r = 1
+        !        Beginning of recursive step:
+        !        Find the bin that contains the median, and the order
+        !        of the median within that bin
+        do
+            count = bottom
+            do  i = 0,1000
+                count = count+counts(i)
+                if (count.ge.k) then
+                    medbin = i
+                    k = k - (count-counts(i))
+                    exit
+                endif
+            end do
+            bottom = 0
+            counts = 0
+            oldscale = scalefac
+            oldleft = leftend
+            scalefac = 1000*oldscale
+            leftend = medbin/oldscale + oldleft
+            rghtend = (medbin+1)/oldscale + oldleft
+
+            !        Determine which points map to medbin, and put
+            !        them in spots r,...n
+            i = r
+            r = n+1
+            do while (i.lt.r)
+                oldbin = int((x(i)-oldleft) * oldscale)
+                if (oldbin.eq.medbin) then
+                    r = r-1
+                    !              Swap x(i) and x(r)
+                    a = x(i)
+                    x(i) = x(r)
+                    x(r) = a
+
+                    !              Re-bin on a finer scale
+                    if (x(r).lt.leftend) then
+                        bottom = bottom+1
+                    else if (x(r).lt.rghtend) then
+                        bin = int((x(r)-leftend) * scalefac)
+                        counts(bin) = counts(bin)+1
+                    endif
+                else
+                    i = i+1
+                endif
+            end do
+            !        Stop if all points in medbin are the same
+            samepts = .TRUE.
+            do  i = r+1,n
+                if (x(i).ne.x(r)) then
+                    samepts = .FALSE.
+                    exit
+                endif
+            end do
+            if (samepts) then
+                bmedian = x(r)
+                return
+            endif
+            !        Stop if there's <= 20 points left
+            if ((n+1-r).le.20) then
+                exit
+            endif
+        end do
+        !        Perform insertion sort on the remaining points,
+        !        and then pick the kth smallest
+        do  i = r+1,n
+            a = x(i)
+            do  j = i-1,r,-1
+                if (x(j).lt.a) goto 12
+                x(j+1) = x(j)
+            end do
+            j = r-1
+12                                  x(j+1) = a
+        end do
+
+        bmedian = x(r-1+k)
+        return
+        !     If n is even
+    else
+        bmedian = 0
+        return
+    endif
+
+end function bmedian
+
+! function median_filter( arr, percen ) result( arr_med )
+!     real, intent(in)  :: arr(:), percen
+!     real, allocatable :: arr_med(:)
+!     integer :: n, winsz, i, ileft, iright
+!     n     = size(arr)
+!     allocate( arr_med(n) )
+!     winsz = round2even( (percen / 100.) * real(n) ) / 2
+!     do i=winsz + 1,n - winsz
+!         ileft  = i - winsz
+!         iright = i + winsz
+!         arr_med(i) = median(arr(ileft:iright))
+!     end do
+!     arr_med(:winsz) = arr_med(winsz + 1)
+!     arr_med(n - winsz + 1:) = arr_med(n - winsz)
+! end function median_filter
+
+function stdev (a)
+    real, intent(in) :: a(:)
+    real    :: stdev, avg, SumSQR, var, n
+    integer, volatile :: idbg
+    n= real(size(a))
+    if(n < 2) return
+    avg = sum(a)/n
+    SumSQR = sum(sqrt(a))/n
+    var = (SumSQR - avg*avg/n)/(n-1)
+    stdev = sqrt(var)
+end function stdev
+
+
+!     taken from Numerical Recipes in Fortran 77.
+real function quickselect(k,n,arr)
+    integer k,n
+    real arr(n)
+    integer i,ir,j,l,mid
+    real a,temp
+
+    l = 1
+    ir = n
+    do while (ir-l.gt.1)
+        mid = (l+ir)/2
+        temp = arr(mid)
+        arr(mid) = arr(l+1)
+        arr(l+1) = temp
+        if (arr(l).gt.arr(ir)) then
             temp = arr(l)
             arr(l) = arr(ir)
             arr(ir) = temp
-         endif
-         if (arr(l+1).gt.arr(ir)) then
+        endif
+        if (arr(l+1).gt.arr(ir)) then
             temp = arr(l+1)
             arr(l+1) = arr(ir)
             arr(ir) = temp
-         endif
-         if (arr(l).gt.arr(l+1)) then
+        endif
+        if (arr(l).gt.arr(l+1)) then
             temp = arr(l)
             arr(l) = arr(l+1)
             arr(l+1) = temp
-         endif
-         i = l+1
-         j = ir
-         a = arr(l+1)
- 3       continue
-         i = i+1
-         if (arr(i).lt.a) goto 3
- 4       continue
-         j = j-1
-         if (arr(j).gt.a) goto 4
-         if (j.lt.i) goto 5
-         temp = arr(i)
-         arr(i) = arr(j)
-         arr(j) = temp
-         goto 3
- 5       arr(l+1) = arr(j)
-         arr(j) = a
-         if (j.ge.k) ir = j-1
-         if (j.le.k) l = i
-      endif
-      goto 2
-    end function selec_1
+        endif
+        i = l+1
+        j = ir
+        a = arr(l+1)
+        do
+            i = i+1
+            if (arr(i).lt.a) cycle
+            j = j-1
+            do while (arr(j).gt.a)
+                j=j-1
+            end do
+            if (j.lt.i) exit
+            temp = arr(i)
+            arr(i) = arr(j)
+            arr(j) = temp
+        end do
+        arr(l+1) = arr(j)
+        arr(j) = a
+        if (j.ge.k) ir = j-1
+        if (j.le.k) l = i
+    end do
+    if (ir-1.eq.1) then
+        if (arr(ir).lt.arr(l)) then
+            temp = arr(l)
+            arr(l) = arr(ir)
+            arr(ir) = temp
+        endif
+    endif
+    quickselect = arr(k)
+
+end function quickselect
+
+
+!>   for selecting kth largest, array is modified
+real function selec_1(k,n,arr)
+    integer, intent(in)    :: k,n
+    real,    intent(inout) :: arr(n)
+    integer :: i,ir,j,l,mid
+    real    :: a,temp
+    l = 1
+    ir = n
+22                           if (ir-l.le.1) then
+        if (ir-1.eq.1) then
+            if (arr(ir).lt.arr(l)) then
+                temp = arr(l)
+                arr(l) = arr(ir)
+                arr(ir) = temp
+            endif
+        endif
+        selec_1 = arr(k)
+        return
+    else
+        mid = (l+ir)/2
+        temp = arr(mid)
+        arr(mid) = arr(l+1)
+        arr(l+1) = temp
+        if (arr(l).gt.arr(ir)) then
+            temp = arr(l)
+            arr(l) = arr(ir)
+            arr(ir) = temp
+        endif
+        if (arr(l+1).gt.arr(ir)) then
+            temp = arr(l+1)
+            arr(l+1) = arr(ir)
+            arr(ir) = temp
+        endif
+        if (arr(l).gt.arr(l+1)) then
+            temp = arr(l)
+            arr(l) = arr(l+1)
+            arr(l+1) = temp
+        endif
+        i = l+1
+        j = ir
+        a = arr(l+1)
+23                               continue
+        i = i+1
+        if (arr(i).lt.a) goto 23
+24                               continue
+        j = j-1
+        if (arr(j).gt.a) goto 24
+        if (j.lt.i) goto 25
+        temp = arr(i)
+        arr(i) = arr(j)
+        arr(j) = temp
+        goto 23
+25       arr(l+1) = arr(j)
+        arr(j) = a
+        if (j.ge.k) ir = j-1
+        if (j.le.k) l = i
+    endif
+    goto 22
+end function selec_1
 
     !>   selecting kth largest, array is modified
- !    integer function selec_2(k,n,arr)
- !      integer :: k,n
- !      integer :: arr(n)
- !      integer :: i,ir,j,l,mid
- !      integer ::  a,temp
- !      l = 1
- !      ir = n
- ! 2    if (ir-l.le.1) then
- !         if (ir-1.eq.1) then
- !            if (arr(ir).lt.arr(l)) then
- !               temp = arr(l)
- !               arr(l) = arr(ir)
- !               arr(ir) = temp
- !            endif
- !         endif
- !         selec_2 = arr(k)
- !         return
- !      else
- !         mid = (l+ir)/2
- !         temp = arr(mid)
- !         arr(mid) = arr(l+1)
- !         arr(l+1) = temp
- !         if (arr(l).gt.arr(ir)) then
- !            temp = arr(l)
- !            arr(l) = arr(ir)
- !            arr(ir) = temp
- !         endif
- !         if (arr(l+1).gt.arr(ir)) then
- !            temp = arr(l+1)
- !            arr(l+1) = arr(ir)
- !            arr(ir) = temp
- !         endif
- !         if (arr(l).gt.arr(l+1)) then
- !            temp = arr(l)
- !            arr(l) = arr(l+1)
- !            arr(l+1) = temp
- !         endif
- !         i = l+1
- !         j = ir
- !         a = arr(l+1)
- ! 3       continue
- !         i = i+1
- !         if (arr(i).lt.a) goto 3
- ! 4       continue
- !         j = j-1
- !         if (arr(j).gt.a) goto 4
- !         if (j.lt.i) goto 5
- !         temp = arr(i)
- !         arr(i) = arr(j)
- !         arr(j) = temp
- !         goto 3
- ! 5       arr(l+1) = arr(j)
- !         arr(j) = a
- !         if (j.ge.k) ir = j-1
- !         if (j.le.k) l = i
- !      endif
- !      goto 2
- !  end function selec_2
+    !    integer function selec_2(k,n,arr)
+    !      integer :: k,n
+    !      integer :: arr(n)
+    !      integer :: i,ir,j,l,mid
+    !      integer ::  a,temp
+    !      l = 1
+    !      ir = n
+    ! 2    if (ir-l.le.1) then
+    !         if (ir-1.eq.1) then
+    !            if (arr(ir).lt.arr(l)) then
+    !               temp = arr(l)
+    !               arr(l) = arr(ir)
+    !               arr(ir) = temp
+    !            endif
+    !         endif
+    !         selec_2 = arr(k)
+    !         return
+    !      else
+    !         mid = (l+ir)/2
+    !         temp = arr(mid)
+    !         arr(mid) = arr(l+1)
+    !         arr(l+1) = temp
+    !         if (arr(l).gt.arr(ir)) then
+    !            temp = arr(l)
+    !            arr(l) = arr(ir)
+    !            arr(ir) = temp
+    !         endif
+    !         if (arr(l+1).gt.arr(ir)) then
+    !            temp = arr(l+1)
+    !            arr(l+1) = arr(ir)
+    !            arr(ir) = temp
+    !         endif
+    !         if (arr(l).gt.arr(l+1)) then
+    !            temp = arr(l)
+    !            arr(l) = arr(l+1)
+    !            arr(l+1) = temp
+    !         endif
+    !         i = l+1
+    !         j = ir
+    !         a = arr(l+1)
+    ! 3       continue
+    !         i = i+1
+    !         if (arr(i).lt.a) goto 3
+    ! 4       continue
+    !         j = j-1
+    !         if (arr(j).gt.a) goto 4
+    !         if (j.lt.i) goto 5
+    !         temp = arr(i)
+    !         arr(i) = arr(j)
+    !         arr(j) = temp
+    !         goto 3
+    ! 5       arr(l+1) = arr(j)
+    !         arr(j) = a
+    !         if (j.ge.k) ir = j-1
+    !         if (j.le.k) l = i
+    !      endif
+    !      goto 2
+    !  end function selec_2
 
-  pure function norm_2_sp(v) result(r)
-      real, intent(in) :: v(:)
-      real             :: r
-      r = sqrt(dot_product(v,v))
-  end function norm_2_sp
+    pure function norm_2_sp(v) result(r)
+        real, intent(in) :: v(:)
+        real             :: r
+        r = sqrt(dot_product(v,v))
+    end function norm_2_sp
 
-  pure function norm_2_dp(v) result(r)
-      real(dp), intent(in) :: v(:)
-      real(dp)             :: r
-      r = sqrt(dot_product(v,v))
-  end function norm_2_dp
+    pure function norm_2_dp(v) result(r)
+        real(dp), intent(in) :: v(:)
+        real(dp)             :: r
+        r = sqrt(dot_product(v,v))
+    end function norm_2_dp
 
-  ! GCD computes greatest common divisors
-  pure function gcd (p,q)
-      integer :: gcd
-      integer, intent(in) :: p,q
-      integer x,y
-      x = abs ( p )
-      y = abs ( q )
-      do
-          if ( x .gt. y ) then
-              x = mod ( x , y )
-              if ( x .eq. 0 ) exit
-          else if ( x .lt. y ) then
-              y = mod ( y , x )
-              if ( y .eq. 0 ) exit
-          end if
-      end do
-      gcd = max ( x , y )
-  end function gcd
+    ! GCD computes greatest common divisors
+    pure function gcd (p,q)
+        integer :: gcd
+        integer, intent(in) :: p,q
+        integer x,y
+        x = abs ( p )
+        y = abs ( q )
+        do
+            if ( x .gt. y ) then
+                x = mod ( x , y )
+                if ( x .eq. 0 ) exit
+            else if ( x .lt. y ) then
+                y = mod ( y , x )
+                if ( y .eq. 0 ) exit
+            end if
+        end do
+        gcd = max ( x , y )
+    end function gcd
 
-  ! LCM computes the least common multiple of integers P,Q
-  pure integer function lcm( i, j )
-      integer, intent( in ) :: i, j
-      lcm = ( i * j ) / gcd( i, j )
-  end function lcm
+    ! LCM computes the least common multiple of integers P,Q
+    pure integer function lcm( i, j )
+        integer, intent( in ) :: i, j
+        lcm = ( i * j ) / gcd( i, j )
+    end function lcm
+
+
+
 
 
 end module simple_math
