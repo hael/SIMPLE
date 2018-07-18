@@ -804,17 +804,11 @@ call self%doc%write(filename, sp, labels)
            index(trim(exporttype), 'projinfo')/=0) then
              exporttype2star = PROJINFO_STAR
 !         case DEFAULT
-         else
+        else
             stop 'unsupported exporttype flag; star project :: exporttype2star'
 !        end select
         end if
     end function exporttype2star
-
-
-
-
-
-
 
 
     subroutine kill(self)

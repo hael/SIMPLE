@@ -119,7 +119,7 @@ contains
        call spproj%kill
        call simple_end('**** EXPORTSTAR_PROJECT NORMAL STOP ****')
 
-    end subroutine exec_exportstar_project
+   end subroutine exec_export_star_project
 
     !> for importing STAR formatted project files to *.simple
     subroutine exec_import_star_project( self, cline )
@@ -303,7 +303,7 @@ contains
         call spproj%write
         call spproj%kill
         call simple_end('**** IMPORTSTAR_PROJECT NORMAL STOP ****')
-    end subroutine exec_importstar_project
+    end subroutine exec_import_star_project
 
 
     !> convert binary (.simple) oris doc to text (.txt)
