@@ -2,11 +2,11 @@
 
 MASSIVE=m3-login2.massive.org.au
 MASSIVE_USERNAME=$1
-
+MASSIVE_ACCOUNT=el85
 cat >>EOF
 #!/bin/bash
 #SBATCH --job-name=CompileSIMPLE
-#SBATCH --account=el85
+#SBATCH --account=${MASSIVE_ACCOUNT}
 #SBATCH --time=00:05:00
 #SBATCH --ntasks=1
 #SBATCH --mem-per-cpu=4096
@@ -29,4 +29,4 @@ mpirun -np 10 simple_test_mpi
 simple_test_cuda
 EOF > buildsimple
 scp buildsimple ${MASSIVE_USERNAME}@${MASSIVE}:~
-scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A el85 ~/buildsimple
+scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimple

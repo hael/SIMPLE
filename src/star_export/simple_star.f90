@@ -3,7 +3,7 @@ module simple_star
 include 'simple_lib.f08'
 use simple_stardoc
 use simple_sp_project, only: sp_project
-use simple_parameters, only: params_glob
+use simple_parameters
 
 implicit none
 private
@@ -44,16 +44,17 @@ end type star_project
 
 public :: star_project
 contains
-    subroutine prepare(self, sp, filename)
+    subroutine prepare(self, sp, p)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(inout)       :: filename
-        if( .not. file_exists(trim(filename)) )then
-            write(*,*) 'file: ', trim(filename)
+        class(parameters), intent(inout) :: p
+        if( .not. file_exists(trim(p%starfile)) )then
+            write(*,*) 'file: ', trim(p%starfile)
             stop 'does not exist in cwd;  simple_star :: prepare '
         endif
-        call self%doc%open(filename)
+        call self%doc%open(p%starfile)
     end subroutine prepare
+
     subroutine readfile(self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
@@ -92,6 +93,9 @@ contains
     subroutine read( self, fname )
         class(star_project), intent(inout)     :: self
         character(len=*), optional, intent(inout) :: fname
+        call self%doc%setdoprint()
+        call self%doc%open(fname)
+        
     end subroutine read
 
 

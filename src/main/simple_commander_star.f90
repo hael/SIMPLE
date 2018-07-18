@@ -310,13 +310,14 @@ contains
     subroutine exec_print_star_project_info( self, cline )
         class(print_star_project_info_commander), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
-        ! type(parameters) :: params
-        ! type(star_project) :: starproj
-        ! call params%new(cline)
-        ! call starproj%read(params%starfile)
-        ! call starproj%print_info
-        ! call starproj%kill
-        ! call simple_end('**** PRINT_PROJECT_STAR_INFO NORMAL STOP ****')
+         type(parameters) :: params
+         type(star_project) :: starproj
+         call params%new(cline)
+         print *," Reading star-formatted file: ", trim(params%starfile)
+         call starproj%read(params%starfile)
+         call starproj%print_info
+         call starproj%kill
+         call simple_end('**** PRINT_PROJECT_STAR_INFO NORMAL STOP ****')
     end subroutine exec_print_star_project_info
 
 

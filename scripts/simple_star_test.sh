@@ -9,6 +9,7 @@ cd ~/el85_scratch/stars_from_matt
 
 ## make new project
 cd ~/el85_scratch/stars_from_matt/simple_convert_star
+[ -d micrographs_test1 ] && rm -rf micrographs_test1
 simple_exec prg=new_project projname=micrographs_test1
 cd micrographs_test1
 simple_exec prg=importstar_project starfile=../../micrographs_all_gctf.star

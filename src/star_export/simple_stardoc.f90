@@ -31,6 +31,7 @@ type stardoc
     integer          :: num_frame_elements   = 0
     integer          :: funit
     logical          :: l_open               =.false.
+    logical          :: doprint              =.false.
     logical          :: existence            =.false. !< to indicate existence
 contains
     procedure        :: new
@@ -39,6 +40,7 @@ contains
     procedure,public :: close
     procedure,public :: read_header
     procedure,public :: read_data_labels
+    procedure,public :: setdoprint
     procedure        :: write
     procedure        :: get_r4
     procedure        :: get_i4
@@ -110,7 +112,10 @@ contains
         ! end do
         DebugPrint ' simple_stardoc::new initiated'
     end subroutine new
-
+    subroutine setdoprint(self)
+        class(stardoc), intent(inout):: self
+        self%doprint=.true.
+    end subroutine setdoprint
     subroutine open(self, filename)
         class(stardoc), intent(inout) :: self
         character(len=*),intent(inout) :: filename
@@ -134,7 +139,7 @@ contains
             write(*,*) 'file: ', trim(filename)
             stop 'file size too small to contain a header; stardoc :: open'
         endif
-        call self%read_header
+        call self%read_header()
         if(self%num_data_elements > 0 )then
             allocate(self%param_labels(self%num_data_elements))
             call self%read_data_labels
@@ -162,7 +167,7 @@ contains
             do
                 read(self%funit,*,IOSTAT=ios) line
                 if(ios /= 0) exit
-
+                if(self%doprint) print*, "STAR>>",line
                 !! Count number of fields in header
                 if(inField)then
                     if (line(1:4) == "_rln" )then
@@ -175,6 +180,7 @@ contains
                         inData = .true.
                     endif
                 endif
+                 if(self%doprint) print*, "STAR>> number of fields ", self%num_data_elements
                 !! Count number of data lines
                 if(inData)then
                     if (line == "" )then
@@ -186,6 +192,8 @@ contains
                     DebugPrint " Found STAR data line ", line
                     cycle
                 end if
+                if(self%doprint) print*, "STAR>> number of record lines ", self%num_data_lines
+               
                 !! Parse the start of the STAR file
                 lenstr=len_trim(line)
                 if (lenstr == 0 )cycle ! empty line
@@ -227,7 +235,7 @@ contains
     end subroutine read_header
     subroutine read_data_labels(self)
         class(stardoc), intent(inout) :: self
-        integer          :: n,ios,lenstr, pos
+        integer          :: n,ios,lenstr, pos,i
         character(len=LINE_MAX_LEN) :: line ! 8192
         logical :: inData, inField
         inField=.false.
@@ -257,7 +265,13 @@ contains
                         exit
                     endif
                 endif
+                if(self%doprint) then
+                    do i=1, n-1
+                        print*, "STAR>> field label ", i,  self%param_labels(i)
+                    enddo
+                endif
 
+             
                 !! Parse the start of the STAR file
                 lenstr=len_trim(line)
                 if (lenstr == 0 )cycle ! empty line
@@ -355,9 +369,12 @@ contains
             endif
         end do
         rewind(starfd)
-        print *,' Number of labels: ', num_labels
-        print *,' Number of frames: ',  self%num_frames
-        print *,' Number of data elements: ', self%num_data_elements
+        if(self%doprint) then
+            print*, "STAR>> Number of labels: ", num_labels
+            print*, "STAR>> Number of frames: ",  self%num_frames
+            print*, "STAR>> Number of data elements: ", self%num_data_elements
+        end if
+
         if(self%num_frames < 1 .or.  num_labels < 1 .or. self%num_data_elements < 1)&
             call simple_stop(" Star file error -- no frames ")
         call self%new(self%num_frames)
@@ -383,6 +400,10 @@ contains
                     call simple_stop(" Star file error: num elements in line "//int2str(elems)//&
                     " does not match data req "//int2str(num_labels)//" line:"//trim(line))
                 call parsestr(line,' ',args,elems)
+                if(self%doprint) then
+                    print*, "STAR>> Parsing line: num of elems ", elems 
+                    print*, "STAR>> Parsing line:  ", args
+                end if
                 do i=1, elems
                     call self%frames(iframe)%chtab%push(trim(args(i)),int2str(idata))
                 end do
