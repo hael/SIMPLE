@@ -59,7 +59,7 @@ ENDIF (DEFINED OpenMP_Fortran_FLAGS)
 # check fortran compiler. also determine number of processors
 FOREACH (FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
     SET (SAFE_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-    SET (CMAKE_REQUIRED_FLAGS "${FLAG}")
+    SET (CMAKE_REQUIRED_FLAGS "${FLAG} -v")
     UNSET (OpenMP_FLAG_DETECTED CACHE)
     MESSAGE (STATUS "Try OpenMP Fortran flag = [${FLAG}]")
     FILE (WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90 "
@@ -78,6 +78,7 @@ if(APPLE)
       COMPILE_OUTPUT_VARIABLE OUTPUT
       RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
 else()
+	message(STATUS " OpenMP test : ${CMAKE_BINARY_DIR}  ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90 ${CMAKE_REQUIRED_DEFINITIONS}  -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}")
      TRY_RUN (OpenMP_RUN_FAILED OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
          ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
          COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
@@ -85,6 +86,9 @@ else()
          COMPILE_OUTPUT_VARIABLE OUTPUT
          RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
 endif()
+message(STATUS " OpenMP compilation output : ${OUTPUT}")
+message(STATUS " OpenMP execution output   : ${OMP_NUM_PROCS_INTERNAL}")
+
     IF (OpenMP_FLAG_DETECTED)
        FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
              "Determining if the Fortran compiler supports OpenMP passed with "
@@ -169,13 +173,16 @@ endif()
       ELSE ()
         FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
              "Determining the Fortran compiler version of OpenMP failed with "
-             "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n")
+             "the following output:\n${OMP_VERSION_INTERNAL}\n\n")
         SET (OpenMP_Version_DETECTED 0)
     ENDIF (OpenMP_Version_DETECTED)
+ UNSET (OpenMP_Version_DETECTED CACHE)
+     
+mark_as_advanced(OpenMP_Fortran_FLAGS)
+# mark_as_advanced(OpenMP_Fortran_VERSION)
 
 
 # handle the standard arguments for FIND_PACKAGE
-FIND_PACKAGE_HANDLE_STANDARD_ARGS (OpenMP_Fortran DEFAULT_MSG
+find_package_handle_standard_args (OpenMP_Fortran DEFAULT_MSG
     OpenMP_Fortran_FLAGS)
 
-MARK_AS_ADVANCED(OpenMP_Fortran_FLAGS, OpenMP_Fortran_VERSION)

@@ -775,27 +775,27 @@ call self%doc%write(filename, sp, labels)
         !select case(trim(exporttype))
         ! match oritype equivalent for star export type    
         !case('movies') ! movies
-        if(index(trim(exporttype), 'movie')/=0 )then
+        if(  index(trim(exporttype), 'movie')/=0 )then
             exporttype2star = MOV_STAR
         !case('mic':'micrographs': 'mcmicrographs':'ctf_estimation') ! movies
         else if( index(trim(exporttype), 'mic')/=0 .or. &
-            index(trim(exporttype), 'ctf')/=0) then
+           & index(trim(exporttype), 'ctf')/=0 ) then
             exporttype2star = MIC_STAR
 !         case('stk':'select')           ! micrographs with selected boxes
         else if(index(trim(exporttype), 'select')/=0) then
             exporttype2star = STK_STAR
 !         case('ptcl2D':'extract')
        else if(index(trim(exporttype), 'extract')/=0) then
-             exporttype2star = PTCL2D_STAR
+             exporttype2star = PTCL_STAR
 !         case('cls2D': 'class2d')             ! class averages
-       else if(trim(exporttype), 'class2D')/=0) then
-             exporttype2star = CLS2D_STAR
+       else if(index(trim(exporttype), 'class2D')/=0) then
+             exporttype2star = CLSAVG_STAR
 !         case('cls3D': 'init3dmodel')
        else if(index(trim(exporttype), 'init3d')/=0) then
-             exporttype2star = CLS3D_STAR
+             exporttype2star = CLSAVG_STAR
 !         case('ptcl3D':'refine3d')            ! 3D particles
        else if(index(trim(exporttype), 'refine3')/=0) then
-             exporttype2star = PTCL3D_STAR
+             exporttype2star = PTCL_STAR
 !         case('out': 'post')
        else if(index(trim(exporttype), 'post')/=0) then
              exporttype2star = OUT_STAR

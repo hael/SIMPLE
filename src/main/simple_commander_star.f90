@@ -17,11 +17,11 @@ private
 
 type, extends(commander_base) :: export_star_project_commander
   contains
-    procedure :: execute      => exec_exportstar_project
+    procedure :: execute      => exec_export_star_project
 end type export_star_project_commander
 type, extends(commander_base) :: import_star_project_commander
   contains
-    procedure :: execute      => exec_importstar_project
+    procedure :: execute      => exec_import_star_project
 end type import_star_project_commander
 type, extends(commander_base) ::  print_star_project_info_commander
   contains
@@ -31,7 +31,7 @@ end type print_star_project_info_commander
 contains
 
     !> convert text (.txt) oris doc to binary (.simple)
-    subroutine exec_exportstar_project( self, cline )
+    subroutine exec_export_star_project( self, cline )
         class(export_star_project_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)  :: params
@@ -122,7 +122,7 @@ contains
     end subroutine exec_exportstar_project
 
     !> for importing STAR formatted project files to *.simple
-    subroutine exec_importstar_project( self, cline )
+    subroutine exec_import_star_project( self, cline )
         use simple_oris,      only: oris
         use simple_nrtxtfile, only: nrtxtfile
         use simple_binoris_io ! use all in there

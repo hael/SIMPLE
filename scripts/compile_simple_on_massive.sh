@@ -19,7 +19,7 @@ git pull --rebase
 [ -d tmpbuild ] && rm -rf tmpbuild
 mkdir tmpbuild
 cd tmp build
-cmake  -DUSE_OPENACC=ON -DUSE_MPI=ON -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=RELEASE .. > log_cmake 2> log_cmake_err
+cmake  -DUSE_OPENACC=ON -DUSE_MPI=ON -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=DEBUG .. > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
 source add2.bashrc
 
