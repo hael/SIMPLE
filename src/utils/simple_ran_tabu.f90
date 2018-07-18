@@ -153,7 +153,7 @@ contains
         integer :: i, szrndiarr
         szrndiarr = size(rndiarr)
         if( szrndiarr + self%N_tabus > self%NP ) then
-            write( *,* ) 'Random numbers must be generated from a larger set'
+            write( *,* ) 'Random numbers must be generated from a larger set:',szrndiarr + self%N_tabus,self%NP
             write( *,* ) 'In: ne_ran_iarr, module: simple_ran_tabu.f90'
             stop
         else

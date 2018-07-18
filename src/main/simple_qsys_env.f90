@@ -29,10 +29,11 @@ end type qsys_env
 #include "simple_local_flags.inc"
 contains
 
-    subroutine new( self, stream, numlen, exec_bin )
+    subroutine new( self, nparts, stream, numlen, exec_bin )
         use simple_ori,        only: ori
         use simple_sp_project, only: sp_project
         class(qsys_env),             intent(inout) :: self
+        integer,                     intent(in)    :: nparts
         logical,           optional, intent(in)    :: stream
         integer,           optional, intent(in)    :: numlen
         character(len=*),  optional, intent(in)    :: exec_bin
@@ -46,7 +47,7 @@ contains
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream
-        self%nparts = params_glob%nparts
+        self%nparts = nparts
         select case(trim(params_glob%split_mode))
             case('even')
                 self%parts = split_nobjs_even(params_glob%nptcls, self%nparts)

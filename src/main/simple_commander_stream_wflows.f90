@@ -76,7 +76,7 @@ contains
             call simple_mkdir(output_dir_extract,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         endif
         ! setup the environment for distributed execution
-        call qenv%new(stream=.true. )
+        call qenv%new(1,stream=.true. )
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME, prev_movies)
         ! start watching
@@ -529,7 +529,7 @@ contains
                 if( .not.do_autoscale )return
                 if( .not.allocated(stk_fnames) )return
                 call simple_mkdir(SCALE_DIR, errmsg= "commander_stream_wflows:: cluster2D_stream_distr scale_stks")
-                call qenv%new
+                call qenv%new(params%nparts)
                 call cline_scale%set('prg',        'scale')
                 call cline_scale%set('smpd',       orig_smpd)
                 call cline_scale%set('box',        real(orig_box))
@@ -665,7 +665,7 @@ contains
         ! set oritype & defaults
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('stream','yes')
-        call cline%set('numlen', real(5))
+        call cline%set('numlen', 5.)
         call params%new(cline)
         params_glob%split_mode = 'stream'
         params_glob%ncunits    = params%nparts
@@ -675,7 +675,7 @@ contains
         ! read project info
         call orig_proj%read(params%projfile)
         ! setup the environment for distributed execution
-        call qenv%new(stream=.true.)
+        call qenv%new(1,stream=.true.)
         ! output directories
         output_dir = PATH_HERE
         output_dir_picker  = filepath(trim(output_dir), trim(DIR_PICKER))

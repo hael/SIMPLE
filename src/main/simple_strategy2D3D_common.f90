@@ -74,7 +74,7 @@ contains
         class(cmdline), intent(inout) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05, mapres(params_glob%nstates)
-        integer               :: s, loc(1), lp_ind, kstop_ind
+        integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         select case(params_glob%eo)
@@ -83,7 +83,7 @@ contains
                 all_fsc_bin_exist = .true.
                 fsc_bin_exists    = .false.
                 do s=1,params_glob%nstates
-                    if( str_has_substr(params_glob%refine,'cluster') )then
+                    if( params_glob%nstates > 1 )then
                         fsc_fname = trim(CLUSTER3D_FSC)
                     else
                         fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
@@ -92,14 +92,14 @@ contains
                     if( build_glob%spproj_field%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
-                if( params_glob%oritab .eq. '' )all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
+                if(build_glob%spproj%is_virgin_field(params_glob%oritype)) all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
                     resarr = build_glob%img%get_res()
                     do s=1,params_glob%nstates
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
-                            if( str_has_substr(params_glob%refine,'cluster') )then
+                            if( params_glob%nstates > 1 )then
                                 fsc_fname = trim(CLUSTER3D_FSC) ! mixed model FSC
                             else
                                 fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
@@ -119,9 +119,9 @@ contains
                     ! get median updatecnt
                     if( params_glob%nstates == 1 )then
                         if( build_glob%spproj_field%median('updatecnt') > 1.0 )then
-                            lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
+                            lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), params_glob%lplim_crit)
                         else
-                            lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
+                            lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5)
                         endif
                     else
                         lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
@@ -131,9 +131,6 @@ contains
                     if( params_glob%kfromto(2) == 1 )then
                         call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
                     endif
-                    ! set highest Fourier index for coarse grid search
-                        kstop_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), 0.5)
-                    DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
                     params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
                 else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
@@ -161,10 +158,7 @@ contains
                 if( cline%defined('lpstop') )then
                     params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
-                params_glob%kstop = params_glob%kfromto(2)
-                if( params_glob%refine.eq.'euclid') then
-                    params_glob%kfromto(2) = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
-                endif
+                params_glob%kstop  = params_glob%kfromto(2)
                 params_glob%lp_dyn = params_glob%lp
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case DEFAULT
@@ -388,7 +382,7 @@ contains
         call img_in%fft()
         ! shell normalization & filter
         if( is3D )then
-            if( trim(params_glob%eo) .ne. 'no' )then
+            if( (trim(params_glob%eo).ne.'no') .and. (params_glob%nstates==1) )then
                 if( trim(params_glob%clsfrcs).eq.'yes' )then
                     ifrc = nint(build_glob%spproj_field%get(iptcl,'class'))
                 else
@@ -689,19 +683,19 @@ contains
             ! anisotropic matched filter
             if( params_glob%nstates.eq.1 )then
                 allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
-            else
-                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
-            endif
-            call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
-            if( file_exists(fname_vol_filter) )then
-                call build_glob%vol2%read(fname_vol_filter)
-                call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
-            else
-                ! matched filter based on Rosenthal & Henderson, 2003
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    filter = fsc2optlp(build_glob%fsc(s,:))
-                    call build_glob%vol%shellnorm_and_apply_filter(filter)
+                call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
+                if( file_exists(fname_vol_filter) )then
+                    call build_glob%vol2%read(fname_vol_filter)
+                    call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
+                else
+                    ! matched filter based on Rosenthal & Henderson, 2003
+                    if( any(build_glob%fsc(s,:) > 0.143) )then
+                        filter = fsc2optlp(build_glob%fsc(s,:))
+                        call build_glob%vol%shellnorm_and_apply_filter(filter)
+                    endif
                 endif
+            else
+                ! no filtering involved for multiple states
             endif
         endif
         ! back to real space

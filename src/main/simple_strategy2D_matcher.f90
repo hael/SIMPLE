@@ -76,7 +76,7 @@ contains
         else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
             ! extremal opt without fractional update
             l_partial_sums = .false.
-            l_extr         = .true.
+            l_extr         = .true. ! extremal optimization and refine=snhc share the same cooling scheme
             l_frac_update  = .false.
         else
             ! optional fractional update, no extremal opt
@@ -151,6 +151,7 @@ contains
             call cavger_read(params_glob%refs, 'odd')
         endif
         DebugPrint ' cluster2D_exec;   PREP REFERENCES                           ', toc(t_init)
+
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
@@ -185,6 +186,7 @@ contains
             endif
         endif
         DebugPrint ' cluster2D_exec;   SETUP WEIGHTS                             ', toc(t_init)
+
         ! B-factor
         if( params_glob%shellw.eq.'yes' .and. which_iter >= 3 )then
             call build_glob%spproj_field%calc_bfac_rec
@@ -192,6 +194,7 @@ contains
             call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif
         DebugPrint ' cluster2D_exec;    B-factor                                 ', toc(t_init)
+        
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
         DebugPrint ' cluster2D_exec;    READ FOURIER RING CORRELATIONS ', toc(t_init)

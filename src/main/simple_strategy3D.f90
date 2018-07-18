@@ -23,9 +23,10 @@ abstract interface
         integer,                intent(in)    :: npeaks
     end subroutine generic_new
 
-    subroutine generic_srch( self )
+    subroutine generic_srch( self, ithr )
         import :: strategy3D
         class(strategy3D), intent(inout) :: self
+        integer,           intent(in)    :: ithr
     end subroutine generic_srch
 
     subroutine generic_oris_assign( self )

@@ -6,36 +6,37 @@ use simple_builder,    only: build_glob
 use simple_oris,       only: oris
 implicit none
 
-public :: s3D, clean_strategy3D, prep_strategy3D
+public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 private
 
 type strategy3D_alloc
-    type(oris), allocatable :: o_peaks(:)                !< solution objects
-    real,       allocatable :: proj_space_euls(:,:,:,:)  !< euler angles
-    real,       allocatable :: proj_space_shift(:,:,:,:) !< shift vectors
-    real,       allocatable :: proj_space_corrs(:,:,:)   !< reference vs. particle correlations
-    integer,    allocatable :: proj_space_refinds(:,:)   !< reference indices
-    integer,    allocatable :: proj_space_inplinds(:,:)  !< in-plane indices
-    integer,    allocatable :: proj_space_state(:,:)     !< states
-    integer,    allocatable :: proj_space_proj(:,:)      !< projection directions (1 state assumed)
-    integer,    allocatable :: prev_proj(:)              !< previous projection direction index
-    integer,    allocatable :: srch_order(:,:)           !< stochastic search index
-    logical,    allocatable :: state_exists(:)           !< indicates state existence
+    ! per-ptcl/ref allocation
+    type(oris),       allocatable :: o_peaks(:)             !< solution objects
+    integer,          allocatable :: proj_space_state(:)    !< states
+    integer,          allocatable :: proj_space_proj(:)     !< projection directions (1 state assumed)
+    logical,          allocatable :: state_exists(:)        !< indicates state existence
+    ! per thread allocation
+    type(ran_tabu), allocatable :: rts(:)                    !< stochastic serach order generators
+    real,           allocatable :: proj_space_euls(:,:,:,:)  !< euler angles
+    real,           allocatable :: proj_space_shift(:,:,:,:) !< shift vectors
+    real,           allocatable :: proj_space_corrs(:,:,:)   !< reference vs. particle correlations
+    integer,        allocatable :: proj_space_refinds(:,:)   !< reference indices
+    integer,        allocatable :: proj_space_inplinds(:,:)  !< in-plane indices
+    integer,        allocatable :: srch_order(:,:)           !< stochastic search index
 end type strategy3D_alloc
 
 type(strategy3D_alloc) :: s3D ! singleton
+real,      allocatable :: master_proj_space_euls(:,:,:)     !< references euler angles
+logical                :: srch_order_allocated = .false.
 
 contains
 
     subroutine prep_strategy3D(  ptcl_mask, npeaks )
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer,         intent(in) :: npeaks
-        type(ran_tabu), allocatable :: rts(:)
-        type(ran_tabu) :: rt
         real    :: eul(3)
-        integer :: pinds(params_glob%fromp:params_glob%top)
-        integer :: i, istate, iproj, iptcl, prev_state, inpl
-        integer :: nnnrefs, cnt, prev_ref, nrefs, nptcls
+        integer :: i, istate, iproj, iptcl, inpl, ithr
+        integer :: nnnrefs, cnt, nrefs
         ! clean all class arrays & types
         call clean_strategy3D()
         if( allocated(s3D%o_peaks) )then
@@ -46,61 +47,56 @@ contains
         endif
         ! parameters
         nrefs  = params_glob%nspace * params_glob%nstates
-        nptcls = count(ptcl_mask)
-        ! particle index mapping
-        pinds = 0
-        cnt   = 0
-        do i=params_glob%fromp,params_glob%top
-            if( ptcl_mask(i) )then
-                cnt = cnt + 1
-                pinds(i) = cnt
-            endif
-        end do
         ! shared-memory arrays
-        allocate(s3D%proj_space_euls(nptcls,nrefs,MAXNINPLPEAKS,3), s3D%proj_space_shift(nptcls,nrefs,MAXNINPLPEAKS,2),&
-            &s3D%proj_space_corrs(nptcls,nrefs,MAXNINPLPEAKS), s3D%proj_space_refinds(nptcls,nrefs),&
-            &s3D% proj_space_inplinds(nptcls,MAXNINPLPEAKS), s3D%proj_space_state(nptcls,nrefs),&
-            &s3D%proj_space_proj(nptcls,nrefs), s3D%prev_proj(nptcls), stat=alloc_stat )
+        allocate(master_proj_space_euls(nrefs,MAXNINPLPEAKS,3), s3D%proj_space_euls(nthr_glob,nrefs,MAXNINPLPEAKS,3),&
+            &s3D%proj_space_shift(nthr_glob,nrefs,MAXNINPLPEAKS,2),s3D%proj_space_state(nrefs),&
+            &s3D%proj_space_corrs(nthr_glob,nrefs,MAXNINPLPEAKS), s3D%proj_space_refinds(nthr_glob,nrefs),&
+            &s3D% proj_space_inplinds(nthr_glob,MAXNINPLPEAKS),&
+            &s3D%proj_space_proj(nrefs), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
-        if( params_glob%oritab.ne.'' )then
+        if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
             s3D%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
         else
             allocate(s3D%state_exists(params_glob%nstates), source=.true.)
         endif
-        ! The shared memory used in a parallel section should be initialised
-        ! with a (redundant) parallel section, because of how pages are organised.
-        ! Memory otherwise becomes associated with the single thread used for
-        ! allocation, causing load imbalance. This will reduce cache misses.
-        !$omp parallel default(shared) private(i,iptcl,cnt,istate,iproj,inpl,eul) proc_bind(close)
-        !$omp do schedule(static)
-        do i=1,nptcls
-            s3D%proj_space_shift(i,:,:,:) = 0.
-            s3D%proj_space_corrs(i,:,:)   = -1.
-            s3D%proj_space_refinds( i,:)     = 0
-            s3D%proj_space_state(i,:)     = 0
-            s3D%proj_space_proj( i,:)     = 0
-            ! reference projection directions
-            cnt = 0
-            do istate=1,params_glob%nstates
-                do iproj=1,params_glob%nspace
-                    cnt = cnt + 1
-                    s3D%proj_space_state(i,cnt) = istate
-                    s3D%proj_space_proj(i,cnt)  = iproj
-                    eul = build_glob%eulspace%get_euler(iproj)
-                    do inpl=1,MAXNINPLPEAKS
-                        s3D%proj_space_euls(i,cnt,inpl,:) = eul
-                    end do
-                enddo
+        ! reference projection directions state
+        cnt = 0
+        do istate=1,params_glob%nstates
+            do iproj=1,params_glob%nspace
+                cnt = cnt + 1
+                s3D%proj_space_state(cnt) = istate
+                s3D%proj_space_proj(cnt)  = iproj
+                eul = build_glob%eulspace%get_euler(iproj)
+                do inpl=1,MAXNINPLPEAKS
+                    master_proj_space_euls(cnt,inpl,:) = eul
+                end do
             enddo
-        end do
-        !$omp end do nowait
-        !$omp do schedule(static)
-        do iptcl = params_glob%fromp, params_glob%top
-            if( pinds(iptcl) > 0 )s3D%prev_proj(pinds(iptcl)) = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(iptcl))
         enddo
-        !$omp end do nowait
-        !$omp end parallel
+        s3D%proj_space_shift   = 0.
+        s3D%proj_space_corrs   = -1.
+        s3D%proj_space_refinds = 0
+        s3D%proj_space_euls    = 0.
+        ! search orders allocation
+        select case( trim(params_glob%refine) )
+            case( 'cluster','clustersym','cluster_snhc')
+                srch_order_allocated = .false.
+            case DEFAULT
+                if( params_glob%neigh.eq.'yes' )then
+                    nnnrefs =  params_glob%nnn * params_glob%nstates
+                    allocate(s3D%srch_order(nthr_glob, nnnrefs), s3D%rts(nthr_glob))
+                    do ithr=1,nthr_glob
+                        s3D%rts(ithr) = ran_tabu(nnnrefs)
+                    end do
+                else
+                    allocate(s3D%srch_order(nthr_glob,nrefs), s3D%rts(nthr_glob))
+                    do ithr=1,nthr_glob
+                        s3D%rts(ithr) = ran_tabu(nrefs)
+                    end do
+                endif
+                srch_order_allocated = .true.
+                s3D%srch_order = 0
+        end select
         ! projection direction peaks, eo & CTF transfer
         allocate(s3D%o_peaks(params_glob%fromp:params_glob%top))
         do iptcl = params_glob%fromp, params_glob%top
@@ -123,71 +119,38 @@ contains
                 call s3D%o_peaks(iptcl)%set_all2single('eo', build_glob%spproj_field%get(iptcl,'eo'))
             endif
         enddo
-        ! refine mode specific allocations and initialisations
-        select case( trim(params_glob%refine) )
-        case( 'cluster','clustersym','cluster_snhc')
-                ! nothing to do
-            case DEFAULT
-                if( params_glob%neigh.eq.'yes' )then
-                    nnnrefs =  params_glob%nnn * params_glob%nstates
-                    allocate(s3D%srch_order(nptcls, nnnrefs), rts(nptcls))
-                    do i=1,nptcls
-                        rts(i) = ran_tabu(nnnrefs)
-                    end do
-                    !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
-                    do iptcl = params_glob%fromp, params_glob%top
-                        if( pinds(iptcl) > 0 )then
-                            prev_state = build_glob%spproj_field%get_state(iptcl)
-                            prev_ref   = (prev_state - 1) * params_glob%nspace + s3D%prev_proj(pinds(iptcl))
-                            do istate = 0, params_glob%nstates - 1
-                                i = istate * params_glob%nnn + 1
-                                s3D%srch_order(pinds(iptcl),i:i + params_glob%nnn - 1) = build_glob%nnmat(s3D%prev_proj(pinds(iptcl)),:) + istate * params_glob%nspace
-                            enddo
-                            call rts(pinds(iptcl))%shuffle(s3D%srch_order(pinds(iptcl),:))
-                            call put_last(prev_ref, s3D%srch_order(pinds(iptcl),:))
-                        endif
-                    enddo
-                    !$omp end parallel do
-                    do i=1,nptcls
-                        call rts(i)%kill
-                    end do
-                else
-                    allocate(s3D%srch_order(nptcls,nrefs), rts(nptcls))
-                    do i=1,nptcls
-                        rts(i) = ran_tabu(nrefs)
-                    end do
-                    !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
-                    do iptcl = params_glob%fromp, params_glob%top
-                        if( pinds(iptcl) > 0 )then
-                            call rts(pinds(iptcl))%ne_ran_iarr(s3D%srch_order(pinds(iptcl),:))
-                            prev_state = build_glob%spproj_field%get_state(iptcl)
-                            prev_ref   = (prev_state - 1) * params_glob%nspace + s3D%prev_proj(pinds(iptcl))
-                            call put_last(prev_ref, s3D%srch_order(pinds(iptcl),:))
-                        endif
-                    enddo
-                    !$omp end parallel do
-                    do i=1,nptcls
-                        call rts(i)%kill
-                    end do
-                endif
-        end select
-        call rt%kill
-        if( allocated(s3D%srch_order) )then
-            if( any(s3D%srch_order == 0) ) stop 'Invalid index in srch_order; simple_strategy3D_alloc :: prep_strategy3D'
-        endif
     end subroutine prep_strategy3D
 
+    ! init thread specific search arrays
+    subroutine prep_strategy3D_thread( ithr )
+        integer, intent(in)    :: ithr
+        s3D%proj_space_euls(ithr,:,:,:)  = master_proj_space_euls
+        s3D%proj_space_corrs(ithr,:,:)   = -1.
+        s3D%proj_space_shift(ithr,:,:,:) = 0.
+        s3D%proj_space_refinds(ithr,:)   = 0
+        s3D%proj_space_inplinds(ithr,:)  = 0
+        if(srch_order_allocated) s3D%srch_order(ithr,:) = 0
+    end subroutine prep_strategy3D_thread
+
     subroutine clean_strategy3D
+        integer :: ithr
+        if( allocated(master_proj_space_euls)    ) deallocate(master_proj_space_euls)
+        if( allocated(s3D%state_exists)          ) deallocate(s3D%state_exists)
+        if( allocated(s3D%proj_space_state)      ) deallocate(s3D%proj_space_state)
+        if( allocated(s3D%proj_space_proj)       ) deallocate(s3D%proj_space_proj)
+        if( allocated(s3D%srch_order)          ) deallocate(s3D%srch_order)
         if( allocated(s3D%proj_space_euls)     ) deallocate(s3D%proj_space_euls)
         if( allocated(s3D%proj_space_shift)    ) deallocate(s3D%proj_space_shift)
         if( allocated(s3D%proj_space_corrs)    ) deallocate(s3D%proj_space_corrs)
         if( allocated(s3D%proj_space_refinds)  ) deallocate(s3D%proj_space_refinds)
         if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
-        if( allocated(s3D%proj_space_state)    ) deallocate(s3D%proj_space_state)
-        if( allocated(s3D%proj_space_proj)     ) deallocate(s3D%proj_space_proj)
-        if( allocated(s3D%prev_proj)           ) deallocate(s3D%prev_proj)
-        if( allocated(s3D%srch_order)          ) deallocate(s3D%srch_order)
-        if( allocated(s3D%state_exists)        ) deallocate(s3D%state_exists)
+        if( allocated(s3D%rts) )then
+            do ithr=1,nthr_glob
+                call s3D%rts(ithr)%kill
+            enddo
+            deallocate(s3D%rts)
+        endif
+        srch_order_allocated = .false.
     end subroutine clean_strategy3D
 
 end module simple_strategy3D_alloc

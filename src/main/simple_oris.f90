@@ -1638,24 +1638,6 @@ contains
     end subroutine set_all2single_2
 
     !>  \brief  is a setter
-    subroutine set_projs_old( self, e_space )
-        class(oris), intent(inout) :: self
-        class(oris), intent(inout) :: e_space
-        integer    :: i!, tmploc(1)
-        integer(timer_int_kind) :: t1
-        !real, allocatable :: normals(:,:), e_space_normals(:,:)
-        t1=tic()
-        DebugPrint " in set_projs getting normals "
-
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i=1,self%n
-            call self%set(i, 'proj', real(e_space%find_closest_proj(self%o(i))))
-        end do
-        !$omp end parallel do
-    end subroutine set_projs_old
-
-
-        !>  \brief  is a setter
     subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
         class(oris), intent(inout) :: e_space
@@ -1668,7 +1650,6 @@ contains
         e_space_normals = e_space%get_all_normals()
         DebugPrint " in set_projs got normals",toc()
         allocate(dists(e_space%n))
-
         !$omp parallel do default(shared) private(i,j,tmploc) schedule(static) proc_bind(close)
         do i=1,self%n
             do j=1,e_space%n
@@ -1678,7 +1659,6 @@ contains
             call self%set(i, 'proj', real( tmploc(1) ) )
         end do
         !$omp end parallel do
-
         deallocate(normals,e_space_normals, dists)
         DebugPrint " in set_projs done                                           ",toc()
         DebugPrint " in set_projs total time                                     ",toc(t1), ' secs'
@@ -2679,39 +2659,15 @@ contains
     end subroutine calc_hard_weights2D
 
     !>  \brief  to find the closest matching projection direction
-    ! function find_closest_proj( self, o_in, state ) result( closest )
-    !     class(oris),       intent(inout) :: self
-    !     class(ori),        intent(in) :: o_in
-    !     integer, optional, intent(in) :: state
-    !     real    :: dists(self%n), large
-    !     integer :: loc(1), closest, i
-    !     if( present(state) )then
-    !         if( state<0 )call simple_stop('Invalid state in simple_oris%find_closest_proj')
-    !         dists(:) = huge(large)
-    !         do i=1,self%n
-    !             if( nint(self%o(i)%get('state'))==state )dists(i) = self%o(i).euldist.o_in
-    !         end do
-    !     else
-    !          do i=1,self%n
-    !              dists(i)=self%o(i).euldist.o_in
-    !          end do
-    !      endif
-    !     loc     = minloc( dists )
-    !     closest = loc(1)
-    ! end function find_closest_proj
-
-    !>  \brief  to find the closest matching projection direction
     !! keep this routine serial
     function find_closest_proj( self, o_in ) result( closest )
         class(oris), intent(inout) :: self
         class(ori),  intent(in) :: o_in
         real    :: dists(self%n)
         integer :: loc(1), closest, i
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             dists(i)=self%o(i).euldist.o_in
         end do
-        !$omp end parallel do
         loc     = minloc( dists )
         closest = loc(1)
     end function find_closest_proj

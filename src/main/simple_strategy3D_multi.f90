@@ -35,12 +35,15 @@ contains
         self%spec = spec
     end subroutine new_multi
 
-    subroutine srch_multi( self )
+    subroutine srch_multi( self, ithr )
         class(strategy3D_multi), intent(inout) :: self
+        integer,                 intent(in)    :: ithr
         integer :: iref,isample,nrefs,target_projs(self%s%npeaks_grid)
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            ! set thread index
+            self%s%ithr = ithr
             if( self%s%neigh )then
                 ! for neighbour modes we do a coarse grid search first
                 if( .not. allocated(build_glob%grid_projs) )&
@@ -57,15 +60,14 @@ contains
             ! initialize, ctd
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
-            s3D%proj_space_corrs(self%s%iptcl_map,:,:) = -1.
             do isample=1,nrefs
-                iref = s3D%srch_order(self%s%iptcl_map,isample) ! set the stochastic reference index
+                iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
                 call per_ref_srch                           ! actual search
                 if( self%s%nbetter >= self%s%npeaks ) exit  ! exit condition
             end do
             ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:,1)
-            call hpsort(corrs,s3D%proj_space_refinds(self%s%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%s%ithr,:,1)
+            call hpsort(corrs,s3D%proj_space_refinds(self%s%ithr,:))
             call self%s%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%oris_assign
@@ -78,7 +80,7 @@ contains
 
             subroutine per_ref_srch
                 integer :: loc(3)
-                if( s3D%state_exists( s3D%proj_space_state(self%s%iptcl_map,iref) ) )then
+                if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! calculate in-plane correlations
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     ! identify the 3 top scoring in-planes

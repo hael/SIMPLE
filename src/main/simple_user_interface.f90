@@ -1377,10 +1377,10 @@ contains
         &'is a program for importing STAR-formatted EM project files to the current SIMPLE project and saving as a SIMPLE project',&
         &'simple_exec',&                         ! executable
         &3, &                                    ! # entries in image input/output
-        &26, &                                   ! # entries in parameters
+        &27, &                                   ! # entries in parameters
         &2, &                                    ! # entries in alt params
         &2, &                                    ! # entries in search controls
-        &4, &                                    ! # entries in filter controls
+        &9, &                                    ! # entries in filter controls
         &9, &                                    ! # entries in mask controls
         &7, &                                    ! # entries in computer controls
         .true.)                                  ! # entries in each group, requires sp_project
@@ -1389,7 +1389,7 @@ contains
         call importstar_project%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
         call importstar_project%set_input('img_ios', 2, 'stk', 'file', 'Stack of class averages',&
         &'Stack of class average images to import', 'e.g. cavgs.mrcs', .true., '')
-     call importstar_project%set_input('img_ios', 3, 'dir_target', 'file', 'Target directory',&
+        call importstar_project%set_input('img_ios', 3, 'dir_target', 'file', 'Target directory',&
         &'Directory where the importstar_project_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
         ! parameter input/output
         call importstar_project%set_input('parm_ios', 1, smpd)
@@ -1410,33 +1410,32 @@ contains
         call importstar_project%set_input('parm_ios', 14, 'starfile', 'file', 'STAR-formatted text file of input parameters',&
             'STAR-formatted text file of input parameters ', 'e.g. params.star', .false., 'NONE')
         importstar_project%parm_ios(14)%required = .true.
-call new_project%set_input('parm_ios', 15, user_email)
+        call importstar_project%set_input('parm_ios', 15, user_email)
         call importstar_project%set_input('parm_ios', 16, 'refs', 'file', 'picking 2D references',&
         &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
         call importstar_project%set_input('parm_ios', 17, 'box_extract', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
         call importstar_project%set_input('parm_ios', 18, pcontrast)
         call importstar_project%set_input('parm_ios', 19, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
-  call importstar_project%set_input('parm_ios', 1, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
-        call importstar_project%set_input('parm_ios', 20, mkdir_)
-     call importstar_project%set_input('parm_ios', 21,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call importstar_project%set_input('parm_ios', 22,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-  call importstar_project%set_input('parm_ios', 23,  'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
-  call importstar_project%set_input('parm_ios', 24,  'fbody', 'string', 'Template output micrograph name',&
+        call importstar_project%set_input('parm_ios', 20, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
+        call importstar_project%set_input('parm_ios', 21, mkdir_)
+        call importstar_project%set_input('parm_ios', 22,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
+        call importstar_project%set_input('parm_ios', 23,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call importstar_project%set_input('parm_ios', 24,  'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
+        call importstar_project%set_input('parm_ios', 25,  'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call importstar_project%set_input('parm_ios', 25,  pspecsz)
-        call importstar_project%set_input('parm_ios', 26,  numlen)
-
+        call importstar_project%set_input('parm_ios', 26,  pspecsz)
+        call importstar_project%set_input('parm_ios', 27,  numlen)
         ! alternative inputs
         call importstar_project%set_input('alt_ios', 1, 'stktab', 'file', 'List of per-micrograph particle stacks',&
-        &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
+            &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
         call importstar_project%set_input('alt_ios', 2, 'stk', 'file', 'Stack of particles',&
             &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
         ! search controls
-        call  importstar_project%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
-        call  importstar_project%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        call importstar_project%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
+        call importstar_project%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         ! filter controls
-        call  importstar_project%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
-  call importstar_project%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        call importstar_project%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call importstar_project%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
         call importstar_project%set_input('filt_ctrls', 3, bfac)
         call importstar_project%set_input('filt_ctrls', 4, mirr)
@@ -1475,7 +1474,6 @@ call new_project%set_input('parm_ios', 15, user_email)
         call  importstar_project%set_input('comp_ctrls', 7, job_memory_per_task)
     end subroutine new_importstar_project
 
-
     subroutine new_exportstar_project
         ! PROGRAM SPECIFICATION
         call exportstar_project%new(&
@@ -1501,8 +1499,6 @@ call new_project%set_input('parm_ios', 15, user_email)
         ! computer controls
         ! <empty>
     end subroutine new_exportstar_project
-
-
 
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION

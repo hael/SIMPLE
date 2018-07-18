@@ -89,7 +89,6 @@ contains
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         type(sp_project)              :: spproj
-        character(len=:), allocatable :: output_dir
         logical                       :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -101,8 +100,6 @@ contains
         else
             l_pick = .false.
         endif
-        ! output directories
-        output_dir = PATH_HERE
         ! read in movies
         call spproj%read(params%projfile)
         ! DISTRIBUTED EXECUTION
@@ -116,7 +113,7 @@ contains
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -138,7 +135,6 @@ contains
         type(sp_project)              :: spproj
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
-        character(len=:), allocatable :: output_dir
         call cline%set('oritype', 'mic')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
@@ -150,10 +146,8 @@ contains
             stop 'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
         endif
         call spproj%kill
-        ! output directory
-        output_dir = PATH_HERE
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -217,7 +211,7 @@ contains
             call part_params(ipart)%set('dose_rate', trim(str))
         end do
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -239,7 +233,7 @@ contains
         params%nptcls = nlines(params%filetab)
         if( params%nparts > params%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -257,7 +251,6 @@ contains
         type(sp_project)              :: spproj
         type(chash)                   :: job_descr
         type(qsys_env)                :: qenv
-        character(len=:), allocatable :: output_dir
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
         ! sanity check
@@ -271,10 +264,8 @@ contains
         call cline%set('mkdir', 'no')
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
-        ! output directory
-        output_dir = PATH_HERE
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
@@ -295,7 +286,6 @@ contains
         type(sp_project)              :: spproj
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
-        character(len=:), allocatable :: output_dir
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
         ! sanity check
@@ -309,10 +299,8 @@ contains
         call cline%set('mkdir', 'no')
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
-        ! output directory
-        output_dir = PATH_HERE
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -338,7 +326,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
@@ -383,7 +371,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! splitting
@@ -546,7 +534,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! init
@@ -619,7 +607,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! splitting
         call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! prepare command lines from prototype master
@@ -902,7 +890,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         call cline%gen_job_descr(job_descr)
         ! splitting
         tsplit=tic()
@@ -1006,7 +994,7 @@ contains
             call part_params(ipart)%set('ind',    int2str(ipart))
         end do
         ! setup the environment for distributed execution
-        call qenv%new
+        call qenv%new(params%nparts)
         ! schedule & clean
         call cline%gen_job_descr(job_descr)
         call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
@@ -1092,7 +1080,7 @@ contains
             end do
             deallocate(parts)
             ! setup the environment for distributed execution
-            call qenv%new
+            call qenv%new(nparts)
             ! prepare job description
             call cline_scale%gen_job_descr(job_descr)
             call job_descr%set('prg', 'scale')

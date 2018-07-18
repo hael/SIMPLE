@@ -35,11 +35,14 @@ contains
         self%spec = spec
     end subroutine new_greedy_multi
 
-    subroutine srch_greedy_multi( self )
+    subroutine srch_greedy_multi( self, ithr )
         class(strategy3D_greedy_multi), intent(inout) :: self
-        integer :: iref, isample,nrefs,target_projs(self%s%npeaks_grid), state
+        integer,                        intent(in)    :: ithr
+        integer :: iref, isample,nrefs,target_projs(self%s%npeaks_grid)
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            ! set thread index
+            self%s%ithr = ithr
             if( self%s%neigh )then
                 ! for neighbour modes we do a coarse grid search first
                 if( .not. allocated(build_glob%grid_projs) )&
@@ -53,17 +56,16 @@ contains
                 call self%s%prep4srch()
                 nrefs = self%s%nrefs
             endif
-            s3D%proj_space_corrs(self%s%iptcl_map,:,:) = -1.
             ! search
             do isample=1,nrefs
-                iref =  s3D%srch_order(self%s%iptcl_map,isample) ! set the reference index
+                iref =  s3D%srch_order(self%s%ithr,isample) ! set the reference index
                 call per_ref_srch                                ! actual search
             end do
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = nrefs
             ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%iptcl_map,:,1)
-            call hpsort(corrs, s3D%proj_space_refinds(self%s%iptcl_map,:))
+            corrs = s3D%proj_space_corrs(self%s%ithr,:,1)
+            call hpsort(corrs, s3D%proj_space_refinds(self%s%ithr,:))
             ! take care of the in-planes
             call self%s%inpl_srch
             ! prepare weights & orientation
@@ -77,8 +79,7 @@ contains
 
             subroutine per_ref_srch
                 integer :: loc(3)
-                state = s3D%proj_space_state(self%s%iptcl_map,iref)
-                if( s3D%state_exists(state) )then
+                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! calculate in-plane correlations
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     ! identify the 3 top scoring in-planes

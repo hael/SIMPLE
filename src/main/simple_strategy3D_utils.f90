@@ -19,13 +19,13 @@ contains
         state_present = present(state)
         cnt = 0
         do ipeak = 1, s%npeaks
-            ref = s3D%proj_space_refinds(s%iptcl_map, s%nrefs - s%npeaks + ipeak)
+            ref = s3D%proj_space_refinds(s%ithr, s%nrefs - s%npeaks + ipeak)
             if( ref < 1 .or. ref > s%nrefs )then
                 print *, 'ref: ', ref
                 stop 'ref index out of bound; strategy3D_utils :: extract_peaks'
             endif
             if( state_present )then
-                state = s3D%proj_space_state(s%iptcl_map,ref)
+                state = s3D%proj_space_state(ref)
                 if( .not. s3D%state_exists(state) )then
                     print *, 'empty state: ', state
                     stop 'strategy3D_utils :: extract_peak'
@@ -35,19 +35,19 @@ contains
                 cnt = cnt + 1
                 ! add shift
                 shvec = s%prev_shvec
-                if( s%doshift ) shvec = shvec + s3D%proj_space_shift(s%iptcl_map,ref,inpl,1:2)
+                if( s%doshift ) shvec = shvec + s3D%proj_space_shift(s%ithr,ref,inpl,1:2)
                 where( abs(shvec) < 1e-6 ) shvec = 0.
                 ! transfer to solution set
-                corrs(cnt) = s3D%proj_space_corrs(s%iptcl_map,ref,inpl)
+                corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
                 if( corrs(cnt) < 0. ) corrs(cnt) = 0.
                 if( state_present )then
                     call s3D%o_peaks(s%iptcl)%set(cnt, 'state', real(state))
                 else
                     call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
                 endif
-                call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',  real(s3D%proj_space_proj(s%iptcl_map,ref)))
+                call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',  real(s3D%proj_space_proj(ref)))
                 call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',  corrs(cnt))
-                call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%iptcl_map,ref,inpl,1:3))
+                call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
                 call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)
             end do
         enddo
@@ -65,14 +65,14 @@ contains
             ! stash peak index
             inds(ipeak) = ipeak
             ! stash reference index
-            refs(ipeak) = s3D%proj_space_refinds(s%iptcl_map, s%nrefs - s%npeaks + ipeak)
+            refs(ipeak) = s3D%proj_space_refinds(s%ithr, s%nrefs - s%npeaks + ipeak)
             if( refs(ipeak) < 1 .or. refs(ipeak) > s%nrefs )then
                 print *, 'refs(ipeak): ', refs(ipeak)
                 stop 'refs(ipeak) index out of bound; strategy3D_utils :: prob_select_peak'
             endif
             ! stash state index
             if( params_glob%nstates > 1 )then
-                states(ipeak) = s3D%proj_space_state(s%iptcl_map,refs(ipeak))
+                states(ipeak) = s3D%proj_space_state(refs(ipeak))
                 if( .not. s3D%state_exists(states(ipeak)) )then
                     print *, 'empty states(ipeak): ', states(ipeak)
                     stop 'strategy3D_utils :: prob_select_peak'
@@ -82,15 +82,15 @@ contains
             endif
             ! stash shift (obtained with vector addition)
             shvecs(ipeak,:) = s%prev_shvec
-            if( s%doshift ) shvecs(ipeak,:) = shvecs(ipeak,:) + s3D%proj_space_shift(s%iptcl_map,refs(ipeak),1,1:2)
+            if( s%doshift ) shvecs(ipeak,:) = shvecs(ipeak,:) + s3D%proj_space_shift(s%ithr,refs(ipeak),1,1:2)
             where( abs(shvecs(ipeak,:)) < 1e-6 ) shvecs(ipeak,:) = 0.
             ! stash corr
-            corrs(ipeak) = s3D%proj_space_corrs(s%iptcl_map,refs(ipeak),1)
+            corrs(ipeak) = s3D%proj_space_corrs(s%ithr,refs(ipeak),1)
             if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
             ! stash proj index
-            projs(ipeak) = s3D%proj_space_proj(s%iptcl_map,refs(ipeak))
+            projs(ipeak) = s3D%proj_space_proj(refs(ipeak))
             ! stash Euler
-            euls(ipeak,:) = s3D%proj_space_euls(s%iptcl_map,refs(ipeak),1,1:3)
+            euls(ipeak,:) = s3D%proj_space_euls(s%ithr,refs(ipeak),1,1:3)
         end do
         if( updatecnt < 5.0 )then
             ! multinomal peak selection

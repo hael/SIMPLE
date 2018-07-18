@@ -40,12 +40,15 @@ contains
         call self%cont_srch%new
     end subroutine new_cont_single
 
-    subroutine srch_cont_single( self )
+    subroutine srch_cont_single( self, ithr )
         class(strategy3D_cont_single), intent(inout) :: self
+        integer,                       intent(in)    :: ithr
         real, allocatable :: cxy(:)
         logical :: found_better
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            ! set thread index
+            self%s%ithr = ithr
             ! initialize
             call self%s%prep4srch()
             call self%cont_srch%set_particle(self%s%iptcl)

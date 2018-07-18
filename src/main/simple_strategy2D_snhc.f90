@@ -47,8 +47,9 @@ contains
             do isample=1,self%s%nrefs
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
+                ! stochastic # references bound
                 if(self%s%nrefs_eval > nrefs_bound) exit
-                ! reference index
+                ! stochastic reference index
                 iref = s2D%srch_order(self%s%iptcl_map, isample)
                 ! passes empty classes
                 if( s2D%cls_pops(iref) == 0 )cycle

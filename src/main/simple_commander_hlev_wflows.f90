@@ -107,7 +107,7 @@ contains
             scale_stage1 = cline_scale1%get_rarg('scale')
             scaling      = trim(projfile_sc) /= trim(params%projfile)
             if( scaling )then
-               call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
+                call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
                 call xscale_distr%execute( cline_scale1 )
                 ! scale references
                 if( cline%defined('refs') )then
@@ -225,7 +225,6 @@ contains
         use simple_commander_distr_wflows, only: refine3D_distr_commander, scale_project_distr_commander
         use simple_oris,                   only: oris
         use simple_commander_volops,       only: reproject_commander, symaxis_search_commander
-        use simple_commander_rec,          only: reconstruct3D_commander
         use simple_parameters,             only: params_glob
         use simple_qsys_env,               only: qsys_env
         class(initial_3Dmodel_commander), intent(inout) :: self
@@ -242,7 +241,6 @@ contains
         type(scale_project_distr_commander) :: xscale_distr
         ! shared-mem commanders
         type(symaxis_search_commander) :: xsymsrch
-        type(reconstruct3D_commander)  :: xreconstruct3D
         type(reproject_commander)      :: xreproject
         ! command lines
         type(cmdline) :: cline_refine3D_snhc_restart
@@ -401,7 +399,7 @@ contains
             call cline_refine3D_snhc%set('pgrp', 'c1')
             call cline_refine3D_init%set('pgrp', 'c1')
             ! symsrch
-            call qenv%new(exec_bin='simple_exec')
+            call qenv%new(1, exec_bin='simple_exec')
             call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
             call cline_symsrch%set('msk',      msk)
             call cline_symsrch%set('smpd',     work_proj1%get_smpd())
@@ -578,7 +576,7 @@ contains
                 use simple_ori, only: ori
                 type(ori)                     :: o, o_even, o_odd
                 character(len=:), allocatable :: eostk, ext, frcs_fname
-                integer :: even_ind, odd_ind, state, nprojs, icls
+                integer :: even_ind, odd_ind, state, icls
                 call os%delete_entry('lp')
                 call spproj%get_frcs(frcs_fname, 'frc2D')
                 if( trim(frcs_fname).eq.'' )then
@@ -649,7 +647,6 @@ contains
 
     end subroutine exec_initial_3Dmodel
 
-
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )
         use simple_oris,             only: oris
@@ -665,8 +662,6 @@ contains
         ! distributed commanders
         type(refine3D_distr_commander)      :: xrefine3D_distr
         type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
-        ! shared-mem commanders
-        type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline) :: cline_refine3D1, cline_refine3D2
         type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr, cline_postprocess
@@ -687,12 +682,12 @@ contains
         if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )stop 'need lp input when eo .eq. no; cluster3D'
         ! set mkdir to no
         call cline%set('mkdir', 'no')
-
         ! prepare command lines from prototype
         call cline%delete('refine')
+        if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
         cline_refine3D1                 = cline ! first stage, extremal optimization
         cline_refine3D2                 = cline ! second stage, stochastic refinement
-        cline_postprocess               = cline ! eo always eq yes, for resolution only
+        !cline_postprocess               = cline ! eo always eq yes, for resolution only
         cline_reconstruct3D_distr       = cline ! eo always eq yes, for resolution only
         cline_reconstruct3D_mixed_distr = cline ! eo always eq yes, for resolution only
         ! first stage
@@ -747,9 +742,11 @@ contains
 
         ! PREP
         call spproj%read(params%projfile )
-        os = spproj%os_ptcl3D
+        ! splitting
+        call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! wipe previous states
-        labels = os%get_all('states')
+        os     = spproj%os_ptcl3D
+        labels = nint(os%get_all('states'))
         if( any(labels > 1) )then
             where(labels > 0) labels = 1
             call os%set_all('state', real(labels))

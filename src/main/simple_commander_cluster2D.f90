@@ -176,6 +176,7 @@ contains
         call build%init_params_and_build_strategy2D_tbox(cline, params)
         DebugPrint ' exec_cavgassemble init and build                            ', toc(t1)
         call cavger_new( 'class')
+        call cavger_transf_oridat( build%spproj )
         t2=tic()
         call cavger_assemble_sums_from_parts()
         DebugPrint ' exec_cavgassemble assemble_sums_from_parts                 ', toc(t2)

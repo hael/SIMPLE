@@ -69,7 +69,7 @@ contains
         type(convergence)     :: conv
         type(image)           :: mskimg
         real    :: frac_srch_space, extr_thresh, extr_score_thresh
-        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch
+        integer :: iptcl, iextr_lim, i, zero_pop, fnr, i_batch, ithr
         integer :: ibatch, npeaks, batchlims(2), updatecnt
         logical :: doprint, do_extr
 
@@ -119,12 +119,9 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        select case(params_glob%refine)
-            case('cluster', 'clustersym', 'cluster_snhc')
-                if( file_exists(CLUSTER3D_FRCS) ) call build_glob%projfrcs%read(CLUSTER3D_FRCS)
-            case DEFAULT
-                if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
-        end select
+        if( params_glob%nstates.eq.1 )then
+            if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
+        endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -160,26 +157,7 @@ contains
         ! EXTREMAL LOGICS
         do_extr = .false.
         select case(trim(params_glob%refine))
-            case('cluster_snhc')
-                if(allocated(het_mask))deallocate(het_mask)
-                allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
-                zero_pop = count(.not.build_glob%spproj_field%included(consider_w=.false.))
-                extr_score_thresh = -huge(extr_score_thresh)
-                if( params_glob%l_frac_update )then
-                    iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)) * (2.-params_glob%update_frac))
-                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. params_glob%extr_iter <= iextr_lim) )&
-                        &do_extr = .true.
-                else
-                    iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)))
-                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim) )&
-                        &do_extr = .true.
-                endif
-                if( do_extr )then
-                    !extr_score_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
-                    extr_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
-                    extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
-                endif
-            case('cluster','clustersym')
+            case('cluster','clustersym', 'cluster_snhc')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
                 zero_pop          = count(.not.build_glob%spproj_field%included(consider_w=.false.))
@@ -187,12 +165,10 @@ contains
                 if( params_glob%l_frac_update )then
                     ptcl_mask = .true.
                     iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)) * (2.-params_glob%update_frac))
-                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. params_glob%extr_iter <= iextr_lim) )&
-                        &do_extr = .true.
+                    if(which_iter==1 .or.(frac_srch_space <= 99. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
                 else
                     iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)))
-                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim) )&
-                        &do_extr = .true.
+                    if(which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
                 endif
                 if( do_extr )then
                     extr_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
@@ -201,7 +177,7 @@ contains
                 if(trim(params_glob%refine).eq.'clustersym')then
                    ! symmetry pairing matrix
                     c1_symop = sym('c1')
-                    params_glob%nspace = min( params_glob%nspace*build_glob%pgrpsyms%get_nsym(), 3000 )
+                    params_glob%nspace = min(params_glob%nspace*build_glob%pgrpsyms%get_nsym(), 2500)
                     call build_glob%eulspace%new( params_glob%nspace )
                     call build_glob%eulspace%spiral
                     call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
@@ -323,13 +299,10 @@ contains
                 stop 'Refinement mode unsupported'
         end select
         ! construct search objects
-        cnt = 0
         do iptcl=params_glob%fromp,params_glob%top
             if( ptcl_mask(iptcl) )then
-                cnt = cnt + 1
                 ! search spec
                 strategy3Dspec%iptcl     =  iptcl
-                strategy3Dspec%iptcl_map =  cnt
                 strategy3Dspec%szsn      =  params_glob%szsn
                 strategy3Dspec%extr_score_thresh =  extr_score_thresh
                 if( allocated(het_mask) )  strategy3Dspec%do_extr =  het_mask(iptcl)
@@ -354,10 +327,11 @@ contains
             ! TBD
         else
             if( L_BENCH ) t_align = tic()
-            !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
             do i=1,nptcls2update
                 iptcl = pinds(i)
-                call strategy3Dsrch(iptcl)%ptr%srch
+                ithr  = omp_get_thread_num() + 1
+                call strategy3Dsrch(iptcl)%ptr%srch(ithr)
             end do
             !$omp end parallel do
         endif

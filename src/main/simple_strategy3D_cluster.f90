@@ -35,20 +35,25 @@ contains
         self%spec = spec
     end subroutine new_cluster3D
 
-    subroutine srch_cluster3D( self )
+    subroutine srch_cluster3D( self, ithr )
         use simple_rnd, only: shcloc, irnd_uni
         class(strategy3D_cluster),   intent(inout) :: self
+        integer,                     intent(in)    :: ithr
         integer :: sym_projs(self%s%nstates), loc(1), iproj, iref, isym, state
         real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
         real    :: shvec(2), corr, mi_state, frac, mi_inpl, mi_proj, bfac, score4extr
         logical :: hetsym
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
-            ! local version of prep4srch
+            ! set thread index
+            self%s%ithr = ithr
+            ! local prep
+            call prep_strategy3D_thread(self%s%ithr)
             hetsym            = associated(self%spec%symmat)
             self%s%prev_roind = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%s%iptcl))
             self%s%prev_corr  = build_glob%spproj_field%get(self%s%iptcl, 'corr')
-            self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
+            self%s%prev_proj  = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(self%s%iptcl))
+            self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
             ! extremal optimization score
             score4extr = self%s%prev_corr
             ! B-factor memoization
@@ -67,7 +72,7 @@ contains
                 if( hetsym )then
                     ! greedy in symmetric unit
                     do isym = 1, self%s%nsym
-                        iproj = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
+                        iproj = self%spec%symmat(self%s%prev_proj, isym)
                         iref  = (state-1) * self%s%nprojs + iproj
                         call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                         corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
@@ -75,9 +80,9 @@ contains
                     loc              = maxloc(corrs_sym)
                     isym             = loc(1)
                     corrs(state)     = corrs_sym(isym)
-                    sym_projs(state) = self%spec%symmat(s3D%prev_proj(self%s%iptcl_map), isym)
+                    sym_projs(state) = self%spec%symmat(self%s%prev_proj, isym)
                 else
-                    iref = (state-1) * self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
+                    iref = (state-1) * self%s%nprojs + self%s%prev_proj
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                     ! replaced:
                     ! corrs(state) = corrs_inpl(self%s%prev_roind)
@@ -109,11 +114,11 @@ contains
                     ! extremal optimization
                     if( hetsym )then
                         ! greedy in symmetric unit
-                        if( sym_projs(state) .ne. s3D%prev_proj(self%s%iptcl_map) )then
+                        if( sym_projs(state) .ne. self%s%prev_proj )then
                             mi_proj = 0.
                             iref    = (state-1)*self%s%nprojs + sym_projs(state)
-                            call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,iref,1,1)) ! inpl = 1
-                            call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map,iref,1,2)) ! inpl = 1
+                            call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,iref,1,1)) ! inpl = 1
+                            call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,iref,1,2)) ! inpl = 1
                         endif
                     endif
                 else
@@ -122,29 +127,29 @@ contains
                         if( hetsym )then
                             ! greedy in symmetric units
                             iproj = sym_projs(state)
-                            if( iproj .ne. s3D%prev_proj(self%s%iptcl_map) )then
+                            if( iproj .ne. self%s%prev_proj )then
                                 mi_proj = 0.
                                 iref    = (state-1) * self%s%nprojs + iproj
-                                call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1, 1)) ! inpl = 1
-                                call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref, 1, 2)) ! inpl = 1
+                                call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 1)) ! inpl = 1
+                                call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 2)) ! inpl = 1
                             endif
                         else
                             ! greedy in plane, need to recalculate bound for in-plane search
-                            iref = (state-1) * self%s%nprojs + s3D%prev_proj(self%s%iptcl_map)
-                            corr = pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], self%s%prev_roind)
-                            s3D%proj_space_corrs(self%s%iptcl_map,iref,1)         = corr ! inpl = 1
-                            s3D%proj_space_refinds(self%s%iptcl_map,self%s%nrefs) = iref
+                            iref = (state-1) * self%s%nprojs + self%s%prev_proj
+                            corr = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], self%s%prev_roind))
+                            s3D%proj_space_corrs(self%s%ithr,iref,1)         = corr ! inpl = 1
+                            s3D%proj_space_refinds(self%s%ithr,self%s%nrefs) = iref
                             call self%s%inpl_srch
-                            if( s3D%proj_space_corrs(self%s%iptcl_map,iref,1) > corr )then
-                                corr  = s3D%proj_space_corrs(self%s%iptcl_map,iref,1)
-                                shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%iptcl_map,iref,1,:) ! inpl = 1
+                            if( s3D%proj_space_corrs(self%s%ithr,iref,1) > corr )then
+                                corr  = s3D%proj_space_corrs(self%s%ithr,iref,1)
+                                shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%ithr,iref,1,:) ! inpl = 1
                                 call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
-                                call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%iptcl_map, iref,1,3))           ! inpl = 1
+                                call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref,1,3))           ! inpl = 1
                             endif
-                            if( self%s%prev_roind .ne. pftcc_glob%get_roind(360.-s3D%proj_space_euls(self%s%iptcl_map, iref,1,3)) ) mi_inpl = 0.
+                            if( self%s%prev_roind .ne. pftcc_glob%get_roind(360.-s3D%proj_space_euls(self%s%ithr, iref,1,3)) ) mi_inpl = 0.
                         endif
                     endif
-                    call build_glob%spproj_field%set(self%s%iptcl,'proj', real(s3D%proj_space_proj(self%s%iptcl_map,iref)))
+                    call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
                 endif
             endif
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
