@@ -72,6 +72,7 @@ type :: polarft_corrcalc
     integer                          :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)
     integer                          :: pftsz      = 0        !< size of reference and particle pft (nrots/2)
     integer                          :: nthr       = 0        !< # OpenMP threads
+    integer                          :: pfromto(2) = 0        !< particle index range
     integer                          :: winsz      = 0        !< size of moving window in correlation calculations
     integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
     integer,             allocatable :: pinds(:)              !< index array (to reduce memory when frac_update < 1)
@@ -91,6 +92,7 @@ type :: polarft_corrcalc
     complex(sp),         allocatable :: fft_factors(:)        !< phase factors for accelerated gencorrs routines
     type(fftw_arrs),     allocatable :: fftdat(:)             !< arrays for accelerated gencorrs routines
     type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)     !< for memoization of particle  FFTs in accelerated gencorrs routines
+    type(fftw_carr),     allocatable :: fft_carray(:)         !< for on-the-fly memoization of particle  FFTs
     logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
@@ -109,7 +111,9 @@ type :: polarft_corrcalc
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_even2odd_ref
     procedure          :: cp_even_ref2ptcl
+    procedure          :: cp_refs
     procedure          :: swap_ptclsevenodd
+    procedure          :: set_eos
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: get_pdim
@@ -117,6 +121,7 @@ type :: polarft_corrcalc
     procedure          :: get_roind
     procedure          :: get_coord
     procedure          :: get_ref_pft
+    procedure          :: get_nrefs
     procedure          :: exists
     procedure          :: ptcl_iseven
     ! PRINTERS/VISUALISERS
@@ -125,10 +130,11 @@ type :: polarft_corrcalc
     procedure          :: vis_ref
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
+    procedure, private :: memoize_fft
+    procedure          :: memoize_ptcl_fft
     procedure          :: memoize_ffts
     procedure          :: memoize_bfac
     ! CALCULATORS
-    procedure, private :: create_polar_absctfmat
     procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
     procedure, private :: calc_corrs_over_k
@@ -187,11 +193,12 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
-    subroutine new( self, nrefs, ptcl_mask, eoarr )
+    subroutine new( self, nrefs, pfromto, ptcl_mask, eoarr )
         class(polarft_corrcalc), target, intent(inout) :: self
         integer,                         intent(in)    :: nrefs
-        logical, optional,               intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer, optional,               intent(in)    :: eoarr(params_glob%fromp:params_glob%top)
+        integer,                         intent(in)    :: pfromto(2)
+        logical, optional,               intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
+        integer, optional,               intent(in)    :: eoarr(pfromto(1):pfromto(2))
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer             :: local_stat,irot, k, ithr, i, ik, cnt
         logical             :: even_dims, test(2)
@@ -199,9 +206,11 @@ contains
         integer(kind=c_int) :: wsdm_ret
         ! kill possibly pre-existing object
         call self%kill
+        ! set particle index range
+        self%pfromto = pfromto
         ! error check
-        if( params_glob%top - params_glob%fromp + 1 < 1 )then
-            write(*,*) 'pfromto: ', params_glob%fromp, params_glob%top
+        if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
+            write(*,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
             call simple_stop ('nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc')
         endif
         if( nrefs < 1 )then
@@ -221,7 +230,7 @@ contains
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
-            self%nptcls  = params_glob%top - params_glob%fromp + 1                   !< the total number of particles in partition
+            self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1                   !< the total number of particles in partition
         endif
         self%nrefs       = nrefs                                 !< the number of references (logically indexded [1,nrefs])
         self%nrots       = round2even(twopi * real(params_glob%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
@@ -256,11 +265,11 @@ contains
             self%angtab(irot) = rad2deg(self%angtab(irot)) ! angle (in degrees)
         end do
         ! index translation table
-        allocate( self%pinds(params_glob%fromp:params_glob%top), source=0, stat=alloc_stat)
+        allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0, stat=alloc_stat)
         if(alloc_stat/=0)call allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 2')
         if( present(ptcl_mask) )then
             cnt = 0
-            do i=params_glob%fromp,params_glob%top
+            do i=self%pfromto(1),self%pfromto(2)
                 if( ptcl_mask(i) )then
                     cnt = cnt + 1
                     self%pinds(i) = cnt
@@ -274,7 +283,7 @@ contains
             if( all(eoarr == - 1) )then
                 self%iseven = .true.
             else
-                do i=params_glob%fromp,params_glob%top
+                do i=self%pfromto(1),self%pfromto(2)
                     if( self%pinds(i) > 0 )then
                         if( eoarr(i) == 0 )then
                             self%iseven(self%pinds(i)) = .true.
@@ -302,7 +311,7 @@ contains
                  &self%pfts_drefs_even(self%pftsz,params_glob%kfromto(1):params_glob%kstop,3,params_glob%nthr),&
                  &self%pfts_drefs_odd (self%pftsz,params_glob%kfromto(1):params_glob%kstop,3,params_glob%nthr),&
                  &self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
-                 &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),&
+                 &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                  &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kstop),&
                  &self%heap_vars(params_glob%nthr),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('shared arrays; new; simple_polarft_corrcalc')
@@ -352,6 +361,11 @@ contains
             call c_f_pointer(self%fftdat(ithr)%p_ref_fft_im,  self%fftdat(ithr)%ref_fft_im,  [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_product_fft, self%fftdat(ithr)%product_fft, [self%nrots])
             call c_f_pointer(self%fftdat(ithr)%p_backtransf,  self%fftdat(ithr)%backtransf,  [self%nrots])
+            ! thread-safe c-style allocatables for on-the-fly particle memoization
+            self%fft_carray(ithr)%p_re = fftwf_alloc_real(int(self%pftsz, c_size_t))
+            self%fft_carray(ithr)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+            call c_f_pointer(self%fft_carray(ithr)%p_re, self%fft_carray(ithr)%re, [self%pftsz])
+            call c_f_pointer(self%fft_carray(ithr)%p_im, self%fft_carray(ithr)%im, [self%pftsz])
         end do
         ! thread-safe c-style allocatables for gencorrs, particle memoization
         do i = 1,self%nptcls
@@ -460,6 +474,12 @@ contains
         self%pfts_refs_odd(:,:,iref) = self%pfts_refs_even(:,:,iref)
     end subroutine cp_even2odd_ref
 
+    subroutine cp_refs( self, self2 )
+        class(polarft_corrcalc), intent(inout) :: self, self2
+        self%pfts_refs_odd  = self2%pfts_refs_odd
+        self%pfts_refs_even = self2%pfts_refs_even
+    end subroutine cp_refs
+
     subroutine cp_even_ref2ptcl( self, iref, iptcl )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -471,6 +491,23 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         self%iseven = .not.self%iseven
     end subroutine swap_ptclsevenodd
+
+    subroutine set_eos( self, eoarr )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: eoarr(self%nptcls)
+        integer :: i
+        if( all(eoarr == - 1) )then
+            self%iseven = .true.
+        else
+            do i=1,self%nptcls
+                if( eoarr(i) == 0 )then
+                    self%iseven(i) = .true.
+                else
+                    self%iseven(i) = .false.
+                endif
+            end do
+        endif
+    end subroutine set_eos
 
     ! GETTERS
 
@@ -553,6 +590,12 @@ contains
         if(alloc_stat.ne.0)call allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
+    !>  \brief  returns # references
+    integer function get_nrefs( self )
+        class(polarft_corrcalc), intent(in) :: self
+        get_nrefs = self%nrefs
+    end function get_nrefs
+
     !>  \brief  checks for existence
     logical function exists( self )
         class(polarft_corrcalc), intent(in) :: self
@@ -607,38 +650,64 @@ contains
         self%sqsums_ptcls(i) = sum(csq(self%pfts_ptcls(:,:,i)))
     end subroutine memoize_sqsum_ptcl
 
+    ! ! memoize particles ffts
+    ! subroutine memoize_ffts( self )
+    !     class(polarft_corrcalc), intent(inout) :: self
+    !     type(fftw_carr) :: carray(params_glob%nthr)
+    !     integer         :: i, ik, ithr
+    !     ! memoize particle FFTs in parallel
+    !     !$omp parallel do default(shared) private(i,ik,ithr) proc_bind(close) collapse(2) schedule(static)
+    !     do i = 1, self%nptcls
+    !         do ik = params_glob%kfromto(1),params_glob%kstop
+    !             ! get thread index
+    !             ithr = omp_get_thread_num() + 1
+    !             ! copy particle pfts
+    !             carray(ithr)%re = real(self%pfts_ptcls(:,ik,i))
+    !             carray(ithr)%im = aimag(self%pfts_ptcls(:,ik,i)) * self%fft_factors
+    !             ! FFT
+    !             call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_ptcls(i,ik)%re)
+    !             call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_ptcls(i,ik)%im)
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    ! end subroutine memoize_ffts
+
+    ! memoize all particles ffts
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
-        type(fftw_carr) :: carray(params_glob%nthr)
-        integer         :: i, ik, ithr
-        ! allocate local memory in a thread-safe manner
-        do ithr = 1,params_glob%nthr
-            carray(ithr)%p_re = fftwf_alloc_real(int(self%pftsz, c_size_t))
-            call c_f_pointer(carray(ithr)%p_re, carray(ithr)%re, [self%pftsz])
-            carray(ithr)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-            call c_f_pointer(carray(ithr)%p_im, carray(ithr)%im, [self%pftsz])
-        end do
+        integer :: i
         ! memoize particle FFTs in parallel
-        !$omp parallel do default(shared) private(i,ik,ithr) proc_bind(close) collapse(2) schedule(static)
+        !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
-            do ik = params_glob%kfromto(1),params_glob%kstop
-                ! get thread index
-                ithr = omp_get_thread_num() + 1
-                ! copy particle pfts
-                carray(ithr)%re = real(self%pfts_ptcls(:,ik,i))
-                carray(ithr)%im = aimag(self%pfts_ptcls(:,ik,i)) * self%fft_factors
-                ! FFT
-                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_ptcls(i,ik)%re)
-                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_ptcls(i,ik)%im)
-            end do
+            call self%memoize_fft(i)
         end do
         !$omp end parallel do
-        ! free memory
-        do ithr = 1,params_glob%nthr
-            call fftwf_free(carray(ithr)%p_re)
-            call fftwf_free(carray(ithr)%p_im)
-        end do
     end subroutine memoize_ffts
+
+    ! memoize single particle fft
+    subroutine memoize_ptcl_fft( self, iptcl )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        integer :: i
+        i = self%pinds(iptcl)
+        call self%memoize_fft(i)
+    end subroutine memoize_ptcl_fft
+
+    ! memoize particle fft, serial only
+    subroutine memoize_fft( self, i )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer  :: i, ik, ithr
+        ithr = omp_get_thread_num() + 1
+        ! memoize particle FFTs
+        do ik = params_glob%kfromto(1),params_glob%kstop
+            ! copy particle pfts
+            self%fft_carray(ithr)%re = real(self%pfts_ptcls(:,ik,i))
+            self%fft_carray(ithr)%im = aimag(self%pfts_ptcls(:,ik,i)) * self%fft_factors
+            ! FFT
+            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fft_carray(ithr)%re, self%fftdat_ptcls(i,ik)%re)
+            call fftwf_execute_dft    (self%plan_fwd_2, self%fft_carray(ithr)%im, self%fftdat_ptcls(i,ik)%im)
+        end do
+    end subroutine memoize_fft
 
     subroutine memoize_bfac( self, iptcl, bfac )
         class(polarft_corrcalc), intent(inout) :: self
@@ -657,55 +726,58 @@ contains
 
     ! CALCULATORS
 
-    function create_polar_absctfmat( self, ctfparms, endrot ) result( ctfmat )
+    subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_ctf, only: ctf
-        class(polarft_corrcalc), intent(inout) :: self
-        class(ctfparams),        intent(in)    :: ctfparms
-        integer,                 intent(in)    :: endrot
-        type(ctf)             :: tfun
-        real(sp), allocatable :: ctfmat(:,:)
-        real(sp)              :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
-        integer               :: irot,k
-        allocate( ctfmat(endrot,params_glob%kfromto(1):params_glob%kfromto(2)) )
-        inv_ldim = 1./real(self%ldim)
-        tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-        call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
-        !$omp parallel do collapse(2) default(shared) private(irot,k,hinv,kinv,spaFreqSq,ang)&
-        !$omp schedule(static) proc_bind(close)
-        do irot=1,endrot
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
-                hinv           = self%polar(irot,k)*inv_ldim(1)
-                kinv           = self%polar(irot+self%nrots,k)*inv_ldim(2)
-                spaFreqSq      = hinv*hinv+kinv*kinv
-                ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                if( ctfparms%l_phaseplate )then
-                    ctfmat(irot,k) = abs( tfun%eval(spaFreqSq, ang, ctfparms%phshift) )
-                else
-                    ctfmat(irot,k) = abs( tfun%eval(spaFreqSq, ang) )
-                endif
-            end do
-        end do
-        !$omp end parallel do
-    end function create_polar_absctfmat
-
-    subroutine create_polar_absctfmats( self, spproj, oritype )
-        use simple_sp_project,  only: sp_project
+        use simple_ctf,        only: ctf
+        use simple_sp_project, only: sp_project
         class(polarft_corrcalc),   intent(inout) :: self
         class(sp_project), target, intent(inout) :: spproj
         character(len=*),          intent(in)    :: oritype
-        type(ctfparams) :: ctfparms
-        integer         :: iptcl
+        integer, optional,         intent(in)    :: pfromto(2)
+        type(ctfparams) :: ctfparms(nthr_glob)
+        type(ctf)       :: tfuns(nthr_glob)
+        real(sp)        :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
+        integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind
+        logical         :: present_pfromto
+        present_pfromto = present(pfromto)
+        ppfromto = self%pfromto
+        if( present_pfromto ) ppfromto = pfromto
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2",alloc_stat)
-        do iptcl=params_glob%fromp,params_glob%top
+        inv_ldim = 1./real(self%ldim)
+        !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr,irot,k,hinv,kinv,spaFreqSq,ang)&
+        !$omp schedule(static) proc_bind(close)
+        do i=ppfromto(1),ppfromto(2)
+            if( .not. present_pfromto )then
+                iptcl     = i
+                ctfmatind = i
+            else
+                iptcl     = i
+                ctfmatind = i - ppfromto(1) + 1
+            endif
             if( self%pinds(iptcl) > 0 )then
-                ctfparms = spproj%get_ctfparams( trim(oritype), iptcl )
-                self%ctfmats(:,:,self%pinds(iptcl)) = self%create_polar_absctfmat(ctfparms, self%pftsz)
+                ithr           = omp_get_thread_num() + 1
+                ctfparms(ithr) = spproj%get_ctfparams(trim(oritype), iptcl)
+                tfuns(ithr)    = ctf(ctfparms(ithr)%smpd, ctfparms(ithr)%kv, ctfparms(ithr)%cs, ctfparms(ithr)%fraca)
+                call tfuns(ithr)%init(ctfparms(ithr)%dfx, ctfparms(ithr)%dfy, ctfparms(ithr)%angast)
+                do irot=1,self%pftsz
+                    do k=params_glob%kfromto(1),params_glob%kfromto(2)
+                        hinv           = self%polar(irot,k)*inv_ldim(1)
+                        kinv           = self%polar(irot+self%nrots,k)*inv_ldim(2)
+                        spaFreqSq      = hinv*hinv+kinv*kinv
+                        ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
+                        if( ctfparms(ithr)%l_phaseplate )then
+                            self%ctfmats(irot,k,self%pinds(ctfmatind)) = abs( tfuns(ithr)%eval(spaFreqSq, ang, ctfparms(ithr)%phshift) )
+                        else
+                            self%ctfmats(irot,k,self%pinds(ctfmatind)) = abs( tfuns(ithr)%eval(spaFreqSq, ang) )
+                        endif
+                    end do
+                end do
             endif
         end do
+        !$omp end parallel do
     end subroutine create_polar_absctfmats
 
     subroutine prep_ref4corr( self, iref, i, pft_ref, sqsum_ref, kstop )
@@ -2040,6 +2112,8 @@ contains
                 call fftwf_free(self%fftdat(ithr)%p_ref_fft_im)
                 call fftwf_free(self%fftdat(ithr)%p_product_fft)
                 call fftwf_free(self%fftdat(ithr)%p_backtransf)
+                call fftwf_free(self%fft_carray(ithr)%p_re)
+                call fftwf_free(self%fft_carray(ithr)%p_im)
                 deallocate(self%heap_vars(ithr)%pft_ref,self%heap_vars(ithr)%pft_ref_tmp,&
                     &self%heap_vars(ithr)%pft_ref_tmp1, self%heap_vars(ithr)%pft_ref_tmp2,&
                     &self%heap_vars(ithr)%pft_dref,&

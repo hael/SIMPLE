@@ -319,12 +319,11 @@ contains
     subroutine exec_reproject( self, cline )
         use simple_binoris_io, only: binread_nlines
         class(reproject_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
+        class(cmdline),             intent(inout) :: cline
         type(parameters)         :: params
         type(builder)            :: build
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
-       ! real                     :: x, y
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
@@ -343,10 +342,9 @@ contains
         ! masking
         if(cline%defined('msk')) call build%vol%mask(params%msk, 'soft')
         ! generate projections
-        imgs = reproject(build%vol, build%spproj_field)
-        loop_end = params%nspace
+        imgs     = reproject(build%vol, build%spproj_field)
         if( file_exists(params%outstk) ) call del_file(params%outstk)
-        do i=1,loop_end
+        do i=1,params%nspace
             if( params%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(params%outstk,i)
         end do

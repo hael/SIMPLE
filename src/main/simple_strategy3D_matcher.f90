@@ -14,6 +14,7 @@ use simple_image,                    only: image
 use simple_cmdline,                  only: cmdline
 use simple_parameters,               only: params_glob
 use simple_builder,                  only: build_glob
+use simple_polarizer,                only: polarizer
 use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
     prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
@@ -28,7 +29,7 @@ use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
 use simple_strategy3D_hard_multi,    only: strategy3D_hard_multi
 use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy3D,               only: strategy3D
-use simple_strategy3D_srch,          only: strategy3D_spec
+use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats
 use simple_convergence,              only: convergence
 implicit none
 
@@ -37,8 +38,9 @@ private
 
 logical, parameter             :: L_BENCH = .false., DEBUG = .false.
 type(polarft_corrcalc), target :: pftcc
-integer, allocatable           :: pinds(:)
-logical, allocatable           :: ptcl_mask(:)
+type(polarizer),   allocatable :: match_imgs(:)
+integer,           allocatable :: pinds(:)
+logical,           allocatable :: ptcl_mask(:)
 integer                        :: nptcls2update
 integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
 real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
@@ -335,6 +337,10 @@ contains
             end do
             !$omp end parallel do
         endif
+
+        ! UPDATE STATS
+        call calc_ptcl_stats
+
         ! clean
         call clean_strategy3D  ! deallocate s3D singleton
         call pftcc%kill
@@ -423,9 +429,10 @@ contains
         call killrecvols()
         do ibatch=1,MAXIMGBATCHSZ
             call rec_imgs(ibatch)%kill
-            call build_glob%imgbatch(ibatch)%kill
+            call match_imgs(ibatch)%kill_polarizer
+            call match_imgs(ibatch)%kill
         end do
-        deallocate(rec_imgs, build_glob%imgbatch)
+        deallocate(rec_imgs, match_imgs, build_glob%imgbatch)
         call mskimg%kill
         if( L_BENCH ) rt_rec = toc(t_rec)
 
@@ -466,7 +473,6 @@ contains
         use simple_cmdline,               only: cmdline
         use simple_strategy2D3D_common,   only: calcrefvolshift_and_mapshifts2ptcls, preprefvol, build_pftcc_particles
         class(cmdline), intent(inout) :: cline !< command line
-        type(polarizer),  allocatable :: match_imgs(:)
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs, imatch
         logical   :: do_center, has_been_searched
@@ -474,9 +480,10 @@ contains
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! must be done here since params_glob%kfromto is dynamically set
         if( params_glob%eo .ne. 'no' )then
-            call pftcc%new(nrefs, ptcl_mask, nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
+            call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask,&
+                &nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
         else
-            call pftcc%new(nrefs, ptcl_mask)
+            call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         endif
 
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -546,15 +553,62 @@ contains
             call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
         call build_pftcc_particles(pftcc, MAXIMGBATCHSZ, match_imgs, .true., ptcl_mask)
-
-        ! DESTRUCT
-        do imatch=1,MAXIMGBATCHSZ
-            call match_imgs(imatch)%kill_polarizer
-            call match_imgs(imatch)%kill
-            call build_glob%imgbatch(imatch)%kill
-        end do
-        deallocate(match_imgs, build_glob%imgbatch)
         if( DEBUG ) print *, '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
+
+    !> Prepare alignment search using polar projection Fourier cross correlation
+    subroutine calc_ptcl_stats
+        use simple_strategy2D3D_common, only: prepimg4align
+        type(polarft_corrcalc) :: pftcc_here
+        logical, allocatable   :: ptcl_mask_not(:)
+        integer :: nptcls, nrefs, iptcl_batch, batchlims(2), iptcl, imatch, eoarr(MAXIMGBATCHSZ)
+        if( .not.params_glob%l_frac_update )return
+        ! init local mask with states
+        allocate(ptcl_mask_not(params_glob%fromp:params_glob%top), source=.not.ptcl_mask)
+        do iptcl=params_glob%fromp,params_glob%top
+            if( ptcl_mask_not(iptcl) )ptcl_mask_not(iptcl) = build_glob%spproj_field%get_state(iptcl)>0
+        enddo
+        ! create a local pftcc object with identical references
+        nrefs = pftcc%get_nrefs()
+        call pftcc_here%new(nrefs, [1,MAXIMGBATCHSZ])
+        call pftcc_here%cp_refs(pftcc)
+        ! this is the image batch for reading / polarization
+        call prepimgbatch(MAXIMGBATCHSZ)
+        ! parallelise over batches of size MAXIMGBATCHSZ
+        do iptcl_batch=params_glob%fromp,params_glob%top,MAXIMGBATCHSZ
+            ! read images
+            batchlims = [iptcl_batch,min(params_glob%top,iptcl_batch + MAXIMGBATCHSZ - 1)]
+            nptcls    = batchlims(2)-batchlims(1)+1
+            call read_imgbatch(batchlims, ptcl_mask_not)
+            ! get eo-arrays
+            eoarr = -1
+            eoarr(1:nptcls) = nint(build_glob%spproj_field%get_all('eo', batchlims))
+            call pftcc_here%set_eos(eoarr)
+            ! memoize CTF matrices
+            if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
+                if( build_glob%spproj%get_ctfflag('ptcl3D').ne.'no' )&
+                    &call pftcc_here%create_polar_absctfmats(build_glob%spproj, 'ptcl3D', [1,nptcls])
+            endif
+            !$omp parallel do default(shared) private(iptcl,imatch) schedule(static) proc_bind(close)
+            do iptcl=batchlims(1),batchlims(2)
+                if( .not.ptcl_mask_not(iptcl) )then
+                    ! stuff already calculated or particle excluded
+                else
+                    imatch = iptcl - batchlims(1) + 1
+                    call prepimg4align(iptcl, build_glob%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
+                    ! transfer to polar coordinates
+                    call match_imgs(imatch)%polarize(pftcc_here, imatch, .true., .true.)
+                    ! memoize fft on the fly
+                    call pftcc_here%memoize_ptcl_fft(imatch)
+                    ! calc stats
+                    call set_ptcl_stats(pftcc_here, iptcl, imatch)
+                endif
+            enddo
+            !$omp end parallel do
+        end do
+        ! cleanup
+        call pftcc_here%kill
+        deallocate(ptcl_mask_not)
+    end subroutine calc_ptcl_stats
 
 end module simple_strategy3D_matcher

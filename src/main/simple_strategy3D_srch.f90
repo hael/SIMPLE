@@ -6,13 +6,13 @@ use simple_ori,                only: ori
 use simple_sym,                only: sym
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad ! gradient-based search over all df:s
-use simple_polarft_corrcalc,   only: pftcc_glob
+use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
-public :: strategy3D_srch, strategy3D_spec
+public :: strategy3D_srch, strategy3D_spec, set_ptcl_stats
 private
 #include "simple_local_flags.inc"
 
@@ -66,6 +66,40 @@ type strategy3D_srch
 end type strategy3D_srch
 
 contains
+
+    ! class method: set_ptcl_stats for filling in stats
+    ! of particles not part of update fraction
+    subroutine set_ptcl_stats( pftcc, iptcl, pftcc_pind )
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl, pftcc_pind
+        integer   :: prev_state, prev_roind, prev_proj, prev_ref
+        type(ori) :: o_prev
+        real      :: corr, bfac, specscore, corrs(pftcc%get_nrots())
+        prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
+        if( prev_state == 0 )return
+        ! previous parameters
+        o_prev     = build_glob%spproj_field%get_ori(iptcl)
+        prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
+        prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+        prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
+        ! calc B-factor & memoize
+        if( params_glob%l_bfac_static )then
+            bfac = params_glob%bfac_static
+        else
+            bfac = pftcc%fit_bfac(prev_ref, pftcc_pind, prev_roind, [0.,0.])
+        endif
+        if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc%memoize_bfac(pftcc_pind, bfac)
+        ! calc specscore
+        specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
+        ! calc corr
+        call pftcc%gencorrs(prev_ref, pftcc_pind, corrs)
+        corr = max(0.,maxval(corrs))
+        ! update spproj_field
+        call build_glob%spproj_field%set(iptcl, 'bfac',      bfac)
+        call build_glob%spproj_field%set(iptcl, 'specscore', specscore)
+        call build_glob%spproj_field%set(iptcl, 'corr',      corr)
+        DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
+    end subroutine set_ptcl_stats
 
     subroutine new( self, spec, npeaks )
         class(strategy3D_srch), intent(inout) :: self

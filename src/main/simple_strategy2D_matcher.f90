@@ -194,7 +194,7 @@ contains
             call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif
         DebugPrint ' cluster2D_exec;    B-factor                                 ', toc(t_init)
-        
+
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
         DebugPrint ' cluster2D_exec;    READ FOURIER RING CORRELATIONS ', toc(t_init)
@@ -365,8 +365,8 @@ contains
         integer   :: icls, pop, pop_even, pop_odd, imatch, batchsz_max
         logical   :: do_center, has_been_searched
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%ncls,  eoarr=nint(build_glob%spproj_field%get_all('eo', &
-            &[params_glob%fromp,params_glob%top])))
+        call pftcc%new(params_glob%ncls, [params_glob%fromp,params_glob%top],&
+            &eoarr=nint(build_glob%spproj_field%get_all('eo',[params_glob%fromp,params_glob%top])))
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         ! this is tro avoid excessive allocation, allocate what is the upper bound on the

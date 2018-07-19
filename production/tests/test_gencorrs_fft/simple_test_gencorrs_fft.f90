@@ -28,7 +28,7 @@ call p%new(cline)
 p%kfromto(1) = 2
 p%kfromto(2) = 100
 call b%build_general_tbox(p, cline)
-call pftcc%new(p%nptcls)
+call pftcc%new(p%nptcls, [1, p%nptcls])
 call b%img_match%init_polarizer(pftcc, p%alpha)
 do iptcl=1,p%nptcls
     call b%img_match%read(p%stk, iptcl)

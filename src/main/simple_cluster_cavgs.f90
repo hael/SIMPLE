@@ -228,7 +228,7 @@ contains
         type(polarizer), allocatable :: match_imgs(:), mirr_match_imgs(:)
         integer :: iptcl
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%nptcls)
+        call pftcc%new(params_glob%nptcls, [1,params_glob%nptcls])
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%nptcls), mirr_match_imgs(params_glob%nptcls))

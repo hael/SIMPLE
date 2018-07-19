@@ -7,7 +7,7 @@ use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
 implicit none
 
-public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
+public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &eonorm_struct_facts, norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
 &prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
 &build_pftcc_particles
@@ -328,9 +328,9 @@ contains
         logical, optional,       intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         logical :: mask_here(params_glob%fromp:params_glob%top)
         integer :: iptcl_batch, batchlims(2), imatch, iptcl
-       integer(timer_int_kind):: t1
-       t1=tic()
-       if( present(ptcl_mask) )then
+        integer(timer_int_kind):: t1
+        t1=tic()
+        if( present(ptcl_mask) )then
             mask_here = ptcl_mask
         else
             mask_here = .true.
