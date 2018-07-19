@@ -18,17 +18,17 @@ contains
         ! read
         call volprojobj%read(volfname)
         ! clip
-        if( params_glob%boxmatch < params_glob%box ) &
-            call volprojobj%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
+        ! if( params_glob%boxmatch < params_glob%box ) &
+        !     call volprojobj%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
         ! mask
         call volprojobj%mask(params_glob%msk,'soft')
         ! FT
         call volprojobj%fft()
         ! scale
-        smpd_target = params_glob%lp*LP2SMPDFAC
-        call autoscale(params_glob%boxmatch, params_glob%smpd, smpd_target, box_sc, smpd_sc, scale)
-        call volprojobj%clip_inplace([box_sc,box_sc,box_sc])
-        call volprojobj%set_smpd(smpd_sc)
+        ! smpd_target = params_glob%lp*LP2SMPDFAC
+        ! call autoscale(params_glob%boxmatch, params_glob%smpd, smpd_target, box_sc, smpd_sc, scale)
+        ! call volprojobj%clip_inplace([box_sc,box_sc,box_sc])
+        ! call volprojobj%set_smpd(smpd_sc)
         ! return as FT
     end subroutine read_and_prep_vol
 

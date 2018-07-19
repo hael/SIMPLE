@@ -74,8 +74,8 @@ contains
         cost_init = vol_shsrch_costfun(fun_self, ospec%x, ospec%ndim)
         call nlopt%minimize(ospec, fun_self, cost)
         if( cost < cost_init )then
-            cxyz(1)  = -cost   ! correlation
-            cxyz(2:) = ospec%x ! shift
+            cxyz(1)  = -cost      ! correlation
+            cxyz(2:) = ospec%x    ! shift
         else
             cxyz(1)  = -cost_init ! correlation
             cxyz(2:) = 0.0        ! shift
