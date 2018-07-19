@@ -3192,8 +3192,6 @@ contains
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat )
         if(alloc_stat /= 0)call allocchk("In simple_image::cos_edge")
         rmat = self%rmat(1:self%ldim(1),:,:)
-        !$omp parallel default(shared) private(i,j,k,is, js, ks, ie, je, ke,il, ir, jl, jr, kl, kr)
-        !$omp do
         do i=1,self%ldim(1)
             is = max(1,i-1)                  ! left neighbour
             ie = min(i+1,self%ldim(1))       ! right neighbour
@@ -3229,17 +3227,14 @@ contains
                 endif
             end do
         end do
-        !$omp end do nowait
-        !$omp end parallel
-
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = rmat
         deallocate(rmat)
+
     contains
 
         !> updates neighbours with cosine weight
         subroutine update_mask_2d
             integer :: ii, jj, di_sq, dist_sq
-            !$omp do private(ii, jj, di_sq, dist_sq)
             do ii=il,ir
                 di_sq = (ii-i)**2                 ! 1D squared distance in x dim
                 do jj=jl,jr
@@ -3250,13 +3245,11 @@ contains
                         &rmat(ii,jj,1) = max(local_versine(real(dist_sq)), rmat(ii,jj,1))
                 enddo
             enddo
-            !$omp end do
         end subroutine update_mask_2d
 
         !> updates neighbours with cosine weight
         subroutine update_mask_3d
             integer :: ii, jj, kk, di_sq, dij_sq, dist_sq
-            !$omp do private(ii, jj, kk, di_sq, dij_sq, dist_sq)
             do ii=il,ir
                 di_sq = (ii-i)**2
                 do jj=jl,jr
@@ -3269,7 +3262,6 @@ contains
                     enddo
                 enddo
             enddo
-            !$omp end do
         end subroutine update_mask_3d
 
         !> Local elemental cosine edge function

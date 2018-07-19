@@ -55,6 +55,7 @@ type(reproject_commander)            :: xreproject     ! DUPLICATED
 type(volume_smat_commander)          :: xvolume_smat
 type(dock_volpair_commander)         :: xdock_volpair
 type(symmetrize_map_commander)       :: xsymmetrize_map
+type(automask_commander)             :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
 type(scale_commander)                :: xscale         ! DUPLICATED
@@ -606,6 +607,20 @@ select case(prg)
         keys_optional(2) = 'outvol'
         call cline%parse_oldschool(keys_required(:5), keys_optional(:2))
         call xsymmetrize_map%execute(cline)
+    case( 'automask' )
+        ! for volumetric envelope masking
+        keys_required(1) = 'msk'
+        keys_required(2) = 'amsklp'
+        keys_required(3) = 'mw'
+        keys_required(4) = 'thres'
+        keys_required(5) = 'vol1'
+        keys_required(6) = 'smpd'
+        ! set optional keys
+        keys_optional(1) = 'edge'
+        keys_optional(2) = 'binwidth'
+        keys_optional(3) = 'nthr'
+        call cline%parse_oldschool(keys_required(:6), keys_optional(:3))
+        call xautomask%execute(cline)
 
     ! GENERAL IMAGE PROCESSING PROGRAMS
 

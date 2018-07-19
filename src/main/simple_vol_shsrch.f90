@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_image,       only: image
 use simple_opt_spec,    only: opt_spec
 use simple_opt_simplex, only: opt_simplex
-
 implicit none
 
 public :: vol_shsrch_init, vol_shsrch_minimize

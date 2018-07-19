@@ -17,6 +17,7 @@ implicit none
 public :: fsc_commander
 public :: centervol_commander
 public :: postprocess_commander
+public :: automask_commander
 public :: reproject_commander
 public :: volops_commander
 public :: volume_smat_commander
@@ -40,6 +41,10 @@ type, extends(commander_base) :: postprocess_commander
  contains
    procedure :: execute      => exec_postprocess
 end type postprocess_commander
+type, extends(commander_base) :: automask_commander
+ contains
+   procedure :: execute      => exec_automask
+end type automask_commander
 type, extends(commander_base) :: reproject_commander
  contains
    procedure :: execute      => exec_reproject
@@ -158,7 +163,7 @@ contains
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_centervol
 
-    subroutine exec_postprocess(self, cline)
+    subroutine exec_postprocess( self, cline )
         use simple_sp_project,    only: sp_project
         use simple_estimate_ssnr, only: fsc2optlp
         class(postprocess_commander), intent(inout) :: self
@@ -314,6 +319,20 @@ contains
         call vol_copy%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
+
+    subroutine exec_automask( self, cline )
+        class(automask_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(builder)    :: build
+        type(parameters) :: params
+        type(masker)     :: mskvol
+        call params%new(cline)
+        call build%build_general_tbox(params, cline)
+        call build%vol%read(params%vols(1))
+        call mskvol%automask3D(build%vol)
+        call mskvol%write('automask'//params%ext)
+        call simple_end('**** SIMPLE_AUTOMASK NORMAL STOP ****')
+    end subroutine exec_automask
 
     !> exec_project generate projections from volume
     subroutine exec_reproject( self, cline )
