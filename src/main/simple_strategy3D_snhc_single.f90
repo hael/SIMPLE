@@ -72,7 +72,7 @@ contains
                 ! identify the 3 top scoring in-planes
                 loc = max3loc(inpl_corrs)
                 ! stash
-                call self%s%store_solution(iref, iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
+                call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
             end subroutine per_ref_srch
 
     end subroutine srch_snhc_single

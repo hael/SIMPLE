@@ -85,7 +85,7 @@ contains
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     ! identify the 3 top scoring in-planes
                     loc = max3loc(inpl_corrs)
-                    call self%s%store_solution(iref, iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
+                    call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
                     ! update nbetter to keep track of how many improving solutions we have identified
                     if( self%s%npeaks == 1 )then
                         if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1

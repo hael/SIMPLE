@@ -342,12 +342,12 @@ contains
         endif
     end subroutine inpl_srch
 
-    subroutine store_solution( self, ind, ref, inpl_inds, corrs )
+    subroutine store_solution( self, ref, inpl_inds, corrs )
         class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ind, ref, inpl_inds(MAXNINPLPEAKS)
+        integer,                intent(in)    :: ref, inpl_inds(MAXNINPLPEAKS)
         real,                   intent(in)    :: corrs(MAXNINPLPEAKS)
         integer :: inpl
-        s3D%proj_space_refinds(self%ithr,ind)    = ref
+        s3D%proj_space_refinds(self%ithr,ref)    = ref
         s3D%proj_space_inplinds(self%ithr,ref,:) = inpl_inds
         do inpl=1,MAXNINPLPEAKS
             s3D%proj_space_euls(self%ithr,ref,inpl,3) = 360. - pftcc_glob%get_rot(inpl_inds(inpl))
