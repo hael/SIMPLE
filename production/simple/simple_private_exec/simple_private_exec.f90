@@ -40,9 +40,6 @@ type(refine3D_init_commander)        :: xrefine3D_init
 type(refine3D_commander)             :: xprime3D
 type(check_3Dconv_commander)         :: xcheck_3Dconv
 
-! MASK PROGRAMS
-! type(resmask_commander)              :: xresmask
-
 ! RECONSTRUCTION PROGRAMS
 type(volassemble_eo_commander)       :: xvolassemble_eo
 type(reconstruct3D_commander)        :: xreconstruct3D
@@ -78,6 +75,7 @@ type(project2txt_commander)               :: xproject2txt
 type(print_project_header_commander)      :: xprint_project_header
 type(print_project_vals_commander)        :: xprint_project_vals
 type(update_project_stateflags_commander) :: xupdate_project_stateflags
+type(multivariate_zscore_commander)       :: xmultizscore
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)      :: xtseries_extract
@@ -748,6 +746,13 @@ select case(prg)
         keys_required(3) = 'oritype'
         call cline%parse_oldschool(keys_required(:3))
         call xupdate_project_stateflags%execute(cline)
+    case( 'multivariate_zscore' )
+        keys_required(1) = 'keys'
+        keys_required(2) = 'projfile'
+        ! set optional keys
+        keys_optional(2) = 'oritype'
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
+        call xmultizscore%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 

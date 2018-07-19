@@ -497,6 +497,7 @@ contains
     end subroutine exec_vizoris
 
     subroutine exec_multivariate_zscore( self, cline )
+        use gnufor2
         class(multivariate_zscore_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(sp_project), target      :: spproj
@@ -549,9 +550,9 @@ contains
             zscores(iptcl) = sqrt(sum(vals(:,iptcl) * vals(:,iptcl)))
             call os_ptr%set(iptcl, 'zscore', zscores(iptcl))
         end do
+        call plot(zscores,vals(1,:))
         ! update project file
-        call spproj%write_segment_inside(trim(params%oritype))
+        call spproj%write_segment_inside(trim(params%oritype), trim(params%projfile))
     end subroutine exec_multivariate_zscore
-
 
 end module simple_commander_oris
