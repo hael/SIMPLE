@@ -561,19 +561,23 @@ contains
         select case(params%dockmode)
             case('eul')
                 orientation = volpft_srch_minimize_eul()
+                call vol2%ifft
                 vol_out     = rotvol(vol2, orientation)
             case('shift')
                 orientation = volpft_srch_minimize_shift()
                 call vol2%shift(orientation%get_3Dshift())
+                call vol2%ifft
                 vol_out     = vol2
             case('eulshift')
                 orientation = volpft_srch_minimize_eul()
                 orientation = volpft_srch_minimize_shift()
+                call vol2%ifft
                 vol_out     = rotvol(vol2, orientation, orientation%get_3Dshift())
             case('all')
                 orientation = volpft_srch_minimize_eul()
                 orientation = volpft_srch_minimize_shift()
                 orientation = volpft_srch_minimize_all()
+                call vol2%ifft
                 vol_out     = rotvol(vol2, orientation, orientation%get_3Dshift())
         end select
         call vol_out%write(params%outvol, del_if_exists=.true.)
