@@ -480,7 +480,7 @@ contains
                 call read_and_prep_vol( vollist(ivol), vol1 )
                 call read_and_prep_vol( vollist(jvol), vol2 )
                 call volpft_srch_init(vol1, vol2, params%hp, params%lp, 0.)
-                o = volpft_srch_minimize_eul()
+                o = volpft_srch_minimize()
                 corrs(ipair) = o%get('corr')
             end do
             ! write the similarities
@@ -511,7 +511,7 @@ contains
                     call read_and_prep_vol(  vollist(ivol), vol1 )
                     call read_and_prep_vol(  vollist(jvol), vol2 )
                     call volpft_srch_init(vol1, vol2, params%hp, params%lp, 0.)
-                    o = volpft_srch_minimize_eul()
+                    o = volpft_srch_minimize()
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
                     if( corrmat(ivol,jvol) > corr_max ) corr_max = corrmat(ivol,jvol)
@@ -558,21 +558,17 @@ contains
         call read_and_prep_vol(  params%vols(1), vol1 )
         call read_and_prep_vol(  params%vols(2), vol2 )
         call volpft_srch_init(vol1, vol2, params%hp, params%lp, params%trs)
-        select case(params%dockmode)
-            case('eul')
-                orientation = volpft_srch_minimize_eul()
-                call vol2%ifft
-                vol_out     = rotvol(vol2, orientation)
-            case('shift')
-                orientation = volpft_srch_minimize_shift()
-                call vol2%shift(orientation%get_3Dshift())
-                call vol2%ifft
-                vol_out     = vol2
-            case('all')
-                orientation = volpft_srch_master()
-                call vol2%ifft
-                vol_out     = rotvol(vol2, orientation, orientation%get_3Dshift())
-        end select
+        orientation = volpft_srch_minimize()
+        call vol2%ifft
+        vol_out     = rotvol(vol2, orientation)
+        ! select case(params%dockmode)
+        !     case()
+        !
+        !     case()
+        !
+        !     case()
+        !
+        ! end select
         call vol_out%write(params%outvol, del_if_exists=.true.)
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')

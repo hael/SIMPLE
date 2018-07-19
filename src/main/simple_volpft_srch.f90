@@ -1,6 +1,4 @@
-! volume alignment based on band-pass limited cross-correlation
-! the all df:s & shift routines need further testing
-! need to introduce openMP:ed cost function in volpft_corrcalc for the serial optimisers
+! for fast rotational docking of volumes
 module simple_volpft_srch
 include 'simple_lib.f08'
 !$ use omp_lib
@@ -12,7 +10,7 @@ use simple_oris,            only: oris
 use simple_ori,             only: ori, euler2m
 implicit none
 
-public :: volpft_srch_init, volpft_srch_minimize_eul, volpft_srch_minimize_shift, volpft_srch_master
+public :: volpft_srch_init, volpft_srch_minimize
 private
 
 logical, parameter :: DEBUG   = .false.
@@ -27,10 +25,6 @@ end type opt4openMP
 
 type(volpft_corrcalc)         :: vpftcc                     !< corr calculator
 type(opt4openMP), allocatable :: opt_eul(:)                 !< parallel optimisation, Euler angles
-type(opt_spec)                :: ospec_shift                !< optimizer specification object, rotational origin shifts
-type(opt_spec)                :: ospec_eul_wshift           !< optimizer specification object, Euler with global shifts
-class(optimizer), pointer     :: nlopt_shift      => null() !< optimizer object, rotational origin shifts
-class(optimizer), pointer     :: nlopt_eul_wshift => null() !< optimizer object, Euler with global shifts
 type(ori)                     :: e_glob                     !< ori of best global solution
 real                          :: shvec_glob(3) = 0.         !< best global origin shift
 integer                       :: nrestarts     = 3          !< simplex restarts (randomized bounds)
@@ -66,42 +60,16 @@ contains
             call opt_eul(ithr)%ospec%specify('simplex', 3, ftol=1e-4,&
             &gtol=1e-4, limits=lims_eul, nrestarts=nrestarts, maxits=30)
             ! point to costfun
-            call opt_eul(ithr)%ospec%set_costfun(volpft_srch_costfun_eul)
+            call opt_eul(ithr)%ospec%set_costfun(volpft_srch_costfun)
             ! generate optimizer object with the factory
             call ofac%new(opt_eul(ithr)%ospec, opt_eul(ithr)%nlopt)
         end do
-        ! serial optimizers
-        call ospec_shift%specify('simplex', 3, ftol=1e-4,&
-        &gtol=1e-4, limits=lims_shift, nrestarts=nrestarts, maxits=30)
-        call ospec_eul_wshift%specify('simplex', 3, ftol=1e-4,&
-        &gtol=1e-4, limits=lims_eul, nrestarts=nrestarts, maxits=30)
-        call ospec_shift%set_costfun(volpft_srch_costfun_shift)
-        call ospec_eul_wshift%set_costfun(volpft_srch_costfun_eul_wshift)
-        call ofac%new(ospec_shift, nlopt_shift)
-        call ofac%new(ospec_eul_wshift, nlopt_eul_wshift)
         ! create global ori
         call e_glob%new()
         if( DEBUG ) write(*,*) 'debug(volpft_srch); volpft_srch_init, DONE'
     end subroutine volpft_srch_init
 
-    function volpft_srch_master( ) result( orientation_best )
-        type(ori) :: orientation_best
-        integer   :: i
-        ! initialize with zero shifts
-        shvec_glob = 0.
-        ! first rotational search
-        orientation_best = volpft_srch_minimize_eul()
-        ! best Euler without considering shifts now in e_glob
-        ! iterative refinement
-        do i=1,10
-            print *, 'minimizing shifts'
-            orientation_best = volpft_srch_minimize_shift( )
-            print *, 'minimizing Eulers'
-            orientation_best = volpft_srch_minimize_eul_wshift()
-        end do
-    end function volpft_srch_master
-
-    function volpft_srch_minimize_eul() result( orientation_best )
+    function volpft_srch_minimize() result( orientation_best )
         real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:)
         integer, allocatable :: order(:)
         class(*), pointer    :: fun_self => null()
@@ -186,67 +154,9 @@ contains
         call espace%kill
         call cand_oris%kill
         call orientation%kill
-    end function volpft_srch_minimize_eul
+    end function volpft_srch_minimize
 
-    function volpft_srch_minimize_shift( ) result( orientation_best )
-        type(ori)         :: orientation_best
-        real              :: cost_init, cost
-        class(*), pointer :: fun_self => null()
-        ospec_shift%x = shvec_glob
-        cost_init     = volpft_srch_costfun_shift(fun_self, ospec_shift%x, ospec_shift%ndim)
-
-        print *, 'cost_init: ', cost_init
-
-        call nlopt_shift%minimize(ospec_shift, fun_self, cost)
-
-        print *, 'cost: ', cost
-
-        if( cost < cost_init )then
-            ! set corr
-            call orientation_best%set('corr', -cost)
-            ! set shift
-            call orientation_best%set('x', ospec_shift%x(1))
-            call orientation_best%set('y', ospec_shift%x(2))
-            call orientation_best%set('z', ospec_shift%x(3))
-			shvec_glob = ospec_shift%x
-            ! update global ori
-            e_glob = orientation_best
-        else
-            orientation_best = e_glob
-        endif
-    end function volpft_srch_minimize_shift
-
-    function volpft_srch_minimize_eul_wshift( ) result( orientation_best )
-        type(ori)         :: orientation_best
-        real              :: cost_init, cost
-        class(*), pointer :: fun_self => null()
-        ospec_eul_wshift%x           = e_glob%get_euler()
-        ospec_eul_wshift%limits(1,1) = ospec_eul_wshift%x(1) - 5.
-        ospec_eul_wshift%limits(1,2) = ospec_eul_wshift%x(1) + 5.
-        ospec_eul_wshift%limits(2,1) = ospec_eul_wshift%x(2) - 5.
-        ospec_eul_wshift%limits(2,2) = ospec_eul_wshift%x(2) + 5.
-        ospec_eul_wshift%limits(3,1) = ospec_eul_wshift%x(3) - 5.
-        ospec_eul_wshift%limits(3,2) = ospec_eul_wshift%x(3) + 5.
-        cost_init = volpft_srch_costfun_eul_wshift(fun_self, ospec_eul_wshift%x, ospec_eul_wshift%ndim)
-
-        print *, 'cost_init: ', cost_init
-
-        call nlopt_eul_wshift%minimize(ospec_eul_wshift, fun_self, cost)
-
-        print *, 'cost: ', cost
-
-        if( cost < cost_init )then
-            ! set corr
-            call orientation_best%set('corr', -cost)
-            ! set Euler
-            call orientation_best%set_euler(ospec_eul_wshift%x)
-			call e_glob%set_euler(ospec_eul_wshift%x)
-        else
-            orientation_best = e_glob
-        endif
-    end function volpft_srch_minimize_eul_wshift
-
-    function volpft_srch_costfun_eul( fun_self, vec, D ) result( cost )
+    function volpft_srch_costfun( fun_self, vec, D ) result( cost )
         use simple_ori, only: ori
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
@@ -254,26 +164,7 @@ contains
         real                    :: cost, rmat(3,3)
         rmat = euler2m(vec(:3))
         cost = -vpftcc%corr(rmat)
-    end function volpft_srch_costfun_eul
-
-    function volpft_srch_costfun_shift( fun_self, vec, D ) result( cost )
-        use simple_ori, only: ori
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: vec_here(3), cost
-        cost = -vpftcc%corr(e_glob%get_mat(), vec_here(:3))
-    end function volpft_srch_costfun_shift
-
-    function volpft_srch_costfun_eul_wshift( fun_self, vec, D ) result( cost )
-        use simple_ori, only: ori
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: D
-        real,     intent(in)    :: vec(D)
-        real                    :: cost, rmat(3,3)
-        rmat = euler2m(vec(:3))
-        cost = -vpftcc%corr(rmat, shvec_glob)
-    end function volpft_srch_costfun_eul_wshift
+    end function volpft_srch_costfun
 
     subroutine volpft_srch_kill
         integer :: ithr
@@ -288,16 +179,6 @@ contains
             deallocate(opt_eul)
         endif
         call vpftcc%kill
-        call ospec_shift%kill
-        if( associated(nlopt_shift) )then
-            call nlopt_shift%kill
-            nullify(nlopt_shift)
-        endif
-        call ospec_eul_wshift%kill
-        if( associated(nlopt_eul_wshift) )then
-            call nlopt_eul_wshift%kill
-            nullify(nlopt_eul_wshift)
-        endif
     end subroutine volpft_srch_kill
 
 end module simple_volpft_srch

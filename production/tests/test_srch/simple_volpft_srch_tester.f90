@@ -4,7 +4,7 @@ use simple_builder,    only: builder
 use simple_parameters, only: parameters
 use simple_ori,        only: ori
 use simple_image,      only: image
- use simple_cmdline,   only: cmdline
+use simple_cmdline,    only: cmdline
 use simple_projector,  only: projector
 use simple_volpft_srch ! singleton
 implicit none
@@ -81,7 +81,7 @@ contains
         sumcorr = 0.
 
 
-        o_best  = volpft_srch_minimize_eul()
+        o_best  = volpft_srch_minimize()
         call o_best%print_ori
 
         ! call ranori%new
