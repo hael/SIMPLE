@@ -21,7 +21,7 @@ type strategy3D_alloc
     real,           allocatable :: proj_space_shift(:,:,:,:) !< shift vectors
     real,           allocatable :: proj_space_corrs(:,:,:)   !< reference vs. particle correlations
     integer,        allocatable :: proj_space_refinds(:,:)   !< reference indices
-    integer,        allocatable :: proj_space_inplinds(:,:)  !< in-plane indices
+    integer,        allocatable :: proj_space_inplinds(:,:,:)!< in-plane indices
     integer,        allocatable :: srch_order(:,:)           !< stochastic search index
 end type strategy3D_alloc
 
@@ -51,7 +51,7 @@ contains
         allocate(master_proj_space_euls(nrefs,MAXNINPLPEAKS,3), s3D%proj_space_euls(nthr_glob,nrefs,MAXNINPLPEAKS,3),&
             &s3D%proj_space_shift(nthr_glob,nrefs,MAXNINPLPEAKS,2),s3D%proj_space_state(nrefs),&
             &s3D%proj_space_corrs(nthr_glob,nrefs,MAXNINPLPEAKS), s3D%proj_space_refinds(nthr_glob,nrefs),&
-            &s3D% proj_space_inplinds(nthr_glob,MAXNINPLPEAKS),&
+            &s3D%proj_space_inplinds(nthr_glob,nrefs,MAXNINPLPEAKS),&
             &s3D%proj_space_proj(nrefs), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
@@ -124,11 +124,11 @@ contains
     ! init thread specific search arrays
     subroutine prep_strategy3D_thread( ithr )
         integer, intent(in)    :: ithr
-        s3D%proj_space_euls(ithr,:,:,:)  = master_proj_space_euls
-        s3D%proj_space_corrs(ithr,:,:)   = -1.
-        s3D%proj_space_shift(ithr,:,:,:) = 0.
-        s3D%proj_space_refinds(ithr,:)   = 0
-        s3D%proj_space_inplinds(ithr,:)  = 0
+        s3D%proj_space_euls(ithr,:,:,:)   = master_proj_space_euls
+        s3D%proj_space_corrs(ithr,:,:)    = -1.
+        s3D%proj_space_shift(ithr,:,:,:)  = 0.
+        s3D%proj_space_refinds(ithr,:)    = 0
+        s3D%proj_space_inplinds(ithr,:,:) = 0
         if(srch_order_allocated) s3D%srch_order(ithr,:) = 0
     end subroutine prep_strategy3D_thread
 

@@ -263,7 +263,7 @@ contains
                     ! stash the reference index for sorting
                     s3D%proj_space_refinds(self%ithr,iref) = iref
                     ! stash the in-plane indices
-                    s3D%proj_space_inplinds(self%ithr,:)   = loc
+                    s3D%proj_space_inplinds(self%ithr,iref,:) = loc
                 endif
             end subroutine per_ref_srch
 
@@ -313,7 +313,7 @@ contains
                         ref = s3D%proj_space_refinds(self%ithr, i)
                         call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
                         do j=1,MAXNINPLPEAKS
-                            irot = s3D%proj_space_inplinds(self%ithr, j)
+                            irot = s3D%proj_space_inplinds(self%ithr, ref, j)
                             cxy  = self%grad_shsrch_obj%minimize(irot=irot)
                             if( irot > 0 )then
                                 ! irot > 0 guarantees improvement found, update solution
@@ -347,8 +347,8 @@ contains
         integer,                intent(in)    :: ind, ref, inpl_inds(MAXNINPLPEAKS)
         real,                   intent(in)    :: corrs(MAXNINPLPEAKS)
         integer :: inpl
-        s3D%proj_space_refinds(self%ithr,ind) = ref
-        s3D%proj_space_inplinds(self%ithr,:)  = inpl_inds
+        s3D%proj_space_refinds(self%ithr,ind)    = ref
+        s3D%proj_space_inplinds(self%ithr,ref,:) = inpl_inds
         do inpl=1,MAXNINPLPEAKS
             s3D%proj_space_euls(self%ithr,ref,inpl,3) = 360. - pftcc_glob%get_rot(inpl_inds(inpl))
         end do
