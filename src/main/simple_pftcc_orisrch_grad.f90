@@ -80,7 +80,7 @@ contains
         self%ospec%x(1) = o_inout%e1get()
         self%ospec%x(2) = o_inout%e2get()
         self%ospec%x(3) = o_inout%e3get()
-        self%ospec%x(4) = 0. ! because shifts are updated with vector addition between succesive rounds
+        self%ospec%x(4) = 0. ! because shifts are updated with vector addition between successive rounds
         self%ospec%x(5) = 0. ! -"-
         ! set limits for L-BFGS-B initialisation
         self%ospec%limits(1,1) = self%ospec%x(1) - angerr_deg
