@@ -557,7 +557,7 @@ contains
         call params%new(cline)
         call read_and_prep_vol(  params%vols(1), vol1 )
         call read_and_prep_vol(  params%vols(2), vol2 )
-        call volpft_srch_init(vol1, vol2, params%hp, params%lp, 0.)
+        call volpft_srch_init(vol1, vol2, params%hp, params%lp, params%trs)
         select case(params%dockmode)
             case('eul')
                 orientation = volpft_srch_minimize_eul()
@@ -571,12 +571,6 @@ contains
             case('eulshift')
                 orientation = volpft_srch_minimize_eul()
                 orientation = volpft_srch_minimize_shift()
-                call vol2%ifft
-                vol_out     = rotvol(vol2, orientation, orientation%get_3Dshift())
-            case('all')
-                orientation = volpft_srch_minimize_eul()
-                orientation = volpft_srch_minimize_shift()
-                orientation = volpft_srch_minimize_all()
                 call vol2%ifft
                 vol_out     = rotvol(vol2, orientation, orientation%get_3Dshift())
         end select
