@@ -341,11 +341,9 @@ contains
         if(allocated(arr))deallocate(arr)
         allocate( arr(ffromto(1):ffromto(2)), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('get_all; simple_oris',alloc_stat)
-        !$omp parallel do schedule(static) default(shared) proc_bind(close) private(i)
         do i=ffromto(1),ffromto(2)
             arr(i) = self%o(i)%get(key)
         enddo
-        !$omp end parallel do
     end function get_all
 
     !>  \brief  is for getting an array of 'key' values
@@ -357,11 +355,9 @@ contains
         if( allocated(vals) ) deallocate(vals)
         allocate( vals(self%n), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('getter_all_1; simple_oris',alloc_stat)
-        !$omp parallel do schedule(static) default(shared) proc_bind(close) private(i)
         do i=1,self%n
             call self%o(i)%getter(key, vals(i))
         enddo
-        !$omp end parallel do
     end subroutine getter_all_1
 
     !>  \brief  is for getting an array of 'key' values
@@ -475,13 +471,10 @@ contains
         character(len=*), intent(in)    :: label
         integer :: i, n, ival
         n = 1
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(i,ival)
         do i=1,self%n
             ival = nint(self%o(i)%get(trim(label)))
             if( ival > n ) n = ival
         end do
-        !$omp end parallel do
     end function get_n
 
     !>  \brief  is for checking label population
@@ -1021,6 +1014,68 @@ contains
     end function get_arr
 
 
+    !>  \brief  is for calculating the sum of 'which' variables with
+    !!          filtering based on class/state/fromto
+    subroutine calc_sum( self, which, sum, cnt, class, state, fromto, mask )
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which
+        real,              intent(out)   :: sum
+        integer,           intent(out)   :: cnt
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        integer, optional, intent(in)    :: fromto(2)
+        logical, optional, intent(in)    :: mask(self%n)
+        integer :: clsnr, i, mystate, istart, istop
+        real    :: val
+        logical :: proceed, class_present, state_present, mask_present
+        class_present = present(class)
+        state_present = present(state)
+        mask_present  = present(mask)
+        cnt = 0
+        sum = 0.
+        if( mask_present )then
+            if( count(mask)==0 )then
+                write(*,*)'Empty mask; simple_oris :: clac_sum'
+                return
+            endif
+        endif
+        if( present(fromto) )then
+            istart = fromto(1)
+            istop  = fromto(2)
+        else
+            istart = 1
+            istop  = self%n
+        endif
+        do i=istart,istop
+            mystate = nint(self%get( i, 'state'))
+            if( mystate == 0 ) cycle
+            if( mask_present )then
+                proceed = mask(i)
+            else
+                proceed = .true.
+            endif
+            if( proceed )then
+                val = self%get(i, which)
+                if( .not. is_a_number(val) ) val=0.
+                if( class_present )then
+                    clsnr = nint(self%get( i, 'class'))
+                    if( clsnr == class )then
+                        cnt = cnt+1
+                        sum = sum+val
+                    endif
+                else if( state_present )then
+                    if( mystate == state )then
+                        cnt = cnt+1
+                        sum = sum+val
+                    endif
+                else
+                    cnt = cnt+1
+                    sum = sum+val
+                endif
+            endif
+        end do
+    end subroutine calc_sum
+
     !> get the 'which' variables from ori dependent on state, class and mask
     function prep_calc_sum(self,  which, class, mask, state, fromto ) result(state_val_class)
         class(oris),       intent(inout) :: self
@@ -1061,72 +1116,11 @@ contains
 
     end function prep_calc_sum
 
-     !>  \brief  is for calculating the sum of 'which' variables with
-     !!          filtering based on class/state/fromto
-    subroutine calc_sum_old( self, which, sum, cnt, class, state, fromto, mask )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real,              intent(out)   :: sum
-        integer,           intent(out)   :: cnt
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(self%n)
-        integer :: clsnr, i, mystate, istart, istop
-        real    :: val
-        logical :: proceed, class_present, state_present, mask_present
-        class_present = present(class)
-        state_present = present(state)
-        mask_present  = present(mask)
-        cnt = 0
-        sum = 0.
-        if( mask_present )then
-            if( count(mask)==0 )then
-                write(*,*)'Empty mask; simple_oris :: calc_sum'
-                return
-            endif
-        endif
-        if( present(fromto) )then
-            istart = fromto(1)
-            istop  = fromto(2)
-        else
-            istart = 1
-            istop  = self%n
-        endif
-        do i=istart,istop
-            mystate = nint(self%get( i, 'state'))
-            if( mystate == 0 ) cycle
-            if( mask_present )then
-                proceed = mask(i)
-            else
-                proceed = .true.
-            endif
-            if( proceed )then
-                val = self%get(i, which)
-                if( .not. is_a_number(val) ) val=0.
-                if( class_present )then
-                    clsnr = nint(self%get( i, 'class'))
-                    if( clsnr == class )then
-                        cnt = cnt+1
-                        sum = sum+val
-                    endif
-                else if( state_present )then
-                    if( mystate == state )then
-                        cnt = cnt+1
-                        sum = sum+val
-                    endif
-                else
-                    cnt = cnt+1
-                    sum = sum+val
-                endif
-            endif
-        end do
-    end subroutine calc_sum_old
 
 
     !>  \brief  is for calculating the sum of 'which' variables with
     !!          filtering based on class/state/fromto
-    subroutine calc_sum( self, which, sum, cnt, class, state, fromto, mask )
+    subroutine calc_sum_mp( self, which, sum, cnt, class, state, fromto, mask )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,              intent(out)   :: sum
@@ -1187,7 +1181,7 @@ contains
         end do
         !$omp end parallel do
         deallocate(vars)
-    end subroutine calc_sum
+      end subroutine calc_sum_mp
 
     !>  \brief  is for getting the sum of 'which' variables with
     !!          filtering based on class/state/fromto
@@ -1641,6 +1635,18 @@ contains
     subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
         class(oris), intent(inout) :: e_space
+        integer    :: i
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i=1,self%n
+            call self%set(i, 'proj', real(e_space%find_closest_proj(self%o(i))))
+        end do
+        !$omp end parallel do
+    end subroutine set_projs
+
+    !>  \brief  is a setter
+    subroutine set_projs_mp( self, e_space )
+        class(oris), intent(inout) :: self
+        class(oris), intent(inout) :: e_space
         integer    :: i,j, tmploc(1)
         integer(timer_int_kind) :: t1
         real, allocatable :: normals(:,:), e_space_normals(:,:), dists(:)
@@ -1662,7 +1668,7 @@ contains
         deallocate(normals,e_space_normals, dists)
         DebugPrint " in set_projs done                                           ",toc()
         DebugPrint " in set_projs total time                                     ",toc(t1), ' secs'
-    end subroutine set_projs
+      end subroutine set_projs_mp
 
     !>  \brief  is a setter
     subroutine e3swapsgn( self )
@@ -2108,7 +2114,6 @@ contains
         integer, optional, intent(out)   :: nst
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, istart, iend
-
         if( .not. file_exists(orifile) )then
             call simple_stop("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
         endif
@@ -2385,7 +2390,6 @@ contains
         if( self%n == 1 )then
             call self%o(1)%set_euler([0.,0.,0.])
         else if( self%n > 1 )then
-            !$omp parallel do default(shared) private(k,h,theta,psi) schedule(static) proc_bind(close)
             do k=1,self%n
                 h = -1.+((2.*(real(k)-1.))/(real(self%n)-1.))
                 theta = acos(h)
@@ -2399,7 +2403,6 @@ contains
                 end do
                 call self%o(k)%set_euler([rad2deg(psi),rad2deg(theta),0.])
             end do
-            !$omp end parallel do
         else
             call simple_stop('object nonexistent; spiral_1; simple_oris')
         endif
@@ -2873,37 +2876,27 @@ contains
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
-        class(oris), intent(inout) :: self
-        real, allocatable :: onormals(:,:)
-        real      :: dists(self%n,self%n), d(self%n)
-        real    :: res, nearest3(3)
+        class(oris), intent(in) :: self
+        real    :: dists(self%n), res, x
         integer :: i, j
         res = 0.
-        onormals = self%get_all_normals()
-        !$omp parallel do collapse(2) default(shared) private(i,j) proc_bind(close)
+        !$omp parallel do default(shared) private(i,j,x,dists) reduction(+:res) proc_bind(close) schedule(static)
         do j=1,self%n
             do i=1,self%n
                 if( i == j )then
-                    dists(i,j) = 0.
-                else if( i < j )then
-                    dists(i,j) = dists(j,i)
+                    dists(i) = huge(x)
                 else
-                    dists(i,j) = acos(dot_product(onormals(i,:),onormals(j,:)))
+                    dists(i) = self%o(i).euldist.self%o(j)
                 endif
             end do
-        end do
-        !$omp end parallel do
-        deallocate(onormals)
-        !$omp parallel do default(shared) private(i,j,d,nearest3) reduction(+:res) proc_bind(close)
-        do j=1,self%n
-            d=dists(j,:)
-            nearest3 = min3(d)
-!            call hpsort(d)
-            res = res + sum(nearest3)/3. ! average of three nearest neighbors
+            call hpsort(dists)
+            res = res + sum(dists(:3))/3. ! average of three nearest neighbors
         end do
         !$omp end parallel do
         res = rad2deg(res/real(self%n))
     end function find_angres
+
+
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres_mp( self ) result( res )
@@ -3050,6 +3043,22 @@ contains
 
     !>  \brief  find number of peaks from angular threshold
     function find_npeaks_from_athres( self, athres ) result( npeaks )
+        class(oris), intent(in) :: self
+        real,        intent(in) :: athres
+        integer :: i, j, npeaks
+        real :: dists(self%n), rnpeaks
+        rnpeaks = 0.
+        do i=1,self%n
+            do j=1,self%n
+                dists(j) = rad2deg( self%o(i).euldist.self%o(j) )
+            end do
+            rnpeaks = rnpeaks + real(count(dists <= athres))
+        end do
+        npeaks = nint(rnpeaks/real(self%n))
+    end function find_npeaks_from_athres
+
+    !>  \brief  find number of peaks from angular threshold
+    function find_npeaks_from_athres_mp( self, athres ) result( npeaks )
         class(oris), intent(inout) :: self
         real,        intent(in) :: athres
         integer :: i, j, npeaks
@@ -3069,7 +3078,7 @@ contains
         !$omp end parallel do
         deallocate(onormals)
         npeaks = nint(rnpeaks/real(self%n))
-    end function find_npeaks_from_athres
+      end function find_npeaks_from_athres_mp
 
 
     !>  \brief  for mapping a 3D shift of volume to 2D shifts of the projections
@@ -3253,32 +3262,27 @@ contains
         deallocate(emats)
         geodesic_dist_omp = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
         deallocate(class_part_of_set, class_weights)
-    end function geodesic_dist_omp
+      end function geodesic_dist_omp
 
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
-        class(oris), intent(inout)  :: self
+        class(oris), intent(in)  :: self
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
-        integer :: i, j
+        integer :: i, j, cnt
         real    :: dists((self%n*(self%n-1))/2), vard, x
-        real, allocatable :: onormals(:,:)
-
         logical :: err
         mind = huge(x)
         maxd = -mind
-        sumd = 0.
-        onormals = self%get_all_normals()
-        !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(guided)
+        cnt  = 0
         do i=1,self%n-1
-            do j=i+1,self%n
-                dists(i) =  vector_angle_norm(onormals(i,:),onormals(j,:))
-                 if( dists(i) < mind ) mind = dists(i)
-                 if( dists(i) > maxd ) maxd = dists(i)
-                 sumd = sumd+dists(i)
-            end do
+           do j=i+1,self%n
+              cnt = cnt+1
+              dists(cnt) = self%o(i).euldist.self%o(j)
+           end do
         end do
-        !$omp end parallel do
-        deallocate(onormals)
+        mind = minval(dists)
+        maxd = maxval(dists)
+        sumd = sum(dists)
         call moment(dists, avgd, sdevd, vard, err )
     end subroutine diststat_1
 
@@ -3287,7 +3291,7 @@ contains
     subroutine diststat_2( self1, self2, sumd, avgd, sdevd, mind, maxd )
         class(oris), intent(inout)  :: self1, self2
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
-        integer :: i
+        integer :: i, cnt
         real    :: dists(self1%n), vard, x
         real, allocatable :: onormals1(:,:),onormals2(:,:)
         logical :: err
@@ -3297,6 +3301,7 @@ contains
         mind = huge(x)
         maxd = -mind
         sumd = 0.
+        cnt  = 0
         onormals1 = self1%get_all_normals()
         onormals2 = self2%get_all_normals()
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)&
