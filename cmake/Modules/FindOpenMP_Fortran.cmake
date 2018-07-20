@@ -26,31 +26,66 @@
 # (To distribute this file outside of CMake, substitute the full
 #  License text for the above reference.)
 
-INCLUDE (${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake)
+# Modified by Michael Eager 2018 Monash University
+#
+#
 
+INCLUDE (${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake)
+UNSET (OPENMP_FOUND CACHE)
 SET (OpenMP_Fortran_FLAG_CANDIDATES
      #Gnu
      "-fopenmp"
-     #Microsoft Visual Studio
-     "/openmp"
-     #Intel windows
-     "/Qopenmp"
      #Intel
      "-qopenmp"
-     #Sun
-     "-xopenmp"
-     #HP
-     "+Oopenmp"
      #IBM XL C/c++
      "-qsmp"
      #Portland Group
      "-mp"
+     #Clang		
+     "-fopenmp=libomp"
+     #Sun
+     "-xopenmp"
+     #HP
+     "+Oopenmp"
+     #PathScale, Intel
+     "-openmp"
+     #Microsoft Visual Studio
+     "/openmp"
+     #Intel windows
+     "/Qopenmp"
     #Empty, if compiler automatically accepts openmp
      " "
-     )
+ )
+ set(OMP_FLAG_GNU "-fopenmp")
 if(APPLE)
-message(STATUS " Testing OpenMP affinity <<<<<<<<>>>>>>>")
+    message(STATUS " Testing OpenMP affinity <<<<<<<<>>>>>>>")
 endif()
+set (IFM3 $ENV{SLURM_CLUSTER_NAME})
+if("${IFM3} " STREQUAL "m3 ")
+    message(STATUS " Testing OpenMP on MASSIVE ")
+    message(STATUS " Warning: if cuda module loaded after gcc or openmpi, LDFLAGS will override libstdc++ location. ")
+
+    string(FIND "$ENV{LDFLAGS}" "-L/usr/lib64" OMP_ERROR )
+    if(NOT ${OMP_ERROR} EQUAL -1)
+    	message(STATUS " Warning: /usr/lib64 in LDFLAGS ") 
+	message(STATUS " Warning: LDFLAGS=  $ENV{LDFLAGS}" )
+    endif()
+   #  message(STATUS " ${CMAKE_C_COMPILER} ${CMAKE_Fortran_COMPILER}")
+#    find_package(OpenMP REQUIRED)
+#    if(OPENMP_FOUND)
+#    endif()
+endif()
+
+
+if(NOT OPENMP_FOUND)
+if(CMAKE_${LANG}_COMPILER_ID STREQUAL "Intel" AND
+         "${CMAKE_${LANG}_COMPILER_VERSION}" VERSION_LESS "15.0.0.20140528")
+    set(OMP_FLAG_Intel "-openmp")
+  else()
+    set(OMP_FLAG_Intel "-qopenmp")
+  endif() 
+ set(OMP_FLAG_PGI "-mp")
+
 
 IF (DEFINED OpenMP_Fortran_FLAGS)
     SET (OpenMP_Fortran_FLAG_CANDIDATES)
@@ -59,30 +94,30 @@ ENDIF (DEFINED OpenMP_Fortran_FLAGS)
 # check fortran compiler. also determine number of processors
 FOREACH (FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
     SET (SAFE_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-    SET (CMAKE_REQUIRED_FLAGS "${FLAG} -v")
+    SET (CMAKE_REQUIRED_FLAGS "${FLAG}")
     UNSET (OpenMP_FLAG_DETECTED CACHE)
     MESSAGE (STATUS "Try OpenMP Fortran flag = [${FLAG}]")
     FILE (WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90 "
 program TestOpenMP
-   use omp_lib
-write(*,'(I2)',ADVANCE='NO') omp_get_num_procs()
+!$  use omp_lib
+write(*,'(I0)',ADVANCE='NO') omp_get_num_procs()
 end program TestOpenMP
 ")
     SET (MACRO_CHECK_FUNCTION_DEFINITIONS
       "-DOpenMP_FLAG_DETECTED ${CMAKE_REQUIRED_FLAGS}")
 if(APPLE)
-    try_compile(OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
+    try_compile(OpenMP_FLAG_DETECTED LDFLAGS="" ${CMAKE_BINARY_DIR}
       ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
       COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
       CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
       COMPILE_OUTPUT_VARIABLE OUTPUT
       RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
 else()
-	message(STATUS " OpenMP test : ${CMAKE_BINARY_DIR}  ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90 ${CMAKE_REQUIRED_DEFINITIONS}  -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}")
+	message(STATUS " OpenMP testing : ${CMAKE_REQUIRED_FLAGS}")
      TRY_RUN (OpenMP_RUN_FAILED OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
          ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
          COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
-         CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS}
+         CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS} -CMAKE_LINKER_STATIC_FLAGS=""
          COMPILE_OUTPUT_VARIABLE OUTPUT
          RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
 endif()
@@ -123,14 +158,15 @@ ENDFOREACH (FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
 SET (OpenMP_Fortran_FLAGS "${OpenMP_Fortran_FLAGS_INTERNAL}"
      CACHE STRING "Fortran compiler flags for OpenMP parallelism")
 
+endif(NOT OPENMP_FOUND)
 
-   UNSET (OpenMP_Version_DETECTED CACHE)
-   MESSAGE (STATUS "Try OpenMP version")
+UNSET (OpenMP_Version_DETECTED CACHE)
+MESSAGE (STATUS "Try OpenMP version")
 
     FILE (WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMPVersion.f90 "
 program TestOpenMPVersion
-   use omp_lib
-write(*,'(I6)',ADVANCE='NO') openmp_version()
+include 'omp_lib.h' !    only include when _OPENMP defined
+write(*,'(I6)',ADVANCE='NO') openmp_version 
 end program TestOpenMPVersion
 ")
 
@@ -142,6 +178,7 @@ if(APPLE)
       COMPILE_OUTPUT_VARIABLE OUTPUT
       RUN_OUTPUT_VARIABLE OMP_VERSION_INTERNAL)
 else()
+#	message(STATUS " TESTING  ")
      TRY_RUN (OpenMP_RUN_FAILED OpenMP_Version_DETECTED ${CMAKE_BINARY_DIR}
          ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMPVersion.f90
          COMPILE_DEFINITIONS ${OpenMP_Fortran_FLAGS}
@@ -169,15 +206,22 @@ endif()
          SET (OpenMP_Fortran_VERSION ${OMP_VERSION_INTERNAL} CACHE
            STRING " OpenMP version" FORCE)
        endif()
-       BREAK ()
+       
       ELSE ()
         FILE (APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
              "Determining the Fortran compiler version of OpenMP failed with "
              "the following output:\n${OMP_VERSION_INTERNAL}\n\n")
         SET (OpenMP_Version_DETECTED 0)
     ENDIF (OpenMP_Version_DETECTED)
- UNSET (OpenMP_Version_DETECTED CACHE)
-     
+  UNSET (OpenMP_Version_DETECTED CACHE)
+
+if(OpenMP_Fortran_VERSION)
+ message (STATUS " OpenMP Version string cleanup")
+    string(REGEX REPLACE ".* \([0-9]*\)$" "\\1" OpenMP_Fortran_VERSION "${OpenMP_Fortran_VERSION}")
+ message (STATUS " OpenMP Version string = ${OpenMP_Fortran_VERSION}")
+endif()
+message(FATAL_ERROR "")     
+
 mark_as_advanced(OpenMP_Fortran_FLAGS)
 # mark_as_advanced(OpenMP_Fortran_VERSION)
 

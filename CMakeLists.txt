@@ -248,7 +248,6 @@ if(VERBOSE) #only for the fool-hardy
   include(SimplePackage)
   ## Debugging CMAKE
   include(CMakeGraphVizOptions)
-  include(GenericLogging)
 endif()
 
 #################################################################
@@ -259,6 +258,10 @@ endif()
 # The source for the SIMPLE binary and have it placed in the bin folder
 add_subdirectory(production bin)
 
+#only for debugging
+if(VERBOSE) 
+ include(GenericLogging)
+endif()
 
 # Add message at end of installation
 add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)

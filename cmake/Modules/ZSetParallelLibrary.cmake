@@ -21,11 +21,15 @@ if (USE_OPENMP)
     if (NOT OpenMP_Fortran_FLAGS)
       message (FATAL_ERROR "Fortran compiler does not support OpenMP")
     endif (NOT OpenMP_Fortran_FLAGS)
+
+    if(OpenMP_Fortran_VERSION)
+       # set(OpenMP_Fortran_FLAGS "${OpenMP_Fortran_FLAGS} -DOPENMP_VERSION=${OpenMP_Fortran_VERSION}")
+    endif(OpenMP_Fortran_VERSION)
   endif (NOT OpenMP_Fortran_FLAGS)
 endif()
 
 if (USE_MPI)
-  # Find MPI
+  # Find MPI when FC != mpif90
   if (NOT MPI_Fortran_FOUND)
     find_package (MPI REQUIRED)
   endif (NOT MPI_Fortran_FOUND)

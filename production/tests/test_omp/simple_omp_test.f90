@@ -13,8 +13,8 @@
 ! Public License.
 ! -----------------------------------------------------------------------------!
 program simple_omp_test
-
 include 'simple_lib.f08'
+
 use simple_timer_omp_test
 use simple_test_omp_basics
 
@@ -33,6 +33,12 @@ character(STDLEN) :: timestr
 call date_and_time(TIME=timestr)
 starttime = str2real(timestr)
 be_verbose = .true.
+
+#ifdef _OPENMP
+    print *, " Preprocessor macro _OPENMP ", _OPENMP
+#else
+    print *, " Preprocessor macro _OPENMP not defined"
+#endif
 
 write(*,'(a,i0)') 'OpenMP version: ', openmp_version
 
