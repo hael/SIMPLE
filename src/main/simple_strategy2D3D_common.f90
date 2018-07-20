@@ -500,7 +500,7 @@ contains
 
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         poulation, average correlation and weight
-    subroutine gen2Dclassdoc(  )
+    subroutine gen2Dclassdoc
         integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143

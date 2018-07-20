@@ -664,7 +664,7 @@ contains
         type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
         ! command lines
         type(cmdline) :: cline_refine3D1, cline_refine3D2
-        type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr, cline_postprocess
+        type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
         ! other variables
         type(parameters)      :: params
         type(sym)             :: symop
@@ -687,7 +687,6 @@ contains
         if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
         cline_refine3D1                 = cline ! first stage, extremal optimization
         cline_refine3D2                 = cline ! second stage, stochastic refinement
-        !cline_postprocess               = cline ! eo always eq yes, for resolution only
         cline_reconstruct3D_distr       = cline ! eo always eq yes, for resolution only
         cline_reconstruct3D_mixed_distr = cline ! eo always eq yes, for resolution only
         ! first stage
@@ -704,6 +703,10 @@ contains
         ! second stage
         call cline_refine3D2%set('prg', 'refine3D')
         call cline_refine3D2%set('refine', 'multi')
+        !!!!!!!!!!!!!! Under testing
+        call cline_refine3D2%set('neigh', 'yes')
+        call cline_refine3D2%set('nnn', real(max(30,nint(0.05*real(params%nspace)))))
+        !!!!!!!!!!!!!!!!!!
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
@@ -713,14 +716,10 @@ contains
         call cline_reconstruct3D_mixed_distr%delete('lp')
         call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
         if( trim(params%refine) .eq. 'sym' ) call cline_reconstruct3D_mixed_distr%set('pgrp', 'c1')
-        call cline_postprocess%set('prg', 'postprocess')
-        call cline_postprocess%delete('lp')
-        call cline_postprocess%set('eo','yes')
-        call cline_postprocess%set('mkdir','no')
         if( cline%defined('trs') )then
             ! all good
         else
-            ! works out shift lmits for in-plane search
+            ! works out shift limits for in-plane search
             trs = MSK_FRAC*real(params%msk)
             trs = min(MAXSHIFT, max(MINSHIFT, trs))
             call cline_refine3D1%set('trs',trs)
@@ -807,18 +806,6 @@ contains
         write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 2'
         write(*,'(A)')    '>>>'
         call xrefine3D_distr%execute(cline_refine3D2)
-        iter   = nint(cline_refine3D2%get_rarg('endit'))
-        ! stage 2 reconstruction to obtain resolution estimate when eo .eq. 'no'
-        ! if( params%eo .eq. 'no' )then
-        !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
-        !     do state = 1, params%nstates
-        !         str_state  = int2str_pad(state, 2)
-        !         call cline_postprocess%set('state', real(state))
-        !         call cline_postprocess%set('fsc', trim(FSC_FBODY)//trim(str_state)//BIN_EXT)
-        !         call cline_postprocess%set('vol_filt', trim(ANISOLP_FBODY)//trim(str_state)//params%ext)
-        !         call xpostprocess%execute(cline_postprocess)
-        !     enddo
-        ! endif
 
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER3D NORMAL STOP ****')

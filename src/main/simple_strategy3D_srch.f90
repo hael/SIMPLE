@@ -131,7 +131,7 @@ contains
             ! number of populated states
             nstates_eff = count(s3D%state_exists)
             select case(trim(params_glob%refine))
-            case('cluster','clustersym')
+                case('cluster','clustersym','cluster_snhc')
                     self%npeaks_grid = 1
                 case DEFAULT
                     ! "-(nstates_eff-1)" because all states share the same previous orientation
@@ -166,7 +166,7 @@ contains
         if( self%neigh )then
             if( .not. present(nnmat) )&
             &stop 'need optional nnmat to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
-            if( .not. present(target_projs) )&
+            if( .not. present(target_projs) .and. self%nstates.eq.1 )&
             &stop 'need optional target_projs to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
         endif
         ! previous parameters
@@ -194,7 +194,7 @@ contains
             if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_strategy3D_srch'
             if( .not. s3D%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_strategy3D_srch'
         endif
-        if( self%neigh )then
+        if( self%neigh .and. self%nstates.eq.1 )then
             ! disjoint nearest neighbour set
             self%nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
         endif

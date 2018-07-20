@@ -9,14 +9,18 @@ implicit none
 
 contains
 
-    subroutine extract_peaks( s, corrs, state )
+    subroutine extract_peaks( s, corrs, multistates )
         class(strategy3D_srch), intent(inout) :: s
         real,                   intent(out)   :: corrs(s%npeaks * MAXNINPLPEAKS)
-        integer, optional,      intent(out)   :: state
-        integer :: ipeak, cnt, ref, inpl
+        logical, optional,      intent(in)    :: multistates
+        integer :: ipeak, cnt, ref, inpl, state
         real    :: shvec(2)
-        logical :: state_present
-        state_present = present(state)
+        logical :: l_multistates
+        if( present(multistates) )then
+            l_multistates = multistates
+        else
+            l_multistates = .false.
+        endif
         cnt = 0
         do ipeak = 1, s%npeaks
             ref = s3D%proj_space_refinds(s%ithr, s%nrefs - s%npeaks + ipeak)
@@ -24,7 +28,7 @@ contains
                 print *, 'ref: ', ref
                 stop 'ref index out of bound; strategy3D_utils :: extract_peaks'
             endif
-            if( state_present )then
+            if( l_multistates )then
                 state = s3D%proj_space_state(ref)
                 if( .not. s3D%state_exists(state) )then
                     print *, 'empty state: ', state
@@ -40,7 +44,7 @@ contains
                 ! transfer to solution set
                 corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
                 if( corrs(cnt) < 0. ) corrs(cnt) = 0.
-                if( state_present )then
+                if( l_multistates )then
                     call s3D%o_peaks(s%iptcl)%set(cnt, 'state', real(state))
                 else
                     call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
@@ -198,36 +202,40 @@ contains
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
     end subroutine corrs2softmax_weights
 
-    subroutine states_reweight( s, n, corrs, ws, state_ws, included, state, best_loc, wcorr )
+    subroutine states_reweight( s, npeaks, ws, included, state, best_loc, wcorr )
         class(strategy3D_srch), intent(inout) :: s
-        integer,                intent(in)    :: n
-        real,                   intent(out)   :: corrs(n)
-        real,                   intent(inout) :: ws(n)
-        real,                   intent(out)   :: state_ws(s%nstates), wcorr
-        logical,                intent(inout) :: included(n)
+        integer,                intent(in)    :: npeaks
+        real,                   intent(inout) :: ws(npeaks)
+        real,                   intent(out)   :: wcorr
+        logical,                intent(inout) :: included(npeaks)
         integer,                intent(out)   :: state, best_loc(1)
-        integer :: istate, loc(1), ipeak, states(n)
-        if( n > 1 .and. s%nstates > 1 )then
+        integer :: istate, ipeak, states(npeaks)
+        real    :: corrs(npeaks), state_ws(s%nstates)
+        if( npeaks > 1 .and. s%nstates > 1 )then
             ! states weights
-            do ipeak = 1, n
+            do ipeak = 1, npeaks
                 corrs(ipeak)  = s3D%o_peaks(s%iptcl)%get(ipeak,'corr')
-                states(ipeak) = nint(s3D%o_peaks(s%iptcl)%get(ipeak,'state'))
+                states(ipeak) = s3D%o_peaks(s%iptcl)%get_state(ipeak)
             enddo
             ! greedy state assignment
+            state_ws = 0.
             do istate = 1, s%nstates
                 state_ws(istate) = sum(ws,mask=(states==istate))
             enddo
-            loc   = maxloc(state_ws)
-            state = loc(1)
+            state = maxloc(state_ws, dim=1)
             ! in-state re-weighing
             included = included .and. (states==state)
             where( .not. included ) ws = 0.
-            ws = ws / sum(ws, mask=included)
+            ws       = ws / sum(ws, mask=included)
             best_loc = maxloc(ws)
             ! weighted corr
-            wcorr    = sum(ws*corrs, mask=included)
+            wcorr = sum(ws*corrs, mask=included)
             ! update individual weights
             call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
+        else if( npeaks == 1 .and. s%nstates > 1 )then
+            best_loc = 1
+            state    = s3D%o_peaks(s%iptcl)%get_state(1)
+            wcorr    = s3D%o_peaks(s%iptcl)%get(1,'corr')
         endif
     end subroutine states_reweight
 

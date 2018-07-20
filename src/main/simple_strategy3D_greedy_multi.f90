@@ -44,12 +44,16 @@ contains
             ! set thread index
             self%s%ithr = ithr
             if( self%s%neigh )then
-                ! for neighbour modes we do a coarse grid search first
-                if( .not. allocated(build_glob%grid_projs) )&
-                &stop 'need optional grid_projs 4 subspace srch; strategy3D_greedy_multi :: srch_greedy_multi'
-                call self%s%greedy_subspace_srch(build_glob%grid_projs, target_projs)
-                ! initialize
-                call self%s%prep4srch(build_glob%nnmat, target_projs)
+                if( self%s%nstates == 1 )then
+                    ! for neighbour modes we do a coarse grid search first
+                    if( .not. allocated(build_glob%grid_projs) )&
+                    &stop 'need optional grid_projs 4 subspace srch; strategy3D_greedy_multi :: srch_greedy_multi'
+                    call self%s%greedy_subspace_srch(build_glob%grid_projs, target_projs)
+                    ! initialize
+                    call self%s%prep4srch(build_glob%nnmat, target_projs)
+                else
+                    call self%s%prep4srch(build_glob%nnmat)
+                endif
                 nrefs = self%s%nnnrefs
             else
                 ! initialize
@@ -58,8 +62,8 @@ contains
             endif
             ! search
             do isample=1,nrefs
-                iref =  s3D%srch_order(self%s%ithr,isample) ! set the reference index
-                call per_ref_srch                                ! actual search
+                iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
+                call per_ref_srch                          ! actual search
             end do
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = nrefs
@@ -96,17 +100,17 @@ contains
         use simple_oris, only: oris
         class(strategy3D_greedy_multi), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS), state_ws(self%s%nstates)
+        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS)
         real      :: wcorr, frac, ang_sdev, dist_inpl, euldist
         integer   :: best_loc(1), neff_states, state, npeaks_all
         logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
         npeaks_all = self%s%npeaks * MAXNINPLPEAKS
         ! extract peak info
-        call extract_peaks(self%s, corrs, state)
+        call extract_peaks(self%s, corrs, multistates=.true.)
         ! stochastic weights
         call corrs2softmax_weights(self%s, npeaks_all, corrs, params_glob%tau, ws, included, best_loc, wcorr)
         ! state reweighting
-        call states_reweight(self%s, npeaks_all, corrs, ws, state_ws, included, state, best_loc, wcorr )
+        call states_reweight(self%s, npeaks_all, ws, included, state, best_loc, wcorr )
         ! angular standard deviation
         ang_sdev = estimate_ang_sdev(self%s, best_loc)
         ! angular distances

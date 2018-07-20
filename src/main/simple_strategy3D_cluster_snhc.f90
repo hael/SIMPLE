@@ -82,7 +82,7 @@ contains
             if( do_snhc )then
                 ! state randomization, best of two
                 avail = s3D%state_exists
-                !avail(self%s%prev_state) = .false. ! without replacement
+                avail(self%s%prev_state) = .false. ! without replacement
                 ran_state = irnd_uni(self%s%nstates)
                 do while(.not.avail(ran_state))
                     ran_state = irnd_uni(self%s%nstates)
@@ -154,7 +154,7 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
+        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D_SNHC'
     end subroutine srch_cluster3D_snhc
 
     !>  placeholder
