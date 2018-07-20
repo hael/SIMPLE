@@ -221,7 +221,7 @@ contains
         call self%eulspace_red%spiral(params%nsym, params%eullims)
         ! create angular subspace
         DebugPrint ' build_general_tbox: create angular subspace                 ', toc()
-        self%grid_projs = self%eulspace%create_proj_subspace_3(NPDIRS_SUBSPACE, params%nsym, params%eullims)
+        self%grid_projs = self%eulspace%create_proj_subspace(NPDIRS_SUBSPACE, params%nsym, params%eullims)
         DebugPrint ' build_general_tbox: projection direction space              ', toc()
         if( params%box > 0 )then
             ! build image objects

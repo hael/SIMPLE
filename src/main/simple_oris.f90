@@ -2804,6 +2804,36 @@ contains
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: k
         integer, allocatable, intent(inout) :: nnmat(:,:)
+        real      :: dists(self%n)
+        integer   :: inds(self%n), i, j
+        type(ori) :: o
+        if( k >= self%n ) call simple_stop('need to identify fewer nearest_neighbors; simple_oris')
+        if( allocated(nnmat) ) deallocate(nnmat)
+        allocate( nnmat(self%n,k), stat=alloc_stat )
+        if(alloc_stat.ne.0)call allocchk("In: nearest_neighbors; simple_oris",alloc_stat)
+        do i=1,self%n
+            o = self%get_ori(i)
+            do j=1,self%n
+                inds(j) = j
+                if( i == j )then
+                    dists(j) = 0.
+                else
+                    dists(j) = self%o(j).euldist.o
+                endif
+            end do
+            call hpsort(dists, inds)
+            do j=1,k
+                nnmat(i,j) = inds(j)
+            end do
+        end do
+    end subroutine nearest_proj_neighbors
+
+
+    !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
+    subroutine nearest_proj_neighbors_omp( self, k, nnmat )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: k
+        integer, allocatable, intent(inout) :: nnmat(:,:)
         real, allocatable :: onormals(:,:)
         real      :: dists(self%n,self%n), d(self%n)
         integer   :: inds(self%n), i, j
@@ -2839,7 +2869,7 @@ contains
             call hpsort(d, inds)
             nnmat(i,1:k) = (/ (inds(j), j=1, k) /)
         end do
-    end subroutine nearest_proj_neighbors
+      end subroutine nearest_proj_neighbors_omp
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
