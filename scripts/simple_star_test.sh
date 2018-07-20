@@ -1,7 +1,7 @@
 !#/usr/bin/bash
 
 SIMPLE_PATH=~/el85_scratch/eagerm/SIMPLE3.0/build
-module load git cmake fftw relion gctf/1.06_cuda8 chimera eman/2.2
+module load git cmake fftw  gctf/1.06_cuda8 chimera eman/2.2
 export PATH=$SIMPLE_PATH/bin:$PATH
 cd ~/el85_scratch/stars_from_matt
 

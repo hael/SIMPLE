@@ -10,7 +10,7 @@ private
 type star_project
     type(stardoc) :: doc
 contains
-    procedure :: prepare
+    procedure :: prepareimport
     procedure :: readfile
     procedure :: get_ndatalines
     procedure :: get_nrecs_per_line
@@ -44,16 +44,21 @@ end type star_project
 
 public :: star_project
 contains
-    subroutine prepare(self, sp, p)
+    subroutine prepareimport(self, sp, p, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         class(parameters), intent(inout) :: p
+        character(len=*),intent(inout) :: filename
         if( .not. file_exists(trim(p%starfile)) )then
             write(*,*) 'file: ', trim(p%starfile)
             stop 'does not exist in cwd;  simple_star :: prepare '
         endif
-        call self%doc%open(p%starfile)
-    end subroutine prepare
+       
+            ! import mode
+            call self%doc%open(filename)
+            call self%doc%close()
+
+    end subroutine prepareimport
 
     subroutine readfile(self, sp, filename)
         class(star_project), intent(inout) :: self

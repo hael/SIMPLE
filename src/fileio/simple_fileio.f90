@@ -347,6 +347,12 @@ contains
         inquire(unit=unit,size=sz)
     end function funit_size
 
+    !> \brief  return file opened state
+    logical function is_funit_open(funit)
+        integer, intent(in) :: funit !< input file unit
+        inquire(unit=funit, OPENED=is_funit_open)
+    end function is_funit_open
+
     ! computes an array of integers made of all currently opened units.
     ! Output : nbunits : number of opened units, units ( iunit ) : unit number for the opened unit
     ! #iunit with 1<= iunit <= nbunits
@@ -678,6 +684,8 @@ contains
                 fname2format = 'P'
             case('simple')
                 fname2format = 'O'
+            case('star')
+                fname2format = 'R'
             case DEFAULT
                 fname2format = 'N'
         end select

@@ -575,7 +575,7 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
-        call check_file('starfile',       self%starfile)
+        call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
@@ -1408,11 +1408,12 @@ DebugPrint 'found ncls from refs: ', ncls
                         case ('N')
                             write(*,*) 'file: ', trim(var)
                             call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')
-                        case ('T','B','P','O')
+                        case ('T','B','P','O', 'R')
                             ! text files are supported
                             ! binary files are supported
                             ! PDB files are supported
                             ! *.simple project files are supported
+                            ! R=*.star format -- in testing
                         case DEFAULT
                             write(*,*) 'file: ', trim(var)
                             call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')

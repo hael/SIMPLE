@@ -27,7 +27,7 @@ type, extends(commander_base) ::  print_star_project_info_commander
   contains
     procedure :: execute      => exec_print_star_project_info
 end type print_star_project_info_commander
-
+#include "simple_local_flags.inc"
 contains
 
     !> convert text (.txt) oris doc to binary (.simple)
@@ -50,6 +50,7 @@ contains
         else
             allocate(this_starfile, source=trim(params%starfile))
         end if
+
         ! create backup in case the starfile exists
         if(file_exists(this_starfile))then
             iostat= simple_rename(trim(this_starfile),&
@@ -75,7 +76,7 @@ contains
            call simple_stop( " exportstar_project failed due to incorrect startype arg")
         end if
         !! Prepare project
-        call starproj%prepare(spproj,  this_starfile)
+!        call starproj%prepare(spproj,  params, this_starfile)
 
         ! Use export type to define export output variables
         select case(params%startype)
@@ -144,7 +145,7 @@ contains
         l_starfile = cline%defined('starfile')
         if( .not. l_starfile)then
             write(*,*) 'Star project file argument empty or not set, e.g. starfile=<filename> or <directory>'
-            call simple_stop( "ERROR! exec_importstar_project ")
+            call simple_stop( "ERROR! simple_commander_star :: exec_importstar_project ")
         end if
          if(dir_exists(params%starfile))then
            call simple_list_files(trim(params%starfile)//'*.star', starfiles)
@@ -158,28 +159,26 @@ contains
            write(*,*) " Importing star project must have a valid input file, starfile=<filename|directory>"
            call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
        endif
-        inputted_boxtab = cline%defined('boxtab')
+       inputted_boxtab = cline%defined('boxtab')
 
-        ! project file management
-        if( .not. file_exists(trim(params%projfile)) )then
+       ! project file management
+       if( .not. file_exists(trim(params%projfile)) )then
            write(*,*) 'Project file: ', trim(params%projfile), ' does not exist!'
-           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
-        endif
+           DiePrint("exec_importstar_project; not in SIMPLE project dir")
+       endif
         !! Read existing SIMPLE project
         call spproj%read(params%projfile)
 
        ! Prepare STAR project module
-       call starproj%prepare( spproj, starfiles(1))
+       call starproj%prepareimport( spproj, params, starfiles(1))
        ndatlines = starproj%get_ndatalines()
        nrecs     = starproj%get_nrecs_per_line()
 
        if(nrecs == 0)then
-           print *," Unable to read header records in STAR file."
-           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
+           DiePrint("exec_importstar_project; Unable to read header records in STAR file.")
        end if
         if(ndatlines == 0)then
-           print *," Unable to read data line records in STAR file."
-           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
+           DiePrint("exec_importstar_project; Unable to read data line records in STAR file.")
        end if
 
 !! vvvvv TODO vvvvv

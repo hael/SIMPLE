@@ -498,7 +498,9 @@ contains
         integer               :: io_status
         character(len=STDLEN) :: io_message
         io_status = 0
+        is_open=.false.
         inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
+        if(is_iostat_eor(io_status) .or. is_iostat_end(io_status)) return
         if (io_status .ne. 0) then
             print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
             call simple_stop ('IO error; is_open; simple_fileio      ',__FILENAME__,__LINE__)

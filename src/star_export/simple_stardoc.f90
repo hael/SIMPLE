@@ -57,7 +57,7 @@ interface stardoc
     module procedure constructor
 end interface stardoc
 integer, parameter :: MIN_STAR_NBYTES = 10
-
+type(star_dict) :: dict
 enum, bind(C) ! STAR_FORMAT
     enumerator :: STAR_MOVIES=1
     enumerator :: STAR_MICROGRAPHS=2
@@ -155,17 +155,69 @@ contains
             self%l_open = .false.
         end if
     end subroutine close
+
+    subroutine readline(funit, line,ier)
+        implicit none
+        integer, intent(in)                      :: funit
+        character(len=:),allocatable,intent(out) :: line
+        integer,intent(out)                      :: ier
+
+        integer,parameter                     :: buflen=1024
+        character(len=buflen)                 :: buffer
+        integer                               :: last
+        integer                               :: isize
+
+        line=''
+        ier=0
+        if(funit <= 0 ) return
+        ! read characters from line and append to result
+        do
+            ! read next buffer (an improvement might be to use stream I/O
+            ! for files other than stdin so system line limit is not
+            ! limiting)
+            read(funit,iostat=ier,fmt='(a)',advance='no',size=isize) buffer
+            ! append what was read to result
+            if(isize.gt.0)line=line//" "//buffer(:isize)
+            ! if hit EOR reading is complete unless backslash ends the line
+            if(is_iostat_eor(ier))then
+                last=len(line)
+                ! if(last.ne.0)then
+                !     ! if line ends in backslash it is assumed a continued line
+                !     if(line(last:last).eq.'\')then
+                !         ! remove backslash
+                !         line=line(:last-1)
+                !         ! continue on and read next line and append to result
+                !         cycle
+                !     endif
+                ! endif
+                ! hitting end of record is not an error for this routine
+                ier=0
+                ! end of reading line
+                exit 
+                ! end of file or error
+            elseif(ier.ne.0)then
+                exit 
+            endif
+        enddo
+
+        line=trim(line)
+
+    end subroutine readline
+
     subroutine read_header(self)
         class(stardoc), intent(inout) :: self
-        integer          :: n,ios,lenstr
-        character(len=LINE_MAX_LEN) :: line ! 8192
+        integer          :: n,ios,lenstr,isize
+        character(len=:), allocatable :: line ! LINE_MAX_LEN=8192, LONGSTRLEN=1024
         logical :: inData, inField
         self%num_data_elements=0
         self%num_data_lines=0
         inData=.false.;inField=.false.
         if(self%l_open)then
-            do
-                read(self%funit,*,IOSTAT=ios) line
+            !! Make sure we are at the start of the file
+            rewind( self%funit,IOSTAT=ios)
+            if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
+            do while (ios /= 0)
+                call readline(self%funit, line, ios)
                 if(ios /= 0) exit
                 if(self%doprint) print*, "STAR>>",line
                 !! Count number of fields in header
@@ -290,17 +342,18 @@ contains
         use simple_sp_project
         class(stardoc), intent(inout) :: self
         class(sp_project), intent(inout) :: sp
-        character(len=KEYLEN) :: vars(:)
+        character(len=KEYLEN) :: vars(:)          ! fixed-length strings
         character(len=*),intent(inout) :: filename
         character(len=LONGSTRLEN*8) :: starline
         character(len=LONGSTRLEN) :: imagename
         character(len=:), allocatable ::  val,stackfile,state
-        integer  :: i, io_stat
+        integer  :: i, io_stat, iframe, ielem
         real     :: statef, defocus
 
         if(self%l_open)call self%close
         call fopen(self%funit, trim(filename) ,iostat=io_stat)
         if(io_stat/=0) call fileiochk("In stardoc; write; unable to open "//trim(filename))
+        !! standard mode only -- no relion data_... 
         write(self%funit,'(A)') ""
         write(self%funit,'(A)') "data_"
         write(self%funit,'(A)') ""
@@ -309,27 +362,32 @@ contains
         do i=1, self%num_data_elements
             write(self%funit,'("_rln",A,3x,"#",I0)') trim(self%param_labels(i)), i
         end do
-        do i=1, self%num_frames
-            statef = self%frames(i)%state
+        do iframe=1, self%num_frames
+            statef = self%frames(iframe)%state
             if (statef .ne. 0)then
 
                 !! create zero-padded frame number and stackfile
                 imagename=int2str_pad(self%get_i4(i,"frameid"),5)//'@'//&
-                    self%get_str(i,"stackfile")//'s'
+                    self%get_str(iframe,"stackfile")//'s'
 
                 stackfile = self%get_str(i,"stackfile")
                 call syslib_symlink(trim(stackfile), trim(stackfile)//'s',status=io_stat)
                 if(io_stat/=0)call simple_stop("simple_stardoc::write symlink failed")
 
-                starline =imagename//&
-                    &" "//real2str(self%get_r4(i,"kv"))//&
-                    &" "//real2str(self%get_r4(i,"dfx")*1000)//&
-                    &" "//real2str(self%get_r4(i,"dfy")*1000)//&
-                    &" "//real2str(self%get_r4(i,"angast"))//&
-                    &" "//real2str(self%get_r4(i,"cs"))//&
-                    &" "//real2str(self%get_r4(i,"fraca"))//&
-                    &" 10000"//&
-                    &" "//real2str(self%get_r4(i,"smpd"))
+                ! starline =imagename//&
+                !     &" "//real2str(self%get_r4(i,"kv"))//&
+                !     &" "//real2str(self%get_r4(i,"dfx")*1000)//&
+                !     &" "//real2str(self%get_r4(i,"dfy")*1000)//&
+                !     &" "//real2str(self%get_r4(i,"angast"))//&
+                !     &" "//real2str(self%get_r4(i,"cs"))//&
+                !     &" "//real2str(self%get_r4(i,"fraca"))//&
+                !     &" 10000"//&
+                !     &" "//real2str(self%get_r4(i,"smpd"))
+                
+                ! do ielem = 2,  self%num_data_elements
+                !     write(starline,'(a," ",F13.6)')  starline, self%get(iframe,
+                ! end do
+ 
                 write(self%funit,'(A)') starline
             end if
         end do
