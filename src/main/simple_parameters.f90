@@ -148,7 +148,6 @@ type :: parameters
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
-    character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
@@ -469,7 +468,6 @@ contains
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
-        call check_carg('dockmode',       self%dockmode)
         call check_carg('dev',            self%dev)
         call check_carg('dihedral',       self%dihedral)
         call check_carg('dopca',          self%dopca)

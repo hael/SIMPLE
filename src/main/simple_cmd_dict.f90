@@ -74,7 +74,6 @@ contains
         call chdict%push('dir_target',    'put output here')
         call chdict%push('discrete',      'discrete(yes|no){no}')
         call chdict%push('diverse',       'diverse or not flag (yes|no){no}')
-        call chdict%push('dockmode',      'volume docking mode(eul|shift|eulshift|all){eul}')
         call chdict%push('doclist',       'list of oritabs for different states')
         call chdict%push('doprint',       'whether to print(yes|no){no}')
         call chdict%push('dose_rate',     'dose rate(in e/A2/s)')

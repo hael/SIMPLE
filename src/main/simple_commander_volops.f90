@@ -548,27 +548,32 @@ contains
     end subroutine exec_volume_smat
 
     subroutine exec_dock_volpair( self, cline )
+        use simple_vol_srch
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
         type(projector)  :: vol1, vol2
         type(image)      :: vol_out
         type(ori)        :: orientation
+        real             :: ceulxyz(7)
         call params%new(cline)
-        call read_and_prep_vol(  params%vols(1), vol1 )
-        call read_and_prep_vol(  params%vols(2), vol2 )
+        ! prep vols
+        call read_and_prep_vol(params%vols(1), vol1)
+        call read_and_prep_vol(params%vols(2), vol2)
+        ! grid search with volpft (icosahedral sampling geometry)
         call volpft_srch_init(vol1, vol2, params%hp, params%lp, params%trs)
         orientation = volpft_srch_minimize()
+        call volpft_srch_kill
+        ! continuous refinement by vol2vol registration over all 6 degrees of freedom
+        call vol1%ifft
         call vol2%ifft
-        vol_out     = rotvol(vol2, orientation)
-        ! select case(params%dockmode)
-        !     case()
-        !
-        !     case()
-        !
-        !     case()
-        !
-        ! end select
+        call vol_srch_init(vol1, vol2, params%hp, params%lp, params%trs, 5., orientation)
+        ceulxyz = vol_srch_minimize()
+        ! rotate and shift volume for output
+        call orientation%set_euler(ceulxyz(2:4))
+        call vol2%ifft
+        vol_out = rotvol(vol2, orientation, ceulxyz(5:7))
+        ! write
         call vol_out%write(params%outvol, del_if_exists=.true.)
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')

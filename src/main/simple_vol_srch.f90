@@ -52,8 +52,19 @@ contains
         lims(1:3,2) =  eul + angres
         lims(4:6,1) = -trs
         lims(4:6,2) =  trs
+
+        print *, 'start eul: ', eul
+        print *, lims(1,1), lims(1,2)
+        print *, lims(2,1), lims(2,2)
+        print *, lims(3,1), lims(3,2)
+        print *, lims(4,1), lims(4,2)
+        print *, lims(5,1), lims(5,2)
+
         call ospec%specify('simplex', 6, ftol=1e-4,&
         &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=100)
+        ! set starting point for opt
+        ospec%x = [eul(1),eul(2),eul(3),0.,0.]
+        ! costfun
         call ospec%set_costfun(vol_srch_costfun)
         ! generate the simplex optimizer object
         call nlopt%new(ospec)

@@ -10,7 +10,7 @@ use simple_oris,            only: oris
 use simple_ori,             only: ori, euler2m
 implicit none
 
-public :: volpft_srch_init, volpft_srch_minimize
+public :: volpft_srch_init, volpft_srch_minimize, volpft_srch_kill
 private
 
 logical, parameter :: DEBUG   = .false.
@@ -150,6 +150,7 @@ contains
         e_glob = cand_oris%get_ori(order(1))
         ! return best
         orientation_best = cand_oris%get_ori(order(1))
+        call orientation_best%print_ori
         ! destruct
         call espace%kill
         call cand_oris%kill

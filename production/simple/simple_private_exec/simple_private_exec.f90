@@ -591,9 +591,8 @@ select case(prg)
         keys_required(5) = 'msk'
         ! set optional keys
         keys_optional(1) = 'hp'
-        keys_optional(2) = 'dockmode'
-        keys_optional(3) = 'outvol'
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
+        keys_optional(2) = 'outvol'
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:2))
         call xdock_volpair%execute(cline)
     case( 'symmetrize_map' )
         ! for finding the symmetry axis and average over the symmetry-related rotations
