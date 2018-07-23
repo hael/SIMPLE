@@ -36,10 +36,10 @@ type stardoc
 contains
     procedure        :: new
     procedure        :: read
-    procedure,public :: open
+    procedure,public :: open4import
     procedure,public :: close
     procedure,public :: read_header
-    procedure,public :: read_data_labels
+    procedure,public :: read_data_lines
     procedure,public :: setdoprint
     procedure        :: write
     procedure        :: get_r4
@@ -116,16 +116,17 @@ contains
         class(stardoc), intent(inout):: self
         self%doprint=.true.
     end subroutine setdoprint
-    subroutine open(self, filename)
+
+    subroutine open4import(self, filename)
         class(stardoc), intent(inout) :: self
         character(len=*),intent(inout) :: filename
-        integer :: io_stat, tmpunit,filesz
+        integer :: io_stat, tmpunit
+        integer(8) :: filesz
         if(self%l_open) call self%close
         if(allocated(self%param_labels)) deallocate(self%param_labels)
         if(.not. file_exists(trim(filename) ))&
             call simple_stop("simple_stardoc::open ERROR file does not exist "//trim(filename) )
-        call fopen(tmpunit, trim(filename), access='STREAM', action='READWRITE',&
-            &status='UNKNOWN', form='UNFORMATTED', iostat=io_stat)
+        call fopen(tmpunit, file=trim(filename), action='READ', iostat=io_stat)
         if(io_stat/=0)call fileiochk('star_doc ; open '//trim(filename), io_stat)
         self%funit  = tmpunit
         self%l_open = .true.
@@ -139,12 +140,13 @@ contains
             write(*,*) 'file: ', trim(filename)
             stop 'file size too small to contain a header; stardoc :: open'
         endif
+
         call self%read_header()
         if(self%num_data_elements > 0 )then
             allocate(self%param_labels(self%num_data_elements))
-            call self%read_data_labels
+            call self%read_data_lines
         end if
-    end subroutine open
+    end subroutine open4import
 
 
     subroutine close( self )
@@ -156,7 +158,9 @@ contains
         end if
     end subroutine close
 
-    subroutine readline(funit, line,ier)
+
+    subroutine readline(funit, line, ier)
+        use iso_fortran_env
         implicit none
         integer, intent(in)                      :: funit
         character(len=:),allocatable,intent(out) :: line
@@ -166,20 +170,27 @@ contains
         character(len=buflen)                 :: buffer
         integer                               :: last
         integer                               :: isize
-
+        logical :: isopened
         line=''
         ier=0
-        if(funit <= 0 ) return
+        inquire(unit=funit,opened=isopened,iostat=ier)
+        if(ier/=0) call fileiochk("readline isopened failed", ier)
+        if(.not. isopened )then
+            DiePrint("readline isopened failed")
+        endif
         ! read characters from line and append to result
         do
             ! read next buffer (an improvement might be to use stream I/O
             ! for files other than stdin so system line limit is not
             ! limiting)
-            read(funit,iostat=ier,fmt='(a)',advance='no',size=isize) buffer
+            read(funit,fmt='(a)',advance='no',size=isize,iostat=ier) buffer
             ! append what was read to result
+            !isize=len_trim(buffer)
             if(isize.gt.0)line=line//" "//buffer(:isize)
             ! if hit EOR reading is complete unless backslash ends the line
-            if(is_iostat_eor(ier))then
+            !print *, ier == iostat_eor, ier == iostat_end, buffer
+            !call fileiochk("readline isopened failed", ier)
+           if(is_iostat_eor(ier))then
                 last=len(line)
                 ! if(last.ne.0)then
                 !     ! if line ends in backslash it is assumed a continued line
@@ -206,50 +217,59 @@ contains
 
     subroutine read_header(self)
         class(stardoc), intent(inout) :: self
-        integer          :: n,ios,lenstr,isize
-        character(len=:), allocatable :: line ! LINE_MAX_LEN=8192, LONGSTRLEN=1024
-        logical :: inData, inField
+        integer          :: n,ios,lenstr,isize,cnt, pos1,pos2, nargsline
+        character(len=:), allocatable :: line 
+        logical :: inData, inHeader
         self%num_data_elements=0
         self%num_data_lines=0
-        inData=.false.;inField=.false.
+        inData=.false.;inHeader=.false.;cnt=1
         if(self%l_open)then
+            ios=0
             !! Make sure we are at the start of the file
             rewind( self%funit,IOSTAT=ios)
             if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
-            do while (ios /= 0)
+            do 
                 call readline(self%funit, line, ios)
                 if(ios /= 0) exit
-                if(self%doprint) print*, "STAR>>",line
+                line = trim(adjustl(line))
+                if(self%doprint) print*, "STAR>> line #",cnt,":", trim(line)
+                cnt=cnt+1
+                !! Parse the start of the STAR file
+                lenstr=len_trim(line)
+                if (lenstr == 0 )cycle ! empty line
+
                 !! Count number of fields in header
-                if(inField)then
-                    if (line(1:4) == "_rln" )then
+                if(inHeader)then
+                    if (.not. (index(trim(line),"_rln") == 0) )then
                         self%num_data_elements=self%num_data_elements+1
-                        DebugPrint " Found STAR field line ", line
+                        pos1 = firstNonBlank(trim(line))
+                        pos2 = firstBlank(trim(line))
+                        DebugPrint " Found STAR field line ", trim(line), " VAR= ",pos2, line(pos1+4:pos2)
+
                         cycle
                     else
-                        inField=.false.
+                        inHeader=.false.
                         DebugPrint " End of STAR data field lines "
                         inData = .true.
                     endif
                 endif
-                 if(self%doprint) print*, "STAR>> number of fields ", self%num_data_elements
+
                 !! Count number of data lines
-                if(inData)then
-                    if (line == "" )then
-                        inData=.false.
-                        DebugPrint " End of STAR data lines ", line
-                        exit
-                    endif
+                if(inData)then   !! continue through to end of file
                     self%num_data_lines=self%num_data_lines+1
                     DebugPrint " Found STAR data line ", line
+                    !call parsestr(line,' ',argline,nargsline)
+                    nargsline = cntRecsPerLine(trim(line))
+                    if(nargsline /=  self%num_data_elements)then
+                        print *, " Records on line mismatch ", nargsline,  self%num_data_elements
+                        print *, "Line number ",self%num_data_lines, ":: ", line
+                        stop " line has insufficient elements "
+                    endif
                     cycle
                 end if
-                if(self%doprint) print*, "STAR>> number of record lines ", self%num_data_lines
-               
-                !! Parse the start of the STAR file
-                lenstr=len_trim(line)
-                if (lenstr == 0 )cycle ! empty line
-                if ( line(1:5) == "data_")then !! e.g. data_
+
+                !! does line contain ''data_''
+                if ( .not. (index(trim(line),"data_") == 0))then 
                     DebugPrint " Found STAR 'data_*' in header ", line
                     !! Quick string length comparison
                     if(lenstr == len_trim("data_pipeline_general"))then
@@ -267,13 +287,12 @@ contains
                    else if(lenstr == len_trim("data_model_general"))then
                       print *," Found STAR 'data_model_general' header -- Not supported "
                       exit
-
                     end if
                     !!otherwise
                     cycle
                 endif
-                if (line == "loop_" )then
-                    inField=.true.
+                if (.not. (index(trim(line), "loop_") == 0) )then
+                    inHeader=.true.
                     DebugPrint "Begin STAR field lines ", line
                 endif
 
@@ -285,58 +304,71 @@ contains
         endif
 
     end subroutine read_header
-    subroutine read_data_labels(self)
+
+    subroutine read_data_lines(self)
         class(stardoc), intent(inout) :: self
-        integer          :: n,ios,lenstr, pos,i
-        character(len=LINE_MAX_LEN) :: line ! 8192
-        logical :: inData, inField
-        inField=.false.
-        n=1
+        integer          :: n,cnt,ios,lenstr,pos,i,nargsOnDataline, nDatalines
+        character(len=:),allocatable :: line 
+        logical :: inData, inHeader
+        inHeader=.false.;inData=.false.
+        n=1;cnt=1;ios=0
+        nDatalines=0; nargsOnDataline=0
         if(self%l_open)then
             do
-                read(self%funit,*,IOSTAT=ios) line
+                call readline(self%funit, line, ios)
                 if(ios /= 0) exit
+                line=trim(adjustl(line))
+                lenstr=len_trim(line)
+                if (lenstr == 0 )cycle ! empty line
+
 
                 !! Count number of fields in header
-                if(inField)then
-                    if (lenstr == 0 )cycle ! in case there is an empty line after 'loop_'
-                    if (trim(line(1:4)) == "_rln" )then
-                        pos = firstNonBlank(line)
-                        if(pos <= 5)then
-                            write(*,*) 'line: ', line
-                            stop 'field too small to contain a header; stardoc :: read_data_labels'
-                        end if
-                        !! shorten label
-                        if(pos >= KEYLEN+5)pos = KEYLEN+4
-                        self%param_labels(n) = trim(line(5:pos))
-                        DebugPrint " STAR param field : ",n, " : ", self%param_labels(n)
+                if(inHeader)then
+                    if ( .not. (index(trim(line),"_rln") ==0) )then
+                        ! ignore header
                         n = n+1
                     else
-                        inField=.false.
-                        DebugPrint " End of STAR data field lines "
-                        exit
+                        inHeader=.false.
+                        print *, " Beginning data lines "
+                        inData = .true.
                     endif
                 endif
+                !! Process Data line
+                if(inData)then
+                    nDatalines=nDatalines+1
+                    print *, " Found STAR data line ", line
+                    !call parsestr(line,' ',argline,nargsline)
+                    nargsOnDataline = cntRecsPerLine(trim(line))
+                    if(nargsOnDataline /=  self%num_data_elements) then
+                        print *, " Records on line mismatch ", nargsOnDataline,  self%num_data_elements
+                        print *, line
+                        stop " line has insufficient elements "
+                    endif
+                    cycle
+                endif
+
                 if(self%doprint) then
                     do i=1, n-1
                         print*, "STAR>> field label ", i,  self%param_labels(i)
                     enddo
                 endif
-
              
                 !! Parse the start of the STAR file
-                lenstr=len_trim(line)
-                if (lenstr == 0 )cycle ! empty line
-                if ( line(1:4) == "data") cycle
-                if (trim(line) == "loop_" )then
-                    inField=.true.
+                if ( .not. (index(trim(line), "data_") == 0)) cycle
+                if ( .not. (index(trim(line) , "loop_") == 0))then
+                    inHeader=.true.
                     DebugPrint "Begin STAR field lines ", line
                 endif
             end do
+            if(nDatalines /= self%num_data_lines)then
+                print *," Num data lines mismatch in read_data_lines and read_header"
+                stop
+            endif
+
             rewind( self%funit,IOSTAT=ios)
             if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
         endif
-    end subroutine read_data_labels
+    end subroutine read_data_lines
 
     subroutine  write(self, filename, sp, vars)
         use simple_sp_project
@@ -469,7 +501,6 @@ contains
 
             endif
         end do
-
         call fclose(starfd)
     end subroutine read
 

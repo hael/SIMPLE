@@ -55,7 +55,7 @@ contains
         endif
        
             ! import mode
-            call self%doc%open(filename)
+            call self%doc%open4import(filename)
             call self%doc%close()
 
     end subroutine prepareimport
@@ -99,7 +99,7 @@ contains
         class(star_project), intent(inout)     :: self
         character(len=*), optional, intent(inout) :: fname
         call self%doc%setdoprint()
-        call self%doc%open(fname)
+        call self%doc%open4import(fname)
         
     end subroutine read
 

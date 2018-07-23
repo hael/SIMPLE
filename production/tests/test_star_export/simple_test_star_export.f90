@@ -13,9 +13,10 @@ use simple_binoris,    only: binoris
 use simple_stardoc
 use simple_star_dict,  only:  star_dict
 implicit none
+#include "simple_local_flags.inc"
 character(len=STDLEN) :: oldCWDfolder,curDir,datestr
 character(len=STDLEN) :: simple_testbench,timestr,folder, fileref, filecompare
-character(len=:),allocatable:: tmpfile
+character(len=:),allocatable:: tmpfile,line
 integer(8) :: count1
 integer :: io_stat,funit,ier
 integer :: num_data_elements, num_data_lines
@@ -27,8 +28,21 @@ type(star_project) :: s
 type(stardoc) :: sdoc
 type(star_dict) :: sdict
 logical :: isopened
+CHARACTER(len=32) :: argtmp
 
-#include "simple_local_flags.inc"
+if( command_argument_count() == 1 )then
+    call get_command_argument(1,argtmp)
+    print *, trim(argtmp)
+    tmpfile = trim(argtmp)
+else
+allocate(tmpfile,source="/scratch/el85/stars_from_matt/micrographs_all_gctf.star")
+!tmpfile="/scratch/el85/stars_from_matt/micrographs_all_gctf.star"
+
+!io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
+!tmpfile=filepath(trim(simple_testbench),"star_test/stars_from_matt/micrographs_all_gctf.star")
+endif
+print *, trim(tmpfile)
+
 debug=.true.
 isopened=.false.
 call date_and_time(date=datestr)
@@ -41,23 +55,31 @@ if(io_stat/=0) call simple_stop("simple_chdir failed")
 call simple_getcwd(curDir)
 print *," Current working directory ", curDir
 count1=tic()
-io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
-print *,"(info)**simple_test_star_export:  Testing star formatted file"
-!! Testing starformat
-!tmpfile="/scratch/el85/stars_from_matt/micrographs_all_gctf.star"
-tmpfile=filepath(trim(simple_testbench),"star_test/stars_from_matt/micrographs_all_gctf.star")
 
+print *,"(info)**simple_test_star_export:  Testing star formatted file ", trim(tmpfile)
+tmpfile= trim(adjustl(tmpfile))
+!! Testing starformat
 call openstar(trim(tmpfile),funit)
-print *,"(info)**simple_test_star_export:  Testing star formatted file, ", funit, is_open(funit)
-if(.not. is_open(funit)) stop "readline isopened failed"
+print *,"(info)**simple_test_star_export:  Testing star formatted file is_open ", is_open(funit)
+if(.not. is_open(funit)) then
+    DiePrint("readline isopened failed")
+endif
+ier=0
+print *,"(info)**simple_test_star_export: Readline testing"
+do while (ier==0)
+    call readline(funit,line,ier)
+    if(allocated(line))print *,line
+enddo
+print *,"(info)**simple_test_star_export: Reading header"
 call read_header(funit)
 write(*,*)
 write(*,*)
 write(*,*)
 write(*,*)
-print *,"(info)**simple_test_star_export:  Testing star formatted file, ", funit, is_open(funit)
+print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
+print *,"(info)**simple_test_star_export: Reading body"
 call read_data_lines(funit)
-print *,"(info)**simple_test_star_export:  Testing star formatted file, ", funit, is_open(funit)
+print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
 call fclose(funit,io_stat,errmsg='stardoc ; close ')
 
 print *,' Testing star_dict'
@@ -190,8 +212,8 @@ contains
         integer(8):: filesz
         if(.not. file_exists(trim(filename) ))&
             call simple_stop("simple_stardoc::open ERROR file does not exist "//trim(filename) )
-        call fopen(tmpunit, trim(filename), action='READ',&
-            &status='UNKNOWN', iostat=io_stat)
+        call fopen(tmpunit, file=trim(filename), action='READ',&
+            & iostat=io_stat)
         if(io_stat/=0)call fileiochk('star_doc ; open '//trim(filename), io_stat)
         funit  = tmpunit
 
@@ -208,7 +230,8 @@ contains
 
 
 
-    subroutine readline(funit, line,ier)
+    subroutine readline(funit, line, ier)
+        use iso_fortran_env
         implicit none
         integer, intent(in)                      :: funit
         character(len=:),allocatable,intent(out) :: line
@@ -223,7 +246,9 @@ contains
         ier=0
         inquire(unit=funit,opened=isopened,iostat=ier)
         if(ier/=0) call fileiochk("readline isopened failed", ier)
-        if(.not. isopened ) stop "readline isopened failed"
+        if(.not. isopened )then
+            DiePrint("readline isopened failed")
+        endif
         ! read characters from line and append to result
         do
             ! read next buffer (an improvement might be to use stream I/O
@@ -231,9 +256,12 @@ contains
             ! limiting)
             read(funit,fmt='(a)',advance='no',size=isize,iostat=ier) buffer
             ! append what was read to result
+            !isize=len_trim(buffer)
             if(isize.gt.0)line=line//" "//buffer(:isize)
             ! if hit EOR reading is complete unless backslash ends the line
-            if(is_iostat_eor(ier))then
+            !print *, ier == iostat_eor, ier == iostat_end, buffer
+            !call fileiochk("readline isopened failed", ier)
+           if(is_iostat_eor(ier))then
                 last=len(line)
                 ! if(last.ne.0)then
                 !     ! if line ends in backslash it is assumed a continued line
@@ -270,7 +298,7 @@ contains
         inData=.false.;inField=.false.
         ios=0
         !! Make sure we are at the start of the file
-        rewind( funit,IOSTAT=ios)
+        rewind( funit, IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
         ios=0
         do
@@ -278,6 +306,10 @@ contains
             if(ios /= 0) exit
             line = trim(adjustl(line))
             print*, "STAR>>",line
+            !! Parse the start of the STAR file
+            lenstr=len_trim(line)
+            if (lenstr == 0 )cycle ! empty line
+
             !! Count number of fields in header
             if(inField)then
                 if ( .not. (index(trim(line), "_rln") == 0) )then
@@ -292,13 +324,9 @@ contains
                     inData = .true.
                 endif
             endif
+
             !! Count number of data lines
-            if(inData)then
-                if (line == "" )then
-                    inData=.false.
-                    DebugPrint " End of STAR data lines ", line
-                    exit
-                endif
+            if(inData)then !! continue through to end of file
                 num_data_lines=num_data_lines+1
                 DebugPrint " Found STAR data line ", line
                 !call parsestr(line,' ',argline,nargsline)
@@ -311,9 +339,6 @@ contains
                 cycle
             end if
 
-            !! Parse the start of the STAR file
-            lenstr=len_trim(line)
-            if (lenstr == 0 )cycle ! empty line
             if (  .not. (index(trim(line), "data_") == 0))then !! does line contain ''data_''
                 DebugPrint " Found STAR 'data_*' in header ", line
                 !! Quick string length comparison
@@ -332,7 +357,6 @@ contains
                 else if(lenstr == len_trim("data_model_general"))then
                     print *," Found STAR 'data_model_general' header -- Not supported "
                     exit
-
                 end if
                 !!otherwise
                 cycle
@@ -348,8 +372,8 @@ contains
         DebugPrint " STAR field lines: ", num_data_elements
         DebugPrint " STAR data lines : ", num_data_lines
 
-
     end subroutine read_header
+
     subroutine read_data_lines(funit)
         integer,intent(inout) :: funit
         integer          :: n,cnt,ios,lenstr, pos,i, nargsOnDataline, nDatalines
