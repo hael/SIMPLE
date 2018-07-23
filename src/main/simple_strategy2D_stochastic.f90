@@ -51,8 +51,7 @@ contains
             endif
             if( do_shc )then
                 ! SHC move
-                found_better      = .false.
-                self%s%nrefs_eval = 0
+                found_better = .false.
                 do isample=1,self%s%nrefs
                     iref = s2D%srch_order(self%s%iptcl_map, isample)
                     ! keep track of how many references we are evaluating

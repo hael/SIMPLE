@@ -56,8 +56,8 @@ contains
         !      relevant strategy2D base class
         type(strategy2D_spec) :: strategy2Dspec
         integer               :: iptcl, icls, i, fnr, cnt, update_cnt
-        real                  :: extr_bound, frac_srch_space, extr_thresh
-        logical               :: doprint, l_partial_sums, l_extr, l_frac_update
+        real                  :: extr_bound, frac_srch_space, extr_thresh, snhc_sz
+        logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
         if( L_BENCH )then
             t_init = tic()
@@ -84,6 +84,12 @@ contains
             l_extr         = .false.
             l_frac_update  = params_glob%l_frac_update
         endif
+        ! snhc & extremal optimzation follow the same iteration dependent rule
+        l_snhc = .false.
+        if( params_glob%refine.eq.'snhc' )then
+            l_snhc = l_extr
+            l_extr = .false.
+        endif
 
         ! EXTREMAL LOGICS
         if( l_extr )then
@@ -104,6 +110,16 @@ contains
         else
             extr_thresh = 0.
             extr_bound  = -huge(extr_bound)
+        endif
+
+        ! SNHC LOGICS
+        if( l_snhc )then
+            ! factorial decay, -2 because first step is always greedy
+            snhc_sz = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(params_glob%extr_iter-2)
+            snhc_sz = min(EXTRINITHRESH, max(0., snhc_sz))
+            write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*snhc_sz
+        else
+            snhc_sz = 0.
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
@@ -132,6 +148,7 @@ contains
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
         endif
         DebugPrint ' cluster2D_exec;  INDEX SAMPLING                             ', toc(t_init)
+
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -248,7 +265,7 @@ contains
                 strategy2Dspec%iptcl      = iptcl
                 strategy2Dspec%iptcl_map  = cnt
                 if( params_glob%refine.eq.'snhc' )then
-                    strategy2Dspec%extr_bound = extr_thresh
+                    strategy2Dspec%extr_bound = snhc_sz
                 else
                     strategy2Dspec%extr_bound = extr_bound
                 endif

@@ -705,7 +705,7 @@ contains
         call cline_refine3D2%set('refine', 'multi')
         !!!!!!!!!!!!!! Under testing
         call cline_refine3D2%set('neigh', 'yes')
-        call cline_refine3D2%set('nnn', real(max(30,nint(0.05*real(params%nspace)))))
+        call cline_refine3D2%set('nnn', real(max(30,nint(0.1*real(params%nspace)))))
         !!!!!!!!!!!!!!!!!!
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
@@ -892,7 +892,7 @@ contains
         character(len=:),      allocatable :: projname
         type(parameters)         :: params
         type(sp_project)         :: spproj, spproj_master
-        integer                  :: state, iptcl, cnt, nstates, single_state, status
+        integer                  :: state, iptcl, cnt, nstates, single_state
         logical                  :: l_singlestate, error
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call params%new(cline)

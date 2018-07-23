@@ -41,7 +41,7 @@ contains
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt
-        logical :: converged, update_frac
+        logical :: converged
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
@@ -161,28 +161,24 @@ contains
             state_mi_joint = 0.
             statepops      = 0.
             do iptcl=1,build_glob%spproj_field%get_noris()
-                istate = nint(build_glob%spproj_field%get(iptcl,'state'))
+                istate = build_glob%spproj_field%get_state(iptcl)
                 if( istate==0 )cycle
-                ! it doesn't make sense to include the state overlap here
-                ! as the overall state overlap is already provided above
                 state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_proj')
                 state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_inpl')
-                ! 2.0 because we include two mi-values
-                statepops(istate)      = statepops(istate) + 2.0
+                statepops(istate)      = statepops(istate) + 1.
             end do
+            state_mi_joint = state_mi_joint/2.
             ! normalise the overlap
             forall( istate=1:params_glob%nstates, statepops(istate)>0. )&
                &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
-            ! bring back the correct statepops
-            statepops = statepops/2.0
             ! the minumum overlap is in charge of convergence
-            min_state_mi_joint = minval(state_mi_joint, MASK=statepops>0.)
+            min_state_mi_joint = minval(state_mi_joint, mask=statepops>0.)
             ! print the overlaps and pops for the different states
             do istate=1,params_glob%nstates
                 write(*,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
-                'DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
+                'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
-            if( min_state_mi_joint > MI_STATE_LIM .and.&
+            if( min_state_mi_joint > MI_STATE_JOINT_LIM .and.&
                 self%mi_state      > MI_STATE_LIM .and.&
                 self%frac          > FRAC_LIM      )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
@@ -193,6 +189,8 @@ contains
             endif
             deallocate( state_mi_joint, statepops )
         endif
+        ! destruct
+        deallocate(mask, updatecnts)
     end function check_conv3D
 
     function check_conv_cluster( self, cline ) result( converged )
@@ -210,7 +208,7 @@ contains
         allocate( statepops(params_glob%nstates) )
         statepops = 0.
         do iptcl=1,build_glob%spproj_field%get_noris()
-            istate = nint(build_glob%spproj_field%get(iptcl,'state'))
+            istate = build_glob%spproj_field%get_state(iptcl)
             if( istate==0 )cycle
             statepops(istate) = statepops(istate) + 1.0
         end do
@@ -262,6 +260,7 @@ contains
             case('bfac')
                 get = self%bfac
             case DEFAULT
+                get = 0.
         end select
     end function get
 

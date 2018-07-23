@@ -3269,10 +3269,8 @@ contains
         class(oris), intent(in)  :: self
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i, j, cnt
-        real    :: dists((self%n*(self%n-1))/2), vard, x
+        real    :: dists((self%n*(self%n-1))/2), vard
         logical :: err
-        mind = huge(x)
-        maxd = -mind
         cnt  = 0
         do i=1,self%n-1
            do j=i+1,self%n

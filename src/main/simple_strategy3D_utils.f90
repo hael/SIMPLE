@@ -224,7 +224,8 @@ contains
             enddo
             state = maxloc(state_ws, dim=1)
             ! in-state re-weighing
-            included = included .and. (states==state)
+            included     = included .and. (states==state)
+            s%npeaks_eff = count(included)
             where( .not. included ) ws = 0.
             ws       = ws / sum(ws, mask=included)
             best_loc = maxloc(ws)

@@ -37,7 +37,7 @@ contains
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("simple_strategy2D_matcher; prime2D_exec cls_pops")
+            if(alloc_stat.ne.0)call allocchk("simple_strategy2D_srch :: prep4strategy2D_srch")
         endif
         ! make random reference direction order
         nptcls = count(ptcl_mask)
@@ -47,7 +47,6 @@ contains
         do iptcl = params_glob%fromp, params_glob%top
             if(ptcl_mask(iptcl))then
                 cnt = cnt + 1
-                call rt%reset
                 call rt%ne_ran_iarr( s2D%srch_order(cnt,:) )
                 prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
                 call put_last(prev_class, s2D%srch_order(cnt,:))

@@ -75,7 +75,7 @@ contains
                 ! to not take account alignment errors due to state mixing
                 corrs(state) = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], self%s%prev_roind))
             enddo
-            self%s%prev_corr = corrs(self%s%prev_state)
+            !self%s%prev_corr = corrs(self%s%prev_state) ! to use with shcloc
             ! make moves
             mi_state = 0.
             mi_inpl  = 1.

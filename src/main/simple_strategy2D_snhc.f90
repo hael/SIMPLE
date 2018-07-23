@@ -36,13 +36,12 @@ contains
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
-            do_inplsrch       = .true.
-            cc_glob           = -1.
-            glob_best_set     = .false.
-            found_better      = .false.
-            self%s%nrefs_eval = 0
-            nrefs_bound       = min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-self%spec%extr_bound)) )
-            nrefs_bound       = max(2, nrefs_bound)
+            do_inplsrch   = .true.
+            cc_glob       = -1.
+            glob_best_set = .false.
+            found_better  = .false.
+            nrefs_bound   = min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-self%spec%extr_bound)) )
+            nrefs_bound   = max(2, nrefs_bound)
             call self%s%prep4srch
             do isample=1,self%s%nrefs
                 ! keep track of how many references we are evaluating
@@ -94,7 +93,8 @@ contains
                 endif
             endif
             if( do_inplsrch )call self%s%inpl_srch
-            call self%s%store_solution
+            nrefs_bound = min(self%s%nrefs, nrefs_bound+1) ! to take into account withdrawal
+            call self%s%store_solution(nrefs=nrefs_bound)
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

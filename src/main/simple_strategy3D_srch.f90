@@ -123,7 +123,7 @@ contains
         self%nnn_static = params_glob%nnn
         self%nnn        = params_glob%nnn
         self%nnnrefs    = self%nnn*self%nstates
-        self%dowinpl    = npeaks /= 1
+        self%dowinpl    = (npeaks /= 1) .and. (self%nstates == 1)
         ! multiple states
         if( self%nstates == 1 )then
             self%npeaks_grid = GRIDNPEAKS

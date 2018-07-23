@@ -84,6 +84,7 @@ contains
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
         real :: corrs(pftcc_glob%get_nrots())
+        self%nrefs_eval = 0
         ! find previous discrete alignment parameters
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class')) ! class index
         if( self%dyncls )then
@@ -149,12 +150,12 @@ contains
       !  DebugPrint '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
 
-    subroutine store_solution( self, entropy )
+    subroutine store_solution( self, nrefs )
         use simple_ori,  only: ori
         class(strategy2D_srch), intent(in) :: self
-        real,         optional, intent(in) :: entropy
+        integer,      optional, intent(in) :: nrefs
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: e3, mi_class, mi_inpl, mi_joint
+        real :: e3, mi_class, mi_inpl, mi_joint, frac
         ! get in-plane angle
         e3   = 360. - pftcc_glob%get_rot(self%best_rot) ! change sgn to fit convention
         ! calculate in-plane rot dist (radians)
@@ -178,6 +179,12 @@ contains
             mi_joint = mi_joint + 1.
         endif
         mi_joint = mi_joint / 2.
+        ! search psace explored
+        if( present(nrefs) )then
+            frac = 100.*(real(self%nrefs_eval)/real(nrefs))
+        else
+            frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
+        endif
         ! update parameters
         call build_glob%spproj_field%e3set(self%iptcl,e3)
         call build_glob%spproj_field%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
@@ -189,8 +196,7 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'mi_class',   mi_class)
         call build_glob%spproj_field%set(self%iptcl, 'mi_inpl',    mi_inpl)
         call build_glob%spproj_field%set(self%iptcl, 'mi_joint',   mi_joint)
-        call build_glob%spproj_field%set(self%iptcl, 'frac',       100.*(real(self%nrefs_eval)/real(self%nrefs)))
-        if( present(entropy) )call build_glob%spproj_field%set(self%iptcl, 'ent', entropy)
+        call build_glob%spproj_field%set(self%iptcl, 'frac',       frac)
       !  DebugPrint  '>>> strategy2D_srch::GOT BEST ORI'
     end subroutine store_solution
 
