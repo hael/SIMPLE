@@ -2552,9 +2552,9 @@ contains
         type(image) :: self
         call self%copy(self1)
         !$omp parallel workshare proc_bind(close)
-            self%rmat = self%rmat**rconst
+        self%rmat = self%rmat**rconst
         !$omp end parallel workshare
-        end function pow_1
+    end function pow_1
 
     !>  \brief pow_2 is for calculating the power of an image
     !!
@@ -4760,8 +4760,8 @@ contains
         complex                       :: shcomp
         integer                       :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
         ! this is for highly optimised code, so we assume that images are always Fourier transformed beforehand
-        if( .not. self_ref%ft  ) call simple_stop('self_ref not FTed;  corr_shifted; simple_image')
-        if( .not. self_ptcl%ft ) call simple_stop('self_ptcl not FTed; corr_shifted; simple_image')
+        if( .not. self_ref%ft  ) stop 'self_ref not FTed;  corr_shifted; simple_image'
+        if( .not. self_ptcl%ft ) stop 'self_ptcl not FTed; corr_shifted; simple_image'
         r = 0.
         sumasq = 0.
         sumbsq = 0.
@@ -4936,8 +4936,8 @@ contains
         sumbsq = 0.
         lims   = self1%fit%loop_lims(2)
         n      = self1%get_filtsz()
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys, sh)&
-        !$omp schedule(static) proc_bind(close)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
+        !$omp schedule(static) reduction(+:corrs,sumasq,sumbsq) proc_bind(close)
         do k=lims(2,1),lims(2,2)
             do h=lims(1,1),lims(1,2)
                 do l=lims(3,1),lims(3,2)

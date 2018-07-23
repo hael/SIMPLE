@@ -92,7 +92,6 @@ contains
         call vol%pad(vol_pad)
         call vol_pad%fft
         call vol_pad%expand_cmat(KBALPHA)
-        write(*,'(A)') '>>> ROTATING VOLUME'
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
         call vol_pad%kill_expanded
         call vol_pad%kill
@@ -109,6 +108,7 @@ contains
         integer          :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3)
         real             :: loc(3), rmat(3,3)
         logical          :: l_shvec_present
+        l_shvec_present = present(shvec)
         rovol_pad = cmplx(0.,0.)
         rovol     = 0.
         lims      = vol_pad%loop_lims(2)

@@ -69,7 +69,7 @@ contains
         call b%vol%mask(p%msk,'soft')
         call b%vol%write('rotated.mrc')
         call b%vol%fft()
-        call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp,0.)
+        call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp)
         call vol_tmp%kill
     end subroutine setup_testenv
 

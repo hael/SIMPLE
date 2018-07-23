@@ -1,5 +1,4 @@
-! fast rotational cross-correlation calculation between Fourier volumes
-! using defined sampling space geometries
+! fast cross-correlation calculation between Fourier volumes using defined sampling space geometries
 module simple_volpft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -30,9 +29,13 @@ type :: volpft_corrcalc
     procedure          :: get_kfromto
     ! INTERPOLATION METHODS
     procedure, private :: extract_ref
-    procedure          :: extract_target
-    ! CORRELATOR
-    procedure          :: corr
+    procedure, private :: extract_target_1
+    procedure, private :: extract_target_2
+    generic            :: extract_target => extract_target_1, extract_target_2
+    ! CORRELATORS
+    procedure, private :: corr_1
+    procedure, private :: corr_2
+    generic            :: corr => corr_1, corr_2
     ! DESTRUCTOR
     procedure          :: kill
 end type volpft_corrcalc
@@ -172,7 +175,7 @@ contains
         self%sqsum_ref = sum(csq(self%vpft_ref))
     end subroutine extract_ref
 
-    subroutine extract_target( self, rmat, vpft_target, sqsum_target )
+    subroutine extract_target_1( self, rmat, vpft_target, sqsum_target )
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: rmat(3,3)
         complex,                intent(out)   :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
@@ -186,17 +189,46 @@ contains
             end do
         end do
         sqsum_target = sum(csq(vpft_target))
-    end subroutine extract_target
+    end subroutine extract_target_1
 
-    function corr( self, rmat ) result( cc )
+    subroutine extract_target_2( self, rmat, shvec, vpft_target, sqsum_target )
+        class(volpft_corrcalc), intent(inout) :: self
+        real,                   intent(in)    :: rmat(3,3)
+        real,                   intent(in)    :: shvec(3)
+        complex,                intent(out)   :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
+        real,                   intent(out)   :: sqsum_target
+        real    :: loc(3)
+        integer :: ispace, k
+        do ispace=1,self%nspace
+            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                loc  = matmul(self%locs_ref(k,ispace,:),rmat)
+                vpft_target(k,ispace) = &
+                    &self%vol_target%interp_fcomp(loc) * self%vol_target%oshift(loc, shvec)
+            end do
+        end do
+        sqsum_target = sum(csq(vpft_target))
+    end subroutine extract_target_2
+
+    function corr_1( self, rmat ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: rmat(3,3)
         complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
         real    :: sqsum_target, cc
-        call self%extract_target(rmat, vpft_target, sqsum_target)
+        call self%extract_target_1(rmat, vpft_target, sqsum_target)
         cc = sum(real(self%vpft_ref * conjg(vpft_target)))
         cc = cc / sqrt(self%sqsum_ref * sqsum_target)
-    end function corr
+    end function corr_1
+
+    function corr_2( self, rmat, shvec ) result( cc )
+        class(volpft_corrcalc), intent(inout) :: self
+        real,                   intent(in)    :: rmat(3,3)
+        real,                   intent(in)    :: shvec(3)
+        complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
+        real    :: sqsum_target, cc
+        call self%extract_target_2(rmat, shvec, vpft_target, sqsum_target)
+        cc = sum(real(self%vpft_ref * conjg(vpft_target)))
+        cc = cc / sqrt(self%sqsum_ref * sqsum_target)
+    end function corr_2
 
     subroutine kill( self )
         class(volpft_corrcalc), intent(inout) :: self

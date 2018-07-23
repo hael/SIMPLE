@@ -479,7 +479,7 @@ contains
                 jvol = pairs(ipair,2)
                 call read_and_prep_vol( vollist(ivol), vol1 )
                 call read_and_prep_vol( vollist(jvol), vol2 )
-                call volpft_srch_init(vol1, vol2, params%hp, params%lp, 0.)
+                call volpft_srch_init(vol1, vol2, params%hp, params%lp)
                 o = volpft_srch_minimize()
                 corrs(ipair) = o%get('corr')
             end do
@@ -508,9 +508,9 @@ contains
                 do jvol=ivol + 1,nvols
                     cnt = cnt + 1
                     call progress(cnt, npairs)
-                    call read_and_prep_vol(  vollist(ivol), vol1 )
-                    call read_and_prep_vol(  vollist(jvol), vol2 )
-                    call volpft_srch_init(vol1, vol2, params%hp, params%lp, 0.)
+                    call read_and_prep_vol( vollist(ivol), vol1 )
+                    call read_and_prep_vol( vollist(jvol), vol2 )
+                    call volpft_srch_init(vol1, vol2, params%hp, params%lp)
                     o = volpft_srch_minimize()
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
@@ -554,27 +554,60 @@ contains
         type(parameters) :: params
         type(projector)  :: vol1, vol2
         type(image)      :: vol_out
-        type(ori)        :: orientation
-        real             :: ceulxyz(7)
+        type(ori)        :: orientation, orientation_best
+        real             :: cxyz(4), cxyz2(4)
+        integer          :: i
         call params%new(cline)
         ! prep vols
         call read_and_prep_vol(params%vols(1), vol1)
         call read_and_prep_vol(params%vols(2), vol2)
-        ! grid search with volpft (icosahedral sampling geometry)
-        call volpft_srch_init(vol1, vol2, params%hp, params%lp, params%trs)
+        ! grid search with volpft (icosahedral sampling geometry) using lpstart low-pass limit
+        call volpft_srch_init(vol1, vol2, params%hp, params%lpstart)
         orientation = volpft_srch_minimize()
-        call volpft_srch_kill
-        ! continuous refinement by vol2vol registration over all 6 degrees of freedom
-        call vol1%ifft
+        ! rotate vol to create reference for shift alignment
         call vol2%ifft
-        call vol_srch_init(vol1, vol2, params%hp, params%lp, params%trs, 5., orientation)
-        ceulxyz = vol_srch_minimize()
-        ! rotate and shift volume for output
-        call orientation%set_euler(ceulxyz(2:4))
+        vol_out = rotvol(vol2, orientation)
+        call vol2%fft
+        call vol_out%fft
+        ! continuous shift alignment using lpstart low-pass limit
+        call vol_srch_init(vol1, vol_out, params%hp, params%lpstart, params%trs)
+        cxyz = vol_shsrch_minimize()
+        ! re-search the angular grid with the shifts in-place
+        call volpft_srch_set_shvec(cxyz(2:4))
+        orientation = volpft_srch_minimize()
+        ! Refinment using lpstop low-pass limit
+        call volpft_srch_init(vol1, vol2, params%hp, params%lpstop)
+        call vol_srch_init(vol1, vol_out, params%hp, params%lpstop, params%trs)
+        do i=1,10
+            ! rotate and shift vol to create reference for shift alignment
+            call vol2%ifft
+            vol_out = rotvol(vol2, orientation, cxyz(2:4))
+            call vol2%fft
+            call vol_out%fft
+            cxyz2 = vol_shsrch_minimize()
+            if( cxyz2(1) > 0. )then ! a better solution was found
+                ! obtain joint shifts by vector addition
+                cxyz(2:4) = cxyz(2:4) + cxyz2(2:4)
+                ! update shifts in volpft_srch class and refine angles
+                call volpft_srch_set_shvec(cxyz(2:4))
+                if( i <= 3 )then
+                    orientation_best = volpft_srch_refine(orientation)
+                else
+                    orientation_best = volpft_srch_refine(orientation, angres=5.)
+                endif
+                orientation = orientation_best
+                call orientation%set('x', cxyz(2))
+                call orientation%set('y', cxyz(3))
+                call orientation%set('z', cxyz(4))
+            endif
+        end do
+        ! rotate and shift vol for output
         call vol2%ifft
-        vol_out = rotvol(vol2, orientation, ceulxyz(5:7))
+        vol_out = rotvol(vol2, orientation, cxyz(2:4))
         ! write
         call vol_out%write(params%outvol, del_if_exists=.true.)
+        ! destruct
+        call volpft_srch_kill
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
     end subroutine exec_dock_volpair

@@ -10,55 +10,54 @@ use simple_oris,            only: oris
 use simple_ori,             only: ori, euler2m
 implicit none
 
-public :: volpft_srch_init, volpft_srch_minimize, volpft_srch_kill
+public :: volpft_srch_init, volpft_srch_set_shvec, volpft_srch_minimize, volpft_srch_refine, volpft_srch_kill
 private
 
 logical, parameter :: DEBUG   = .false.
-integer, parameter :: NPROJ   = 200
-integer, parameter :: NBEST   = 20
-integer, parameter :: ANGSTEP = 10
+integer, parameter :: NPROJ   = 500
+integer, parameter :: NBEST   = 10
+integer, parameter :: ANGSTEP = 7
 
 type opt4openMP
     type(opt_spec)            :: ospec           !< optimizer specification object
     class(optimizer), pointer :: nlopt => null() !< optimizer object
 end type opt4openMP
 
-type(volpft_corrcalc)         :: vpftcc                     !< corr calculator
-type(opt4openMP), allocatable :: opt_eul(:)                 !< parallel optimisation, Euler angles
-type(ori)                     :: e_glob                     !< ori of best global solution
-real                          :: shvec_glob(3) = 0.         !< best global origin shift
-integer                       :: nrestarts     = 3          !< simplex restarts (randomized bounds)
+type(volpft_corrcalc)         :: vpftcc                  !< corr calculator
+type(opt4openMP), allocatable :: opt_eul(:)              !< parallel optimisation, Euler angles
+type(ori)                     :: e_glob                  !< ori of best global solution
+real                          :: shvec_glob(3) = 0.      !< global origin shift
+real                          :: lims_eul(3,2)           !< opt boundaries
+logical                       :: doshift       = .false. !< shifted cross-correlation search
+integer                       :: nrestarts     = 5       !< simplex restarts (randomized bounds)
 
 contains
 
-    subroutine volpft_srch_init( vol_ref, vol_target, hp, lp, trs, nrestarts_in )
+    subroutine volpft_srch_init( vol_ref, vol_target, hp, lp, nrestarts_in )
         use simple_projector,   only: projector
         use simple_opt_factory, only: opt_factory
         class(projector),  intent(in) :: vol_ref, vol_target
-        real,              intent(in) :: hp, lp, trs
+        real,              intent(in) :: hp, lp
         integer, optional, intent(in) :: nrestarts_in
         type(opt_factory) :: ofac
-        real              :: lims_eul(3,2), lims_shift(3,2)
         integer           :: ithr
         call volpft_srch_kill
         ! create the correlator
         call vpftcc%new( vol_ref, vol_target, hp, lp, KBALPHA )
         ! set nrestarts
-        nrestarts = 3
+        nrestarts = 5
         if( present(nrestarts_in) ) nrestarts = nrestarts_in
         ! make optimizer specs
-        lims_eul        = 0.
-        lims_eul(1,2)   = 359.99
-        lims_eul(2,2)   = 180.
-        lims_eul(3,2)   = 359.99
-        lims_shift(:,1) = -max(3.,trs)
-        lims_shift(:,2) =  max(3.,trs)
+        lims_eul      = 0.
+        lims_eul(1,2) = 359.99
+        lims_eul(2,2) = 180.
+        lims_eul(3,2) = 359.99
         ! make parallel optimiser struct
         allocate(opt_eul(nthr_glob))
         do ithr=1,nthr_glob
             ! optimiser spec
             call opt_eul(ithr)%ospec%specify('simplex', 3, ftol=1e-4,&
-            &gtol=1e-4, limits=lims_eul, nrestarts=nrestarts, maxits=30)
+            &gtol=1e-4, limits=lims_eul, nrestarts=nrestarts, maxits=100)
             ! point to costfun
             call opt_eul(ithr)%ospec%set_costfun(volpft_srch_costfun)
             ! generate optimizer object with the factory
@@ -66,8 +65,17 @@ contains
         end do
         ! create global ori
         call e_glob%new()
+        ! unflag doshift
+        doshift    = .false.
+        shvec_glob = 0.
         if( DEBUG ) write(*,*) 'debug(volpft_srch); volpft_srch_init, DONE'
     end subroutine volpft_srch_init
+
+    subroutine volpft_srch_set_shvec( shvec )
+        real, intent(in) :: shvec(3)
+        doshift    = .true.
+        shvec_glob = shvec
+    end subroutine volpft_srch_set_shvec
 
     function volpft_srch_minimize() result( orientation_best )
         real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:)
@@ -107,13 +115,17 @@ contains
         end do
         ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         corrs  = -1.
-        !omp parallel do schedule(static) default(shared) private(iproj,inpl) proc_bind(close) collapse(2)
+        !$omp parallel do schedule(static) default(shared) private(iproj,inpl) proc_bind(close) collapse(2)
         do iproj=1,NPROJ
             do inpl=1,n_inpls
-                corrs(iproj,inpl) = vpftcc%corr(rmats(iproj,inpl,:,:))
+                if( doshift )then
+                    corrs(iproj,inpl) = vpftcc%corr(rmats(iproj,inpl,:,:), shvec_glob)
+                else
+                    corrs(iproj,inpl) = vpftcc%corr(rmats(iproj,inpl,:,:))
+                endif
             end do
         end do
-        !omp end parallel do
+        !$omp end parallel do
         ! identify the best candidates (serial code)
         do iproj=1,NPROJ
             corr_best  = -1.
@@ -135,6 +147,8 @@ contains
         ! refine local optima
         ! order the local optima according to correlation
         order = cand_oris%order_corr()
+        orientation_best = cand_oris%get_ori(order(1))
+        call orientation_best%print_ori
         !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
         do iloc=1,NBEST
             ithr = omp_get_thread_num() + 1
@@ -157,6 +171,28 @@ contains
         call orientation%kill
     end function volpft_srch_minimize
 
+    function volpft_srch_refine( orientation_start, angres ) result( orientation_best )
+        class(ori),     intent(in) :: orientation_start
+        real, optional, intent(in) :: angres
+        class(*), pointer      :: fun_self => null()
+        type(ori) :: orientation_best
+        real      :: cost
+        integer   :: ithr
+        call orientation_best%new
+        ithr = omp_get_thread_num() + 1
+        opt_eul(ithr)%ospec%x = orientation_start%get_euler()
+        if( present(angres) )then
+            opt_eul(ithr)%ospec%limits(:,1) = opt_eul(ithr)%ospec%x(:) - angres
+            opt_eul(ithr)%ospec%limits(:,2) = opt_eul(ithr)%ospec%x(:) + angres
+        else
+            opt_eul(ithr)%ospec%limits = lims_eul
+        endif
+        call opt_eul(ithr)%nlopt%minimize(opt_eul(ithr)%ospec, fun_self, cost)
+        call orientation_best%set_euler(opt_eul(ithr)%ospec%x)
+        call orientation_best%set('corr', -cost)
+        call orientation_best%print_ori
+    end function volpft_srch_refine
+
     function volpft_srch_costfun( fun_self, vec, D ) result( cost )
         use simple_ori, only: ori
         class(*), intent(inout) :: fun_self
@@ -164,7 +200,11 @@ contains
         real,     intent(in)    :: vec(D)
         real                    :: cost, rmat(3,3)
         rmat = euler2m(vec(:3))
-        cost = -vpftcc%corr(rmat)
+        if( doshift )then
+            cost = -vpftcc%corr(rmat, shvec_glob)
+        else
+            cost = -vpftcc%corr(rmat)
+        endif
     end function volpft_srch_costfun
 
     subroutine volpft_srch_kill

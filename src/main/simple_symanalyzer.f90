@@ -77,58 +77,6 @@ contains
         call symobj%kill
     end subroutine symmetrize_map
 
-    ! subroutine eval_platonic_point_groups( vol_in, msk, hp, lp )
-    !     class(projector), intent(inout) :: vol_in
-    !     real,             intent(in)    :: msk, hp, lp
-    !     type(sym_stats), allocatable :: pgrps(:)
-    !     integer, parameter :: NGRPS = 11
-    !     real, allocatable  :: zscores(:)
-    !     integer            :: filtsz, isym, inds(3), iisym
-    !     real               :: scores(3)
-    !     ! prepare point-group stats object
-    !     allocate(pgrps(NGRPS))
-    !     pgrps(1)%str  = 'c2'
-    !     pgrps(2)%str  = 'c3'
-    !     pgrps(3)%str  = 'c4'
-    !     pgrps(4)%str  = 'c5'
-    !     pgrps(5)%str  = 'd2'
-    !     pgrps(6)%str  = 'd3'
-    !     pgrps(7)%str  = 'd4'
-    !     pgrps(8)%str  = 'd5'
-    !     pgrps(9)%str  = 't'
-    !     pgrps(10)%str = 'o'
-    !     pgrps(11)%str = 'i'
-    !     ! gather stats
-    !     call eval_point_groups(vol_in, msk, hp, lp, pgrps)
-    !     ! calculate cc-based scores
-    !     pgrps(9)%cc_avg  = pgrps(1)%cc + pgrps(2)%cc  + pgrps(5)%cc  + pgrps(9)%cc / 4.
-    !     pgrps(9)%score   = max(0.,median(pgrps(9)%fsc))
-    !     scores(1)        = pgrps(9)%score
-    !     pgrps(10)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(3)%cc  + pgrps(5)%cc +&
-    !                      & pgrps(6)%cc + pgrps(7)%cc  + pgrps(9)%cc  + pgrps(10)%cc / 8.
-    !     pgrps(10)%score  = max(0.,median(pgrps(10)%fsc))
-    !
-    !     scores(2)        = pgrps(10)%score
-    !     pgrps(11)%cc_avg = pgrps(1)%cc + pgrps(2)%cc  + pgrps(4)%cc  + pgrps(5)%cc +&
-    !                      & pgrps(6)%cc + pgrps(8)%cc  + pgrps(9)%cc  + pgrps(11)%cc / 8.
-    !     pgrps(11)%score  = max(0.,median(pgrps(11)%fsc))
-    !     scores(3)        = pgrps(11)%score
-    !     ! calculate Z-scores
-    !     zscores = robust_z_scores(scores)
-    !     ! produce ranked output
-    !     inds(1) = 9
-    !     inds(2) = 10
-    !     inds(3) = 11
-    !     call hpsort(scores, inds)
-    !     call reverse(inds)
-    !     do isym=1,3
-    !         iisym = inds(isym)
-    !         write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym,&
-    !         &'POINT-GROUP:', pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:',&
-    !         &pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
-    !     end do
-    ! end subroutine eval_platonic_point_groups
-
     subroutine symmetry_tester( vol_in, msk, hp, lp, cn_start, cn_stop, dihedral, platonic )
         class(projector), intent(inout) :: vol_in
         real,             intent(in)    :: msk, hp, lp
