@@ -105,7 +105,6 @@ contains
         integer :: addr
         logical :: success
         integer :: phys_i !< physical particle index
-        integer, volatile :: zebra
         if (.not. file_exists(trim(self%fname))) then
             call self%create_empty()
         else
