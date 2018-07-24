@@ -37,9 +37,12 @@
 #ifndef VerbosePrint
 # define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *,
 #endif
+
+! DiePrint must be used with and if/then statement dure to ";" otherwise it will break
 #ifndef DiePrint
 # define DiePrint(msg) write(*,'("Error in ",A," line ",I0,": ",A)') __FILENAME__,__LINE__, msg; stop
 #endif
+
 
 #ifdef USING_CUDA
 #define CheckLaunchError(CudaErrorMsg) if(cudaDeviceSynchronize().ge.0)then;\

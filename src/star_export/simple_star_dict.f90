@@ -279,7 +279,7 @@ contains
         if(which /= 0 )then
             val = self%keywords_general%get(which)
         else
-            which =  self%keywords_filename%lookup(trim(starkey))
+            which = self%keywords_filename%lookup(trim(starkey))
             if(which /= 0 )then
                 val = self%keywords_filename%get(which)
             else
@@ -305,7 +305,7 @@ contains
         else
             which =  self%keywords_filename%reverselookup(trim(simplekey))
             if(which /= 0 )then
-                val = self%keywords_general%get_key(which)
+                val = self%keywords_filename%get_key(which)
             else
                 !    if((self%keywords_class3D%isthere(simplekey))then
                 print *,"simple_star_dict:: SIMPLE token ", trim(simplekey), " not supported "
@@ -344,7 +344,7 @@ contains
         call self%keywords_class3D%print_key_val_pairs
     end subroutine print_star_dict
 
-!>  \brief  looks up the index of a key value in the chash
+    !>  \brief  looks up the index of a key value in the chash
     function lookup( self, key , mode) result( which )
         class(star_dict),     intent(inout) :: self
         character(len=*), intent(in) :: key

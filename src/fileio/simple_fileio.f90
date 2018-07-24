@@ -480,9 +480,9 @@ contains
         character(len=*), intent(in)  :: fname !< abs filename
         character(len=:), allocatable :: path
         integer :: pos
-        pos = scan(fname,path_separator,back=.true.)
+        pos = scan(fname,PATH_SEPARATOR,back=.true.)
         if( pos == 0 )then
-            allocate(path, source=path_here)
+            allocate(path, source=PATH_HERE)
         else
             allocate(path, source=trim(fname(:pos)))
         endif
