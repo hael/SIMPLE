@@ -365,18 +365,15 @@ contains
                         DebugPrint " STAR field found in dictionary ", ivalid, " of ", self%num_valid_elements
 
                         simplelabel = self%sdict%star2simple(starlabel)
-
                         allocate(self%param_labels(ielem)%str,source=trim(adjustl(simplelabel)))
-
                         self%param_converted(ielem) = 1
                         if (.not.(index(trim(simplelabel),'file' ) == 0 ))then
                             self%param_isstr(ielem) = .true.
                         else if (.not.(index(trim(simplelabel),'dfx' ) == 0 )  .or.  &
                             &.not.(index(trim(simplelabel),'dfy' ) == 0 ))then
-                            self%param_scale(ielem) = 1000.0
+                            self%param_scale(ielem) = 0.0001  !! factor microns / angstroms == 1/10^4
                         endif
                         DebugPrint " STAR param #",ielem, trim(starlabel), " ==> #",ivalid, trim(self%param_labels(ielem)%str)
-
                     else
                         DebugPrint " STAR field: ", trim(starlabel), " star field not in dictionary"
                         allocate(self%param_labels(ielem)%str,source=trim(adjustl(starlabel)))
@@ -453,132 +450,131 @@ contains
         n=0;cnt=1;ios=0
         nDataline=0; nargsOnDataline=0
 
+        if(.not.self%l_open)then
+            print *, " stardoc module read_header file not opened"
+            stop " simple_stardoc::read_header "
+        endif
+
         if(allocated(self%data)) deallocate(self%data)
         allocate(self%data(self%num_data_lines))
 
-        if(self%l_open)then
-            do
-                call readline(self%funit, line, ios)
-                if(ios /= 0) exit
-                line=trim(adjustl(line))
-                lenstr=len_trim(line)
-                !! Skip empty lines
-                if (lenstr == 0 )cycle ! empty line
+        do
+            call readline(self%funit, line, ios)
+            if(ios /= 0) exit
+            line=trim(adjustl(line))
+            lenstr=len_trim(line)
+            !! Skip empty lines
+            if (lenstr == 0 )cycle ! empty line
 
-                !! Ignore header lines
-                if(inHeader)then
-                    if ( .not. (index(trim(line),"_rln") ==0) )then
-                        n = n+1
-                        cycle
-                    else
-                        inHeader=.false.
-                        DebugPrint " Beginning data lines "
-                        inData = .true.
-                    endif
-                endif
-
-                !! Process Data line
-                if(inData)then
-                    nDataline=nDataline+1
-                    DebugPrint " Found STAR data line ", line
-                    nargsOnDataline = cntRecsPerLine(trim(line))
-                    if(nargsOnDataline /=  self%num_data_elements) then
-                        print *, " Records on line mismatch ", nargsOnDataline,  self%num_data_elements
-                        print *, line
-                        stop " line has insufficient elements "
-                    endif
-                    self%data(nDataline)%str = trim(line)
-                    if(allocated(lineparts))deallocate(lineparts)
-                    allocate(lineparts(nargsOnDataline))
-                    call parsestr(line,' ',lineparts,nargsParsed)
-
-                    if(nargsParsed == nargsOnDataline )then
-                        DebugPrint " Line Parsing : "
-                        !write(*,'(A)', advance='no') " data values ["
-                        !do i=1, nargsParsed
-                        !    write(*,'(A)', advance='no') trim(adjustl(lineparts(i)))//", "
-                        !end do
-                        !write(*,*) "]"
-                        sline=""
-                        do i=1, nargsParsed
-                            if( self%param_converted(i) == 1 )then
-                                if ( self%param_isstr(i) ) then
-                                    if(allocated(fname))deallocate(fname)
-                                    allocate(fname,source=trim(adjustl(lineparts(i))))
-                                    !! check filename for irregular STAR behaviour
-                                    pos1 = index(trim(fname),"@")
-                                    if( pos1 /= 0 )then
-                                        if(pos1 > len_trim(fname) - 1)then
-                                            DiePrint(" File part "//trim(fname)//" irregular"  )
-                                        endif
-                                        fname = trim(fname(pos1+1:))
-                                    endif
-                                    !! modify string for :mrc extension
-                                    pos1 =index(trim(fname),":mrc",back=.true.)
-                                    if( pos1 /= 0 )then
-                                        if(pos1 < 4 .or. pos1 > len_trim(fname) - 1)then
-                                            DiePrint(" File part "//trim(fname)//" irregular"  )
-                                        endif
-                                        fname = trim(fname(1:pos1-1))
-                                    endif
-                                    DebugPrint " Parsing file param : ", trim(fname)
-                                    if( file_exists (trim(fname)) )then
-                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)
-                                    else
-                                        tmp = get_fpath(trim(self%current_file))
-                                        if( allocated(tmp) )then
-                                            tmp = filepath(trim(tmp), trim(fname))
-                                            if( file_exists (trim(tmp)) )then
-                                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
-                                            else
-                                                print *," Unable to find file in path of current star file "//trim(tmp)
-                                                !! DiePrint(" Unable to find file "//trim(tmp) )
-                                            endif
-                                        else
-                                            print *," Unable to find file or path of current star file "//trim(fname)
-                                           !!  DiePrint("simple_stardoc failed to get file in starfile")
-                                        endif
-
-                                    endif
-                                else
-                                    !! Data to be inserted
-                                    tmpval = str2real(trim(adjustl(lineparts(i))))
-                                    tmpval = tmpval * self%param_scale(i)
-                                    sline  = trim(adjustl(sline))//trim(self%param_labels(i)%str)//&
-                                        &"="//trim(real2str(tmpval))//" "
-                                endif
-
-                            else
-                                DebugPrint " ignoring ",i, trim(self%param_labels(i)%str), trim(adjustl(lineparts(i)))
-                            endif
-
-                        end do
-                        DebugPrint " Processed Data Line : ", trim(sline)
-
-                    else
-                        print *, " Parsing records on line failed ", nargsOnDataline,  nargsParsed
-                        print *, line
-                        stop " line has insufficient elements "
-                    endif
-
+            !! Ignore header lines
+            if(inHeader)then
+                if ( .not. (index(trim(line),"_rln") ==0) )then
+                    n = n+1
                     cycle
+                else
+                    inHeader=.false.
+                    DebugPrint " Beginning data lines "
+                    inData = .true.
                 endif
-
-                !! Parse the start of the STAR file
-                if ( .not. (index(trim(line), "data_") == 0)) cycle
-                if ( .not. (index(trim(line), "loop_") == 0))then
-                    inHeader=.true.
-                    DebugPrint "Begin STAR field lines ", line
-                endif
-            end do
-            if(nDataline /= self%num_data_lines)then
-                print *," Num data lines mismatch in read_data_lines and read_header"
-                stop
             endif
 
-            rewind( self%funit,IOSTAT=ios)
-            if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
+            !! Process Data line
+            if(inData)then
+                nDataline=nDataline+1
+                DebugPrint " Found STAR data line ", line
+                nargsOnDataline = cntRecsPerLine(trim(line))
+                if(nargsOnDataline /=  self%num_data_elements) then
+                    print *, " Records on line mismatch ", nargsOnDataline,  self%num_data_elements
+                    print *, line
+                    stop " line has insufficient elements "
+                endif
+                self%data(nDataline)%str = trim(line)
+                if(allocated(lineparts))deallocate(lineparts)
+                allocate(lineparts(nargsOnDataline))
+                call parsestr(line,' ',lineparts,nargsParsed)
+
+                if(nargsParsed == nargsOnDataline )then
+                    DebugPrint " Line Parsing : ", trim(self%data(nDataline)%str)
+                    !write(*,'(A)', advance='no') " data values ["
+                    !do i=1, nargsParsed
+                    !    write(*,'(A)', advance='no') trim(adjustl(lineparts(i)))//", "
+                    !end do
+                    !write(*,*) "]"
+                    sline=""
+                    do i=1, nargsParsed
+                        if( self%param_converted(i) == 0 )then
+                            DebugPrint " ignoring ",i, trim(self%param_labels(i)%str)," ", trim(adjustl(lineparts(i)))
+                        endif
+                        if ( self%param_isstr(i) ) then
+                            if(allocated(fname))deallocate(fname)
+                            allocate(fname,source=trim(adjustl(lineparts(i))))
+                            !! check filename for irregular STAR behaviour
+                            pos1 = index(trim(fname),"@")
+                            if( pos1 /= 0 )then
+                                if(pos1 > len_trim(fname) - 1)then
+                                    DiePrint(" File part "//trim(fname)//" irregular"  )
+                                endif
+                                fname = trim(fname(pos1+1:))
+                            endif
+                            !! modify string for :mrc extension
+                            pos1 =index(trim(fname),":mrc",back=.true.)
+                            if( pos1 /= 0 )then
+                                if(pos1 < 4 .or. pos1 > len_trim(fname) - 1)then
+                                    DiePrint(" File part "//trim(fname)//" irregular"  )
+                                endif
+                                fname = trim(fname(1:pos1-1))
+                            endif
+                            DebugPrint " Parsing file param : ", trim(fname)
+                            if( file_exists (trim(fname)) )then
+                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)
+                            else
+                                tmp = get_fpath(trim(self%current_file))
+                                if( allocated(tmp) )then
+                                    tmp = filepath(trim(tmp), trim(fname))
+                                    if( file_exists (trim(tmp)) )then
+                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
+                                    else
+                                        print *," Unable to find file in path of current star file "//trim(tmp)
+                                        !! DiePrint(" Unable to find file "//trim(tmp) )
+                                    endif
+                                else
+                                    print *," Unable to find file or path of current star file "//trim(fname)
+                                    !!  DiePrint("simple_stardoc failed to get file in starfile")
+                                endif
+                            endif
+                        else
+                            !! Data to be inserted
+                            tmpval = str2real(trim(adjustl(lineparts(i))))
+                            DebugPrint " String converted ", trim(adjustl(lineparts(i))), " to ", tmpval
+                            tmpval = tmpval * self%param_scale(i)
+                            sline  = trim(adjustl(sline))//" "//trim(self%param_labels(i)%str)//&
+                                &"="//trim(real2str(tmpval))
+                        endif
+                    end do
+                    DebugPrint " Processed Data Line : ", trim(sline)
+                else
+                    print *, " Parsing records on line failed ", nargsOnDataline,  nargsParsed
+                    print *, line
+                    stop " line has insufficient elements "
+                endif
+
+                cycle
+            endif  !! inData
+
+            !! Parse the start of the STAR file
+            if ( .not. (index(trim(line), "data_") == 0)) cycle
+            if ( .not. (index(trim(line), "loop_") == 0))then
+                inHeader=.true.
+                DebugPrint "Begin STAR field lines ", line
+            endif
+        end do !! file loop
+        if(nDataline /= self%num_data_lines)then
+            DiePrint(" Num data lines mismatch in read_data_lines and read_header")
         endif
+
+        rewind( self%funit,IOSTAT=ios)
+        if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
+
     end subroutine read_data_lines
 
     subroutine  write(self, filename, sp, vars)
@@ -605,6 +601,7 @@ contains
         do i=1, self%num_data_elements
             write(self%funit,'("_rln",A,3x,"#",I0)') trim(self%param_labels(i)%str), i
         end do
+
         do iframe=1, self%num_frames
             statef = self%frames(iframe)%state
             if (statef .ne. 0)then
