@@ -9,7 +9,7 @@ contains
       real, allocatable    :: rmat(:,:,:)
 
       rmat = img%get_rmat()
-      sz = cc_size(img)
+      sz = size_connected_comps(img)
       biggest_cc  = maxloc(sz(2,:))!, dim = 2)
       biggest_val = real(sz(1, biggest_cc))
       ! print *, "Biggest cc",  biggest_cc
@@ -19,7 +19,7 @@ contains
       deallocate(rmat, sz,biggest_cc)
   end subroutine elimin_cc
 
-  function cc_size(img) result(sz)
+  function size_connected_comps(img) result(sz)
       type(image), intent(in) :: img
       integer, allocatable :: sz(:,:)
       real,    allocatable :: rmat(:,:,:)
@@ -31,7 +31,7 @@ contains
           sz(1, n_cc) = n_cc                  !I could avoid to save it
           sz(2, n_cc) = count(rmat == n_cc)
       enddo
-  end function cc_size
+  end function size_connected_comps
 
       subroutine elimin_isolated_points(bin_img)
         type(image), intent(inout) :: bin_img
@@ -215,7 +215,7 @@ contains
     enddo
   end subroutine print_mat
 
-  subroutine create_initial_label_map(self, tmp_matrix)
+  subroutine enumerate_white_pixels(self, tmp_matrix)
     type(image), intent(in)        :: self
     real, allocatable, intent(out) :: tmp_matrix(:,:,:)
     real, allocatable :: rmat(:,:,:)
@@ -233,7 +233,7 @@ contains
         endif
       enddo
     enddo
-  end subroutine create_initial_label_map
+  end subroutine enumerate_white_pixels
 
 
 
@@ -425,7 +425,7 @@ function cft_matrix(mat1,mat2) result(yes_no)
   enddo
 end function cft_matrix
 
-subroutine calc_cc(img_in, img_out)
+subroutine find_connected_comps(img_in, img_out)
 type(image), intent(in)    :: img_in
 type(image), intent(inout) :: img_out
 real, allocatable :: rmat_in(:,:,:), tmp_mat(:,:,:),tmp_mat_cfr(:,:,:), neigh_8(:)
@@ -435,7 +435,7 @@ rmat_in = img_in%get_rmat()
 ldim    = img_in%get_ldim()
 call img_out%new(ldim,1.)
 allocate(tmp_mat_cfr(ldim(1),ldim(2),1), source = 0.)
-call create_initial_label_map(img_in, tmp_mat)
+call enumerate_white_pixels(img_in, tmp_mat)
 n_maxit = maxval(tmp_mat) !maybe I can improve it
 do n_it = 1, n_maxit
   if(cft_matrix(tmp_mat_cfr,tmp_mat)) then
@@ -454,7 +454,7 @@ do n_it = 1, n_maxit
 enddo
 call img_out%set_rmat(tmp_mat)
 deallocate(rmat_in,tmp_mat, tmp_mat_cfr)
-end subroutine calc_cc
+end subroutine find_connected_comps
 
 function is_picked( new_coord,saved_coord, saved ) result(yes_no)
   integer, intent(in) :: new_coord(2)       !Coordinates of a new window to extract

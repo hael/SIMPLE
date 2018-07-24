@@ -103,7 +103,7 @@ contains
         class(stardoc), intent(inout) :: self
         integer,        intent(in)    :: n
         integer :: i
-        call self%kill_doc
+        ! call self%kill_doc
         if(.not. self%sdict%exists() ) call self%sdict%new()
 
         ! if(allocated(self%frames))then

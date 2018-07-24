@@ -101,7 +101,7 @@ endif
  ! ! call s%import_ctf_estimation(myproject,tmpfile)
   call s%kill()
  ! print *, '     star module imported successfully'
-  if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
+  ! if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
 
   call exec_cmdline("simple_exec prg=new_project projname=test && cd test && "//&
       &"simple_exec prg=import_movies filetab=../filetab-stardoc.txt  cs=2.7 ctf=yes "//&

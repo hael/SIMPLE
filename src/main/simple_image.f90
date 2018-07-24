@@ -188,7 +188,6 @@ contains
     procedure          :: cendist
     procedure          :: masscen
     procedure          :: center
-    !procedure          :: center_edge !!!!!!!!!!!ADDED BY CHIARA
     procedure          :: center_serial
     procedure          :: bin_inv
     procedure          :: grow_bin
@@ -200,11 +199,11 @@ contains
     procedure          :: increment
     procedure          :: bin2logical
     procedure          :: collage
-    procedure, private :: create_initial_label_map !!!!!!!!ADDED BY CHIARA
-    procedure, private :: order_labels             !!!!!!!!ADDED BY CHIARA
-    procedure          :: calc_cc                  !!!!!!!!ADDED BY CHIARA
-    procedure          :: cc_size                  !!!!!!!!ADDED BY CHIARA
-    procedure          :: prepare_cc               !!!!!!!!ADDED BY CHIARA
+    procedure, private :: enumerate_white_pixels
+    ! procedure, private :: enumerate_connected_comps
+    procedure          :: find_connected_comps
+    procedure          :: size_connected_comps
+    procedure          :: prepare_connected_comps
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -229,7 +228,7 @@ contains
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
-    procedure          :: sobel   !!ADDED BY CHIARA
+    procedure          :: sobel
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: rmsd
@@ -242,8 +241,8 @@ contains
     procedure          :: checkimg4nans
     procedure          :: cure
     procedure          :: loop_lims
-    procedure          :: calc_gradient  !!ADDED BY CHIARA
-    procedure          :: calc_neigh_8   !!ADDED BY CHIARA
+    procedure          :: calc_gradient
+    procedure          :: calc_neigh_8
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -1812,29 +1811,6 @@ contains
         is = self%ft
     end function is_ft
 
-    !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
-    !This is just a supportive function for calc_cc. It compares
-    !two matrices and tells wether they are equal or not. I think
-    !it might be written without loops. It works on matrices, not on images.
-    function cfr_matrix(mat1,mat2) result(yes_no)
-      real, intent(in) :: mat1(:,:,:), mat2(:,:,:)
-      logical :: yes_no
-      integer :: s(3), i, j, k
-      s = shape(mat1)
-      yes_no = .true.
-      !if(s /= shape(mat2)) stop 'Input matrices have different dimensions'
-      do i = 1, s(1)
-         do j = 1, s(2)
-            do k = 1, s(3)
-                if(mat1(i,j,k) /= mat2(i,j,k)) then
-                    yes_no = .false.
-                    return
-                endif
-            enddo
-          enddo
-      enddo
-    end function cfr_matrix
-
     ! ARITHMETICS
 
     !>  \brief  assign, polymorphic assignment (=)
@@ -3110,118 +3086,113 @@ contains
         call img_pad%kill
     end subroutine collage
 
-    !!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!
-   !This subroutine creates the initial label map of a binary image in order
-   !to identify the connected components of the image
-    subroutine create_initial_label_map(self, tmp_matrix)
-      class(image), intent(in)        :: self
-      real, allocatable, intent(out)  :: tmp_matrix(:,:,:)
-      integer           :: i, j, cnt
-      allocate(tmp_matrix(self%ldim(1),self%ldim(2),1), source = 0.)
-      cnt = 0  !labels
-      do i = 1, self%ldim(1)
-        do j = 1, self%ldim(2)
-          if(self%rmat(i,j,1) /= 0) then
-            cnt = cnt + 1
-            tmp_matrix(i,j,1) = cnt
-          endif
-        enddo
-      enddo
-    end subroutine create_initial_label_map
-
-    !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!!!
-    !This function is to order the labels of a connected components image.
-      subroutine order_labels(img)
-          class(image), intent(inout) :: img
-          integer           :: i, j
-          integer           :: cnt !to store ordered labels
-          real, allocatable :: tmp_mat(:,:,:) !unnecessary if in simple_image module
-          real :: tmp
-          cnt = 0
-          !allocate(tmp_mat(img%ldim(1),img%ldim(2),1), source = 0.)
-          allocate(tmp_mat(img%ldim(1), img%ldim(2), 1), source = 0.)
-          do i = 1, img%ldim(1)
-             do j = 1, img%ldim(2)
-                if(img%rmat(i,j,1) /= 0.) then  !rmat == 0  --> background
+    ! This subroutine creates the initial label map of a binary image in order
+    ! to identify the connected components of the image
+    subroutine enumerate_white_pixels(self, label_matrix)
+        class(image),      intent(in)   :: self
+        real, allocatable, intent(out)  :: label_matrix(:,:,:)
+        integer           :: i, j, cnt
+        if( allocated(label_matrix) ) deallocate(label_matrix)
+        allocate(label_matrix(self%ldim(1),self%ldim(2),1), source = 0.)
+        cnt = 0 ! # labels
+        do i = 1, self%ldim(1)
+            do j = 1, self%ldim(2)
+                if( self%rmat(i,j,1) > 0.5 )then
                     cnt = cnt + 1
-                    tmp = img%rmat(i,j,1)
-                    where(img%rmat == tmp)
-                      img%rmat = 0.     !Not to consider this cc again
-                      tmp_mat = tmp
-                    endwhere
+                    label_matrix(i,j,1) = cnt
                 endif
-             enddo
-          enddo
-      end subroutine order_labels
+            enddo
+        enddo
+    end subroutine enumerate_white_pixels
 
-      !!!!!!!!!ADDED BY CHIARA!!!!!!!!!
-      !Img_in should be a binary image. Img_out is the connencted component image.
-        subroutine calc_cc(img_in, img_out)
+    ! This function is to enumerate the labels of a connected components image.
+    ! This routine assumes that the input pixel values are 0 or cnt (see enumerate_white_pixels, above)
+    ! subroutine enumerate_connected_comps( img )
+    !     class(image), intent(inout) :: img
+    !     integer           :: i, j
+    !     real, allocatable :: tmp_mat(:,:,:) !unnecessary if in simple_image module
+    !     real :: tmp
+    !     allocate(tmp_mat(img%ldim(1), img%ldim(2), 1), source = 0.)
+    !     do i = 1, img%ldim(1)
+    !         do j = 1, img%ldim(2)
+    !             if( img%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
+    !                 tmp = img%rmat(i,j,1) ! tmp is now [1,cnt]
+    !                 where(img%rmat == tmp)
+    !                     img%rmat = 0.     !Not to consider this cc again
+    !                     tmp_mat = tmp
+    !                 endwhere
+    !             endif
+    !         enddo
+    !     enddo
+    ! end subroutine enumerate_connected_comps
+
+    ! Img_in should be a binary image. Img_out is the connencted component image.
+    subroutine find_connected_comps(img_in, img_out)
         class(image), intent(in)    :: img_in
         class(image), intent(inout) :: img_out
-        real, allocatable :: tmp_mat(:,:,:),tmp_mat_cfr(:,:,:), neigh_8(:)
+        real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:),neigh_8(:)
         integer           :: i, j, n_it, n_maxit
         call img_out%new(img_in%ldim,1.)
-        allocate(tmp_mat_cfr(img_in%ldim(1),img_in%ldim(2),1), source = 0.)
-        call create_initial_label_map(img_in, tmp_mat)
-        call img_out%set_rmat(tmp_mat)
-        n_maxit = maxval(tmp_mat) !maybe I can improve it (overestimate? check the book)
+        allocate(mat4compare(img_in%ldim(1),img_in%ldim(2),1), source = 0.)
+        call enumerate_white_pixels(img_in, label_matrix)
+        call img_out%set_rmat(label_matrix)
+        n_maxit = maxval(label_matrix) ! maybe I can improve it (overestimate? check the book)
         do n_it = 1, n_maxit
-          if(cfr_matrix(tmp_mat_cfr,img_out%rmat)) return   !if there is no improvement, stop.
-          tmp_mat_cfr = img_out%rmat
-          do i = 1, img_in%ldim(1)
-            do j = 1, img_in%ldim(2)
-              if(img_in%rmat(i,j,1) /= 0) then
-                neigh_8 = img_out%calc_neigh_8([i,j,1])
-                img_out%rmat(i,j,1) = minval(neigh_8, neigh_8 /= 0)
-              endif
+            if( all(abs(mat4compare - img_out%rmat(:img_out%ldim(1),:img_out%ldim(2),:img_out%ldim(3))) < TINY) )then
+                ! the matrices are identical
+                return
+            endif
+            mat4compare = img_out%rmat
+            do i = 1, img_in%ldim(1)
+                do j = 1, img_in%ldim(2)
+                    if(img_in%rmat(i,j,1) /= 0) then
+                        neigh_8 = img_out%calc_neigh_8([i,j,1])
+                        img_out%rmat(i,j,1) = minval(neigh_8, neigh_8 /= 0)
+                    endif
+                enddo
             enddo
-          enddo
         enddo
-        call order_labels(img_out)
-        deallocate(tmp_mat, tmp_mat_cfr)
-        end subroutine calc_cc
+        ! call enumerate_connected_comps(img_out) ! to be tested
+        deallocate(label_matrix, mat4compare)
+    end subroutine find_connected_comps
 
-        !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!!!
-        !The result of the function is the size(# of pixels) of each cc. This
-        !value is stored in the 2nd column of sz. In the first one is recorded
-        !the label of the cc.  (cc = connected component)
-        function cc_size(img) result(sz)
-            class(image), intent(in) :: img
-            integer, allocatable :: sz(:,:)
-            integer :: n_cc
-            allocate(sz(2,int(maxval(img%rmat))), source = 0)
-            do n_cc = int(maxval(img%rmat)),1,-1
-                sz(1, n_cc) = n_cc
-                sz(2, n_cc) = count(img%rmat == n_cc)
-            enddo
-        end function cc_size
+    ! The result of the function is the size(# of pixels) of each cc. This
+    ! value is stored in the 2nd column of sz. In the first one is recorded
+    ! the label of the cc.  (cc = connected component)
+    function size_connected_comps(img) result(sz)
+        class(image), intent(in) :: img
+        integer, allocatable :: sz(:,:)
+        integer :: n_cc
+        allocate(sz(2,int(maxval(img%rmat))), source = 0)
+        do n_cc = int(maxval(img%rmat)),1,-1
+            sz(1, n_cc) = n_cc
+            sz(2, n_cc) = count(img%rmat == n_cc)
+        enddo
+    end function size_connected_comps
 
-
-        !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!!!
-        !This function takes in input a connected component image and modifies
-        !it in order to prepare the centering process developed through the
-        !mass center function.
-        subroutine prepare_cc(img, discard, min_sz)
-            class(image), intent(inout)   :: img !image which contains connected components
-            logical, intent(out)          :: discard
-            integer, optional, intent(in) :: min_sz
-            integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
-            integer              :: mmin_sz
-            mmin_sz = 250
-            discard = .false.
-            sz = cc_size(img)
-            biggest_cc  = maxloc(sz(2,:))
-            biggest_val =real(sz(1, biggest_cc))
-            if(present(min_sz)) mmin_sz = min_sz
-            if(maxval(sz(2,:)) < mmin_sz) discard = .true.
-            where(img%rmat /= real(biggest_val(1)))
-                img%rmat = 0.
-            elsewhere
-                img%rmat = 1.
-            endwhere
-            deallocate(sz,biggest_cc)
-        end subroutine prepare_cc
+    ! This function takes in input a connected component image and modifies
+    ! it in order to prepare the centering process developed through the
+    ! mass center function.
+    subroutine prepare_connected_comps(img, discard, min_sz)
+        class(image), intent(inout)   :: img !image which contains connected components
+        logical, intent(out)          :: discard
+        integer, optional, intent(in) :: min_sz
+        integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
+        integer              :: mmin_sz
+        mmin_sz = 250
+        discard = .false.
+        sz = size_connected_comps(img)
+        biggest_cc  = maxloc(sz(2,:))
+        biggest_val =real(sz(1, biggest_cc))
+        if(present(min_sz)) mmin_sz = min_sz
+        if(maxval(sz(2,:)) < mmin_sz) discard = .true.
+        where(img%rmat /= real(biggest_val(1)))
+            img%rmat = 0.
+        elsewhere
+            img%rmat = 1.
+        endwhere
+        deallocate(sz,biggest_cc)
+    end subroutine prepare_connected_comps
 
     ! FILTERS
 
@@ -4071,8 +4042,7 @@ contains
         call img_filt%kill()
     end subroutine real_space_filter
 
-    !!!!!!ADDED BY CHIARA!!!!
-    !Edge detection, Sobel algorithm
+    ! Edge detection, Sobel algorithm
     subroutine sobel(img_in,img_out,thresh)
         class(image), intent(inout) :: img_in,img_out        !image input and output
         real,         intent(in)    :: thresh                !threshold for Sobel algorithm
@@ -4398,121 +4368,131 @@ contains
         endif
     end function loop_lims
 
-    !!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!!!
-    !This function returns a the gradient matrix of the input image.
-    !It is also possible to have derivates row and column
-    !as output (optional).
-        subroutine calc_gradient(self, grad, Dc, Dr)
-          class(image),                 intent(inout) :: self
-          real, allocatable,            intent(out)   :: grad(:,:,:)  !gradient matrix
-          real, allocatable, optional,  intent(out)   :: Dc(:,:,:), Dr(:,:,:)  !derivates column and row matrices
-          type(image)        :: img_p                         !padded image
-          real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
-          integer, parameter :: L = 3                         !dimension of the masks
-          integer            :: ldim(3)                       !dimension of the image, save just for comfort
-          integer            :: i,j,m,n                       !loop indeces
-          real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
-          ldim = self%ldim
-          if(ldim(3) /= 1) then
+    ! This function returns a the gradient matrix of the input image.
+    ! It is also possible to have derivates row and column
+    ! as output (optional).
+    subroutine calc_gradient(self, grad, Dc, Dr)
+        class(image),                intent(inout) :: self
+        real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
+        real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+        type(image)        :: img_p                         !padded image
+        real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
+        integer, parameter :: L = 3                         !dimension of the masks
+        integer            :: ldim(3)                       !dimension of the image, save just for comfort
+        integer            :: i,j,m,n                       !loop indeces
+        real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
+        ldim = self%ldim
+        if(ldim(3) /= 1) then
             print *, "The image has to be 2D!"
-            stop
-          endif
-          allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
-                   & wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
-          wc = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1])      !Sobel masks
-          wr = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
-          call img_p%new([ldim(1)+L-1,ldim(2)+L-1,1],1.)
-          call self%pad(img_p)                                     !padding
-          do i = 1, ldim(1)
-              do j = 1, ldim(2)
-                  do m = -(L-1)/2,(L-1)/2
-                      do n = -(L-1)/2,(L-1)/2
-                          Ddc(i,j,1) = Ddc(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wc(m,n,1)
-                          Ddr(i,j,1) = Ddr(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wr(m,n,1)
-                      end do
+            stop 'simple_image :: calc_gradient'
+        endif
+        allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
+               & wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
+        wc = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1]) ! Sobel masks
+        wr = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
+        call img_p%new([ldim(1)+L-1,ldim(2)+L-1,1],1.)
+        call self%pad(img_p)                                 ! padding
+        !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
+        !$omp schedule(static) proc_bind(close)
+        do i = 1, ldim(1)
+          do j = 1, ldim(2)
+              do m = -(L-1)/2,(L-1)/2
+                  do n = -(L-1)/2,(L-1)/2
+                      Ddc(i,j,1) = Ddc(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wc(m,n,1)
+                      Ddr(i,j,1) = Ddr(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wr(m,n,1)
                   end do
               end do
           end do
-          deallocate(wc,wr)
-          grad = sqrt(Ddc**2+Ddr**2)
-          if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
-          if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
-          deallocate(Ddc,Ddr)
-        end subroutine calc_gradient
+        end do
+        !omp end parallel do
+        deallocate(wc,wr)
+        grad = sqrt(Ddc**2. + Ddr**2.)
+        if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
+        if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
+        deallocate(Ddc,Ddr)
+    end subroutine calc_gradient
 
-
-        !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
-        !Returns 8-neighborhoods of the pixel px in the matrix mat, in particular it returns
-        !the intensity values of the 8-neigh ina CLOCKWISE order, starting from any 4-neigh
-        !and the value of the pixel itself (the last one).
-        function calc_neigh_8(self, px) result(neigh_8)
-          class(image), intent(in)  :: self
-          integer,      intent(in)  :: px(3)
-          integer, allocatable :: neigh_8(:)
-          integer              :: i, j
-          if(px(3) /= 1) then
-              print *, "The image has to be 2D!"
-              stop
-          endif
-          i = px(1)
-          j = px(2)            !Assumes to have a 2-dim matrix
-          if ( i-1 < 1 .and. j-1 < 1 ) then
+    ! Returns 8-neighborhoods of the pixel position px in self
+    ! it returns the intensity values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
+    ! and the value of the pixel itself (the last one).
+    function calc_neigh_8( self, px) result(neigh_8)
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: px(3)
+        integer, allocatable :: neigh_8(:)
+        integer              :: i, j
+        if( px(3) /= 1 .or. self%ldim(3) /= 1 ) then
+            print *, "The image has to be 2D!"
+            stop 'simple_image :: calc_neigh_8'
+        endif
+        i = px(1)
+        j = px(2) ! Assumes to have a 2-dim matrix
+        ! sanity check
+        if( i < 1 .or. i > self%ldim(1) )then
+            print *, 'x-coordinate out of bound'
+            stop 'simple_image :: calc_neigh_8'
+        endif
+        if( j < 1 .or. j > self%ldim(2) )then
+            print *, 'y-coordinate out of bound'
+            stop 'simple_image :: calc_neigh_8'
+        endif
+        ! identify neighborhood
+        if( i-1 < 1 .and. j-1 < 1 )then                            ! NW corner
             allocate(neigh_8(4), source = 0)
             neigh_8(1) = self%rmat(i+1,j,1)
             neigh_8(2) = self%rmat(i+1,j+1,1)
             neigh_8(3) = self%rmat(i,j+1,1)
-            neigh_8(4) = self%rmat(i,j,1)   !the pixel itself
-          else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then
+            neigh_8(4) = self%rmat(i,j,1)
+        else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then ! SE corner
             allocate(neigh_8(4), source = 0)
             neigh_8(1) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j-1,1)
             neigh_8(3) = self%rmat(i,j-1,1)
-            neigh_8(4) = self%rmat(i,j,1)   !the pixel itself
-          else if (j-1 < 1  .and. i+1 >self%ldim(1)) then
+            neigh_8(4) = self%rmat(i,j,1)
+        else if (j-1 < 1  .and. i+1 >self%ldim(1)) then            ! SW corner
             allocate(neigh_8(4), source = 0)
             neigh_8(3) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j+1,1)
             neigh_8(1) = self%rmat(i,j+1,1)
-            neigh_8(4) = self%rmat(i,j,1)   !the pixel itself
-          else if (j+1 > self%ldim(2) .and. i-1 < 1) then
+            neigh_8(4) = self%rmat(i,j,1)
+        else if (j+1 > self%ldim(2) .and. i-1 < 1) then            ! NE corner
             allocate(neigh_8(4), source = 0)
             neigh_8(1) = self%rmat(i,j-1,1)
             neigh_8(2) = self%rmat(i+1,j-1,1)
             neigh_8(3) = self%rmat(i+1,j,1)
-            neigh_8(4) = self%rmat(i,j,1)   !the pixel itself
-          else if( j-1 < 1 ) then
+            neigh_8(4) = self%rmat(i,j,1)
+        else if( j-1 < 1 ) then                                    ! N border
             allocate(neigh_8(6), source = 0)
             neigh_8(5) = self%rmat(i-1,j,1)
             neigh_8(4) = self%rmat(i-1,j+1,1)
             neigh_8(3) = self%rmat(i,j+1,1)
             neigh_8(2) = self%rmat(i+1,j+1,1)
             neigh_8(1) = self%rmat(i+1,j,1)
-            neigh_8(6) = self%rmat(i,j,1)   !the pixel itself
-          else if ( j+1 > self%ldim(2) ) then
+            neigh_8(6) = self%rmat(i,j,1)
+        else if ( j+1 > self%ldim(2) ) then                        ! S border
             allocate(neigh_8(6), source = 0)
             neigh_8(1) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j-1,1)
             neigh_8(3) = self%rmat(i,j-1,1)
             neigh_8(4) = self%rmat(i+1,j-1,1)
             neigh_8(5) = self%rmat(i+1,j,1)
-            neigh_8(6) = self%rmat(i,j,1)   !the pixel itself
-          else if ( i-1 < 1 ) then
+            neigh_8(6) = self%rmat(i,j,1)
+        else if ( i-1 < 1 ) then                                   ! W border
             allocate(neigh_8(6), source = 0)
             neigh_8(1) = self%rmat(i,j-1,1)
             neigh_8(2) = self%rmat(i+1,j-1,1)
             neigh_8(3) = self%rmat(i+1,j,1)
             neigh_8(4) = self%rmat(i+1,j+1,1)
             neigh_8(5) = self%rmat(i,j+1,1)
-            neigh_8(6) = self%rmat(i,j,1)   !the pixel itself
-          else if ( i+1 > self%ldim(1) ) then
+            neigh_8(6) = self%rmat(i,j,1)
+        else if ( i+1 > self%ldim(1) ) then                       ! E border
             allocate(neigh_8(6), source = 0)
             neigh_8(1) = self%rmat(i,j+1,1)
             neigh_8(2) = self%rmat(i-1,j+1,1)
             neigh_8(3) = self%rmat(i-1,j,1)
             neigh_8(4) = self%rmat(i-1,j-1,1)
             neigh_8(5) = self%rmat(i,j-1,1)
-            neigh_8(6) = self%rmat(i,j,1)   !the pixel itself
-          else
+            neigh_8(6) = self%rmat(i,j,1)
+        else                                                     ! DEFAULT
             allocate(neigh_8(9), source = 0)
             neigh_8(1) = self%rmat(i-1,j-1,1)
             neigh_8(2) = self%rmat(i,j-1,1)
@@ -4522,9 +4502,9 @@ contains
             neigh_8(6) = self%rmat(i,j+1,1)
             neigh_8(7) = self%rmat(i-1,j+1,1)
             neigh_8(8) = self%rmat(i-1,j,1)
-            neigh_8(9) = self%rmat(i,j,1)   !the pixel itself
-          endif
-        end function calc_neigh_8
+            neigh_8(9) = self%rmat(i,j,1)
+        endif
+    end function calc_neigh_8
 
     !>  \brief  Convert logical address to physical address. Complex image.
     pure function comp_addr_phys1(self,logi) result(phys)

@@ -22,8 +22,8 @@ contains
       end where
       call tmp%sobel(bin_img, thresh)
       call bin_img%real_space_filter(3, 'median') !median filtering allows me to calculate cc in an easy way
-      call bin_img%calc_cc(imgcc)
-      call imgcc%prepare_cc(discard, min_sz)
+      call bin_img%find_connected_comps(imgcc)
+      call imgcc%prepare_connected_comps(discard, min_sz)
       xyz = imgcc%masscen()
       call tmp%kill
   end function center_edge
