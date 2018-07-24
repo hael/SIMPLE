@@ -293,7 +293,8 @@ contains
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         allocate(strategy3D_cluster_snhc :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster_neigh",alloc_stat)
+                        if(alloc_stat.ne.0)&
+                            call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster_neigh",alloc_stat)
                     endif
                 end do
             case DEFAULT
@@ -564,7 +565,8 @@ contains
         integer :: nptcls, nrefs, iptcl_batch, batchlims(2), iptcl, imatch, eoarr(MAXIMGBATCHSZ)
         if( .not.params_glob%l_frac_update )return
         ! init local mask with states
-        allocate(ptcl_mask_not(params_glob%fromp:params_glob%top), source=.not.ptcl_mask)
+        allocate(ptcl_mask_not(params_glob%fromp:params_glob%top))!, source=.not.ptcl_mask) !! ICE error #8155: In an ALLOCATE statement the source expression in SOURCE= or MOLD= specifiers must be of the same type and kind type parameters as the object being allocated.
+        ptcl_mask_not = .not.ptcl_mask
         do iptcl=params_glob%fromp,params_glob%top
             if( ptcl_mask_not(iptcl) )ptcl_mask_not(iptcl) = build_glob%spproj_field%get_state(iptcl)>0
         enddo
