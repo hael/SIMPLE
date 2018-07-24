@@ -42,7 +42,7 @@ contains
         integer :: iref, state, ran_state
         real    :: corrs(self%s%nstates)
         real    :: shvec(2), corr, mi_state, frac, mi_inpl, bfac
-        logical :: do_snhc, do_greedy_inpl, avail(self%s%nstates)
+        logical :: do_snhc, avail(self%s%nstates)
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
             ! set thread index
@@ -63,24 +63,19 @@ contains
             ! search decisions
             self%s%prev_corr = build_glob%spproj_field%get(self%s%iptcl, 'corr')
             do_snhc          = self%spec%do_extr .and. self%s%prev_corr < self%spec%extr_score_thresh
-            do_greedy_inpl   = .not.self%spec%do_extr
             ! evaluate all correlations
             corrs = -1.
             do state = 1, self%s%nstates
                 if( .not. s3D%state_exists(state) ) cycle
                 iref = (state-1) * self%s%nprojs + self%s%prev_proj
-                ! to somewhat take account alignment errors due to state mixing
-                ! call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
-                ! corrs(state) = maxval(corrs_inpl)
-                ! to not take account alignment errors due to state mixing
                 corrs(state) = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], self%s%prev_roind))
             enddo
-            !self%s%prev_corr = corrs(self%s%prev_state) ! to use with shcloc
+            self%s%prev_corr = corrs(self%s%prev_state) ! to use with shcloc
             ! make moves
             mi_state = 0.
             mi_inpl  = 1.
             if( do_snhc )then
-                ! state randomization, best of two
+                ! state randomization: best of two
                 avail = s3D%state_exists
                 avail(self%s%prev_state) = .false. ! without replacement
                 ran_state = irnd_uni(self%s%nstates)
@@ -106,29 +101,27 @@ contains
                 if( state.eq.self%s%prev_state )mi_state = 1.
             else
                 ! shc in state
-                ! state = shcloc(self%s%nstates, corrs, self%s%prev_corr)
-                ! self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
+                state = shcloc(self%s%nstates, corrs, self%s%prev_corr)
+                self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
                 ! greedy in state
-                state = maxloc(corrs, dim=1)
-                self%s%nrefs_eval = self%s%nstates
+                ! state = maxloc(corrs, dim=1)
+                ! self%s%nrefs_eval = self%s%nstates
                 corr = corrs(state)
                 if( state.eq.self%s%prev_state )mi_state = 1.
-                if( do_greedy_inpl )then
+                if( .not.self%spec%do_extr .and. mi_state>0.5 )then
                     ! greedy in-plane moves after extremal optimization complete
-                    if( mi_state > 0.5 )then
-                        iref = (state-1) * self%s%nprojs + self%s%prev_proj
-                        corr = corrs(state)
-                        s3D%proj_space_corrs(self%s%ithr,iref,1)         = corr
-                        s3D%proj_space_refinds(self%s%ithr,self%s%nrefs) = iref
-                        call self%s%inpl_srch
-                        if( s3D%proj_space_corrs(self%s%ithr,iref,1) > corr )then
-                            corr  = s3D%proj_space_corrs(self%s%ithr,iref,1)
-                            shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%ithr,iref,1,:) ! inpl = 1
-                            call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
-                            call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref,1,3))           ! inpl = 1
-                        endif
-                        if( self%s%prev_roind .ne. pftcc_glob%get_roind(360.-s3D%proj_space_euls(self%s%ithr, iref,1,3)) ) mi_inpl = 0.
+                    iref = (state-1) * self%s%nprojs + self%s%prev_proj
+                    corr = corrs(state)
+                    s3D%proj_space_corrs(self%s%ithr,iref,1)         = corr
+                    s3D%proj_space_refinds(self%s%ithr,self%s%nrefs) = iref
+                    call self%s%inpl_srch
+                    if( s3D%proj_space_corrs(self%s%ithr,iref,1) > corr )then
+                        corr  = s3D%proj_space_corrs(self%s%ithr,iref,1)
+                        shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%ithr,iref,1,:) ! inpl = 1
+                        call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
+                        call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref,1,3))           ! inpl = 1
                     endif
+                    if( self%s%prev_roind .ne. pftcc_glob%get_roind(360.-s3D%proj_space_euls(self%s%ithr, iref,1,3)) ) mi_inpl = 0.
                     call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
                 endif
             endif

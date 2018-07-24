@@ -2415,48 +2415,6 @@ contains
         end do
     end subroutine nearest_proj_neighbors
 
-    !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
-    subroutine nearest_proj_neighbors_omp( self, k, nnmat )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: k
-        integer, allocatable, intent(inout) :: nnmat(:,:)
-        real, allocatable :: onormals(:,:)
-        real      :: dists(self%n,self%n)
-        integer   :: i, j, inds(self%n)
-        if( k >= self%n ) call simple_stop('need to identify fewer nearest_proj_neighbors_omp; simple_oris')
-        if( allocated(nnmat) ) deallocate(nnmat)
-        allocate( nnmat(self%n,k), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors_omp; simple_oris",alloc_stat)
-        onormals = self%get_all_normals()
-        ! calculate distances
-        dists = 0.
-        !$omp parallel default(shared) private(i,j) proc_bind(close)
-        !$omp do schedule(guided)
-        do i=1,self%n - 1
-            do j=i + 1,self%n
-                dists(i,j) = acos(dot_product(onormals(i,:),onormals(j,:)))
-            end do
-        end do
-        !$omp end do nowait
-        ! symmetrization of distance matrix must be outside first openMP nest to avoid race conditions
-        !$omp do schedule(guided)
-        do i=1,self%n - 1
-            do j=i + 1,self%n
-                dists(j,i) = dists(i,j)
-            end do
-        end do
-        !$omp end do nowait
-        !$omp do schedule(static)
-        do i=1,self%n
-            inds = (/ (j, j = 1, self%n) /)
-            call hpsort(dists(i,:), inds)
-            nnmat(i,1:k) = (/ (inds(j), j=1, k) /)
-        end do
-        !$omp end do nowait
-        !$omp end parallel
-        deallocate(onormals)
-    end subroutine nearest_proj_neighbors_omp
-
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
         class(oris), intent(in) :: self

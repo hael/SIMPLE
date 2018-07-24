@@ -785,6 +785,7 @@ contains
                     volassemble_output = ''
                 endif
                 call cline_volassemble%set( 'state', real(state) )
+                if( params%nstates>1 )call cline_volassemble%set('part', real(state))
                 call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                     &script_name='simple_script_state'//trim(str_state))
             end do
@@ -897,7 +898,6 @@ contains
         call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         DebugPrint ' splitting stack                 ',toc(tsplit)
         ! eo partitioning
-
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then
                 if( params%tseries .eq. 'yes' )then
@@ -935,6 +935,7 @@ contains
                 volassemble_output = ''
             endif
             call cline_volassemble%set( 'state', real(state) )
+            if( params%nstates>1 )call cline_volassemble%set('part', real(state))
             call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                 &script_name='simple_script_state'//trim(str_state))
         end do
