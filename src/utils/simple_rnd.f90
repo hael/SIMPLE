@@ -300,4 +300,76 @@ contains
         endif
     end function shcloc
 
+    !>  \brief  mnorm_smp samples a multivariate normal distribution.
+    !!          The multivariate normal distribution for the M dimensional vector X has the form:
+    !!          pdf(X) = (2*pi*det(A))**(-M/2) * exp(-0.5*(X-MU)'*inverse(A)*(X-MU))
+    !!          where MU is the mean vector, and A is a positive definite symmetric
+    !!          matrix called the variance-covariance matrix. M=the dimension of the space.
+    !!          N=the number of points. Input, real A(M,M), the variance-covariance
+    !!          matrix.  A must be positive definite symmetric. Input, real MU(M), the mean vector.
+    !!          Output, real X(M), the points.
+    function mnorm_smp( cov, m, means ) result( x )
+        integer, intent(in) :: m
+        real, intent(in)    :: cov(m,m), means(m)
+        integer             :: info, i
+        real                :: r(m,m), x(m), xtmp(1,m)
+        ! Compute the upper triangular Cholesky factor R of the variance-covariance matrix.
+        r = cov
+        call r8po_fa ( m, r, info )
+        if ( info /= 0 ) then
+            write ( *, '(a)' ) 'mnorm_smp - Fatal error!'
+            write ( *, '(a)' ) 'The variance-covariance matrix is not positive definite symmetric'
+            stop
+        end if
+        ! Samples of the 1D normal distribution with mean 0 and variance 1.
+        do i=1,m
+            x(i) = gasdev()
+        end do
+        ! Compute R' * X.
+        xtmp(1,:) = x
+        xtmp = matmul(xtmp,r)
+        x = xtmp(1,:)+means
+    end function mnorm_smp
+
+    !>  \brief  R8PO_FA factors an R8PO matrix. The R8PO storage format is used for a symmetric
+    !!          positive definite matrix and its inverse.  (The Cholesky factor of an R8PO matrix is an
+    !!          upper triangular matrix, so it will be in R8GE storage format.) Only the diagonal and
+    !!          upper triangle of the square array are used. This same storage scheme is used when the
+    !!          matrix is factored by R8PO_FA, or inverted by R8PO_INVERSE.  For clarity, the lower triangle
+    !!          is set to zero. R8PO storage is used by LINPACK and LAPACK. The positive definite symmetric
+    !!          matrix A has a Cholesky factorization of the form:
+    !!
+    !!          A = R' * R
+    !!
+    !!          where R is an upper triangular matrix with positive elements on its diagonal. This routine
+    !!          overwrites the matrix A with its factor R
+    !!          Reference: Jack Dongarra, Jim Bunch, Cleve Moler, Pete Stewart,
+    !!          LINPACK User's Guide, SIAM, 1979, ISBN13: 978-0-898711-72-1, LC: QA214.L56.
+    subroutine r8po_fa( n, a, info )
+       integer, intent(in)  :: n
+       real, intent(inout)  :: a(n,n)
+       integer, intent(out) :: info
+       integer :: i, j, k
+       real :: s
+       do j = 1, n
+           do k = 1, j - 1
+               a(k,j) = ( a(k,j) - sum ( a(1:k-1,k) * a(1:k-1,j) ) ) / a(k,k)
+           end do
+           s = a(j,j) - sum ( a(1:j-1,j)**2 )
+           if ( s <= 0.0D+00 ) then
+               info = j
+               return
+           end if
+           a(j,j) = sqrt(s)
+       end do
+       info = 0
+       ! Since the Cholesky factor is stored in R8GE format, be sure to
+       ! zero out the lower triangle
+       do i = 1, n
+           do j = 1, i-1
+               a(i,j) = 0.0D+00
+           end do
+       end do
+    end subroutine r8po_fa
+
 end module simple_rnd

@@ -112,7 +112,6 @@ contains
   end subroutine print_mat
 end module cc_rot_mod
 
-
 program cc_rot
 use cc_rot_mod
 use simple_image
@@ -121,7 +120,6 @@ type(image)       :: img2, cc, img_ctf                                   !origin
 integer           :: box, ldim(3), m(3), window
 real              :: center(2), axes1(2), axes2(2), axes3(2), rot      !parameters to build ellipses
 real, allocatable :: rmat_out(:,:,:), cc_mat(:,:,:), w_mat(:,:,:), rmat(:,:,:)
-
 box    = 256
 window = 2      !anint(box/64)
 ldim   = [box,box,1]
@@ -130,12 +128,10 @@ axes1  = [55.,67.]
 axes2  = [30.,70.]
 axes3  = [45.,70.]
 rot    = 0.
-
 call img2%new    ( ldim,1. )
 call cc%new      ( ldim,1. )
 call img_ctf%new ( ldim,1. )
 allocate(rmat(ldim(1), ldim(2),1), rmat_out(ldim(1), ldim(2),1), cc_mat(ldim(1), ldim(2),1), w_mat(window+1, window+1, 1), source = 0.)
-
 !FIRST IMAGE
 img2    = 0.
 cc      = 0.

@@ -94,8 +94,6 @@ contains
         call ppspec_all%roavg(IARES,   pspec_all_roavg,   180)
         call ppspec_lower%roavg(IARES, pspec_lower_roavg, 180)
         call ppspec_upper%roavg(IARES, pspec_upper_roavg, 180)
-        ! prepare 90 deg rotated spectrum
-        call ppspec_all%rtsq(90., 0., 0., ppspec_all_rot90)
         ! prepare CTF power spectra
         call pspec_ctf%new(ldim, smpd)
         call pspec_ctf_roavg%new(ldim, smpd)
@@ -103,6 +101,8 @@ contains
         call imgmsk%new(ldim, smpd)
         call imgmsk%resmsk(hp, lp)
         cc_msk = imgmsk%bin2logical()
+        ! prepare 90 deg rotated spectrum
+        call ppspec_all%rtsq(90., 0., 0., ppspec_all_rot90)
         ! calculate CTF quality score based on corr with 90 deg rotated
         corr90deg = ppspec_all%real_corr(ppspec_all_rot90, cc_msk)
         call ppspec_all_rot90%kill

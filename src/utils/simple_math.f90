@@ -1379,89 +1379,85 @@ contains
     !!         reference : algorithm explained at:
     !!         http://math.uww.edu/~mcfarlat/inverse.htm
     !!         http://www.tutor.ms.unimelb.edu.au/matrix/matrix_inverse.html
- !    subroutine matinv(matrix, inverse, n, errflg)
-!         integer, intent(in)  :: n       !< size of square matrix
-!         integer, intent(out) :: errflg  !< return error status. -1 for error, 0 for normal
-!         real, intent(in), dimension(n,n)  :: matrix  !< input matrix
-!         real, intent(out), dimension(n,n) :: inverse !< inverted matrix
-!         logical :: flag = .true.
-!         integer :: i, j, k
-!         real :: m
-!         real, dimension(n,2*n) :: augmatrix !< augmented matrix
-!         ! augment input matrix with an identity matrix
-!         do i=1,n
-!             do j=1,2*n
-!                 if(j <= n )then
-!                     augmatrix(i,j) = matrix(i,j)
-!                 else if((i+n) == j)then
-!                     augmatrix(i,j) = 1.
-!                 else
-!                     augmatrix(i,j) = 0.
-!                 endif
-!             end do
-!         end do
-!         ! reduce augmented matrix to upper traingular form
-!         do k=1,n-1
-! #ifdef USETINY
-!            if( abs(augmatrix(k,k)) < TINY )then
-! #else
-!               if( augmatrix(k,k) == 0. )then
-! #endif
-!                  flag = .false.
-!                 do i=k+1,n
-!                     if( augmatrix(i,k) > 0. )then
-!                         do j=1,2*n
-!                             augmatrix(k,j) = augmatrix(k,j)+augmatrix(i,j)
-!                         end do
-!                         flag = .true.
-!                         exit
-!                     endif
-!                     if(flag .eqv. .false.)then
-!                         inverse = 0.
-!                         errflg = -1
-!                         return
-!                     endif
-!                 end do
-!             endif
-!             do j=k+1, n
-!                 m = augmatrix(j,k)/augmatrix(k,k)
-!                 do i=k,2*n
-!                     augmatrix(j,i) = augmatrix(j,i)-m*augmatrix(k,i)
-!                 end do
-!             end do
-!         end do
-!         !test for invertibility
-!         do i=1,n
-!             if( augmatrix(i,i) == 0. )then
-!                 inverse = 0
-!                 errflg = -1
-!                 return
-!             endif
-!         end do
-!         !make diagonal elements as 1
-!         do i=1,n
-!             m = augmatrix(i,i)
-!             do j=i,2*n
-!                 augmatrix(i,j) = augmatrix(i,j)/m
-!             end do
-!         end do
-!         !reduced right side half of augmented matrix to identity matrix
-!         do k=n-1,1,-1
-!             do i=1,k
-!                 m = augmatrix(i,k+1)
-!                 do j = k,2*n
-!                     augmatrix(i,j) = augmatrix(i,j)-augmatrix(k+1,j)*m
-!                 end do
-!             end do
-!         end do
-!         ! store answer
-!         do i=1,n
-!             do j=1,n
-!                 inverse(i,j) = augmatrix(i,j+n)
-!             end do
-!         end do
-!         errflg = 0
-!     end subroutine matinv
+    subroutine matinv(matrix, inverse, n, errflg)
+        integer, intent(in)  :: n       !< size of square matrix
+        integer, intent(out) :: errflg  !< return error status. -1 for error, 0 for normal
+        real, intent(in), dimension(n,n)  :: matrix  !< input matrix
+        real, intent(out), dimension(n,n) :: inverse !< inverted matrix
+        logical :: flag = .true.
+        integer :: i, j, k
+        real :: m
+        real, dimension(n,2*n) :: augmatrix !< augmented matrix
+        ! augment input matrix with an identity matrix
+        do i=1,n
+            do j=1,2*n
+                if(j <= n )then
+                    augmatrix(i,j) = matrix(i,j)
+                else if((i+n) == j)then
+                    augmatrix(i,j) = 1.
+                else
+                    augmatrix(i,j) = 0.
+                endif
+            end do
+        end do
+        ! reduce augmented matrix to upper traingular form
+        do k=1,n-1
+              if( augmatrix(k,k) == 0. )then
+                 flag = .false.
+                do i=k+1,n
+                    if( augmatrix(i,k) > 0. )then
+                        do j=1,2*n
+                            augmatrix(k,j) = augmatrix(k,j)+augmatrix(i,j)
+                        end do
+                        flag = .true.
+                        exit
+                    endif
+                    if(flag .eqv. .false.)then
+                        inverse = 0.
+                        errflg = -1
+                        return
+                    endif
+                end do
+            endif
+            do j=k+1, n
+                m = augmatrix(j,k)/augmatrix(k,k)
+                do i=k,2*n
+                    augmatrix(j,i) = augmatrix(j,i)-m*augmatrix(k,i)
+                end do
+            end do
+        end do
+        ! test for invertibility
+        do i=1,n
+            if( augmatrix(i,i) == 0. )then
+                inverse = 0
+                errflg = -1
+                return
+            endif
+        end do
+        ! make diagonal elements as 1
+        do i=1,n
+            m = augmatrix(i,i)
+            do j=i,2*n
+                augmatrix(i,j) = augmatrix(i,j)/m
+            end do
+        end do
+        ! reduced right side half of augmented matrix to identity matrix
+        do k=n-1,1,-1
+            do i=1,k
+                m = augmatrix(i,k+1)
+                do j = k,2*n
+                    augmatrix(i,j) = augmatrix(i,j)-augmatrix(k+1,j)*m
+                end do
+            end do
+        end do
+        ! store answer
+        do i=1,n
+            do j=1,n
+                inverse(i,j) = augmatrix(i,j+n)
+            end do
+        end do
+        errflg = 0
+    end subroutine matinv
 
     !>   subroutine to find the inverse of a square matrix
     !!         author : louisda16th a.k.a ashwith j. rego
@@ -3634,5 +3630,28 @@ end function selec_1
 
 
 
+  ! TRACE calculates the trace of a real 2D matrix
+  pure function trace(mat) result (tr)
+      real, intent(in) :: mat(:,:)
+      real             :: tr
+      integer          :: i
+      tr = 0.
+      do i = 1, size(mat, dim = 1)
+        tr = tr + mat(i,i)
+      enddo
+  end function trace
 
+  !>  \brief  generates a binary mask from a logical one  !CHIARA
+  function logical2bin( mask ) result( matrix )
+     logical, intent(in) :: mask(:,:,:)
+     real, allocatable   :: matrix(:,:,:)
+     integer      :: s(3), i, j
+     s = shape(mask)
+     allocate(matrix(s(1),s(2),1), source = 0.)
+     do i = 1, s(1)
+       do j = 1, s(2)
+         if(mask(i,j,1)) matrix(i,j,1)=1.
+       enddo
+     enddo
+  end function logical2bin
 end module simple_math
