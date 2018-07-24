@@ -47,7 +47,7 @@ global_debug=.true.
 debug=.true.
 isopened=.false.
 call date_and_time(date=datestr)
-folder = 'SIMPLE_TEST_SSIM_'//trim(datestr)
+folder = 'SIMPLE_TEST_STAR_'//trim(datestr)
 call simple_mkdir( trim(folder) , status=io_stat)
 if(io_stat/=0) call simple_stop("simple_mkdir failed")
 print *," Changing directory to ", folder
@@ -101,6 +101,13 @@ endif
  ! ! call s%import_ctf_estimation(myproject,tmpfile)
   call s%kill()
  ! print *, '     star module imported successfully'
+  if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
+
+  call exec_cmdline("simple_exec prg=new_project projname=test && cd test && "//&
+      &"simple_exec prg=import_movies filetab=../filetab-stardoc.txt  cs=2.7 ctf=yes "//&
+      &"fraca=0.1 kv=300 smpd=14 deftab=../oritab-stardoc.txt && "//&
+      &"simple_exec prg=print_project_info")
+
 
 
 ! call test_stardoc

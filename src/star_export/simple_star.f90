@@ -925,7 +925,7 @@ call self%doc%write(filename, sp, labels)
 
     subroutine kill(self)
         class(star_project), intent(inout):: self
-        call self%doc%kill_doc
+        call self%doc%kill()
     end subroutine kill
 
 end module simple_star

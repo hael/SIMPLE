@@ -59,7 +59,7 @@ contains
     procedure        :: put_str
     !generic         :: put => put_r4, put_i4, put_str
     procedure        :: kill_stored_params
-    procedure,public :: kill_doc
+    procedure,public :: kill
 end type stardoc
 
 interface stardoc
@@ -444,6 +444,8 @@ contains
         character(len=:),allocatable :: line,fname,tmp
         character(len=LONGSTRLEN) :: sline
         character(len=STDLEN),allocatable :: lineparts(:)
+        logical, allocatable :: fnames(:)
+        integer :: filetabunit, oritabunit
         logical :: inData, inHeader
         real :: tmpval
         inHeader=.false.;inData=.false.
@@ -457,7 +459,11 @@ contains
 
         if(allocated(self%data)) deallocate(self%data)
         allocate(self%data(self%num_data_lines))
-
+        if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
+        call fopen(filetabunit,file="filetab-stardoc.txt")
+        if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
+        call fopen(oritabunit,file="oritab-stardoc.txt")
+        allocate(fnames(self%num_data_lines),source=.false.)
         do
             call readline(self%funit, line, ios)
             if(ios /= 0) exit
@@ -527,19 +533,28 @@ contains
                             DebugPrint " Parsing file param : ", trim(fname)
                             if( file_exists (trim(fname)) )then
                                 print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)
+                                if (.not.fnames(nDataline))then
+                                    write(filetabunit,'(A)') trim(fname)
+                                    fnames(nDataline) = .true.
+                                endif
+
                             else
                                 tmp = get_fpath(trim(self%current_file))
                                 if( allocated(tmp) )then
                                     tmp = filepath(trim(tmp), trim(fname))
                                     if( file_exists (trim(tmp)) )then
                                         print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
+                                        if (.not. fnames(nDataline))then
+                                            write(filetabunit,'(A)') trim(tmp)
+                                            fnames(nDataline) = .true.
+                                        endif
                                     else
                                         print *," Unable to find file in path of current star file "//trim(tmp)
-                                        !! DiePrint(" Unable to find file "//trim(tmp) )
+                                        DiePrint(" Unable to find file "//trim(tmp) )
                                     endif
                                 else
                                     print *," Unable to find file or path of current star file "//trim(fname)
-                                    !!  DiePrint("simple_stardoc failed to get file in starfile")
+                                    DiePrint("simple_stardoc failed to get file in starfile")
                                 endif
                             endif
                         else
@@ -551,7 +566,9 @@ contains
                                 &"="//trim(real2str(tmpval))
                         endif
                     end do
-                    DebugPrint " Processed Data Line : ", trim(sline)
+                    DebugPrint " Processed Data Line #",nDataline,":", trim(sline)
+                    write(oritabunit,'(A)') trim(sline)
+
                 else
                     print *, " Parsing records on line failed ", nargsOnDataline,  nargsParsed
                     print *, line
@@ -571,7 +588,8 @@ contains
         if(nDataline /= self%num_data_lines)then
             DiePrint(" Num data lines mismatch in read_data_lines and read_header")
         endif
-
+        if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
+        if(is_open(oritabunit))  call fclose(oritabunit,  errmsg="star_doc ; read_header oritab")
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
 
@@ -822,7 +840,7 @@ contains
 
 
     !>  \brief  is a destructor
-    subroutine kill_doc( self )
+    subroutine kill( self )
         class(stardoc), intent(inout) :: self
         integer :: i
         if( self%l_open ) call self%close
@@ -837,6 +855,10 @@ contains
             self%num_frame_elements = 0
         endif
         self%existence =.false.
-    end subroutine kill_doc
+        if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
+        if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
+
+
+    end subroutine kill
 
 end module simple_stardoc
