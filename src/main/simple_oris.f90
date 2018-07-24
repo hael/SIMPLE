@@ -33,9 +33,6 @@ type :: oris
     generic            :: getter => getter_1, getter_2
     procedure          :: get_all
     procedure          :: get_all_rmats
-    ! procedure, private :: getter_all_1
-    ! procedure, private :: getter_all_2
-    ! generic            :: getter_all => getter_all_1, getter_all_2
     procedure          :: get_mat
     procedure          :: get_normal
     procedure          :: get_2Dshift
@@ -319,36 +316,6 @@ contains
             arr(i) = self%o(i)%get(key)
         enddo
     end function get_all
-
-    !>  \brief  is for getting an array of 'key' values
-    ! subroutine getter_all_1( self, key, vals )
-    !     class(oris),       intent(inout) :: self
-    !     character(len=*),  intent(in)    :: key
-    !     real, allocatable, intent(out)   :: vals(:)
-    !     integer :: i
-    !     if( allocated(vals) ) deallocate(vals)
-    !     allocate( vals(self%n), stat=alloc_stat)
-    !     if(alloc_stat.ne.0)call allocchk('getter_all_1; simple_oris',alloc_stat)
-    !     do i=1,self%n
-    !         call self%o(i)%getter(key, vals(i))
-    !     enddo
-    ! end subroutine getter_all_1
-
-    !>  \brief  is for getting an array of 'key' values
-    ! subroutine getter_all_2( self, key, vals )
-    !     class(oris),                        intent(inout) :: self
-    !     character(len=*),                   intent(in)    :: key
-    !     character(len=STDLEN), allocatable, intent(out)   :: vals(:)
-    !     integer :: i
-    !     character(len=:), allocatable :: tmp
-    !     if( allocated(vals) ) deallocate(vals)
-    !     allocate( vals(self%n), stat=alloc_stat)
-    !     if(alloc_stat.ne.0)call allocchk('getter_all_2; simple_oris',alloc_stat)
-    !     do i=1,self%n
-    !         call self%o(i)%getter(key, tmp)
-    !         vals(i) = tmp
-    !     enddo
-    ! end subroutine getter_all_2
 
     !>  \brief  is for getting the i:th rotation matrix
     pure function get_mat( self, i ) result( mat )

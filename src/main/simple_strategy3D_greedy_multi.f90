@@ -38,22 +38,13 @@ contains
     subroutine srch_greedy_multi( self, ithr )
         class(strategy3D_greedy_multi), intent(inout) :: self
         integer,                        intent(in)    :: ithr
-        integer :: iref, isample,nrefs,target_projs(self%s%npeaks_grid)
+        integer :: iref, isample,nrefs
         real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             if( self%s%neigh )then
-                if( self%s%nstates == 1 )then
-                    ! for neighbour modes we do a coarse grid search first
-                    if( .not. allocated(build_glob%grid_projs) )&
-                    &stop 'need optional grid_projs 4 subspace srch; strategy3D_greedy_multi :: srch_greedy_multi'
-                    call self%s%greedy_subspace_srch(build_glob%grid_projs, target_projs)
-                    ! initialize
-                    call self%s%prep4srch(build_glob%nnmat, target_projs)
-                else
-                    call self%s%prep4srch(build_glob%nnmat)
-                endif
+                call self%s%prep4srch(build_glob%nnmat)
                 nrefs = self%s%nnnrefs
             else
                 ! initialize

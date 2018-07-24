@@ -29,7 +29,6 @@ end type strategy3D_spec
 type strategy3D_srch
     type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(pftcc_orisrch_grad) :: grad_orisrch_obj          !< obj 4 search over all df:s, L-BFGS with gradient
-    integer, allocatable     :: nnvec(:)                  !< nearest neighbours indices
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
@@ -39,7 +38,6 @@ type strategy3D_srch
     integer                  :: nrots         = 0         !< # in-plane rotations in polar representation
     integer                  :: npeaks        = 0         !< # peaks (nonzero orientation weights)
     integer                  :: npeaks_eff    = 0         !< effective # peaks
-    integer                  :: npeaks_grid   = 0         !< # peaks after coarse search
     integer                  :: nsym          = 0         !< symmetry order
     integer                  :: nbetter       = 0         !< # better orientations identified
     integer                  :: nrefs_eval    = 0         !< # references evaluated
@@ -59,7 +57,6 @@ type strategy3D_srch
   contains
     procedure :: new
     procedure :: prep4srch
-    procedure :: greedy_subspace_srch
     procedure :: inpl_srch
     procedure :: store_solution
     procedure :: kill
@@ -106,7 +103,6 @@ contains
         class(strategy3D_spec), intent(in)    :: spec
         integer,                intent(in)    :: npeaks
         integer, parameter :: MAXITS = 60
-        integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
         self%iptcl      = spec%iptcl
@@ -124,25 +120,6 @@ contains
         self%nnn        = params_glob%nnn
         self%nnnrefs    = self%nnn*self%nstates
         self%dowinpl    = (npeaks /= 1) .and. (self%nstates == 1)
-        ! multiple states
-        if( self%nstates == 1 )then
-            self%npeaks_grid = GRIDNPEAKS
-        else
-            ! number of populated states
-            nstates_eff = count(s3D%state_exists)
-            select case(trim(params_glob%refine))
-                case('cluster','clustersym','cluster_snhc')
-                    self%npeaks_grid = 1
-                case DEFAULT
-                    ! "-(nstates_eff-1)" because all states share the same previous orientation
-                    self%npeaks_grid = GRIDNPEAKS * nstates_eff - (nstates_eff - 1)
-            end select
-        endif
-        if( self%neigh )then
-            self%npeaks_grid = min(self%npeaks_grid,self%nnnrefs)
-        else
-            self%npeaks_grid = min(self%npeaks_grid,self%nrefs)
-        endif
         ! create in-plane search object
         lims(:,1)      = -params_glob%trs
         lims(:,2)      =  params_glob%trs
@@ -156,18 +133,16 @@ contains
         DebugPrint  '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
     end subroutine new
 
-    subroutine prep4srch( self, nnmat, target_projs )
+    subroutine prep4srch( self, nnmat )
         use simple_combinatorics, only: merge_into_disjoint_set
         class(strategy3D_srch), intent(inout) :: self
-        integer, optional,      intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
+        integer, optional,      intent(in)    :: nnmat(self%nprojs,self%nnn_static)
         integer   :: i, istate
         type(ori) :: o_prev
         real      :: corrs(self%nrots), corr, bfac
         if( self%neigh )then
             if( .not. present(nnmat) )&
             &stop 'need optional nnmat to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
-            if( .not. present(target_projs) .and. self%nstates.eq.1 )&
-            &stop 'need optional target_projs to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
         endif
         ! previous parameters
         o_prev          = build_glob%spproj_field%get_ori(self%iptcl)
@@ -194,10 +169,6 @@ contains
             if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_strategy3D_srch'
             if( .not. s3D%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_strategy3D_srch'
         endif
-        if( self%neigh .and. self%nstates.eq.1 )then
-            ! disjoint nearest neighbour set
-            self%nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
-        endif
         ! B-factor memoization
         if( params_glob%l_bfac_static )then
             bfac = params_glob%bfac_static
@@ -222,86 +193,6 @@ contains
         self%prev_corr = corr
         DebugPrint  '>>> STRATEGY3D_SRCH :: PREPARED FOR SIMPLE_STRATEGY3D_SRCH'
     end subroutine prep4srch
-
-    subroutine greedy_subspace_srch( self, grid_projs, target_projs )
-        class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: grid_projs(:)
-        integer,                intent(inout) :: target_projs(:)
-        real      :: inpl_corrs(self%nrots), corrs(self%nrefs)
-        integer   :: iref, isample, nrefs, ntargets, cnt, istate
-        integer   :: state_cnt(self%nstates), iref_state
-        if( build_glob%spproj_field%get_state(self%iptcl) > 0 )then
-            ! initialize
-            call prep_strategy3D_thread(self%ithr)
-            target_projs   = 0
-            nrefs          = size(grid_projs)
-            self%prev_proj = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(self%iptcl))
-            ! search
-            do isample = 1, nrefs
-                do istate = 1, self%nstates
-                    iref = grid_projs(isample)           ! set the projdir reference index
-                    iref = (istate-1)*self%nprojs + iref ! set the state reference index
-                    call per_ref_srch                    ! actual search
-                end do
-            end do
-            ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%ithr,:,1) ! 1 is the top ranking in-plane corr
-            call hpsort(corrs, s3D%proj_space_refinds(self%ithr,:))
-            ! return target points
-            ntargets = size(target_projs)
-            cnt      = 1
-            target_projs( cnt ) = self%prev_proj ! previous always part of the targets
-            if( self%nstates == 1 )then
-                ! Single state
-                do isample=self%nrefs,self%nrefs - ntargets + 1,-1
-                    if( target_projs(1) == s3D%proj_space_refinds(self%ithr,isample) )then
-                        ! direction is already in target set
-                    else
-                        cnt = cnt + 1
-                        target_projs(cnt) = s3D%proj_space_refinds(self%ithr,isample)
-                        if( cnt == ntargets ) exit
-                    endif
-                end do
-            else
-                ! Multiples states
-                state_cnt = 1                                                   ! previous always part of the targets
-                do isample = self%nrefs, 1, -1
-                    if( cnt >= self%npeaks_grid )exit                           ! all that we need
-                    iref_state = s3D%proj_space_refinds(self%ithr,isample) ! reference index to multi-state space
-                    istate     = ceiling(real(iref_state)/real(self%nprojs))
-                    iref       = iref_state - (istate-1)*self%nprojs            ! reference index to single state space
-                    if( .not.s3D%state_exists(istate) )cycle
-                    if( any(target_projs == iref) )cycle                        ! direction is already set
-                    if( state_cnt(istate) >= GRIDNPEAKS )cycle                  ! state is already filled
-                    cnt = cnt + 1
-                    target_projs(cnt) = iref
-                    state_cnt(istate) = state_cnt(istate) + 1
-                end do
-            endif
-        else
-            call build_glob%spproj_field%reject(self%iptcl)
-        endif
-        DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED GREEDY SUBSPACE SEARCH'
-
-        contains
-
-            subroutine per_ref_srch
-                integer :: loc(3)
-                if( s3D%state_exists(istate) )then
-                    ! calculate in-plane correlations
-                    call pftcc_glob%gencorrs(iref, self%iptcl, inpl_corrs)
-                    ! identify the 3 top scoring in-planes
-                    loc = max3loc(inpl_corrs)
-                    ! stash in-plane correlations for sorting
-                    s3D%proj_space_corrs(self%ithr,iref,:) = [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))]
-                    ! stash the reference index for sorting
-                    s3D%proj_space_refinds(self%ithr,iref) = iref
-                    ! stash the in-plane indices
-                    s3D%proj_space_inplinds(self%ithr,iref,:) = loc
-                endif
-            end subroutine per_ref_srch
-
-    end subroutine greedy_subspace_srch
 
     subroutine inpl_srch( self )
         class(strategy3D_srch), intent(inout) :: self
@@ -391,7 +282,6 @@ contains
 
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
-        if(allocated(self%nnvec))deallocate(self%nnvec)
         call self%grad_shsrch_obj%kill
     end subroutine kill
 

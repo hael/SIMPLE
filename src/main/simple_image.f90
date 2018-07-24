@@ -310,7 +310,7 @@ contains
     procedure          :: roavg
     procedure          :: rtsq
     procedure          :: rtsq_serial
-    procedure          :: shift_phorig
+    procedure, private :: shift_phorig
     procedure          :: shift
     procedure          :: shift2Dserial
     procedure          :: set_within
@@ -5769,49 +5769,89 @@ contains
         if( self%ft ) call simple_stop('ERROR, this method is intended for real images; shift_phorig; simple_image')
         if( self%even_dims() )then
             if( self%ldim(3) == 1 )then
-                !$omp parallel do collapse(2) default(shared) private(rswap,i,j)&
-                !$omp schedule(static) proc_bind(close)
-                do i=1,self%ldim(1)/2
-                    do j=1,self%ldim(2)/2
-                        !(1)
-                        rswap = self%rmat(i,j,1)
-                        self%rmat(i,j,1) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1)
-                        self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1) = rswap
-                        !(2)
-                        rswap = self%rmat(i,self%ldim(2)/2+j,1)
-                        self%rmat(i,self%ldim(2)/2+j,1) = self%rmat(self%ldim(1)/2+i,j,1)
-                        self%rmat(self%ldim(1)/2+i,j,1) = rswap
+                if( self%wthreads )then
+                    !$omp parallel do collapse(2) default(shared) private(rswap,i,j)&
+                    !$omp schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)/2
+                        do j=1,self%ldim(2)/2
+                            !(1)
+                            rswap = self%rmat(i,j,1)
+                            self%rmat(i,j,1) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1)
+                            self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1) = rswap
+                            !(2)
+                            rswap = self%rmat(i,self%ldim(2)/2+j,1)
+                            self%rmat(i,self%ldim(2)/2+j,1) = self%rmat(self%ldim(1)/2+i,j,1)
+                            self%rmat(self%ldim(1)/2+i,j,1) = rswap
+                        end do
                     end do
-                end do
-                !$omp end parallel do
+                    !$omp end parallel do
+                else
+                    do i=1,self%ldim(1)/2
+                        do j=1,self%ldim(2)/2
+                            !(1)
+                            rswap = self%rmat(i,j,1)
+                            self%rmat(i,j,1) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1)
+                            self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1) = rswap
+                            !(2)
+                            rswap = self%rmat(i,self%ldim(2)/2+j,1)
+                            self%rmat(i,self%ldim(2)/2+j,1) = self%rmat(self%ldim(1)/2+i,j,1)
+                            self%rmat(self%ldim(1)/2+i,j,1) = rswap
+                        end do
+                    end do
+                endif
             else
                 kfrom = 1
                 kto   = self%ldim(3)/2
-                !$omp parallel do collapse(3) default(shared) private(rswap,i,j,k)&
-                !$omp schedule(static) proc_bind(close)
-                do i=1,self%ldim(1)/2
-                    do j=1,self%ldim(2)/2
-                        do k=1,kto
-                            !(1)
-                            rswap = self%rmat(i,j,k)
-                            self%rmat(i,j,k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k)
-                            self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k) = rswap
-                            !(2)
-                            rswap = self%rmat(i,self%ldim(2)/2+j,self%ldim(3)/2+k)
-                            self%rmat(i,self%ldim(2)/2+j,self%ldim(3)/2+k) = self%rmat(self%ldim(1)/2+i,j,k)
-                            self%rmat(self%ldim(1)/2+i,j,k) = rswap
-                            !(3)
-                            rswap = self%rmat(self%ldim(1)/2+i,j,self%ldim(3)/2+k)
-                            self%rmat(self%ldim(1)/2+i,j,self%ldim(3)/2+k) = self%rmat(i,self%ldim(2)/2+j,k)
-                            self%rmat(i,self%ldim(2)/2+j,k) = rswap
-                            !(4)
-                            rswap = self%rmat(i,j,self%ldim(3)/2+k)
-                            self%rmat(i,j,self%ldim(3)/2+k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k)
-                            self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k) = rswap
+                if( self%wthreads )then
+                    !$omp parallel do collapse(3) default(shared) private(rswap,i,j,k)&
+                    !$omp schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)/2
+                        do j=1,self%ldim(2)/2
+                            do k=1,kto
+                                !(1)
+                                rswap = self%rmat(i,j,k)
+                                self%rmat(i,j,k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k)
+                                self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k) = rswap
+                                !(2)
+                                rswap = self%rmat(i,self%ldim(2)/2+j,self%ldim(3)/2+k)
+                                self%rmat(i,self%ldim(2)/2+j,self%ldim(3)/2+k) = self%rmat(self%ldim(1)/2+i,j,k)
+                                self%rmat(self%ldim(1)/2+i,j,k) = rswap
+                                !(3)
+                                rswap = self%rmat(self%ldim(1)/2+i,j,self%ldim(3)/2+k)
+                                self%rmat(self%ldim(1)/2+i,j,self%ldim(3)/2+k) = self%rmat(i,self%ldim(2)/2+j,k)
+                                self%rmat(i,self%ldim(2)/2+j,k) = rswap
+                                !(4)
+                                rswap = self%rmat(i,j,self%ldim(3)/2+k)
+                                self%rmat(i,j,self%ldim(3)/2+k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k)
+                                self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k) = rswap
+                            end do
                         end do
                     end do
-                end do
-                !$omp end parallel do
+                    !$omp end parallel do
+                else
+                    do i=1,self%ldim(1)/2
+                        do j=1,self%ldim(2)/2
+                            do k=1,kto
+                                !(1)
+                                rswap = self%rmat(i,j,k)
+                                self%rmat(i,j,k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k)
+                                self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k) = rswap
+                                !(2)
+                                rswap = self%rmat(i,self%ldim(2)/2+j,self%ldim(3)/2+k)
+                                self%rmat(i,self%ldim(2)/2+j,self%ldim(3)/2+k) = self%rmat(self%ldim(1)/2+i,j,k)
+                                self%rmat(self%ldim(1)/2+i,j,k) = rswap
+                                !(3)
+                                rswap = self%rmat(self%ldim(1)/2+i,j,self%ldim(3)/2+k)
+                                self%rmat(self%ldim(1)/2+i,j,self%ldim(3)/2+k) = self%rmat(i,self%ldim(2)/2+j,k)
+                                self%rmat(i,self%ldim(2)/2+j,k) = rswap
+                                !(4)
+                                rswap = self%rmat(i,j,self%ldim(3)/2+k)
+                                self%rmat(i,j,self%ldim(3)/2+k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k)
+                                self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k) = rswap
+                            end do
+                        end do
+                    end do
+                endif
             endif
         else
             write(*,*) 'ldim: ', self%ldim
