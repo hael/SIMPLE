@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_stardoc
 use simple_sp_project, only: sp_project
 use simple_parameters
-
+use simple_oris, only: oris
 implicit none
 private
 type star_project
@@ -49,14 +49,16 @@ contains
         class(sp_project), intent(inout)   :: sp
         class(parameters), intent(inout) :: p
         character(len=*),intent(inout) :: filename
-        if( .not. file_exists(trim(p%starfile)) )then
-            write(*,*) 'file: ', trim(p%starfile)
-            stop 'does not exist in cwd;  simple_star :: prepare '
+
+        if( .not. file_exists(trim(filename)) )then
+            write(*,*) 'file: ', trim(filename)
+            stop 'file does not exist in cwd;  simple_star :: prepare '
         endif
-       
-            ! import mode
-            call self%doc%open4import(filename)
-            call self%doc%close()
+
+        !! import mode
+        call self%doc%open4import(filename)
+
+        call self%doc%close()
 
     end subroutine prepareimport
 
@@ -100,7 +102,7 @@ contains
         character(len=*), optional, intent(inout) :: fname
         call self%doc%setdoprint()
         call self%doc%open4import(fname)
-        
+
     end subroutine read
 
 
@@ -121,6 +123,7 @@ contains
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
+
     end subroutine import_micrographs
 
     !! Motion Correct: Simple/Unblur/MotionCorr2
@@ -186,10 +189,110 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_ctf_estimation
-    subroutine import_ctf_estimation (self, sp, filename)
+    subroutine import_ctf_estimation (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
+        integer i,nheaders, nlines
+        type(oris)       :: os
+        integer          :: noris
+        class(oris),      pointer     :: os_ptr
+
+        ! call p%set('oritype','MIC_SEG')
+
+        ! do i=1, self%doc%num_data_elements
+        !     print *," ", self%doc%get_header(i)
+        ! end do
+        ! do i=1, self%doc%num_data_lines
+        !     print *," ", self%doc%get_data(i)
+        ! end do
+
+        ! !! load ctf information into sp%os_stk
+        ! noris = self%doc%num_data_line
+        ! iseg  = oritype2segment(oritype)
+
+        ! call os%new(noris)
+        ! !! Convert data
+        ! do i = 1, self%doc%num_data_lines
+
+        !     ! call self%o(i)%read(fnr)
+
+        !     ! call sauron_line_parser( line, self%htab, self%chtab )
+        !     ! isthere(1) = self%htab%isthere('e1')
+        !     ! isthere(2) = self%htab%isthere('e2')
+        !     ! isthere(3) = self%htab%isthere('e3')
+        !     ! if( any(isthere) )&
+        !     !     &call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
+        !     ! if( present(nst) )then
+        !     !     state = self%o(i)%get_state()
+        !     !     nst   = max(1,max(state,nst))
+        !     ! endif
+        ! end do
+
+        ! !!Insert oris into sp project
+        ! call sp%set_sp_oris(p%oritype, os)
+
+        ! call params%new(cline)
+        ! ! parameter input management
+        ! inputted_boxtab = cline%defined('boxtab')
+        ! ! project file management
+        ! if( .not. file_exists(trim(params%projfile)) )then
+        !     write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
+        !     stop 'ERROR! simple_commander_project :: exec_import_movies'
+        ! endif
+        ! call spproj%read(params%projfile)
+        ! ! CTF
+        ! if( cline%defined('phaseplate') )then
+        !     phaseplate = cline%get_carg('phaseplate')
+        ! else
+        !     allocate(phaseplate, source='no')
+        ! endif
+        ! ctfvars%smpd  = params%smpd
+        ! ctfvars%kv    = params%kv
+        ! ctfvars%cs    = params%cs
+        ! ctfvars%fraca = params%fraca
+        ! select case(params%ctf)
+        !     case('yes')
+        !         ctfvars%ctfflag = 1
+        !     case('no')
+        !         ctfvars%ctfflag = 0
+        !     case('flip')
+        !         ctfvars%ctfflag = 2
+        !     case DEFAULT
+        !         write(*,*) 'ctf flag params%ctf: ', params%ctf
+        !         stop 'ERROR! ctf flag not supported; commander_project :: import_movies'
+        ! end select
+        ! ctfvars%l_phaseplate = .false.
+        ! if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
+        ! ! update project info
+        ! call spproj%update_projinfo( cline )
+
+        ! ! updates segment
+        ! call spproj%add_movies(params%filetab, ctfvars)
+        ! do i = 1, self%doc%num_data_lines
+        !     call simple_abspath(, fname, 'simple_sp_project::add_single_movie')
+
+        !     call sp%add_single_movie
+        ! end do
+
+        ! ! add boxtab
+        ! ! if( inputted_boxtab )then
+        ! !     call read_filetable(params%boxtab, boxfnames)
+        ! !     nboxf = size(boxfnames)
+        ! !     nmovf = nlines(params%filetab)
+        ! !     if( nboxf /= nmovf )then
+        ! !         write(*,*) '# boxfiles: ', nboxf
+        ! !         write(*,*) '# movies  : ', nmovf
+        ! !         stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
+        ! !     endif
+        ! !     do i=1,nmovf
+        ! !         call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+        ! !         call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
+        ! !     end do
+        ! ! endif
+
+
     end subroutine import_ctf_estimation
 
 
@@ -782,7 +885,7 @@ call self%doc%write(filename, sp, labels)
     integer function exporttype2star( exporttype )
         character(len=*),  intent(in) :: exporttype
         !select case(trim(exporttype))
-        ! match oritype equivalent for star export type    
+        ! match oritype equivalent for star export type
         !case('movies') ! movies
         if(  index(trim(exporttype), 'movie')/=0 )then
             exporttype2star = MOV_STAR

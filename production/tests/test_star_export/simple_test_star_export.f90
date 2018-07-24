@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 use simple_star
 use simple_cmdline,        only: cmdline
-!use simple_parameters,         only: parameters
+use simple_parameters
 !use simple_builder,          only: builder
 use simple_sp_project,     only: sp_project
 use simple_oris,       only: oris
@@ -24,11 +24,11 @@ type(sp_project)     :: myproject
 type(binoris)        :: bos
 integer, allocatable :: strlens(:)
 type(star_project) :: s
-! type(parameters) :: p
+type(parameters) :: p
 type(stardoc) :: sdoc
 type(star_dict) :: sdict
 logical :: isopened
-CHARACTER(len=32) :: argtmp
+CHARACTER(len=STDLEN) :: argtmp
 
 if( command_argument_count() == 1 )then
     call get_command_argument(1,argtmp)
@@ -41,8 +41,9 @@ allocate(tmpfile,source="/scratch/el85/stars_from_matt/micrographs_all_gctf.star
 !io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
 !tmpfile=filepath(trim(simple_testbench),"star_test/stars_from_matt/micrographs_all_gctf.star")
 endif
-print *, trim(tmpfile)
 
+print *, trim(tmpfile)
+global_debug=.true.
 debug=.true.
 isopened=.false.
 call date_and_time(date=datestr)
@@ -56,6 +57,16 @@ call simple_getcwd(curDir)
 print *," Current working directory ", curDir
 count1=tic()
 
+ print *,' Testing star_dict'
+ if( .not. sdict%exists()) then
+     print *,"Star dictionary constructor did not call new() "
+     call sdict%new()
+ endif
+
+ call sdict%print_star_dict()
+
+
+
 print *,"(info)**simple_test_star_export:  Testing star formatted file ", trim(tmpfile)
 tmpfile= trim(adjustl(tmpfile))
 !! Testing starformat
@@ -64,27 +75,33 @@ print *,"(info)**simple_test_star_export:  Testing star formatted file is_open "
 if(.not. is_open(funit)) then
     DiePrint("readline isopened failed")
 endif
-ier=0
-print *,"(info)**simple_test_star_export: Readline testing"
-do while (ier==0)
-    call readline(funit,line,ier)
-    if(allocated(line))print *,line
-enddo
-print *,"(info)**simple_test_star_export: Reading header"
-call read_header(funit)
-write(*,*)
-write(*,*)
-write(*,*)
-write(*,*)
-print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
-print *,"(info)**simple_test_star_export: Reading body"
-call read_data_lines(funit)
-print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
-call fclose(funit,io_stat,errmsg='stardoc ; close ')
+! ier=0
+! print *,"(info)**simple_test_star_export: Readline testing"
+! do while (ier==0)
+!     call readline(funit,line,ier)
+!     if(allocated(line))print *,line
+! enddo
+ print *,"(info)**simple_test_star_export: Reading header"
+ call read_header(funit)
+! write(*,*)
+! write(*,*)
+! write(*,*)
+! write(*,*)
+! print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
+! print *,"(info)**simple_test_star_export: Reading body"
+! call read_data_lines(funit)
+! print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
+ call fclose(funit,io_stat,errmsg='stardoc ; close ')
+ if( is_open(funit)) then
+     DiePrint(" star file still open after closing")
+ endif
 
-print *,' Testing star_dict'
+  print *, 'Testing star module'
+  call s%prepareimport(myproject,p,tmpfile)
+ ! ! call s%import_ctf_estimation(myproject,tmpfile)
+  call s%kill()
+ ! print *, '     star module imported successfully'
 
-call sdict%print_star_dict()
 
 ! call test_stardoc
 
@@ -281,22 +298,22 @@ contains
                 exit
             endif
         enddo
-
         call compact(line)  ! remove extra spaces and preceeding spaces
 
     end subroutine readline
 
+    !> First pass of reading in STAR file
     subroutine read_header(funit)
         integer,intent(inout)  :: funit
-        integer          :: n,ios,lenstr,isize,pos1,pos2, nargsline
-        character(len=:), allocatable :: line ! LINE_MAX_LEN=8192, LONGSTRLEN=1024
+        integer          :: cnt,n,ios,lenstr,isize,pos1,pos2, nargsline
+        character(len=:), allocatable :: line, starlabel, eqvsimplelabel
         !character(len=:),allocatable :: argline(:)
         character(len=STDLEN) :: argline(128)
-        logical :: inData, inField
+        logical :: inData, inHeader
         num_data_elements=0
         num_data_lines=0
-        inData=.false.;inField=.false.
-        ios=0
+        inData=.false.;inHeader=.false.
+        ios=0;cnt=1
         !! Make sure we are at the start of the file
         rewind( funit, IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
@@ -305,21 +322,30 @@ contains
             call readline(funit, line, ios)
             if(ios /= 0) exit
             line = trim(adjustl(line))
-            print*, "STAR>>",line
+            print*, "STAR>> line #",cnt,":",line
+            cnt=cnt+1
             !! Parse the start of the STAR file
             lenstr=len_trim(line)
             if (lenstr == 0 )cycle ! empty line
 
             !! Count number of fields in header
-            if(inField)then
+            if(inHeader)then
                 if ( .not. (index(trim(line), "_rln") == 0) )then
                     num_data_elements=num_data_elements+1
                     pos1 = firstNonBlank(trim(line))
                     pos2 = firstBlank(trim(line))
                     DebugPrint " Found STAR field line ", trim(line), " VAR= ",pos2, line(pos1+4:pos2)
+                    starlabel = line(pos1+4:pos2)
+                    if( sdict%isthere(starlabel) )then
+                        print *," STAR field found in dictionary ", num_data_elements
+                        eqvsimplelabel = sdict%star2simple(starlabel)
+                        print *," STAR field: ", trim(starlabel), " equivalent to ", trim(eqvsimplelabel)
+                    else
+                        print *," STAR field: ", trim(starlabel), " star field not in dictionary"
+                    endif
                     cycle
                 else
-                    inField=.false.
+                    inHeader=.false.
                     DebugPrint " End of STAR data field lines "
                     inData = .true.
                 endif
@@ -362,7 +388,7 @@ contains
                 cycle
             endif
             if ( .not. (index(trim(line), "loop_") == 0))then
-                inField=.true.
+                inHeader=.true.
                 DebugPrint "Begin STAR field lines ", line
             endif
 
@@ -374,6 +400,7 @@ contains
 
     end subroutine read_header
 
+    !> Read STAR file and store information
     subroutine read_data_lines(funit)
         integer,intent(inout) :: funit
         integer          :: n,cnt,ios,lenstr, pos,i, nargsOnDataline, nDatalines

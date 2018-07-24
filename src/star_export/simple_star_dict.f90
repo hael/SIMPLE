@@ -16,6 +16,7 @@ contains
     procedure :: new
     procedure :: exists
     procedure :: lookup
+    procedure :: isthere
     procedure :: star_dict2str
     procedure :: print_star_dict
     procedure :: simple2star
@@ -47,11 +48,11 @@ contains
         !! File name keywords and their formats
         self%keywords_filename = chash()
         call self%keywords_filename%new(5)
-        call self%keywords_filename%push('ImageName',          'file' ) ! os_mic|os_stk...  '([0-9]{05})@(Extract|Polish)/job[0-9]{03}/filename.mrc[s]?')
-        call self%keywords_filename%push('MicrographName',       'file' ) !  sp_project%os_mic ) ! eg. 'MotionCorr/job[0-9]{03}/filename.mrc[s]?')
-        call self%keywords_filename%push('MicrographNameNoDW',     'file' ) !'MotionCorr/job[0-9]{03}/filename_noDW.mrc[s]?')
-        call self%keywords_filename%push('OriginalParticleName',    'file' ) !'Extract/job[0-9]{03}/filename.mrc[s]?')
-        call self%keywords_filename%push('CtfImage',         'file' ) !       'Ctffind/job[0-9]{03}/filename.ctf:mrc')
+        call self%keywords_filename%push('ImageName',            'file' ) ! os_mic|os_stk...  '([0-9]{05})@(Extract|Polish)/job[0-9]{03}/filename.mrc[s]?')
+        call self%keywords_filename%push('MicrographName',       'file' ) ! 'movie' in sp_project%os_mic ) ! eg. 'MotionCorr/job[0-9]{03}/filename.mrc[s]?')
+        call self%keywords_filename%push('MicrographNameNoDW',   'file' ) !'MotionCorr/job[0-9]{03}/filename_noDW.mrc[s]?')
+        call self%keywords_filename%push('OriginalParticleName', 'file' ) !'Extract/job[0-9]{03}/filename.mrc[s]?')
+        call self%keywords_filename%push('CtfImage',             'file' ) !  'Ctffind/job[0-9]{03}/filename.ctf:mrc')
 
 
 
@@ -67,10 +68,10 @@ contains
         call self%keywords_general%push('AngleRot',                          'e1')   !! imghead: theta
         call self%keywords_general%push('AngleTilt',                         'e2')   !! imghead phi
 
-        ! call self%keywords_general%push('AutopickFigureOfMerit',             '?')    !!
-        ! call self%keywords_general%push('AverageNrOfFrames',                 '?')    !!
-        ! call self%keywords_general%push('ClassNumber',                       '?')    !!
-       
+        ! call self%keywords_general%push('AutopickFigureOfMerit',             '')    !!
+        ! call self%keywords_general%push('AverageNrOfFrames',                 '')    !!
+        ! call self%keywords_general%push('ClassNumber',                       '')    !!
+
 
         !!  Symmetry libraries have been copied from XMIPP. As such, with the exception of
         !!  tetrahedral symmetry, they comply with the Heymann, Chagoyen and Belnap (2005) standard:
@@ -91,7 +92,7 @@ contains
         !! I2: Crowther 222 setting: 2-fold axes on X,Y,Z. With the positive Z pointing at the
         !! viewer, the front-most 5-fold vertices are in XZ plane, and the front-most 3-fold axes
         !! are in the YZ plane.
-        
+
         !! I3: 52-setting (as in SPIDER?): 5-fold axis on Z and 2-fold on Y. With the positive Z
         !! pointing at the viewer and without taken into account the 5-fold vertex in Z, there is
         !! one of the front-most 5-fold vertices in -XZ plane
@@ -232,12 +233,12 @@ contains
         which =  self%keywords_general%lookup(trim(starkey))
         if(which /= 0 )then
             found = .true.
-            
+
         else
             which =  self%keywords_filename%lookup(trim(starkey))
             if(which /= 0 )then
                  found = .true.
-            
+
             !else
                 !    if((self%keywords_class3D%isthere(starkey))then
              endif
@@ -280,7 +281,7 @@ contains
         else
             which =  self%keywords_filename%lookup(trim(starkey))
             if(which /= 0 )then
-                val = self%keywords_general%get(which)
+                val = self%keywords_filename%get(which)
             else
                 !    if((self%keywords_class3D%isthere(starkey))then
                 print *,"simple_star_dict::  STAR token ", trim(starkey), " not supported "
@@ -288,10 +289,11 @@ contains
         end if
 
     end function star2simple
+
     !> \brief for looking up a value in the keywork hashs
     !! *Warning* the reverse lookup will have issues if there is not a
     !! one-to-one mapping of the SIMPLE-STAR keywords
-    !! 
+    !!
     function simple2star( self, simplekey ) result( val )
         class(star_dict),   intent(in) :: self
         character(len=*), intent(inout) :: simplekey
