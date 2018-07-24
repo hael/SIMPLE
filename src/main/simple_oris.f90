@@ -366,7 +366,6 @@ contains
         normal = self%o(i)%get_normal()
     end function get_normal
 
-    !>  \brief  is a getter
     function get_2Dshift( self, i )  result(shvec)
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -374,7 +373,6 @@ contains
         shvec = self%o(i)%get_2Dshift()
     end function get_2Dshift
 
-    !>  \brief  is a etter
     integer function get_state( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -411,7 +409,6 @@ contains
         is = self%o(i)%ischar(key)
     end function ischar
 
-    !>  \brief  is for getting the maximum hash size
     integer function max_hash_size( self )
         class(oris),      intent(inout) :: self
         integer :: sz, i
@@ -498,7 +495,6 @@ contains
         end do
     end function get_all_rmats
 
-    !>  \brief  is for checking discrete label populations
     subroutine get_pops( self, pops, label, consider_w, maxn, eo )
         class(oris),          intent(inout) :: self
         integer, allocatable, intent(out)   :: pops(:)
@@ -1084,14 +1080,12 @@ contains
         get_nevenodd = self%get_neven() + self%get_nodd()
     end function get_nevenodd
 
-    !>  \brief  is for printing
     subroutine print_( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         call self%o(i)%print_ori()
     end subroutine print_
 
-    !>  \brief  is for printing
     subroutine print_matrices( self )
         class(oris), intent(inout) :: self
         integer :: i
@@ -1235,7 +1229,6 @@ contains
         str = self%o(i)%ori2str()
     end function ori2str
 
-    !>  \brief
     function get_ctfvars( self, i ) result( ctfvars )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1256,14 +1249,12 @@ contains
         end do
     end subroutine assign
 
-    !>  \brief  is a setter
     subroutine reject( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         call self%o(i)%reject
     end subroutine reject
 
-    !>  \brief  entry deleter
     subroutine delete_entry( self, key )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: key
@@ -1505,7 +1496,6 @@ contains
         endif
     end subroutine rnd_proj_space
 
-    !>  \brief  randomizes eulers in oris
     subroutine rnd_ori( self, i, trs, eullims )
         class(oris),    intent(inout) :: self
         integer,        intent(in)    :: i

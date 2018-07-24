@@ -87,7 +87,6 @@ contains
     procedure          :: set_smpd
     procedure          :: get_slice
     procedure          :: set_slice
-    procedure          :: get_npix
     procedure          :: get_lfny
     procedure          :: get_lhp
     procedure          :: get_lp
@@ -102,8 +101,6 @@ contains
     procedure          :: zero2one
     procedure          :: get_fcomp
     procedure          :: set_fcomp
-    procedure          :: add_fcomp
-    procedure          :: subtr_fcomp
     procedure          :: vis
     procedure          :: set_ft
     ! CHECKUPS
@@ -134,11 +131,6 @@ contains
     generic :: operator(*) => multiplication, multiplication_const_real, multiplication_const_int
     procedure, private :: division
     generic :: operator(/) => division
-    procedure, private :: l1norm_1
-    procedure, private :: l1norm_2
-    generic :: operator(.lone.) => l1norm_1
-    generic :: operator(.lonesum.) => l1norm_2
-    procedure          :: l1weights
     procedure, private :: add_1
     procedure, private :: add_2
     procedure, private :: add_3
@@ -186,13 +178,6 @@ contains
     procedure, private :: div_cmat_at_3
     procedure, private :: div_cmat_at_4
     generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
-    procedure          :: sqpow
-    procedure          :: pow_1
-    procedure          :: pow_2
-    generic            :: pow => pow_1, pow_2
-    procedure          :: sq_root
-    procedure          :: signswap_aimag
-    procedure          :: signswap_real
     ! BINARY IMAGE METHODS
     procedure          :: nforeground
     procedure          :: nbackground
@@ -200,8 +185,6 @@ contains
     procedure, private :: bin_2
     generic            :: bin => bin_1, bin_2
     procedure          :: bin_kmeans
-    procedure          :: bin_filament
-    procedure          :: bin_cylinder
     procedure          :: cendist
     procedure          :: masscen
     procedure          :: center
@@ -212,10 +195,6 @@ contains
     procedure          :: grow_bins
     procedure          :: shrink_bin
     procedure          :: shrink_bins
-    procedure          :: binary_erosion
-    procedure          :: binary_dilation
-    procedure          :: binary_opening
-    procedure          :: binary_closing
     procedure          :: cos_edge
     procedure          :: remove_edge
     procedure          :: increment
@@ -225,7 +204,7 @@ contains
     procedure, private :: order_labels             !!!!!!!!ADDED BY CHIARA
     procedure          :: calc_cc                  !!!!!!!!ADDED BY CHIARA
     procedure          :: cc_size                  !!!!!!!!ADDED BY CHIARA
-    procedure          :: prepare_cc                !!!!!!!!ADDED BY CHIARA
+    procedure          :: prepare_cc               !!!!!!!!ADDED BY CHIARA
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -243,7 +222,6 @@ contains
         &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
     procedure          :: apply_bfac
     procedure          :: bp
-    procedure          :: gen_lpfilt
     procedure, private :: apply_filter_1
     procedure, private :: apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
@@ -253,9 +231,6 @@ contains
     procedure          :: real_space_filter
     procedure          :: sobel   !!ADDED BY CHIARA
     ! CALCULATORS
-    procedure          :: square_root
-    procedure          :: maxcoord
-    procedure          :: ccpeak_offset
     procedure          :: minmax
     procedure          :: rmsd
     procedure, private :: stats_1
@@ -269,7 +244,6 @@ contains
     procedure          :: loop_lims
     procedure          :: calc_gradient  !!ADDED BY CHIARA
     procedure          :: calc_neigh_8   !!ADDED BY CHIARA
-!    procedure          :: comp_addr_phys
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -286,13 +260,11 @@ contains
     procedure, private :: real_corr_prenorm_2
     generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
     procedure          :: fsc
-    procedure          :: get_nvoxshell
     procedure          :: get_res
     procedure, private :: oshift_1
     procedure, private :: oshift_2
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
-    procedure          :: gen_argtransf_mats
     ! MODIFIERS
     procedure          :: insert
     procedure          :: insert_lowres
@@ -313,8 +285,9 @@ contains
     procedure          :: square
     procedure          :: corners
     procedure          :: before_after
-    procedure          :: gauimg
-    procedure          :: gauimg2
+    procedure, private :: gauimg_1
+    procedure, private :: gauimg_2
+    generic            :: gauimg => gauimg_1, gauimg_2
     procedure          :: gauimg2D
     procedure          :: dampen_central_cross
     procedure          :: subtr_backgr
@@ -331,7 +304,6 @@ contains
     procedure          :: norm
     procedure, private :: norm4viz
     procedure          :: norm_ext
-    procedure          :: radius_norm
     procedure          :: noise_norm
     procedure          :: edges_norm
     procedure          :: norm_bin
@@ -344,15 +316,13 @@ contains
     procedure          :: set_within
     procedure          :: ft2img
     procedure          :: img2ft
-    ! FFTs and signal processing operations
-    procedure          :: fwd_ft    ! FFTW forward transform
-    procedure          :: bwd_ft    ! FFTW inverse transform
+    procedure          :: cure_outliers
+    procedure          :: zero_below
+    ! FFTs
+    procedure          :: fwd_ft
+    procedure          :: bwd_ft
     generic            :: fft => fwd_ft
     generic            :: ifft => bwd_ft
-    ! DENOISING FUNCTIONS
-    procedure          :: cure_outliers
-    ! procedure          :: denoise_NLM
-    procedure          :: zero_below
     ! DESTRUCTOR
     procedure :: kill
 end type image
@@ -718,7 +688,7 @@ contains
         else
             self_out%rmat(1:box,1:box,1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
         endif
-end subroutine window_slim
+    end subroutine window_slim
 
     ! for re-generation of micrograph after convolutional PPCA
     subroutine add_window( self, imgwin, coord, offset )
@@ -746,27 +716,6 @@ end subroutine window_slim
             self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) = self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) + imgwin%rmat(1:box,1:box,1) !add everything
         endif
     end subroutine add_window
-
-    !! for re-generation of micrograph after convolutional PPCA, with sovrapposition, it requires division after
-    ! subroutine add_window( self, imgwin, coord)
-    !     class(image), intent(inout) :: self
-    !     class(image), intent(in)    :: imgwin
-    !     integer,      intent(in)    :: coord(2)
-    !     integer ::  fromc(2), toc(2), ld(3), box
-    !     ld    = imgwin%get_ldim()
-    !     box   = ld(1)
-    !     fromc = coord + 1         ! compensate for the c-range that starts at 0
-    !     toc   = fromc + (box - 1) ! the lower left corner is 1,1
-    !     if( fromc(1) < 1 .or. fromc(2) < 1 .or. toc(1) > self%ldim(1) .or. toc(2) > self%ldim(2) )then
-    !       return
-    !     endif
-    !     self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) = self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) + imgwin%rmat(1:box,1:box,1) !add everything
-    ! end subroutine add_window
-
-
-
-
-
 
     !>  \brief win2arr extracts a small window into an array (circular indexing)
     function win2arr( self, i, j, k, winsz ) result( pixels )
@@ -1529,42 +1478,6 @@ end subroutine window_slim
         self3d%rmat(:,:,slice) = self2d%rmat(:,:,1)
     end subroutine set_slice
 
-    !>  \brief get_npix is for getting the number of pixels for serialization
-    function get_npix( self, mskrad ) result( npix )
-        class(image), intent(in) :: self
-        real,         intent(in) :: mskrad
-        real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3)), e
-        integer :: i, j, k, ir, jr, kr, npix
-        ! count # pixels
-        npix = 0
-        if( self%is_3d() )then
-            !$omp parallel do private(i,j,k,ir,jr,kr,e) reduction(+:npix) default(shared) proc_bind(close)
-            do i=1,self%ldim(1)/2
-                ir = self%ldim(1)+1-i
-                do j=1,self%ldim(2)/2
-                    jr = self%ldim(2)+1-j
-                    do k=1,self%ldim(3)/2
-                        kr = self%ldim(3)+1-k
-                        e = hardedge(ir,jr,kr,mskrad)
-                        if( e > 0.5 ) npix = npix + 1
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do private(i,j,ir,jr,e) reduction(+:npix) default(shared) proc_bind(close)
-            do i=1,self%ldim(1)/2
-                ir = self%ldim(1)+1-i
-                do j=1,self%ldim(2)/2
-                    jr = self%ldim(2)+1-j
-                    e = hardedge(ir,jr,mskrad)
-                    if( e > 0.5 ) npix = npix + 1
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
-    end function get_npix
-
     pure function get_lfny( self, which ) result( fnyl )
         class(image), intent(in) :: self
         integer,      intent(in) :: which
@@ -1607,14 +1520,12 @@ end subroutine window_slim
         lims = self%fit%get_clin_lims(lp_dyn)
     end function get_clin_lims
 
-    !>  \brief  rmat_associated check rmat association
     function rmat_associated( self ) result( assoc )
         class(image), intent(in) :: self
         logical :: assoc
         assoc = associated(self%rmat)
     end function rmat_associated
 
-    !>  \brief cmat_associated check cmat association
     function cmat_associated( self ) result( assoc )
         class(image), intent(in) :: self
         logical :: assoc
@@ -1782,36 +1693,8 @@ end subroutine window_slim
         self%cmat(phys(1),phys(2),phys(3)) = comp_here
     end subroutine set_fcomp
 
-    !> \brief add_fcomp  is for componentwise summation
-    subroutine add_fcomp( self, logi, phys, comp)
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3), phys(3)
-        complex,      intent(in)    :: comp
-        complex :: comp_here
-        if( logi(1) < 0 )then
-            comp_here = conjg(comp)
-        else
-            comp_here = comp
-        endif
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp_here
-    end subroutine add_fcomp
-
-    !> \brief subtr_fcomp  is for componentwise summation
-    subroutine subtr_fcomp( self, logi, phys, comp )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: logi(3), phys(3)
-        complex,      intent(in)    :: comp
-        complex :: comp_here
-        if( logi(1) < 0 )then
-            comp_here = conjg(comp)
-        else
-            comp_here = comp
-        endif
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) - comp_here
-    end subroutine subtr_fcomp
-
     !>  \brief vis is for plotting an image
-    subroutine vis( self, sect, geomorsphr)
+    subroutine vis( self, sect, geomorsphr )
         class(image),      intent(in) :: self
         integer, optional, intent(in) :: sect
         logical, optional, intent(in) :: geomorsphr !< geometrical or spherical complex format
@@ -2021,7 +1904,6 @@ end subroutine window_slim
         self%ft = self1%ft
     end function sq_root
 
-
     !>  \brief  l1norm_1 is for l1 norm calculation
     function l1norm_1( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
@@ -2040,42 +1922,6 @@ end subroutine window_slim
             call simple_stop('cannot process images of different dims; l1norm_1; simple_image')
         endif
     end function l1norm_1
-
-    !>  \brief l1norm_2 is for l1 norm calculation
-    function l1norm_2( self1, self2 ) result( l1 )
-        class(image), intent(in) :: self1, self2
-        real :: l1
-        if( self1%ft .neqv. self2%ft ) call simple_stop('images in different FT states; l1norm_2; simple_image')
-        if(.not.(self1.eqdims.self2 ))call simple_stop('cannot process images of different dims; l1norm_2; simple_image')
-        if( self1%ft .and. self2%ft )then
-            l1 = sum(cabs(self1%cmat-self2%cmat))
-        else
-            l1 = sum(abs(self1%rmat-self2%rmat))
-        endif
-    end function l1norm_2
-
-    !>  \brief l1weights is for l1 norm weight generation
-    function l1weights( self1, self2, nvar ) result( self )
-        class(image),   intent(in) :: self1, self2
-        real, optional, intent(in) :: nvar
-        type(image) :: self
-        integer :: i, j, k
-        real :: sumw, nnvar
-        if( self1%ft .or. self2%ft ) call simple_stop('not impemented for FTs; l1weights; simple_image')
-        nnvar = 1.
-        if( present(nvar) ) nnvar = nvar
-        self = self1.lone.self2
-        sumw = 0.
-        do i=1,self1%ldim(1)
-            do j=1,self1%ldim(2)
-                do k=1,self1%ldim(3)
-                    self%rmat(i,j,k) = exp(-self%rmat(i,j,k)/nvar)
-                    sumw = sumw+self%rmat(i,j,k)
-                end do
-            end do
-        end do
-        call self%div(sumw)
-    end function l1weights
 
     !>  \brief add_1 is for image summation, not overloaded
     subroutine add_1( self, self_to_add, w )
@@ -2214,7 +2060,7 @@ end subroutine window_slim
         endif
     end function subtraction
 
-    !>  \brief subtr_1 is for image subtraction,  not overloaded
+    !>  \brief subtr_1 is for image subtraction, not overloaded
     subroutine subtr_1( self, self_to_subtr, w )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_subtr
@@ -2603,64 +2449,6 @@ end subroutine window_slim
         endif
     end function conjugate
 
-    !>  \brief sqpow is for calculating the square power of an image
-    subroutine sqpow( self )
-        class(image), intent(inout) :: self
-        if( self%ft )then
-            self%cmat = (self%cmat*conjg(self%cmat))**2.
-        else
-            self%rmat = self%rmat*self%rmat
-        endif
-    end subroutine sqpow
-
-    !>  \brief pow is for calculating the power of an image
-    !!
-    function pow_1( self1, rconst ) result (self)
-        class(image), intent(in) :: self1
-        real, intent(in) :: rconst
-        type(image) :: self
-        call self%copy(self1)
-        !$omp parallel workshare proc_bind(close)
-        self%rmat = self%rmat**rconst
-        !$omp end parallel workshare
-    end function pow_1
-
-    !>  \brief pow_2 is for calculating the power of an image
-    !!
-    function pow_2( self1, iconst ) result (self)
-        class(image), intent(in) :: self1
-        integer, intent(in) :: iconst
-        type(image) :: self
-        call self%copy(self1)
-        !$omp parallel workshare proc_bind(close)
-        self%rmat = self%rmat**iconst
-        !$omp end parallel workshare
-    end function pow_2
-
-    !>  \brief signswap_aimag is changing the sign of the imaginary part of the Fourier transform
-    subroutine signswap_aimag( self )
-        class(image), intent(inout) :: self
-        if( self%ft )then
-            self%cmat = cmplx(real(self%cmat),-aimag(self%cmat))
-        else
-            call self%fft()
-            self%cmat = cmplx(real(self%cmat),-aimag(self%cmat))
-            call self%ifft()
-        endif
-    end subroutine signswap_aimag
-
-    !>  \brief  signswap_real is changing the sign of the real part of the Fourier transform
-    subroutine signswap_real( self )
-        class(image), intent(inout) :: self
-        if( self%ft )then
-            self%cmat = cmplx(-real(self%cmat),aimag(self%cmat))
-        else
-            call self%fft()
-            self%cmat = cmplx(-real(self%cmat),aimag(self%cmat))
-            call self%ifft()
-        endif
-    end subroutine signswap_real
-
     ! BINARY IMAGE METHODS
 
     !>  \brief nforeground counts the number of foreground (white) pixels in a binary image
@@ -2778,47 +2566,6 @@ end subroutine window_slim
         end where
     end subroutine bin_kmeans
 
-    !>  \brief bin_filament is for creating a binary filament
-    subroutine bin_filament( self, width_A )
-        class(image), intent(inout) :: self
-        real, intent(in)            :: width_A
-        real    :: halfwidth_pix, cen_xdim
-        integer :: xstart, xstop
-        if( self%ldim(3) > 1 ) call simple_stop('only for 2D images; simple_imge :: bin_filament ')
-        halfwidth_pix = (width_A/self%smpd)/2.
-        cen_xdim      = real(self%ldim(1))/2.
-        xstart        = floor(cen_xdim-halfwidth_pix)
-        xstop         = ceiling(cen_xdim+halfwidth_pix)
-        if( self%ft ) self%ft = .false.
-        self%rmat = 0.
-        self%rmat(xstart:xstop,:,1) = 1.
-    end subroutine bin_filament
-
-    !>  \brief bin_cylinder  is for creating a binary cyclinder along z-axis
-    subroutine bin_cylinder( self, rad, height )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: rad, height
-        type(image)       :: mask2d
-        real, allocatable :: plane(:,:,:)
-        real        :: centre(3)
-        integer     :: k
-        if( self%ldim(3) == 1 ) call simple_stop('only for 3D images; simple_imge :: bin_cylinder ')
-        centre = 1. + real(self%ldim-1)/2.
-        if( self%ft ) self%ft = .false.
-        call mask2d%new([self%ldim(1), self%ldim(2), 1], self%smpd)
-        mask2d = 1.
-        call mask2d%mask(rad, 'hard')
-        plane = mask2d%get_rmat()
-        self%rmat = 0.
-        do k = 1,self%ldim(3)
-            if( abs(real(k)-centre(3)) < height/2. )then
-                self%rmat(:self%ldim(1),:self%ldim(2),k) = plane(:,:,1)
-            endif
-        enddo
-        call mask2d%kill()
-        deallocate(plane)
-    end subroutine bin_cylinder
-
     !>  \brief cendist produces an image with square distance from the centre of the image
     subroutine cendist( self )
         class(image), intent(inout) :: self
@@ -2933,31 +2680,6 @@ end subroutine window_slim
         xyz = tmp%masscen()
         call tmp%kill
     end function center
-
-    !!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
-    !This function takes in input the binary image output of the function
-    !center, and re-centers it according to the mass-centers. It uses
-    !edge detection + median filtering for binarisation
-    ! function center_edge( self, lp, thresh, bin_img ) result( xyz )
-    !     class(image),   intent(in)      :: self
-    !     real,           intent(in)      :: lp, thresh
-    !     class(image) :: bin_img
-    !     type(image)  :: tmp, imgcc
-    !     real         :: xyz(3)
-    !     call tmp%copy(self)
-    !     call tmp%bp(0., lp)
-    !     call tmp%ifft()
-    !     where( tmp%rmat < 0. )
-    !          tmp%rmat = 0.
-    !     end where
-    !     call tmp%sobel(bin_img, thresh) !call sobel(tmp, bin_img, thresh)
-    !     call bin_img%real_space_filter(3, 'median') !median filtering allows me to calculate cc in an easy way
-    !     call bin_img%calc_cc(imgcc) !call calc_cc(bin_img, imgcc)
-    !     call imgcc%prepare_cc()
-    !     xyz = imgcc%masscen()
-    !     call tmp%kill
-    ! end function center_edge
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     function center_serial( self, lp, msk ) result( xyz )
         class(image), intent(inout) :: self
@@ -3226,50 +2948,6 @@ end subroutine window_slim
             & self%rmat(i,j,k) = 0.
         deallocate( template, sub_pixels )
     end subroutine shrink_bins
-
-    !> binary_dilation wrapper for grow_bin(s)
-    subroutine binary_dilation(self,nlayers)
-        class(image), intent(inout) :: self
-        integer, intent(inout),optional :: nlayers
-        if(.not.present(nlayers))then
-            call   self%grow_bin()
-        else
-            call   self%grow_bins(nlayers)
-        end if
-    end subroutine binary_dilation
-
-    !> binary_erosion wrapper for shrink_bin(s)
-    subroutine binary_erosion(self,nlayers)
-        class(image), intent(inout) :: self
-        integer, intent(inout),optional :: nlayers
-        if(.not.present(nlayers))then
-            call   self%shrink_bin()
-        else
-            call   self%shrink_bins(nlayers)
-        end if
-    end subroutine binary_erosion
-
-    subroutine binary_opening (self,nlayers)
-        class(image), intent(inout) :: self
-        integer, intent(inout),optional :: nlayers
-        integer:: i,n
-        n=1; if(present(nlayers))n=nlayers
-        do i=1,nlayers
-            call  self%binary_erosion()
-            call  self%binary_dilation()
-        end do
-    end subroutine binary_opening
-
-    subroutine binary_closing (self,nlayers)
-        class(image), intent(inout) :: self
-        integer, intent(inout),optional  :: nlayers
-        integer:: i,n
-        n=1; if(present(nlayers))n=nlayers
-        do i=1,n
-            call  self%binary_dilation()
-            call  self%binary_erosion()
-        end do
-    end subroutine binary_closing
 
     !>  \brief cos_edge applies cosine squared edge to a binary image
     subroutine cos_edge( self, falloff )
@@ -4065,30 +3743,6 @@ end subroutine window_slim
         if( didft ) call self%ifft()
     end subroutine bp
 
-    !>  \brief gen_lpfilt is for generating low-pass filter weights
-    function gen_lpfilt( self, lplim, width ) result( filter )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: lplim
-        real, optional, intent(in)    :: width
-        integer                       :: nyq, k
-        real                          :: wwidth, lplim_freq, freq
-        real, allocatable             :: filter(:)
-        wwidth = 5.
-        if( present(width) ) wwidth = width
-        nyq = self%get_nyq()
-        allocate( filter(nyq), stat=alloc_stat )
-        lplim_freq = self%fit%get_find(1,lplim)
-        filter = 1.
-        do k=1,nyq
-            freq = real(k)
-            if(freq .gt. lplim_freq)then
-                filter(k) = 0.
-            else if(freq .ge. lplim_freq-wwidth)then
-                filter(k) = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
-            endif
-        end do
-    end function gen_lpfilt
-
     !> \brief apply_filter_1  is for application of an arbitrary 1D filter function
     subroutine apply_filter_1( self, filter )
         class(image), intent(inout) :: self
@@ -4430,47 +4084,6 @@ end subroutine window_slim
     end subroutine sobel
 
     ! CALCULATORS
-
-    !> \brief square_root  is for calculating the square root of an image
-    subroutine square_root( self )
-        class(image), intent(inout) :: self
-        if( self%ft )then
-            where(real(self%cmat) > 0. )
-                self%cmat = sqrt(real(self%cmat))
-            end where
-        else
-            where(self%rmat > 0. )
-                self%rmat = sqrt(self%rmat)
-            end where
-        endif
-    end subroutine square_root
-
-    !>  \brief maxcoord is for providing location of the maximum pixel value
-    function maxcoord(self) result(loc)
-        class(image), intent(inout) :: self
-        integer :: loc(3)
-        if( self%ft )then
-            call simple_stop('maxloc not implemented 4 FTs! simple_image')
-        else
-            loc = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        endif
-    end function maxcoord
-
-    !> \brief for finding the offset of the cross-correlation peak
-    function ccpeak_offset( self ) result( xyz )
-        class(image), intent(inout) :: self
-        integer :: loc(3)
-        real    :: xyz(3)
-        if( self%ft ) call simple_stop('not implemented 4 FTs! simple_image :: ccpeak_offset')
-        loc    = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        xyz(1) = real(loc(1) - self%ldim(1)/2)
-        xyz(2) = real(loc(2) - self%ldim(2)/2)
-        if( self%ldim(3) > 1 )then
-            xyz(3) = real(loc(3) - self%ldim(3)/2)
-        else
-            xyz(3) = 0.0
-        endif
-    end function ccpeak_offset
 
     !> \brief stats  is for providing foreground/background statistics
     subroutine stats_1( self, which, ave, sdev, maxv, minv, msk, med, errout )
@@ -5222,40 +4835,6 @@ end subroutine window_slim
         end do
     end subroutine fsc
 
-    !> \brief get_nvoxshell is for calculation of voxels per Fourier shell
-    subroutine get_nvoxshell( self, voxs )
-        class(image)     , intent(inout) :: self
-        real, allocatable, intent(inout) :: voxs(:)
-        integer                          :: n, lims(3,2), sh, h, k, l
-        logical                          :: didft
-        if( .not. square_dims(self) ) call simple_stop('square dimensions only! fsc; simple_image')
-        didft = .false.
-        if( .not. self%is_ft() )then
-            call self%fft()
-            didft = .true.
-        endif
-        n = self%get_filtsz()
-        if( allocated(voxs) )deallocate(voxs)
-        allocate( voxs(n), stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk('In: get_nvoxshell, module: simple_image')
-        voxs = 0.
-        lims = self%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
-        !$omp schedule(static) proc_bind(close) reduction(+:voxs)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! find shell
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh == 0 .or. sh > n ) cycle
-                    voxs( sh ) = voxs( sh ) + 1.
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        if( didft ) call self%ifft()
-    end subroutine get_nvoxshell
-
     !>  \brief get array of resolution steps
     function get_res( self ) result( res )
         class(image), intent(in) :: self
@@ -5320,33 +4899,6 @@ end subroutine window_slim
             endif
         end do
     end function gen_argtransf_comp
-
-    !> \brief gen_argtransf_mats  is for generating the argument transfer matrix for fast shifting of a FT
-    !! \param transfmats transfer matrix
-    !!
-    subroutine gen_argtransf_mats( self, transfmats )
-        class(image), intent(inout) :: self, transfmats(3)
-        integer                     :: h, k, l, lims(3,2), phys(3)
-        real                        :: arg(3)
-        call transfmats(1)%new(self%ldim,self%smpd)
-        call transfmats(2)%new(self%ldim,self%smpd)
-        call transfmats(3)%new(self%ldim,self%smpd)
-        lims = self%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(arg,phys,h,k,l)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    arg  = self%gen_argtransf_comp(real([h,k,l]))
-                    phys = self%fit%comp_addr_phys([h,k,l])
-                    transfmats(1)%cmat(phys(1),phys(2),phys(3)) = cmplx(arg(1),0.)
-                    transfmats(2)%cmat(phys(1),phys(2),phys(3)) = cmplx(arg(2),0.)
-                    transfmats(3)%cmat(phys(1),phys(2),phys(3)) = cmplx(arg(3),0.)
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine gen_argtransf_mats
 
     ! MODIFIERS
 
@@ -5937,7 +5489,7 @@ end subroutine window_slim
 
     !> \brief gauimg  just a Gaussian fun for testing purposes
     !! \param wsz window size
-    subroutine gauimg( self, wsz , alpha )
+    subroutine gauimg_1( self, wsz , alpha )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: wsz
         real, intent(in), optional  :: alpha
@@ -5966,11 +5518,11 @@ end subroutine window_slim
             x = x+1.
         end do
         self%ft = .false.
-    end subroutine gauimg
+    end subroutine gauimg_1
 
-    !> \brief gauimg2  just a Gaussian fun for testing purposes
+    !> \brief gauimg  just a Gaussian fun for testing purposes
     !! \param wsz window size
-    subroutine gauimg2( self, wsz, offx,offy)
+    subroutine gauimg_2( self, wsz, offx,offy)
         class(image), intent(inout) :: self
         integer, intent(in) :: wsz, offx, offy
         real    :: x, y, z, xw, yw, zw
@@ -5996,7 +5548,7 @@ end subroutine window_slim
             x = x+1.
         end do
         self%ft = .false.
-    end subroutine gauimg2
+    end subroutine gauimg_2
 
     subroutine gauimg2D( self, xsigma, ysigma )
         class(image), intent(inout) :: self
@@ -6763,45 +6315,6 @@ end subroutine window_slim
         if( abs(edges_ave) > TINY )self%rmat = self%rmat - edges_ave
     end subroutine edges_norm
 
-    !> \brief radius_norm  normalizes the image based on a central sphere of input radius
-    !! \param radius Radius of sphere
-    !! \param errout error flag
-    subroutine radius_norm( self, radius, errout )
-        class(image),      intent(inout) :: self
-        real,    optional, intent(in)    :: radius
-        logical, optional, intent(out)   :: errout
-        type(image)       :: maskimg
-        integer           :: npix
-        real              :: ave,sdev,var,irad
-        real, allocatable :: pixels(:)
-        logical           :: err
-        if( self%ft )then
-            write(*,*) 'WARNING: Cannot normalize FTs; noise_norm; simple_image'
-            return
-        endif
-        if( .not.present(radius) )then
-            irad = real(self%ldim(1)+1)/2.
-        else
-            irad = radius
-        endif
-        if( irad<=0. )call simple_stop('Invalid radius value in rad_norm')
-        call maskimg%disc(self%ldim, self%smpd, irad, npix)
-        pixels = pack( self%rmat, maskimg%rmat > 0.5 )
-        call moment( pixels, ave, sdev, var, err )
-        deallocate(pixels)
-        if( err )then
-            call self%norm()
-        else
-            self%rmat = self%rmat - ave
-            if( present(errout) )then
-                errout = err
-            else
-                if( err ) write(*,'(a)') 'WARNING: variance zero; rad_norm; simple_image'
-            endif
-            if( sdev > 1e-6 )self%rmat = self%rmat / sdev
-        endif
-    end subroutine radius_norm
-
     !>  \brief  is for [0,1] interval normalization of an image
     subroutine norm_bin( self )
         class(image), intent(inout) :: self
@@ -7100,82 +6613,6 @@ end subroutine window_slim
         endif
     end subroutine cure_outliers
 
-    ! BROKEN ROUTINE, TO FIX
-    ! !>  \brief  denoise_NLM for denoising image with non-local means algorithm
-    ! !! \param Hsigma power of noise cancelling
-    ! !! \param searchRad search radius from pixel origin to patch origin
-    ! !! \param patchSz patch width
-    ! !! \param deadhot number of rejections for upper and lower limits
-    ! !! \param outliers mask of rejection points
-    ! !! \param l1normdiff return the L1-norm difference
-    ! subroutine denoise_NLM( self, Hsigma, patchSz,searchRad, deadhot, outliers, l1normdiff)
-    !     class(image),      intent(inout) :: self
-    !     integer,           intent(in)    :: patchSz
-    !     real,              intent(in)    :: Hsigma,searchRad
-    !     integer,           intent(out)   :: deadhot(2)
-    !     logical, optional, allocatable   :: outliers(:,:)
-    !     real, optional,    intent(inout) :: l1normdiff
-    !     type(image) :: selfcopy
-    !     real, allocatable :: patch(:,:), padded_image(:,:)
-    !     real    :: ave, sdev, var, lthresh, uthresh, nsigma
-    !     integer :: i, j, hwinsz, winsz,ncured
-    !     logical :: was_fted, err, present_outliers, retl1norm
-    !     if( self%ldim(3)>1 )stop 'for images only; simple_image:: denoise_NLM'
-    !     was_fted = self%is_ft()
-    !     if( was_fted )stop 'for real space images only; simple_image::denoise_NLM'
-    !     present_outliers = present(outliers)
-    !     retl1norm=.false.
-    !     if(present(l1normdiff))then
-    !         retl1norm=.true.
-    !         selfcopy = self    ! create copy for comparison
-    !     end if
-    !     ncured = 0
-    !     hwinsz = 6
-    !     nsigma = 1.0/ sqrt(1.0) !??
-    !     if( allocated(outliers) ) deallocate(outliers)
-    !     allocate( outliers(self%ldim(1),self%ldim(2)) )
-    !     outliers = .false
-    !     call moment( self%rmat, ave, sdev, var, err )
-    !     if( sdev<TINY )return
-    !     lthresh = ave - nsigma * sdev
-    !     uthresh = ave + nsigma * sdev
-    !     if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
-    !         winsz   = 2*hwinsz+1
-    !         deadhot = 0
-    !         allocate(padded_image(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
-    !             &patch(winsz,winsz), stat=alloc_stat)
-    !         if(alloc_stat/=0)call allocchk('In: cure_outliers; simple_image 1')
-    !         padded_image(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
-    !         padded_image(1:self%ldim(1), 1:self%ldim(2)) = &
-    !             &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
-    !         !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,patch)&
-    !         !$omp reduction(+:ncured) proc_bind(close)
-    !         do i=1,self%ldim(1)
-    !             do j=1,self%ldim(2)
-    !                 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !                 ! if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then  !
-    !                      if( present_outliers )then                                    !
-    !                          outliers(i,j)=.true.                                      !
-    !                 !         if (self%rmat(i,j,1)<lthresh) deadhot(1) = deadhot(1) + 1 !
-    !                 !         if (self%rmat(i,j,1)>uthresh) deadhot(2) = deadhot(2) + 1 !
-    !                      else                                                          !
-    !                 !         patch = padded_image( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )    !
-    !                 !         self%rmat(i,j,1) = median( reshape(patch,(/winsz**2/)) )    !
-    !                         ncured = ncured + 1                                       !
-    !                 !     endif                                                         !
-    !                 endif                                                             !
-    !                 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !             enddo
-    !         enddo
-    !         !$omp end parallel do
-    !         deallocate( patch, padded_image )
-    !     endif
-    !     if(retl1norm)then
-    !         l1normdiff = l1norm_2(selfcopy,self)
-    !         call selfcopy%kill()
-    !     end if
-    ! end subroutine denoise_NLM
-
     !>  \brief  zero pixels below thres
     subroutine zero_below( self, thres )
         class(image), intent(inout) :: self
@@ -7231,21 +6668,6 @@ end subroutine window_slim
             end do
             if( .not. passed )  stop 'getters/setters test failed'
 
-            ! write(*,'(a)') '**info(simple_image_unit_test, part 3): testing serialization'
-            ! passed = .false.
-            ! msk = 50.
-            ! img_2 = img
-            ! call img%ran
-            ! if( doplot ) call img%vis
-            ! call img%serialize(pcavec1, msk)
-            ! img = 0.
-            ! call img%serialize(pcavec1, msk)
-            ! if( doplot ) call img%vis
-            ! call img_2%serialize(pcavec1, msk)
-            ! call img_2%serialize(pcavec2, msk)
-            ! if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-            ! if( .not. passed ) stop 'serialization test failed'
-
             write(*,'(a)') '**info(simple_image_unit_test, part 4): testing checkups'
             test(1) = img%even_dims()
             if( ld1 == ld2 )then
@@ -7259,91 +6681,6 @@ end subroutine window_slim
             test(6) = .not. img%is_3d()
             passed = all(test)
             if( .not. passed ) stop 'checkups test failed'
-
-            ! write(*,'(a)') '**info(simple_image_unit_test, part 5): testing arithmetics'
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! passed = .false.
-            ! msk = 50.
-            ! call img%ran
-            ! call img%serialize(pcavec1, msk)
-            ! img_2 = img
-            ! call img_2%serialize(pcavec2, msk)
-            ! if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-            ! if( .not. passed ) stop 'polymorphic assignment test 1 failed'
-            ! passed = .false.
-            ! img = 5.
-            ! img_2 = 10.
-            ! img_3 = img_2-img
-            ! call img%serialize(pcavec1, msk)
-            ! call img_3%serialize(pcavec2, msk)
-            ! if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-            ! if( .not. passed ) stop 'overloaded subtraction test failed'
-            ! passed = .false.
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! img = 5.
-            ! img_2 = 10.
-            ! img_3 = 15.
-            ! img_4 = img + img_2
-            ! call img_3%serialize(pcavec1, msk)
-            ! call img_4%serialize(pcavec2, msk)
-            ! if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-            ! if( .not. passed ) stop 'overloaded addition test failed'
-            ! passed = .false.
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! img = 5.
-            ! img_2 = 2.
-            ! img_3 = 10.
-            ! img_4 = img*img_2
-            ! call img_3%serialize(pcavec1, msk)
-            ! call img_4%serialize(pcavec2, msk)
-            ! if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-            ! if( .not. passed ) stop 'overloaded multiplication test failed'
-            ! passed = .false.
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! img_4 = img_3/img_2
-            ! call img%serialize(pcavec1, msk)
-            ! call img_4%serialize(pcavec2, msk)
-            ! if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-            ! if( .not. passed ) stop 'overloaded division test failed'
-            ! passed = .false.
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! img = 0.
-            ! img_2 = 5.
-            ! img_3 = 1.
-            ! do i=1,5
-            !     call img%add(img_3 )
-            ! end do
-            ! call img_2%serialize(pcavec1, msk)
-            ! call img%serialize(pcavec2, msk)
-            ! if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-            ! if( .not. passed ) stop 'summation test failed'
-            ! passed = .false.
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! do i=1,5
-            !     call img%subtr(img_3)
-            ! end do
-            ! img_2 = 0.
-            ! call img_2%serialize(pcavec1, msk)
-            ! call img%serialize(pcavec2, msk)
-            ! if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-            ! if( .not. passed ) stop 'subtraction test failed'
-            ! passed = .false.
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! img_2 = 5.
-            ! img_3 = 1.
-            ! call img_2%div(5.)
-            ! call img_2%serialize(pcavec1, msk)
-            ! call img_3%serialize(pcavec2, msk)
-            ! if( euclid(pcavec1, pcavec2) < 0.0001 ) passed = .true.
-            ! if( .not. passed ) stop 'constant division test failed'
-
             write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
             passed = .false.
             call img%gauran( 5., 15. )
@@ -7351,40 +6688,6 @@ end subroutine window_slim
             if( ave >= 4. .and. ave <= 6. .and. sdev >= 14. .and.&
                 sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
             if( .not. passed )  stop 'stats test failed'
-
-            ! write(*,'(a)') '**info(simple_image_unit_test, part 7): testing origin shift'
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! passed = .false.
-            ! msk=50
-            ! call img%gauimg(10)
-            ! if( doplot ) call img%vis
-            ! call img%serialize(pcavec1, msk)
-            ! call img%shift([-9.345,-5.786,0.])
-            ! if( doplot ) call img%vis
-            ! call img%shift([9.345,5.786,0.])
-            ! call img%serialize(pcavec2, msk)
-            ! if( doplot ) call img%vis
-            ! if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-            ! if( .not. passed )  stop 'origin shift test failed'
-
-            ! write(*,'(a)') '**info(simple_image_unit_test, part 8): testing masscen'
-            ! passed = .false.
-            ! msk = 50
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! call img%square( 10 )
-            ! if( doplot ) call img%vis
-            ! call img%serialize(pcavec1, msk)
-            ! call img%shift([10.,5.,0.])
-            ! if( doplot ) call img%vis
-            ! xyz = img%masscen()
-            ! call img%shift([real(int(xyz(1))),real(int(xyz(2))),0.])
-            ! if( doplot ) call img%vis
-            ! call img%serialize(pcavec2, msk)
-            ! if( pearsn(pcavec1, pcavec2) > 0.9 ) passed = .true.
-            ! print *,'determined shift:', xyz
-            ! if( .not. passed ) stop 'masscen test failed'
 
             write(*,'(a)') '**info(simple_image_unit_test, part 9): testing lowpass filter'
             call img%square( 10 )
@@ -7406,36 +6709,6 @@ end subroutine window_slim
             call img%ran
             call img%mask(35.,'soft')
             if( doplot ) call img%vis
-
-            ! write(*,'(a)') '**info(simple_image_unit_test, part 11): testing padding/clipping'
-            ! passed = .false.
-            ! msk = 50
-            ! if( allocated(pcavec1) ) deallocate(pcavec1)
-            ! if( allocated(pcavec2) ) deallocate(pcavec2)
-            ! call img%ran
-            ! call img%serialize(pcavec1, msk)
-            ! if( doplot ) call img%vis
-            ! call img_2%new([2*ld1,2*ld2,1],1.)
-            ! call img%pad(img_2)
-            ! if( doplot ) call img_2%vis
-            ! call img_3%new([ld1,ld2,1],1.)
-            ! call img%clip(img_3)
-            ! call img_3%serialize(pcavec2, msk)
-            ! if( doplot ) call img_3%vis
-            ! if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
-            ! if( .not. passed ) stop 'padding/clipping test failed'
-            ! call img%square(10)
-            ! if( doplot ) call img%vis
-            ! call img%fft()
-            ! call img%pad(img_2)
-            ! call img_2%ifft()
-            ! if( doplot ) call img_2%vis
-            ! call img_2%square(20)
-            ! if( doplot ) call img_2%vis
-            ! call img_2%fft()
-            ! call img_2%clip(img)
-            ! call img%ifft()
-            ! if( doplot ) call img%vis
 
             write(*,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'
             cnt = 0
