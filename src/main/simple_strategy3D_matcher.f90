@@ -31,21 +31,23 @@ use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats
 use simple_convergence,              only: convergence
+use simple_euclid_sigma,             only: euclid_sigma
 implicit none
 
 public :: refine3D_exec, preppftcc4align, pftcc
 private
 
-logical, parameter             :: L_BENCH = .false., DEBUG = .false.
-type(polarft_corrcalc), target :: pftcc
-type(polarizer),   allocatable :: match_imgs(:)
-integer,           allocatable :: pinds(:)
-logical,           allocatable :: ptcl_mask(:)
-integer                        :: nptcls2update
-integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
-real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
-real(timer_int_kind)           :: rt_tot
-character(len=STDLEN)          :: benchfname
+logical, parameter              :: L_BENCH = .false., DEBUG = .false.
+type(polarft_corrcalc),  target :: pftcc
+type(polarizer),    allocatable :: match_imgs(:)
+integer,            allocatable :: pinds(:)
+logical,            allocatable :: ptcl_mask(:)
+integer                         :: nptcls2update
+integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
+real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
+real(timer_int_kind)            :: rt_tot
+character(len=STDLEN)           :: benchfname
+type(euclid_sigma)              :: eucl_sigma
 
 contains
 
@@ -339,6 +341,10 @@ contains
             !$omp end parallel do
         endif
 
+        if ( params_glob%cc_objfun .eq. OBJFUN_EUCLID ) then
+            call eucl_sigma%calc_and_write_sigmas( pftcc, build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
+        end if
+
         ! UPDATE STATS
         call calc_ptcl_stats
 
@@ -486,6 +492,10 @@ contains
         else
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         endif
+        if ( params_glob%cc_objfun .eq. OBJFUN_EUCLID ) then
+            call eucl_sigma%new('sigma2_noise_part'//int2str(params_glob%part), pftcc)
+            call eucl_sigma%read(pftcc, ptcl_mask)
+        end if
 
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections

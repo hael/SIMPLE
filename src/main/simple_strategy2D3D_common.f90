@@ -147,6 +147,10 @@ contains
                 params_glob%kstop = params_glob%kfromto(2)
                 ! set high-pass Fourier index limit
                 params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
+                ! for the euclidian distance case all frequencies need to be extracted
+                if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) then
+                    params_glob%kfromto(2) = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
+                endif
                 ! re-set the low-pass limit
                 params_glob%lp     = calc_lowpass_lim(params_glob%kstop, params_glob%boxmatch, params_glob%smpd)
                 params_glob%lp_dyn = params_glob%lp

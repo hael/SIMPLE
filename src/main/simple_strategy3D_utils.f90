@@ -43,7 +43,9 @@ contains
                 where( abs(shvec) < 1e-6 ) shvec = 0.
                 ! transfer to solution set
                 corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
-                if( corrs(cnt) < 0. ) corrs(cnt) = 0.
+                if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+                    if( corrs(cnt) < 0. ) corrs(cnt) = 0.
+                end if
                 if( l_multistates )then
                     call s3D%o_peaks(s%iptcl)%set(cnt, 'state', real(state))
                 else
@@ -97,11 +99,15 @@ contains
             euls(ipeak,:) = s3D%proj_space_euls(s%ithr,refs(ipeak),1,1:3)
         end do
         if( updatecnt < 5.0 )then
-            ! multinomal peak selection
-            ! convert correlations to distances
-            dists = 1.0 - corrs
-            ! scale distances with TAU
-            dists = dists / tau
+            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+                ! multinomal peak selection
+                ! convert correlations to distances
+                dists = 1.0 - corrs           
+                ! scale distances with TAU
+                dists = dists / tau
+            else
+                dists = - corrs
+            end if
             ! argument for softmax function is negative distances
             arg4softmax = -dists
             ! subtract maxval of negative distances for numerical stability
@@ -176,11 +182,14 @@ contains
             !         ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
             !     endif
             ! enddo
-
-            ! convert correlations to distances
-            dists = 1.0 - corrs
-            ! scale distances with TAU
-            dists = dists / tau
+            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+                ! convert correlations to distances
+                dists = 1.0 - corrs
+                ! scale distances with TAU
+                dists = dists / tau
+            else
+                dists = - corrs
+            end if
             ! argument for softmax function is negative distances
             arg4softmax = -dists
             ! subtract maxval of negative distances for numerical stability
@@ -188,7 +197,9 @@ contains
             ! calculate softmax weights
             ws = exp(arg4softmax) !* ang_weights
             ! corrs <= TINY => ws = 0.
-            where( corrs <= TINY ) ws = 0.
+            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+                where( corrs <= TINY ) ws = 0.                
+            end if
             ! normalise
             ws = ws / sum(ws)
             ! threshold weights
