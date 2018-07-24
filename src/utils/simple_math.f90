@@ -428,7 +428,7 @@ contains
     !>   to check if val is zero
     elemental logical function is_zero_1( val )
         real, intent(in) :: val  !< query val
-        is_zero_1 = abs(val) < TINY
+        is_zero_1 = abs(val) == 0
     end function is_zero_1
 
         !>   to check if val is zero

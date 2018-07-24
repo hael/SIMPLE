@@ -45,7 +45,6 @@ contains
     procedure          :: window
     procedure          :: window_slim
     procedure          :: win2arr
-    procedure          :: win2arr_omp
     procedure          :: corner
     ! I/O
     procedure          :: open
@@ -340,7 +339,7 @@ contains
     generic            :: ifft => bwd_ft
     ! DENOISING FUNCTIONS
     procedure          :: cure_outliers
-    procedure          :: denoise_NLM
+    ! procedure          :: denoise_NLM
     procedure          :: zero_below
     ! DESTRUCTOR
     procedure :: kill
@@ -1479,8 +1478,7 @@ contains
         ! count # pixels
         npix = 0
         if( self%is_3d() )then
-            ! 3d
-            !$omp parallel do private(i,j,k,e) reduction(+:npix) default(shared) proc_bind(close)
+            !$omp parallel do private(i,j,k,ir,jr,kr,e) reduction(+:npix) default(shared) proc_bind(close)
             do i=1,self%ldim(1)/2
                 ir = self%ldim(1)+1-i
                 do j=1,self%ldim(2)/2
@@ -1494,8 +1492,7 @@ contains
             enddo
             !$omp end parallel do
         else
-            ! 2d
-            !$omp parallel do private(i,j,k,e) reduction(+:npix) default(shared) proc_bind(close)
+            !$omp parallel do private(i,j,ir,jr,e) reduction(+:npix) default(shared) proc_bind(close)
             do i=1,self%ldim(1)/2
                 ir = self%ldim(1)+1-i
                 do j=1,self%ldim(2)/2
@@ -2347,8 +2344,6 @@ contains
         if( self.eqdims.self2mul )then
             lims = self%fit%loop_lims(1,lp)
             sqlim = (maxval(lims(:,2)))**2
-            !$omp parallel do collapse(3) default(shared)&
-            !$omp private(h,k,l,phys) schedule(static) proc_bind(close)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -2360,7 +2355,6 @@ contains
                     end do
                 end do
             end do
-            !$omp end parallel do
         else
             call simple_stop('cannot multiply images of different dims; mul_3; simple_image')
         endif
@@ -3398,6 +3392,7 @@ contains
     end function guinier
 
     !>  \brief spectrum generates the rotationally averaged spectrum of an image
+    !>  keep serial
     subroutine spectrum( self, which, spec, norm)
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -3423,10 +3418,8 @@ contains
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
-        !$omp parallel private(h,k,l,sh,phys) default(shared)
         select case(which)
         case('real')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3438,9 +3431,7 @@ contains
                     end do
                 end do
             end do
-            !$omp end do
         case('power')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3452,9 +3443,7 @@ contains
                     end do
                 end do
             end do
-            !$omp end do
         case('sqrt')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3466,9 +3455,7 @@ contains
                     end do
                 end do
             end do
-            !$omp end do
         case('log')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3480,9 +3467,7 @@ contains
                     end do
                 end do
             end do
-            !$omp end do
         case('absreal')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3495,7 +3480,6 @@ contains
                 end do
             end do
         case('absimag')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3507,9 +3491,7 @@ contains
                     end do
                 end do
             end do
-            !$omp end do
         case('abs')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3522,7 +3504,6 @@ contains
                 end do
             end do
         case('phase')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3534,9 +3515,7 @@ contains
                     end do
                 end do
             end do
-            !$omp end do
         case('count')
-            !$omp do collapse(3)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3548,12 +3527,10 @@ contains
                     end do
                 end do
             end do
-            !$omp end do
         case DEFAULT
             write(*,*) 'Spectrum kind: ', trim(which)
             call simple_stop('Unsupported spectrum kind; simple_image; spectrum', __FILENAME__,__LINE__)
         end select
-        !$omp end parallel
         if( which .ne. 'count' .and. nnorm )then
             where(counts > 0.)
                 spec = spec/counts
@@ -3673,7 +3650,7 @@ contains
         lfny      = self%get_lfny(1)
         lims      = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
-        call self%spectrum('poer',expec_pow)
+        call self%spectrum('power',expec_pow)
         ! normalise
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -4189,7 +4166,7 @@ contains
                 do i=1,self%ldim(1)
                     do j=1,self%ldim(2)
                         do k=1,self%ldim(3)
-                            call self%win2arr_omp(i, j, k, winsz, npix, pixels)
+                            pixels = self%win2arr(i, j, k, winsz)
                             img_filt%rmat(i,j,k) = sum(pixels)/rn
                         end do
                     end do
@@ -4224,43 +4201,6 @@ contains
         call self%copy(img_filt)
         call img_filt%kill()
     end subroutine real_space_filter
-
-
-    !>  \brief win2arr extracts a small window into an array (circular indexing)
-    subroutine  win2arr_omp( self, i, j, k, winsz, npix, pixels )
-        class(image), intent(in) :: self
-        integer,      intent(in) :: i, j, k, winsz, npix
-        real,         intent(out) :: pixels(npix)
-        integer :: s, ss, t, tt, u, uu, cnt
-        cnt = 1
-        if( self%ldim(3) > 1 )then
-            !$omp parallel do default(shared) private(s,ss,t,tt,u) proc_bind(close)
-            do s=i-winsz,i+winsz
-                ss = cyci_1d_static(self%ldim(1),s)
-                do t=j-winsz,j+winsz
-                    tt = cyci_1d_static(self%ldim(2),t)
-                    do u=k-winsz,k+winsz
-                        uu          = cyci_1d_static(self%ldim(3),u)
-                        pixels(cnt) = self%rmat(ss,tt,uu)
-                        cnt         = cnt+1
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(s,ss,t,tt,u) proc_bind(close) reduction(+:cnt)
-            do s=i-winsz,i+winsz
-                ss =  cyci_1d_static(self%ldim(1),s)
-                do t=j-winsz,j+winsz
-                    tt = cyci_1d_static(self%ldim(2),t)
-                    pixels(cnt) = self%rmat(ss,tt,1)
-                    cnt         = cnt+1
-                end do
-            end do
-            !$omp end parallel do
-        endif
-
-    end subroutine win2arr_omp
 
     ! CALCULATORS
 
@@ -4313,14 +4253,12 @@ contains
         real,    optional, intent(in)    :: msk
         real,    optional, intent(out)   :: med
         logical, optional, intent(out)   :: errout
-        integer           :: i, j, k, npix, alloc_stat, minlen, bckgrsign
-        real              :: ci, cj, ck, mskrad, e, var, bckgrdsgn
+        integer           :: i, j, k, npix, alloc_stat, minlen
+        real              :: ci, cj, ck, mskrad, e, var
         logical           :: err, didft, background
         real, allocatable :: pixels(:)
         ! FT
         didft = .false.
-        background = .true.
-        bckgrsign=1.
         if( self%ft )then
             call self%ifft()
             didft = .true.
@@ -4339,78 +4277,64 @@ contains
         endif
         ! back/foreground
         if( which.eq.'background' )then
-           background = .true.
+            background = .true.
         else if( which.eq.'foreground' )then
             background = .false.
-            bckgrsign=-1.
         else
             call simple_stop('unrecognized parameter: which; stats_1; simple_image', __FILENAME__,__LINE__)
         endif
         allocate( pixels(product(self%ldim)), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk('backgr; simple_image')
         pixels = 0.
-        npix = 0
-        ! OLD METHOD
-        ! if( self%ldim(3) > 1 )then
-        !     ! 3d
-        !     ci = -real(self%ldim(1))/2.
-        !     do i=1,self%ldim(1)
-        !         cj = -real(self%ldim(2))/2.
-        !          do j=1,self%ldim(2)
-        !             ck = -real(self%ldim(3))/2.
-        !              do k=1,self%ldim(3)
-        !                       e = hardedge(ci,cj,ck,mskrad)
-        !                      if( background )then
-        !                         if( e < 0.5 )then
-        !                            npix = npix+1
-        !                            pixels(npix) = self%rmat(i,j,k)
-        !                         endif
-        !                      else
-        !                         if( e > 0.5 )then
-        !                             npix = npix+1
-        !                             pixels(npix) = self%rmat(i,j,k)
-        !                         endif
-        !                      endif
-        !                        ck = ck + 1.
-        !                     end do
-        !                    cj = cj + 1.
-        !                 end do
-        !                ci = ci + 1.
-        !             end do
-        ! NEW METHOD
-        ci = -real(self%ldim(1))/2.
-        cj = -real(self%ldim(2))/2.
+        npix   = 0
         if( self%ldim(3) > 1 )then
             ! 3d
-            ck = -real(self%ldim(3))/2.
-            !$omp parallel do collapse(3) default(shared) private(i,j,k,e) proc_bind(close)&
-            !$omp reduction(+:npix)
+            ci = -real(self%ldim(1))/2.
             do i=1,self%ldim(1)
+                cj = -real(self%ldim(2))/2.
                 do j=1,self%ldim(2)
+                    ck = -real(self%ldim(3))/2.
                     do k=1,self%ldim(3)
-                        e = hardedge(ci +real(i-1),cj+real(j-1),ck+real(k-1),mskrad) - 0.5
-                        if( bckgrsign*e > 0 )then
-                            npix = npix+1
-                            pixels(npix) = self%rmat(i,j,k)
+                        e = hardedge(ci,cj,ck,mskrad)
+                        if( background )then
+                            if( e < 0.5 )then
+                                npix = npix+1
+                                pixels(npix) = self%rmat(i,j,k)
+                            endif
+                        else
+                            if( e > 0.5 )then
+                                npix = npix+1
+                                pixels(npix) = self%rmat(i,j,k)
+                            endif
                         endif
+                        ck = ck + 1.
                     end do
+                    cj = cj + 1.
                 end do
+                ci = ci + 1.
             end do
-            !$omp end parallel do
         else
             ! 2d
-            !$omp parallel do collapse(2) default(shared) private(i,j,e) proc_bind(close)&
-            !$omp reduction(+:npix)
+            ci = -real(self%ldim(1))/2.
             do i=1,self%ldim(1)
+                cj = -real(self%ldim(2))/2.
                 do j=1,self%ldim(2)
-                    e = hardedge(ci+real(i-1),cj+real(j-1),mskrad) - 0.5
-                    if( bckgrsign*e > 0 )then
-                        npix = npix+1
-                        pixels(npix) = self%rmat(i,j,1)
+                    e = hardedge(ci,cj,mskrad)
+                    if( background )then
+                        if( e < 0.5 )then
+                            npix = npix+1
+                            pixels(npix) = self%rmat(i,j,1)
+                        endif
+                    else
+                        if( e > 0.5 )then
+                            npix = npix+1
+                            pixels(npix) = self%rmat(i,j,1)
+                        endif
                     endif
+                    cj = cj + 1.
                 end do
+                ci = ci + 1.
             end do
-            !$omp end parallel do
         endif
         maxv = maxval(pixels(:npix))
         minv = minval(pixels(:npix))
@@ -4498,36 +4422,25 @@ contains
             didft = .true.
         endif
         ci = -real(self%ldim(1))/2.
-        cj = -real(self%ldim(2))/2.
-        if( self%ldim(3) > 1 )then
-            ck = -real(self%ldim(3))/2.
-            !$omp parallel do collapse(3) default(shared) private(i,j,k,e) schedule(static) proc_bind(close)
-            do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
-                        e = hardedge(ci+real(i-1),cj+real(j-1),ck+real(k-1),msk)
-                        if( e < 0.5 )then
-                            call ovar%add(self%rmat(i,j,k))
-                        endif
-                    end do
+        do i=1,self%ldim(1)
+            cj = -real(self%ldim(2))/2.
+            do j=1,self%ldim(2)
+                ck = -real(self%ldim(3))/2.
+                do k=1,self%ldim(3)
+                    if( self%ldim(3) > 1 )then
+                        e = hardedge(ci,cj,ck,msk)
+                    else
+                        e = hardedge(ci,cj,msk)
+                    endif
+                    if( e < 0.5 )then
+                        call ovar%add(self%rmat(i,j,k))
+                    endif
+                    ck = ck+1
                 end do
+                cj = cj+1.
             end do
-            !$omp end parallel do
-        else
-            k=1
-            !$omp parallel do collapse(2) default(shared) private(i,j,e) schedule(static) proc_bind(close)
-            do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
-                        e = hardedge(ci+real(i-1),cj+real(j-1),msk)
-                        if( e < 0.5 )then
-                            call ovar%add(self%rmat(i,j,k))
-                        endif
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        endif
+            ci = ci+1.
+        end do
         call ovar%finalize
         mv = ovar%get_mean_var()
         sdev = 0.
@@ -4546,18 +4459,7 @@ contains
             call self%ifft()
             didft = .true.
         endif
-        avg=0.
-        !avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
-        !$omp parallel do default(shared) private(i,j,k) reduction(+:avg) collapse(3) proc_bind(close) schedule(static)
-        do j=1,self%ldim(2)
-            do i=1,self%ldim(1)
-                do k=1,self%ldim(3)
-                    avg = avg + self%rmat(i,j,k)
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        avg  = avg/real(product(self%ldim))
+        avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         if( didft ) call self%ifft()
     end function mean
 
@@ -4984,14 +4886,14 @@ contains
         voxs = 0.
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
-        !$omp schedule(static) proc_bind(close)
+        !$omp schedule(static) proc_bind(close) reduction(+:voxs)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     ! find shell
                     sh = nint(hyp(real(h),real(k),real(l)))
                     if( sh == 0 .or. sh > n ) cycle
-                    voxs( sh ) = voxs( sh )+1.
+                    voxs( sh ) = voxs( sh ) + 1.
                 end do
             end do
         end do
@@ -6062,10 +5964,9 @@ contains
 
     !> \brief mask  is for spherical masking
     !! \param mskrad mask radius
-    !! \param which image type
+    !! \param which mask type
     !! \param inner include cosine edge material
     !! \param width width of inner patch
-    !! \param msksum masking sum
     subroutine mask( self, mskrad, which, inner, width )
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
@@ -6580,7 +6481,7 @@ contains
         if( present(ang_stop) ) aang_stop = ang_stop
         avgs_rmat = 0.
         rotated   = 0.
-        !$omp parallel do schedule(static) default(shared) private(irot) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(irot,ithr) proc_bind(close)
         do irot = 0 + angstep,aang_stop,angstep
             ! get thread index
             ithr = omp_get_thread_num() + 1
@@ -6844,80 +6745,81 @@ contains
         endif
     end subroutine cure_outliers
 
-    !>  \brief  denoise_NLM for denoising image with non-local means algorithm
-    !! \param Hsigma power of noise cancelling
-    !! \param searchRad search radius from pixel origin to patch origin
-    !! \param patchSz patch width
-    !! \param deadhot number of rejections for upper and lower limits
-    !! \param outliers mask of rejection points
-    !! \param l1normdiff return the L1-norm difference
-    subroutine denoise_NLM( self, Hsigma, patchSz,searchRad, deadhot, outliers, l1normdiff)
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: patchSz
-        real,              intent(in)    :: Hsigma,searchRad
-        integer,           intent(out)   :: deadhot(2)
-        logical, optional, allocatable   :: outliers(:,:)
-        real, optional,    intent(inout) :: l1normdiff
-        type(image) :: selfcopy
-        real, allocatable :: patch(:,:), padded_image(:,:)
-        real    :: ave, sdev, var, lthresh, uthresh, nsigma
-        integer :: i, j, hwinsz, winsz,ncured
-        logical :: was_fted, err, present_outliers, retl1norm
-        if( self%ldim(3)>1 )stop 'for images only; simple_image:: denoise_NLM'
-        was_fted = self%is_ft()
-        if( was_fted )stop 'for real space images only; simple_image::denoise_NLM'
-        present_outliers = present(outliers)
-        retl1norm=.false.
-        if(present(l1normdiff))then
-            retl1norm=.true.
-            selfcopy = self    ! create copy for comparision
-        end if
-        ncured=0
-        hwinsz   = 6
-        nsigma = 1.0/ sqrt(1.0)
-        if( allocated(outliers) ) deallocate(outliers)
-        allocate( outliers(self%ldim(1),self%ldim(2)) )
-        outliers = .false.
-        call moment( self%rmat, ave, sdev, var, err )
-        if( sdev<TINY )return
-        lthresh = ave - nsigma * sdev
-        uthresh = ave + nsigma * sdev
-        if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
-            winsz = 2*hwinsz+1
-            deadhot = 0
-            allocate(padded_image(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
-                &patch(winsz,winsz), stat=alloc_stat)
-            if(alloc_stat/=0)call allocchk('In: cure_outliers; simple_image 1')
-            padded_image(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
-            padded_image(1:self%ldim(1), 1:self%ldim(2)) = &
-                &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
-            !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,patch)&
-            !$omp reduction(+:ncured) proc_bind(close)
-            do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    ! if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then  !
-                         if( present_outliers )then                                    !
-                             outliers(i,j)=.true.                                      !
-                    !         if (self%rmat(i,j,1)<lthresh) deadhot(1) = deadhot(1) + 1 !
-                    !         if (self%rmat(i,j,1)>uthresh) deadhot(2) = deadhot(2) + 1 !
-                         else                                                          !
-                    !         patch = padded_image( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )    !
-                    !         self%rmat(i,j,1) = median( reshape(patch,(/winsz**2/)) )    !
-                            ncured = ncured + 1                                       !
-                    !     endif                                                         !
-                    endif                                                             !
-                    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                enddo
-            enddo
-            !$omp end parallel do
-            deallocate( patch, padded_image )
-        endif
-        if(retl1norm)then
-            l1normdiff = l1norm_2(selfcopy,self)
-            call selfcopy%kill()
-        end if
-    end subroutine denoise_NLM
+    ! BROKEN ROUTINE, TO FIX
+    ! !>  \brief  denoise_NLM for denoising image with non-local means algorithm
+    ! !! \param Hsigma power of noise cancelling
+    ! !! \param searchRad search radius from pixel origin to patch origin
+    ! !! \param patchSz patch width
+    ! !! \param deadhot number of rejections for upper and lower limits
+    ! !! \param outliers mask of rejection points
+    ! !! \param l1normdiff return the L1-norm difference
+    ! subroutine denoise_NLM( self, Hsigma, patchSz,searchRad, deadhot, outliers, l1normdiff)
+    !     class(image),      intent(inout) :: self
+    !     integer,           intent(in)    :: patchSz
+    !     real,              intent(in)    :: Hsigma,searchRad
+    !     integer,           intent(out)   :: deadhot(2)
+    !     logical, optional, allocatable   :: outliers(:,:)
+    !     real, optional,    intent(inout) :: l1normdiff
+    !     type(image) :: selfcopy
+    !     real, allocatable :: patch(:,:), padded_image(:,:)
+    !     real    :: ave, sdev, var, lthresh, uthresh, nsigma
+    !     integer :: i, j, hwinsz, winsz,ncured
+    !     logical :: was_fted, err, present_outliers, retl1norm
+    !     if( self%ldim(3)>1 )stop 'for images only; simple_image:: denoise_NLM'
+    !     was_fted = self%is_ft()
+    !     if( was_fted )stop 'for real space images only; simple_image::denoise_NLM'
+    !     present_outliers = present(outliers)
+    !     retl1norm=.false.
+    !     if(present(l1normdiff))then
+    !         retl1norm=.true.
+    !         selfcopy = self    ! create copy for comparison
+    !     end if
+    !     ncured = 0
+    !     hwinsz = 6
+    !     nsigma = 1.0/ sqrt(1.0) !??
+    !     if( allocated(outliers) ) deallocate(outliers)
+    !     allocate( outliers(self%ldim(1),self%ldim(2)) )
+    !     outliers = .false
+    !     call moment( self%rmat, ave, sdev, var, err )
+    !     if( sdev<TINY )return
+    !     lthresh = ave - nsigma * sdev
+    !     uthresh = ave + nsigma * sdev
+    !     if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
+    !         winsz   = 2*hwinsz+1
+    !         deadhot = 0
+    !         allocate(padded_image(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
+    !             &patch(winsz,winsz), stat=alloc_stat)
+    !         if(alloc_stat/=0)call allocchk('In: cure_outliers; simple_image 1')
+    !         padded_image(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
+    !         padded_image(1:self%ldim(1), 1:self%ldim(2)) = &
+    !             &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
+    !         !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,patch)&
+    !         !$omp reduction(+:ncured) proc_bind(close)
+    !         do i=1,self%ldim(1)
+    !             do j=1,self%ldim(2)
+    !                 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !                 ! if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then  !
+    !                      if( present_outliers )then                                    !
+    !                          outliers(i,j)=.true.                                      !
+    !                 !         if (self%rmat(i,j,1)<lthresh) deadhot(1) = deadhot(1) + 1 !
+    !                 !         if (self%rmat(i,j,1)>uthresh) deadhot(2) = deadhot(2) + 1 !
+    !                      else                                                          !
+    !                 !         patch = padded_image( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )    !
+    !                 !         self%rmat(i,j,1) = median( reshape(patch,(/winsz**2/)) )    !
+    !                         ncured = ncured + 1                                       !
+    !                 !     endif                                                         !
+    !                 endif                                                             !
+    !                 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !             enddo
+    !         enddo
+    !         !$omp end parallel do
+    !         deallocate( patch, padded_image )
+    !     endif
+    !     if(retl1norm)then
+    !         l1normdiff = l1norm_2(selfcopy,self)
+    !         call selfcopy%kill()
+    !     end if
+    ! end subroutine denoise_NLM
 
     !>  \brief  zero pixels below thres
     subroutine zero_below( self, thres )
