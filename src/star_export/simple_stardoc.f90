@@ -23,7 +23,7 @@ end interface starframes
 
 type stardoc
     type(star_dict) :: sdict
-    type(str4arr), allocatable :: param_labels(:)
+    type(str4arr), allocatable         :: param_labels(:)
     type(str4arr), allocatable         :: data(:)
     logical      , allocatable         :: param_isstr(:)
     real         , allocatable         :: param_scale(:)
@@ -103,8 +103,13 @@ contains
         class(stardoc), intent(inout) :: self
         integer,        intent(in)    :: n
         integer :: i
-        ! call self%kill_doc
+        call self%kill()
         if(.not. self%sdict%exists() ) call self%sdict%new()
+
+        if(allocated(self%param_labels)) deallocate(self%param_labels)
+        if(allocated(self%param_isstr)) deallocate(self%param_isstr)
+        if(allocated(self%param_scale)) deallocate(self%param_scale)
+        if(allocated(self%param_converted)) deallocate(self%param_converted)
 
         ! if(allocated(self%frames))then
         !     if(self%num_frames > 1) then
@@ -133,7 +138,7 @@ contains
         integer :: io_stat, tmpunit
         integer(8) :: filesz
         if(self%l_open) call self%close
-        if(allocated(self%param_labels)) deallocate(self%param_labels)
+
         if(.not. file_exists(trim(filename) ))&
             call simple_stop("simple_stardoc::open ERROR file does not exist "//trim(filename) )
         call fopen(tmpunit, file=trim(filename), action='READ', iostat=io_stat)
