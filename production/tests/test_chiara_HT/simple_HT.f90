@@ -2,7 +2,7 @@ module Ht_project_mod
   include 'simple_lib.f08'
   use simple_image, only : image
   use simple_ctf,   only : ctf
-  use canny_no_thresh_mod
+  ! use canny_no_thresh_mod
   implicit none
   type ::three_vect
   real, allocatable:: a(:)
@@ -69,7 +69,7 @@ end module Ht_project_mod
 
   program Ht_project
   use Ht_project_mod
-  use canny_no_thresh_mod
+  !use canny_no_thresh_mod
   implicit none
   integer                 :: N, Na,Nb                                !< number of points and discretization parameters
   integer                 :: i,j,k,l                                      !< to indicize loops

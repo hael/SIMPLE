@@ -7,8 +7,9 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-!public :: make_pattern_stack
-public ::acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
+public :: make_pattern_stack
+public :: acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
+
 contains
 
     !>  \brief  is for raising exception
