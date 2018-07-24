@@ -33,9 +33,9 @@ type :: oris
     generic            :: getter => getter_1, getter_2
     procedure          :: get_all
     procedure          :: get_all_rmats
-    procedure, private :: getter_all_1
-    procedure, private :: getter_all_2
-    generic            :: getter_all => getter_all_1, getter_all_2
+    ! procedure, private :: getter_all_1
+    ! procedure, private :: getter_all_2
+    ! generic            :: getter_all => getter_all_1, getter_all_2
     procedure          :: get_mat
     procedure          :: get_normal
     procedure          :: get_2Dshift
@@ -51,7 +51,7 @@ type :: oris
     procedure          :: get_pops
     procedure          :: get_pinds
     procedure          :: gen_mask
-    procedure          :: get_all_normals
+    procedure, private :: get_all_normals
     procedure          :: states_exist
     procedure          :: get_arr
     procedure, private :: calc_sum
@@ -113,7 +113,6 @@ type :: oris
     procedure          :: merge
     procedure          :: clean_updatecnt
     procedure          :: partition_eo
-    procedure          :: transf_proj2class
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
     ! I/O
@@ -154,18 +153,13 @@ type :: oris
     procedure          :: calc_spectral_weights
     procedure          :: calc_bfac_rec
     procedure          :: find_closest_proj
-    procedure          :: find_closest_projs
     procedure, private :: create_proj_subspace_1
     procedure, private :: create_proj_subspace_2
     generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
-    procedure          :: create_proj_subspace_3
     procedure          :: discretize
     procedure          :: nearest_proj_neighbors
     procedure          :: find_angres
-    procedure          :: find_angres_mp
-    ! procedure          :: find_angres_geod
     procedure          :: extremal_bound
-    procedure          :: find_npeaks
     procedure          :: find_npeaks_from_athres
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
@@ -174,12 +168,9 @@ type :: oris
     procedure          :: mirror3d
     procedure          :: add_shift2class
     procedure          :: corr_oris
-    ! procedure          :: gen_smat
-    ! procedure          :: geodesic_dist
     procedure, private :: diststat_1
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
-    !procedure          :: cluster_diststat
     ! DESTRUCTORS
     procedure          :: kill_chash
     procedure          :: kill
@@ -193,14 +184,12 @@ contains
 
     ! CONSTRUCTORS
 
-    !>  \brief  is an abstract constructor
     function constructor( n ) result( self )
         integer, intent(in) :: n
         type(oris) :: self
         call self%new(n)
     end function constructor
 
-    !>  \brief  is a constructor
     subroutine new( self, n )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: n
@@ -212,10 +201,8 @@ contains
         do i=1,n
             call self%o(i)%new
         end do
-       ! DebugPrint ' simple_oris::new initiated'
     end subroutine new
 
-    !>  \brief  is a constructor
     subroutine reallocate( self, new_n )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: new_n
@@ -236,7 +223,6 @@ contains
 
     ! GETTERS
 
-    !>  \brief  returns the i:th first Euler angle
     pure function e1get( self, i ) result( e1 )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -244,7 +230,6 @@ contains
         e1 = self%o(i)%e1get()
     end function e1get
 
-    !>  \brief  returns the i:th second Euler angle
     pure function e2get( self, i ) result( e2 )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -252,7 +237,6 @@ contains
         e2 = self%o(i)%e2get()
     end function e2get
 
-    !>  \brief  returns the i:th third Euler angle
     pure function e3get( self, i ) result( e3 )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -260,7 +244,6 @@ contains
         e3 = self%o(i)%e3get()
     end function e3get
 
-    !>  \brief  returns the i:th Euler triplet
     pure function get_euler( self, i ) result( euls )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -268,14 +251,12 @@ contains
         euls = self%o(i)%get_euler()
     end function get_euler
 
-    !>  \brief  is for getting the number of orientations
     pure function get_noris( self ) result( n )
         class(oris), intent(in) :: self
         integer :: n
         n = self%n
     end function get_noris
 
-    !>  \brief  returns an individual orientation
     function get_ori( self, i ) result( o )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -288,7 +269,6 @@ contains
         o = self%o(i)
     end function get_ori
 
-    !>  \brief  is a multiparameter getter
     function get( self, i, key ) result( val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -297,7 +277,6 @@ contains
         val = self%o(i)%get(key)
     end function get
 
-    !>  \brief  is a getter
     subroutine getter_1( self, i, key, val )
         class(oris),                   intent(inout) :: self
         integer,                       intent(in)    :: i
@@ -306,7 +285,6 @@ contains
         call self%o(i)%getter(key, val)
     end subroutine getter_1
 
-    !>  \brief  is a getter
     subroutine getter_2( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -343,34 +321,34 @@ contains
     end function get_all
 
     !>  \brief  is for getting an array of 'key' values
-    subroutine getter_all_1( self, key, vals )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: key
-        real, allocatable, intent(out)   :: vals(:)
-        integer :: i
-        if( allocated(vals) ) deallocate(vals)
-        allocate( vals(self%n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('getter_all_1; simple_oris',alloc_stat)
-        do i=1,self%n
-            call self%o(i)%getter(key, vals(i))
-        enddo
-    end subroutine getter_all_1
+    ! subroutine getter_all_1( self, key, vals )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: key
+    !     real, allocatable, intent(out)   :: vals(:)
+    !     integer :: i
+    !     if( allocated(vals) ) deallocate(vals)
+    !     allocate( vals(self%n), stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk('getter_all_1; simple_oris',alloc_stat)
+    !     do i=1,self%n
+    !         call self%o(i)%getter(key, vals(i))
+    !     enddo
+    ! end subroutine getter_all_1
 
     !>  \brief  is for getting an array of 'key' values
-    subroutine getter_all_2( self, key, vals )
-        class(oris),                        intent(inout) :: self
-        character(len=*),                   intent(in)    :: key
-        character(len=STDLEN), allocatable, intent(out)   :: vals(:)
-        integer :: i
-        character(len=:), allocatable :: tmp
-        if( allocated(vals) ) deallocate(vals)
-        allocate( vals(self%n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('getter_all_2; simple_oris',alloc_stat)
-        do i=1,self%n
-            call self%o(i)%getter(key, tmp)
-            vals(i) = tmp
-        enddo
-    end subroutine getter_all_2
+    ! subroutine getter_all_2( self, key, vals )
+    !     class(oris),                        intent(inout) :: self
+    !     character(len=*),                   intent(in)    :: key
+    !     character(len=STDLEN), allocatable, intent(out)   :: vals(:)
+    !     integer :: i
+    !     character(len=:), allocatable :: tmp
+    !     if( allocated(vals) ) deallocate(vals)
+    !     allocate( vals(self%n), stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk('getter_all_2; simple_oris',alloc_stat)
+    !     do i=1,self%n
+    !         call self%o(i)%getter(key, tmp)
+    !         vals(i) = tmp
+    !     enddo
+    ! end subroutine getter_all_2
 
     !>  \brief  is for getting the i:th rotation matrix
     pure function get_mat( self, i ) result( mat )
@@ -515,11 +493,9 @@ contains
         if(allocated(mat))deallocate(mat)
         allocate(mat(n,3,3),source=0.,stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: geteulmats, module: simple_oris')
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             mat(i,:,:) = self%o(i)%get_mat()
         end do
-        !$omp end parallel do
     end function get_all_rmats
 
     !>  \brief  is for checking discrete label populations
@@ -567,11 +543,9 @@ contains
         real, allocatable :: normals(:,:)
         integer :: i
         allocate(normals(self%n,3), stat=alloc_stat)
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             normals(i,:) = self%o(i)%get_normal()
         end do
-        !$omp end parallel do
     end function get_all_normals
 
     !>  \brief  returns a logical array of state existence
@@ -906,7 +880,6 @@ contains
             end do
         endif
     end function get_arr
-
 
     !>  \brief  is for calculating the sum of 'which' variables with
     !!          filtering based on class/state/fromto
@@ -1308,7 +1281,6 @@ contains
         end do
     end subroutine delete_2Dclustering
 
-    !>  \brief  is a setter
     subroutine set_euler( self, i, euls )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1316,7 +1288,6 @@ contains
         call self%o(i)%set_euler(euls)
     end subroutine set_euler
 
-    !>  \brief  is a setter
     subroutine set_shift( self, i, vec )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1324,7 +1295,6 @@ contains
         call self%o(i)%set_shift(vec)
     end subroutine set_shift
 
-    !>  \brief  is a setter
     subroutine e1set( self, i, e1 )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1332,7 +1302,6 @@ contains
         call self%o(i)%e1set(e1)
     end subroutine e1set
 
-    !>  \brief  is a setter
     subroutine e2set( self, i, e2 )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1340,7 +1309,6 @@ contains
         call self%o(i)%e2set(e2)
     end subroutine e2set
 
-    !>  \brief  is a setter
     subroutine e3set( self, i, e3 )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1348,7 +1316,6 @@ contains
         call self%o(i)%e3set(e3)
     end subroutine e3set
 
-    !>  \brief  is a setter
     subroutine set_1( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -1357,7 +1324,6 @@ contains
         call self%o(i)%set(key, val)
     end subroutine set_1
 
-    !>  \brief  is a setter
     subroutine set_2( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -1366,7 +1332,6 @@ contains
         call self%o(i)%set(key, val)
     end subroutine set_2
 
-    !>  \brief  is a setter
     subroutine set_ori( self, i, o )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1374,7 +1339,6 @@ contains
         self%o(i) = o
     end subroutine set_ori
 
-    !>  \brief  is a setter
     subroutine set_all_1( self, which, vals )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
@@ -1385,7 +1349,6 @@ contains
         enddo
     end subroutine set_all_1
 
-    !>  \brief  is a setter
     subroutine set_all_2( self, which, vals )
         class(oris),           intent(inout) :: self
         character(len=*),      intent(in)    :: which
@@ -1396,7 +1359,6 @@ contains
         enddo
     end subroutine set_all_2
 
-    !>  \brief  is a setter
     subroutine set_all2single_1( self, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
@@ -1407,7 +1369,6 @@ contains
         end do
     end subroutine set_all2single_1
 
-    !>  \brief  is a setter
     subroutine set_all2single_2( self, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
@@ -1418,7 +1379,6 @@ contains
         end do
     end subroutine set_all2single_2
 
-    !>  \brief  is a setter
     subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
         class(oris), intent(inout) :: e_space
@@ -1430,7 +1390,6 @@ contains
         !$omp end parallel do
     end subroutine set_projs
 
-    !>  \brief  is a setter
     subroutine e3swapsgn( self )
         class(oris), intent(inout) :: self
         integer :: i
@@ -1439,7 +1398,6 @@ contains
         end do
     end subroutine e3swapsgn
 
-    !>  \brief  is a setter
     subroutine swape1e3( self )
         class(oris), intent(inout) :: self
         integer :: i
@@ -1473,7 +1431,6 @@ contains
         end do
     end subroutine zero_projs
 
-    !>  \brief  zero the shifts
     subroutine zero_shifts( self )
         class(oris), intent(inout) :: self
         integer :: i
@@ -1483,7 +1440,6 @@ contains
         end do
     end subroutine zero_shifts
 
-    !>  \brief  zero the shifts
     subroutine mul_shifts( self, mul )
         class(oris), intent(inout) :: self
         real,        intent(in)    :: mul
@@ -1494,7 +1450,6 @@ contains
         end do
     end subroutine mul_shifts
 
-    !>  \brief  randomizes eulers in oris
     subroutine rnd_oris( self, trs, eullims )
         class(oris),    intent(inout) :: self
         real, optional, intent(in)    :: trs
@@ -1694,18 +1649,15 @@ contains
     subroutine rnd_lps( self )
         class(oris), intent(inout) :: self
         integer :: i
-        DebugPrint " In oris:: rnd_lps"
         do i=1,self%n
             call self%o(i)%set('lp', ran3()*100.)
         end do
-        DebugPrint " In oris:: rnd_lps done"
     end subroutine rnd_lps
 
     !>  \brief  randomizes correlations in oris
     subroutine rnd_corrs( self )
         class(oris), intent(inout) :: self
         integer :: i
-        DebugPrint " In oris:: rnd_corrs"
         do i=1,self%n
             call self%o(i)%set('corr', ran3())
         end do
@@ -1789,9 +1741,8 @@ contains
         call self2add%kill
     end subroutine merge
 
-    !>  \brief  for balanced assignment of even/odd partitions
     subroutine clean_updatecnt( self )
-        class(oris),       intent(inout) :: self    !< instance
+        class(oris),       intent(inout) :: self
         integer :: i
         do i = 1,self%n
             call self%o(i)%delete_entry('updatecnt')
@@ -1826,16 +1777,6 @@ contains
         deallocate(eopart)
     end subroutine partition_eo
 
-    !>  \brief  transfers proj indices to class indices in self
-    subroutine transf_proj2class( self )
-        class(oris), intent(inout) :: self
-        integer :: i
-        do i=1,self%n
-            call self%o(i)%set('class', self%o(i)%get('proj'))
-        enddo
-    end subroutine transf_proj2class
-
-    !>  \brief  reads all orientation info (by line) into the hash-tables
     subroutine str2ori( self, i, line )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -1843,7 +1784,6 @@ contains
         call self%o(i)%str2ori(line)
     end subroutine str2ori
 
-    !>  \brief  reads ctfparams_state_eo info (by line) into the hash-tables
     subroutine str2ori_ctfparams_state_eo( self, i, line )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -2090,7 +2030,7 @@ contains
         call self%o(i)%set_euler(o_tmp%get_euler())
     end subroutine rot_transp_2
 
-    !>  \brief  for identifying the median value of parameter which within the cluster class
+    !>  \brief  for identifying the median value of parameter which
     function median_1( self, which ) result( med )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -2128,7 +2068,6 @@ contains
         allocate( vals(self%n), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('In: minmax, module: simple_oris',alloc_stat)
         vals = 0.
-        ! fish values
         cnt = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
@@ -2245,18 +2184,14 @@ contains
         integer :: i
         allocate( inds(self%n), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
-        DebugPrint " In oris:: order allocated ?"
         specscores = self%get_all('specscore')
-        DebugPrint " In oris:: order allocated yes"
         inds = (/(i,i=1,self%n)/)
         call hpsort(specscores, inds)
         call reverse(inds)
-        DebugPrint " oris order sorted"
         if(allocated(specscores))then
             deallocate( specscores, stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('order; simple_oris dealloc ',alloc_stat)
         end if
-        DebugPrint " oris order done"
     end function order
 
     !>  \brief  orders oris according to corr
@@ -2422,7 +2357,7 @@ contains
     end subroutine calc_hard_weights2D
 
     !>  \brief  to find the closest matching projection direction
-    !! keep this routine serial
+    !! KEEP THIS ROUTINE SERIAL
     function find_closest_proj( self, o_in ) result( closest )
         class(oris), intent(inout) :: self
         class(ori),  intent(in) :: o_in
@@ -2434,25 +2369,6 @@ contains
         loc     = minloc( dists )
         closest = loc(1)
     end function find_closest_proj
-
-    !>  \brief  to find the closest matching projection directions
-    subroutine find_closest_projs( self, o_in, pdirinds )
-        class(oris), intent(in)  :: self
-        class(ori),  intent(in)  :: o_in
-        integer,     intent(out) :: pdirinds(:)
-        real    :: dists(self%n)
-        integer :: inds(self%n), i
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i=1,self%n
-            dists(i) = self%o(i).euldist.o_in
-            inds(i)  = i
-        end do
-        !$omp end parallel do
-        call hpsort(dists, inds)
-        do i=1,size(pdirinds)
-            pdirinds(i) = inds(i)
-        end do
-    end subroutine find_closest_projs
 
     !>  \brief  to identify a subspace of projection directions
     function create_proj_subspace_1( self, nsub ) result( subspace_projs )
@@ -2493,56 +2409,6 @@ contains
         !$omp end parallel do
     end function create_proj_subspace_2
 
-    ! SUPERFLUOUS?
-    !>  \brief  to identify a subspace of projection directions
-    function create_proj_subspace_3( self, nsub, nsym, eullims ) result( subspace_projs )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nsub
-        integer,     intent(in)    :: nsym
-        real,        intent(in)    :: eullims(3,2)
-        type(oris)           :: suboris
-        integer, allocatable :: subspace_projs(:)
-        integer :: isub
-        real    :: dists(self%n), selfnormals(self%n,3), suboris_normals(nsub,3)
-        integer ::  i
-        integer(timer_int_kind) :: t1
-        t1=tic()
-        DebugPrint " in create_proj_subspace_3 "
-        call suboris%new(nsub)
-        DebugPrint " in create_proj_subspace_3 suboris created                   ",toc()
-        call suboris%spiral(nsym, eullims)
-        DebugPrint " in create_proj_subspace_3 suboris spiral                    ",toc()
-        allocate( subspace_projs(nsub) ,  stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_3, module: simple_oris',alloc_stat)
-        DebugPrint " in create_proj_subspace_3 getting normals                   ",toc()
-
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i=1,self%n
-            selfnormals(i,:) = self%o(i)%get_normal()
-        end do
-        !$omp end parallel do
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i=1,nsub
-            suboris_normals(i,:) = suboris%o(i)%get_normal()
-        end do
-        !$omp end parallel do
-
-        DebugPrint " in create_proj_subspace_3 got normals                       ",toc()
-
-        !$omp parallel do default(shared) private(i,isub) schedule(static) proc_bind(close)
-        do isub=1,nsub
-            do i=1,self%n
-                dists(i) = acos(dot_product(selfnormals(i,:),suboris_normals(isub,:)))
-            end do
-            !            tmploc = minloc( dists )
-            subspace_projs(isub) = minloc( dists ,1)
-        end do
-        !$omp end parallel do
-
-        DebugPrint " in create_proj_subspace_3 done                              ",toc()
-        DebugPrint " in create_proj_subspace_3 total time                        ",toc(t1)
-    end function create_proj_subspace_3
-
     !>  \brief  method for discretization of the projection directions
     subroutine discretize( self, n )
         class(oris), intent(inout) :: self
@@ -2571,10 +2437,10 @@ contains
         real      :: dists(self%n)
         integer   :: inds(self%n), i, j
         type(ori) :: o
-        if( k >= self%n ) call simple_stop('need to identify fewer nearest_neighbors; simple_oris')
+        if( k >= self%n ) call simple_stop('need to identify fewer nearest_proj_neighbors; simple_oris')
         if( allocated(nnmat) ) deallocate(nnmat)
         allocate( nnmat(self%n,k), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk("In: nearest_neighbors; simple_oris",alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_oris",alloc_stat)
         do i=1,self%n
             o = self%get_ori(i)
             do j=1,self%n
@@ -2592,79 +2458,54 @@ contains
         end do
     end subroutine nearest_proj_neighbors
 
-    ! WILL NOT WORK
-    ! !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
-    ! subroutine nearest_proj_neighbors_omp( self, k, nnmat )
-    !     class(oris),          intent(inout) :: self
-    !     integer,              intent(in)    :: k
-    !     integer, allocatable, intent(inout) :: nnmat(:,:)
-    !     real, allocatable :: onormals(:,:)
-    !     real      :: dists(self%n,self%n), d(self%n)
-    !     integer   :: inds(self%n), i, j
-    !     dists = -1.
-    !     if( k >= self%n ) call simple_stop('need to identify fewer nearest_neighbors; simple_oris')
-    !     if( allocated(nnmat) ) deallocate(nnmat)
-    !     allocate( nnmat(self%n,k), stat=alloc_stat )
-    !     if(alloc_stat.ne.0)call allocchk("In: nearest_neighbors; simple_oris",alloc_stat)
-    !     onormals = self%get_all_normals()
-    !     !$omp parallel do collapse(2) default(shared) private(i,j) proc_bind(close)
-    !     do i=1,self%n
-    !         do j=1,self%n
-    !             if( i == j )then
-    !                 dists(i,j) = 0.
-    !             else if( i < j )then
-    !                 dists(i,j) = dists(j,i)
-    !             else
-    !                 dists(i,j) = acos(dot_product(onormals(i,:),onormals(j,:)))
-    !             endif
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    !     deallocate(onormals)
-    !     if (debug)then
-    !         if(any(dists < 0.))then
-    !             call simple_stop(' nearest_proj_neighbors')
-    !         endif
-    !     endif
-    !     !$omp parallel do default(shared) private(i,inds, d) schedule(static) proc_bind(close)
-    !     do i=1,self%n
-    !         inds = (/ (i, i = 1, self%n) /)
-    !         d= dists(i,:)
-    !         call hpsort(d, inds)
-    !         nnmat(i,1:k) = (/ (inds(j), j=1, k) /)
-    !     end do
-    !   end subroutine nearest_proj_neighbors_omp
+    !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
+    subroutine nearest_proj_neighbors_omp( self, k, nnmat )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: k
+        integer, allocatable, intent(inout) :: nnmat(:,:)
+        real, allocatable :: onormals(:,:)
+        real      :: dists(self%n,self%n)
+        integer   :: i, j, inds(self%n)
+        if( k >= self%n ) call simple_stop('need to identify fewer nearest_proj_neighbors_omp; simple_oris')
+        if( allocated(nnmat) ) deallocate(nnmat)
+        allocate( nnmat(self%n,k), stat=alloc_stat )
+        if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors_omp; simple_oris",alloc_stat)
+        onormals = self%get_all_normals()
+        ! calculate distances
+        dists = 0.
+        !$omp parallel default(shared) private(i,j) proc_bind(close)
+        !$omp do schedule(guided)
+        do i=1,self%n - 1
+            do j=i + 1,self%n
+                dists(i,j) = acos(dot_product(onormals(i,:),onormals(j,:)))
+            end do
+        end do
+        !$omp end do nowait
+        ! symmetrization of distance matrix must be outside first openMP nest to avoid race conditions
+        !$omp do schedule(guided)
+        do i=1,self%n - 1
+            do j=i + 1,self%n
+                dists(j,i) = dists(i,j)
+            end do
+        end do
+        !$omp end do nowait
+        !$omp do schedule(static)
+        do i=1,self%n
+            inds = (/ (j, j = 1, self%n) /)
+            call hpsort(dists(i,:), inds)
+            nnmat(i,1:k) = (/ (inds(j), j=1, k) /)
+        end do
+        !$omp end do nowait
+        !$omp end parallel
+        deallocate(onormals)
+    end subroutine nearest_proj_neighbors_omp
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
         class(oris), intent(in) :: self
-        real    :: dists(self%n), res, x
-        integer :: i, j
-        res = 0.
-        !$omp parallel do default(shared) private(i,j,dists) reduction(+:res) proc_bind(close) schedule(static)
-        do j=1,self%n
-            do i=1,self%n
-                if( i == j )then
-                    dists(i) = huge(x)
-                else
-                    dists(i) = self%o(i).euldist.self%o(j)
-                endif
-            end do
-            call hpsort(dists)
-            res = res + sum(dists(:3))/3. ! average of three nearest neighbors
-        end do
-        !$omp end parallel do
-        res = rad2deg(res/real(self%n))
-    end function find_angres
-
-    ! ! WHICH ONE TO KEEP THEY ARE BOTH USING OPENMP AND ARE NEARLY IDENTICAL?
-    !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
-    function find_angres_mp( self ) result( res )
-        class(oris), intent(in) :: self
         real    :: dists(self%n), res, x, nearest3(3)
         integer :: i, j
         res = 0.
-        DebugPrint ' In oris; find_angres'
         !$omp parallel do default(shared) proc_bind(close)&
         !$omp private(j,i,dists,nearest3) reduction(+:res)
         do j=1,self%n
@@ -2675,62 +2516,12 @@ contains
                     dists(i) = self%o(i).euldist.self%o(j)
                 endif
             end do
-            !call hpsort(dists)
             nearest3 = min3(dists)
-            res = res + sum(nearest3)/3. ! average of three nearest neighbors
+            res = res + sum(nearest3) / 3. ! average of three nearest neighbors
         end do
         !$omp end parallel do
-        DebugPrint ' In oris; find_angres; done'
-        res = rad2deg(res/real(self%n))
-    end function find_angres_mp
-
-    !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
-    ! function find_angres_geod( self ) result( res )
-    !     class(oris), intent(in) :: self
-    !     real                    :: dists(self%n), res, x
-    !     integer                 :: i, j
-    !     res = 0.
-    !     !$omp parallel do default(shared) private(i,j,dists) reduction(+:res) proc_bind(close) schedule(static)
-    !     do j=1,self%n
-    !         do i=1,self%n
-    !             if( i == j )then
-    !                 dists(i) = huge(x)
-    !             else
-    !                 dists(i) = self%o(i).geodsc.self%o(j)
-    !             endif
-    !         end do
-    !         call hpsort(dists)
-    !         res = res + sum(dists(:3))/3. ! average of three nearest neighbors
-    !     end do
-    !     !$omp end parallel do
-    !     res = rad2deg(res/real(self%n))
-    ! end function find_angres_geod
-
-    ! WHICH ONE TO KEEP THEY ARE BOTH USING OPENMP AND ARE NEARLY IDENTICAL?
-    function find_angres_geod_omp( self ) result( res )
-        class(oris), intent(in) :: self
-        real                    :: dists(self%n), res, x, nearest3(3)
-        real, allocatable       :: emats(:,:,:)
-        integer                 :: i, j
-        res = 0.
-        emats = self%get_all_rmats()
-        !$omp parallel do default(shared) private(i,j,x,dists) &
-        !$omp reduction(+:res) proc_bind(close)
-        do j=1,self%n
-            do i=1,self%n
-                if( i == j )then
-                    dists(i) = huge(x)
-                else
-                    dists(i) = geodesic_scaled_dist(emats(i,:,:),emats(j,:,:))
-                endif
-            end do
-            nearest3=min3(dists)
-            res = res + sum(nearest3)/3. ! average of three nearest neighbors
-        end do
-        !$omp end parallel do
-        deallocate(emats)
-        res = rad2deg(res/real(self%n))
-    end function find_angres_geod_omp
+        res = rad2deg(res / real(self%n))
+    end function find_angres
 
     !>  \brief  to find the correlation bound in extremal search
     function extremal_bound( self, thresh, which ) result( score_bound )
@@ -2775,33 +2566,6 @@ contains
         deallocate(scores, incl, scores_incl)
     end function extremal_bound
 
-    !>  \brief  to find the neighborhood size for weighted orientation assignment
-    function find_npeaks( self, res, moldiam ) result( npeaks )
-        class(oris), intent(in) :: self
-        real,        intent(in) :: res, moldiam
-        real                    :: dists(self%n), tres, npeaksum
-        integer                 :: i, j, npeaks
-        tres = atan(res/(moldiam/2.))
-        npeaksum = 0.
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(j,i,dists) reduction(+:npeaksum)
-        do j=1,self%n
-            do i=1,self%n
-                dists(i) = self%o(i).euldist.self%o(j)
-            end do
-            call hpsort(dists)
-            do i=1,self%n
-                if( dists(i) <= tres )then
-                    npeaksum = npeaksum + 1.
-                else
-                    exit
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        npeaks = nint(npeaksum/real(self%n)) ! nr of peaks is average of peaksum
-    end function find_npeaks
-
     !>  \brief  find number of peaks from angular threshold
     function find_npeaks_from_athres( self, athres ) result( npeaks )
         class(oris), intent(in) :: self
@@ -2817,29 +2581,6 @@ contains
         end do
         npeaks = nint(rnpeaks/real(self%n))
     end function find_npeaks_from_athres
-
-    !>  \brief  find number of peaks from angular threshold
-    function find_npeaks_from_athres_mp( self, athres ) result( npeaks )
-        class(oris), intent(inout) :: self
-        real,        intent(in) :: athres
-        integer :: i, j, npeaks
-        real :: dists(self%n), rnpeaks, radthresh
-        real, allocatable :: onormals(:,:)
-        rnpeaks = 0.
-        onormals = self%get_all_normals()
-        radthresh = deg2rad(athres)
-        !$omp parallel do reduction(+:rnpeaks) default(shared) private(i,j,dists)&
-        !$omp proc_bind(close)
-        do i=1,self%n
-            do j=1,self%n
-                dists(j) =  vector_angle_norm(onormals(i,:),onormals(j,:))
-            end do
-            rnpeaks = rnpeaks + real(count(dists <= radthresh))
-        end do
-        !$omp end parallel do
-        deallocate(onormals)
-        npeaks = nint(rnpeaks/real(self%n))
-      end function find_npeaks_from_athres_mp
 
     !>  \brief  for mapping a 3D shift of volume to 2D shifts of the projections
     subroutine map3dshift22d_1( self, sh3d, state )
@@ -2923,109 +2664,6 @@ contains
         corr = corr/real(self1%n)
     end function corr_oris
 
-    !>  \brief  generates a similarity matrix for the oris in self
-    ! function gen_smat( self ) result( smat )
-    !     class(oris), intent(in) :: self
-    !     real, allocatable :: smat(:,:)
-    !     integer :: i, j
-    !     allocate( smat(self%n,self%n), stat=alloc_stat )
-    !     if(alloc_stat.ne.0)call allocchk("In: simple_oris :: gen_smat",alloc_stat)
-    !     smat = 0.
-    !     !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
-    !     do i=1,self%n-1
-    !         do j=i+1,self%n
-    !             smat(i,j) = -(self%o(i).geod.self%o(j))
-    !             smat(j,i) = smat(i,j)
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    ! end function gen_smat
-
-    ! WHICH ONE TO KEEP THEY ARE BOTH USING OPENMP AND ARE NEARLY IDENTICAL?
-    function gen_smat_omp( self ) result( smat )
-        class(oris), intent(in) :: self
-        real, allocatable :: smat(:,:), emats(:,:,:)
-        integer :: i, j
-        allocate( smat(self%n,self%n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk("In: simple_oris :: gen_smat",alloc_stat)
-        smat = 0.
-        emats = self%get_all_rmats()
-        !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
-        do i=1,self%n-1
-            do j=i+1,self%n
-                smat(i,j) = - geodesic_distance(emats(i,:,:), emats(j,:,:))
-                smat(j,i) = smat(i,j)
-            end do
-        end do
-        !$omp end parallel do
-        deallocate(emats)
-    end function gen_smat_omp
-
-    !>  \brief  calculates the average geodesic distance between the input orientation
-    !!          and all other orientations in the instance, part_of_set acts as mask
-    ! real function geodesic_dist( self, o, part_of_set, weights )
-    !     class(oris),       intent(in) :: self
-    !     class(ori),        intent(in) :: o
-    !     logical, optional, intent(in) :: part_of_set(self%n)
-    !     real,    optional, intent(in) :: weights(self%n)
-    !     logical, allocatable :: class_part_of_set(:)
-    !     real,    allocatable :: class_weights(:)
-    !     integer :: i
-    !     real    :: dists(self%n)
-    !     if( present(part_of_set) )then
-    !         allocate(class_part_of_set(self%n), source=part_of_set)
-    !     else
-    !         allocate(class_part_of_set(self%n), source=.true.)
-    !     endif
-    !     if( present(weights) )then
-    !         allocate(class_weights(self%n), source=weights)
-    !     else
-    !         allocate(class_weights(self%n), source=1.0)
-    !     endif
-    !     dists = 0.
-    !     !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
-    !     do i=1,self%n
-    !         dists(i) = self%o(i).geod.o
-    !     end do
-    !     !$omp end parallel do
-    !     geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
-    !     deallocate(class_part_of_set, class_weights)
-    ! end function geodesic_dist
-
-    ! WHICH ONE TO KEEP THEY ARE BOTH USING OPENMP AND ARE NEARLY IDENTICAL?
-    real function geodesic_dist_omp( self, o, part_of_set, weights )
-        class(oris),       intent(in) :: self
-        class(ori),        intent(in) :: o
-        logical, optional, intent(in) :: part_of_set(self%n)
-        real,    optional, intent(in) :: weights(self%n)
-        logical, allocatable :: class_part_of_set(:)
-        real,    allocatable :: class_weights(:), emats(:,:,:)
-        real   :: omat(3,3)
-        integer :: i
-        real    :: dists(self%n)
-        if( present(part_of_set) )then
-            allocate(class_part_of_set(self%n), source=part_of_set)
-        else
-            allocate(class_part_of_set(self%n), source=.true.)
-        endif
-        if( present(weights) )then
-            allocate(class_weights(self%n), source=weights)
-        else
-            allocate(class_weights(self%n), source=1.0)
-        endif
-        dists = 0.
-        omat = o%get_mat()
-        emats = self%get_all_rmats()
-        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
-        do i=1,self%n
-            dists(i) = geodesic_distance(emats(i,:,:),omat)
-        end do
-        !$omp end parallel do
-        deallocate(emats)
-        geodesic_dist_omp = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
-        deallocate(class_part_of_set, class_weights)
-      end function geodesic_dist_omp
-
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
         class(oris), intent(in)  :: self
@@ -3075,110 +2713,6 @@ contains
         deallocate(onormals1,onormals2)
     end subroutine diststat_2
 
-    ! !>  \brief  for calculating statistics of geodesic distances within clusters of orientations
-    ! subroutine cluster_diststat( self, avgd, sdevd, maxd, mind )
-    !     class(oris), intent(inout) :: self
-    !     real,        intent(out)   :: avgd, sdevd, maxd, mind
-    !     integer, allocatable       :: clsarr(:)
-    !     real,    allocatable       :: dists(:)
-    !     integer                    :: ncls, icls, iptcl, jptcl, sz, cnt, nobs, n
-    !     real                       :: avgd_here, sdevd_here, vard_here, mind_here, maxd_here
-    !     type(ori)                  :: iori, jori
-    !     logical                    :: err
-    !     ncls  = self%get_n('class')
-    !     nobs  = 0
-    !     avgd  = 0.
-    !     sdevd = 0.
-    !     maxd  = 0.
-    !     mind  = 0.
-    !     do icls=1,ncls
-    !         call self%get_pinds(icls, 'class', clsarr)
-    !         if( allocated(clsarr) )then
-    !             sz = size(clsarr)
-    !             n  = (sz*(sz-1))/2
-    !             allocate( dists(n) )
-    !             cnt       = 0
-    !             mind_here = 2.*pi
-    !             maxd_here = 0.
-    !             do iptcl=1,sz-1
-    !                 do jptcl=iptcl+1,sz
-    !                     cnt        = cnt + 1
-    !                     iori       = self%get_ori(clsarr(iptcl))
-    !                     jori       = self%get_ori(clsarr(jptcl))
-    !                     dists(cnt) = iori.geodsc.jori
-    !                     if( dists(cnt) < mind_here ) mind_here = dists(cnt)
-    !                     if( dists(cnt) > maxd_here ) maxd_here = dists(cnt)
-    !                 end do
-    !             end do
-    !             call moment(dists, avgd_here, sdevd_here, vard_here, err)
-    !             avgd  = avgd  + avgd_here
-    !             sdevd = sdevd + sdevd_here
-    !             maxd  = maxd  + maxd_here
-    !             mind  = mind  + mind_here
-    !             nobs  = nobs  + 1
-    !             deallocate( dists, clsarr )
-    !         endif
-    !     end do
-    !     avgd  = avgd/real(nobs)
-    !     sdevd = sdevd/real(nobs)
-    !     maxd  = maxd/real(nobs)
-    !     mind  = mind/real(nobs)
-    ! end subroutine cluster_diststat
-
-    ! WILL NOT WORK
-    ! subroutine cluster_diststat_omp( self, avgd, sdevd, maxd, mind )
-    !     class(oris), intent(inout) :: self
-    !     real,        intent(out)   :: avgd, sdevd, maxd, mind
-    !     integer, allocatable       :: clsarr(:)
-    !     real,    allocatable       :: dists(:),emats(:,:,:)
-    !     integer                    :: ncls, icls, iptcl, jptcl, sz, cnt, nobs, n
-    !     real                       :: avgd_here, sdevd_here, vard_here, mind_here, maxd_here
-    !     logical                    :: err
-    !     ncls  = self%get_n('class')
-    !     nobs  = 0
-    !     avgd  = 0.
-    !     sdevd = 0.
-    !     maxd  = 0.
-    !     mind  = 0.
-    !     emats = self%get_all_rmats()
-    !     !$omp parallel do default(shared) private(icls,iptcl,jptcl,dists,clsarr,cnt,mind_here,maxd_here)&
-    !     !$omp proc_bind(close) schedule(static) reduction(+:nobs,avgd,sdevd,maxd,mind)
-    !     do icls=1,ncls
-    !         call self%get_pinds(icls, 'class', clsarr)
-    !         if( allocated(clsarr) )then
-    !             sz = size(clsarr)
-    !             n  = (sz*(sz-1))/2
-    !             allocate( dists(n) )
-    !             cnt       = 0
-    !             mind_here = 2.*pi
-    !             maxd_here = 0.
-    !
-    !             do iptcl=1,sz-1
-    !                 do jptcl=iptcl+1,sz
-    !                     cnt        = cnt + 1
-    !                     dists(cnt) = geodesic_scaled_dist(emats(clsarr(iptcl),:,:),emats(clsarr(jptcl),:,:))
-    !                     if( dists(cnt) < mind_here ) mind_here = dists(cnt)
-    !                     if( dists(cnt) > maxd_here ) maxd_here = dists(cnt)
-    !                 end do
-    !             end do
-    !
-    !             call moment(dists, avgd_here, sdevd_here, vard_here, err)
-    !             avgd  = avgd  + avgd_here
-    !             sdevd = sdevd + sdevd_here
-    !             maxd  = maxd  + maxd_here
-    !             mind  = mind  + mind_here
-    !             nobs  = nobs  + 1
-    !             deallocate( dists, clsarr )
-    !         endif
-    !     end do
-    !     !$omp end parallel do
-    !     deallocate(emats)
-    !     avgd  = avgd/real(nobs)
-    !     sdevd = sdevd/real(nobs)
-    !     maxd  = maxd/real(nobs)
-    !     mind  = mind/real(nobs)
-    ! end subroutine cluster_diststat_omp
-
     pure real function geodesic_distance( rmat1, rmat2 )
         real, intent(in) :: rmat1(3,3), rmat2(3,3)
         real :: Imat(3,3), sumsq, diffmat(3,3)
@@ -3201,7 +2735,6 @@ contains
         geodesic_scaled_dist = geodesic_distance(rmat1,rmat2)*(pi/old_max)
     end function geodesic_scaled_dist
 
-
     ! UNIT TEST
 
     !>  \brief  oris class unit test
@@ -3213,7 +2746,6 @@ contains
         integer, allocatable :: order(:)
         logical              :: passed
         write(*,'(a)') '**info(simple_oris_unit_test, part1): testing getters/setters'
-        debug=.true.
         os = oris(100)
         os2 = oris(100)
         passed = .false.
@@ -3296,25 +2828,20 @@ contains
         call os%spiral
         call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
         call os%rnd_corrs()
-        DebugPrint "simple_oris::test_oris rnd_corrs called"
         order = os%order()
-        DebugPrint "simple_oris::test_oris order called"
         if( doprint )then
             do i=1,100
                 call os%print_(order(i))
             end do
             write(*,*) 'median:', os%median('lp')
         endif
-        DebugPrint "simple_oris::test_oris order called"
         write(*,'(a)') '**info(simple_oris_unit_test, part4): testing destructor'
         call os%kill
         call os2%kill
-        ! test find_angres vs. find_angres_geod
+        ! test find_angres
         os = oris(1000)
         call os%spiral
         print *, 'angres:      ', os%find_angres()
-        print *, 'angres_mp:      ', os%find_angres_mp()
-        ! print *, 'angres_geod: ', os%find_angres_geod()
         write(*,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_oris
 
