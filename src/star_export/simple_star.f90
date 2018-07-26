@@ -923,9 +923,10 @@ call self%doc%write(filename, sp, labels)
     end function exporttype2star
 
 
-    subroutine kill(self)
+    subroutine kill(self,keeptabs)
         class(star_project), intent(inout):: self
-        call self%doc%kill()
+        logical, optional :: keeptabs
+        call self%doc%kill(keeptabs)
     end subroutine kill
 
 end module simple_star

@@ -47,6 +47,13 @@ program test_expm1
   real(kind=4) :: vector_arg(nsize), sarg(nsize), tmp(nsize)
   real(kind=8) :: tsum(8), dsum(6), dmin(6),dmax(6)
 
+  print *,">>> TEST ACCURACY"
+  print *,"  Smallest distance between two sp reals: ", spacing(1.0_sp)
+  print *,"  Smallest distance between two dp reals: ", spacing(1.0_dp)
+  print *,"  Reciprocal relative distance between two sp reals: ", rrspacing(1.0_sp)
+  print *,"  Reciprocal relative distance between two dp reals: ", rrspacing(1.0_dp)
+  print *,"  Epsilon for sp reals: ", spacing(1.0_sp)
+  print *,"  Epsilon for dp reals: ", spacing(1.0_dp)
 
   call init_random_seed()
   t1=tic()

@@ -23,6 +23,7 @@ end interface starframes
 
 type stardoc
     type(star_dict) :: sdict
+    type(str4arr), allocatable         :: param_starlabels(:)
     type(str4arr), allocatable         :: param_labels(:)
     type(str4arr), allocatable         :: data(:)
     logical      , allocatable         :: param_isstr(:)
@@ -106,6 +107,7 @@ contains
         call self%kill()
         if(.not. self%sdict%exists() ) call self%sdict%new()
 
+        if(allocated(self%param_starlabels)) deallocate(self%param_starlabels)
         if(allocated(self%param_labels)) deallocate(self%param_labels)
         if(allocated(self%param_isstr)) deallocate(self%param_isstr)
         if(allocated(self%param_scale)) deallocate(self%param_scale)
@@ -330,11 +332,12 @@ contains
         if(inHeader) stop "stardoc:: read_header parsing failed"
         inData=.false.; inHeader=.false.
         cnt=1;
-
+        if(allocated(self%param_starlabels)) deallocate(self%param_starlabels)
         if(allocated(self%param_labels)) deallocate(self%param_labels)
         if(allocated(self%param_isstr)) deallocate(self%param_isstr)
         if(allocated(self%param_scale)) deallocate(self%param_scale)
         if(allocated(self%param_converted)) deallocate(self%param_converted)
+        allocate(self%param_starlabels(self%num_data_elements))
         allocate(self%param_labels(self%num_data_elements))
         allocate(self%param_isstr(self%num_data_elements))
         allocate(self%param_scale(self%num_data_elements))
@@ -365,6 +368,7 @@ contains
                     pos2 = firstBlank(trim(line))
                     DebugPrint " Found STAR field line ", trim(line), " VAR= ",pos2, line(pos1+4:pos2)
                     starlabel = trim(adjustl(line(pos1+4:pos2)))
+                    allocate(self%param_starlabels(ielem)%str,source=trim(adjustl(starlabel)))
                     if( self%sdict%isthere(starlabel) )then
                         ivalid=ivalid+1
                         DebugPrint " STAR field found in dictionary ", ivalid, " of ", self%num_valid_elements
@@ -428,18 +432,20 @@ contains
             DiePrint( "simple_stardoc:: read_header invalid element mismatch 2")
         endif
 
+        print *, ">>>  STAR IMPORT HEADER INFO "
         do i=1, self%num_data_elements
             if(allocated(self%param_labels(i)%str)) then
                 if(self%param_converted(i) == 1)then
-                    print*, i, trim(self%param_labels(i)%str),  self%param_scale(i), self%param_isstr(i), self%param_converted(i)
+                    print*, i, trim(self%param_starlabels(i)%str),  trim(self%param_labels(i)%str), self%param_scale(i), self%param_isstr(i), self%param_converted(i)
                 else
-                    print*, i, trim(self%param_labels(i)%str), " not converted"
+                    print*, i, trim(self%param_starlabels(i)%str), " not converted"
                 end if
             else
                 print *, " Second pass incorrectly allocated detected parameter label ",i
                 DiePrint( "simple_stardoc:: read_header invalid label ")
             endif
         end do
+
         DebugPrint " End of read_header "
     end subroutine read_header
 
@@ -449,7 +455,7 @@ contains
         character(len=:),allocatable :: line,fname,tmp
         character(len=LONGSTRLEN) :: sline
         character(len=STDLEN),allocatable :: lineparts(:)
-        logical, allocatable :: fnames(:)
+        logical, allocatable :: fnameselected(:)
         integer :: filetabunit, oritabunit
         logical :: inData, inHeader
         real :: tmpval
@@ -468,7 +474,7 @@ contains
         call fopen(filetabunit,file="filetab-stardoc.txt")
         if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
         call fopen(oritabunit,file="oritab-stardoc.txt")
-        allocate(fnames(self%num_data_lines),source=.false.)
+        allocate(fnameselected(self%num_data_lines),source=.false.)
         do
             call readline(self%funit, line, ios)
             if(ios /= 0) exit
@@ -538,20 +544,35 @@ contains
                             DebugPrint " Parsing file param : ", trim(fname)
                             if( file_exists (trim(fname)) )then
                                 print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)
-                                if (.not.fnames(nDataline))then
+                                if (.not.fnameselected(nDataline))then
                                     write(filetabunit,'(A)') trim(fname)
-                                    fnames(nDataline) = .true.
+                                    fnameselected(nDataline) = .true.
                                 endif
 
+                            else if( file_exists (trim(fname)//"s") )then
+                                !! Account for MRCS extension
+                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)//"s"
+                                if (.not.fnameselected(nDataline))then
+                                    write(filetabunit,'(A)') trim(fname)//"s"
+                                    fnameselected(nDataline) = .true.
+                                endif
                             else
                                 tmp = get_fpath(trim(self%current_file))
                                 if( allocated(tmp) )then
                                     tmp = filepath(trim(tmp), trim(fname))
                                     if( file_exists (trim(tmp)) )then
                                         print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
-                                        if (.not. fnames(nDataline))then
+                                        if (.not. fnameselected(nDataline))then
                                             write(filetabunit,'(A)') trim(tmp)
-                                            fnames(nDataline) = .true.
+                                            fnameselected(nDataline) = .true.
+                                        endif
+                                    else if( file_exists (trim(tmp)//"s") )then
+                                        !! Account for MRCS extension
+                                        tmp = filepath( get_fpath(trim(self%current_file)), trim(fname)//"s")
+                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
+                                        if (.not.fnameselected(nDataline))then
+                                            write(filetabunit,'(A)') trim(tmp)
+                                            fnameselected(nDataline) = .true.
                                         endif
                                     else
                                         print *," Unable to find file in path of current star file "//trim(tmp)
@@ -597,6 +618,9 @@ contains
         if(is_open(oritabunit))  call fclose(oritabunit,  errmsg="star_doc ; read_header oritab")
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
+
+        print *, ">>>  STAR IMPORT DATA INFO "
+        print *, ">>>  number of data lines imported: ",self%num_data_lines 
 
     end subroutine read_data_lines
 
@@ -845,9 +869,13 @@ contains
 
 
     !>  \brief  is a destructor
-    subroutine kill( self )
+    subroutine kill( self,keeptabs)
         class(stardoc), intent(inout) :: self
+        logical, optional :: keeptabs
+        logical :: keephere
         integer :: i
+        keephere = .false.
+        if(present(keeptabs)) keephere=keeptabs
         if( self%l_open ) call self%close
         if( self%sdict%exists() ) call self%sdict%kill
         call self%kill_stored_params()
@@ -860,9 +888,10 @@ contains
             self%num_frame_elements = 0
         endif
         self%existence =.false.
-        if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
-        if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
-
+        if(.not.keephere)then
+            if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
+            if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
+        endif
 
     end subroutine kill
 

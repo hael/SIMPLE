@@ -33,11 +33,10 @@ CHARACTER(len=STDLEN) :: argtmp
 if( command_argument_count() == 1 )then
     call get_command_argument(1,argtmp)
     print *, trim(argtmp)
-    tmpfile = trim(argtmp)
+    allocate(tmpfile,source=trim(argtmp))
 else
-allocate(tmpfile,source="/scratch/el85/stars_from_matt/micrographs_all_gctf.star")
+    allocate(tmpfile,source="/scratch/el85/stars_from_matt/micrographs_all_gctf.star")
 !tmpfile="/scratch/el85/stars_from_matt/micrographs_all_gctf.star"
-
 !io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
 !tmpfile=filepath(trim(simple_testbench),"star_test/stars_from_matt/micrographs_all_gctf.star")
 endif
@@ -68,19 +67,19 @@ count1=tic()
 
 
 print *,"(info)**simple_test_star_export:  Testing star formatted file ", trim(tmpfile)
-tmpfile= trim(adjustl(tmpfile))
+!tmpfile= trim(adjustl(tmpfile))
 !! Testing starformat
 call openstar(trim(tmpfile),funit)
 print *,"(info)**simple_test_star_export:  Testing star formatted file is_open ", is_open(funit)
 if(.not. is_open(funit)) then
     DiePrint("readline isopened failed")
 endif
-! ier=0
-! print *,"(info)**simple_test_star_export: Readline testing"
-! do while (ier==0)
-!     call readline(funit,line,ier)
-!     if(allocated(line))print *,line
-! enddo
+ ier=0
+ print *,"(info)**simple_test_star_export: Readline testing"
+ do while (ier==0)
+     call readline(funit,line,ier)
+     if(allocated(line))print *,line
+ enddo
  print *,"(info)**simple_test_star_export: Reading header"
  call read_header(funit)
 ! write(*,*)
@@ -99,13 +98,15 @@ endif
   print *, 'Testing star module'
   call s%prepareimport(myproject,p,tmpfile)
  ! ! call s%import_ctf_estimation(myproject,tmpfile)
-  call s%kill()
+  call s%kill(keeptabs=.true.)
  ! print *, '     star module imported successfully'
 
   call exec_cmdline("simple_exec prg=new_project projname=test && cd test && "//&
       &"simple_exec prg=import_movies filetab=../filetab-stardoc.txt  cs=2.7 ctf=yes "//&
       &"fraca=0.1 kv=300 smpd=14 deftab=../oritab-stardoc.txt && "//&
       &"simple_exec prg=print_project_info")
+
+
 
 
 ! call test_stardoc
