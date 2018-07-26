@@ -798,8 +798,8 @@ contains
         ! put a full path on projfile
         if( self%projfile .ne. '' )then
             if( file_exists(self%projfile) )then
-                call simple_abspath(trim(self%projfile), absname, 'simple_parameters::new')
-                self%projfile = absname
+                absname = get_absolute_path(trim(self%projfile), 'simple_parameters::new')
+                self%projfile = trim(absname)
                 self%projname = get_fbody(basename(self%projfile), 'simple')
             endif
         endif
@@ -820,8 +820,8 @@ contains
                     call syslib_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
                     ! update the projfile/projname
                     self%projfile = filepath(PATH_HERE, basename(self%projfile))
-                    call simple_abspath(trim(self%projfile), absname, 'simple_parameters::new')
-                    self%projfile = absname
+                    absname = get_absolute_path(trim(self%projfile), 'simple_parameters::new')
+                    self%projfile = trim(absname)
                     self%projname = get_fbody(basename(self%projfile), 'simple')
                     ! cwd of SP-project will be updated in the builder
                 endif
@@ -1303,7 +1303,7 @@ DebugPrint 'found ncls from refs: ', ncls
                             write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
                             stop
                         else
-                            call simple_abspath(self%vols(i), abs_fname, 'parameters :: check_vol', check_exists=.false.)
+                            abs_fname = get_absolute_path(self%vols(i), 'parameters :: check_vol', check_exists=.false.)
                             if( len_trim( abs_fname) > LONGSTRLEN )then
                                 write(*,*)'Argument too long: ',trim( abs_fname)
                                 stop 'simple_parameters :: new :: check_vol'
@@ -1331,7 +1331,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call simple_abspath(name, abs_name, 'parameters :: read_vols', check_exists=.false.)
+                        abs_name = get_absolute_path(name, 'parameters :: read_vols', check_exists=.false.)
                         self%vols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1354,7 +1354,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        call simple_abspath(name, abs_name, 'parameters :: read_masks', check_exists=.false.)
+                        abs_name = get_absolute_path(name, 'parameters :: read_masks', check_exists=.false.)
                         self%mskvols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1418,7 +1418,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     end select
                     if( file_exists(var) )then
                         ! updates name to include absolute path
-                        call simple_abspath(var, abspath_file, 'parameters :: check_file', check_exists=.false.)
+                        abspath_file = get_absolute_path(var, 'parameters :: check_file', check_exists=.false.)
                         if( len_trim(abspath_file) > LONGSTRLEN )then
                             write(*,*)'Argument too long: ',trim(abspath_file)
                             stop 'simple_parameters :: new :: checkfile'

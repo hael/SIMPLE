@@ -1104,6 +1104,10 @@ contains
         get_process_id = getpid()
     end function get_process_id
 
+    integer function get_login_id( )
+        get_login_id = getuid()
+    end function get_login_id
+
     subroutine print_compiler_info(file_unit)
         use simple_strings, only: int2str
 #ifdef INTEL

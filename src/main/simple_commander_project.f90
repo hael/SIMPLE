@@ -432,8 +432,8 @@ contains
             stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
         endif
         do i=1,nos_mic
-            call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
-            call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
+            boxf_abspath = get_absolute_path(trim(boxfnames(i)), errmsg='commander_project :: exec_import_movies')
+            call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
         end do
         ! write project file
         call spproj%write

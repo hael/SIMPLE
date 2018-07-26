@@ -468,7 +468,7 @@ contains
         endif
         ! update ori
         call os_ptr%new(1)
-        call simple_abspath(moviename, fname, 'simple_sp_project::add_single_movie')
+        fname = get_absolute_path(moviename, 'simple_sp_project::add_single_movie')
         call find_ldim_nptcls(trim(fname), ldim, nframes)
         if( nframes <= 0 )then
             write(*,*) 'WARNING! # frames in movie ', trim(fname), ' <= zero, ommitting'
@@ -536,7 +536,7 @@ contains
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call simple_abspath(movienames(cnt), moviename, 'simple_sp_project::add_movies')
+            moviename = get_absolute_path(movienames(cnt), 'simple_sp_project::add_movies')
             call find_ldim_nptcls(trim(moviename), ldim, nframes)
             if( nframes <= 0 )then
                 write(*,*) 'WARNING! # frames in movie ', trim(moviename), ' <= zero, ommitting'
@@ -626,7 +626,7 @@ contains
         integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer :: i, fromp, top
         ! full path and existence check
-        call simple_abspath(stk, stk_abspath, 'sp_project :: add_stk')
+        stk_abspath = get_absolute_path(stk, 'sp_project :: add_stk')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
@@ -736,9 +736,9 @@ contains
         call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
         call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
         ! full path and existence check
-        call simple_abspath(stk, stk_abspath, 'sp_project :: add_single_stk')
+        stk_abspath = get_absolute_path(stk, 'sp_project :: add_single_stk')
         ! find dimension of inputted stack
-        call find_ldim_nptcls(stk_abspath, ldim, nptcls)
+        call find_ldim_nptcls(trim(stk_abspath), ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
@@ -805,7 +805,7 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            call simple_abspath(stknames(istk), stk_abspath, 'sp_project :: add_stktab')
+            stk_abspath = get_absolute_path(stknames(istk), 'sp_project :: add_stktab')
             stknames(istk) = trim(stk_abspath)
             o_stk          = os%get_ori(istk)
             ! logical dimension management
@@ -969,7 +969,7 @@ contains
             endif
             status = simple_rename(trim(stkpart), trim(dest_stkpart))
             deallocate(stkpart)
-            call simple_abspath(dest_stkpart, stkpart, 'sp_project :: split_stk')
+            stkpart = get_absolute_path(dest_stkpart, 'sp_project :: split_stk')
             nptcls_part = parts(istk,2) - parts(istk,1) + 1
             ! set original before overriding
             call self%os_stk%set_ori(istk, orig_stk)
@@ -1052,7 +1052,7 @@ contains
             end select
             if(present(dir))then
                 call simple_mkdir(trim(dir),errmsg="sp_project::add_scale_tag")
-                call simple_abspath(dir, abs_dir, 'sp_project :: add_scale_tag')
+                abs_dir = get_absolute_path(dir, 'sp_project :: add_scale_tag')
                 nametmp = basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
                 newname = filepath(trim(abs_dir), trim(nametmp))
             else
@@ -1072,7 +1072,7 @@ contains
         character(len=:), allocatable :: stk_abspath
         integer :: ldim(3), nptcls, ind
         ! full path and existence check
-        call simple_abspath(stk, stk_abspath, 'sp_project :: add_cavgs2os_out')
+        stk_abspath = get_absolute_path(stk, 'sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         ! add os_out entry
@@ -1105,7 +1105,7 @@ contains
                 stop 'sp_project :: add_frcs2os_out'
         end select
         ! full path and existence check
-        call simple_abspath(frc, frc_abspath, 'sp_project :: add_frcs2os_out')
+        frc_abspath = get_absolute_path(frc, 'sp_project :: add_frcs2os_out')
         ! add os_out entry
         call self%add_entry2os_out(which_imgkind, ind)
         ! fill-in field
@@ -1120,7 +1120,7 @@ contains
         character(len=:), allocatable :: fsc_abspath, imgkind
         integer :: i, ind, n_os_out
         ! full path and existence check
-        call simple_abspath(fsc, fsc_abspath, 'sp_project :: add_fsc2os_out')
+        fsc_abspath = get_absolute_path(fsc, 'sp_project :: add_fsc2os_out')
         ! add os_out entry
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
@@ -1169,7 +1169,7 @@ contains
                 stop 'sp_project :: add_vol2os_out'
         end select
         ! full path and existence check
-        call simple_abspath(vol, vol_abspath, 'sp_project :: add_vol2os_out')
+        vol_abspath = get_absolute_path(vol, 'sp_project :: add_vol2os_out')
         ! find_dimension of inputted volume
         call find_ldim_nptcls(vol_abspath, ldim, ifoo)
         ! check if field is empty

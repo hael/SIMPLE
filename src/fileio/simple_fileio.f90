@@ -3,7 +3,7 @@ module simple_fileio
 use simple_defs
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
 use simple_error,   only: allocchk, simple_stop, simple_error_check
-use simple_syslib,  only: file_exists, is_open, is_file_open, is_io,&
+use simple_syslib,  only: file_exists, is_open, is_file_open, is_io,simple_abspath,&
 &exec_cmdline, del_file, simple_list_files, simple_glob_list_tofile, syslib_copy_file
 implicit none
 
@@ -487,6 +487,15 @@ contains
             allocate(path, source=trim(fname(:pos)))
         endif
     end function get_fpath
+
+    function get_absolute_path (infile, errmsg, check_exists) result(absolute_name)
+        character(len=*),              intent(in)  :: infile
+        character(len=:), allocatable              :: absolute_name
+        character(len=*), optional,    intent(in)  :: errmsg
+        logical,          optional,    intent(in)  :: check_exists
+        call simple_abspath(infile, absolute_name, errmsg, check_exists)
+    end function get_absolute_path
+
 
     !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
