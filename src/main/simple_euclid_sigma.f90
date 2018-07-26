@@ -6,7 +6,7 @@ use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_oris, only: oris
 implicit none
 
-public :: euclid_sigma
+public :: euclid_sigma, eucl_sigma_glob
 private
 
 type euclid_sigma
@@ -17,9 +17,11 @@ type euclid_sigma
     integer                         :: headsz      = 0
     integer                         :: sigmassz    = 0
     character(len=STDLEN)           :: fname
+    logical                         :: do_divide
+    real,    allocatable            :: divide_by(:)
     real,    allocatable            :: sigma2_noise(:,:)
     logical, allocatable            :: sigma2_exists_msk(:)
-    integer, pointer                :: pinds(:) => null()
+    integer, allocatable            :: pinds(:)
 contains
     ! constructor
     procedure                       :: new
@@ -28,22 +30,32 @@ contains
     procedure                       :: create_empty
     procedure                       :: calc_and_write_sigmas
     procedure, private              :: open_and_check_header
+    ! getters / setters
+    procedure                       :: sigma2_exists
+    procedure                       :: set_do_divide
+    procedure                       :: get_do_divide
+    procedure                       :: set_divide_by
+    procedure                       :: get_divide_by
     ! destructor
     procedure                       :: kill
 end type euclid_sigma
+
+class(euclid_sigma), pointer :: eucl_sigma_glob
 
 contains
 
     ! constructor
 
     subroutine new( self, fname, pftcc )
-        class(euclid_sigma),    intent(inout) :: self
-        character(len=*),       intent(in)    :: fname
-        type(polarft_corrcalc), intent(inout) :: pftcc
-        real(sp)                              :: r
+        class(euclid_sigma), target, intent(inout) :: self
+        character(len=*),            intent(in)    :: fname
+        type(polarft_corrcalc),      intent(inout) :: pftcc
+        real(sp)                                   :: r
         call self%kill
         allocate( self%sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2),1:pftcc%get_nptcls()),&
-            self%sigma2_exists_msk(1:pftcc%get_nptcls()) )
+            self%sigma2_exists_msk(1:pftcc%get_nptcls()),&
+            self%pinds(params_glob%fromp:params_glob%top),&
+            self%divide_by(params_glob%kfromto(1):params_glob%kfromto(2)) )
         call pftcc%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
         call pftcc%assign_pinds(self%pinds)
         self%fname = trim(fname)
@@ -53,9 +65,11 @@ contains
         self%file_header(4) = params_glob%kfromto(2)
         self%headsz         = sizeof(self%file_header)
         self%sigmassz       = sizeof(r)*(params_glob%kfromto(2)-params_glob%kfromto(1)+1)
+        self%do_divide      = .false.
         self%exists         = .true.
+        eucl_sigma_glob     => self
     end subroutine new
-
+    
     ! I/O
 
     subroutine read( self, pftcc, ptcl_mask )
@@ -189,6 +203,49 @@ contains
         deallocate(sigmas_empty)
     end subroutine create_empty
 
+    ! getters / setters
+
+    function sigma2_exists( self, iptcl ) result( res )
+        class(euclid_sigma), intent(in) :: self
+        integer,             intent(in) :: iptcl
+        logical                         :: res
+        if (self%pinds(iptcl) .eq. 0) then
+            write (*,*) 'error in simple_euclid_sigma: sigma2_exists. iptcl = ', iptcl
+            stop 'error in simple_euclid_sigma: sigma2_exists. iptcl wrong! '
+        else
+            res = self%sigma2_exists_msk(self%pinds(iptcl))
+        end if        
+    end function sigma2_exists
+
+    subroutine set_do_divide( self, do_divide )
+        class(euclid_sigma), intent(inout) :: self
+        logical,             intent(in)    :: do_divide
+        self%do_divide = do_divide
+    end subroutine set_do_divide
+    
+    function get_do_divide( self ) result( res )
+        class(euclid_sigma), intent(in) :: self
+        logical                         :: res
+        res = self%do_divide
+    end function get_do_divide
+
+    subroutine set_divide_by( self, iptcl )
+        class(euclid_sigma), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        if (self%pinds(iptcl) .eq. 0) then
+            write (*,*) 'error in simple_euclid_sigma: set_divide_by. iptcl = ', iptcl
+            stop 'error in simple_euclid_sigma: set_divide_by. iptcl wrong! '
+        else
+            self%divide_by(:) = self%sigma2_noise(:,self%pinds(iptcl))
+        end if
+    end subroutine set_divide_by
+    
+    function get_divide_by( self ) result( res )
+        class(euclid_sigma), intent(in) :: self
+        real, allocatable               :: res(:)
+        res = self%divide_by
+    end function get_divide_by
+    
     ! destructor
 
     subroutine kill( self )
@@ -196,11 +253,13 @@ contains
         if( self%exists )then
             if ( allocated(self%sigma2_noise) )      deallocate(self%sigma2_noise)
             if ( allocated(self%sigma2_exists_msk) ) deallocate(self%sigma2_exists_msk)
-            self%pinds       => null()
+            if ( allocated(self%pinds) )             deallocate(self%pinds)
+            if ( allocated(self%divide_by) )         deallocate(self%divide_by)
             self%file_header = 0
             self%headsz      = 0
             self%sigmassz    = 0
             self%nptcls      = 0
+            self%do_divide   = .false.
             self%exists      = .false.
         endif
     end subroutine kill

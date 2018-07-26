@@ -328,7 +328,7 @@ contains
             !$omp end parallel do
         endif
 
-        if ( params_glob%cc_objfun .eq. OBJFUN_EUCLID ) then
+        if ( params_glob%l_needs_sigma ) then
             call eucl_sigma%calc_and_write_sigmas( pftcc, build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
         end if
 
@@ -337,7 +337,6 @@ contains
 
         ! clean
         call clean_strategy3D  ! deallocate s3D singleton
-        call eucl_sigma%kill
         call pftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
@@ -402,7 +401,14 @@ contains
                 orientation = build_glob%spproj_field%get_ori(iptcl)
                 ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 if( orientation%isstatezero() ) cycle
-                select case(trim(params_glob%refine))
+                call eucl_sigma%set_do_divide(.false.)
+                if ( params_glob%recvol_sigma .eq. 'yes' ) then
+                    if ( eucl_sigma%sigma2_exists( iptcl ) ) then
+                        call eucl_sigma%set_do_divide(.true.)
+                        call eucl_sigma%set_divide_by(iptcl)
+                    end if
+                end if
+                select case(trim(params_glob%refine))                    
                     case('clustersym')
                         ! always C1 reconstruction
                         call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
@@ -480,7 +486,7 @@ contains
         else
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         endif
-        if ( params_glob%cc_objfun .eq. OBJFUN_EUCLID ) then
+        if ( params_glob%l_needs_sigma ) then
             call eucl_sigma%new('sigma2_noise_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat', pftcc)
             call eucl_sigma%read(pftcc, ptcl_mask)
         end if

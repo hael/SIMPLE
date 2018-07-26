@@ -65,6 +65,7 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
+    character(len=3)      :: recvol_sigma='no'    !< noise(sigma)-strategy for volume reconstructor(yes|no){no}
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
@@ -373,19 +374,20 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)      = .false.
-    logical :: l_distr_exec   = .false.
-    logical :: l_match_filt   = .true.
-    logical :: l_doshift      = .false.
-    logical :: l_focusmsk     = .false.
     logical :: l_autoscale    = .false.
     logical :: l_bfac_static  = .false.
+    logical :: l_cc_bfac      = .true.
+    logical :: l_distr_exec   = .false.
+    logical :: l_dev          = .false.
     logical :: l_dose_weight  = .false.
+    logical :: l_doshift      = .false.
+    logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_innermsk     = .false.
-    logical :: l_remap_cls    = .false.
-    logical :: l_cc_bfac      = .true.
+    logical :: l_match_filt   = .true.
     logical :: l_phaseplate   = .false.
-    logical :: l_dev          = .false.
+    logical :: l_needs_sigma  = .false.    
+    logical :: l_remap_cls    = .false.
     logical :: sp_required    = .false.
   contains
     procedure          :: new
@@ -516,9 +518,10 @@ contains
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)
-        call check_carg('clsfrcs',       self%clsfrcs)
+        call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
+        call check_carg('recvol_sigma',   self%recvol_sigma)
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('restart',        self%restart)
@@ -1255,6 +1258,8 @@ DebugPrint 'found ncls from refs: ', ncls
                 write(*,*) 'objfun flag: ', trim(self%objfun)
                 stop 'unsupported objective function; parameters :: new'
         end select
+        self%l_needs_sigma = (( self%recvol_sigma .eq. 'yes' ).or.&
+            ( self%cc_objfun .eq. OBJFUN_EUCLID )) 
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
         if( cline%defined('bfac') ) self%l_cc_bfac = .true.

@@ -8,6 +8,7 @@ use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_parameters, only: params_glob
 use simple_fftw3
+use simple_euclid_sigma, only: euclid_sigma, eucl_sigma_glob
 implicit none
 
 public :: reconstructor
@@ -280,6 +281,7 @@ contains
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         real,       optional, intent(in)    :: bfac   !<
         real, allocatable :: rotmats(:,:,:)
+        real, allocatable :: divide_by(:)
         type(ori) :: o_sym
         type(ctf) :: tfun
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
@@ -288,7 +290,15 @@ contains
         real      :: w(self%wdim,self%wdim,self%wdim)
         real      :: arg, tval, tvalsq, rsh_sq, rnyq_sq, bfac_sc, freq_sq
         logical   :: do_bfac_rec
+        logical   :: do_divide
+        integer   :: div_lbound, div_ubound
         if( pwght < TINY )return
+        do_divide = eucl_sigma_glob%get_do_divide()
+        if (do_divide) then
+            divide_by = eucl_sigma_glob%get_divide_by()
+            div_lbound = lbound(divide_by,1)
+            div_ubound = ubound(divide_by,1)
+        end if
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
@@ -370,6 +380,9 @@ contains
                     else
                         w = pwght
                     endif
+                    if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) then
+                        w = w / divide_by(sh)
+                    end if
                     do i=1,self%wdim
                         dists    = real(win(1,:) + i - 1) - loc
                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
@@ -403,6 +416,7 @@ contains
         real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         real,    optional,    intent(in)    :: bfac  !<
         integer, optional,    intent(in)    :: state !< state to reconstruct
+        real, allocatable                   :: divide_by(:)
         type(ori) :: o_sym, o
         type(ctf) :: tfun
         complex   :: comp, oshift
@@ -410,6 +424,14 @@ contains
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, bfac_sc
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rotmats(os%get_noris(),se%get_nsym(),3,3)
         logical   :: do_bfac_rec
+        logical   :: do_divide
+        integer   :: div_lbound, div_ubound
+        do_divide = eucl_sigma_glob%get_do_divide()
+        if (do_divide) then
+            divide_by = eucl_sigma_glob%get_divide_by()
+            div_lbound = lbound(divide_by,1)
+            div_ubound = ubound(divide_by,1)
+        end if
         ! take care of optional state flag
         sstate = 1
         if( present(state) ) sstate = state
@@ -496,6 +518,9 @@ contains
                             endif
                         endif
                         w = ows(iori)
+                        if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) then
+                            w = w / divide_by(sh)
+                        end if
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))

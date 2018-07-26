@@ -2362,7 +2362,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 2, 0, 14, 8, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 2, 0, 15, 8, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2392,6 +2392,7 @@ contains
         call refine3D%set_input('srch_ctrls', 12, neigh)
         call refine3D%set_input('srch_ctrls', 13, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 14, nrestarts)
+        call refine3D%set_input('srch_ctrls', 15, 'recvol_sigma', 'binary', 'noise(sigma)-strategy for volume reconstruction', 'noise(sigma)-strategy for volume reconstruction(yes|no){no}', '(yes|no){no}', .false., 'no')
 
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)

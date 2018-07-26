@@ -630,9 +630,9 @@ contains
     end function get_nptcls
 
     subroutine assign_pinds( self, pinds )
-        class(polarft_corrcalc), target, intent(inout) :: self
-        integer, pointer                               :: pinds(:)
-        pinds => self%pinds
+        class(polarft_corrcalc), intent(inout) :: self
+        integer, allocatable,    intent(out)   :: pinds(:)
+        pinds = self%pinds
     end subroutine assign_pinds
 
     function is_euclid( self, iptcl ) result( res )
@@ -643,7 +643,7 @@ contains
             res = .false.
         else
             if (self%pinds(iptcl) .eq. 0) then
-                write (*,*) 'error in simple_polarft_corrcalc: is_euclid. iptcl = ', iptcl
+                write (*,*) 'error in simple_polarft_corrcalc: sigma2_exists. iptcl = ', iptcl
                 stop 'error in simple_polarft_corrcalc: is_euclid. iptcl wrong! '
             else
                 res = self%sigma2_exists_msk(self%pinds(iptcl))
