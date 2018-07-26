@@ -350,6 +350,7 @@ contains
 
         ! clean
         call clean_strategy3D  ! deallocate s3D singleton
+        call eucl_sigma%kill
         call pftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
@@ -493,7 +494,7 @@ contains
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         endif
         if ( params_glob%cc_objfun .eq. OBJFUN_EUCLID ) then
-            call eucl_sigma%new('sigma2_noise_part'//int2str(params_glob%part), pftcc)
+            call eucl_sigma%new('sigma2_noise_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat', pftcc)
             call eucl_sigma%read(pftcc, ptcl_mask)
         end if
 
@@ -619,6 +620,7 @@ contains
             !$omp end parallel do
         end do
         ! cleanup
+        call eucl_sigma%kill
         call pftcc_here%kill
         deallocate(ptcl_mask_not)
     end subroutine calc_ptcl_stats

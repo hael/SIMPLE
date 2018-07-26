@@ -643,7 +643,8 @@ contains
             res = .false.
         else
             if (self%pinds(iptcl) .eq. 0) then
-                res = .false.
+                write (*,*) 'error in simple_polarft_corrcalc: is_euclid. iptcl = ', iptcl
+                stop 'error in simple_polarft_corrcalc: is_euclid. iptcl wrong! '
             else
                 res = self%sigma2_exists_msk(self%pinds(iptcl))
             end if
