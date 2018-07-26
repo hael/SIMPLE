@@ -1020,7 +1020,7 @@ contains
                 tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - real(k)*tmp / ( 2. * self%sigma2_noise(k, i))
+            euclid = euclid - tmp / ( 2. * self%sigma2_noise(k, i))
         end do
     end function calc_euclid_for_rot
 
@@ -1049,7 +1049,7 @@ contains
                 tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
         end if
-            euclid = euclid - real(k)*tmp / ( 2._dp * self%sigma2_noise(k, i))
+            euclid = euclid - tmp / ( 2._dp * self%sigma2_noise(k, i))
         end do
     end function calc_euclid_for_rot_8
 
@@ -1296,7 +1296,7 @@ contains
             call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, keuclids)
             sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            euclids(:) = euclids(:) + real(k)*(2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
+            euclids(:) = euclids(:) + (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
         end do
     end subroutine gencorrs_euclid_1
 
@@ -1334,7 +1334,7 @@ contains
             call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, keuclids)
             sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            euclids(:) = euclids(:) + real(k)*(2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
+            euclids(:) = euclids(:) + (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
         end do
     end subroutine gencorrs_euclid_2
 
@@ -2084,19 +2084,19 @@ contains
         grad(1)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(1) = grad(1) + real(k)*&
+            grad(1) = grad(1) + &
                 self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(1) = grad(1) - real(k)*real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k)) )) &
+            grad(1) = grad(1) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k)) )) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(2) = grad(2) + real(k)*&
+            grad(2) = grad(2) + &
                 self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(2) = grad(2) - real(k)*real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
+            grad(2) = grad(2) - real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
         end do
     end subroutine gencorr_euclid_grad_for_rot_8
@@ -2134,19 +2134,19 @@ contains
         grad(1)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(1) = grad(1) + real(k)*&
+            grad(1) = grad(1) + &
                 self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(1) = grad(1) - real(k)*real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k)) )) &
+            grad(1) = grad(1) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k)) )) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(2) = grad(2) + real(k)*&
+            grad(2) = grad(2) + &
                 self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(2) = grad(2) - real(k)*real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
+            grad(2) = grad(2) - real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
         end do
     end subroutine gencorr_euclid_grad_only_for_rot_8
