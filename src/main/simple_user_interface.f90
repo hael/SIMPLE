@@ -593,7 +593,7 @@ contains
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
-        call set_param(objfun,        'objfun',        'num',    'Objective function', 'Objective function(cc|ccres|euclid){cc}', '(cc|ccres|euclid){cc}', .false., 'cc')
+        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|ccres|euclid){cc}', '(cc|ccres|euclid){cc}', .false., 'cc')
         call set_param(weights2D,     'weights2D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
         &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(weights3D,     'weights3D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
@@ -614,7 +614,7 @@ contains
         call set_param(bfac,          'bfac',          'num',    'B-factor for sharpening','B-factor for sharpening in Angstroms^2', 'B-factor in Angstroms^2', .false., 200.)
         call set_param(outvol,        'outvol',        'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
         call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
-        &filtering and resolution estimation(yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        &filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per part', 'Memory in MB per part in distributed execution{1600}', 'MB per part{1600}', .false., 1600.)
         call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
@@ -737,7 +737,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 11, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 12, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -761,7 +761,8 @@ contains
         call cluster2D%set_input('srch_ctrls', 8, update_frac)
         call cluster2D%set_input('srch_ctrls', 9, frac)
         call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function in Angstroms^2', 'B-factor in Angstroms^2(>0.0){200}', .false., 200.)
-        call cluster2D%set_input('srch_ctrls',11, 'objfun','num', 'Objective function', 'Objective function(cc|ccres|euclid){ccres}', '(cc|ccres|euclid){ccres}', .false., 'ccres')
+        call cluster2D%set_input('srch_ctrls',11, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
+        call cluster2D%set_input('srch_ctrls',12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(extr|snhc){snhc}', '(extr|snhc){snhc}', .false., 'snhc')
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -778,7 +779,6 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, weights2D)
-        call cluster2D%set_input('filt_ctrls', 8, shellw)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -1238,9 +1238,9 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, eo)
-        initial_3Dmodel%filt_ctrls(4)%descr_long        = 'Gold-standard FSC for filtering and resolution estimation(yes|no){no}'
-        initial_3Dmodel%filt_ctrls(4)%descr_placeholder = '(yes|no){no}'
-        initial_3Dmodel%filt_ctrls(4)%cval_default      = 'no'
+        initial_3Dmodel%filt_ctrls(4)%descr_long        = 'Gold-standard FSC for filtering and resolution estimation(yes|no){yes}'
+        initial_3Dmodel%filt_ctrls(4)%descr_placeholder = '(yes|no){yes}'
+        initial_3Dmodel%filt_ctrls(4)%cval_default      = 'yes'
         call initial_3Dmodel%set_input('filt_ctrls', 5, shellw)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
@@ -1377,7 +1377,7 @@ contains
         &'is a program for importing STAR-formatted EM project files to the current SIMPLE project and saving as a SIMPLE project',&
         &'simple_exec',&                         ! executable
         &0, 2, 0, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
-     
+
         ! &3, &                                    ! # entries in image input/output
         ! &26, &                                   ! # entries in parameters
         ! &2, &                                    ! # entries in alt params
@@ -1394,7 +1394,7 @@ contains
 !     call importstar_project%set_input('img_ios', 3, 'dir_target', 'file', 'Target directory',&
 !        &'Directory where the importstar_project_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
         ! parameter input/output
-       
+
         call importstar_project%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted text file of input parameters',&
             'STAR-formatted text file of input parameters ', 'e.g. params.star', .false., 'NONE')
         importstar_project%parm_ios(1)%required = .true.
@@ -1415,7 +1415,7 @@ contains
         ! call importstar_project%set_input('parm_ios', 12, 'phshiftunit', 'binary', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
         ! call importstar_project%set_input('parm_ios', 13, 'boxtab', 'file', 'List of box files', &
         !     'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
-    
+
   !       call new_project%set_input('parm_ios', 15, user_email)
   !       call importstar_project%set_input('parm_ios', 16, 'refs', 'file', 'picking 2D references',&
   !       &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
@@ -1515,7 +1515,7 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &1, 5, 0, 0, 1, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 5, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
@@ -1532,7 +1532,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call make_cavgs%set_input('filt_ctrls', 1, shellw)
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls

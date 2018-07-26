@@ -241,7 +241,6 @@ type :: parameters
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
-    integer :: nrepeats=HETNREPEATS !< # repeats in het_ensemble worklow
     integer :: nrots=0
     integer :: nspace=2500         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
@@ -632,7 +631,6 @@ contains
         call check_iarg('npeaks',         self%npeaks)
         call check_iarg('nran',           self%nran)
         call check_iarg('nrefs',          self%nrefs)
-        call check_iarg('nrepeats',       self%nrepeats)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)

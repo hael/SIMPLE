@@ -65,16 +65,18 @@ double precision, parameter :: gamma  = 54.735611d0
 contains
 
     !>  \brief  is a constructor
-    function constructor( pgrp) result( self )
-        character(len=*), intent(in) :: pgrp !< sym group string
-        type(sym)                    :: self
-        call self%new(pgrp)
+    function constructor( pgrp, incl_mirror ) result( self )
+        character(len=*), intent(in)  :: pgrp        !< sym group string
+        logical, optional, intent(in) :: incl_mirror !< whether to include mirror
+        type(sym)                     :: self
+        call self%new(pgrp, incl_mirror)
     end function constructor
 
     !>  \brief  is a constructor
-    subroutine new( self, pgrp )
-        class(sym), intent(inout)    :: self !< this instance
-        character(len=*), intent(in) :: pgrp !< sym group string
+    subroutine new( self, pgrp, incl_mirror )
+        class(sym),        intent(inout) :: self
+        character(len=*),  intent(in)    :: pgrp         !< sym group string
+        logical, optional, intent(in)    :: incl_mirror  !< whether to include mirror
         call self%kill
         self%c_or_d = .false.
         self%n      = 1
@@ -120,30 +122,39 @@ contains
         endif
         call self%e_sym%swape1e3
         if(trim(self%pgrp).ne.'d1')call self%set_subgrps
-        self%eullims = self%build_srchrange()
+        self%eullims = self%build_srchrange(incl_mirror)
     end subroutine new
 
     !>  \brief  builds the search range for the point-group
-    function build_srchrange( self ) result( eullims )
-        class(sym), intent(inout) :: self !< this instance
-        real                      :: eullims(3,2) !< 3-axis search range
+    function build_srchrange( self, incl_mirror ) result( eullims )
+        class(sym),        intent(inout) :: self
+        logical, optional, intent(in)    :: incl_mirror     !< whether to include mirror
+        real    :: eullims(3,2) !< 3-axis search range
+        logical :: incl_mirror_here
+        incl_mirror_here = .true.
+        if(present(incl_mirror)) incl_mirror_here = incl_mirror
         eullims(:,1) = 0.
         eullims(:,2) = 360.
         eullims(2,2) = 180.
         if( self%pgrp(1:1).eq.'c' .and. self%ncsym > 1 )then
             eullims(1,2) = 360./real(self%ncsym)
+            if(.not.incl_mirror_here) eullims(2,2) = 90.             ! northern hemisphere only
         else if( self%pgrp(1:1).eq.'d' .and. self%ncsym > 1 )then
             eullims(1,2) = 360./real(self%ncsym)
             eullims(2,2) = 90.
+            if(.not.incl_mirror_here) eullims(1,2) = eullims(1,2)/2. ! half e1 slice
         else if( self%pgrp(1:1).eq.'t' )then
             eullims(1,2) = 180.
             eullims(2,2) = 54.7
+            if(.not.incl_mirror_here )stop 'fundamental domain for t symmetry not implemented yet; simple_sym::build_srchrange'
         else if( self%pgrp(1:1).eq.'o' )then
             eullims(1,2) = 90.
             eullims(2,2) = 54.7
+            if(.not.incl_mirror_here )stop 'fundamental domain for o symmetry not implemented yet; simple_sym::build_srchrange'
         else if( self%pgrp(1:1).eq.'i' )then
             eullims(1,2) = 180.
             eullims(2,2) = 31.7
+            if(.not.incl_mirror_here )stop 'fundamental domain for i symmetry not implemented yet; simple_sym::build_srchrange'
         endif
     end function build_srchrange
 

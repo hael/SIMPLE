@@ -16,7 +16,6 @@ type ptcl_record
     integer              :: pind    = 0                         !< particle index in stack
     integer              :: eo      = -1                        !< even is 0, odd is 1, default is -1
     real                 :: pw      = 0.0                       !< particle weight
-    real                 :: bfac    = 0.0                       !< b-factor for CTF-weighted reconstruction
     real                 :: dfx     = 0.0                       !< defocus in x (microns)
     real                 :: dfy     = 0.0                       !< defocus in y (microns)
     real                 :: angast  = 0.0                       !< angle of astigmatism (in degrees)
@@ -143,15 +142,9 @@ contains
                 cycle
             endif
             ! parameter transfer
-            precs(cnt)%pind  = iptcl
-            precs(cnt)%eo    = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
-            if( params_glob%shellw.eq.'yes' )then
-                precs(cnt)%pw   = 1.
-                precs(cnt)%bfac = spproj%os_ptcl2D%get(iptcl,'bfac_rec')
-            else
-                precs(cnt)%pw   = spproj%os_ptcl2D%get(iptcl,'w')
-                precs(cnt)%bfac = 0.
-            endif
+            precs(cnt)%pind    = iptcl
+            precs(cnt)%eo      = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
+            precs(cnt)%pw      = spproj%os_ptcl2D%get(iptcl,'w')
             ctfvars            = spproj%get_ctfparams('ptcl2D',iptcl)
             precs(cnt)%tfun    = ctf(params_glob%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             precs(cnt)%dfx     = ctfvars%dfx
@@ -247,11 +240,17 @@ contains
     end subroutine get_indices
 
     !>  \brief  is for calculating class population
-    function class_pop( class ) result( pop )
+    integer function class_pop( class )
         integer, intent(in) :: class
-        integer :: pop, iprec, sz
+        class_pop = sum(eo_class_pop(class))
+    end function class_pop
+
+    !>  \brief  is for calculating even/odd class population
+    function eo_class_pop( class ) result( pops )
+        integer, intent(in) :: class
+        integer :: pops(2), iprec, sz
         logical, allocatable :: l_state_class(:)
-        pop = 0
+        pops = 0
         do iprec=1,partsz
             if( allocated(precs(iprec)%classes) )then
                 sz = size(precs(iprec)%classes)
@@ -261,11 +260,15 @@ contains
                 else where
                     l_state_class = .false.
                 endwhere
-                pop = pop + count(l_state_class)
+                if( precs(iprec)%eo == 1 )then
+                    pops(2) = pops(2) + count(l_state_class)
+                else
+                    pops(1) = pops(1) + count(l_state_class)
+                endif
                 deallocate(l_state_class)
             endif
         end do
-    end function class_pop
+    end function eo_class_pop
 
     ! calculators
 
@@ -391,16 +394,16 @@ contains
                         if( ctfflag == CTFFLAG_FLIP )then
                             call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 1, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                                &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
+                                &precs(iprec)%angast, add_phshift)
                         else
                             call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 2, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                                &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
+                                &precs(iprec)%angast, add_phshift)
                         endif
                     else
                         call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 3, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                             &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                            &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
+                            &precs(iprec)%angast, add_phshift)
                     endif
                     ! prep weight
                     if( l_hard_assign )then
@@ -530,22 +533,31 @@ contains
 
     !>  \brief  merges the even/odd pairs and normalises the sums
     subroutine cavger_merge_eos_and_norm
-        integer :: icls
-        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+        integer :: icls, eo_pop(2), pop
+        !$omp parallel do default(shared) private(icls,eo_pop,pop) schedule(static) proc_bind(close)
         do icls=1,ncls
-            call cavgs_merged(icls)%zero_and_flag_ft
-            call cavgs_merged(icls)%add(cavgs_even(icls))
-            call cavgs_merged(icls)%add(cavgs_odd(icls))
-            call ctfsqsums_merged(icls)%zero_and_flag_ft
-            call ctfsqsums_merged(icls)%add(ctfsqsums_even(icls))
-            call ctfsqsums_merged(icls)%add(ctfsqsums_odd(icls))
-            ! (w*CTF)**2 density correction
-            call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
-            call cavgs_even(icls)%ifft()
-            call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
-            call cavgs_odd(icls)%ifft()
-            call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
-            call cavgs_merged(icls)%ifft()
+            eo_pop = eo_class_pop(icls)
+            pop    = sum(eo_pop)
+            if(pop == 0)then
+                call cavgs_merged(icls)%zero_and_unflag_ft
+                call cavgs_even(icls)%zero_and_unflag_ft
+                call cavgs_odd(icls)%zero_and_unflag_ft
+                call ctfsqsums_merged(icls)%zero_and_flag_ft
+            else
+                call cavgs_merged(icls)%zero_and_flag_ft
+                call cavgs_merged(icls)%add(cavgs_even(icls))
+                call cavgs_merged(icls)%add(cavgs_odd(icls))
+                call ctfsqsums_merged(icls)%zero_and_flag_ft
+                call ctfsqsums_merged(icls)%add(ctfsqsums_even(icls))
+                call ctfsqsums_merged(icls)%add(ctfsqsums_odd(icls))
+                ! (w*CTF)**2 density correction
+                if(eo_pop(1) > 1) call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
+                if(eo_pop(2) > 1) call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
+                if(pop > 1)       call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
+                call cavgs_even(icls)%ifft()
+                call cavgs_odd(icls)%ifft()
+                call cavgs_merged(icls)%ifft()
+            endif
         end do
         !$omp end parallel do
     end subroutine cavger_merge_eos_and_norm

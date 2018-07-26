@@ -132,7 +132,6 @@ integer, parameter :: MAXNPEAKS            = 40        !< maximum # peaks to be 
 integer, parameter :: MAXNINPLPEAKS        = 3         !< maximum # in-plane peaks to be associated with each projection direction
 integer, parameter :: MAX_NSPACE           = 5000      !< maximum # of projection directions (PRIME3D)
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
-integer, parameter :: HETNREPEATS          = 1         !< # repeats het_ensemble
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: NPDIRS_SUBSPACE      = 800       !< # projection directions in subspace search refine=neigh

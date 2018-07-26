@@ -280,8 +280,7 @@ contains
         class(image),         intent(inout) :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         real,       optional, intent(in)    :: bfac   !<
-        real, allocatable :: rotmats(:,:,:)
-        real, allocatable :: divide_by(:)
+        real, allocatable :: rotmats(:,:,:), divide_by(:)
         type(ori) :: o_sym
         type(ctf) :: tfun
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
@@ -289,16 +288,16 @@ contains
         real      :: vec(3), loc(3), dists(3), shconst_here(2)
         real      :: w(self%wdim,self%wdim,self%wdim)
         real      :: arg, tval, tvalsq, rsh_sq, rnyq_sq, bfac_sc, freq_sq
-        logical   :: do_bfac_rec
-        logical   :: do_divide
+        logical   :: do_bfac_rec, do_divide
         integer   :: div_lbound, div_ubound
         if( pwght < TINY )return
-        do_divide = eucl_sigma_glob%get_do_divide()
-        if (do_divide) then
-            divide_by = eucl_sigma_glob%get_divide_by()
-            div_lbound = lbound(divide_by,1)
-            div_ubound = ubound(divide_by,1)
-        end if
+        do_divide = .false.
+        ! do_divide = eucl_sigma_glob%get_do_divide()
+        ! if (do_divide) then
+        !     divide_by = eucl_sigma_glob%get_divide_by()
+        !     div_lbound = lbound(divide_by,1)
+        !     div_ubound = ubound(divide_by,1)
+        ! end if
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
@@ -426,12 +425,13 @@ contains
         logical   :: do_bfac_rec
         logical   :: do_divide
         integer   :: div_lbound, div_ubound
-        do_divide = eucl_sigma_glob%get_do_divide()
-        if (do_divide) then
-            divide_by = eucl_sigma_glob%get_divide_by()
-            div_lbound = lbound(divide_by,1)
-            div_ubound = ubound(divide_by,1)
-        end if
+        do_divide = .false.
+        ! do_divide = eucl_sigma_glob%get_do_divide()
+        ! if (do_divide) then
+        !     divide_by = eucl_sigma_glob%get_divide_by()
+        !     div_lbound = lbound(divide_by,1)
+        !     div_ubound = ubound(divide_by,1)
+        ! end if
         ! take care of optional state flag
         sstate = 1
         if( present(state) ) sstate = state

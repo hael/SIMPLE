@@ -17,7 +17,7 @@ type euclid_sigma
     integer                         :: headsz      = 0
     integer                         :: sigmassz    = 0
     character(len=STDLEN)           :: fname
-    logical                         :: do_divide
+    logical                         :: do_divide   = .false.
     real,    allocatable            :: divide_by(:)
     real,    allocatable            :: sigma2_noise(:,:)
     logical, allocatable            :: sigma2_exists_msk(:)
@@ -68,7 +68,7 @@ contains
         self%exists         = .true.
         eucl_sigma_glob     => self
     end subroutine new
-    
+
     ! I/O
 
     subroutine read( self, ptcl_mask )
@@ -182,7 +182,7 @@ contains
             write (*,*) 'resorting to cross-correlations.'
             call fclose(funit)
             success = .false.
-        else            
+        else
             success = .true.
         end if
     end function open_and_check_header
@@ -211,7 +211,7 @@ contains
             stop 'error in simple_euclid_sigma: sigma2_exists. iptcl wrong! '
         else
             res = self%sigma2_exists_msk(self%pinds(iptcl))
-        end if        
+        end if
     end function sigma2_exists
 
     subroutine set_do_divide( self, do_divide )
@@ -219,11 +219,15 @@ contains
         logical,             intent(in)    :: do_divide
         self%do_divide = do_divide
     end subroutine set_do_divide
-    
+
     function get_do_divide( self ) result( res )
         class(euclid_sigma), intent(in) :: self
         logical                         :: res
-        res = self%do_divide
+        if( self%exists )then
+            res = self%do_divide
+        else
+            res = .false.
+        endif
     end function get_do_divide
 
     subroutine set_divide_by( self, iptcl )
@@ -236,13 +240,13 @@ contains
             self%divide_by(:) = self%sigma2_noise(:,self%pinds(iptcl))
         end if
     end subroutine set_divide_by
-    
+
     function get_divide_by( self ) result( res )
         class(euclid_sigma), intent(in) :: self
         real, allocatable               :: res(:)
         res = self%divide_by
     end function get_divide_by
-    
+
     ! destructor
 
     subroutine kill( self )

@@ -80,6 +80,8 @@ contains
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
+        ! refinement flag
+        if(.not.cline%defined('refine') )call cline%set('refine','snhc')
         ! splitting
         call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! general options planning
@@ -231,10 +233,8 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! constants
         real,    parameter :: CENLP=30. !< consistency with refine3D
-        integer, parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer, parameter :: STATE=1, MAXITS_SNHC_RESTART=3
+        integer, parameter :: STATE=1, MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer, parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE= 2500
-        integer, parameter :: NRESTARTS=5
         character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE = 'initial_3Dmodel_tmpproj.simple'
         ! distributed commanders
         type(refine3D_distr_commander)      :: xrefine3D_distr
@@ -243,7 +243,6 @@ contains
         type(symaxis_search_commander) :: xsymsrch
         type(reproject_commander)      :: xreproject
         ! command lines
-        type(cmdline) :: cline_refine3D_snhc_restart
         type(cmdline) :: cline_refine3D_snhc
         type(cmdline) :: cline_refine3D_init
         type(cmdline) :: cline_refine3D_refine
@@ -252,7 +251,7 @@ contains
         type(cmdline) :: cline_reproject
         type(cmdline) :: cline_scale
         ! other variables
-        character(len=:), allocatable :: stk, orig_stk
+        character(len=:), allocatable :: stk, orig_stk, frcs_fname
         character(len=:), allocatable :: WORK_PROJFILE
         real,             allocatable :: res(:)
         integer,          allocatable :: states(:)
@@ -301,6 +300,16 @@ contains
                 '; simple_commander_hlev_wflows::initial_3Dmodel'
             stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
         endif
+        ! sanity check
+        if( do_eo )then
+            call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+            write(*,*)trim(frcs_fname)
+            if( .not.file_exists(frcs_fname) )then
+                write(*,*)'The project file does not contain the required information for e/o alignment, use eo=no instead'
+                stop 'The project file does not contain the required information for e/o alignment'
+            endif
+        endif
+        ! init
         params%smpd = ctfvars%smpd
         orig_stk    = stk
         ! set lplims
@@ -355,15 +364,15 @@ contains
         ! projects names are subject to change depending on scaling and are updated individually
         call cline%delete('projname')
         call cline%delete('projfile')
-        cline_reconstruct3D         = cline
-        cline_refine3D_refine       = cline
-        cline_reproject             = cline
-        cline_refine3D_snhc_restart = cline
-        cline_refine3D_init         = cline
-        cline_symsrch               = cline
+        cline_reconstruct3D   = cline
+        cline_refine3D_refine = cline
+        cline_reproject       = cline
+        cline_refine3D_snhc   = cline
+        cline_refine3D_init   = cline
+        cline_symsrch         = cline
         ! In shnc & stage 1 the objective function is always standard cross-correlation,
         ! in stage 2 it follows optional user input and defaults to ccres
-        call cline_refine3D_snhc_restart%set('objfun', 'cc')
+        call cline_refine3D_snhc%set('objfun', 'cc')
         call cline_refine3D_init%set('objfun', 'cc')
         if( .not.cline%defined('objfun') )call cline_refine3D_refine%set('objfun', 'ccres')
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
@@ -371,16 +380,14 @@ contains
         call cline_reproject%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
-        call cline_refine3D_snhc_restart%set('projfile', trim(WORK_PROJFILE))
-        call cline_refine3D_snhc_restart%set('msk',      msk)
-        call cline_refine3D_snhc_restart%set('box',      real(box))
-        call cline_refine3D_snhc_restart%delete('update_frac') ! no fractional update in first phase
-        call cline_refine3D_snhc_restart%set('prg',    'refine3D')
-        call cline_refine3D_snhc_restart%set('maxits',  real(MAXITS_SNHC_RESTART))
-        call cline_refine3D_snhc_restart%set('refine',  'snhc')
-        call cline_refine3D_snhc_restart%set('lp',      lplims(1))
-        call cline_refine3D_snhc_restart%set('nspace',  real(NSPACE_SNHC))
-        cline_refine3D_snhc = cline_refine3D_snhc_restart
+        call cline_refine3D_snhc%set('projfile', trim(WORK_PROJFILE))
+        call cline_refine3D_snhc%set('msk',      msk)
+        call cline_refine3D_snhc%set('box',      real(box))
+        call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
+        call cline_refine3D_snhc%set('prg',    'refine3D')
+        call cline_refine3D_snhc%set('refine',  'snhc')
+        call cline_refine3D_snhc%set('lp',      lplims(1))
+        call cline_refine3D_snhc%set('nspace',  real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('maxits', real(MAXITS_SNHC))
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('prg',      'refine3D')
@@ -575,14 +582,9 @@ contains
             subroutine prep_eo_stks_refine
                 use simple_ori, only: ori
                 type(ori)                     :: o, o_even, o_odd
-                character(len=:), allocatable :: eostk, ext, frcs_fname
+                character(len=:), allocatable :: eostk, ext
                 integer :: even_ind, odd_ind, state, icls
                 call os%delete_entry('lp')
-                call spproj%get_frcs(frcs_fname, 'frc2D')
-                if( trim(frcs_fname).eq.'' )then
-                    write(*,*)'The project file does not contain the required information for e/o alignment'
-                    stop 'The project file does not contain the required information for e/o alignment'
-                endif
                 call cline_refine3D_refine%set('frcs',trim(frcs_fname))
                 ! add stks
                 ext   = '.'//fname2ext( stk )
@@ -596,7 +598,7 @@ contains
                     odd_ind  = ncavgs+icls
                     o        = os%get_ori(icls)
                     state    = os%get_state(icls)
-                    call o%set('class', real(icls)) ! for mapping frcs
+                    call o%set('class', real(icls)) ! for mapping frcs in 3D
                     call o%set('state', real(state))
                     ! even
                     o_even = o

@@ -44,7 +44,7 @@ contains
         do i=1,nrestarts
             call self%execute(cline)
             ! go back to original working directory
-            print *, 'IN COMMANDER_BASE, CHANGING BACK TO DIR: ', CWD_GLOB_ORIGINAL
+            write(*,'(A,A)') '>>> IN COMMANDER_BASE, CHANGING BACK TO DIR: ', CWD_GLOB_ORIGINAL
             call simple_chdir(CWD_GLOB_ORIGINAL,errmsg="commander_base :: execute_commander;")
             ! put back the original command line
             cline = cline_original

@@ -301,14 +301,13 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncls'
-        keys_optional(3)  = 'shellw'
+        keys_optional(3)  = 'weights2D'
         keys_optional(4)  = 'mul'
         keys_optional(5)  = 'tseries'
         keys_optional(6)  = 'outfile'
         keys_optional(7)  = 'refs'
         keys_optional(8)  = 'remap_cls'
-        keys_optional(9)  = 'weights2D'
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:9))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         call xmake_cavgs%execute(cline)
     case( 'cluster2D' )
@@ -337,9 +336,8 @@ select case(prg)
         keys_optional(17) = 'refine'
         keys_optional(18) = 'match_filt'
         keys_optional(19) = 'dyncls'
-        keys_optional(20) = 'shellw'
-        keys_optional(21) = 'bfac_static'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:21))
+        keys_optional(20) = 'bfac_static'
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:20))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
@@ -347,6 +345,7 @@ select case(prg)
         if( .not. cline%defined('eo')        ) call cline%set('eo',       'no')
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',    30.)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D','no')
+        if( .not. cline%defined('refine')    ) call cline%set('refine',   'snhc')
         call xcluster2D%execute(cline)
     case( 'cavgassemble' )
         ! for assembling class averages when the clustering

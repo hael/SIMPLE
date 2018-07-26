@@ -103,7 +103,7 @@ contains
                 type(ctfparams)      :: ctfvars
                 type(image)          :: mskimg
                 integer, allocatable :: sample(:)
-                integer              :: i, nsamp
+                integer              :: i, nsamp, ind
                 ! init volumes
                 call preprecvols()
                 if( trim(params%refine).eq.'tseries' )then
@@ -127,9 +127,10 @@ contains
                 call mskimg%disc(build%img%get_ldim(), params%smpd, params%msk)
                 do i=1,nsamp
                     call progress(i, nsamp)
-                    orientation = build%spproj_field%get_ori(sample(i) + params%fromp - 1)
-                    ctfvars     = build%spproj%get_ctfparams(params%oritype, sample(i) + params%fromp - 1)
-                    call read_img( sample(i) + params%fromp - 1 )
+                    ind         = sample(i) + params%fromp - 1
+                    orientation = build%spproj_field%get_ori(ind)
+                    ctfvars     = build%spproj%get_ctfparams(params%oritype, ind)
+                    call read_img(ind)
                     call build%img%norm_subtr_backgr_pad_fft(mskimg, build%img_pad)
                     call build%recvols(1)%insert_fplane(build%pgrpsyms, orientation, ctfvars, build%img_pad, pwght=1.0)
                 end do
@@ -142,6 +143,7 @@ contains
                     ! update the spproj on disk
                     call build%spproj%write_segment_inside(params%oritype)
                 endif
+                call mskimg%kill
             end subroutine gen_random_model
 
     end subroutine exec_refine3D_init
@@ -152,9 +154,8 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer :: i, startit
+        integer :: startit
         logical :: converged
-        real    :: corr, corr_prev
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         if( cline%defined('lp') .or. cline%defined('find').or. params%eo .ne. 'no')then
             ! alles ok!
@@ -164,34 +165,8 @@ contains
         startit = 1
         if( cline%defined('startit') )startit = params%startit
         if( startit == 1 ) call build%spproj_field%clean_updatecnt
-        converged  = .false.
-        if( params%l_distr_exec )then
-            if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call refine3D_exec( cline, startit, converged) ! partition or not, depending on 'part'
-        else
-            params%find = calc_fourier_index( params%lp, params%boxmatch, params%smpd)
-            ! init extremal dynamics
-            if( cline%defined('extr_iter') )then
-                ! all is well
-            else
-                params%extr_iter = startit
-            endif
-            corr = -1
-            do i=startit,params%maxits
-                call refine3D_exec( cline, i, converged)
-                ! updates extremal iteration
-                params%extr_iter = params%extr_iter + 1
-                if( .not. params%l_distr_exec .and. params%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
-                    ! update stochastic neighborhood size if corr is not improving
-                    corr_prev = corr
-                    corr      = build%spproj_field%get_avg('corr')
-                    if( i > 1 .and. corr <= corr_prev )then
-                        params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
-                    endif
-                endif
-                if( converged )exit
-            end do
-        endif
+        if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
+        call refine3D_exec( cline, startit, converged) ! partition or not, depending on 'part'
         ! end gracefully
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D

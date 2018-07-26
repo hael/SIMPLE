@@ -785,7 +785,7 @@ contains
         integer,                   allocatable :: nptcls_arr(:)
         type(ori) :: o_ptcl, o_stk
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
-        integer   :: i, istk, fromp, top, nptcls, n_os, iptcl, nstks, nptcls_tot, stk_ind
+        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind
         ! file exists?
         if( .not. file_exists(stktab) )then
             write(*,*) 'Inputted stack list (stktab): ', trim(stktab)
@@ -908,7 +908,7 @@ contains
         type(sp_project)              :: parent_proj
         type(image)                   :: img
         type(ori)                     :: orig_stk
-        character(len=:), allocatable :: stk, tmp_dir, imgkind, stkpart, dest_stkpart, projname
+        character(len=:), allocatable :: stk, tmp_dir, stkpart, dest_stkpart, projname
         character(len=STDLEN) :: cwd
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer :: nptcls, nptcls_part, numlen, status
@@ -1359,7 +1359,7 @@ contains
         deallocate(vol_fname)
         call self%os_out%getter(ind, 'vol', vol_fname)
         smpd = self%os_out%get(ind,  'smpd')
-        box  = self%os_out%get(ind,  'box')
+        box  = nint(self%os_out%get(ind,  'box'))
     end subroutine get_vol
 
     subroutine get_fsc( self, state, fsc_fname, box )
@@ -1401,7 +1401,7 @@ contains
         logical,          optional,    intent(in)    :: fail
         character(len=:), allocatable :: imgkind
         integer :: n_os_out, ind, i, cnt
-        logical :: fail_here
+        logical :: fail_here, found
         select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
@@ -1415,14 +1415,16 @@ contains
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 ) stop 'ERROR! trying to fetch from empty os_out field; sp_project :: get_frcs'
         ! look for cavgs
-        ind = 0
-        cnt = 0
+        ind   = 0
+        cnt   = 0
+        found = .false.
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
                 call self%os_out%getter(i,'imgkind',imgkind)
                 if(trim(imgkind).eq.trim(which_imgkind))then
-                    ind = i
-                    cnt = cnt + 1
+                    ind   = i
+                    cnt   = cnt + 1
+                    found = .true.
                 endif
             endif
         end do
@@ -1430,7 +1432,9 @@ contains
         if( fail_here )then
             if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=frcXD, aborting...; sp_project :: get_frcs'
             if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=frcsXD identified, aborting...; sp_project :: get_frcs'
-            ! set return values
+        endif
+        ! set return values
+        if( found )then
             call self%os_out%getter(ind,'frcs',frcs)
         else
             frcs = NIL

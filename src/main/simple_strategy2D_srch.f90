@@ -15,9 +15,9 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
-    real    :: extr_bound = 0.
-    integer :: iptcl      = 0
-    integer :: iptcl_map  = 0
+    real    :: stoch_bound = 0.
+    integer :: iptcl       = 0
+    integer :: iptcl_map   = 0
 end type strategy2D_spec
 
 type strategy2D_srch

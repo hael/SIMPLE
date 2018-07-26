@@ -144,6 +144,7 @@ select case(prg)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no' )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('refine')    ) call cline%set('refine',    'snhc')
         if( cline%defined('frac') .and. cline%get_carg('weights2D').eq.'yes' )then
             write(*,*)'FRAC & WEIGHTS2D=yes options are incompatible'
             stop 'FRAC & WEIGHTS2D=yes options are incompatible'
@@ -189,7 +190,7 @@ select case(prg)
         call cline%parse()
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('eo')        ) call cline%set('eo',        'no')
+        if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
         call execute_commander(xinitial_3Dmodel, cline)
     case( 'cluster3D' )
         call cline%parse()

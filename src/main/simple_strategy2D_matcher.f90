@@ -84,12 +84,16 @@ contains
             l_extr         = .false.
             l_frac_update  = params_glob%l_frac_update
         endif
-        ! snhc & extremal optimzation follow the same iteration dependent rule
-        l_snhc = .false.
-        if( params_glob%refine.eq.'snhc' )then
-            l_snhc = l_extr
-            l_extr = .false.
-        endif
+        l_snhc = l_extr ! snhc & extremal optimizations follow the same iteration dependent rule
+        ! refinement logic
+        select case(trim(params_glob%refine))
+            case('extr')
+                l_snhc = .false.
+            case('snhc')
+                l_extr = .false.
+            case DEFAULT
+                stop 'Unsupported refinement mode; simple_strategy2D_matcher :: cluster2D_exec'
+        end select
 
         ! EXTREMAL LOGICS
         if( l_extr )then
@@ -191,14 +195,6 @@ contains
         endif
         DebugPrint ' cluster2D_exec;   SETUP WEIGHTS                             ', toc(t_init)
 
-        ! B-factor
-        if( params_glob%shellw.eq.'yes' .and. which_iter >= 3 )then
-            call build_glob%spproj_field%calc_bfac_rec
-        else
-            call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
-        endif
-        DebugPrint ' cluster2D_exec;    B-factor                                 ', toc(t_init)
-
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
         DebugPrint ' cluster2D_exec;    READ FOURIER RING CORRELATIONS ', toc(t_init)
@@ -232,10 +228,10 @@ contains
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. update_cnt == 1 )then
                             allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
-                            if(params_glob%refine.eq.'snhc')then
-                                allocate(strategy2D_snhc       :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
-                            else
+                            if(params_glob%refine.eq.'extr')then
                                 allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            else
+                                allocate(strategy2D_snhc       :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                             endif
                         endif
                         if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
@@ -251,10 +247,10 @@ contains
                 ! search spec
                 strategy2Dspec%iptcl      = iptcl
                 strategy2Dspec%iptcl_map  = cnt
-                if( params_glob%refine.eq.'snhc' )then
-                    strategy2Dspec%extr_bound = snhc_sz
+                if( params_glob%refine.eq.'extr' )then
+                    strategy2Dspec%stoch_bound = extr_bound
                 else
-                    strategy2Dspec%extr_bound = extr_bound
+                    strategy2Dspec%stoch_bound = snhc_sz
                 endif
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)

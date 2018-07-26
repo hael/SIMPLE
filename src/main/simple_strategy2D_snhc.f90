@@ -40,7 +40,7 @@ contains
             cc_glob       = -1.
             glob_best_set = .false.
             found_better  = .false.
-            nrefs_bound   = min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-self%spec%extr_bound)) )
+            nrefs_bound   = min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-self%spec%stoch_bound)) )
             nrefs_bound   = max(2, nrefs_bound)
             call self%s%prep4srch
             do isample=1,self%s%nrefs

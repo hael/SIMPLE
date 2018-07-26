@@ -220,6 +220,7 @@ contains
             call img_pd%clip(img)
             call img_pd%kill()
         endif
+        if( present(bfac) ) call img%apply_bfac(bfac)
     end subroutine apply
 
     !>  \brief  is for generating an image of CTF
@@ -381,7 +382,7 @@ contains
 
     !>  \brief  is for applying CTF to an image and shifting it (used in classaverager)
     !!          KEEP THIS ROUTINE SERIAL
-    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift, bfac )
+    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift)
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
@@ -393,12 +394,10 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        real,           intent(in)    :: bfac !< b-factor for weighing CTF
         integer :: ldim(3),logi(3),h,k,phys(3)
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3), rnyq_sq, bfac_w
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         ! initialize
         call self%init(dfx, dfy, angast)
-        rnyq_sq  = real(img%get_nyq()**2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
         do h=lims(1,1),lims(1,2)
@@ -416,14 +415,6 @@ contains
                 ! multiply image with tval & weight
                 logi   = [h,k,0]
                 phys   = img%comp_addr_phys(logi)
-                if( bfac > TINY )then
-                    if( spaFreqSq > rnyq_sq )then
-                        bfac_w = exp(-4.*bfac)
-                    else
-                        bfac_w = exp(-4.*bfac * spaFreqSq/rnyq_sq)
-                    endif
-                    tval = bfac_w * tval
-                endif
                 call img%mul_cmat_at(phys, tval)
                 ! shift image
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), img%oshift(logi,[x,y,0.]))

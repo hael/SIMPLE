@@ -96,7 +96,6 @@ contains
         else
             t2=tic()
             call build%spproj_field%set_all2single('w', 1.0)
-            if( params%shellw.eq.'yes' ) call build%spproj_field%calc_bfac_rec
              DebugPrint ' exec_make_cavgs spproj_field%calc_bfac_rec             ', toc(t2)
         endif
         ! even/odd partitioning

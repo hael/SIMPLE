@@ -501,7 +501,8 @@ contains
     subroutine exec_stackops( self, cline )
         use simple_oris, only: oris
         use simple_stackops
-        use simple_procimgfile, only: copy_imgfile, add_noise_imgfile, neg_imgfile, shellnorm_imgfile, add_noise_imgfile
+        use simple_procimgfile, only: copy_imgfile, add_noise_imgfile, neg_imgfile,&
+            &mirror_imgfile, shellnorm_imgfile, add_noise_imgfile
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters)              :: params
@@ -711,6 +712,11 @@ contains
         ! copy
         if( cline%defined('top') .and. .not. cline%defined('part') )then
             call copy_imgfile(params%stk, params%outstk, params%smpd, fromto=[params%fromp,params%top])
+            goto 999
+        endif
+        ! mirror
+        if( params%mirr .ne. 'no' )then
+            call mirror_imgfile(params%stk, params%outstk, params%mirr, params%smpd)
             goto 999
         endif
         ! default

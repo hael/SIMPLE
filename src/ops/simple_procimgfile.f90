@@ -8,7 +8,7 @@ implicit none
 private
 
 !! Basic Operations
-public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile
+public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile, mirror_imgfile
 public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
 !! Normalisation
 public :: norm_bin_imgfile, norm_imgfile, norm_ext_imgfile, noise_norm_imgfile
@@ -218,6 +218,28 @@ contains
             call img_clip%kill
         end if
     end subroutine clip_imgfile
+
+    !>  \brief mirror imgfile
+    subroutine mirror_imgfile( fname2mirr, fname, mirr_flag, smpd )
+        character(len=*), intent(in) :: fname2mirr, fname
+        character(len=1), intent(in) :: mirr_flag
+        real,             intent(in) :: smpd
+        type(image) :: img
+        integer     :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2mirr, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
+        ! do the work
+        call img%new(ldim,smpd)
+        write(*,'(a)') '>>> MIRRORING IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2mirr, i)
+            call img%mirror(mirr_flag)
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine mirror_imgfile
 
     !>  \brief  resize_and_clip_imgfile is for resizing and clipping
     !! \param fname2resize  output filename

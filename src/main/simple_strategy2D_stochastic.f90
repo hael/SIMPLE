@@ -44,10 +44,10 @@ contains
             ! objective function based logics for performing extremal search
             if( params_glob%cc_objfun == OBJFUN_RES )then
                 ! based on b-factor for objfun=ccres (the lower the better)
-                do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_bfac < self%spec%extr_bound)
+                do_shc = (self%spec%stoch_bound < 0.) .or. (self%s%prev_bfac < self%spec%stoch_bound)
             else
                 ! based on correlation for objfun=cc (the higher the better)
-                do_shc = (self%spec%extr_bound < 0.) .or. (self%s%prev_corr > self%spec%extr_bound)
+                do_shc = (self%spec%stoch_bound < 0.) .or. (self%s%prev_corr > self%spec%stoch_bound)
             endif
             if( do_shc )then
                 ! SHC move
