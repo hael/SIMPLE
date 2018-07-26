@@ -677,11 +677,11 @@ contains
         select case(trim(which))
             case('read')
                 if( .not. file_exists(cae) )then
-                    write(*,*) 'File does not exists: ', trim(cae)
+                    write(*,*) 'File does not exist: ', trim(cae)
                     call simple_stop('In: simple_classaverager :: assemble_sums_from_parts')
                 endif
                 if( .not. file_exists(cao) )then
-                    write(*,*) 'File does not exists: ', trim(cao)
+                    write(*,*) 'File does not exist: ', trim(cao)
                     call simple_stop('In: simple_classaverager :: assemble_sums_from_parts')
                 endif
                 do icls=1,ncls
@@ -735,19 +735,19 @@ contains
             allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             if( .not. file_exists(cae) )then
-                write(*,*) 'File does not exists: ', trim(cae)
+                write(*,*) 'File does not exist: ', trim(cae)
                 stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
             endif
             if( .not. file_exists(cao) )then
-                write(*,*) 'File does not exists: ', trim(cao)
+                write(*,*) 'File does not exist: ', trim(cao)
                 stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
             endif
             if( .not. file_exists(cte) )then
-                write(*,*) 'File does not exists: ', trim(cte)
+                write(*,*) 'File does not exist: ', trim(cte)
                 stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
             endif
             if( .not. file_exists(cto) )then
-                write(*,*) 'File does not exists: ', trim(cto)
+                write(*,*) 'File does not exist: ', trim(cto)
                 stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
             endif
             do icls=1,ncls

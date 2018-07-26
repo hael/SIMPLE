@@ -72,7 +72,7 @@ print *,"(info)**simple_test_star_export:  Testing star formatted file ", trim(t
 call openstar(trim(tmpfile),funit)
 print *,"(info)**simple_test_star_export:  Testing star formatted file is_open ", is_open(funit)
 if(.not. is_open(funit)) then
-    DiePrint("readline isopened failed")
+    HALT_NOW("readline isopened failed")
 endif
  ier=0
  print *,"(info)**simple_test_star_export: Readline testing"
@@ -92,7 +92,7 @@ endif
 ! print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
  call fclose(funit,io_stat,errmsg='stardoc ; close ')
  if( is_open(funit)) then
-     DiePrint(" star file still open after closing")
+     HALT_NOW(" star file still open after closing")
  endif
 
   print *, 'Testing star module'
@@ -270,7 +270,7 @@ contains
         inquire(unit=funit,opened=isopened,iostat=ier)
         if(ier/=0) call fileiochk("readline isopened failed", ier)
         if(.not. isopened )then
-            DiePrint("readline isopened failed")
+            HALT_NOW("readline isopened failed")
         endif
         ! read characters from line and append to result
         do

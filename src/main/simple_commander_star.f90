@@ -164,7 +164,7 @@ contains
        ! project file management
        if( .not. file_exists(trim(params%projfile)) )then
            write(*,*) 'Project file: ', trim(params%projfile), ' does not exist!'
-           DiePrint("exec_importstar_project; not in SIMPLE project dir")
+           HALT_NOW("exec_importstar_project; not in SIMPLE project dir")
        endif
         !! Read existing SIMPLE project
         call spproj%read(params%projfile)
@@ -175,10 +175,10 @@ contains
        nrecs     = starproj%get_nrecs_per_line()
 
        if(nrecs == 0)then
-           DiePrint("exec_importstar_project; Unable to read header records in STAR file.")
+           HALT_NOW("exec_importstar_project; Unable to read header records in STAR file.")
        end if
         if(ndatlines == 0)then
-           DiePrint("exec_importstar_project; Unable to read data line records in STAR file.")
+           HALT_NOW("exec_importstar_project; Unable to read data line records in STAR file.")
        end if
 
 !! vvvvv TODO vvvvv

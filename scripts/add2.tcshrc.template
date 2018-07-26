@@ -1,4 +1,10 @@
 
+
+# make sure path is set
+if (!(${?PATH})) then
+  setenv PATH /usr/bin
+endif
+
 setenv SIMPLE_EMAIL="my.name@uni.edu"
 setenv SIMPLE_QSYS="local"
 setenv SIMPLE_PATH @CMAKE_INSTALL_PREFIX@

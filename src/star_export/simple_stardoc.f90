@@ -195,7 +195,7 @@ contains
         inquire(unit=funit,opened=isopened,iostat=ier)
         if(ier/=0) call fileiochk("readline isopened failed", ier)
         if(.not. isopened )then
-            DiePrint("readline isopened failed")
+            HALT_NOW("readline isopened failed")
         endif
         ! read characters from line and append to result
         do
@@ -421,15 +421,15 @@ contains
 
         if(ielem /= self%num_data_elements .or. ivalid /= self%num_valid_elements)then
             print *, " Second pass incorrectly counted  detected parameters "
-            DiePrint( "simple_stardoc:: read_header invalid element mismatch 1")
+            HALT_NOW( "simple_stardoc:: read_header invalid element mismatch 1")
         endif
         if(idata /= self%num_data_lines)then
             print *, " Second pass incorrectly counted data lines "
-            DiePrint( "simple_stardoc:: read_header invalid data line mismatch ")
+            HALT_NOW( "simple_stardoc:: read_header invalid data line mismatch ")
         endif
         if(sum(int(self%param_converted)) /= self%num_valid_elements) then
             print *, " Second pass incorrectly allocated detected parameters "
-            DiePrint( "simple_stardoc:: read_header invalid element mismatch 2")
+            HALT_NOW( "simple_stardoc:: read_header invalid element mismatch 2")
         endif
 
         print *, ">>>  STAR IMPORT HEADER INFO "
@@ -442,7 +442,7 @@ contains
                 end if
             else
                 print *, " Second pass incorrectly allocated detected parameter label ",i
-                DiePrint( "simple_stardoc:: read_header invalid label ")
+                HALT_NOW( "simple_stardoc:: read_header invalid label ")
             endif
         end do
 
@@ -452,7 +452,7 @@ contains
     subroutine read_data_lines(self)
         class(stardoc), intent(inout) :: self
         integer          :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
-        character(len=:),allocatable :: line,fname,tmp
+        character(len=:),allocatable :: line,fname,tmp, projrootdir, experrootdir
         character(len=LONGSTRLEN) :: sline
         character(len=STDLEN),allocatable :: lineparts(:)
         logical, allocatable :: fnameselected(:)
@@ -467,7 +467,7 @@ contains
             print *, " stardoc module read_header file not opened"
             stop " simple_stardoc::read_header "
         endif
-
+        if(.not.allocated(experrootdir)) experrootdir= get_fpath(trim(self%current_file))
         if(allocated(self%data)) deallocate(self%data)
         allocate(self%data(self%num_data_lines))
         if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
@@ -522,6 +522,7 @@ contains
                         if( self%param_converted(i) == 0 )then
                             DebugPrint " ignoring ",i, trim(self%param_labels(i)%str)," ", trim(adjustl(lineparts(i)))
                         endif
+                        !! Check filename params point to actual files
                         if ( self%param_isstr(i) ) then
                             if(allocated(fname))deallocate(fname)
                             allocate(fname,source=trim(adjustl(lineparts(i))))
@@ -529,59 +530,70 @@ contains
                             pos1 = index(trim(fname),"@")
                             if( pos1 /= 0 )then
                                 if(pos1 > len_trim(fname) - 1)then
-                                    DiePrint(" File part "//trim(fname)//" irregular"  )
+                                    HALT_NOW(" File part "//trim(fname)//" irregular"  )
                                 endif
                                 fname = trim(fname(pos1+1:))
                             endif
                             !! modify string for :mrc extension
-                            pos1 =index(trim(fname),":mrc",back=.true.)
+                            !! Special note: CtfImage files are recorded as "*.ctf:mrc". These are
+                            !! not imported into SIMPLE, but we still check to see if they exist
+                            pos1 = index(trim(fname),":mrc",back=.true.)
                             if( pos1 /= 0 )then
                                 if(pos1 < 4 .or. pos1 > len_trim(fname) - 1)then
-                                    DiePrint(" File part "//trim(fname)//" irregular"  )
+                                    HALT_NOW(" File part "//trim(fname)//" irregular"  )
                                 endif
                                 fname = trim(fname(1:pos1-1))
                             endif
+                            if(.not. allocated(projrootdir))then
+                                !! Estimate Project root dir
+                                projrootdir = get_absolute_path(filepath(get_fpath(self%current_file),PATH_PARENT,PATH_PARENT))
+                                DebugPrint " Project root dir (estimate from ../../ of starfile) : ", trim(projrootdir)
+                            end if
+
+
                             DebugPrint " Parsing file param : ", trim(fname)
                             if( file_exists (trim(fname)) )then
                                 print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)
-                                if (.not.fnameselected(nDataline))then
-                                    write(filetabunit,'(A)') trim(fname)
-                                    fnameselected(nDataline) = .true.
-                                endif
-
                             else if( file_exists (trim(fname)//"s") )then
                                 !! Account for MRCS extension
                                 print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)//"s"
-                                if (.not.fnameselected(nDataline))then
-                                    write(filetabunit,'(A)') trim(fname)//"s"
-                                    fnameselected(nDataline) = .true.
-                                endif
+                                fname = trim(fname)//"s"
                             else
                                 tmp = get_fpath(trim(self%current_file))
                                 if( allocated(tmp) )then
                                     tmp = filepath(trim(tmp), trim(fname))
                                     if( file_exists (trim(tmp)) )then
                                         print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
-                                        if (.not. fnameselected(nDataline))then
-                                            write(filetabunit,'(A)') trim(tmp)
-                                            fnameselected(nDataline) = .true.
-                                        endif
+                                        fname = trim(tmp)
                                     else if( file_exists (trim(tmp)//"s") )then
                                         !! Account for MRCS extension
-                                        tmp = filepath( get_fpath(trim(self%current_file)), trim(fname)//"s")
-                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
-                                        if (.not.fnameselected(nDataline))then
-                                            write(filetabunit,'(A)') trim(tmp)
-                                            fnameselected(nDataline) = .true.
+                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)//"s"
+                                        fname = trim(tmp)//"s"
+                                    else if ( allocated(projrootdir)) then
+                                        tmp = filepath(trim(projrootdir), trim(fname))
+                                        if( file_exists (trim(tmp)) )then
+                                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
+                                            fname = trim(tmp)
+                                        else if( file_exists (trim(tmp)//"s") )then
+                                            !! Account for MRCS extension
+                                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)//"s"
+                                            fname = trim(tmp)//"s"
+                                        else
+                                            print *," Unable to find file in path of project "//trim(tmp)
+                                            HALT_NOW(" Unable to find file "//trim(tmp) )
                                         endif
                                     else
                                         print *," Unable to find file in path of current star file "//trim(tmp)
-                                        DiePrint(" Unable to find file "//trim(tmp) )
+                                        HALT_NOW(" Unable to find file "//trim(tmp) )
                                     endif
                                 else
                                     print *," Unable to find file or path of current star file "//trim(fname)
-                                    DiePrint("simple_stardoc failed to get file in starfile")
+                                    HALT_NOW("simple_stardoc failed to get file in starfile")
                                 endif
+                            endif
+                            if (.not.fnameselected(nDataline))then
+                                write(filetabunit,'(A)') trim(fname)
+                                fnameselected(nDataline) = .true.
                             endif
                         else
                             !! Data to be inserted
@@ -612,7 +624,7 @@ contains
             endif
         end do !! file loop
         if(nDataline /= self%num_data_lines)then
-            DiePrint(" Num data lines mismatch in read_data_lines and read_header")
+            HALT_NOW(" Num data lines mismatch in read_data_lines and read_header")
         endif
         if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
         if(is_open(oritabunit))  call fclose(oritabunit,  errmsg="star_doc ; read_header oritab")

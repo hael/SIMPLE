@@ -1277,7 +1277,7 @@ contains
         if( present(check_exists) )check_exists_here = check_exists
         if( check_exists_here )then
             if( .not.file_exists(trim(infile)) )then
-                write(*,*)'File does not exists: ', trim(infile)
+                write(*,*)'File does not exist: ', trim(infile)
                 if(present(errmsg)) write(*,*)trim(errmsg)
                 stop
             endif

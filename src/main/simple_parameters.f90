@@ -753,8 +753,9 @@ contains
         CWD_GLOB = trim(self%cwd)
         ! get process ID
         self%pid = get_process_id()
-        ! get name of of executable
-        call getarg(0,self%executable)
+        ! get name of executable
+        call get_command_argument(0,self%executable)
+        if(len_trim(self%executable) == 0) stop 'ERROR! get_command_argument failed; simple_parameters :: new'
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for a project file
