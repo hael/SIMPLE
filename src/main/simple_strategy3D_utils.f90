@@ -102,7 +102,7 @@ contains
             if (.not. pftcc_glob%is_euclid(s%iptcl)) then
                 ! multinomal peak selection
                 ! convert correlations to distances
-                dists = 1.0 - corrs           
+                dists = 1.0 - corrs
                 ! scale distances with TAU
                 dists = dists / tau
             else
@@ -182,6 +182,7 @@ contains
             !         ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
             !     endif
             ! enddo
+
             if (.not. pftcc_glob%is_euclid(s%iptcl)) then
                 ! convert correlations to distances
                 dists = 1.0 - corrs
@@ -198,7 +199,7 @@ contains
             ws = exp(arg4softmax) !* ang_weights
             ! corrs <= TINY => ws = 0.
             if (.not. pftcc_glob%is_euclid(s%iptcl)) then
-                where( corrs <= TINY ) ws = 0.                
+                where( corrs <= TINY ) ws = 0.
             end if
             ! normalise
             ws = ws / sum(ws)
@@ -251,32 +252,73 @@ contains
         endif
     end subroutine states_reweight
 
-    function estimate_ang_sdev( s, best_loc ) result( ang_sdev )
+    function estimate_ang_spread( s ) result( ang_spread )
         use simple_ori,  only: ori
         use simple_oris, only: oris
         class(strategy3D_srch), intent(inout) :: s
-        integer,                intent(in)    :: best_loc(1)
-        real       :: ang_sdev, dist, inpl_dist
-        integer    :: ipeak, npeaks
+        integer    :: ipeak, jpeak, states(s3D%o_peaks(s%iptcl)%get_noris())
+        integer    :: best_state, loc(1), npeaks, cnt, i
         type(ori)  :: osym
-        type(oris) :: sym_os
-        ang_sdev = 0.
-        npeaks   = s3D%o_peaks(s%iptcl)%get_noris()
-        if( trim(build_glob%pgrpsyms%get_pgrp()).eq.'c1' )then
-            ang_sdev = s3D%o_peaks(s%iptcl)%ang_sdev(s%nstates, npeaks)
-        else
-            if( npeaks > 2 )then
-                sym_os = s3D%o_peaks(s%iptcl)
-                do ipeak = 1, npeaks
-                    if( ipeak == best_loc(1) )cycle
-                    call build_glob%pgrpsyms%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(best_loc(1)),&
-                        &s3D%o_peaks(s%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
-                    call sym_os%set_ori(ipeak, osym)
-                enddo
-                ang_sdev = sym_os%ang_sdev(s%nstates, npeaks)
-            endif
+        real       :: ang_spread, dist, inpl_dist, ws(s3D%o_peaks(s%iptcl)%get_noris()), ave, dev, var, ep
+        real       :: dists(s3D%o_peaks(s%iptcl)%get_noris() * (s3D%o_peaks(s%iptcl)%get_noris() - 1) / 2)
+        logical    :: multi_states
+        ang_spread = 0.
+        npeaks     = s3D%o_peaks(s%iptcl)%get_noris()
+        if( npeaks < 3 ) return ! need at least 3
+        ! gather weights & states
+        do ipeak=1,npeaks
+            ws(ipeak)     = s3D%o_peaks(s%iptcl)%get(ipeak, 'ow')
+            states(ipeak) = s3D%o_peaks(s%iptcl)%get_state(ipeak)
+        enddo
+        if( count(ws > TINY) < 3 ) return ! need at least 3
+        ! multi-states or not?
+        multi_states = .false.
+        if( s%nstates > 1 ) multi_states = .true.
+        ! best state is?
+        loc = maxloc(ws)
+        best_state = states(loc(1))
+        if( multi_states )then
+            if( count(states == best_state) < 3 ) return ! need at least 3
         endif
-    end function estimate_ang_sdev
+        ! loop over valid peaks and find maximum angular distance as metric for angular spread
+        cnt = 0.
+        do ipeak = 1, npeaks - 1
+            ! take care of ow > 0. requirement
+            if( ws(ipeak) <= TINY ) cycle
+            ! take care of multi-state case
+            if( multi_states )then
+                if( states(ipeak) /= best_state ) cycle
+            endif
+            do jpeak = ipeak + 1, npeaks
+                ! take care of ow > 0. requirement
+                if( ws(jpeak) <= TINY ) cycle
+                ! take care of multi-state case
+                if( multi_states )then
+                    if( states(jpeak) /= best_state ) cycle
+                endif
+                ! incr dist counter
+                cnt = cnt + 1
+                ! to minimize the angular distance over the symmetry operations
+                ! this routine takes care of the c1 case
+                call build_glob%pgrpsyms%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(ipeak),&
+                    &s3D%o_peaks(s%iptcl)%get_ori(jpeak), osym, dist, inpl_dist)
+                dists(cnt) = dist
+            enddo
+        enddo
+        if( cnt < 3 ) return ! need at least 3
+        ! calculate standard deviation of distances as measure of angular spread
+        ave = sum(dists(:cnt)) / real(cnt)
+        ep  = 0.
+        var = 0.
+        do i=1,cnt
+            dev = dists(i) - ave
+            ep  = ep + dev
+            var = var + dev * dev
+        end do
+        var = (var - ep * ep / real(cnt))/(real(cnt) - 1.) ! corrected two-pass formula
+        ang_spread = 0.
+        if( var > 0. ) ang_spread = sqrt(var)
+    end function estimate_ang_spread
 
     subroutine convergence_stats_single( s, best_loc, euldist )
         class(strategy3D_srch), intent(inout) :: s

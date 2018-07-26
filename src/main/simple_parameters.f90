@@ -332,7 +332,7 @@ type :: parameters
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
-    real    :: lp_dyn=20.
+    ! real    :: lp_dyn=20.
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
@@ -1147,8 +1147,9 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         endif
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
+        self%kstop      = self%kfromto(2)                ! -"-
         self%lp         = max(self%fny,self%lp)          ! lowpass limit
-        self%lp_dyn     = self%lp                        ! dynamic lowpass limit
+        ! self%lp_dyn     = self%lp                        ! dynamic lowpass limit
         self%lpmed      = self%lp                        ! median lp
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim

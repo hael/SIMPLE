@@ -393,68 +393,6 @@ contains
         endif
     end subroutine nearest_proj_neighbors
 
- !>  \brief  is for retrieving nearest neighbors in symmetric cases
-    subroutine nearest_proj_neighbors_omp( self, os_asym_unit, k, nnmat )
-        class(sym),           intent(inout) :: self
-        type(oris),           intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
-        integer,              intent(inout) :: k
-        integer, allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix
-        real,    allocatable :: dists(:)
-        integer, allocatable :: inds(:)
-        type(ori)  :: oasym, osym, oj
-        real :: rasym(3,3), rsym(3,3), rj(3,3)
-        integer    :: i, j, n_os, isym
-        real, allocatable       :: os_rmats(:,:,:), esym_rmats(:,:,:)
-        real, parameter :: zvec(3) = [0.,0.,1.]
-        if( trim(self%pgrp).eq.'c1' )then
-            call os_asym_unit%nearest_proj_neighbors(k, nnmat)
-        else
-            n_os = os_asym_unit%get_noris()
-            allocate( nnmat(n_os,k), dists(n_os), inds(n_os), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_sym")
-            esym_rmats= self%e_sym%get_all_rmats()
-            os_rmats = os_asym_unit%get_all_rmats()
-            !$omp parallel do default(shared) private(i,dists,rasym,isym, rsym, j, rj,inds) proc_bind(close)
-            do i = 1, n_os
-                dists = pi
-                rasym = os_rmats(i,:,:)
-                do isym = 1, self%n
-                    if(isym == 1)then
-                        rsym = rasym
-                    else
-                        rsym =  matmul(rasym, os_rmats(isym,:,:) )
-                    endif
-                    do j = 1, n_os
-                        if( j == i )then
-                            dists(j) = 0.
-                        else
-                            rj = os_rmats(j,:,:)
-                            dists(j) = min(dists(j), vector_angle_norm(matmul(zvec,rsym),matmul(zvec,rj)))
-                        endif
-                    enddo
-                enddo
-                inds = (/(j,j=1,n_os)/)
-                call hpsort(dists, inds)
-                nnmat(i,:) = inds(:k)
-            enddo
-            !$omp end parallel do
-            deallocate(inds, dists)
-            if(allocated(esym_rmats)) deallocate(esym_rmats)
-            if(allocated(os_rmats)) deallocate(os_rmats)
-
-        endif
-    end subroutine nearest_proj_neighbors_omp
-
-
-    !>  \brief  is a symmetry adaptor
-    function apply2rmats( rmat1,rmat2 ) result( new_rmat )
-        real, intent(inout) :: rmat1(3,3), rmat2(3,3)
-        real      ::  new_rmat(3,3)
-        new_rmat = matmul(rmat2,rmat1)  ! multiplication of two rotation matrices commute (n>2 not)
-    end function apply2rmats
-
-
-
     !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
     subroutine nearest_sym_neighbors( self, asym_os, nnmat )
         class(sym),           intent(inout) :: self
@@ -799,7 +737,7 @@ contains
         endif
         ! special case of euls(2) rotation/ y rotaion = 180 or 0
         ! if we do this, need only one z rotation
-        if( is_equal(rotmat(3,3),1.d0) ) then
+        if( is_equal(rotmat(3,3),1.d0) )then
             euls(1) = 0.d0
             ! find euls(3), if sin=-, switch sign all in radians
             dt     = max(-1.0d0, min(1.0d0,rotmat(1,1)))

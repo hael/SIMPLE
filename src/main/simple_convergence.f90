@@ -13,6 +13,7 @@ private
 type convergence
     private
     real :: corr      = 0. !< average correlation
+    real :: specscore = 0. !< average spectral score
     real :: dist      = 0. !< average angular distance
     real :: dist_inpl = 0. !< average in-plane angular distance
     real :: npeaks    = 0. !< average # peaks
@@ -22,7 +23,7 @@ type convergence
     real :: mi_proj   = 0. !< projection parameter distribution overlap
     real :: mi_inpl   = 0. !< in-plane parameter distribution overlap
     real :: mi_state  = 0. !< state parameter distribution overlap
-    real :: sdev      = 0. !< angular standard deviation of model
+    real :: spread    = 0. !< angular spread
     real :: bfac      = 0. !< average per-particle B-factor
   contains
     procedure :: check_conv2D
@@ -108,7 +109,8 @@ contains
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-        self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
+        self%corr      = build_glob%spproj_field%get_avg('corr')      ! always updated for all ptcls with states > 0
+        self%specscore = build_glob%spproj_field%get_avg('specscore') ! always updated for all ptcls with states > 0
         self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
         self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
         self%npeaks    = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
@@ -117,8 +119,8 @@ contains
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_inpl   = build_glob%spproj_field%get_avg('mi_inpl',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
-        self%sdev      = build_glob%spproj_field%get_avg('sdev',      mask=mask)
-        self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
+        self%spread    = build_glob%spproj_field%get_avg('spread',      mask=mask)
+        self%bfac      = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
@@ -131,7 +133,8 @@ contains
         write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:     ', self%bfac
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-        write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
+        write(*,'(A,1X,F7.4)') '>>> SPECSCORE:                         ', self%specscore
+        write(*,'(A,1X,F7.2)') '>>> ANGULAR SPREAD OF MODEL:           ', self%spread
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
@@ -239,6 +242,8 @@ contains
         select case(which)
             case('corr')
                 get = self%corr
+            case('specscore')
+                get = self%specscore
             case('dist')
                 get = self%dist
             case('dist_inpl')
@@ -255,8 +260,8 @@ contains
                 get = self%mi_inpl
             case('mi_state')
                 get = self%mi_state
-            case('sdev')
-                get = self%sdev
+            case('spread')
+                get = self%spread
             case('bfac')
                 get = self%bfac
             case DEFAULT

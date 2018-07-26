@@ -72,9 +72,7 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_cont_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: dist_inpl, euldist, mi_proj, mi_inpl, mi_joint, frac, ang_sdev
-        ! angular standard deviation
-        ang_sdev = 0.
+        real      :: dist_inpl, euldist, mi_proj, mi_inpl, mi_joint, frac
         ! angular distances
         call build_glob%pgrpsyms%sym_dists(build_glob%spproj_field%get_ori(self%s%iptcl), self%o, osym, euldist, dist_inpl)
         ! generate convergence stats
@@ -110,7 +108,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',      self%corr)
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
         call build_glob%spproj_field%set(self%s%iptcl, 'ow',        1.0)
-        call build_glob%spproj_field%set(self%s%iptcl, 'sdev',      0.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
         ! transfer data to o_peaks
         call s3D%o_peaks(self%s%iptcl)%set_ori(1,build_glob%spproj_field%get_ori(self%s%iptcl))

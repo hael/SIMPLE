@@ -134,19 +134,6 @@ contains
             allocate(ptcl_mask(params_glob%fromp:params_glob%top))
             call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
             &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
-            ! correct convergence stats
-            do iptcl=params_glob%fromp,params_glob%top
-                if( .not. ptcl_mask(iptcl) )then
-                    ! these are not updated
-                    call build_glob%spproj_field%set(iptcl, 'mi_proj',     1.0)
-                    call build_glob%spproj_field%set(iptcl, 'mi_inpl',     1.0)
-                    call build_glob%spproj_field%set(iptcl, 'mi_state',    1.0)
-                    call build_glob%spproj_field%set(iptcl, 'mi_joint',    1.0)
-                    call build_glob%spproj_field%set(iptcl, 'dist',        0.0)
-                    call build_glob%spproj_field%set(iptcl, 'dist_inpl',   0.0)
-                    call build_glob%spproj_field%set(iptcl, 'frac',      100.0)
-                endif
-            end do
         else
             nptcls2update = params_glob%top - params_glob%fromp + 1
             allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))

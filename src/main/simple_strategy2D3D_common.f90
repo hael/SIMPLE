@@ -147,13 +147,12 @@ contains
                 params_glob%kstop = params_glob%kfromto(2)
                 ! set high-pass Fourier index limit
                 params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
-                ! for the euclidian distance case all frequencies need to be extracted
+                ! for the euclidean distance case all frequencies need to be extracted
                 if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) then
                     params_glob%kfromto(2) = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
                 endif
                 ! re-set the low-pass limit
-                params_glob%lp     = calc_lowpass_lim(params_glob%kstop, params_glob%boxmatch, params_glob%smpd)
-                params_glob%lp_dyn = params_glob%lp
+                params_glob%lp = calc_lowpass_lim(params_glob%kstop, params_glob%boxmatch, params_glob%smpd)
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case('no')
                 ! set Fourier index range
@@ -162,8 +161,7 @@ contains
                 if( cline%defined('lpstop') )then
                     params_glob%kfromto(2) = min(params_glob%kfromto(2), calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
                 endif
-                params_glob%kstop  = params_glob%kfromto(2)
-                params_glob%lp_dyn = params_glob%lp
+                params_glob%kstop = params_glob%kfromto(2)
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case DEFAULT
                 call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
@@ -181,7 +179,6 @@ contains
         params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
         if( cline%defined('lp') )then
             params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
-            params_glob%lp_dyn     = params_glob%lp
             call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
@@ -199,7 +196,6 @@ contains
             ! to avoid pathological cases, fall-back on lpstart
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%boxmatch, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
-            params_glob%lp_dyn = lplim
             call build_glob%spproj_field%set_all2single('lp',lplim)
         endif
         params_glob%kstop = params_glob%kfromto(2)

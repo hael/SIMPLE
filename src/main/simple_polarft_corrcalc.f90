@@ -59,9 +59,9 @@ type heap_vars
     complex(dp), pointer :: pft_dref_8(:,:,:)   => null()
     complex(dp), pointer :: shmat_8(:,:)        => null()
     real(dp),    pointer :: argmat_8(:,:)       => null()
-    real(dp),    pointer :: fdf_y_8(:)      => null()
-    real(dp),    pointer :: fdf_T1_8(:,:)   => null()
-    real(dp),    pointer :: fdf_T2_8(:,:)   => null()
+    real(dp),    pointer :: fdf_y_8(:)          => null()
+    real(dp),    pointer :: fdf_T1_8(:,:)       => null()
+    real(dp),    pointer :: fdf_T2_8(:,:)       => null()
 end type heap_vars
 
 type :: polarft_corrcalc
@@ -86,8 +86,8 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: ctfmats(:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
-    complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)  !< derivatives w.r.t. orientation angles of 3D complex matrices
-    complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)   !< derivatives w.r.t. orientation angles of 3D complex matrices
+    complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:) !< derivatives w.r.t. orientation angles of 3D complex matrices
+    complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)  !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
     complex(sp),         allocatable :: fft_factors(:)        !< phase factors for accelerated gencorrs routines
     type(fftw_arrs),     allocatable :: fftdat(:)             !< arrays for accelerated gencorrs routines
@@ -149,7 +149,7 @@ type :: polarft_corrcalc
     procedure, private :: calc_corr_for_rot_8
     procedure, private :: calc_T1_T2_for_rot_8
     procedure, private :: calc_euclid_for_rot
-    procedure, private :: calc_euclid_for_rot_8 
+    procedure, private :: calc_euclid_for_rot_8
     procedure, private :: calc_corrk_for_rot_8
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: gencorrs_cc_1
@@ -650,7 +650,7 @@ contains
             end if
         end if
     end function is_euclid
-    
+
     ! PRINTERS/VISUALISERS
 
     subroutine vis_ptcl( self, iptcl )
@@ -1050,7 +1050,7 @@ contains
                 tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
         end if
             euclid = euclid - real(k)*tmp / ( 2._dp * self%sigma2_noise(k, i))
-        end do        
+        end do
     end function calc_euclid_for_rot_8
 
     function calc_corrk_for_rot_8( self, pft_ref, i, k, irot ) result( corr )
@@ -1081,7 +1081,7 @@ contains
         corr = real(tmp)
     end function calc_corrk_for_rot_8
 
-        function calc_euclidk_for_rot( self, pft_ref, i, k, irot ) result( euclid )
+    function calc_euclidk_for_rot( self, pft_ref, i, k, irot ) result( euclid )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i, irot, k
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
@@ -1278,7 +1278,6 @@ contains
         end do
         cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
     end subroutine gencorrs_resnorm_2
-
 
     subroutine gencorrs_euclid_1( self, iref, iptcl, euclids )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2186,7 +2185,7 @@ contains
         end do
         sigma_contrib = sigma_contrib !/ real(self%nrots)
     end subroutine gencorr_sigma_contrib
-    
+
     real function specscore( self, iref, iptcl, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot

@@ -97,12 +97,10 @@ contains
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(params_glob%extr_iter-2)
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
             select case(params_glob%cc_objfun)
-                case(OBJFUN_CC)
+                case(OBJFUN_CC,OBJFUN_EUCLID)
                     extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
                 case(OBJFUN_RES)
                     extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'bfac')
-                case(OBJFUN_EUCLID)
-                    extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
             end select
             write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
             write(*,'(A,F8.2)') '>>> EXTREMAL THRESHOLD:    ', extr_bound
@@ -129,17 +127,6 @@ contains
             allocate(ptcl_mask(params_glob%fromp:params_glob%top))
             call build_glob%spproj_field%sample4update_and_incrcnt2D(params_glob%ncls, &
                 [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
-            ! correct convergence stats
-            do iptcl=params_glob%fromp,params_glob%top
-                if( .not. ptcl_mask(iptcl) )then
-                    ! these are not updated
-                    call build_glob%spproj_field%set(iptcl, 'mi_class',    1.0)
-                    call build_glob%spproj_field%set(iptcl, 'mi_inpl',     1.0)
-                    call build_glob%spproj_field%set(iptcl, 'mi_joint',    1.0)
-                    call build_glob%spproj_field%set(iptcl, 'dist_inpl',   0.0)
-                    call build_glob%spproj_field%set(iptcl, 'frac',      100.0)
-                endif
-            end do
         else
             nptcls2update = params_glob%top - params_glob%fromp + 1
             allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))

@@ -40,7 +40,6 @@ contains
         ! set bp range
         params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
         params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
-        params_glob%lp_dyn     = params_glob%lp
         ! prep pftcc
         call preppftcc4cluster
         ! memoize FFTs for improved performance
@@ -223,7 +222,7 @@ contains
     end subroutine cluster_cavgs_exec
 
     !>  \brief  prepares the polarft corrcalc object for clustering
-     subroutine preppftcc4cluster
+    subroutine preppftcc4cluster
         use simple_polarizer, only: polarizer
         type(polarizer), allocatable :: match_imgs(:), mirr_match_imgs(:)
         integer :: iptcl

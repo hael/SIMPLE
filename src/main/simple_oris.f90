@@ -54,7 +54,6 @@ type :: oris
     procedure, private :: calc_sum
     procedure          :: get_sum
     procedure          :: get_avg
-    procedure          :: ang_sdev
     procedure          :: included
     procedure          :: get_nevenodd
     procedure, private :: get_neven
@@ -934,69 +933,6 @@ contains
         call self%calc_sum(which, sum, cnt, class, state, fromto, mask)
         avg = sum/real(cnt)
     end function get_avg
-
-    !>  \brief  angular standard deviation
-    real function ang_sdev( self, nstates, npeaks )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nstates, npeaks
-        integer :: instates, state, pop
-        ang_sdev = 0.
-        if(npeaks < 3 )return
-        instates = 0
-        do state=1,nstates
-            pop = self%get_pop( state, 'state' )
-            if( pop > 0 )then
-                ang_sdev = ang_sdev + ang_sdev_state( state )
-                instates = instates + 1
-            endif
-        enddo
-        ang_sdev = ang_sdev / real(instates)
-
-        contains
-
-            function ang_sdev_state( istate )result( wsdev )
-                integer, intent(in)  :: istate
-                type(ori)            :: o_best, o
-                type(oris)           :: os
-                real,    allocatable :: dists(:), ws(:)
-                integer, allocatable :: inds(:)
-                real                 :: wdmean, nw_nonzero, wsdev
-                integer              :: loc(1), i, n
-                call self%get_pinds(istate, 'state', inds)
-                n = size(inds)
-                wsdev = 0.
-                if( n < 3 ) return
-                call os%new(n)
-                allocate( ws(n), dists(n), stat=alloc_stat )
-                if(alloc_stat.ne.0)call allocchk( 'ang_sdev_state; simple_oris',alloc_stat)
-                ws    = 0.
-                dists = 0.
-                ! gather weights & oris
-                do i=1,n
-                    ws(i) = self%get(inds(i),'ow')
-                    call os%set_ori( i, self%o(inds(i)) )
-                enddo
-                ! # nonzero weights
-                nw_nonzero = real(count(ws > 0.))
-                if( nint(nw_nonzero) < 3 ) return
-                ! get best ori
-                loc    = maxloc(ws)
-                o_best = os%get_ori( loc(1) )
-                ! build distance vector
-                do i=1,n
-                    o = os%get_ori(i)
-                    dists(i) = rad2deg( o.euldist.o_best )
-                enddo
-                ! weighted distance mean
-                wdmean = sum(ws * dists) / sum(ws)
-                ! weighted standard deviation of distances
-                wsdev = sqrt(sum(ws * (dists - wdmean)**2.0) / (((nw_nonzero - 1.0) / nw_nonzero) * sum(ws)))
-                ! destruct
-                deallocate( ws, dists, inds )
-                call os%kill
-            end function ang_sdev_state
-
-    end function ang_sdev
 
     !>  \brief  for getting a logical mask of the included particles
     function included( self, consider_w ) result( incl )
@@ -2188,53 +2124,16 @@ contains
     !>  \brief  calculates spectral particle weights
     subroutine calc_spectral_weights( self )
         class(oris), intent(inout) :: self
-        integer           :: i, nstates, istate, cnt, mystate
-        real, allocatable :: weights(:), corrs(:)
-        logical           :: specscore_isthere, corr_isthere
-        specscore_isthere = self%isthere('specscore')
-        corr_isthere      = self%isthere('corr')
-        if( specscore_isthere .or. corr_isthere )then
-            nstates = self%get_n('state')
-            if( nstates > 1 )then
-                do istate=1,nstates
-                    if( specscore_isthere )then
-                        corrs = self%get_arr('specscore', state=istate)
-                    else
-                        corrs = self%get_arr('corr', state=istate)
-                    endif
-                    weights = corrs2weights(corrs)
-                    cnt = 0
-                    do i=1,self%n
-                        mystate = nint(self%o(i)%get('state'))
-                        if( mystate == istate )then
-                            cnt = cnt + 1
-                            call self%o(i)%set('w', weights(cnt))
-                        else if( mystate == 0 )then
-                            call self%o(i)%set('w', 0.0)
-                        endif
-                    enddo
-                    deallocate(corrs,weights)
-                enddo
-            else
-                if( specscore_isthere )then
-                    corrs = self%get_all('specscore')
-                else
-                    corrs = self%get_all('corr')
-                endif
-                weights = corrs2weights(corrs)
-                do i=1,self%n
-                    mystate = nint(self%o(i)%get('state'))
-                    if( mystate == 0 )then
-                        call self%o(i)%set('w', 0.0)
-                    else
-                        call self%o(i)%set('w', weights(i))
-                    endif
-                end do
-                deallocate(corrs,weights)
-            endif
+        real, allocatable :: states(:), scores(:)
+        if( self%isthere('specscore') )then
+            states  = self%get_arr('state')
+            scores  = self%get_arr('specscore')
+            where( scores < 0. )  scores = 0.
+            where( states < 0.5 ) scores = 0.
+            call self%set_all('w', scores)
+            deallocate(states, scores)
         else
-            write(*,*) 'ERROR! neither specscore nor corr set. Cannot calculate spectral weights'
-            stop 'simple_oris :: calc_spectral_weights'
+            call self%set_all2single('w', 1.)
         endif
     end subroutine calc_spectral_weights
 

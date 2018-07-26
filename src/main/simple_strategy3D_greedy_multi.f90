@@ -92,7 +92,7 @@ contains
         class(strategy3D_greedy_multi), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS)
-        real      :: wcorr, frac, ang_sdev, dist_inpl, euldist
+        real      :: wcorr, frac, ang_spread, dist_inpl, euldist
         integer   :: best_loc(1), neff_states, state, npeaks_all
         logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
         npeaks_all = self%s%npeaks * MAXNINPLPEAKS
@@ -103,7 +103,7 @@ contains
         ! state reweighting
         call states_reweight(self%s, npeaks_all, ws, included, state, best_loc, wcorr )
         ! angular standard deviation
-        ang_sdev = estimate_ang_sdev(self%s, best_loc)
+        ang_spread = estimate_ang_spread(self%s)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
@@ -132,7 +132,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
         call build_glob%spproj_field%set(self%s%iptcl, 'ow',        s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow')  )
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
-        call build_glob%spproj_field%set(self%s%iptcl, 'sdev',      ang_sdev)
+        call build_glob%spproj_field%set(self%s%iptcl, 'spread',    ang_spread)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint  '>>> STRATEGY3D_GREEDY_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'
     end subroutine oris_assign_greedy_multi
