@@ -329,7 +329,7 @@ contains
         endif
 
         if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%calc_and_write_sigmas( pftcc, build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
+            call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
         end if
 
         ! UPDATE STATS
@@ -487,8 +487,8 @@ contains
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         endif
         if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%new('sigma2_noise_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat', pftcc)
-            call eucl_sigma%read(pftcc, ptcl_mask)
+            call eucl_sigma%new('sigma2_noise_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat')
+            call eucl_sigma%read(ptcl_mask)
         end if
 
         ! PREPARATION OF REFERENCES IN PFTCC

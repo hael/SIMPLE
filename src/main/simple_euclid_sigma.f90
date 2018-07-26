@@ -1,7 +1,7 @@
 module simple_euclid_sigma
 include 'simple_lib.f08'
 use simple_parameters,               only: params_glob
-use simple_polarft_corrcalc,         only: polarft_corrcalc
+use simple_polarft_corrcalc,         only: polarft_corrcalc, pftcc_glob
 !use simple_strategy3D_alloc,         only: s3D              !cannot use here bc of cyclical dependencies
 use simple_oris, only: oris
 implicit none
@@ -46,18 +46,17 @@ contains
 
     ! constructor
 
-    subroutine new( self, fname, pftcc )
+    subroutine new( self, fname )
         class(euclid_sigma), target, intent(inout) :: self
         character(len=*),            intent(in)    :: fname
-        type(polarft_corrcalc),      intent(inout) :: pftcc
         real(sp)                                   :: r
         call self%kill
-        allocate( self%sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2),1:pftcc%get_nptcls()),&
-            self%sigma2_exists_msk(1:pftcc%get_nptcls()),&
+        allocate( self%sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2),1:pftcc_glob%get_nptcls()),&
+            self%sigma2_exists_msk(1:pftcc_glob%get_nptcls()),&
             self%pinds(params_glob%fromp:params_glob%top),&
             self%divide_by(params_glob%kfromto(1):params_glob%kfromto(2)) )
-        call pftcc%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
-        call pftcc%assign_pinds(self%pinds)
+        call pftcc_glob%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
+        call pftcc_glob%assign_pinds(self%pinds)
         self%fname = trim(fname)
         self%file_header(1) = params_glob%fromp
         self%file_header(2) = params_glob%top
@@ -72,16 +71,15 @@ contains
     
     ! I/O
 
-    subroutine read( self, pftcc, ptcl_mask )
+    subroutine read( self, ptcl_mask )
         class(euclid_sigma),    intent(inout) :: self
-        type(polarft_corrcalc), intent(inout) :: pftcc
         logical, optional,      intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer                               :: funit
         integer                               :: iptcl
         real(sp)                              :: sigma2_noise_n(params_glob%kfromto(1):params_glob%kfromto(2))
         integer                               :: addr
         logical                               :: success
-        call pftcc%assign_pinds(self%pinds)
+        call pftcc_glob%assign_pinds(self%pinds)
         if (.not. file_exists(trim(self%fname))) call self%create_empty()
         success = self%open_and_check_header(funit)
         if (success) then
@@ -103,9 +101,8 @@ contains
         end if
     end subroutine read
 
-    subroutine calc_and_write_sigmas( self, pftcc, os, o_peaks, ptcl_mask )
+    subroutine calc_and_write_sigmas( self, os, o_peaks, ptcl_mask )
         class(euclid_sigma),              intent(inout) :: self
-        class(polarft_corrcalc), pointer, intent(in)    :: pftcc
         class(oris),                      intent(inout) :: os
         type(oris),          allocatable, intent(inout) :: o_peaks(:)
         logical,             allocatable, intent(in)    :: ptcl_mask(:)
@@ -141,8 +138,8 @@ contains
                 if (weight < TINY) cycle
                 iref   = int(o_peaks(iptcl)%get(ipeak, 'proj'))
                 shvec  = o_peaks(iptcl)%get_2Dshift(ipeak)
-                irot   = pftcc%get_roind(360. - o_peaks(iptcl)%e3get(ipeak))
-                call pftcc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+                irot   = pftcc_glob%get_roind(360. - o_peaks(iptcl)%e3get(ipeak))
+                call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
                 sigmas_tmp = sigmas_tmp + 0.5 * weight * sigma_contrib
             end do
             self%sigma2_noise(:,self%pinds(iptcl))    = sigmas_tmp
