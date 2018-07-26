@@ -37,6 +37,7 @@ contains
         real    :: eul(3)
         integer :: i, istate, iproj, iptcl, inpl, ithr
         integer :: nnnrefs, cnt, nrefs
+        real    :: areal
         ! clean all class arrays & types
         call clean_strategy3D()
         if( allocated(s3D%o_peaks) )then
@@ -74,7 +75,7 @@ contains
             enddo
         enddo
         s3D%proj_space_shift   = 0.
-        s3D%proj_space_corrs   = -1.
+        s3D%proj_space_corrs   = -HUGE(areal)
         s3D%proj_space_refinds = 0
         s3D%proj_space_euls    = 0.
         ! search orders allocation
