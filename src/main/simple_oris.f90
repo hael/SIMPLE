@@ -2125,16 +2125,19 @@ contains
     subroutine calc_spectral_weights( self )
         class(oris), intent(inout) :: self
         real, allocatable :: states(:), scores(:)
-        if( self%isthere('specscore') )then
-            states  = self%get_arr('state')
-            scores  = self%get_arr('specscore')
-            where( scores < 0. )  scores = 0.
-            where( states < 0.5 ) scores = 0.
-            call self%set_all('w', scores)
-            deallocate(states, scores)
-        else
+
+        ! does not work
+
+        ! if( self%isthere('specscore') )then
+        !     states  = self%get_arr('state')
+        !     scores  = self%get_arr('specscore')
+        !     where( scores < 0. )  scores = 0.
+        !     where( states < 0.5 ) scores = 0.
+        !     call self%set_all('w', scores)
+        !     deallocate(states, scores)
+        ! else
             call self%set_all2single('w', 1.)
-        endif
+        ! endif
     end subroutine calc_spectral_weights
 
     subroutine calc_bfac_rec( self )

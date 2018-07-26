@@ -10,12 +10,14 @@ implicit none
 public :: vol_srch_init, vol_shsrch_minimize
 private
 
+logical, parameter :: INI_W_DISCR_SRCH = .false.
+
 type(opt_spec)        :: ospec           !< optimizer specification object
 type(opt_simplex)     :: nlopt           !< optimizer object
 integer               :: nrestarts = 3   !< simplex restarts (randomized bounds)
 real                  :: hp, lp          !< srch ctrl params
 real                  :: lims(3,2)       !< variable bounds
-class(image), pointer :: vref => null()  !< reference volume
+class(image), pointer :: vref  => null() !< reference volume
 class(image), pointer :: vtarg => null() !< target volume (subjected to shift)
 
 contains
@@ -36,7 +38,7 @@ contains
         lims(1:3,1) = -trs_in
         lims(1:3,2) =  trs_in
         call ospec%specify('simplex', 3, ftol=1e-4,&
-        &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=30)
+        &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=100)
         call ospec%set_costfun(vol_shsrch_costfun)
         call nlopt%new(ospec)
     end subroutine vol_srch_init
@@ -54,9 +56,34 @@ contains
     end function vol_shsrch_costfun
 
     function vol_shsrch_minimize( ) result( cxyz )
-        real              :: cost_init, cost, cxyz(4)
+        real :: cost_init, cost, cxyz(4), cost_best
+        real :: shvec(3), shvec_best(3), xsh, ysh, zsh
         class(*), pointer :: fun_self => null()
-        ospec%x   = 0. ! assumed that vol is shifted to previous centre
+        shvec_best = 0.
+        if( INI_W_DISCR_SRCH )then
+            ! discrete search to start-off with (half-pixel resolution)
+            cost_best = 1.
+            xsh = lims(1,1)
+            ysh = lims(2,1)
+            zsh = lims(3,1)
+            do while( xsh <= lims(1,2) )
+                do while( ysh <= lims(2,2) )
+                    do while( zsh <= lims(3,2) )
+                        shvec = [xsh,ysh,zsh]
+                        cost = vol_shsrch_costfun(fun_self, shvec, ospec%ndim)
+                        if( cost < cost_best )then
+                            shvec_best = shvec
+                            cost_best  = cost
+                        endif
+                        zsh = zsh + 0.5
+                    end do
+                    ysh = ysh + 0.5
+                end do
+                xsh = xsh + 0.5
+            end do
+        endif
+        ! refinement with simplex
+        ospec%x   = shvec_best ! assumed that vol is shifted to previous centre
         cost_init = vol_shsrch_costfun(fun_self, ospec%x, ospec%ndim)
         call nlopt%minimize(ospec, fun_self, cost)
         if( cost < cost_init )then
