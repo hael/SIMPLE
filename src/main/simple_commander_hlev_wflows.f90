@@ -303,7 +303,6 @@ contains
         ! sanity check
         if( do_eo )then
             call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-            write(*,*)trim(frcs_fname)
             if( .not.file_exists(frcs_fname) )then
                 write(*,*)'The project file does not contain the required information for e/o alignment, use eo=no instead'
                 stop 'The project file does not contain the required information for e/o alignment'

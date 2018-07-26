@@ -2052,6 +2052,7 @@ contains
                 self%o(cnt) = tmp%o(i)
             endif
         enddo
+        deallocate(avail)
 
         contains
 

@@ -512,7 +512,11 @@ contains
             call build_glob%spproj%os_cls2D%set(icls, 'class', real(icls))
             call build_glob%spproj%os_cls2D%set(icls, 'pop',   real(pop))
             call build_glob%spproj%os_cls2D%set(icls, 'res',   frc0143)
-            call build_glob%spproj%os_cls2D%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
+            if( pop > 0 )then
+                call build_glob%spproj%os_cls2D%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
+            else
+                call build_glob%spproj%os_cls2D%set(icls, 'state', 0.0) ! exclusion
+            endif
             if( pop > 1 )then
                 call build_glob%spproj%os_cls2D%set(icls, 'corr',  build_glob%spproj_field%get_avg('corr', class=icls))
                 call build_glob%spproj%os_cls2D%set(icls, 'w',     build_glob%spproj_field%get_avg('w',    class=icls))

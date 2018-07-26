@@ -8,10 +8,9 @@ implicit none
 type(sym)  :: symop
 type(oris) :: os, os_c1
 character(len=3), allocatable :: sym_subgrps(:)
-integer,          allocatable :: nnmat(:,:)
 integer :: i, j
 ! symmetry subgroups
-write(*,'(A)')'>>> SYMMETRY SUBGROPUS FOR C1'
+write(*,'(A)')'>>> SYMMETRY SUBGROUPS FOR C1'
 symop = sym('c1')
 call write_subgrp(symop)
 write(*,'(A)')'>>> SYMMETRY SUBGROPUS FOR D14'
@@ -32,7 +31,24 @@ call write_subgrp(symop)
 write(*,'(A)')'>>> SYMMETRY SUBGROPUS FOR O'
 symop = sym('O')
 call write_subgrp(symop)
-
+! un-mirrored symmetry
+write(*,'(A)')'>>> SYMMETRY EULER RANGE FOR C1'
+symop = sym('c1', incl_mirror=.true.)
+print *,symop%srchrange()
+symop = sym('c1', incl_mirror=.false.)
+print *,symop%srchrange()
+call os%new(300)
+call os%spiral(symop%get_nsym(), symop%srchrange())
+call os%write('c1_unmirrored.txt')
+write(*,'(A)')'>>> SYMMETRY EULER RANGE FOR D2'
+symop = sym('d2', incl_mirror=.true.)
+print *,symop%srchrange()
+symop = sym('d2', incl_mirror=.false.)
+print *,symop%srchrange()
+call os%new(300)
+call os%spiral(symop%get_nsym(), symop%srchrange())
+call os%write('d2_unmirrored.txt')
+call os%kill
 contains
 
     subroutine write_subgrp( se )

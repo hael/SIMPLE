@@ -136,7 +136,7 @@ contains
         eullims(:,1) = 0.
         eullims(:,2) = 360.
         eullims(2,2) = 180.
-        if( self%pgrp(1:1).eq.'c' .and. self%ncsym > 1 )then
+        if( self%pgrp(1:1).eq.'c' )then
             eullims(1,2) = 360./real(self%ncsym)
             if(.not.incl_mirror_here) eullims(2,2) = 90.             ! northern hemisphere only
         else if( self%pgrp(1:1).eq.'d' .and. self%ncsym > 1 )then
