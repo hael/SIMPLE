@@ -40,7 +40,7 @@ contains
     procedure                       :: kill
 end type euclid_sigma
 
-class(euclid_sigma), pointer :: eucl_sigma_glob
+class(euclid_sigma), pointer :: eucl_sigma_glob => null()
 
 contains
 
@@ -262,6 +262,7 @@ contains
             self%nptcls      = 0
             self%do_divide   = .false.
             self%exists      = .false.
+            eucl_sigma_glob  => null()
         endif
     end subroutine kill
 

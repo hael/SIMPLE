@@ -292,12 +292,14 @@ contains
         integer   :: div_lbound, div_ubound
         if( pwght < TINY )return
         do_divide = .false.
-        ! do_divide = eucl_sigma_glob%get_do_divide()
-        ! if (do_divide) then
-        !     divide_by = eucl_sigma_glob%get_divide_by()
-        !     div_lbound = lbound(divide_by,1)
-        !     div_ubound = ubound(divide_by,1)
-        ! end if
+        if (associated(eucl_sigma_glob)) then
+            do_divide = eucl_sigma_glob%get_do_divide()
+            if (do_divide) then
+                divide_by = eucl_sigma_glob%get_divide_by()
+                div_lbound = lbound(divide_by,1)
+                div_ubound = ubound(divide_by,1)
+            end if
+        end if
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
@@ -426,12 +428,14 @@ contains
         logical   :: do_divide
         integer   :: div_lbound, div_ubound
         do_divide = .false.
-        ! do_divide = eucl_sigma_glob%get_do_divide()
-        ! if (do_divide) then
-        !     divide_by = eucl_sigma_glob%get_divide_by()
-        !     div_lbound = lbound(divide_by,1)
-        !     div_ubound = ubound(divide_by,1)
-        ! end if
+        if (associated(eucl_sigma_glob)) then
+            do_divide = eucl_sigma_glob%get_do_divide()
+            if (do_divide) then
+                divide_by = eucl_sigma_glob%get_divide_by()
+                div_lbound = lbound(divide_by,1)
+                div_ubound = ubound(divide_by,1)
+            end if
+        end if
         ! take care of optional state flag
         sstate = 1
         if( present(state) ) sstate = state
