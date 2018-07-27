@@ -19,6 +19,8 @@ module gnufor2
     character(len=100), parameter :: default_color4='dark-salmon'
     character(len=100), parameter :: default_terminal='x11' !'wxt' <-- changed
     character(len=100), parameter :: default_palette='CMY'
+    character(len=100), parameter	:: default_xlabel='X'
+    character(len=100), parameter	:: default_ylabel='Y'
 
     interface plot
         module procedure plot_1
@@ -63,7 +65,7 @@ contains
         integer, parameter  :: Nc=35
         character(len=Nc)  :: f_result
 
-        if(simple_isenv('DISPLAY')) then
+        if(.not.simple_isenv('DISPLAY')) then
             f_result = 'dumb'
             return
         endif
@@ -71,6 +73,13 @@ contains
         select case(terminal)
         case('ps')
             f_result='postscript landscape color'
+        case('emf')
+            f_result='emf'
+        case('eps')
+            f_result='epscairo'
+        case('aqua')
+            f_result='aqua'
+
         case default
             f_result=terminal
         end select
@@ -330,7 +339,7 @@ contains
 
 
         write ( file_unit, '(a)' ) 'splot "' // trim ( data_file_name ) // &
-            & '" using 1:2:3 with pm3d, \\'
+            & '" using 1:2:3 with pm3d, \'
         write ( file_unit, '(a)' ) '"' // trim ( data_file_name ) //&
             & '" using 1:2:( sprintf("%.3g",$3) ) with labels'
 
@@ -353,19 +362,20 @@ contains
     end subroutine image_5
 
 
-    subroutine image_4(x,y,rgb,pause,terminal,filename,persist,input)
+    subroutine image_4(x,y,rgb,pause,terminal,filename,persist,input,&
+        xlabel, ylabel, xyrange)
 
         ! this is the most general subroutine for generating 3D plots.
         ! The data is contained in a 3D array z(:,:,:)
 
         implicit none
-        real(kind=4), intent(in) :: x(:), y(:)
-        integer,intent(in)  :: rgb(:,:,:)
-        real(kind=4), optional  :: pause
-        character(len=*),optional :: terminal, filename, persist, input
-        integer    :: nx, ny
-        integer    :: i, j, ierror, ios, file_unit
-        character(len=100)  :: data_file_name, command_file_name, my_pause, my_persist,&
+        real(kind=4), intent(in)  :: x(:), y(:)
+        integer,intent(in)        :: rgb(:,:,:)
+        real(kind=4), optional    :: pause, xyrange(:)
+        character(len=*),optional :: terminal, filename, persist, input, xlabel, ylabel
+        integer                   :: nx, ny
+        integer                   :: i, j, ierror, ios, file_unit
+        character(len=100)        :: data_file_name, command_file_name, my_pause, my_persist,&
             & xrange1,xrange2,yrange1,yrange2
 
         nx=size(rgb(1,:,1))
@@ -379,6 +389,17 @@ contains
         write (xrange2,'(e15.7)') maxval(x)
         write (yrange1,'(e15.7)') minval(y)
         write (yrange2,'(e15.7)') maxval(y)
+        if (present(xyrange)) then
+            if (size(xyrange).ne.4) then
+                print *,'subroutine image ERROR: size(xyrange) is not equal to 4'
+                stop
+            end if
+            write (xrange1,'(e15.7)') xyrange(1)
+            write (xrange2,'(e15.7)') xyrange(2)
+            write (yrange1,'(e15.7)') xyrange(3)
+            write (yrange2,'(e15.7)') xyrange(4)
+        end if
+
         do j=1,ny
             do i=1,nx
                 if ((maxval(rgb(:,i,j))>255).or.(minval(rgb(:,i,j))<0)) then
@@ -397,12 +418,6 @@ contains
         end if
 
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -422,12 +437,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -454,7 +463,7 @@ contains
         write ( file_unit, '(a)' ) 'set nokey'
         write ( file_unit, '(a)' ) 'set xrange ['// trim(xrange1) // ':'// trim(xrange2) //']'
         write ( file_unit, '(a)' ) 'set yrange ['// trim(yrange1) // ':'// trim(yrange2) //']'
-        write ( file_unit, '(a)' ) 'unset colorbox'
+        write ( file_unit, '(a)' ) 'set colorbox'
 
         write ( file_unit, '(a)' ) 'plot "' // trim ( data_file_name ) // &
             & '" with rgbimage'
@@ -469,6 +478,18 @@ contains
         else
             write ( file_unit, '(a)' ) 'pause 0'
         end if
+
+        if (present(xlabel)) then
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(xlabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(default_xlabel) //'"'
+        end if
+        if (present(ylabel)) then
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(ylabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(default_ylabel) //'"'
+        end if
+
 
         write ( file_unit, '(a)' ) 'q'
         close ( unit = file_unit )
@@ -485,12 +506,12 @@ contains
         ! The data is contained in a 3D array z(:,:,:)
 
         implicit none
-        integer, intent(in)  :: rgb(:,:,:)
-        real(kind=4), optional  :: pause
+        integer, intent(in)       :: rgb(:,:,:)
+        real(kind=4), optional    :: pause
         character(len=*),optional :: terminal, filename, persist, input
-        integer    :: nx, ny
-        integer    :: i, j, ierror, ios, file_unit
-        character(len=100)  :: data_file_name, command_file_name, my_pause, my_persist
+        integer                   :: nx, ny
+        integer                   :: i, j, ierror, ios, file_unit
+        character(len=100)        :: data_file_name, command_file_name, my_pause, my_persist
 
         nx=size(rgb(1,:,1))
         ny=size(rgb(1,1,:))
@@ -512,12 +533,6 @@ contains
         end if
 
         ierror=0
-        !call get_unit(file_unit)
-        !if (file_unit==0) then
-        ! ierror=1
-        ! print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        ! stop
-        !end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -537,12 +552,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        !call get_unit(file_unit)
-        !if (file_unit==0) then
-        ! ierror=1
-        ! print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        ! stop
-        !end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -570,7 +579,7 @@ contains
         write ( file_unit, '(a)' ) 'unset border'
         write ( file_unit, '(a)' ) 'unset xtics'
         write ( file_unit, '(a)' ) 'unset ytics'
-        write ( file_unit, '(a)' ) 'unset colorbox'
+        write ( file_unit, '(a)' ) 'set colorbox'
 
         write ( file_unit, '(a)' ) 'plot "' // trim ( data_file_name ) // &
             & '" with rgbimage'
@@ -579,7 +588,7 @@ contains
             if (pause<0.0) then
                 write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
             else
-                write ( my_pause,'(e9.3)') pause
+                write (	my_pause,'(e9.3)') pause
                 write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
             end if
         else
@@ -595,18 +604,19 @@ contains
 
 
 
-    subroutine image_2(x,y,gray,pause,palette,terminal,filename,persist,input)
+    subroutine image_2(x,y,gray,pause,palette,terminal,filename,persist,input,&
+        xlabel,ylabel,xyrange)
 
         ! this is the most general subroutine for generating 3D plots.
         ! The data is contained in a 3D array z(:,:,:)
 
         implicit none
-        real(kind=4), intent(in) :: x(:), y(:), gray(:,:)
-        real(kind=4), optional  :: pause
-        character(len=*),optional :: palette, terminal, filename, persist, input
-        integer    :: nx, ny
-        integer    :: i, j, ierror, ios, file_unit
-        character(len=100)  :: data_file_name, command_file_name, my_pause, my_persist,&
+        real(kind=4), intent(in)  :: x(:), y(:), gray(:,:)
+        real(kind=4), optional    :: pause, xyrange(:)
+        character(len=*),optional :: palette, terminal, filename, persist, input,xlabel,ylabel
+        integer                   :: nx, ny
+        integer                   :: i, j, ierror, ios, file_unit
+        character(len=100)        :: data_file_name, command_file_name, my_pause, my_persist,&
             & xrange1,xrange2,yrange1,yrange2
 
         nx=size(gray(:,1))
@@ -620,6 +630,16 @@ contains
         write (xrange2,'(e15.7)') maxval(x)
         write (yrange1,'(e15.7)') minval(y)
         write (yrange2,'(e15.7)') maxval(y)
+        if (present(xyrange)) then
+            if (size(xyrange).ne.4) then
+                print *,'subroutine image ERROR: size(xyrange) is not equal to 4'
+                stop
+            end if
+            write (xrange1,'(e15.7)') xyrange(1)
+            write (xrange2,'(e15.7)') xyrange(2)
+            write (yrange1,'(e15.7)') xyrange(3)
+            write (yrange2,'(e15.7)') xyrange(4)
+        end if
 
         if (present(input)) then
             data_file_name='data_file_'//input//'.txt'
@@ -630,12 +650,6 @@ contains
         end if
 
         ierror=0
-        !call get_unit(file_unit)
-        !if (file_unit==0) then
-        ! ierror=1
-        ! print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        ! stop
-        !end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -655,12 +669,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -687,16 +695,33 @@ contains
         write ( file_unit, '(a)' ) 'set nokey'
         write ( file_unit, '(a)' ) 'set xrange ['// trim(xrange1) // ':'// trim(xrange2) //']'
         write ( file_unit, '(a)' ) 'set yrange ['// trim(yrange1) // ':'// trim(yrange2) //']'
-        write ( file_unit, '(a)' ) 'unset colorbox'
+        write ( file_unit, '(a)' ) 'set colorbox'
         if (present(palette)) then
-            if ((trim(palette).ne.'RGB').and.(trim(palette).ne.'HSV').and.(trim(palette).ne.'CMY').and.&
-                & (trim(palette).ne.'YIQ').and.(trim(palette).ne.'XYZ')) then
-                write ( file_unit, '(a)' ) 'set palette '// trim(palette)
+            if(trim(palette).eq.'loadj') then
+                write ( file_unit, '(a)' ) 'load "jetmap.plt" '
+            elseif (trim(palette).eq.'loadm') then
+                write ( file_unit, '(a)' ) 'load "moreland.plt" '
             else
-                write ( file_unit, '(a)' ) 'set palette model '// trim(palette)
+                if ((trim(palette).ne.'RGB').and.(trim(palette).ne.'HSV').and.(trim(palette).ne.'CMY').and.&
+                    & (trim(palette).ne.'YIQ').and.(trim(palette).ne.'XYZ')) then
+                    write ( file_unit, '(a)' ) 'set palette '// trim(palette)
+                else
+                    write ( file_unit, '(a)' ) 'set palette model '// trim(palette)
+                end if
             end if
         else
             write ( file_unit, '(a)' ) 'set palette model '// trim(default_palette)
+        end if
+
+        if (present(xlabel)) then
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(xlabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(default_xlabel) //'"'
+        end if
+        if (present(ylabel)) then
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(ylabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(default_ylabel) //'"'
         end if
 
         write ( file_unit, '(a)' ) 'plot "' // trim ( data_file_name ) // &
@@ -706,7 +731,7 @@ contains
             if (pause<0.0) then
                 write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
             else
-                write ( my_pause,'(e9.3)') pause
+                write (	my_pause,'(e9.3)') pause
                 write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
             end if
         else
@@ -728,16 +753,15 @@ contains
         ! The data is contained in a 3D array z(:,:,:)
 
         implicit none
-        real(kind=4), intent(in) :: gray(:,:)
-        real(kind=4), optional  :: pause
-        character(len=*),optional :: palette, terminal, filename, persist, input
-        integer    :: nx, ny
-        integer    :: i, j, ierror, ios, file_unit
-        character(len=100)  :: data_file_name, command_file_name, my_pause, my_persist
+        real(kind=4), intent(in)   :: gray(:,:)
+        real(kind=4),     optional :: pause
+        character(len=*), optional :: palette, terminal, filename, persist, input
+        integer                    :: nx, ny
+        integer                    :: i, j, ierror, ios, file_unit
+        character(len=100)         :: data_file_name, command_file_name, my_pause, my_persist
 
         nx=size(gray(:,1))
         ny=size(gray(1,:))
-        write(*,*) nx,ny
 
         if (present(input)) then
             data_file_name='data_file_'//input//'.txt'
@@ -748,12 +772,6 @@ contains
         end if
 
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -773,12 +791,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -806,7 +818,7 @@ contains
         write ( file_unit, '(a)' ) 'unset border'
         write ( file_unit, '(a)' ) 'unset xtics'
         write ( file_unit, '(a)' ) 'unset ytics'
-        write ( file_unit, '(a)' ) 'unset colorbox'
+        write ( file_unit, '(a)' ) 'set colorbox'
         if (present(palette)) then
             if ((trim(palette).ne.'RGB').and.(trim(palette).ne.'HSV').and.(trim(palette).ne.'CMY').and.&
                 & (trim(palette).ne.'YIQ').and.(trim(palette).ne.'XYZ')) then
@@ -825,7 +837,7 @@ contains
             if (pause<0.0) then
                 write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
             else
-                write ( my_pause,'(e9.3)') pause
+                write (	my_pause,'(e9.3)') pause
                 write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
             end if
         else
@@ -846,11 +858,11 @@ contains
         ! this subroutine plots 3D curve, given by three arrays x,y,z
 
         implicit none
-        real(kind=4), intent(in) :: x(:),y(:),z(:)
-        real(kind=4), optional  :: pause, linewidth
+        real(kind=4), intent(in)  :: x(:),y(:),z(:)
+        real(kind=4), optional    :: pause, linewidth
         character(len=*),optional :: color, terminal, filename, persist, input
-        integer    :: i, ierror, ios, file_unit, nx !, j
-        character(len=100)  :: data_file_name, command_file_name, my_color, my_pause, my_persist, my_linewidth
+        integer                   :: i, ierror, ios, file_unit, nx
+        character(len=100)        :: data_file_name, command_file_name, my_color, my_pause, my_persist, my_linewidth
 
         ! prepare the data
         nx=size(x)
@@ -868,12 +880,6 @@ contains
         end if
 
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -890,12 +896,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -959,14 +959,14 @@ contains
         ! this subroutine plots the histogram of data contained in array x, using n bins
 
         implicit none
-        real(kind=4), intent(in) :: x(:) !the data to plot
-        integer, intent(in)  :: n !the number of intervals
-        real(kind=4), optional  :: pause
+        real(kind=4), intent(in)  :: x(:) !the data to plot
+        integer, intent(in)       :: n !the number of intervals
+        real(kind=4), optional    :: pause
         character(len=*),optional :: color, terminal, filename, persist, input
-        integer    :: i, j, ierror, ios, file_unit, nx
-        character(len=100)  :: data_file_name, command_file_name, yrange, xrange1, xrange2, my_color, &
+        integer                   :: i, j, ierror, ios, file_unit, nx
+        character(len=100)        :: data_file_name, command_file_name, yrange, xrange1, xrange2, my_color, &
             & xtic_start, dxtic, xtic_end, my_pause, my_persist
-        real(kind=4)   :: xmin, xmax, xhist(0:n), yhist(n+1), dx
+        real(kind=4)              :: xmin, xmax, xhist(0:n), yhist(n+1), dx
 
         ! prepare the data
         nx=size(x)
@@ -998,12 +998,6 @@ contains
         end if
 
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1020,12 +1014,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1091,12 +1079,12 @@ contains
         ! z(:,:) is a 2D array
 
         implicit none
-        real(kind=4), intent(in) :: x(:),y(:),z(:,:)
-        real(kind=4), optional  :: pause
-        real(kind=4)   :: xyz(3,size(z(:,1)),size(z(1,:)))
+        real(kind=4), intent(in)  :: x(:),y(:),z(:,:)
+        real(kind=4), optional    :: pause
+        real(kind=4)              :: xyz(3,size(z(:,1)),size(z(1,:)))
         character(len=*),optional :: palette, terminal, filename, pm3d, contour, persist, input
-        integer    :: nx, ny
-        integer    :: i, j
+        integer                   :: nx, ny
+        integer                   :: i, j
 
         nx=size(z(:,1))
         ny=size(z(1,:))
@@ -1124,12 +1112,12 @@ contains
         ! is generated automatically
 
         implicit none
-        real(kind=4), intent(in) :: z(:,:)
-        real(kind=4), optional  :: pause
-        real(kind=4)   :: xyz(3,size(z(:,1)),size(z(1,:)))
+        real(kind=4), intent(in)  :: z(:,:)
+        real(kind=4), optional    :: pause
+        real(kind=4)              :: xyz(3,size(z(:,1)),size(z(1,:)))
         character(len=*),optional :: palette, terminal, filename, pm3d, contour, persist, input
-        integer    :: nx, ny
-        integer    :: i, j
+        integer                   :: nx, ny
+        integer                   :: i, j
 
         nx=size(z(:,1))
         ny=size(z(1,:))
@@ -1144,20 +1132,18 @@ contains
 
     end subroutine surf_2
 
-
-
     subroutine surf_1(xyz,pause,palette,terminal,filename,pm3d,contour,persist,input)
 
         ! this is the most general subroutine for generating 3D plots.
         ! The data is contained in a 3D array z(:,:,:)
 
         implicit none
-        real(kind=4), intent(in) :: xyz(:,:,:)
-        real(kind=4), optional  :: pause
+        real(kind=4), intent(in)  :: xyz(:,:,:)
+        real(kind=4), optional    :: pause
         character(len=*),optional :: palette, terminal, filename, pm3d, contour, persist, input
-        integer    :: nx, ny, nrow
-        integer    :: i, j, ierror, ios, file_unit
-        character(len=100)  :: data_file_name, command_file_name, my_pause, my_persist
+        integer                   :: nx, ny, nrow
+        integer                   :: i, j, ierror, ios, file_unit
+        character(len=100)        :: data_file_name, command_file_name, my_pause, my_persist
 
         nx=size(xyz(1,:,1))
         ny=size(xyz(1,1,:))
@@ -1172,12 +1158,6 @@ contains
         end if
 
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1197,12 +1177,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1279,19 +1253,19 @@ contains
 
 
     subroutine plot_4(x1,y1,x2,y2,x3,y3,x4,y4,style,pause,color1,color2,color3,color4,&
-        & terminal,filename,polar,persist,input,linewidth)
+        & terminal,filename,polar,persist,input,linewidth,xlabel,ylabel,xyrange)
 
         ! this subroutine plots 4 two-dimensional graphs in the same coordinate system
 
         implicit none
-        real(kind=4), intent(in) :: x1(:), y1(:), x2(:), y2(:), x3(:), y3(:), x4(:), y4(:)
-        real(kind=4), optional  :: pause,linewidth
+        real(kind=4), intent(in)  :: x1(:), y1(:), x2(:), y2(:), x3(:), y3(:), x4(:), y4(:)
+        real(kind=4), optional    :: pause,linewidth,xyrange(:)
         character(len=*),optional :: style, color1, color2, color3, color4, terminal, filename, polar,&
-            & persist, input
-        integer    :: i, ierror, ios, file_unit, Nx1, Nx2, Nx3, Nx4, Nmax
-        character(len=100)  :: data_file_name, command_file_name, my_linewidth
-        integer, parameter  :: Nc=20
-        character(len=Nc)  :: my_line_type1, my_line_type2, my_line_type3, my_line_type4, &
+            & persist, input,xlabel,ylabel
+        integer                   :: i, ierror, ios, file_unit, Nx1, Nx2, Nx3, Nx4, Nmax
+        character(len=100)        :: data_file_name, command_file_name, my_linewidth, xrange1,xrange2,yrange1,yrange2
+        integer, parameter        :: Nc=20
+        character(len=Nc)         :: my_line_type1, my_line_type2, my_line_type3, my_line_type4, &
             & my_color1, my_color2, my_color3,  my_color4, my_range, my_pause, my_persist
 
         if (present(input)) then
@@ -1315,13 +1289,22 @@ contains
             stop
         end if
 
+        write (xrange1,'(e15.7)') min(minval(x1),minval(x2),minval(x3),minval(x4))
+        write (xrange2,'(e15.7)') max(maxval(x1),maxval(x2),maxval(x3),maxval(x4))
+        write (yrange1,'(e15.7)') min(minval(y1),minval(y2),minval(y3),minval(y4))
+        write (yrange2,'(e15.7)') max(maxval(y1),maxval(y2),maxval(y3),maxval(y4))
+        if (present(xyrange)) then
+            if (size(xyrange).ne.4) then
+                print *,'subroutine plot ERROR: size(xyrange) is not equal to 4'
+                stop
+            end if
+            write (xrange1,'(e15.7)') xyrange(1)
+            write (xrange2,'(e15.7)') xyrange(2)
+            write (yrange1,'(e15.7)') xyrange(3)
+            write (yrange2,'(e15.7)') xyrange(4)
+        end if
+
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1340,12 +1323,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1436,32 +1413,45 @@ contains
             write ( file_unit, '(a)' ) 'set polar'
             write ( file_unit, '(a)' ) 'set grid polar'
         else
+            write ( file_unit, '(a)' ) 'set xrange ['// trim(xrange1) // ':'// trim(xrange2) //']'
+            write ( file_unit, '(a)' ) 'set yrange ['// trim(yrange1) // ':'// trim(yrange2) //']'
             write ( file_unit, '(a)' ) 'set grid'
+        end if
+
+        if (present(xlabel)) then
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(xlabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(default_xlabel) //'"'
+        end if
+        if (present(ylabel)) then
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(ylabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(default_ylabel) //'"'
         end if
 
         if (present(style)) then
             write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
                 &//'" using 1:2 with ' // trim(my_line_type1) // ' pointtype ' // &
-                & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 &//'" using 3:4 with ' // trim(my_line_type2) // ' pointtype ' &
-                &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\\'
+                &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 &//'" using 5:6 with ' // trim(my_line_type3) // ' pointtype ' &
-                &// style(7:8) // ' linecolor rgb ' // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\\'
+                &// style(7:8) // ' linecolor rgb ' // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 &//'" using 7:8 with ' // trim(my_line_type4) // ' pointtype ' &
                 &// style(10:11) // ' linecolor rgb '// trim(my_color4)// ' linewidth '// trim(my_linewidth)
         else
             write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
                 & //'" using 1:2 with ' // trim(my_line_type1)  // ' linecolor rgb '&
-                & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 & //'" using 3:4 with ' // trim(my_line_type2)  // ' linecolor rgb '&
-                & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 & //'" using 5:6 with ' // trim(my_line_type3)  // ' linecolor rgb '&
-                & // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 & //'" using 7:8 with ' // trim(my_line_type4)  // ' linecolor rgb '&
                 & // trim(my_color4) // ' linewidth '// trim(my_linewidth)
@@ -1487,18 +1477,19 @@ contains
 
 
 
-    subroutine plot_3(x1,y1,x2,y2,x3,y3,style,pause,color1,color2,color3,terminal,filename,polar,persist,input,linewidth)
+    subroutine plot_3(x1,y1,x2,y2,x3,y3,style,pause,color1,color2,color3,terminal,filename,polar,persist,input,&
+        linewidth,xlabel,ylabel,xyrange)
 
         ! this subroutine plots 3 two-dimensional graphs in the same coordinate system
 
         implicit none
-        real(kind=4), intent(in) :: x1(:), y1(:), x2(:), y2(:), x3(:), y3(:)
-        real(kind=4), optional  :: pause,linewidth
-        character(len=*),optional :: style, color1, color2, color3, terminal, filename, polar, persist, input
-        integer    :: i, ierror, ios, file_unit, Nx1, Nx2, Nx3, Nmax
-        character(len=100)  :: data_file_name, command_file_name, my_linewidth
-        integer, parameter  :: Nc=20
-        character(len=Nc)  :: my_line_type1, my_line_type2, my_line_type3, my_color1, my_color2,&
+        real(kind=4), intent(in)  :: x1(:), y1(:), x2(:), y2(:), x3(:), y3(:)
+        real(kind=4), optional    :: pause,linewidth,xyrange(:)
+        character(len=*),optional :: style, color1, color2, color3, terminal, filename, polar, persist, input,xlabel,ylabel
+        integer                   :: i, ierror, ios, file_unit, Nx1, Nx2, Nx3, Nmax
+        character(len=100)        :: data_file_name, command_file_name, my_linewidth,xrange1, xrange2, yrange1, yrange2
+        integer, parameter        :: Nc=20
+        character(len=Nc)         :: my_line_type1, my_line_type2, my_line_type3, my_color1, my_color2,&
             & my_color3, my_range, my_pause, my_persist
 
         if (present(input)) then
@@ -1521,13 +1512,22 @@ contains
             stop
         end if
 
+        write (xrange1,'(e15.7)') min(minval(x1),minval(x2),minval(x3))
+        write (xrange2,'(e15.7)') max(maxval(x1),maxval(x2),maxval(x3))
+        write (yrange1,'(e15.7)') min(minval(y1),minval(y2),minval(y3))
+        write (yrange2,'(e15.7)') max(maxval(y1),maxval(y2),maxval(y3))
+        if (present(xyrange)) then
+            if (size(xyrange).ne.4) then
+                print *,'subroutine plot ERROR: size(xyrange) is not equal to 4'
+                stop
+            end if
+            write (xrange1,'(e15.7)') xyrange(1)
+            write (xrange2,'(e15.7)') xyrange(2)
+            write (yrange1,'(e15.7)') xyrange(3)
+            write (yrange2,'(e15.7)') xyrange(4)
+        end if
+
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1546,12 +1546,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1630,26 +1624,39 @@ contains
             write ( file_unit, '(a)' ) 'set polar'
             write ( file_unit, '(a)' ) 'set grid polar'
         else
+            write ( file_unit, '(a)' ) 'set xrange ['// trim(xrange1) // ':'// trim(xrange2) //']'
+            write ( file_unit, '(a)' ) 'set yrange ['// trim(yrange1) // ':'// trim(yrange2) //']'
             write ( file_unit, '(a)' ) 'set grid'
+        end if
+
+        if (present(xlabel)) then
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(xlabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(default_xlabel) //'"'
+        end if
+        if (present(ylabel)) then
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(ylabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(default_ylabel) //'"'
         end if
 
         if (present(style)) then
             write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
                 &//'" using 1:2 with ' // trim(my_line_type1) // ' pointtype ' // &
-                & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 &//'" using 3:4 with ' // trim(my_line_type2) // ' pointtype ' &
-                &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\\'
+                &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 &//'" using 5:6 with ' // trim(my_line_type3) // ' pointtype ' &
                 &// style(7:8) // ' linecolor rgb ' // trim(my_color3) // ' linewidth '// trim(my_linewidth)
         else
             write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
                 & //'" using 1:2 with ' // trim(my_line_type1)  // ' linecolor rgb '&
-                & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 & //'" using 3:4 with ' // trim(my_line_type2)  // ' linecolor rgb '&
-                & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 & //'" using 5:6 with ' // trim(my_line_type3)  // ' linecolor rgb '&
                 & // trim(my_color3) // ' linewidth '// trim(my_linewidth)
@@ -1675,18 +1682,19 @@ contains
 
 
 
-    subroutine plot_2(x1,y1,x2,y2,style,pause,color1,color2,terminal,filename,polar,persist,input,linewidth)
+    subroutine plot_2(x1,y1,x2,y2,style,pause,color1,color2,terminal,filename,polar,persist,input,&
+        linewidth,xlabel,ylabel,xyrange)
 
         ! this subroutine plots 2 two-dimensional graphs in the same coordinate system
 
         implicit none
-        real(kind=4), intent(in) :: x1(:), y1(:), x2(:), y2(:)
-        real(kind=4), optional  :: pause,linewidth
-        character(len=*),optional :: style, color1, color2, terminal, filename, polar, persist, input
-        integer    :: i, ierror, ios, file_unit, Nx1, Nx2, Nmax
-        character(len=100)  :: data_file_name, command_file_name, my_linewidth
-        integer, parameter  :: Nc=20
-        character(len=Nc)  :: my_line_type1, my_line_type2, my_color1, my_color2, my_range, my_pause, my_persist
+        real(kind=4), intent(in)  :: x1(:), y1(:), x2(:), y2(:)
+        real(kind=4), optional    :: pause,linewidth,xyrange(:)
+        character(len=*),optional :: style, color1, color2, terminal, filename, polar, persist, input,xlabel,ylabel
+        integer                   :: i, ierror, ios, file_unit, Nx1, Nx2, Nmax
+        character(len=100)        :: data_file_name, command_file_name, my_linewidth,xrange1, xrange2, yrange1, yrange2
+        integer, parameter        :: Nc=20
+        character(len=Nc)         :: my_line_type1, my_line_type2, my_color1, my_color2, my_range, my_pause, my_persist
 
         if (present(input)) then
             data_file_name='data_file_'//input//'.txt'
@@ -1707,13 +1715,22 @@ contains
             stop
         end if
 
+        write (xrange1,'(e15.7)') min(minval(x1),minval(x2))
+        write (xrange2,'(e15.7)') max(maxval(x1),maxval(x2))
+        write (yrange1,'(e15.7)') min(minval(y1),minval(y2))
+        write (yrange2,'(e15.7)') max(maxval(y1),maxval(y2))
+        if (present(xyrange)) then
+            if (size(xyrange).ne.4) then
+                print *,'subroutine plot ERROR: size(xyrange) is not equal to 4'
+                stop
+            end if
+            write (xrange1,'(e15.7)') xyrange(1)
+            write (xrange2,'(e15.7)') xyrange(2)
+            write (yrange1,'(e15.7)') xyrange(3)
+            write (yrange2,'(e15.7)') xyrange(4)
+        end if
+
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1731,12 +1748,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1794,7 +1805,6 @@ contains
 
 
         write ( file_unit, '(a)' ) 'unset key'
-        write ( file_unit, '(a)' ) 'unset key'
         if (present(polar).and.(polar=='yes')) then
             write (my_range,'(e15.7)') max(maxval(abs(y1)),maxval(abs(y2)))
             write ( file_unit, '(a)' ) 'set xrange [-'//trim(my_range)//':'//trim(my_range)//']'
@@ -1803,20 +1813,33 @@ contains
             write ( file_unit, '(a)' ) 'set polar'
             write ( file_unit, '(a)' ) 'set grid polar'
         else
+            write ( file_unit, '(a)' ) 'set xrange ['// trim(xrange1) // ':'// trim(xrange2) //']'
+            write ( file_unit, '(a)' ) 'set yrange ['// trim(yrange1) // ':'// trim(yrange2) //']'
             write ( file_unit, '(a)' ) 'set grid'
+        end if
+
+        if (present(xlabel)) then
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(xlabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(default_xlabel) //'"'
+        end if
+        if (present(ylabel)) then
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(ylabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(default_ylabel) //'"'
         end if
 
         if (present(style)) then
             write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
                 &//'" using 1:2 with ' // trim(my_line_type1) // ' pointtype ' // &
-                & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 &//'" using 3:4 with ' // trim(my_line_type2) // ' pointtype ' &
                 &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth)
         else
             write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
                 & //'" using 1:2 with ' // trim(my_line_type1)  // ' linecolor rgb '&
-                & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\'
+                & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\'
             write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
                 & //'" using 3:4 with ' // trim(my_line_type2)  // ' linecolor rgb '&
                 & // trim(my_color2) // ' linewidth '// trim(my_linewidth)
@@ -1842,18 +1865,19 @@ contains
 
 
 
-    subroutine plot_1(x1,y1,style,pause,color1,terminal,filename,polar,persist,input,linewidth)
+    subroutine plot_1(x1,y1,style,pause,color1,terminal,filename,polar,persist,input,&
+        linewidth,xlabel,ylabel,xyrange)
 
         ! this subroutine plots a two-dimensional graph
 
         implicit none
-        real(kind=4), intent(in) :: x1(:), y1(:)
-        real(kind=4), optional  :: pause,linewidth
-        character(len=*),optional :: style, color1, terminal, filename, polar, persist, input
-        integer    :: i, ierror, ios, file_unit, Nx1
-        character(len=100)  :: data_file_name, command_file_name, my_linewidth
-        integer, parameter  :: Nc=20
-        character(len=Nc)  :: my_line_type1, my_color1, my_range, my_pause, my_persist
+        real(kind=4), intent(in)  :: x1(:), y1(:)
+        real(kind=4), optional    :: pause,linewidth,xyrange(:)
+        character(len=*),optional :: style, color1, terminal, filename, polar, persist, input,xlabel,ylabel
+        integer                   :: i, ierror, ios, file_unit, Nx1
+        character(len=100)        :: data_file_name, command_file_name, my_linewidth,xrange1, xrange2, yrange1, yrange2
+        integer, parameter        :: Nc=20
+        character(len=Nc)         :: my_line_type1, my_color1, my_range, my_pause, my_persist
 
         if (present(input)) then
             data_file_name='data_file_'//input//'.txt'
@@ -1873,13 +1897,22 @@ contains
             stop
         end if
 
+        write (xrange1,'(e15.7)') minval(x1)
+        write (xrange2,'(e15.7)') maxval(x1)
+        write (yrange1,'(e15.7)') minval(y1)
+        write (yrange2,'(e15.7)') maxval(y1)
+        if (present(xyrange)) then
+            if (size(xyrange).ne.4) then
+                print *,'subroutine plot ERROR: size(xyrange) is not equal to 4'
+                stop
+            end if
+            write (xrange1,'(e15.7)') xyrange(1)
+            write (xrange2,'(e15.7)') xyrange(2)
+            write (yrange1,'(e15.7)') xyrange(3)
+            write (yrange2,'(e15.7)') xyrange(4)
+        end if
+        !**********************************************************************************
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1896,12 +1929,6 @@ contains
         close (unit=file_unit)
 
         ierror = 0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
@@ -1953,7 +1980,20 @@ contains
             write ( file_unit, '(a)' ) 'set polar'
             write ( file_unit, '(a)' ) 'set grid polar'
         else
+            write ( file_unit, '(a)' ) 'set xrange ['// trim(xrange1) // ':'// trim(xrange2) //']'
+            write ( file_unit, '(a)' ) 'set yrange ['// trim(yrange1) // ':'// trim(yrange2) //']'
             write ( file_unit, '(a)' ) 'set grid'
+        end if
+
+        if (present(xlabel)) then
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(xlabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set xlabel "' // trim(default_xlabel) //'"'
+        end if
+        if (present(ylabel)) then
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(ylabel) //'"'
+        else
+            write ( file_unit, '(a)' ) 'set ylabel "' // trim(default_ylabel) //'"'
         end if
 
         if (present(style)) then
@@ -1991,19 +2031,17 @@ contains
         implicit none
         character (len = 100) command
         character (len = *) command_file_name
-        ! integer status
-        ! integer system
+        integer status1,status2
 
         !  Issue a command to the system that will startup GNUPLOT, using
         !  the file we just wrote as input.
 
         write (command, *) 'gnuplot ' // trim (command_file_name)
-        ! status=system(trim(command))
-        call system(trim(command))
-        ! if (status.ne.0) then
-        !  print *,'RUN_GNUPLOT - Fatal error!'
-        !  stop
-        ! end if
+        call execute_command_line(trim(command), cmdstat=status1,exitstat=status2)
+        if (status1.ne.0 .or. status2.ne.0) then
+            print *,'RUN_GNUPLOT - Fatal error!'
+            stop
+        end if
         return
 
     end subroutine run_gnuplot
