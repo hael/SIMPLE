@@ -356,6 +356,7 @@ type :: parameters
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale2=1.           !< image scale factor 2nd{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
+    real    :: sigma2_fudge=1.     !< fudge factor for sigma2_noise{1}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
@@ -731,6 +732,7 @@ contains
         call check_rarg('scale2',         self%scale2)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
+        call check_rarg('sigma2_fudge',   self%sigma2_fudge)
         call check_rarg('snr',            self%snr)
         call check_rarg('tau',            self%tau)
         call check_rarg('thres',          self%thres)

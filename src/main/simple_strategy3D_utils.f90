@@ -106,7 +106,7 @@ contains
                 ! scale distances with TAU
                 dists = dists / tau
             else
-                dists = - corrs
+                dists = - corrs / params_glob%sigma2_fudge                
             end if
             ! argument for softmax function is negative distances
             arg4softmax = -dists
@@ -189,7 +189,7 @@ contains
                 ! scale distances with TAU
                 dists = dists / tau
             else
-                dists = - corrs
+                dists = - corrs / params_glob%sigma2_fudge                
             end if
             ! argument for softmax function is negative distances
             arg4softmax = -dists
