@@ -31,9 +31,6 @@
 #  endif
 # endif
 #endif
-#ifndef WarnPrint
-# define WarnPrint print *, __FILENAME__,':',__LINE__,':Warning:',
-#endif
 #ifndef VerbosePrint
 # define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *,
 #endif
@@ -43,8 +40,9 @@
 #define HALT_NOW(msg) write(*,'("Error in ",A," line ",I0,": ",A)') __FILENAME__,__LINE__, msg; \
 call backtrace;stop
 #endif
-
-
+#ifndef STOP_NOW
+#define (msg) call simple_stop(msg, __FILENAME__ , __LINE__)
+#endif
 #ifdef USING_CUDA
 #define CheckLaunchError(CudaErrorMsg) if(cudaDeviceSynchronize().ge.0)then;\
 associate(i => cudaGetLastError());\
