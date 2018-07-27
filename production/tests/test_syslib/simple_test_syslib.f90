@@ -145,7 +145,7 @@ call exec_cmdline("rm  -f test_syslib.file* " )
 
 
 print *, '>>> Syslib function Test 2c: simple_copy_file '
-call system("rm -rf testcopy*.mrc SIMPLE_TEST_FILEIO_*; simple_test_fileio 2>/dev/null >/dev/null")
+call exec_cmdline("rm -rf testcopy*.mrc SIMPLE_TEST_FILEIO_*; simple_test_fileio 2>/dev/null >/dev/null")
 ! TBLOCK()
 ! call simple_copy_file(trim('SIMPLE_TEST_FILEIO_'//datestr//'/cubes.mrc'), trim('testcopy.mrc'), status=io_stat)
 ! TSTOP()

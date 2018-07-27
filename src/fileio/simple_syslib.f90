@@ -473,7 +473,7 @@ contains
         if(.not.currently_opened) open(newunit=funit,file=trim(adjustl(filename)),status='old')
         !allocate(buffer(13), source=0)
         status = STAT (trim(adjustl(filename)) , buffer)
-        if (.NOT. status) then
+        if (status /= 0) then
             call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename))
             print *, buffer
         end if
@@ -1110,16 +1110,16 @@ contains
 
     subroutine print_compiler_info(file_unit)
         use simple_strings, only: int2str
+        integer, intent (in), optional :: file_unit
+        integer  :: file_unit_op
+        integer  :: status
 #ifdef INTEL
-        character*56  :: str
+        character(len=56)  :: str
 #endif
 #ifdef GNU
         character(*), parameter :: compilation_cmd = compiler_options()
         character(*), parameter :: compiler_ver = compiler_version()
 #endif
-        integer, intent (in), optional :: file_unit
-        integer  :: file_unit_op
-        integer  :: status
         if (present(file_unit)) then
             file_unit_op = file_unit
         else

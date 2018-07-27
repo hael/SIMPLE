@@ -835,7 +835,8 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
 
 void free_file_list(char**ptr, int n)
 {
-    for(int i = 0; i < n; i++) free(ptr[i]);
+  int i;
+    for( i = 0; i < n; i++) free(ptr[i]);
     free(ptr);
 }
 
@@ -1126,10 +1127,6 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
 #else
     char *resolved = lrealpath(filein);
 #endif
-    // dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%s:\n", "input", filein);
-    // dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%zd\n", "strlen(input path)", strlen(filein));
-    // dgprintf(stderr, "DEBUG: In get_absolute_pathname resolved:%s\n",  resolved);
-
 
     if(resolved == NULL) {
       fprintf(stderr, "%d %s\nget_absolute_path failed to canonicalize  file %s\n", errno, strerror(errno), filein);
@@ -1140,21 +1137,15 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
     if (*outlen > LONGSTRLEN){
       fprintf(stderr, "get_absolute_path: lrealpath returned string longer than str max (%d): \nstrlen %d  \npath:%s \n",LONGSTRLEN, *outlen, resolved);
     }
-    strncpy(out, resolved, *outlen); //for(int i = *outlen; i < MAX_CHAR_FILENAME; i++) out[i] = '\0';
+    strncpy(out, resolved, *outlen); 
     out[*outlen] = '\0';
-    // dgprintf(stderr, "DEBUG:In get_absolute_pathname %30s:%s:\n", " out path", out);
-    // dgprintf(stderr, "DEBUG:%30s: strlen out path:%zd\n", "DEBUG: In  get_absolute_pathname", strlen(out));
 
     c2fstr(resolved, out, *outlen, sizeof(resolved));
     out[0] = '/';
 
-    // dgprintf(stderr, "DEBUG: In get_absolute_pathname out %s\n", out);
-    // dgprintf(stderr, "DEBUG: In get_absolute_pathname %30s:%d\n", " out path addr", *out);
-    // dgprintf(stderr, "DEBUG: In get_absolute_pathname strlen(out):%zd\n", strlen(out));
-
     free(filein);
     free(resolved);
-    //out = resolved;
+
     return 0;
 }
 #ifdef __APPLE__
