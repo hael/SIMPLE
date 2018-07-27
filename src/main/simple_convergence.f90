@@ -24,7 +24,8 @@ type convergence
     real :: mi_inpl   = 0. !< in-plane parameter distribution overlap
     real :: mi_state  = 0. !< state parameter distribution overlap
     real :: spread    = 0. !< angular spread
-    real :: bfac      = 0. !< average per-particle B-factor
+    real :: bfac      = 0. !< average per-particle B-factor (search)
+    real :: bfac_rec  = 0. !< average per-particle B-factor (rec)
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
@@ -104,7 +105,7 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt
-        logical :: converged
+        logical :: converged, bfac_rec_there
         integer :: iptcl, istate
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
@@ -121,16 +122,23 @@ contains
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
         self%spread    = build_glob%spproj_field%get_avg('spread',      mask=mask)
         self%bfac      = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
+        self%bfac_rec  = 0.
+        bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
+        if( bfac_rec_there ) self%bfac_rec = build_glob%spproj_field%get_avg('bfac_rec')
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
         write(*,'(A,1X,F7.1)') '>>> AVERAGE # PARTICLE UPDATES:        ', avg_updatecnt
-        if( params_glob%nstates > 1 )&
-        &write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
+        if( params_glob%nstates > 1 )then
+        write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
+        endif
         write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
         write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
         write(*,'(A,1X,F7.1)') '>>> AVERAGE # PEAKS:                   ', self%npeaks
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:     ', self%bfac
+        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PTCL B-FACTOR (SEARCH):', self%bfac
+        if( bfac_rec_there )then
+        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PTCL B-FACTOR (REC):   ', self%bfac_rec
+        endif
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         write(*,'(A,1X,F7.4)') '>>> SPECSCORE:                         ', self%specscore
@@ -264,6 +272,8 @@ contains
                 get = self%spread
             case('bfac')
                 get = self%bfac
+            case('bfac_rec')
+                get = self%bfac_rec
             case DEFAULT
                 get = 0.
         end select
