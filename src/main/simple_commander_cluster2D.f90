@@ -91,13 +91,9 @@ contains
              DebugPrint ' exec_make_cavgs mul_shifts                             ', toc(t2)
         endif
         ! setup weights in case the 2D was run without them (specscore will still be there)
-        if( params%weights2D.eq.'yes' )then
-            call build%spproj_field%calc_spectral_weights
-        else
-            t2=tic()
-            call build%spproj_field%set_all2single('w', 1.0)
-             DebugPrint ' exec_make_cavgs spproj_field%calc_bfac_rec             ', toc(t2)
-        endif
+        t2=tic()
+        call build%spproj_field%set_all2single('w', 1.0)
+        DebugPrint ' exec_make_cavgs spproj_field%calc_bfac_rec             ', toc(t2)
         ! even/odd partitioning
         t2=tic()
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo

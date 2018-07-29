@@ -206,8 +206,6 @@ type(simple_input_param) :: update_frac
 type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
-type(simple_input_param) :: weights2D
-type(simple_input_param) :: weights3D
 
 interface set_param
     module procedure set_param_1
@@ -594,10 +592,6 @@ contains
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|ccres|euclid){cc}', '(cc|ccres|euclid){cc}', .false., 'cc')
-        call set_param(weights2D,     'weights2D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(weights3D,     'weights3D',     'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding re-projection(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
@@ -737,7 +731,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 12, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 12, 6, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -778,7 +772,6 @@ contains
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
-        call cluster2D%set_input('filt_ctrls', 7, weights2D)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -794,7 +787,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
         &'simple_distr_exec',&                                                                                            ! executable
-        &0, 2, 0, 6, 5, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
+        &0, 2, 0, 6, 4, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -828,7 +821,6 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){no}', .false., 'no')
-        call cluster2D_stream%set_input('filt_ctrls', 5, weights2D)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, msk)
         call cluster2D_stream%set_input('mask_ctrls', 2, inner)
@@ -844,7 +836,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
-        &0, 2, 0, 8, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 2, 0, 8, 5, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -871,8 +863,6 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D%set_input('filt_ctrls', 4, lplim_crit)
         call cluster3D%set_input('filt_ctrls', 5, eo)
-        call cluster3D%set_input('filt_ctrls', 6, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call cluster3D%set_input('mask_ctrls', 1, msk)
         call cluster3D%set_input('mask_ctrls', 2, inner)
@@ -892,7 +882,7 @@ contains
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
         &'simple_distr_exec',&                                               ! executable
-        &2, 2, 0, 11, 7, 3, 2, .true.)                                       ! # entries in each group
+        &2, 2, 0, 11, 6, 3, 2, .true.)                                       ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .false., '')
@@ -926,8 +916,6 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D_refine%set_input('filt_ctrls', 5, lplim_crit)
         call cluster3D_refine%set_input('filt_ctrls', 6, eo)
-        call cluster3D_refine%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call cluster3D_refine%set_input('mask_ctrls', 1, msk)
         call cluster3D_refine%set_input('mask_ctrls', 2, inner)
@@ -1511,11 +1499,11 @@ contains
         ! PROGRAM SPECIFICATION
         call make_cavgs%new(&
         &'make_cavgs', &                           ! name
-        &'Make class averages',&               ! descr_short
+        &'Make class averages',&                   ! descr_short
         &'is a distributed workflow for generating class averages or initial random references&
         &for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
-        &1, 5, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
@@ -1524,9 +1512,8 @@ contains
         call make_cavgs%set_input('parm_ios', 1, ncls)
         call make_cavgs%set_input('parm_ios', 2, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
-        call make_cavgs%set_input('parm_ios', 3, weights2D)
-        call make_cavgs%set_input('parm_ios', 4, remap_cls)
-        call make_cavgs%set_input('parm_ios', 5, mkdir_)
+        call make_cavgs%set_input('parm_ios', 3, remap_cls)
+        call make_cavgs%set_input('parm_ios', 4, mkdir_)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2294,7 +2281,7 @@ contains
         &'tables (oritab and oritab2) are inputted, statistics of the distances between the orientations '&
         &'in the two documents are provided',&
         &'simple_exec',&                          ! executable
-        &0, 11, 0, 0, 0, 0, 1, .false.)           ! # entries in each group, requires sp_project
+        &0, 9, 0, 0, 0, 0, 1, .false.)           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2306,12 +2293,10 @@ contains
         oristats%parm_ios(3)%required = .false.
         call oristats%set_input('parm_ios', 4,  nspace)
         call oristats%set_input('parm_ios', 5,  oritype)
-        call oristats%set_input('parm_ios', 6,  weights2D)
-        call oristats%set_input('parm_ios', 7,  weights3D)
-        call oristats%set_input('parm_ios', 8,  'ctfstats', 'binary', 'CTF statistics',         'Provide statistics about CTF(yes|no){no}',                      '(yes|no){no}', .false., 'no')
-        call oristats%set_input('parm_ios', 9,  'classtats', 'binary', 'Class statistics',      'Provide statistics about 2D clusters(yes|no){no}',              '(yes|no){no}', .false., 'no')
-        call oristats%set_input('parm_ios', 10, 'projstats', 'binary', 'Projection statistics', 'Provide statistics about projection directions(yes|no){no}',    '(yes|no){no}', .false., 'no')
-        call oristats%set_input('parm_ios', 11, 'trsstats', 'binary', 'Shift statistics',       'Provide statistics about rotational origin shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call oristats%set_input('parm_ios', 6,  'ctfstats',  'binary', 'CTF statistics',        'Provide statistics about CTF(yes|no){no}',                      '(yes|no){no}', .false., 'no')
+        call oristats%set_input('parm_ios', 7,  'classtats', 'binary', 'Class statistics',      'Provide statistics about 2D clusters(yes|no){no}',              '(yes|no){no}', .false., 'no')
+        call oristats%set_input('parm_ios', 8,  'projstats', 'binary', 'Projection statistics', 'Provide statistics about projection directions(yes|no){no}',    '(yes|no){no}', .false., 'no')
+        call oristats%set_input('parm_ios', 9,  'trsstats',  'binary', 'Shift statistics',      'Provide statistics about rotational origin shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2362,7 +2347,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 2, 0, 16, 8, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 2, 0, 16, 7, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2404,9 +2389,7 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
         call refine3D%set_input('filt_ctrls', 6, eo)
-        call refine3D%set_input('filt_ctrls', 7, 'weights3D', 'binary', 'Spectral weighting', 'Weighted particle contributions based on &
-        &the median FRC between the particle and its corresponding reference(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call refine3D%set_input('filt_ctrls', 8, shellw)
+        call refine3D%set_input('filt_ctrls', 7, shellw)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)

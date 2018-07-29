@@ -201,13 +201,6 @@ contains
             if( params%classtats .eq. 'yes' )then
                 noris = build%spproj_field%get_noris()
                 ncls  = build%spproj_field%get_n('class')
-                ! setup weights
-                if( params%weights2D.eq.'yes' )then
-                    call build%spproj_field%calc_spectral_weights
-                else
-                    ! defaults to unitary weights
-                    call build%spproj_field%set_all2single('w', 1.0)
-                endif
                 ! generate class stats
                 call build%spproj_field%get_pops(pops, 'class', consider_w=.true.)
                 popmin         = minval(pops)
@@ -235,11 +228,7 @@ contains
                 if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
                 noris = build%spproj_field%get_noris()
                 ! setup weights
-                if( params%weights3D.eq.'yes' )then
-                    call build%spproj_field%calc_spectral_weights
-                else
-                    call build%spproj_field%calc_hard_weights(params%frac)
-                endif
+                call build%spproj_field%calc_hard_weights(params%frac)
                 ! generate population stats
                 call build%spproj_field%get_pops(tmp, 'proj', consider_w=.true.)
                 nprojs         = size(tmp)

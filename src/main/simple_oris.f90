@@ -146,7 +146,6 @@ type :: oris
     procedure          :: order_cls
     procedure          :: calc_hard_weights
     procedure          :: calc_hard_weights2D
-    procedure          :: calc_spectral_weights
     procedure          :: calc_bfac_rec
     procedure          :: find_closest_proj
     procedure, private :: create_proj_subspace_1
@@ -2121,25 +2120,6 @@ contains
         call hpsort(classpops, inds)
         call reverse(inds)
     end function order_cls
-
-    !>  \brief  calculates spectral particle weights
-    subroutine calc_spectral_weights( self )
-        class(oris), intent(inout) :: self
-        real, allocatable :: states(:), scores(:)
-
-        ! does not work
-
-        ! if( self%isthere('specscore') )then
-        !     states  = self%get_arr('state')
-        !     scores  = self%get_arr('specscore')
-        !     where( scores < 0. )  scores = 0.
-        !     where( states < 0.5 ) scores = 0.
-        !     call self%set_all('w', scores)
-        !     deallocate(states, scores)
-        ! else
-            call self%set_all2single('w', 1.)
-        ! endif
-    end subroutine calc_spectral_weights
 
     subroutine calc_bfac_rec( self )
         class(oris), intent(inout) :: self

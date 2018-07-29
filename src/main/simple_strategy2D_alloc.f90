@@ -29,11 +29,7 @@ contains
         integer        :: iptcl, prev_class, cnt, nptcls
         ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
-            if( params_glob%weights2D .eq. 'yes' .and. which_iter > 3 )then
-                call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.true., maxn=params_glob%ncls)
-            else
-                call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
-            endif
+            call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)

@@ -301,14 +301,12 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncls'
-        keys_optional(3)  = 'weights2D'
-        keys_optional(4)  = 'mul'
-        keys_optional(5)  = 'tseries'
-        keys_optional(6)  = 'outfile'
-        keys_optional(7)  = 'refs'
-        keys_optional(8)  = 'remap_cls'
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
+        keys_optional(3)  = 'mul'
+        keys_optional(4)  = 'tseries'
+        keys_optional(5)  = 'outfile'
+        keys_optional(6)  = 'refs'
+        keys_optional(7)  = 'remap_cls'
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:7))
         call xmake_cavgs%execute(cline)
     case( 'cluster2D' )
         ! is a reference-free 2D alignment/clustering algorithm adopted from the PRIME
@@ -332,19 +330,17 @@ select case(prg)
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'center'
-        keys_optional(16) = 'weights2D'
-        keys_optional(17) = 'refine'
-        keys_optional(18) = 'match_filt'
-        keys_optional(19) = 'dyncls'
-        keys_optional(20) = 'bfac_static'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:20))
+        keys_optional(16) = 'refine'
+        keys_optional(17) = 'match_filt'
+        keys_optional(18) = 'dyncls'
+        keys_optional(19) = 'bfac_static'
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:19))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     30.)
         if( .not. cline%defined('eo')        ) call cline%set('eo',       'no')
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',    30.)
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D','no')
         if( .not. cline%defined('refine')    ) call cline%set('refine',   'snhc')
         call xcluster2D%execute(cline)
     case( 'cavgassemble' )

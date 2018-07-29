@@ -116,11 +116,7 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SETUP WEIGHTS
-        if( params_glob%weights3D.eq.'yes' )then
-            call build_glob%spproj_field%calc_spectral_weights
-        else
-            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        endif
+        call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
 
         ! READ FOURIER RING CORRELATIONS
         if( params_glob%nstates.eq.1 )then
@@ -408,7 +404,7 @@ contains
                         call eucl_sigma%set_divide_by(iptcl)
                     end if
                 end if
-                select case(trim(params_glob%refine))                    
+                select case(trim(params_glob%refine))
                     case('clustersym')
                         ! always C1 reconstruction
                         call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)

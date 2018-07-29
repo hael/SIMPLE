@@ -131,7 +131,6 @@ select case(prg)
 
     case( 'make_cavgs' )
         call cline%parse()
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
         call xmake_cavgs_distr%execute(cline)
     case( 'cluster2D' )
@@ -141,14 +140,9 @@ select case(prg)
         if( .not. cline%defined('eo')        ) call cline%set('eo',        'no' )
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     50. )
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no' )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('refine')    ) call cline%set('refine',    'snhc')
-        if( cline%defined('frac') .and. cline%get_carg('weights2D').eq.'yes' )then
-            write(*,*)'FRAC & WEIGHTS2D=yes options are incompatible'
-            stop 'FRAC & WEIGHTS2D=yes options are incompatible'
-        endif
         call xcluster2D_distr%execute(cline)
     case( 'cluster2D_stream' )
         call cline%parse()
@@ -156,7 +150,6 @@ select case(prg)
         if( .not. cline%defined('eo')        ) call cline%set('eo',         'no')
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D',  'no')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         call xcluster2D_stream_distr%execute(cline)
 
