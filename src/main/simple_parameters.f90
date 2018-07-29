@@ -386,7 +386,7 @@ type :: parameters
     logical :: l_innermsk     = .false.
     logical :: l_match_filt   = .true.
     logical :: l_phaseplate   = .false.
-    logical :: l_needs_sigma  = .false.    
+    logical :: l_needs_sigma  = .false.
     logical :: l_remap_cls    = .false.
     logical :: sp_required    = .false.
   contains
@@ -1251,16 +1251,22 @@ DebugPrint 'found ncls from refs: ', ncls
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
+                ! below is to guard against over-fitting
+                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.3
             case('ccres')
                 self%cc_objfun = OBJFUN_RES
+                ! with ccres there is already a guarding mechanism in place
+                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
             case('euclid')
                 self%cc_objfun = OBJFUN_EUCLID
+                ! to be consistent with RELION
+                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
             case DEFAULT
                 write(*,*) 'objfun flag: ', trim(self%objfun)
                 stop 'unsupported objective function; parameters :: new'
         end select
         self%l_needs_sigma = (( self%recvol_sigma .eq. 'yes' ).or.&
-            ( self%cc_objfun .eq. OBJFUN_EUCLID )) 
+            ( self%cc_objfun .eq. OBJFUN_EUCLID ))
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
         if( cline%defined('bfac') ) self%l_cc_bfac = .true.
