@@ -1881,20 +1881,20 @@ contains
         integer,           intent(in)    :: nptcls, ndocs
         character(len=*),  intent(in)    :: oritype, fbody
         integer, optional, intent(in)    :: numlen_in
-        class(oris),          pointer :: os_ptr
         integer,          allocatable :: parts(:,:)
-        character(len=:), allocatable :: fname
+        character(len=:), allocatable :: fname, projfile
+        type(str4arr), allocatable :: os_strings(:)
         type(binoris) :: bos_doc
-        type(oris)    :: os_part
-        integer       :: i, iptcl, cnt, numlen, n_records, partsz, isegment
+        integer       :: i, numlen, n_records, partsz, isegment
+        integer       :: strlen, strlen_max
         numlen = len(int2str(ndocs))
         if( present(numlen_in) ) numlen = numlen_in
         parts  = split_nobjs_even(nptcls, ndocs)
-        ! convert from flag to enumerator to integer
+        ! convert from flag to enumerator
         isegment = oritype2segment(oritype)
-        ! allocate merged oris
-        call self%new_seg_with_ptr( nptcls, oritype, os_ptr )
-        ! read & transfer
+        ! allocate merged string representation
+        allocate(os_strings(nptcls))
+        ! read into string representation
         do i=1,ndocs
             ! read part
             fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
@@ -1910,17 +1910,29 @@ contains
                 write(*,*) 'partsz: ', partsz
                 stop
             endif
-            call os_part%new(n_records)
-            call bos_doc%read_segment(isegment, os_part)
-            call bos_doc%close()
-            ! transfer to self
-            cnt = 0
-            do iptcl = parts(i,1), parts(i,2)
-                cnt = cnt + 1
-                call os_ptr%set_ori(iptcl, os_part%get_ori(cnt))
-            enddo
+            call bos_doc%read_segment(isegment, os_strings)
+            call bos_doc%close
         end do
-        call self%write_segment_inside(oritype)
+        ! find maxium string lenght
+        strlen_max = 0
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(i,strlen) reduction(max:strlen_max)
+        do i=1,nptcls
+            strlen = len_trim(os_strings(i)%str)
+            if( strlen > strlen_max ) strlen_max = strlen
+        end do
+        !$omp end parallel do
+        ! write
+        call self%projinfo%getter(1, 'projfile', projfile)
+        call self%bos%open(projfile, del_if_exists=.false.)
+        call self%bos%write_segment_inside(isegment, os_strings, [1,nptcls], strlen_max)
+        ! destruct
+        do i=1,nptcls
+            if( allocated(os_strings(i)%str) ) deallocate(os_strings(i)%str)
+        end do
+        deallocate(os_strings)
+        ! no need to update header (taken care of in binoris object)
+        call self%bos%close
     end subroutine merge_algndocs
 
     ! this map2ptcls routine assumes that any selection of class averages is done

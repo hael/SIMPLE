@@ -40,7 +40,11 @@ type binoris
     procedure, private :: write_segment_1
     procedure, private :: write_segment_2
     generic            :: write_segment => write_segment_1, write_segment_2
-    procedure          :: write_segment_inside
+    procedure, private :: write_segment_inside_1
+    procedure, private :: write_segment_inside_2
+    generic            :: write_segment_inside => write_segment_inside_1, write_segment_inside_2
+    procedure, private :: byte_manager4seg_inside_1
+    procedure, private :: byte_manager4seg_inside_2
     procedure, private :: add_segment_1
     procedure, private :: add_segment_2
     procedure, private :: update_byte_ranges
@@ -165,17 +169,17 @@ contains
         end do
     end subroutine print_header
 
-    subroutine write_segment_inside( self, isegment, os, fromto )
+    subroutine write_segment_inside_1( self, isegment, os, fromto )
         use simple_oris,   only: oris
-        class(binoris),    intent(inout) :: self
-        integer,           intent(in)    :: isegment
-        class(oris),       intent(inout) :: os ! indexed from 1 to nptcls
-        integer, optional, intent(in)    :: fromto(2)
+        class(binoris),        intent(inout) :: self
+        integer,               intent(in)    :: isegment
+        class(oris), optional, intent(inout) :: os ! indexed from 1 to nptcls
+        integer,     optional, intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
         integer         :: i, nspaces, noris, iseg
         integer(kind=8) :: end_part1, start_part3, end_part3
         integer(kind=8) :: n_bytes_part3, n_bytes_part3_orig, ibytes, first_data_byte
-        character(len=1), allocatable :: bytearr_part1(:), bytearr_part3(:)
+        character(len=1), allocatable ::bytearr_part3(:)
         noris = os%get_noris()
         if( noris == 0 ) return
         if( present(fromto) )then
@@ -186,69 +190,13 @@ contains
             endif
         endif
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_inside'
-
-        ! READ RAW BYTES OF PART 1 OF FILE
-        ! figure out byte range
-        end_part1 = N_BYTES_HEADER
-        if( isegment > 1 )then
-            do iseg=1,isegment-1
-                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
-                    end_part1 = end_part1 + self%header(iseg)%n_records * self%header(iseg)%n_bytes_per_record
-                endif
-            end do
-        endif
-        ! allocate & read
-        allocate( bytearr_part1(1:end_part1) )
-        read(unit=self%funit,pos=1) bytearr_part1
-
-        ! READ RAW BYTES OF PART 3 OF FILE
-        ! figure out byte range
-        if( isegment < self%n_segments )then
-            start_part3 = N_BYTES_HEADER
-            do iseg=1,isegment
-                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
-                    start_part3 = start_part3 + self%header(iseg)%n_records * self%header(iseg)%n_bytes_per_record
-                endif
-            end do
-            start_part3 = start_part3 + 1
-            end_part3 = self%get_n_bytes_tot()
-            ! allocate & read 3d part
-            allocate( bytearr_part3(start_part3:end_part3) )
-            read(unit=self%funit,pos=start_part3) bytearr_part3
-        endif
-
+        ! ranges and raw bytes
+        call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
         call self%add_segment_1(isegment, os, fromto)
-        ! update byte ranges in header
-        call self%update_byte_ranges
-        ! validate byte ranges
-        if( self%header(isegment)%first_data_byte - 1 /= end_part1 )then
-            write(*,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
-            write(*,*) 'end of part 1 (bytes)     : ', end_part1
-            write(*,*) 'ERROR! end of part 1 of file does not match first data byte of segment'
-            stop 'simple_binoris :: write_segment_inside'
-        endif
-        if( allocated(bytearr_part3) )then
-            ! calculate byte size of second part of file, given the updated header
-            n_bytes_part3 = 0
-            do iseg=isegment + 1,self%n_segments
-                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
-                    n_bytes_part3 = n_bytes_part3 + self%header(iseg)%n_bytes_per_record * self%header(iseg)%n_records
-                endif
-            end do
-            ! compare with original
-            n_bytes_part3_orig = end_part3 - start_part3 + 1
-            if( n_bytes_part3_orig /= n_bytes_part3 )then
-                write(*,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
-                write(*,*) '# bytes of part 3 in updated : ', n_bytes_part3
-                write(*,*) 'ERROR! byte sizes of part3 in original and updated do not match'
-                stop 'simple_binoris :: write_segment_inside'
-            endif
-        endif
-
+        ! error checks
+        call self%byte_manager4seg_inside_2(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! WRITE FILE
-        ! 1st part
-        write(unit=self%funit,pos=1) bytearr_part1
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
@@ -263,7 +211,6 @@ contains
         end do
         ! 3d part
         if( allocated(bytearr_part3) )then
-
             ! find next nonzero first_data_byte
             do iseg=isegment + 1,self%n_segments
                 if( self%header(iseg)%first_data_byte > 0 )then
@@ -282,7 +229,131 @@ contains
         ! write updated header
         write(unit=self%funit,pos=1) self%header
         ! so no need to update header in file after this operation
-    end subroutine write_segment_inside
+    end subroutine write_segment_inside_1
+
+    subroutine write_segment_inside_2( self, isegment, os_strings, fromto, strlen_max )
+        use simple_oris,   only: oris
+        class(binoris), intent(inout) :: self
+        integer,        intent(in)    :: isegment
+        type(str4arr),  intent(in)    :: os_strings(:)
+        integer,        intent(in)    :: fromto(2), strlen_max
+        character(len=:), allocatable :: str_dyn
+        integer         :: i, nspaces, noris, iseg
+        integer(kind=8) :: end_part1, start_part3, end_part3
+        integer(kind=8) :: n_bytes_part3, n_bytes_part3_orig, ibytes, first_data_byte
+        character(len=1), allocatable :: bytearr_part3(:)
+        noris = size(os_strings)
+        if( noris == 0 ) return
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_inside'
+        ! ranges and raw bytes
+        call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        ! add segment to stack, this sets all the information needed for allocation
+        call self%add_segment_2(isegment, fromto, strlen_max)
+        ! error checks
+        call self%byte_manager4seg_inside_2(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        ! WRITE FILE
+        ! write orientation data (2nd part)
+        ibytes = self%header(isegment)%first_data_byte
+        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+            str_dyn = os_strings(i)%str
+            nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
+            if( nspaces > 0 )then
+                write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
+            else
+                write(unit=self%funit,pos=ibytes) str_dyn
+            endif
+            ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+        end do
+        ! 3d part
+        if( allocated(bytearr_part3) )then
+            ! find next nonzero first_data_byte
+            do iseg=isegment + 1,self%n_segments
+                if( self%header(iseg)%first_data_byte > 0 )then
+                    first_data_byte = self%header(iseg)%first_data_byte
+                    exit
+                endif
+            end do
+            if( first_data_byte > 0 )then
+                write(unit=self%funit,pos=first_data_byte) bytearr_part3
+            else
+                write(*,*) 'first_data_byte: ', first_data_byte
+                write(*,*) 'ERROR! first_data_byte must be > 0 for non-empty 3d segment'
+                stop 'simple_binoris :: write_segment_inside'
+            endif
+        endif
+        ! write updated header
+        write(unit=self%funit,pos=1) self%header
+        ! so no need to update header in file after this operation
+    end subroutine write_segment_inside_2
+
+    subroutine byte_manager4seg_inside_1( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
+        class(binoris),                intent(inout) :: self
+        integer,                       intent(in)    :: isegment
+        integer(kind=8),               intent(out)   :: end_part1, start_part3, end_part3
+        character(len=1), allocatable, intent(out)   :: bytearr_part3(:)
+        integer :: iseg
+        ! READ RAW BYTES OF PART 1 OF FILE
+        ! figure out byte range
+        end_part1 = N_BYTES_HEADER
+        if( isegment > 1 )then
+            do iseg=1,isegment-1
+                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
+                    end_part1 = end_part1 + self%header(iseg)%n_records * self%header(iseg)%n_bytes_per_record
+                endif
+            end do
+        endif
+        ! READ RAW BYTES OF PART 3 OF FILE
+        ! figure out byte range
+        if( isegment < self%n_segments )then
+            start_part3 = N_BYTES_HEADER
+            do iseg=1,isegment
+                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
+                    start_part3 = start_part3 + self%header(iseg)%n_records * self%header(iseg)%n_bytes_per_record
+                endif
+            end do
+            start_part3 = start_part3 + 1
+            end_part3 = self%get_n_bytes_tot()
+            ! allocate & read 3d part
+            if( allocated(bytearr_part3) ) deallocate(bytearr_part3)
+            allocate( bytearr_part3(start_part3:end_part3) )
+            read(unit=self%funit,pos=start_part3) bytearr_part3
+        endif
+    end subroutine byte_manager4seg_inside_1
+
+    subroutine byte_manager4seg_inside_2( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
+        class(binoris),                intent(inout) :: self
+        integer,                       intent(in)    :: isegment
+        integer(kind=8),               intent(in)    :: end_part1, start_part3, end_part3
+        character(len=1), allocatable, intent(in)    :: bytearr_part3(:)
+        integer(kind=8) :: n_bytes_part3_orig, n_bytes_part3
+        integer         :: iseg
+        ! update byte ranges in header
+        call self%update_byte_ranges
+        ! validate byte ranges
+        if( self%header(isegment)%first_data_byte - 1 /= end_part1 )then
+            write(*,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
+            write(*,*) 'end of part 1 (bytes)     : ', end_part1
+            write(*,*) 'ERROR! end of part 1 of file does not match first data byte of segment'
+            stop 'simple_binoris :: byte_manager4seg_inside_2'
+        endif
+        if( allocated(bytearr_part3) )then
+            ! calculate byte size of second part of file, given the updated header
+            n_bytes_part3 = 0
+            do iseg=isegment + 1,self%n_segments
+                if( self%header(iseg)%n_records > 0 .and. self%header(iseg)%n_bytes_per_record > 0 )then
+                    n_bytes_part3 = n_bytes_part3 + self%header(iseg)%n_bytes_per_record * self%header(iseg)%n_records
+                endif
+            end do
+            ! compare with original
+            n_bytes_part3_orig = end_part3 - start_part3 + 1
+            if( n_bytes_part3_orig /= n_bytes_part3 )then
+                write(*,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
+                write(*,*) '# bytes of part 3 in updated : ', n_bytes_part3
+                write(*,*) 'ERROR! byte sizes of part3 in original and updated do not match'
+                stop 'simple_binoris :: byte_manager4seg_inside_2'
+            endif
+        endif
+    end subroutine byte_manager4seg_inside_2
 
     subroutine write_segment_1( self, isegment, os, fromto )
         use simple_oris,   only: oris
