@@ -287,7 +287,6 @@ type :: parameters
     real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
-    real    :: bfac_static=0.       !< bfactor for weighted cros-correlation objection function
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
@@ -372,7 +371,6 @@ type :: parameters
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)      = .false.
     logical :: l_autoscale    = .false.
-    logical :: l_bfac_static  = .false.
     logical :: l_cc_bfac      = .true.
     logical :: l_distr_exec   = .false.
     logical :: l_dev          = .false.
@@ -670,7 +668,6 @@ contains
         call check_rarg('athres',         self%athres)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
-        call check_rarg('bfac_static',     self%bfac_static)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
@@ -1077,8 +1074,6 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         self%lplims2D(3)       = max(self%fny, self%lpstop)
         self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
         self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
-        ! bfactor for objective function
-        self%l_bfac_static = cline%defined('bfac_static')
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then

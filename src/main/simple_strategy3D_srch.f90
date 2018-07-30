@@ -80,11 +80,7 @@ contains
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
         ! calc B-factor & memoize
-        if( params_glob%l_bfac_static )then
-            bfac = params_glob%bfac_static
-        else
-            bfac = pftcc%fit_bfac(prev_ref, pftcc_pind, prev_roind, [0.,0.])
-        endif
+        bfac = pftcc%fit_bfac(prev_ref, pftcc_pind, prev_roind, [0.,0.])
         if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc%memoize_bfac(pftcc_pind, bfac)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
@@ -170,11 +166,7 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_strategy3D_srch'
         endif
         ! B-factor memoization
-        if( params_glob%l_bfac_static )then
-            bfac = params_glob%bfac_static
-        else
-            bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
-        endif
+        bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
         if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc_glob%memoize_bfac(self%iptcl, bfac)
         call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)
         ! calc specscore

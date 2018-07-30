@@ -53,11 +53,7 @@ contains
             self%s%prev_roind = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%s%iptcl))
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
             ! specscore & B-factor
-            if( params_glob%l_bfac_static )then
-                bfac = params_glob%bfac_static
-            else
-                bfac = pftcc_glob%fit_bfac(self%s%prev_ref, self%s%iptcl, self%s%prev_roind, [0.,0.])
-            endif
+            bfac = pftcc_glob%fit_bfac(self%s%prev_ref, self%s%iptcl, self%s%prev_roind, [0.,0.])
             if( params_glob%cc_objfun == OBJFUN_RES )call pftcc_glob%memoize_bfac(self%s%iptcl, bfac)
             self%s%specscore = pftcc_glob%specscore(self%s%prev_ref, self%s%iptcl, self%s%prev_roind)
             ! search decisions

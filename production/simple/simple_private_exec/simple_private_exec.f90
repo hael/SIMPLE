@@ -332,8 +332,7 @@ select case(prg)
         keys_optional(15) = 'center'
         keys_optional(16) = 'refine'
         keys_optional(17) = 'match_filt'
-        keys_optional(18) = 'bfac_static'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:18))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
