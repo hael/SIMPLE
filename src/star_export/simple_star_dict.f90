@@ -52,7 +52,7 @@ contains
         call self%keywords_filename%push('MicrographName',       'file' ) ! 'movie' in sp_project%os_mic ) ! eg. 'MotionCorr/job[0-9]{03}/filename.mrc[s]?')
         call self%keywords_filename%push('MicrographNameNoDW',   'file' ) !'MotionCorr/job[0-9]{03}/filename_noDW.mrc[s]?')
         call self%keywords_filename%push('OriginalParticleName', 'file' ) !'Extract/job[0-9]{03}/filename.mrc[s]?')
-        call self%keywords_filename%push('CtfImage',             'file' ) !  'Ctffind/job[0-9]{03}/filename.ctf:mrc')
+        call self%keywords_filename%push('CtfImage',             'file' ) !!DO NOT IMPORT THIS!!  'Ctffind/job[0-9]{03}/filename.ctf:mrc')
 
 
 
@@ -70,7 +70,7 @@ contains
 
         ! call self%keywords_general%push('AutopickFigureOfMerit',             '')    !!
         ! call self%keywords_general%push('AverageNrOfFrames',                 '')    !!
-        ! call self%keywords_general%push('ClassNumber',                       '')    !!
+        ! call self%keywords_general%push('ClassNumber',                       '')    !! arbitrary 
 
 
         !!  Symmetry libraries have been copied from XMIPP. As such, with the exception of

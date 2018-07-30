@@ -40,6 +40,9 @@ type stardoc
     logical          :: l_open               =.false.
     logical          :: doprint              =.false.
     logical          :: existence            =.false. !< to indicate existence
+    !! optional params for class and frame numbers
+    integer         , allocatable         :: data_framenum(:)
+    integer         , allocatable         :: data_classnum(:)
 contains
     procedure        :: new
     procedure        :: read
@@ -537,6 +540,13 @@ contains
                                 if(pos1 > len_trim(fname) - 1)then
                                     HALT_NOW(" File part "//trim(fname)//" irregular"  )
                                 endif
+                                !! get the frame number
+                                if(.not.allocated(self%data_framenum)) allocate(self%data_framenum(self%num_data_lines))
+                                call str2int( trim(fname(1:pos1-1)) , ios, self%data_framenum(nDataline) )
+                                if(ios/=0) then
+                                    HALT_NOW( 'stardoc; read_datalines frame num str2int error :'//trim(fname(1:pos1-1)) )
+                                endif
+                                !! shift the filename string
                                 fname = trim(fname(pos1+1:))
                             endif
                             !! modify string for :mrc extension
