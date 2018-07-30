@@ -13,6 +13,7 @@
 ! Public License.
 ! -----------------------------------------------------------------------------!
 program simple_omp_test
+!$ use omp_lib
 include 'simple_lib.f08'
 
 use simple_timer_omp_test
@@ -25,7 +26,7 @@ use simple_test_omp45
 #endif
 
 implicit none
-include 'omp_lib.h'
+! include 'omp_lib.h'
 
 real              :: starttime, stoptime
 logical           :: be_verbose=.false.
@@ -41,7 +42,7 @@ be_verbose = .true.
 #endif
 
 write(*,'(a,i0)') 'OpenMP version: ', openmp_version
-
+!$omp flush
 call test_omp_basics(10000)
 print *, ' Test internal openMP '
 call test_internal_omp
@@ -67,9 +68,7 @@ print *, ' Test OpenMP SIMD example 3'
 call test_simd_example3
 print *, ' Test OpenMP SIMD example 4'
 call test_simd_example4
-print *, ' Test OpenMP SIMD example 5'
-call test_simd_example5
-
+print *, ' Test OpenMP timer '
 
 call exec_OpenMP_timer_test(be_verbose)
 call date_and_time(TIME=timestr)
@@ -79,7 +78,11 @@ write(*,'(a,1x,f9.2)') '<<< intrinsic date_and_time elapsed (s): ', stoptime - s
 
 #ifdef OPENMP_VERSION
 #if OPENMP_VERSION >= 201511
+print *, ' Test OpenMP SIMD example 5'
+call test_simd_example5
+print *, ' Test OpenMP affinity example'
 call test_omp_affinity
+print *, ' Test OpenMP cancellation example '
 call test_omp_cancellation
 #endif
 #endif

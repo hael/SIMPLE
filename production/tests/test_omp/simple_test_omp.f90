@@ -502,6 +502,7 @@ contains
         do i = 1,N
             print*, i,a(i)
         end do
+        print *,"End of simd example2"
     end subroutine test_simd_example2
 
     function add1(a,b,fact) result(c)
@@ -529,7 +530,6 @@ contains
             a(i) = add2(a, b, i, 1.0d0,n) + tmp
             a(i) = a(i) + b(i) + 1.0d0
         end do
-
     end subroutine worksimd2
     subroutine test_simd_example3
         implicit none
@@ -544,6 +544,7 @@ contains
         do i = 1,N
             print*, i,a(i)
         end do
+        print *,"End of simd example3"
     end subroutine test_simd_example3
     subroutine worksimd3( a, b, n, sum )
         implicit none
@@ -569,6 +570,8 @@ contains
         do i = 1,N
             print*, i,a(i)
         end do
+        !$omp flush
+        print *,"End of simd example4"
     end subroutine test_simd_example4
     subroutine worksimd4( b, n, m )
         implicit none
@@ -579,7 +582,7 @@ contains
             b(i) = b(i-m) - 1.0
         end do
     end subroutine worksimd4
-        subroutine test_simd_example5
+    subroutine test_simd_example5
         implicit none
         integer, parameter :: N=32, m=12
         integer :: i
@@ -592,6 +595,8 @@ contains
         do i = 1,N
             print*, i,c(i)
         end do
+        !$omp flush
+        print *,"End of simd example5"
     end subroutine test_simd_example5
     subroutine worksimd5( a, b, c, n )
         implicit none
