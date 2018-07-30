@@ -66,7 +66,6 @@ end type stardoc
 interface stardoc
     module procedure constructor
 end interface stardoc
-integer, parameter :: MIN_STAR_NBYTES = 10
 
 enum, bind(C) ! STAR_FORMAT
     enumerator :: STAR_MOVIES=1
@@ -77,6 +76,8 @@ end enum
 
 #include "simple_local_flags.inc"
 integer, parameter :: MAX_STAR_ARGS_PER_LINE=16
+integer, parameter :: MIN_STAR_NBYTES = 10
+
 contains
 
     ! CONSTRUCTORS
@@ -184,12 +185,11 @@ contains
         integer, intent(in)                      :: funit
         character(len=:),allocatable,intent(out) :: line
         integer,intent(out)                      :: ier
-
-        integer,parameter                     :: buflen=1024
-        character(len=buflen)                 :: buffer
-        integer                               :: last
-        integer                               :: isize
-        logical :: isopened
+        integer,parameter     :: buflen = 1024
+        character(len=buflen) :: buffer
+        integer               :: last
+        integer               :: isize
+        logical               :: isopened
         line=''
         ier=0
         inquire(unit=funit,opened=isopened,iostat=ier)
@@ -204,11 +204,8 @@ contains
             ! limiting)
             read(funit,fmt='(a)',advance='no',size=isize,iostat=ier) buffer
             ! append what was read to result
-            !isize=len_trim(buffer)
             if(isize.gt.0)line=line//" "//buffer(:isize)
             ! if hit EOR reading is complete unless backslash ends the line
-            !print *, ier == iostat_eor, ier == iostat_end, buffer
-            !call fileiochk("readline isopened failed", ier)
             if(is_iostat_eor(ier))then
                 last=len(line)
                 ! if(last.ne.0)then
@@ -238,9 +235,9 @@ contains
     !> Parse the STAR file header
     subroutine read_header(self)
         class(stardoc), intent(inout) :: self
-        integer          :: ielem,ivalid,idata,ios,lenstr,isize,cnt,i
-        integer          :: pos1,pos2, nargsline
         character(len=:), allocatable :: line,tmp, starlabel,simplelabel
+        integer :: ielem,ivalid,idata,ios,lenstr,isize,cnt,i
+        integer :: pos1,pos2, nargsline
         logical :: inData, inHeader
         self%num_data_elements=0
         self%num_valid_elements=0
@@ -252,13 +249,9 @@ contains
         endif
         ios=0
         cnt=1
-
-        if(allocated(self%param_starlabels)) call self%kill_stored_params
-        if(allocated(self%param_labels)) call self%kill_stored_params
-        if(allocated(self%param_isstr)) call self%kill_stored_params
-        if(allocated(self%param_scale)) call self%kill_stored_params
-        if(allocated(self%param_converted)) call self%kill_stored_params
-
+        !! Make sure str4arr params are not allocated
+        call self%kill_stored_params
+        
         !! First Pass
         !! Make sure we are at the start of the file
         rewind( self%funit,IOSTAT=ios)
@@ -432,6 +425,15 @@ contains
         if(sum(int(self%param_converted)) /= self%num_valid_elements) then
             print *, " Second pass incorrectly allocated detected parameters "
             HALT_NOW( "simple_stardoc:: read_header invalid element mismatch 2")
+        endif
+        !! Check allocation of type variables
+        if(.not. allocated(self%param_starlabels) .or. &
+           .not. allocated(self%param_labels) .or. &
+           .not. allocated(self%param_isstr) .or. &
+           .not. allocated(self%param_scale) .or. &
+           .not. allocated(self%param_converted)) then
+            print *, " Second pass do not allocate correctly "
+            HALT_NOW( "simple_stardoc:: read_header allocation unsuccessful")
         endif
 
         print *, ">>>  STAR IMPORT HEADER INFO "

@@ -7,9 +7,13 @@ use simple_parameters
 use simple_oris, only: oris
 implicit none
 private
+public :: star_project
+
+
 type star_project
     type(stardoc) :: doc
 contains
+    procedure :: new
     procedure :: prepareimport
     procedure :: readfile
     procedure :: get_ndatalines
@@ -41,9 +45,34 @@ contains
     procedure :: kill
 end type star_project
 
+interface star_project
+    module procedure constructor
+end interface
 
-public :: star_project
 contains
+
+        !>  \brief  is an abstract constructor
+    function constructor( filename ) result( self )
+        character(len=*),intent(inout),optional :: filename
+        type(star_project) :: self
+        call self%new(filename)
+    end function constructor
+
+    subroutine new( self, filename )
+        class(star_project), intent(inout) :: self
+        character(len=*),intent(inout),optional :: filename
+        call self%kill()
+
+        if(present(filename)) then
+            if( .not. file_exists(trim(filename)) )then
+                !! import mode
+                call self%doc%open4import(filename)
+            else
+                !! export mode
+            endif
+        endif
+    end subroutine new
+
     subroutine prepareimport(self, sp, p, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
@@ -57,9 +86,7 @@ contains
 
         !! import mode
         call self%doc%open4import(filename)
-
         call self%doc%close()
-
     end subroutine prepareimport
 
     subroutine readfile(self, sp, filename)
