@@ -133,6 +133,7 @@ contains
         call get_resolution(corrs, res, res_fsc05, res_fsc0143)
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        write(*,'(A,1X,F6.2)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs)
         call even%kill
         call odd%kill
         ! end gracefully
