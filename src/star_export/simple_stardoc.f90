@@ -107,11 +107,11 @@ contains
         call self%kill()
         if(.not. self%sdict%exists() ) call self%sdict%new()
 
-        if(allocated(self%param_starlabels)) deallocate(self%param_starlabels)
-        if(allocated(self%param_labels)) deallocate(self%param_labels)
-        if(allocated(self%param_isstr)) deallocate(self%param_isstr)
-        if(allocated(self%param_scale)) deallocate(self%param_scale)
-        if(allocated(self%param_converted)) deallocate(self%param_converted)
+        if(allocated(self%param_starlabels)) call self%kill_stored_params
+        if(allocated(self%param_labels)) call self%kill_stored_params
+        if(allocated(self%param_isstr)) call self%kill_stored_params
+        if(allocated(self%param_scale)) call self%kill_stored_params
+        if(allocated(self%param_converted)) call self%kill_stored_params
 
         ! if(allocated(self%frames))then
         !     if(self%num_frames > 1) then
@@ -252,6 +252,13 @@ contains
         endif
         ios=0
         cnt=1
+
+        if(allocated(self%param_starlabels)) call self%kill_stored_params
+        if(allocated(self%param_labels)) call self%kill_stored_params
+        if(allocated(self%param_isstr)) call self%kill_stored_params
+        if(allocated(self%param_scale)) call self%kill_stored_params
+        if(allocated(self%param_converted)) call self%kill_stored_params
+
         !! First Pass
         !! Make sure we are at the start of the file
         rewind( self%funit,IOSTAT=ios)
@@ -332,11 +339,6 @@ contains
         if(inHeader) stop "stardoc:: read_header parsing failed"
         inData=.false.; inHeader=.false.
         cnt=1;
-        if(allocated(self%param_starlabels)) deallocate(self%param_starlabels)
-        if(allocated(self%param_labels)) deallocate(self%param_labels)
-        if(allocated(self%param_isstr)) deallocate(self%param_isstr)
-        if(allocated(self%param_scale)) deallocate(self%param_scale)
-        if(allocated(self%param_converted)) deallocate(self%param_converted)
         allocate(self%param_starlabels(self%num_data_elements))
         allocate(self%param_labels(self%num_data_elements))
         allocate(self%param_isstr(self%num_data_elements))
@@ -436,7 +438,8 @@ contains
         do i=1, self%num_data_elements
             if(allocated(self%param_labels(i)%str)) then
                 if(self%param_converted(i) == 1)then
-                    print*, i, trim(self%param_starlabels(i)%str),  trim(self%param_labels(i)%str), self%param_scale(i), self%param_isstr(i), self%param_converted(i)
+                    print*, i, trim(self%param_starlabels(i)%str),  trim(self%param_labels(i)%str), &
+                        &self%param_scale(i), self%param_isstr(i), self%param_converted(i)
                 else
                     print*, i, trim(self%param_starlabels(i)%str), " not converted"
                 end if
@@ -546,10 +549,11 @@ contains
                             endif
                             if(.not. allocated(projrootdir))then
                                 !! Estimate Project root dir
-                                projrootdir = get_absolute_path(filepath(get_fpath(self%current_file),PATH_PARENT,PATH_PARENT))
+                                projrootdir = get_absolute_path(&
+                                    filepath( get_fpath(self%current_file),&
+                                              PATH_PARENT,PATH_PARENT ) )
                                 DebugPrint " Project root dir (estimate from ../../ of starfile) : ", trim(projrootdir)
                             end if
-
 
                             DebugPrint " Parsing file param : ", trim(fname)
                             if( file_exists (trim(fname)) )then
@@ -632,7 +636,7 @@ contains
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
 
         print *, ">>>  STAR IMPORT DATA INFO "
-        print *, ">>>  number of data lines imported: ",self%num_data_lines 
+        print *, ">>>  number of data lines imported: ",self%num_data_lines
 
     end subroutine read_data_lines
 
@@ -862,6 +866,12 @@ contains
     subroutine kill_stored_params(self)
         class(stardoc), intent(inout) :: self
         integer :: i
+        if(allocated(self%param_starlabels))then
+            do i=1,self%num_data_elements
+                if(allocated(self%param_starlabels(i)%str))  deallocate(self%param_starlabels(i)%str)
+            end do
+            deallocate(self%param_starlabels)
+        end if
         if(allocated(self%param_labels))then
             do i=1,self%num_data_elements
                 if(allocated(self%param_labels(i)%str))  deallocate(self%param_labels(i)%str)
