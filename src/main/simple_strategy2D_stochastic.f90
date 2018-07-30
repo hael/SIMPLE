@@ -89,17 +89,13 @@ contains
                 self%s%nrefs_eval = 1 ! evaluate one random ref
                 isample           = 1 ! random .ne. prev
                 iref              = s2D%srch_order(self%s%iptcl_map, isample)
-                if( self%s%dyncls )then
-                    ! all good
-                else
-                    ! makes sure the ptcl does not land in an empty class
-                    ! such that a search is performed
-                    do while( s2D%cls_pops(iref) == 0 )
-                        isample = isample + 1
-                        iref    = s2D%srch_order(self%s%iptcl_map, isample)
-                        if( isample.eq.self%s%nrefs )exit
-                    enddo
-                endif
+                ! makes sure the ptcl does not land in an empty class
+                ! such that a search is performed
+                do while( s2D%cls_pops(iref) == 0 )
+                    isample = isample + 1
+                    iref    = s2D%srch_order(self%s%iptcl_map, isample)
+                    if( isample.eq.self%s%nrefs )exit
+                enddo
                 if( s2D%cls_pops(iref) == 0 )then
                     ! empty class
                     do_inplsrch = .false.                 ! no in-plane search

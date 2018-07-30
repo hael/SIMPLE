@@ -79,7 +79,6 @@ contains
         call chdict%push('dose_rate',     'dose rate(in e/A2/s)')
         call chdict%push('dryrun',        'dry 3D search')
         call chdict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')
-        call chdict%push('dyncls',        'dynamic classes update(yes|no){yes}')
         call chdict%push('e1',            'Euler 1 (in degrees){0}')
         call chdict%push('e2',            'Euler 2 (in degrees){0}')
         call chdict%push('e3',            'Euler 3 (in degrees){0}')

@@ -731,7 +731,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 12, 6, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 11, 6, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -749,14 +749,12 @@ contains
         &'(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('srch_ctrls', 5, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call cluster2D%set_input('srch_ctrls', 6, 'dyncls', 'binary', 'Dynamic reallocation of clusters', 'Dynamic reallocation of clusters &
-        &that fall below a minimum population by randomization(yes|no){yes}', '(yes|no){no}', .false., 'no')
-        call cluster2D%set_input('srch_ctrls', 7, maxits)
-        call cluster2D%set_input('srch_ctrls', 8, update_frac)
-        call cluster2D%set_input('srch_ctrls', 9, frac)
-        call cluster2D%set_input('srch_ctrls',10, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function in Angstroms^2', 'B-factor in Angstroms^2(>0.0){200}', .false., 200.)
-        call cluster2D%set_input('srch_ctrls',11, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
-        call cluster2D%set_input('srch_ctrls',12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(extr|snhc){snhc}', '(extr|snhc){snhc}', .false., 'snhc')
+        call cluster2D%set_input('srch_ctrls', 6, maxits)
+        call cluster2D%set_input('srch_ctrls', 7, update_frac)
+        call cluster2D%set_input('srch_ctrls', 8, frac)
+        call cluster2D%set_input('srch_ctrls', 9, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function in Angstroms^2', 'B-factor in Angstroms^2(>0.0){200}', .false., 200.)
+        call cluster2D%set_input('srch_ctrls',10, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
+        call cluster2D%set_input('srch_ctrls',11, 'refine', 'multi', 'Refinement mode', 'Refinement mode(extr|snhc){snhc}', '(extr|snhc){snhc}', .false., 'snhc')
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

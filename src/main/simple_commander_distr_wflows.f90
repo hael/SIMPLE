@@ -443,8 +443,6 @@ contains
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
             call cline_cavgassemble%set('refs', trim(refs))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
-            ! remapping of empty classes
-            call remap_empty_cavgs
             ! check convergence
             call xcheck_2Dconv%execute(cline_check_2Dconv)
             frac_srch_space = 0.
@@ -468,55 +466,6 @@ contains
         call cline%set('endit', real(iter))
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_CLUSTER2D NORMAL STOP ****')
-
-        contains
-
-            subroutine remap_empty_cavgs
-                use simple_image,           only: image
-                use simple_projection_frcs, only: projection_frcs
-                type(image)           :: img_cavg
-                type(projection_frcs) :: frcs
-                integer, allocatable  :: fromtocls(:,:)
-                integer               :: icls, state
-                if( params%dyncls.eq.'yes' )then
-                    call build%spproj%read_segment('ptcl2D', params%projfile )
-                    call build%spproj_field%fill_empty_classes(params%ncls, fromtocls)
-                    if( allocated(fromtocls) )then
-                        ! updates refs
-                        call img_cavg%new([params%box,params%box,1], params%smpd)
-                        do icls = 1, size(fromtocls, dim=1)
-                            call img_cavg%read(trim(refs), fromtocls(icls, 1))
-                            call img_cavg%write(trim(refs), fromtocls(icls, 2))
-                        enddo
-                        call img_cavg%read(trim(refs), params%ncls)
-                        call img_cavg%write(trim(refs), params%ncls)     ! to preserve size
-                        do icls = 1, size(fromtocls, dim=1)
-                            call img_cavg%read(trim(refs_even), fromtocls(icls, 1))
-                            call img_cavg%write(trim(refs_even), fromtocls(icls, 2))
-                        enddo
-                        call img_cavg%read(trim(refs_even), params%ncls)
-                        call img_cavg%write(trim(refs_even), params%ncls) ! to preserve size
-                        do icls = 1, size(fromtocls, dim=1)
-                            call img_cavg%read(trim(refs_odd), fromtocls(icls, 1))
-                            call img_cavg%write(trim(refs_odd), fromtocls(icls, 2))
-                        enddo
-                        call img_cavg%read(trim(refs_odd), params%ncls)
-                        call img_cavg%write(trim(refs_odd), params%ncls)  ! to preserve size
-                        ! updates FRCs
-                        state     = 1
-                        call frcs%new(params%ncls, params%box, params%smpd, state)
-                        call frcs%read(trim(FRCS_FILE))
-                        do icls = 1, size(fromtocls, dim=1)
-                            call frcs%set_frc( fromtocls(icls,2),&
-                            &frcs%get_frc(fromtocls(icls,1), params%box, state), state)
-                        enddo
-                        ! need to be re-written for distributed apps!
-                        call frcs%write(trim(FRCS_FILE))
-                        call build%spproj%write_segment_inside(params%oritype)
-                    endif
-                endif
-            end subroutine remap_empty_cavgs
-
     end subroutine exec_cluster2D_distr
 
     subroutine exec_refine3D_init_distr( self, cline )

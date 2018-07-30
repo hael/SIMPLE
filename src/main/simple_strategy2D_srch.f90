@@ -42,7 +42,6 @@ type strategy2D_srch
     real                    :: best_corr     = -1.  !< best corr found by search
     real                    :: prev_bfac     =  0.  !< previous b-factor
     real                    :: specscore     =  0.  !< spectral score
-    logical                 :: dyncls     = .true.  !< whether to turn on dynamic class update (use of low population threshold)
     logical                 :: doshift    = .true.  !< origin shift search indicator
   contains
     procedure :: new
@@ -71,7 +70,6 @@ contains
         self%fromp      =  params_glob%fromp
         self%top        =  params_glob%top
         self%nnn        =  params_glob%nnn
-        self%dyncls     =  (params_glob%dyncls.eq.'yes')
         ! construct composites
         lims(:,1)       = -params_glob%trs
         lims(:,2)       =  params_glob%trs
@@ -86,17 +84,9 @@ contains
         real :: corrs(pftcc_glob%get_nrots())
         self%nrefs_eval = 0
         ! find previous discrete alignment parameters
-        self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class')) ! class index
-        if( self%dyncls )then
-            if( self%prev_class > 0 )then
-                ! reassignement to a class with higher population
-                do while( s2D%cls_pops(self%prev_class) <= MINCLSPOPLIM )
-                   self%prev_class = irnd_uni(self%nrefs)
-                enddo
-            endif
-        endif
-        self%prev_rot   = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl))  ! in-plane angle index
-        self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                       ! shift vector
+        self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
+        self%prev_rot   = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
+        self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
