@@ -17,7 +17,6 @@ use simple_rnd
 use simple_stat
 use simple_timer
 use simple_magic_boxes
-use simple_combinatorics
 use simple_map_reduce
 use simple_sauron
 !! General data structures
