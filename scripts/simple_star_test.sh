@@ -67,16 +67,30 @@ simple_exec prg=importstar_project starfile=../../ManualPick/ManualPick/microgra
 simple_exec prg=print_project_info
 
 
+## Extract -- Relion does not create stacks by default
+##
+## module load relion/2.1
+## mkdir Stack_Extract_Micrographs
+## ln -s `pwd`/Micrographs Extract/job006/
+## (cd Micrographs; for i in *.mrc; ln -s $i ${i}s; done)
+## relion_stack_create --i Extract/job006/particles.star --o Stack_Extract --split_per_micrograph TRUE --apply_transformation TRUE           
 
-            
 
 cd ~/el85_scratch/stars_from_matt/simple_convert_star
 simple_exec prg=new_project projname=Extract
 cd Extract
 simple_exec prg=importstar_project starfile=../../Extract/364Box_Extract_LocalCTF/particles.star 
 simple_exec prg=print_project_info
-    
 simple_exec prg=import_particles stktab=../filetab-stardoc.txt oritab=../oritab-stardoc.txt  ctf=yes smpd=3.5
+
+cd ~/el85_scratch/stars_from_matt/simple_convert_star
+simple_exec prg=new_project projname=ExtractStk
+cd ExtractStk
+for i in ../../Stack_Extract_Micrographs/*.mrcs; do
+    simple_exec prg=import_cavgs stk=../../Stack_Extract_Micrographs/0001.mrcs  smpd=3.5
+done
+simple_exec prg=print_project_info
+
 
 
 # cd ~/el85_scratch/stars_from_matt/simple_convert_star
