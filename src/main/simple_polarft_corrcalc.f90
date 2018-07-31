@@ -859,8 +859,8 @@ contains
             call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
             call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
             ! correlate
-            self%fftdat(ithr)%ref_fft_re = self%fftdat(ithr)%ref_fft_re * conjg(self%fftdat_ptcls(i,ik)%re)
-            self%fftdat(ithr)%ref_fft_im = self%fftdat(ithr)%ref_fft_im * conjg(self%fftdat_ptcls(i,ik)%im)
+            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,ik)%re
+            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,ik)%im
             self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
                 4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
             self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
@@ -872,9 +872,6 @@ contains
         end do
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         corrs_over_k = corrs_over_k  / real(self%nrots * 2)
-        ! corrs_over_k needs to be reordered
-        corrs_over_k = corrs_over_k(self%nrots:1:-1) ! step 1 is reversing
-        corrs_over_k = cshift(corrs_over_k, -1)      ! step 2 is circular shift by 1
     end subroutine calc_corrs_over_k
 
     subroutine calc_k_corrs( self, pft_ref, i, k, kcorrs )
@@ -891,8 +888,8 @@ contains
         call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
         call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
         ! correlate FFTs
-        self%fftdat(ithr)%ref_fft_re = self%fftdat(ithr)%ref_fft_re * conjg(self%fftdat_ptcls(i,k)%re)
-        self%fftdat(ithr)%ref_fft_im = self%fftdat(ithr)%ref_fft_im * conjg(self%fftdat_ptcls(i,k)%im)
+        self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,k)%re
+        self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,k)%im
         self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
             4. * self%fftdat(ithr)%ref_fft_re(1:1 + int(self%pftsz / 2))
         self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
@@ -901,9 +898,6 @@ contains
         call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         kcorrs = self%fftdat(ithr)%backtransf / real(self%nrots * 2)
-        ! kcorrs needs to be reordered
-        kcorrs = kcorrs(self%nrots:1:-1) ! step 1 is reversing
-        kcorrs = cshift(kcorrs, -1)      ! step 2 is circular shift by 1
     end subroutine calc_k_corrs
 
     function calc_corr_for_rot(self, pft_ref, i, irot) result(corr)
