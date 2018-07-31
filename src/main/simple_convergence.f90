@@ -110,7 +110,7 @@ contains
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-        self%corr      = build_glob%spproj_field%get_avg('corr')      ! always updated for all ptcls with states > 0
+        self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
         self%specscore = build_glob%spproj_field%get_avg('specscore') ! always updated for all ptcls with states > 0
         self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
         self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)

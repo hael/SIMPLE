@@ -71,7 +71,7 @@ contains
         integer,                 intent(in)    :: iptcl, pftcc_pind
         integer   :: prev_state, prev_roind, prev_proj, prev_ref
         type(ori) :: o_prev
-        real      :: corr, bfac, specscore, corrs(pftcc%get_nrots())
+        real      :: bfac, specscore
         prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
         if( prev_state == 0 )return
         ! previous parameters
@@ -84,13 +84,9 @@ contains
         if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc%memoize_bfac(pftcc_pind, bfac)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
-        ! calc corr
-        call pftcc%gencorrs(prev_ref, pftcc_pind, corrs)
-        corr = max(0.,maxval(corrs))
         ! update spproj_field
         call build_glob%spproj_field%set(iptcl, 'bfac',      bfac)
         call build_glob%spproj_field%set(iptcl, 'specscore', specscore)
-        call build_glob%spproj_field%set(iptcl, 'corr',      corr)
         DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
     end subroutine set_ptcl_stats
 
