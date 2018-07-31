@@ -1070,8 +1070,6 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
         self%hpind_fsc = 0                                         ! high-pass Fouirer index FSC
         if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
-        self%hpind_corr_valid  = nint(self%dstep/HP_CORR_VALID)
-        self%lpind_corr_valid  = nint(self%dstep/LP_CORR_VALID)
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = max(self%fny, self%lpstart)
         self%lplims2D(2)       = max(self%fny, self%lplims2D(1) - (self%lpstart - self%lpstop)/2.)
@@ -1100,6 +1098,9 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         self%nrots = round2even(twopi*real(self%ring2))
         ! boxmatch
         self%boxmatch = find_boxmatch(self%box, self%msk)
+        ! set resolution range for corr_valid
+        self%hpind_corr_valid  = calc_fourier_index(HP_CORR_VALID, self%boxmatch, self%smpd)
+        self%lpind_corr_valid  = calc_fourier_index(LP_CORR_VALID, self%boxmatch, self%smpd)
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! matched filter flag
