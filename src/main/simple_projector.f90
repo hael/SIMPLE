@@ -129,20 +129,21 @@ contains
         class(projector), intent(inout) :: self
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
-        real        :: loc(3)
+        real        :: loc(3), e_rotmat(3,3)
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
         lims   = self%loop_lims(2)
         sqlp   = (maxval(lims(:,2)))**2
         ldim   = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
+        e_rotmat = e%get_mat()
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(h,k,sqarg,loc,phys,comp) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
-                loc  = matmul(real([h,k,0]), e%get_mat())
+                loc  = matmul(real([h,k,0]), e_rotmat)
                 comp = self%interp_fcomp(loc)
                 if (h > 0) then
                     phys(1) = h + 1
@@ -165,18 +166,19 @@ contains
         class(projector), intent(inout) :: self
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
-        real        :: loc(3)
+        real        :: loc(3), e_rotmat(3,3)
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
         lims   = self%loop_lims(2)
         sqlp   = (maxval(lims(:,2)))**2
         ldim   = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
+        e_rotmat = e%get_mat()
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
-                loc  = matmul(real([h,k,0]), e%get_mat())
+                loc  = matmul(real([h,k,0]), e_rotmat)
                 comp = self%interp_fcomp(loc)
                 if (h > 0) then
                     phys(1) = h + 1
@@ -202,17 +204,18 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
         logical,                 intent(in)    :: iseven !< eo flag
         integer :: irot, k, pdim(3)
-        real    :: vec(3), loc(3)
+        real    :: vec(3), loc(3), e_rotmat(3,3)
         if( MEMOIZEKB )then
             call self%fproject_polar_memo(iref, e, pftcc, iseven)
             return
         endif
         pdim = pftcc%get_pdim()
+        e_rotmat = e%get_mat()
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
                 vec(:2) = pftcc%get_coord(irot,k)
                 vec(3)  = 0.
-                loc     = matmul(vec,e%get_mat())
+                loc     = matmul(vec,e_rotmat)
                 call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
             end do
         end do
@@ -227,13 +230,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
         logical,                 intent(in)    :: iseven !< eo flag
         integer :: irot, k, pdim(3)
-        real    :: vec(3), loc(3)
+        real    :: vec(3), loc(3), e_rotmat(3,3)
         pdim = pftcc%get_pdim()
+        e_rotmat = e%get_mat()
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
                 vec(:2) = pftcc%get_coord(irot,k)
                 vec(3)  = 0.
-                loc     = matmul(vec,e%get_mat())
+                loc     = matmul(vec,e_rotmat)
                 call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_memo(loc), iseven)
             end do
         end do
