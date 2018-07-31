@@ -84,20 +84,15 @@ contains
         if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc%memoize_bfac(pftcc_pind, bfac)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
-
-        ! calc validation corr
-        corr_valid = 0.
-        if( params_glob%hpind_corr_valid >= params_glob%kfromto(1) .and. &
-          & params_glob%hpind_corr_valid <= params_glob%kstop      .and. &
-          & params_glob%lpind_corr_valid <= params_glob%kstop )then
-            call pftcc%gencorrs_cc_valid(prev_ref, pftcc_pind,&
-                &[params_glob%hpind_corr_valid,params_glob%lpind_corr_valid], corrs)
-            corr_valid = max(0.,maxval(corrs))
-        endif
         ! update spproj_field
         call build_glob%spproj_field%set(iptcl, 'bfac',       bfac)
         call build_glob%spproj_field%set(iptcl, 'specscore',  specscore)
-        call build_glob%spproj_field%set(iptcl, 'corr_valid', corr_valid)
+        ! calc validation corr
+        if( params_glob%l_eo )then
+            call pftcc%gencorrs_cc_valid(prev_ref, pftcc_pind, params_glob%kfromto_valid, corrs)
+            corr_valid = max(0.,maxval(corrs))
+            call build_glob%spproj_field%set(iptcl, 'corr_valid', corr_valid)
+        endif
         DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
     end subroutine set_ptcl_stats
 
@@ -141,7 +136,7 @@ contains
         integer, optional,      intent(in)    :: nnmat(self%nprojs,self%nnn_static)
         integer   :: i, istate
         type(ori) :: o_prev
-        real      :: corrs(self%nrots), corr, bfac
+        real      :: corrs(self%nrots), corr, bfac, corr_valid
         if( self%neigh )then
             if( .not. present(nnmat) )&
             &stop 'need optional nnmat to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
@@ -180,15 +175,13 @@ contains
         ! prep corr
         call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
         corr = max(0.,maxval(corrs))
-        if( corr - 1.0 > 1.0e-5 .or. .not. is_a_number(corr) )then
-            print *, 'FLOATING POINT EXCEPTION ALARM; simple_strategy3D_srch :: prep4srch'
-            print *, 'corr > 1. or isNaN'
-            print *, 'corr = ', corr
-            if( corr > 1. )               corr = 1.
-            if( .not. is_a_number(corr) ) corr = 0.
-            call o_prev%print_ori()
-        endif
         self%prev_corr = corr
+        ! calc validation corr
+        if( params_glob%l_eo )then
+            call pftcc_glob%gencorrs_cc_valid(self%prev_ref, self%iptcl, params_glob%kfromto_valid, corrs)
+            corr_valid = max(0.,maxval(corrs))
+            call build_glob%spproj_field%set(self%iptcl, 'corr_valid', corr_valid)
+        endif
         DebugPrint  '>>> STRATEGY3D_SRCH :: PREPARED FOR SIMPLE_STRATEGY3D_SRCH'
     end subroutine prep4srch
 

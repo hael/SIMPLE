@@ -12,20 +12,20 @@ private
 
 type convergence
     private
-    real :: corr      = 0. !< average correlation
-    real :: specscore = 0. !< average spectral score
-    real :: dist      = 0. !< average angular distance
-    real :: dist_inpl = 0. !< average in-plane angular distance
-    real :: npeaks    = 0. !< average # peaks
-    real :: frac      = 0. !< average fraction of search space scanned
-    real :: mi_joint  = 0. !< joint parameter distribution overlap
-    real :: mi_class  = 0. !< class parameter distribution overlap
-    real :: mi_proj   = 0. !< projection parameter distribution overlap
-    real :: mi_inpl   = 0. !< in-plane parameter distribution overlap
-    real :: mi_state  = 0. !< state parameter distribution overlap
-    real :: spread    = 0. !< angular spread
-    real :: bfac      = 0. !< average per-particle B-factor (search)
-    real :: bfac_rec  = 0. !< average per-particle B-factor (rec)
+    real :: corr       = 0. !< average correlation
+    real :: corr_valid = 0. !< average correlation (4 validation)
+    real :: dist       = 0. !< average angular distance
+    real :: dist_inpl  = 0. !< average in-plane angular distance
+    real :: npeaks     = 0. !< average # peaks
+    real :: frac       = 0. !< average fraction of search space scanned
+    real :: mi_joint   = 0. !< joint parameter distribution overlap
+    real :: mi_class   = 0. !< class parameter distribution overlap
+    real :: mi_proj    = 0. !< projection parameter distribution overlap
+    real :: mi_inpl    = 0. !< in-plane parameter distribution overlap
+    real :: mi_state   = 0. !< state parameter distribution overlap
+    real :: spread     = 0. !< angular spread
+    real :: bfac       = 0. !< average per-particle B-factor (search)
+    real :: bfac_rec   = 0. !< average per-particle B-factor (rec)
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
@@ -105,25 +105,27 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt
-        logical :: converged, bfac_rec_there
+        logical :: converged, bfac_rec_there, corr_valid_there
         integer :: iptcl, istate
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-        self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
-        self%specscore = build_glob%spproj_field%get_avg('specscore') ! always updated for all ptcls with states > 0
-        self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
-        self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
-        self%npeaks    = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
-        self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
-        self%mi_joint  = build_glob%spproj_field%get_avg('mi_joint',  mask=mask)
-        self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
-        self%mi_inpl   = build_glob%spproj_field%get_avg('mi_inpl',   mask=mask)
-        self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
-        self%spread    = build_glob%spproj_field%get_avg('spread',      mask=mask)
-        self%bfac      = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
-        self%bfac_rec  = 0.
-        bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
+        self%corr        = build_glob%spproj_field%get_avg('corr',      mask=mask)
+        self%corr_valid  = 0.
+        corr_valid_there = build_glob%spproj_field%isthere('corr_valid')
+        if( corr_valid_there ) self%corr_valid = build_glob%spproj_field%get_avg('corr_valid') ! always updated for all ptcls with states > 0
+        self%dist        = build_glob%spproj_field%get_avg('dist',      mask=mask)
+        self%dist_inpl   = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
+        self%npeaks      = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
+        self%frac        = build_glob%spproj_field%get_avg('frac',      mask=mask)
+        self%mi_joint    = build_glob%spproj_field%get_avg('mi_joint',  mask=mask)
+        self%mi_proj     = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
+        self%mi_inpl     = build_glob%spproj_field%get_avg('mi_inpl',   mask=mask)
+        self%mi_state    = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+        self%spread      = build_glob%spproj_field%get_avg('spread',    mask=mask)
+        self%bfac        = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
+        self%bfac_rec    = 0.
+        bfac_rec_there   = build_glob%spproj_field%isthere('bfac_rec')
         if( bfac_rec_there ) self%bfac_rec = build_glob%spproj_field%get_avg('bfac_rec')
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
@@ -140,8 +142,10 @@ contains
         write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PTCL B-FACTOR (REC):   ', self%bfac_rec
         endif
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-        write(*,'(A,1X,F7.4)') '>>> SPECSCORE:                         ', self%specscore
+        write(*,'(A,1X,F7.4)') '>>> CORRELATION (SEARCH):              ', self%corr
+        if( corr_valid_there )then
+        write(*,'(A,1X,F7.4)') '>>> CORRELATION (VALIDATION):          ', self%corr_valid
+        endif
         write(*,'(A,1X,F7.2)') '>>> ANGULAR SPREAD OF MODEL:           ', self%spread
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
@@ -250,8 +254,8 @@ contains
         select case(which)
             case('corr')
                 get = self%corr
-            case('specscore')
-                get = self%specscore
+            case('corr_valid')
+                get = self%corr_valid
             case('dist')
                 get = self%dist
             case('dist_inpl')

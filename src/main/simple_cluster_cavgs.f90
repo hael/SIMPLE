@@ -40,6 +40,7 @@ contains
         ! set bp range
         params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
         params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
+        params_glob%kstop      = params_glob%kfromto(2)
         ! prep pftcc
         call preppftcc4cluster
         ! memoize FFTs for improved performance

@@ -74,9 +74,11 @@ contains
         class(cmdline), intent(inout) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05, mapres(params_glob%nstates)
-        integer               :: s, loc(1), lp_ind
+        integer               :: s, loc(1), lp_ind, k_nyq
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
+        ! Nyqvist index
+        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
         select case(params_glob%eo)
             case('yes','aniso')
                 ! check all fsc_state*.bin exist
@@ -93,6 +95,9 @@ contains
                         & all_fsc_bin_exist = .false.
                 enddo
                 if(build_glob%spproj%is_virgin_field(params_glob%oritype)) all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
+                ! Fourier index range for corr_valid
+                params_glob%kfromto_valid(1) = calc_fourier_index(HP_CORR_VALID, params_glob%boxmatch, params_glob%smpd)
+                params_glob%kfromto_valid(2) = min(calc_fourier_index(LP_CORR_VALID, params_glob%boxmatch, params_glob%smpd), k_nyq)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
                     resarr = build_glob%img%get_res()
@@ -116,21 +121,18 @@ contains
                         endif
                     end do
                     loc = maxloc(mapres) ! worst resolved
-                    ! get median updatecnt
                     if( params_glob%nstates == 1 )then
-                        if( build_glob%spproj_field%median('updatecnt') > 1.0 )then
+                        ! get median updatecnt
+                        if( build_glob%spproj_field%median('updatecnt') > 1.0 )then ! more than half have been updated
                             lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), params_glob%lplim_crit)
                         else
-                            lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5)
+                            lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5) ! more conservative limit @ start
                         endif
                     else
                         lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                     endif
                     ! interpolation limit is NOT Nyqvist in correlation search
                     params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), params_glob%boxmatch, params_glob%smpd)
-                    if( params_glob%kfromto(2) == 1 )then
-                        call simple_stop('simple_strategy2D3D_common, simple_math::get_lplim gives nonsensical result (==1)')
-                    endif
                 else if( cline%defined('lp') )then
                     params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
                 else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
@@ -145,12 +147,12 @@ contains
                 endif
                 ! low-pass limit equals interpolation limit for correlation search
                 params_glob%kstop = params_glob%kfromto(2)
+                ! possible extension of interpolation limit to accomodate corr_valid
+                params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
+                ! for the euclidean distance case all frequencies need to be extracted
+                if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) params_glob%kfromto(2) = k_nyq
                 ! set high-pass Fourier index limit
                 params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%boxmatch, params_glob%smpd))
-                ! for the euclidean distance case all frequencies need to be extracted
-                if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) then
-                    params_glob%kfromto(2) = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
-                endif
                 ! re-set the low-pass limit
                 params_glob%lp = calc_lowpass_lim(params_glob%kstop, params_glob%boxmatch, params_glob%smpd)
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
@@ -175,11 +177,20 @@ contains
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space
         real    :: lplim
-        integer :: lpstart_find
+        integer :: lpstart_find, k_nyq
+        ! Nyqvist index
+        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
+        ! Fourier index range for corr_valid
+        params_glob%kfromto_valid(1) = calc_fourier_index(HP_CORR_VALID, params_glob%boxmatch, params_glob%smpd)
+        params_glob%kfromto_valid(2) = min(calc_fourier_index(LP_CORR_VALID, params_glob%boxmatch, params_glob%smpd), k_nyq)
+        ! High-pass index
         params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
         if( cline%defined('lp') )then
             params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
             call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
+            params_glob%kstop      = params_glob%kfromto(2)
+            ! possible extension of interpolation limit to accomodate corr_valid
+            params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
                 lplim = build_glob%projfrcs%estimate_lp_for_align()
@@ -196,6 +207,9 @@ contains
             ! to avoid pathological cases, fall-back on lpstart
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%boxmatch, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
+            params_glob%kstop      = params_glob%kfromto(2)
+            ! possible extension of interpolation limit to accomodate corr_valid
+            params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
             call build_glob%spproj_field%set_all2single('lp',lplim)
         endif
         params_glob%kstop = params_glob%kfromto(2)

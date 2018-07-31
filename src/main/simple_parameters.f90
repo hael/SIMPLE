@@ -202,16 +202,15 @@ type :: parameters
     integer :: fstep=1
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
-    integer :: hpind_corr_valid    !< high-pass Fourier index for corr_valid
     integer :: iares=10            !< integer angular resolution{10}
     integer :: ind=0
     integer :: iptcl=1
     integer :: jptcl=1
     integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
+    integer :: kfromto_valid(2)
     integer :: kstop=0
     integer :: ldim(3)=0
-    integer :: lpind_corr_valid    !< low-pass Fourier index for corr_valid
     integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
     integer :: minp=10             !< minimum cluster population
@@ -385,6 +384,7 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_needs_sigma  = .false.
     logical :: l_remap_cls    = .false.
+    logical :: l_eo           = .false.
     logical :: sp_required    = .false.
   contains
     procedure          :: new
@@ -1094,13 +1094,12 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         else
             self%l_innermsk = .false.
         endif
+        ! set eo flag
+        self%l_eo = self%eo .eq. 'yes'
         ! set nr of rotations
         self%nrots = round2even(twopi*real(self%ring2))
         ! boxmatch
         self%boxmatch = find_boxmatch(self%box, self%msk)
-        ! set resolution range for corr_valid
-        self%hpind_corr_valid  = calc_fourier_index(HP_CORR_VALID, self%boxmatch, self%smpd)
-        self%lpind_corr_valid  = calc_fourier_index(LP_CORR_VALID, self%boxmatch, self%smpd)
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! matched filter flag

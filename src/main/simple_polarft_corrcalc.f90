@@ -321,7 +321,7 @@ contains
                  &self%pfts_drefs_odd (self%pftsz,params_glob%kfromto(1):params_glob%kstop,3,params_glob%nthr),&
                  &self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
                  &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                 &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kstop),&
+                 &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)),&
                  &self%heap_vars(params_glob%nthr),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('shared arrays; new; simple_polarft_corrcalc')
         local_stat=0
@@ -378,7 +378,7 @@ contains
         end do
         ! thread-safe c-style allocatables for gencorrs, particle memoization
         do i = 1,self%nptcls
-            do ik = params_glob%kfromto(1),params_glob%kstop
+            do ik = params_glob%kfromto(1),params_glob%kfromto(2)
                 self%fftdat_ptcls(i,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
                 self%fftdat_ptcls(i,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
                 call c_f_pointer(self%fftdat_ptcls(i,ik)%p_re, self%fftdat_ptcls(i,ik)%re, [self%pftsz])
@@ -694,28 +694,6 @@ contains
         self%sqsums_ptcls(i) = sum(csq(self%pfts_ptcls(:,:,i)))
     end subroutine memoize_sqsum_ptcl
 
-    ! ! memoize particles ffts
-    ! subroutine memoize_ffts( self )
-    !     class(polarft_corrcalc), intent(inout) :: self
-    !     type(fftw_carr) :: carray(params_glob%nthr)
-    !     integer         :: i, ik, ithr
-    !     ! memoize particle FFTs in parallel
-    !     !$omp parallel do default(shared) private(i,ik,ithr) proc_bind(close) collapse(2) schedule(static)
-    !     do i = 1, self%nptcls
-    !         do ik = params_glob%kfromto(1),params_glob%kstop
-    !             ! get thread index
-    !             ithr = omp_get_thread_num() + 1
-    !             ! copy particle pfts
-    !             carray(ithr)%re = real(self%pfts_ptcls(:,ik,i))
-    !             carray(ithr)%im = aimag(self%pfts_ptcls(:,ik,i)) * self%fft_factors
-    !             ! FFT
-    !             call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_ptcls(i,ik)%re)
-    !             call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_ptcls(i,ik)%im)
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    ! end subroutine memoize_ffts
-
     ! memoize all particles ffts
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
@@ -743,7 +721,7 @@ contains
         integer  :: i, ik, ithr
         ithr = omp_get_thread_num() + 1
         ! memoize particle FFTs
-        do ik = params_glob%kfromto(1),params_glob%kstop
+        do ik = params_glob%kfromto(1),params_glob%kfromto(2)
             ! copy particle pfts
             self%fft_carray(ithr)%re = real(self%pfts_ptcls(:,ik,i))
             self%fft_carray(ithr)%im = aimag(self%pfts_ptcls(:,ik,i)) * self%fft_factors
