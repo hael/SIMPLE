@@ -464,7 +464,7 @@ contains
         character(len=LONGSTRLEN) :: sline
         character(len=STDLEN),allocatable :: lineparts(:)
         logical, allocatable :: fnameselected(:)
-        integer :: filetabunit, oritabunit
+        integer :: filetabunit, oritabunit, filetabunit2
         logical :: inData, inHeader
         real :: tmpval
         inHeader=.false.;inData=.false.
@@ -481,7 +481,9 @@ contains
         if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
         call fopen(filetabunit,file="filetab-stardoc.txt")
         if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
-        call fopen(oritabunit,file="oritab-stardoc.txt")
+        call fopen(oritabunit,file="oritab-stardoc.txt") 
+        if(file_exists('filetab-stardoc2.txt')) call del_file("filetab-stardoc2.txt")
+        call fopen(filetabunit2,file="filetab-stardoc2.txt")
         allocate(fnameselected(self%num_data_lines),source=.false.)
         do
             call readline(self%funit, line, ios)
@@ -608,6 +610,8 @@ contains
                             if (.not.fnameselected(nDataline))then
                                 write(filetabunit,'(A)') trim(fname)
                                 fnameselected(nDataline) = .true.
+                            else
+                                write(filetabunit2,'(A)') trim(fname)
                             endif
                         else
                             !! Data to be inserted
@@ -641,7 +645,10 @@ contains
             HALT_NOW(" Num data lines mismatch in read_data_lines and read_header")
         endif
         if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
+        if(is_open(filetabunit2)) call fclose(filetabunit2, errmsg="star_doc ; read_header filetab2")
         if(is_open(oritabunit))  call fclose(oritabunit,  errmsg="star_doc ; read_header oritab")
+        if(nlines("filetab-stardoc2.txt")==0) call del_file("filetab-stardoc2.txt")
+
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
 

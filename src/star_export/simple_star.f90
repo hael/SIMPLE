@@ -35,6 +35,7 @@ contains
     procedure :: export_class2D_select
     procedure :: import_class2D_select
     procedure :: export_init3Dmodel
+    procedure :: import_init3Dmodel
     procedure :: export_class3D
     procedure :: import_class3D
     procedure :: export_refine3D
@@ -42,6 +43,7 @@ contains
     procedure :: export_shiny3D
     procedure :: import_shiny3D
     procedure :: export_all
+    procedure :: import_all
     procedure :: kill
 end type star_project
 
@@ -146,9 +148,10 @@ contains
         labels=(/ 'MicrographNameNoDW' /)
         call self%doc%write(filename, sp, labels)
     end subroutine export_micrographs
-    subroutine import_micrographs (self,  sp, filename)
+    subroutine import_micrographs (self, sp, params, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
+        class(parameters), intent(inout) :: params
         character(len=*), intent(inout) :: filename
 
     end subroutine import_micrographs
@@ -172,9 +175,10 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_motion_corrected_micrographs
-    subroutine import_motion_corrected_micrographs (self,  sp, filename)
+    subroutine import_motion_corrected_micrographs (self,  sp, params, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
+        class(parameters),intent(inout) :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_motion_corrected_micrographs
 
@@ -319,7 +323,6 @@ contains
         ! !     end do
         ! ! endif
 
-
     end subroutine import_ctf_estimation
 
 
@@ -347,9 +350,10 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_autopick
-    subroutine import_autopick (self, sp, filename)
+    subroutine import_autopick (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_autopick
 
@@ -426,9 +430,10 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_extract_doseweightedptcls
-    subroutine import_extract_doseweightedptcls (self, sp, filename)
+    subroutine import_extract_doseweightedptcls (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_extract_doseweightedptcls
 
@@ -511,9 +516,10 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D
-    subroutine import_class2D (self, sp, filename)
+    subroutine import_class2D (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_class2D
 
@@ -585,9 +591,10 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D_select
-    subroutine import_class2D_select (self, sp, filename)
+    subroutine import_class2D_select (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_class2D_select
 
@@ -679,9 +686,10 @@ contains
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
     end subroutine export_class3D
-    subroutine import_class3D (self, sp, filename)
+    subroutine import_class3D (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_class3D
 
@@ -725,8 +733,13 @@ contains
 'MovieFramesRunningAverage',&
 'RandomSubset             ' /)
         call self%doc%write(filename, sp, labels)
-
     end subroutine export_init3Dmodel
+    subroutine import_init3Dmodel (self, spproj, params, filename)
+        class(star_project), intent(inout) :: self
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
+        character(len=*), intent(inout)    :: filename
+    end subroutine import_init3Dmodel
 
 
     !! Refine3D SIMPLE
@@ -807,9 +820,10 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_refine3D
-    subroutine import_refine3D (self, sp, filename)
+    subroutine import_refine3D (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_refine3D
 
@@ -894,9 +908,10 @@ labels=(/ &
 call self%doc%write(filename, sp, labels)
 
     end subroutine export_shiny3D
-    subroutine import_shiny3D (self, sp, filename)
+    subroutine import_shiny3D (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
         character(len=*), intent(inout) :: filename
     end subroutine import_shiny3D
 
@@ -908,40 +923,48 @@ call self%doc%write(filename, sp, labels)
     end subroutine export_all
 
 
+    subroutine import_all (self, spproj, params, filename)
+        class(star_project), intent(inout) :: self
+        class(sp_project), intent(inout)   :: spproj
+        class(parameters), intent(inout)   :: params
+        character(len=*), intent(inout) :: filename
+    end subroutine import_all
 
-    integer function exporttype2star( exporttype )
+
+    function exporttype2star( exporttype ) result(stype)
         character(len=*),  intent(in) :: exporttype
+        integer(kind=kind(MIC_STAR)) :: stype
         !select case(trim(exporttype))
         ! match oritype equivalent for star export type
         !case('movies') ! movies
         if(  index(trim(exporttype), 'movie')/=0 )then
-            exporttype2star = MOV_STAR
+            stype = MOV_STAR
         !case('mic':'micrographs': 'mcmicrographs':'ctf_estimation') ! movies
         else if( index(trim(exporttype), 'mic')/=0 .or. &
            & index(trim(exporttype), 'ctf')/=0 ) then
-            exporttype2star = MIC_STAR
+            stype = MIC_STAR
 !         case('stk':'select')           ! micrographs with selected boxes
         else if(index(trim(exporttype), 'select')/=0) then
-            exporttype2star = STK_STAR
+            stype = STK_STAR
 !         case('ptcl2D':'extract')
        else if(index(trim(exporttype), 'extract')/=0) then
-             exporttype2star = PTCL_STAR
+             stype = PTCL_STAR
 !         case('cls2D': 'class2d')             ! class averages
        else if(index(trim(exporttype), 'class2D')/=0) then
-             exporttype2star = CLSAVG_STAR
+             stype = CLSAVG_STAR
 !         case('cls3D': 'init3dmodel')
        else if(index(trim(exporttype), 'init3d')/=0) then
-             exporttype2star = CLSAVG_STAR
+             stype = CLSAVG_STAR
 !         case('ptcl3D':'refine3d')            ! 3D particles
        else if(index(trim(exporttype), 'refine3')/=0) then
-             exporttype2star = PTCL_STAR
+             stype = PTCL_STAR
 !         case('out': 'post')
        else if(index(trim(exporttype), 'post')/=0) then
-             exporttype2star = OUT_STAR
+             stype = OUT_STAR
 !         case('projinfo': 'all')
        else if(index(trim(exporttype), 'all')/=0 .or. &
            index(trim(exporttype), 'projinfo')/=0) then
-             exporttype2star = PROJINFO_STAR
+             stype = PROJINFO_STAR
 !         case DEFAULT
         else
             stop 'unsupported exporttype flag; star project :: exporttype2star'

@@ -147,7 +147,7 @@ contains
             write(*,*) 'Star project file argument empty or not set, e.g. starfile=<filename> or <directory>'
             call simple_stop( "ERROR! simple_commander_star :: exec_importstar_project ")
         end if
-         if(dir_exists(params%starfile))then
+        if(dir_exists(params%starfile))then
            call simple_list_files(trim(params%starfile)//'*.star', starfiles)
            nStarfiles = size(starfiles)
            write(*,*) " Importing star project :", nStarfiles, " found "
@@ -181,7 +181,57 @@ contains
            HALT_NOW("exec_importstar_project; Unable to read data line records in STAR file.")
        end if
 
+        if( params%startype  == 'NONE')then
+           write (*,*) " importstar_project valid startypes:"
+           write (*,*) " Accepted values are movies|micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post or all."
+           write (*,*) "    movies:         for raw micrographs"
+           write (*,*) "    micrographs:    for non-dose weighted micrographs"
+           write (*,*) "    mcmicrographs:  for motion-corrected, dose weighted micrographs"
+           write (*,*) "    ctf_estimation: for ctf estimation and micrographs"
+
+           write (*,*) "    class2d:        for 2D class averages"
+           write (*,*) "    select:         for selected 2D class averages"
+
+           write (*,*) "    init3dmodel:    for initial particles"
+           write (*,*) "    extract:        for extract dose-weighted particles"
+           write (*,*) "    refine3d:       for refined 3D particles"
+           write (*,*) "    post:           for post-processing"
+
+           
+        end if
+
+
 !! vvvvv TODO vvvvv
+
+        select case(params%startype)
+        case('movies')
+           call  starproj%import_micrographs(spproj, params, params%starfile)
+        case('micrographs')
+           call  starproj%import_micrographs(spproj, params, params%starfile)
+        case('mcmicrographs')
+           call  starproj%import_motion_corrected_micrographs(spproj, params, params%starfile)
+        case('ctf_estimation')
+           call starproj%import_ctf_estimation(spproj, params, params%starfile)
+        case('select')
+            call starproj%import_class2D_select(spproj,params,  params%starfile)
+        case('extract')
+           call starproj%import_extract_doseweightedptcls(spproj,params,  params%starfile)
+        case('class2d')
+           call starproj%import_class2D(spproj, params, params%starfile)
+        case('init3dmodel')
+           call starproj%import_init3Dmodel(spproj, params, params%starfile)
+        case('refine3d')
+           call starproj%import_class3D(spproj, params, params%starfile)
+        case('post')
+           call starproj%import_shiny3D(spproj, params, params%starfile)
+        case('all')
+           call starproj%import_all(spproj, params, params%starfile)
+        case default
+           call simple_stop( " importstar_project must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
+       end select
+
+
+
 
 !!******* Import movies + ctf_estimation
        if( cline%defined('phaseplate') )then
