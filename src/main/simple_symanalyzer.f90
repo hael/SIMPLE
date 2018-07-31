@@ -88,9 +88,17 @@ contains
         real,    allocatable :: scores(:), res(:), zscores(:)
         character(len=3)     :: subgrp
         type(sym) :: symobj
-        integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j
-        integer   :: isym, jsym, ksym, isub, nsubs, filtsz, iisym, fnr
+        integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j, ldim(3)
+        integer   :: isym, jsym, ksym, isub, nsubs, filtsz, iisym, fnr, kfromto(2)
         real      :: cc_sum, smpd
+        ! get info from vol_in
+        res    = vol_in%get_res()
+        smpd   = vol_in%get_smpd()
+        filtsz = vol_in%get_filtsz()
+        ldim   = vol_in%get_ldim()
+        ! set Fourier index range
+        kfromto(1) = calc_fourier_index(hp, ldim(1), smpd)
+        kfromto(2) = calc_fourier_index(lp, ldim(1), smpd)
         ! count # symmetries
         ncsyms = cn_stop - cn_start + 1
         if( dihedral .or. platonic )then
@@ -127,10 +135,6 @@ contains
             pgrps(cnt + 3)%str = 'i'
             write(*,'(a)') '>>> TESTING PLATONIC SYMMETRIES'
         endif
-        ! get resolution array and smpd for FSC analysis
-        res    = vol_in%get_res()
-        smpd   = vol_in%get_smpd()
-        filtsz = vol_in%get_filtsz()
         ! gather stats
         call eval_point_groups(vol_in, msk, hp, lp, pgrps)
         allocate(scoring_groups(nsyms), inds(nsyms), scores(nsyms))
@@ -156,11 +160,12 @@ contains
             end do
             nscoring           = count(scoring_groups)
             pgrps(isym)%cc_avg = pgrps(isym)%cc_avg / real(nscoring)
-            pgrps(isym)%score  = max(0.,median(pgrps(isym)%fsc))
+            pgrps(isym)%score  = max(0.,median(pgrps(isym)%fsc(kfromto(1):kfromto(2))))
             scores(isym)       = pgrps(isym)%score
         end do
         ! calculate Z-scores
-        zscores = robust_z_scores(scores)
+        ! zscores = robust_z_scores(scores)
+        zscores = z_scores(scores)
         ! produce ranked output
         inds = (/(isym,isym=1,nsyms)/)
         call hpsort(scores, inds)

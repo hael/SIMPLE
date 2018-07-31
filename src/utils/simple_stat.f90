@@ -584,9 +584,18 @@ contains
     end function mad_gau
 
     ! the Z-score calculates the number of standard deviations a data point is away from the mean
+    function z_scores( x ) result( zscores )
+        real, intent(in)  :: x(:) ! data points
+        real, allocatable :: zscores(:)
+        logical :: err
+        allocate(zscores(size(x)), source=x)
+        call normalize(zscores, err)
+    end function z_scores
+
+    ! the Z-score calculates the number of standard deviations a data point is away from the mean
     ! the robust Z-score does so in the presence of outliers
     function robust_z_scores( x ) result( z_scores )
-        real, intent(in) :: x(:) ! data points
+        real, intent(in)  :: x(:) ! data points
         real, allocatable :: z_scores(:)
         real :: med
         med = median(x)
