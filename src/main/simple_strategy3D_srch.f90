@@ -137,7 +137,6 @@ contains
     end subroutine new
 
     subroutine prep4srch( self, nnmat )
-        use simple_combinatorics, only: merge_into_disjoint_set
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: nnmat(self%nprojs,self%nnn_static)
         integer   :: i, istate

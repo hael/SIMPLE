@@ -724,7 +724,6 @@ contains
                 integer, intent(in) :: ldim(3), coord(2), box
                 integer             :: fromc(2), toc(2)
                 logical             :: inside
-                write(*,*)trim(params%outside), ldim, coord, box
                 if( params%outside .eq. 'yes' )then
                     inside = .true.
                     return

@@ -114,17 +114,17 @@ contains
         call img_jpg%write_jpg(self%moviename_thumb, quality=90)
         ! report to ori object
         call orientation%set('smpd',   ctfvars%smpd)
-        fname = get_absolute_path(moviename, 'simple_motion_correct_iter::iterate')
+        call simple_abspath(moviename, fname, errmsg='simple_motion_correct_iter::iterate 1')
         call orientation%set('movie',  trim(fname))
-        fname = get_absolute_path(self%moviename_intg,'simple_motion_correct_iter::iterate' )
+        call simple_abspath(self%moviename_intg, fname, errmsg='simple_motion_correct_iter::iterate 2')
         call orientation%set('intg',   trim(fname))
-        fname = get_absolute_path(self%moviename_forctf, 'simple_motion_correct_iter::iterate')
+        call simple_abspath(self%moviename_forctf, fname, errmsg='simple_motion_correct_iter::iterate 3')
         call orientation%set('forctf', trim(fname))
-        fname = get_absolute_path(self%moviename_thumb, 'simple_motion_correct_iter::iterate')
+        call simple_abspath(self%moviename_thumb, fname, errmsg='simple_motion_correct_iter::iterate 4')
         call orientation%set('thumb',  trim(fname))
         call orientation%set('imgkind', 'mic')
         if( cline%defined('tof') )then
-            fname = get_absolute_path(self%moviename_intg_frames, 'simple_motion_correct_iter::iterate')
+            call simple_abspath(self%moviename_intg_frames, fname, errmsg='simple_motion_correct_iter::iterate 5')
             call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         endif
         ! destruct

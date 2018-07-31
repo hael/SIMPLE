@@ -452,7 +452,7 @@ contains
             stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
         endif
         do i=1,nos_mic
-            boxf_abspath = get_absolute_path(trim(boxfnames(i)), errmsg='commander_project :: exec_import_movies')
+            call simple_abspath(trim(boxfnames(i)),boxf_abspath,errmsg='commander_project :: exec_import_movies')
             call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
         end do
         ! write project file
@@ -804,7 +804,7 @@ contains
             stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_update_boxes'
         endif
         do i=1,nos_mic
-            boxf_abspath = get_absolute_path(trim(boxfnames(i)), errmsg='commander_project :: exec_update_movies')
+            call simple_abspath(boxfnames(i), boxf_abspath, errmsg='commander_project :: exec_update_movies')
             call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
         end do
         ! write project file

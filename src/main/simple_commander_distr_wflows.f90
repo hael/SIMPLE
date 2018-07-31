@@ -792,7 +792,7 @@ contains
             enddo
             ! CONVERGENCE
             converged = .false.
-            if( params%refine.eq.'cluster' ) call cline_check_3Dconv%delete('update_res')
+            if( str_has_substr(params%refine,'cluster')) call cline_check_3Dconv%delete('update_res')
             call xcheck_3Dconv%execute(cline_check_3Dconv)
             if( iter >= params%startit + 2 )then
                 ! after a minimum of 2 iterations

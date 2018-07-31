@@ -254,7 +254,7 @@ contains
         cnt=1
         !! Make sure str4arr params are not allocated
         call self%kill_stored_params
-        
+
         !! First Pass
         !! Make sure we are at the start of the file
         rewind( self%funit,IOSTAT=ios)
@@ -561,9 +561,7 @@ contains
                             endif
                             if(.not. allocated(projrootdir))then
                                 !! Estimate Project root dir
-                                projrootdir = get_absolute_path(&
-                                    filepath( get_fpath(self%current_file),&
-                                              PATH_PARENT,PATH_PARENT ) )
+                                call simple_abspath(filepath(get_fpath(self%current_file),PATH_PARENT,PATH_PARENT), projrootdir)
                                 DebugPrint " Project root dir (estimate from ../../ of starfile) : ", trim(projrootdir)
                             end if
 

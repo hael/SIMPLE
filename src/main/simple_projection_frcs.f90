@@ -106,6 +106,11 @@ contains
         class(projection_frcs), intent(in)    :: self
         real,                   intent(in)    :: frc(:)
         real,                   intent(inout) :: res_frc05, res_frc0143
+        if( any([res_frc0143,res_frc05] <= minval(self%res4frc_calc)) )then
+            res_frc0143 = self%res4frc_calc(1)
+            res_frc05   = res_frc0143
+            return
+        endif
         if( all(frc >  0.5) )then
             res_frc05   = 2. * self%smpd
             res_frc0143 = res_frc05

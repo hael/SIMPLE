@@ -163,9 +163,9 @@ contains
                     allocate(fnames(n_spprojs+n_old))
                     fnames(1:n_old) = old_fnames(:)
                     do i=1,n_spprojs
-                        cline_mov       = completed_jobs_clines(i)
-                        fname           = trim(cline_mov%get_carg('projfile'))
-                        abs_fname       = get_absolute_path(fname, 'preprocess_stream :: update_projects_list 1')
+                        cline_mov = completed_jobs_clines(i)
+                        fname     = trim(cline_mov%get_carg('projfile'))
+                        call simple_abspath(fname, abs_fname, errmsg='preprocess_stream :: update_projects_list 1')
                         fnames(n_old+i) = trim(abs_fname)
                         deallocate(abs_fname)
                     enddo
@@ -175,7 +175,7 @@ contains
                     do i=1,n_spprojs
                         cline_mov = completed_jobs_clines(i)
                         fname     = trim(cline_mov%get_carg('projfile'))
-                        abs_fname = get_absolute_path(fname, 'preprocess_stream :: update_projects_list 2')
+                        call simple_abspath(fname, abs_fname, errmsg='preprocess_stream :: update_projects_list 2')
                         fnames(i) = trim(abs_fname)
                         deallocate(abs_fname)
                     enddo

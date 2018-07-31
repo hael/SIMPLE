@@ -795,7 +795,7 @@ contains
         ! put a full path on projfile
         if( self%projfile .ne. '' )then
             if( file_exists(self%projfile) )then
-                absname = get_absolute_path(trim(self%projfile), 'simple_parameters::new')
+                call simple_abspath(self%projfile,absname,'simple_parameters::new 1')
                 self%projfile = trim(absname)
                 self%projname = get_fbody(basename(self%projfile), 'simple')
             endif
@@ -809,15 +809,15 @@ contains
                 idir          = find_next_int_dir_prefix(self%cwd)
                 self%exec_dir = int2str(idir)//'_'//trim(self%prg)
                 ! make execution directory
-                call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new")
+                call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 2")
                 ! change to execution directory directory
-                call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new")
+                call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 3")
                 if( self%sp_required )then
                     ! copy the project file from upstairs
                     call syslib_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
                     ! update the projfile/projname
                     self%projfile = filepath(PATH_HERE, basename(self%projfile))
-                    absname = get_absolute_path(trim(self%projfile), 'simple_parameters::new')
+                    call simple_abspath(self%projfile,absname,'simple_parameters::new 4')
                     self%projfile = trim(absname)
                     self%projname = get_fbody(basename(self%projfile), 'simple')
                     ! cwd of SP-project will be updated in the builder
@@ -1310,7 +1310,7 @@ DebugPrint 'found ncls from refs: ', ncls
                             write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
                             stop
                         else
-                            abs_fname = get_absolute_path(self%vols(i), 'parameters :: check_vol', check_exists=.false.)
+                            call simple_abspath(self%vols(i),abs_fname,'parameters :: check_vol', check_exists=.false.)
                             if( len_trim( abs_fname) > LONGSTRLEN )then
                                 write(*,*)'Argument too long: ',trim( abs_fname)
                                 stop 'simple_parameters :: new :: check_vol'
@@ -1338,7 +1338,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        abs_name = get_absolute_path(name, 'parameters :: read_vols', check_exists=.false.)
+                        call simple_abspath(name,abs_name,'parameters :: read_vols', check_exists=.false.)
                         self%vols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1361,7 +1361,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     read(fnr,*, iostat=io_stat) name
                     if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
                     if( name .ne. '' )then
-                        abs_name = get_absolute_path(name, 'parameters :: read_masks', check_exists=.false.)
+                        call simple_abspath(name, abs_name, 'parameters :: read_masks', check_exists=.false.)
                         self%mskvols(i) = trim(abs_name)
                         deallocate(abs_name)
                     endif
@@ -1425,7 +1425,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     end select
                     if( file_exists(var) )then
                         ! updates name to include absolute path
-                        abspath_file = get_absolute_path(var, 'parameters :: check_file', check_exists=.false.)
+                        call simple_abspath(var,abspath_file,'parameters :: check_file', check_exists=.false.)
                         if( len_trim(abspath_file) > LONGSTRLEN )then
                             write(*,*)'Argument too long: ',trim(abspath_file)
                             stop 'simple_parameters :: new :: checkfile'
@@ -1434,7 +1434,7 @@ DebugPrint 'found ncls from refs: ', ncls
                         call cline%set(file,trim(var))
                         deallocate(abspath_file)
                     endif
- DebugPrint trim(file), '=', trim(var)
+                    DebugPrint trim(file), '=', trim(var)
                 endif
             end subroutine check_file
 

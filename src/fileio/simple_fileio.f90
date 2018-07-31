@@ -488,15 +488,6 @@ contains
         endif
     end function get_fpath
 
-    function get_absolute_path (infile, errmsg, check_exists) result(absolute_name)
-        character(len=*),              intent(in)  :: infile
-        character(len=:), allocatable              :: absolute_name
-        character(len=*), optional,    intent(in)  :: errmsg
-        logical,          optional,    intent(in)  :: check_exists
-        call simple_abspath(infile, absolute_name, errmsg, check_exists)
-    end function get_absolute_path
-
-
     !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
         use simple_strings, only: int2str, int2str_pad

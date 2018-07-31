@@ -1137,7 +1137,7 @@ contains
     !! \param res resolution value
     subroutine get_resolution( corrs, res, fsc05, fsc0143 )
         real, intent(in)  :: corrs(:), res(:) !<  corrs Fourier shell correlation
-        real, intent(out) :: fsc05, fsc0143 !<  fsc05 resolution at FSC=0.5,  fsc0143 resolution at FSC=0.143
+        real, intent(out) :: fsc05, fsc0143   !<  fsc05 resolution at FSC=0.5,  fsc0143 resolution at FSC=0.143
         integer           :: n, ires0143, ires05
         n = size(corrs)
         ires0143 = 1

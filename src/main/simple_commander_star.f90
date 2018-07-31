@@ -221,7 +221,7 @@ contains
                 stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
             endif
             do i=1,nmovf
-                boxf_abspath = get_absolute_path(trim(boxfnames(i)), 'commander_project :: exec_import_movies')
+                call simple_abspath(boxfnames(i), boxf_abspath, errmsg='commander_project :: exec_import_movies')
                 call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         end if
