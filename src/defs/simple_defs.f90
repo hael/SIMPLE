@@ -120,7 +120,11 @@ real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpenes
                                                        !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH      = 0.01      !< threshold for orientations softmax weights
-real,    parameter :: BSC                  = 20.       !< for shell reconstruction b-factor calculation
+real,    parameter :: BSC                  = 20.       !< for shell-weighted reconstruction (shellw), used in B-factor calculation
+real,    parameter :: HP_CORR_VALID        = 20.       !< high-pass limit for validation corr calculation
+                                                       !! 20 A is where domain structure starts
+real,    parameter :: LP_CORR_VALID        = 8.        !< low-pass limit for validation corr calculation
+                                                       !! signal is strong out to A with DDDs and 2ndary structure appears here 
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -135,7 +139,6 @@ integer, parameter :: NSPACE_REDUCED       = 600       !< # projection direction
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: NPDIRS_SUBSPACE      = 800       !< # projection directions in subspace search refine=neigh
-
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-averaging in 3D

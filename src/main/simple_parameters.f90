@@ -202,6 +202,7 @@ type :: parameters
     integer :: fstep=1
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
+    integer :: hpind_corr_valid    !< high-pass Fourier index for corr_valid
     integer :: iares=10            !< integer angular resolution{10}
     integer :: ind=0
     integer :: iptcl=1
@@ -210,6 +211,7 @@ type :: parameters
     integer :: kfromto(2)
     integer :: kstop=0
     integer :: ldim(3)=0
+    integer :: lpind_corr_valid    !< low-pass Fourier index for corr_valid
     integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
     integer :: minp=10             !< minimum cluster population
@@ -1068,6 +1070,8 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
         self%hpind_fsc = 0                                         ! high-pass Fouirer index FSC
         if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
+        self%hpind_corr_valid  = nint(self%dstep/HP_CORR_VALID)
+        self%lpind_corr_valid  = nint(self%dstep/LP_CORR_VALID)
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = max(self%fny, self%lpstart)
         self%lplims2D(2)       = max(self%fny, self%lplims2D(1) - (self%lpstart - self%lpstop)/2.)

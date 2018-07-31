@@ -154,6 +154,7 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
+    procedure          :: gencorrs_cc_valid
     procedure, private :: gencorrs_resnorm_1
     procedure, private :: gencorrs_resnorm_2
     procedure, private :: gencorrs_euclid_1
@@ -841,9 +842,9 @@ contains
         sqsum_ref = sum(csq(pft_ref(:,params_glob%kfromto(1):kstop)))
     end subroutine prep_ref4corr
 
-    subroutine calc_corrs_over_k( self, pft_ref, i, corrs_over_k )
+    subroutine calc_corrs_over_k( self, pft_ref, i, kfromto, corrs_over_k )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i
+        integer,                 intent(in)    :: i, kfromto(2)
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real,                    intent(out)   :: corrs_over_k(self%nrots)
         integer :: ithr, ik
@@ -851,7 +852,7 @@ contains
         ithr = omp_get_thread_num() + 1
         ! sum up correlations over k-rings
         corrs_over_k = 0.
-        do ik = params_glob%kfromto(1),params_glob%kstop
+        do ik = kfromto(1),kfromto(2)
             ! move reference into Fourier Fourier space (particles are memoized)
             self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
             self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
@@ -1179,7 +1180,7 @@ contains
         pft_ref      => self%heap_vars(ithr)%pft_ref
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sqsum_ref, params_glob%kstop)
-        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), corrs_over_k)
+        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), [params_glob%kfromto(1),params_glob%kstop], corrs_over_k)
         sqsum_ptcl = sum(csq(self%pfts_ptcls(:, params_glob%kfromto(1):params_glob%kstop, self%pinds(iptcl))))
         cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
     end subroutine gencorrs_cc_1
@@ -1214,9 +1215,35 @@ contains
             endif
         endif
         sqsum_ref = sum(csq(pft_ref))
-        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), corrs_over_k)
+        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), [params_glob%kfromto(1),params_glob%kstop], corrs_over_k)
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
     end subroutine gencorrs_cc_2
+
+    subroutine gencorrs_cc_valid( self, iref, iptcl, kfromto, cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, kfromto(2)
+        real,                    intent(out)   :: cc(self%nrots)
+        complex(sp), pointer :: pft_ref(:,:)
+        real(sp),    pointer :: corrs_over_k(:)
+        real(sp) :: sqsum_ref, sqsum_ptcl
+        integer  :: ithr
+        ithr         =  omp_get_thread_num() + 1
+        pft_ref      => self%heap_vars(ithr)%pft_ref
+        corrs_over_k => self%heap_vars(ithr)%corrs_over_k
+        ! copy the opposite reference as compared to search
+        if( .not. self%iseven(self%pinds(iptcl)) )then
+            pft_ref = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        ! multiply with CTF
+        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,self%pinds(iptcl))
+        ! for corr normalisation
+        sqsum_ref = sum(csq(pft_ref(:,kfromto(1):kfromto(2))))
+        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), kfromto, corrs_over_k)
+        sqsum_ptcl = sum(csq(self%pfts_ptcls(:,kfromto(1):kfromto(2),self%pinds(iptcl))))
+        cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
+    end subroutine gencorrs_cc_valid
 
     subroutine gencorrs_resnorm_1( self, iref, iptcl, cc )
         class(polarft_corrcalc), intent(inout) :: self

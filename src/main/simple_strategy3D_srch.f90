@@ -71,7 +71,7 @@ contains
         integer,                 intent(in)    :: iptcl, pftcc_pind
         integer   :: prev_state, prev_roind, prev_proj, prev_ref
         type(ori) :: o_prev
-        real      :: bfac, specscore
+        real      :: bfac, specscore, corrs(pftcc%get_nrots()), corr_valid
         prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
         if( prev_state == 0 )return
         ! previous parameters
@@ -84,9 +84,20 @@ contains
         if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc%memoize_bfac(pftcc_pind, bfac)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
+
+        ! calc validation corr
+        corr_valid = 0.
+        if( params_glob%hpind_corr_valid >= params_glob%kfromto(1) .and. &
+          & params_glob%hpind_corr_valid <= params_glob%kstop      .and. &
+          & params_glob%lpind_corr_valid <= params_glob%kstop )then
+            call pftcc%gencorrs_cc_valid(prev_ref, pftcc_pind,&
+                &[params_glob%hpind_corr_valid,params_glob%lpind_corr_valid], corrs)
+            corr_valid = max(0.,maxval(corrs))
+        endif
         ! update spproj_field
-        call build_glob%spproj_field%set(iptcl, 'bfac',      bfac)
-        call build_glob%spproj_field%set(iptcl, 'specscore', specscore)
+        call build_glob%spproj_field%set(iptcl, 'bfac',       bfac)
+        call build_glob%spproj_field%set(iptcl, 'specscore',  specscore)
+        call build_glob%spproj_field%set(iptcl, 'corr_valid', corr_valid)
         DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
     end subroutine set_ptcl_stats
 
