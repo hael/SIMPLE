@@ -464,7 +464,7 @@ contains
         character(len=LONGSTRLEN) :: sline
         character(len=STDLEN),allocatable :: lineparts(:)
         logical, allocatable :: fnameselected(:)
-        integer :: filetabunit, oritabunit, filetabunit2
+        integer :: filetabunit, oritabunit, filetabunit2, imagenamefunit
         logical :: inData, inHeader
         real :: tmpval
         inHeader=.false.;inData=.false.
@@ -484,6 +484,8 @@ contains
         call fopen(oritabunit,file="oritab-stardoc.txt") 
         if(file_exists('filetab-stardoc2.txt')) call del_file("filetab-stardoc2.txt")
         call fopen(filetabunit2,file="filetab-stardoc2.txt")
+        if(file_exists('imagename-stardoc.txt')) call del_file("imagename-stardoc.txt")
+        call fopen(imagenamefunit,file="imagename-stardoc.txt")
         allocate(fnameselected(self%num_data_lines),source=.false.)
         do
             call readline(self%funit, line, ios)
@@ -536,6 +538,7 @@ contains
                         if ( self%param_isstr(i) ) then
                             if(allocated(fname))deallocate(fname)
                             allocate(fname,source=trim(adjustl(lineparts(i))))
+                        
                             !! check filename for irregular STAR behaviour
                             pos1 = index(trim(fname),"@")
                             if( pos1 /= 0 )then
@@ -550,6 +553,7 @@ contains
                                 endif
                                 !! shift the filename string
                                 fname = trim(fname(pos1+1:))
+                                write(imagenamefunit,'(A,1x, I0)') trim(fname), self%data_framenum(nDataline)
                             endif
                             !! modify string for :mrc extension
                             !! Special note: CtfImage files are recorded as "*.ctf:mrc". These are
@@ -647,6 +651,7 @@ contains
         if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
         if(is_open(filetabunit2)) call fclose(filetabunit2, errmsg="star_doc ; read_header filetab2")
         if(is_open(oritabunit))  call fclose(oritabunit,  errmsg="star_doc ; read_header oritab")
+        if(is_open(imagenamefunit)) call fclose(imagenamefunit, errmsg="star_doc ; read_header imagename")
         if(nlines("filetab-stardoc2.txt")==0) call del_file("filetab-stardoc2.txt")
 
         rewind( self%funit,IOSTAT=ios)

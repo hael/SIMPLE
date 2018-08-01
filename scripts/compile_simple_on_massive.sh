@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MASSIVE=m3-login2.massive.org.au
+MASSIVE=m3.massive.org.au
 MASSIVE_USERNAME=$1
 MASSIVE_ACCOUNT=el85
 cat >>EOF
