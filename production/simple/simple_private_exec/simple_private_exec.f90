@@ -332,7 +332,8 @@ select case(prg)
         keys_optional(15) = 'center'
         keys_optional(16) = 'refine'
         keys_optional(17) = 'match_filt'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:17))
+        keys_optional(18) = 'shellw'
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:18))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)

@@ -45,8 +45,8 @@ contains
         use simple_strategy2D_snhc,       only: strategy2D_snhc
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
-        integer, allocatable  :: prev_pops(:), pinds(:), w_pinds(:)
-        logical, allocatable  :: ptcl_mask(:)
+        integer, allocatable :: pinds(:)
+        logical, allocatable :: ptcl_mask(:)
         !---> The below is to allow particle-dependent decision about which 2D strategy to use
         type :: strategy2D_per_ptcl
             class(strategy2D), pointer         :: ptr => null()
@@ -55,7 +55,7 @@ contains
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy2D base class
         type(strategy2D_spec) :: strategy2Dspec
-        integer               :: iptcl, icls, i, fnr, cnt, update_cnt
+        integer               :: iptcl, i, fnr, cnt, update_cnt
         real                  :: extr_bound, frac_srch_space, extr_thresh, snhc_sz
         logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
@@ -117,9 +117,9 @@ contains
         ! SNHC LOGICS
         if( l_snhc )then
             ! factorial decay, -2 because first step is always greedy
-            snhc_sz = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(params_glob%extr_iter-2)
-            snhc_sz = min(EXTRINITHRESH, max(0., snhc_sz))
-            write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*snhc_sz
+            snhc_sz = SNHC2D_INITFRAC * (1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)
+            snhc_sz = min(SNHC2D_INITFRAC, max(0., snhc_sz))
+            write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-snhc_sz)
         else
             snhc_sz = 0.
         endif
@@ -170,6 +170,13 @@ contains
             call build_glob%spproj_field%set_all2single('w', 1.0)
         endif
         DebugPrint ' cluster2D_exec;   SETUP WEIGHTS                             ', toc(t_init)
+
+        ! B-FACTOR
+        if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
+            call build_glob%spproj_field%calc_bfac_rec(is_2d=.true.)
+        else
+            call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
+        endif
 
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
@@ -255,6 +262,7 @@ contains
         end do
         !$omp end parallel do
         DebugPrint ' cluster2D_exec;   strategy2Dsrch ', toc(t_init)
+
         ! CLEAN-UP
         call clean_strategy2D
         DebugPrint ' cluster2D_exec;   clean_strategy2D ', toc(t_init)
@@ -264,7 +272,7 @@ contains
            call strategy2Dsrch(iptcl)%ptr%kill
            nullify(strategy2Dsrch(iptcl)%ptr)
         end do
-        deallocate( strategy2Dsrch )
+        deallocate( strategy2Dsrch, pinds, ptcl_mask )
         if( L_BENCH ) rt_align = toc(t_align)
         DebugPrint ' strategy2D_matcher; completed alignment                     ', toc(t_init)
 

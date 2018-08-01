@@ -91,9 +91,9 @@ contains
              DebugPrint ' exec_make_cavgs mul_shifts                             ', toc(t2)
         endif
         ! setup weights in case the 2D was run without them (specscore will still be there)
-        t2=tic()
         call build%spproj_field%set_all2single('w', 1.0)
-        DebugPrint ' exec_make_cavgs spproj_field%calc_bfac_rec             ', toc(t2)
+        ! shell weighted classes
+        if( params%shellw.eq.'yes' ) call build%spproj_field%calc_bfac_rec(is_2d=.true.)
         ! even/odd partitioning
         t2=tic()
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo

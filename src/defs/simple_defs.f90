@@ -112,6 +112,8 @@ real, parameter    :: FRAC_SH_LIM          = 80.0      !< at what frac to turn o
 real, parameter    :: FRAC_INTERPOL        = 60.0      !< at what frac to turn on the gridding interpolation (2D)
 real, parameter    :: EXTRINITHRESH        = 0.5       !< initial randomization threshold for extremal search
 real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
+real, parameter    :: SNHC2D_INITFRAC      = 0.5       !< initial neighbourhood fraction for 2D SNHC
+real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D SNHC
 real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
@@ -120,11 +122,12 @@ real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpenes
                                                        !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH      = 0.01      !< threshold for orientations softmax weights
-real,    parameter :: BSC                  = 20.       !< for shell-weighted reconstruction (shellw), used in B-factor calculation
+real,    parameter :: BSC3D                = 20.       !< for shell-weighted 3D reconstruction (shellw), used in B-factor calculation
+real,    parameter :: BSC2D                = 15.       !< for shell-weighted 2D reconstruction (shellw), used in B-factor calculation
 real,    parameter :: HP_CORR_VALID        = 20.       !< high-pass limit for validation corr calculation
                                                        !! 20 A is where domain structure starts
 real,    parameter :: LP_CORR_VALID        = 8.        !< low-pass limit for validation corr calculation
-                                                       !! signal is strong out to A with DDDs and 2ndary structure appears here 
+                                                       !! signal is strong out to A with DDDs and 2ndary structure appears here
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

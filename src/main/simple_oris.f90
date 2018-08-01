@@ -2121,26 +2121,38 @@ contains
         call reverse(inds)
     end function order_cls
 
-    subroutine calc_bfac_rec( self )
-        class(oris), intent(inout) :: self
-        real,    allocatable :: states(:), scores(:)
+    subroutine calc_bfac_rec( self, is_2d )
+        class(oris),       intent(inout) :: self
+        logical, optional, intent(in)    :: is_2d
+        real,    allocatable :: states(:),scores(:)
         logical, allocatable :: mask(:)
-        real    :: avg, sdev
+        real    :: avg, sdev, BSC_here, score
+        integer :: i
+        BSC_here = BSC3D
+        if(present(is_2d))then
+            if( is_2d )BSC_here = BSC2D
+        endif
         if( self%isthere('specscore') )then
             states = self%get_all('state')
             mask   = states > 0.5
-            deallocate(states)
             scores = self%get_all('specscore')
             avg    = sum(scores, mask=mask) / real(count(mask))
-            scores = scores - avg
-            sdev   = sqrt( sum(scores*scores, mask=mask) / real(count(mask)) )
+            ! centering
+            where(mask) scores = scores - avg
+            sdev = sqrt( sum(scores*scores, mask=mask) / real(count(mask)) )
             if( sdev < 1.e-6 )then
                 call self%delete_entry('bfac_rec')
             else
-                scores = -scores / sdev
-                scores = BSC * (1. / (1.+exp(-scores)))
-                call self%set_all('bfac_rec', scores )
+                do i=1,self%n
+                    if(.not.mask(i))cycle
+                    ! normalization & sign change for logistic function
+                    score = -scores(i) / sdev
+                    ! logistic function and scaling
+                    score = BSC_here * (1. / (1.+exp(-score)))
+                    call self%set(i, 'bfac_rec', score )
+                enddo
             endif
+            deallocate(mask,states,scores)
         else
             call self%delete_entry('bfac_rec')
         endif

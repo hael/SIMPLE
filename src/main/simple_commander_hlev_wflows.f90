@@ -81,7 +81,7 @@ contains
             call spproj%write_segment_inside(params%oritype)
         endif
         ! refinement flag
-        if(.not.cline%defined('refine') )call cline%set('refine','snhc')
+        if(.not.cline%defined('refine')) call cline%set('refine','snhc')
         ! splitting
         call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! general options planning
@@ -319,6 +319,7 @@ contains
             res       = spproj%os_cls2D%get_all('res')
             lplims(1) = max(median_nocopy(res), lplims(2))
             deallocate(res)
+            write(*,*)'>>> '
         else
             if( cline%defined('lpstart') ) lplims(1) = params%lpstart
         endif
@@ -382,12 +383,12 @@ contains
         call cline_refine3D_snhc%set('projfile', trim(WORK_PROJFILE))
         call cline_refine3D_snhc%set('msk',      msk)
         call cline_refine3D_snhc%set('box',      real(box))
-        call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
         call cline_refine3D_snhc%set('prg',    'refine3D')
         call cline_refine3D_snhc%set('refine',  'snhc')
         call cline_refine3D_snhc%set('lp',      lplims(1))
         call cline_refine3D_snhc%set('nspace',  real(NSPACE_SNHC))
-        call cline_refine3D_snhc%set('maxits', real(MAXITS_SNHC))
+        call cline_refine3D_snhc%set('maxits',  real(MAXITS_SNHC))
+        call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('prg',      'refine3D')
         call cline_refine3D_init%set('projfile', trim(WORK_PROJFILE))
@@ -443,6 +444,7 @@ contains
         ! execute commanders
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
+        write(*,'(A,F6.1,A)') '>>> LOW-PASS LIMIT FOR ALIGNMENT: ', lplims(1),' ANGSTROMS'
         write(*,'(A)') '>>>'
         call xrefine3D_distr%execute(cline_refine3D_snhc)
         write(*,'(A)') '>>>'

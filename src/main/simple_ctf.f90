@@ -382,7 +382,7 @@ contains
 
     !>  \brief  is for applying CTF to an image and shifting it (used in classaverager)
     !!          KEEP THIS ROUTINE SERIAL
-    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift)
+    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift, bfac)
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
@@ -394,28 +394,51 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        real, optional, intent(in)    :: bfac        !< ctf b-factor weighing
         integer :: ldim(3),logi(3),h,k,phys(3)
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
+        real    :: rnyq_sq,bfacw_nyq,rh,rk,sh_sq,bfac_sc
+        logical :: do_bfac
+        do_bfac = present(bfac)
         ! initialize
         call self%init(dfx, dfy, angast)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
+        rnyq_sq  = real(img%get_nyq()**2)
+        if( do_bfac )then
+            if(bfac > TINY)then
+                bfac_sc   = bfac/4.
+                bfacw_nyq = exp(-bfac_sc)
+            else
+                do_bfac = .false.
+            endif
+        endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
+                rh    = real(h)
+                rk    = real(k)
+                sh_sq = real(h*h+k*k)
                 ! calculate CTF and CTF**2.0 values
-                hinv      = real(h) * inv_ldim(1)
-                kinv      = real(k) * inv_ldim(2)
-                spaFreqSq = hinv * hinv + kinv * kinv
-                ang       = atan2(real(k),real(h))
+                hinv      = rh * inv_ldim(1)
+                kinv      = rk * inv_ldim(2)
+                spaFreqSq = hinv*hinv + kinv*kinv
+                ang       = atan2(rh,rk)
                 tval      = 1.0
                 if( imode <  3 ) tval = self%eval(spaFreqSq, ang, add_phshift)
                 ! rho
-                rho(h,k)  = tval * tval
+                rho(h,k) = tval * tval
                 if( imode == 1 ) tval = abs(tval)
                 ! multiply image with tval & weight
                 logi   = [h,k,0]
                 phys   = img%comp_addr_phys(logi)
-                call img%mul_cmat_at(phys, tval)
+                if( do_bfac )then
+                    if( sh_sq > rnyq_sq )then
+                        tval = tval * bfacw_nyq
+                    else
+                        tval = tval * exp(-bfac_sc*sh_sq/rnyq_sq)
+                    endif
+                endif
+                call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
                 ! shift image
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), img%oshift(logi,[x,y,0.]))
             end do

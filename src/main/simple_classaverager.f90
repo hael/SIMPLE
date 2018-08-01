@@ -20,6 +20,7 @@ type ptcl_record
     real                 :: dfy     = 0.0                       !< defocus in y (microns)
     real                 :: angast  = 0.0                       !< angle of astigmatism (in degrees)
     real                 :: phshift = 0.0                       !< additional phase shift from the Volta
+    real                 :: bfac    = 0.0                       !< b-factor for weighted reconstruction
     integer, allocatable :: classes(:)                          !< class assignments
     integer, allocatable :: states(:)                           !< state assignments
     integer, allocatable :: eos(:)                              !< even/odd assignments
@@ -142,9 +143,14 @@ contains
                 cycle
             endif
             ! parameter transfer
-            precs(cnt)%pind    = iptcl
-            precs(cnt)%eo      = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
-            precs(cnt)%pw      = spproj%os_ptcl2D%get(iptcl,'w')
+            precs(cnt)%pind = iptcl
+            precs(cnt)%eo   = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
+            precs(cnt)%pw   = spproj%os_ptcl2D%get(iptcl,'w')
+            if( params_glob%shellw.eq.'yes' )then
+                precs(cnt)%bfac = spproj%os_ptcl2D%get(iptcl,'bfac_rec')
+            else
+                precs(cnt)%bfac = 0.
+            endif
             ctfvars            = spproj%get_ctfparams('ptcl2D',iptcl)
             precs(cnt)%tfun    = ctf(params_glob%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             precs(cnt)%dfx     = ctfvars%dfx
@@ -394,16 +400,16 @@ contains
                         if( ctfflag == CTFFLAG_FLIP )then
                             call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 1, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                                &precs(iprec)%angast, add_phshift)
+                                &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
                         else
                             call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 2, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                                &precs(iprec)%angast, add_phshift)
+                                &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
                         endif
                     else
                         call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 3, lims_small, rho, -precs(iprec)%shifts(iori,1),&
                             &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
-                            &precs(iprec)%angast, add_phshift)
+                            &precs(iprec)%angast, add_phshift, precs(iprec)%bfac)
                     endif
                     ! prep weight
                     if( l_hard_assign )then
