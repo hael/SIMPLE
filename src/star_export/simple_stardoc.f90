@@ -461,7 +461,7 @@ contains
         class(stardoc), intent(inout) :: self
         integer          :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
         character(len=:),allocatable :: line,fname,tmp, projrootdir, experrootdir
-        character(len=LONGSTRLEN) :: sline
+        character(len=:),allocatable :: sline
         character(len=STDLEN),allocatable :: lineparts(:)
         logical, allocatable :: fnameselected(:)
         integer :: filetabunit, oritabunit, filetabunit2, imagenamefunit
@@ -529,10 +529,11 @@ contains
                     !    write(*,'(A)', advance='no') trim(adjustl(lineparts(i)))//", "
                     !end do
                     !write(*,*) "]"
-                    sline=""
+                    if(allocated(sline))deallocate(sline)
                     do i=1, nargsParsed
                         if( self%param_converted(i) == 0 )then
                             DebugPrint " ignoring ",i, trim(self%param_labels(i)%str)," ", trim(adjustl(lineparts(i)))
+                            cycle
                         endif
                         !! Check filename params point to actual files
                         if ( self%param_isstr(i) ) then
@@ -622,8 +623,13 @@ contains
                             tmpval = str2real(trim(adjustl(lineparts(i))))
                             DebugPrint " String converted ", trim(adjustl(lineparts(i))), " to ", tmpval
                             tmpval = tmpval * self%param_scale(i)
+                            if(.not.allocated(sline))then
+                            sline  = trim(self%param_labels(i)%str)//&
+                                &"="//trim(real2str(tmpval))
+                        else
                             sline  = trim(adjustl(sline))//" "//trim(self%param_labels(i)%str)//&
                                 &"="//trim(real2str(tmpval))
+                        endif
                         endif
                     end do
                     DebugPrint " Processed Data Line #",nDataline,":", trim(sline)
