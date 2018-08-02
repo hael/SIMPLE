@@ -88,9 +88,11 @@ contains
         real,    allocatable :: scores(:), res(:), zscores(:)
         character(len=3)     :: subgrp
         type(sym) :: symobj
-        integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j, ldim(3)
+        integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j, ldim(3), ccn_start
         integer   :: isym, jsym, ksym, isub, nsubs, filtsz, iisym, fnr, kfromto(2)
         real      :: cc_sum, smpd
+        ! to ensure correct input
+        ccn_start = max(2,cn_start)
         ! get info from vol_in
         res    = vol_in%get_res()
         smpd   = vol_in%get_smpd()
@@ -100,30 +102,30 @@ contains
         kfromto(1) = calc_fourier_index(hp, ldim(1), smpd)
         kfromto(2) = calc_fourier_index(lp, ldim(1), smpd)
         ! count # symmetries
-        ncsyms = cn_stop - cn_start + 1
+        ncsyms = cn_stop - ccn_start + 1
         if( dihedral .or. platonic )then
             nsyms = ncsyms * 2
         else
             nsyms = ncsyms
         endif
         if( platonic )then
-            if( cn_start > 2 .or. cn_stop < 5 )then
+            if( ccn_start > 2 .or. cn_stop < 5 )then
                 write(*,*) 'ERROR! cn range must include rotational symmetries from orders 2-5 when searching for Platonic groups'
                 write(*,*) 'Set cn_start = 2 and cn_stop > 5 on command line'
                 stop 'simple_symanalyzer :: eval_point_groups'
             endif
             nsyms = nsyms + 3
         endif
-        write(*,'(a,1x,i2,1x,a,1x,i2)') '>>> TESTING C-SYMMETRIES FROM', cn_start, 'TO', cn_stop
+        write(*,'(a,1x,i2,1x,a,1x,i2)') '>>> TESTING C-SYMMETRIES FROM', ccn_start, 'TO', cn_stop
         ! prepare point-group stats object
         allocate(pgrps(nsyms))
         cnt = 0
-        do icsym=cn_start,cn_stop
+        do icsym=ccn_start,cn_stop
             cnt  = cnt + 1
             pgrps(cnt)%str = 'c'//int2str(icsym)
         end do
         if( dihedral .or. platonic )then
-            do idsym=cn_start,cn_stop
+            do idsym=ccn_start,cn_stop
                 cnt  = cnt + 1
                 pgrps(cnt)%str = 'd'//int2str(idsym)
             end do
