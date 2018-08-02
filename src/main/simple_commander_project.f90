@@ -162,7 +162,6 @@ contains
     subroutine exec_update_project_stateflags( self, cline )
         use simple_binoris,    only: binoris
         use simple_sp_project, only: oritype2segment
-        use simple_binoris,    only: binoris
         use simple_oris,       only: oris
         class(update_project_stateflags_commander), intent(inout) :: self
         class(cmdline),                             intent(inout) :: cline

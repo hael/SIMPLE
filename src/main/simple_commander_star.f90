@@ -87,7 +87,7 @@ contains
         case('mcmicrographs')
            call  starproj%export_motion_corrected_micrographs(spproj,  params%starfile)
         case('ctf_estimation')
-           call starproj%export_ctf_estimation(spproj,  params%starfile)
+           call starproj%export_ctf_estimation(spproj, params%starfile)
         case('select')
             call starproj%export_class2D_select(spproj,  params%starfile)
         case('extract')
@@ -211,11 +211,11 @@ contains
         case('mcmicrographs')
            call  starproj%import_motion_corrected_micrographs(spproj, params, params%starfile)
         case('ctf_estimation')
-           call starproj%import_ctf_estimation(spproj, params, params%starfile)
+           call starproj%import_ctf_estimation(spproj, params, cline,params%starfile)
         case('select')
-            call starproj%import_class2D_select(spproj,params,  params%starfile)
+            call starproj%import_class2D_select(spproj, params,  params%starfile)
         case('extract')
-           call starproj%import_extract_doseweightedptcls(spproj,params,  params%starfile)
+           call starproj%import_extract_doseweightedptcls(spproj,params, cline, params%starfile)
         case('class2d')
            call starproj%import_class2D(spproj, params, params%starfile)
         case('init3dmodel')
@@ -231,50 +231,6 @@ contains
        end select
 
 
-
-
-!!******* Import movies + ctf_estimation
-       if( cline%defined('phaseplate') )then
-            phaseplate = cline%get_carg('phaseplate')
-        else
-            allocate(phaseplate, source='no')
-        endif
-        ctfvars%smpd  = params%smpd
-        ctfvars%kv    = params%kv
-        ctfvars%cs    = params%cs
-        ctfvars%fraca = params%fraca
-        select case(params%ctf)
-            case('yes')
-                ctfvars%ctfflag = 1
-            case('no')
-                ctfvars%ctfflag = 0
-            case('flip')
-                ctfvars%ctfflag = 2
-            case DEFAULT
-                write(*,*) 'ctf flag params%ctf: ', params%ctf
-                stop 'ERROR! ctf flag not supported; commander_project :: import_movies'
-        end select
-        ctfvars%l_phaseplate = .false.
-        if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
-        ! update project info
-        call spproj%update_projinfo( cline )
-        ! updates segment
-        call spproj%add_movies(params%filetab, ctfvars)
-        ! add boxtab
-        if( file_exists(params%boxtab) )then
-            call read_filetable(params%boxtab, boxfnames)
-            nboxf = size(boxfnames)
-            nmovf = nlines(params%filetab)
-            if( nboxf /= nmovf )then
-                write(*,*) '# boxfiles: ', nboxf
-                write(*,*) '# movies  : ', nmovf
-                stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
-            endif
-            do i=1,nmovf
-                call simple_abspath(boxfnames(i), boxf_abspath, errmsg='commander_project :: exec_import_movies')
-                call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
-            end do
-        end if
 
 
 

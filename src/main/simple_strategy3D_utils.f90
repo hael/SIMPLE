@@ -281,7 +281,7 @@ contains
             if( count(states == best_state) < 3 ) return ! need at least 3
         endif
         ! loop over valid peaks and find maximum angular distance as metric for angular spread
-        cnt = 0.
+        cnt = 0
         do ipeak = 1, npeaks - 1
             ! take care of ow > 0. requirement
             if( ws(ipeak) <= TINY ) cycle

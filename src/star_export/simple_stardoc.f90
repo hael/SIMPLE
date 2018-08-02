@@ -464,7 +464,7 @@ contains
         character(len=:),allocatable :: sline
         character(len=STDLEN),allocatable :: lineparts(:)
         logical, allocatable :: fnameselected(:)
-        integer :: filetabunit, oritabunit, filetabunit2, imagenamefunit
+        integer :: filetabunit, oritabunit, filetabunit2, imagenamefunit,ctfimagefunit
         logical :: inData, inHeader
         real :: tmpval
         inHeader=.false.;inData=.false.
@@ -486,6 +486,8 @@ contains
         call fopen(filetabunit2,file="filetab-stardoc2.txt")
         if(file_exists('imagename-stardoc.txt')) call del_file("imagename-stardoc.txt")
         call fopen(imagenamefunit,file="imagename-stardoc.txt")
+        if(file_exists('ctfimage-stardoc.txt')) call del_file("ctfimage-stardoc.txt")
+        call fopen(ctfimagefunit,file="ctfimage-stardoc.txt")
         allocate(fnameselected(self%num_data_lines),source=.false.)
         do
             call readline(self%funit, line, ios)
@@ -612,7 +614,9 @@ contains
                                     HALT_NOW("simple_stardoc failed to get file in starfile")
                                 endif
                             endif
-                            if (.not.fnameselected(nDataline))then
+                            if(self%param_labels(i)%str == "CtfImage")then
+                                write(ctfimagefunit,'(A)') trim(fname)
+                            else if (.not.fnameselected(nDataline))then
                                 write(filetabunit,'(A)') trim(fname)
                                 fnameselected(nDataline) = .true.
                             else
@@ -654,12 +658,19 @@ contains
         if(nDataline /= self%num_data_lines)then
             HALT_NOW(" Num data lines mismatch in read_data_lines and read_header")
         endif
+        !! close all the opened files
         if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
         if(is_open(filetabunit2)) call fclose(filetabunit2, errmsg="star_doc ; read_header filetab2")
         if(is_open(oritabunit))  call fclose(oritabunit,  errmsg="star_doc ; read_header oritab")
         if(is_open(imagenamefunit)) call fclose(imagenamefunit, errmsg="star_doc ; read_header imagename")
-        if(nlines("filetab-stardoc2.txt")==0) call del_file("filetab-stardoc2.txt")
+        if(is_open(ctfimagefunit)) call fclose(ctfimagefunit, errmsg="star_doc ; read_header ctfimage")
 
+        !! Delete empty files
+        if(nlines("filetab-stardoc2.txt")==0) call del_file("filetab-stardoc2.txt")
+        if(nlines("ctfimage-stardoc.txt")==0) call del_file("ctfimage-stardoc.txt")
+        if(nlines("imagename-stardoc.txt")==0) call del_file("imagename-stardoc.txt")
+
+        !! rewind file
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
 

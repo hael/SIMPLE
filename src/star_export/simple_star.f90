@@ -3,7 +3,9 @@ module simple_star
 include 'simple_lib.f08'
 use simple_stardoc
 use simple_sp_project, only: sp_project
+use simple_cmdline,        only: cmdline
 use simple_parameters
+use simple_binoris_io
 use simple_oris, only: oris
 implicit none
 private
@@ -18,6 +20,7 @@ contains
     procedure :: readfile
     procedure :: get_ndatalines
     procedure :: get_nrecs_per_line
+    procedure :: check_temp_files
     procedure :: read
     procedure :: print_info
     procedure :: export_micrographs
@@ -49,11 +52,11 @@ end type star_project
 
 interface star_project
     module procedure constructor
-end interface
-
+end interface star_project
+#include "simple_local_flags.inc"
 contains
 
-        !>  \brief  is an abstract constructor
+    !>  \brief  is an abstract constructor
     function constructor( filename ) result( self )
         character(len=*),intent(inout),optional :: filename
         type(star_project) :: self
@@ -139,6 +142,35 @@ contains
         class(star_project), intent(inout)     :: self
     end subroutine print_info
 
+    subroutine check_temp_files(self,msg)
+        class(star_project), intent(inout) :: self
+        character(len=*), intent(in)       :: msg
+        integer :: nl_filetab, nl_deftab
+
+        if (.not. file_exists('oritab-stardoc.txt')) then
+            print *,"star_project; check_temp_files called from "//trim(msg)
+            HALT_NOW( 'star_project;  oritab-stardoc.txt not found' )
+        endif
+        nl_deftab = nlines('oritab-stardoc.txt')
+        if(nl_deftab /= self%doc%num_data_lines)then
+            print *,"star_project; check_temp_files called from "//trim(msg)
+            HALT_NOW('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
+        endif
+        if (.not. file_exists('filetab-stardoc.txt')) then
+            print *,"star_project; check_temp_files called from "//trim(msg)
+            HALT_NOW('star_project;  filetab-stardoc.txt not found')
+        endif
+        nl_filetab= nlines('filetab-stardoc.txt')
+        if(nl_deftab /= self%doc%num_data_lines)then
+            print *,"star_project; check_temp_files called from "//trim(msg)
+            HALT_NOW('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
+        endif
+        if(nl_filetab /= nl_deftab)then
+            print *,"star_project; check_temp_files called from "//trim(msg)
+            HALT_NOW('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
+        endif
+
+    end subroutine check_temp_files
 
     subroutine export_micrographs (self, sp, filename)
         class(star_project), intent(inout) :: self
@@ -170,8 +202,8 @@ contains
         character(len=*), intent(inout) :: filename
         character(len=KEYLEN),allocatable:: labels(:)
         labels=(/  &
-'MicrographNameNoDW',&
-'MicrographName    '/)
+            'MicrographNameNoDW',&
+            'MicrographName    '/)
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_motion_corrected_micrographs
@@ -199,7 +231,7 @@ contains
     !! _rlnDetectorPixelSize #11
     !! _rlnCtfFigureOfMerit #12
     !! [noDW filename #1] [ctf filename #2] ... [#12]
-!! others : CtfMaxResolution
+    !! others : CtfMaxResolution
     subroutine export_ctf_estimation (self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
@@ -220,32 +252,59 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_ctf_estimation
-    subroutine import_ctf_estimation (self, spproj, params, filename)
+    subroutine import_ctf_estimation (self, spproj, params, cline, filename)
+        use simple_sp_project, only: oritype2segment
+             
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
         integer i,nheaders, nlines
         type(oris)       :: os
-        integer          :: noris
+        integer          :: ndatlines,noris,iseg, n_ori_inputs
         class(oris),      pointer     :: os_ptr
+        type(ctfparams)  :: ctfvars
+        character(len=:), allocatable ::  oritype
+        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
 
-        ! call p%set('oritype','MIC_SEG')
 
-        ! do i=1, self%doc%num_data_elements
-        !     print *," ", self%doc%get_header(i)
-        ! end do
-        ! do i=1, self%doc%num_data_lines
-        !     print *," ", self%doc%get_data(i)
-        ! end do
+        call cline%set('oritype','mic')
+        !! make sure starfile has been parsed and temporary files are in current dir        
+        call self%check_temp_files('import_ctf_estimation')
+        !! set deftab
+        call cline%set('deftab', 'oritab-stardoc.txt')
+        if(.not. (cline%defined('stk') .or. cline%defined('stktab')) ) then
+            call cline%set('filetab', 'filetab-stardoc.txt')
+        endif
 
-        ! !! load ctf information into sp%os_stk
-        ! noris = self%doc%num_data_line
-        ! iseg  = oritype2segment(oritype)
 
-        ! call os%new(noris)
-        ! !! Convert data
-        ! do i = 1, self%doc%num_data_lines
+        if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing stacks of particles (stk); commander_project :: exec_import_particles'
+    
+        ! if( n_ori_inputs > 1 )then
+        !     write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
+        !     stop 'commander_project :: exec_import_particles'
+        ! endif
+
+        call params%new(cline)
+
+        ndatlines = binread_nlines(params%oritab)
+        if(ndatlines /= self%doc%num_data_lines)then
+            HALT_NOW('star_project; import_ctf_estimation binread_nlines does not match num_data_lines from starfile')
+        endif
+        call os%new(ndatlines)
+        call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
+     !!       call spproj%kill ! for safety
+
+
+
+         !! load ctf information into sp%os_stk
+         noris = self%get_ndatalines()
+         iseg  = oritype2segment(params%oritype)
+
+!         call os%new(noris)
+         !! Convert data
+         do i = 1, noris
 
         !     ! call self%o(i)%read(fnr)
 
@@ -259,10 +318,10 @@ contains
         !     !     state = self%o(i)%get_state()
         !     !     nst   = max(1,max(state,nst))
         !     ! endif
-        ! end do
+         end do
 
-        ! !!Insert oris into sp project
-        ! call sp%set_sp_oris(p%oritype, os)
+         !!Insert oris into sp project
+         call spproj%set_sp_oris(params%oritype, os)
 
         ! call params%new(cline)
         ! ! parameter input management
@@ -342,11 +401,11 @@ contains
         character(len=*), intent(inout) :: filename
         character(len=KEYLEN), allocatable:: labels(:)
         labels=(/ &
-'CoordinateX          ',&
-'CoordinateY          ',&
-'ClassNumber          ',&
-'AutopickFigureOfMerit',&
-'AnglePsi             ' /)
+            'CoordinateX          ',&
+            'CoordinateY          ',&
+            'ClassNumber          ',&
+            'AutopickFigureOfMerit',&
+            'AnglePsi             ' /)
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_autopick
@@ -393,48 +452,49 @@ contains
     !! _rlnGroupName #29
     !!  [#1] ... [#6 filename] [#7 filename] ... [#29]
     subroutine export_extract_doseweightedptcls (self, sp, filename)
-        class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(inout) :: filename
-        character(len=KEYLEN), allocatable:: labels(:)
-        labels=(/ &
-'CoordinateX              ',&
-'CoordinateY              ',&
-'ClassNumber              ',&
-'AutopickFigureOfMerit    ',&
-'AnglePsi                 ',&
-'ImageName                ',&
-'MicrographName           ',&
-'Voltage                  ',&
-'DefocusU                 ',&
-'DefocusV                 ',&
-'DefocusAngle             ',&
-'SphericalAberration      ',&
-'CtfBfactor               ',&
-'CtfScalefactor           ',&
-'PhaseShift               ',&
-'AmplitudeContrast        ',&
-'Magnification            ',&
-'DetectorPixelSize        ',&
-'CtfFigureOfMerit         ',&
-'GroupNumber              ',&
-'AngleRot                 ',&
-'AngleTilt                ',&
-'OriginX                  ',&
-'OriginY                  ',&
-'NormCorrection           ',&
-'LogLikeliContribution    ',&
-'MaxValueProbDistribution ',&
-'NrOfSignificantSamples   ',&
-'GroupName                ' /)
+        class(star_project)   , intent(inout) :: self
+        class(sp_project)     , intent(inout) :: sp
+        character(len=*)      , intent(inout) :: filename
+        character(len=KEYLEN) , allocatable   :: labels(:)
+          labels=(/ &
+            'CoordinateX              ',&
+            'CoordinateY              ',&
+            'ClassNumber              ',&
+            'AutopickFigureOfMerit    ',&
+            'AnglePsi                 ',&
+            'ImageName                ',&
+            'MicrographName           ',&
+            'Voltage                  ',&
+            'DefocusU                 ',&
+            'DefocusV                 ',&
+            'DefocusAngle             ',&
+            'SphericalAberration      ',&
+            'CtfBfactor               ',&
+            'CtfScalefactor           ',&
+            'PhaseShift               ',&
+            'AmplitudeContrast        ',&
+            'Magnification            ',&
+            'DetectorPixelSize        ',&
+            'CtfFigureOfMerit         ',&
+            'GroupNumber              ',&
+            'AngleRot                 ',&
+            'AngleTilt                ',&
+            'OriginX                  ',&
+            'OriginY                  ',&
+            'NormCorrection           ',&
+            'LogLikeliContribution    ',&
+            'MaxValueProbDistribution ',&
+            'NrOfSignificantSamples   ',&
+            'GroupName                ' /)
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_extract_doseweightedptcls
-    subroutine import_extract_doseweightedptcls (self, spproj, params, filename)
+    subroutine import_extract_doseweightedptcls (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_extract_doseweightedptcls
 
 
@@ -481,38 +541,38 @@ contains
         character(len=*), intent(inout) :: filename
         character(len=KEYLEN), allocatable:: labels(:)
         labels=(/ &
-'MicrographName           ',&
-'CoordinateX              ',&
-'CoordinateY              ',&
-'Voltage                  ',&
-'DefocusU                 ',&
-'DefocusV                 ',&
-'DefocusAngle             ',&
-'SphericalAberration      ',&
-'DetectorPixelSize        ',&
-'CtfFigureOfMerit         ',&
-'Magnification            ',&
-'AmplitudeContrast        ',&
-'AutopickFigureOfMerit    ',&
-'PhaseShift               ',&
-'ImageName                ',&
-'GroupNumber              ',&
-'AngleRot                 ',&
-'AngleTilt                ',&
-'AnglePsi                 ',&
-'OriginX                  ',&
-'OriginY                  ',&
-'ClassNumber              ',&
-'NormCorrection           ',&
-'LogLikeliContribution    ',&
-'MaxValueProbDistribution ',&
-'NrOfSignificantSamples   ',&
-'GroupName                ',&
-'RandomSubset             ',&
-'OriginalParticleName     ',&
-'NrOfFrames               ',&
-'AverageNrOfFrames        ',&
-'MovieFramesRunningAverage' /)
+            'MicrographName           ',&
+            'CoordinateX              ',&
+            'CoordinateY              ',&
+            'Voltage                  ',&
+            'DefocusU                 ',&
+            'DefocusV                 ',&
+            'DefocusAngle             ',&
+            'SphericalAberration      ',&
+            'DetectorPixelSize        ',&
+            'CtfFigureOfMerit         ',&
+            'Magnification            ',&
+            'AmplitudeContrast        ',&
+            'AutopickFigureOfMerit    ',&
+            'PhaseShift               ',&
+            'ImageName                ',&
+            'GroupNumber              ',&
+            'AngleRot                 ',&
+            'AngleTilt                ',&
+            'AnglePsi                 ',&
+            'OriginX                  ',&
+            'OriginY                  ',&
+            'ClassNumber              ',&
+            'NormCorrection           ',&
+            'LogLikeliContribution    ',&
+            'MaxValueProbDistribution ',&
+            'NrOfSignificantSamples   ',&
+            'GroupName                ',&
+            'RandomSubset             ',&
+            'OriginalParticleName     ',&
+            'NrOfFrames               ',&
+            'AverageNrOfFrames        ',&
+            'MovieFramesRunningAverage' /)
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D
@@ -561,33 +621,33 @@ contains
         character(len=*), intent(inout) :: filename
         character(len=KEYLEN), allocatable:: labels(:)
         labels=(/ &
-'MicrographName           ',&
-'CoordinateX              ',&
-'CoordinateY              ',&
-'Voltage                  ',&
-'DefocusU                 ',&
-'DefocusV                 ',&
-'DefocusAngle             ',&
-'SphericalAberration      ',&
-'DetectorPixelSize        ',&
-'CtfFigureOfMerit         ',&
-'Magnification            ',&
-'AmplitudeContrast        ',&
-'AutopickFigureOfMerit    ',&
-'PhaseShift               ',&
-'ImageName                ',&
-'GroupNumber              ',&
-'AngleRot                 ',&
-'AngleTilt                ',&
-'AnglePsi                 ',&
-'OriginX                  ',&
-'OriginY                  ',&
-'ClassNumber              ',&
-'NormCorrection           ',&
-'LogLikeliContribution    ',&
-'MaxValueProbDistribution ',&
-'NrOfSignificantSamples   ',&
-'GroupName                ' /)
+            'MicrographName           ',&
+            'CoordinateX              ',&
+            'CoordinateY              ',&
+            'Voltage                  ',&
+            'DefocusU                 ',&
+            'DefocusV                 ',&
+            'DefocusAngle             ',&
+            'SphericalAberration      ',&
+            'DetectorPixelSize        ',&
+            'CtfFigureOfMerit         ',&
+            'Magnification            ',&
+            'AmplitudeContrast        ',&
+            'AutopickFigureOfMerit    ',&
+            'PhaseShift               ',&
+            'ImageName                ',&
+            'GroupNumber              ',&
+            'AngleRot                 ',&
+            'AngleTilt                ',&
+            'AnglePsi                 ',&
+            'OriginX                  ',&
+            'OriginY                  ',&
+            'ClassNumber              ',&
+            'NormCorrection           ',&
+            'LogLikeliContribution    ',&
+            'MaxValueProbDistribution ',&
+            'NrOfSignificantSamples   ',&
+            'GroupName                ' /)
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D_select
@@ -699,39 +759,39 @@ contains
         character(len=*), intent(inout) :: filename
         character(len=KEYLEN), allocatable :: labels(:)
         labels=(/ &
-'MicrographName           ',&
-'CoordinateX              ',&
-'CoordinateY              ',&
-'Voltage                  ',&
-'DefocusU                 ',&
-'DefocusV                 ',&
-'DefocusAngle             ',&
-'SphericalAberration      ',&
-'DetectorPixelSize        ',&
-'CtfFigureOfMerit         ',&
-'Magnification            ',&
-'AmplitudeContrast        ',&
-'AutopickFigureOfMerit    ',&
-'PhaseShift               ',&
-'ImageName                ',&
-'GroupNumber              ',&
-'AngleRot                 ',&
-'AngleTilt                ',&
-'AnglePsi                 ',&
-'OriginX                  ',&
-'OriginY                  ',&
-'ClassNumber              ',&
-'NormCorrection           ',&
-'LogLikeliContribution    ',&
-'MaxValueProbDistribution ',&
-'NrOfSignificantSamples   ',&
-'GroupName                ',&
-'RandomSubset             ',&
-'OriginalParticleName     ',&
-'NrOfFrames               ',&
-'AverageNrOfFrames        ',&
-'MovieFramesRunningAverage',&
-'RandomSubset             ' /)
+            'MicrographName           ',&
+            'CoordinateX              ',&
+            'CoordinateY              ',&
+            'Voltage                  ',&
+            'DefocusU                 ',&
+            'DefocusV                 ',&
+            'DefocusAngle             ',&
+            'SphericalAberration      ',&
+            'DetectorPixelSize        ',&
+            'CtfFigureOfMerit         ',&
+            'Magnification            ',&
+            'AmplitudeContrast        ',&
+            'AutopickFigureOfMerit    ',&
+            'PhaseShift               ',&
+            'ImageName                ',&
+            'GroupNumber              ',&
+            'AngleRot                 ',&
+            'AngleTilt                ',&
+            'AnglePsi                 ',&
+            'OriginX                  ',&
+            'OriginY                  ',&
+            'ClassNumber              ',&
+            'NormCorrection           ',&
+            'LogLikeliContribution    ',&
+            'MaxValueProbDistribution ',&
+            'NrOfSignificantSamples   ',&
+            'GroupName                ',&
+            'RandomSubset             ',&
+            'OriginalParticleName     ',&
+            'NrOfFrames               ',&
+            'AverageNrOfFrames        ',&
+            'MovieFramesRunningAverage',&
+            'RandomSubset             ' /)
         call self%doc%write(filename, sp, labels)
     end subroutine export_init3Dmodel
     subroutine import_init3Dmodel (self, spproj, params, filename)
@@ -784,39 +844,39 @@ contains
         character(len=*), intent(inout) :: filename
         character(len=KEYLEN), allocatable :: labels(:)
         labels=(/ &
-'MicrographName           ',&
-'CoordinateX              ',&
-'CoordinateY              ',&
-'Voltage                  ',&
-'DefocusU                 ',&
-'DefocusV                 ',&
-'DefocusAngle             ',&
-'SphericalAberration      ',&
-'DetectorPixelSize        ',&
-'CtfFigureOfMerit         ',&
-'Magnification            ',&
-'AmplitudeContrast        ',&
-'AutopickFigureOfMerit    ',&
-'PhaseShift               ',&
-'ImageName                ',&
-'GroupNumber              ',&
-'AngleRot                 ',&
-'AngleTilt                ',&
-'AnglePsi                 ',&
-'OriginX                  ',&
-'OriginY                  ',&
-'ClassNumber              ',&
-'NormCorrection           ',&
-'LogLikeliContribution    ',&
-'MaxValueProbDistribution ',&
-'NrOfSignificantSamples   ',&
-'GroupName                ',&
-'RandomSubset             ',&
-'OriginalParticleName     ',&
-'NrOfFrames               ',&
-'AverageNrOfFrames        ',&
-'MovieFramesRunningAverage',&
-'RandomSubset             ' /)
+            'MicrographName           ',&
+            'CoordinateX              ',&
+            'CoordinateY              ',&
+            'Voltage                  ',&
+            'DefocusU                 ',&
+            'DefocusV                 ',&
+            'DefocusAngle             ',&
+            'SphericalAberration      ',&
+            'DetectorPixelSize        ',&
+            'CtfFigureOfMerit         ',&
+            'Magnification            ',&
+            'AmplitudeContrast        ',&
+            'AutopickFigureOfMerit    ',&
+            'PhaseShift               ',&
+            'ImageName                ',&
+            'GroupNumber              ',&
+            'AngleRot                 ',&
+            'AngleTilt                ',&
+            'AnglePsi                 ',&
+            'OriginX                  ',&
+            'OriginY                  ',&
+            'ClassNumber              ',&
+            'NormCorrection           ',&
+            'LogLikeliContribution    ',&
+            'MaxValueProbDistribution ',&
+            'NrOfSignificantSamples   ',&
+            'GroupName                ',&
+            'RandomSubset             ',&
+            'OriginalParticleName     ',&
+            'NrOfFrames               ',&
+            'AverageNrOfFrames        ',&
+            'MovieFramesRunningAverage',&
+            'RandomSubset             ' /)
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_refine3D
@@ -872,40 +932,40 @@ contains
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
         character(len=KEYLEN), allocatable :: labels(:)
-labels=(/ &
-'MicrographName           ',&
-'CoordinateX              ',&
-'CoordinateY              ',&
-'Voltage                  ',&
-'DefocusU                 ',&
-'DefocusV                 ',&
-'DefocusAngle             ',&
-'SphericalAberration      ',&
-'DetectorPixelSize        ',&
-'CtfFigureOfMerit         ',&
-'Magnification            ',&
-'AmplitudeContrast        ',&
-'AutopickFigureOfMerit    ',&
-'PhaseShift               ',&
-'ImageName                ',&
-'GroupNumber              ',&
-'AngleRot                 ',&
-'AngleTilt                ',&
-'AnglePsi                 ',&
-'OriginX                  ',&
-'OriginY                  ',&
-'ClassNumber              ',&
-'NormCorrection           ',&
-'LogLikeliContribution    ',&
-'MaxValueProbDistribution ',&
-'NrOfSignificantSamples   ',&
-'GroupName                ',&
-'RandomSubset             ',&
-'OriginalParticleName     ',&
-'NrOfFrames               ',&
-'AverageNrOfFrames        ',&
-'MovieFramesRunningAverage' /)
-call self%doc%write(filename, sp, labels)
+        labels=(/ &
+            'MicrographName           ',&
+            'CoordinateX              ',&
+            'CoordinateY              ',&
+            'Voltage                  ',&
+            'DefocusU                 ',&
+            'DefocusV                 ',&
+            'DefocusAngle             ',&
+            'SphericalAberration      ',&
+            'DetectorPixelSize        ',&
+            'CtfFigureOfMerit         ',&
+            'Magnification            ',&
+            'AmplitudeContrast        ',&
+            'AutopickFigureOfMerit    ',&
+            'PhaseShift               ',&
+            'ImageName                ',&
+            'GroupNumber              ',&
+            'AngleRot                 ',&
+            'AngleTilt                ',&
+            'AnglePsi                 ',&
+            'OriginX                  ',&
+            'OriginY                  ',&
+            'ClassNumber              ',&
+            'NormCorrection           ',&
+            'LogLikeliContribution    ',&
+            'MaxValueProbDistribution ',&
+            'NrOfSignificantSamples   ',&
+            'GroupName                ',&
+            'RandomSubset             ',&
+            'OriginalParticleName     ',&
+            'NrOfFrames               ',&
+            'AverageNrOfFrames        ',&
+            'MovieFramesRunningAverage' /)
+        call self%doc%write(filename, sp, labels)
 
     end subroutine export_shiny3D
     subroutine import_shiny3D (self, spproj, params, filename)
@@ -939,36 +999,36 @@ call self%doc%write(filename, sp, labels)
         !case('movies') ! movies
         if(  index(trim(exporttype), 'movie')/=0 )then
             stype = MOV_STAR
-        !case('mic':'micrographs': 'mcmicrographs':'ctf_estimation') ! movies
+            !case('mic':'micrographs': 'mcmicrographs':'ctf_estimation') ! movies
         else if( index(trim(exporttype), 'mic')/=0 .or. &
-           & index(trim(exporttype), 'ctf')/=0 ) then
+            & index(trim(exporttype), 'ctf')/=0 ) then
             stype = MIC_STAR
-!         case('stk':'select')           ! micrographs with selected boxes
+            !         case('stk':'select')           ! micrographs with selected boxes
         else if(index(trim(exporttype), 'select')/=0) then
             stype = STK_STAR
-!         case('ptcl2D':'extract')
-       else if(index(trim(exporttype), 'extract')/=0) then
-             stype = PTCL_STAR
-!         case('cls2D': 'class2d')             ! class averages
-       else if(index(trim(exporttype), 'class2D')/=0) then
-             stype = CLSAVG_STAR
-!         case('cls3D': 'init3dmodel')
-       else if(index(trim(exporttype), 'init3d')/=0) then
-             stype = CLSAVG_STAR
-!         case('ptcl3D':'refine3d')            ! 3D particles
-       else if(index(trim(exporttype), 'refine3')/=0) then
-             stype = PTCL_STAR
-!         case('out': 'post')
-       else if(index(trim(exporttype), 'post')/=0) then
-             stype = OUT_STAR
-!         case('projinfo': 'all')
-       else if(index(trim(exporttype), 'all')/=0 .or. &
-           index(trim(exporttype), 'projinfo')/=0) then
-             stype = PROJINFO_STAR
-!         case DEFAULT
+            !         case('ptcl2D':'extract')
+        else if(index(trim(exporttype), 'extract')/=0) then
+            stype = PTCL_STAR
+            !         case('cls2D': 'class2d')             ! class averages
+        else if(index(trim(exporttype), 'class2D')/=0) then
+            stype = CLSAVG_STAR
+            !         case('cls3D': 'init3dmodel')
+        else if(index(trim(exporttype), 'init3d')/=0) then
+            stype = CLSAVG_STAR
+            !         case('ptcl3D':'refine3d')            ! 3D particles
+        else if(index(trim(exporttype), 'refine3')/=0) then
+            stype = PTCL_STAR
+            !         case('out': 'post')
+        else if(index(trim(exporttype), 'post')/=0) then
+            stype = OUT_STAR
+            !         case('projinfo': 'all')
+        else if(index(trim(exporttype), 'all')/=0 .or. &
+            index(trim(exporttype), 'projinfo')/=0) then
+            stype = PROJINFO_STAR
+            !         case DEFAULT
         else
             stop 'unsupported exporttype flag; star project :: exporttype2star'
-!        end select
+            !        end select
         end if
     end function exporttype2star
 
