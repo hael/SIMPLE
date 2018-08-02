@@ -4,7 +4,7 @@ program simple_test_sort
     include 'simple_lib.f08'
     use simple_ansi_ctrls
     use simple_qsort_mt
-    use simple_qsort
+    use simple_sort
     use simple_qsort_c, only: sortp_1r4
 #ifdef INTEL
     use simple_intel_qsort
@@ -13,7 +13,7 @@ program simple_test_sort
     real(8) :: startt, stopt
     integer (8), parameter :: nmax =  10000000
     integer, parameter :: it_max=10
-    real,    allocatable, dimension(:) :: A
+    real,    allocatable, dimension(:) :: A,trec
     integer, allocatable, dimension(:) :: Aind
     real,    allocatable, dimension(:,:) :: B
     !  integer, allocatable, dimension(:) :: Bind
@@ -41,7 +41,8 @@ program simple_test_sort
     do m=25,6,-1
         nAsp = INT(2**m,4) + 1
         if(nAsp > nmax) cycle
-        allocate (A(nAsp));allocate ( Aind(nAsp))
+
+        allocate (A(nAsp));allocate(Aind(nAsp))
         Aind = (/(i, i=1, nAsp )/)
         call make_data4(A,nAsp)
         call system_clock(count1)
@@ -111,9 +112,9 @@ program simple_test_sort
         deallocate(A)
 
 #ifdef INTEL
-        call print_table(INT(nAsp,8), t1, t2, t2m, t3, t4, t5)
+        call print_table(INT(nAsp,8), [ t1, t2, t2m, t3, t4, t5 ])
 #else
-        call print_table(INT(nAsp,8), t1, t2, t2m, t3, t4)
+        call print_table(INT(nAsp,8), [ t1, t2, t2m, t3, t4 ])
 #endif
     end do
 
@@ -518,9 +519,9 @@ program simple_test_sort
         deallocate(A)
 
 #ifdef INTEL
-        call print_table(nA, t1, t2, t2m, t3, t4, t5)
+        call print_table(nA, [ t1, t2, t2m, t3, t4, t5 ])
 #else
-        call print_table(nA, t1, t2, t2m, t3, t4)
+        call print_table(nA, [ t1, t2, t2m, t3, t4 ])
 #endif
 
     end do
@@ -881,60 +882,36 @@ contains
 
     end subroutine make_data4
 
-    subroutine print_table(nA, t1, t2, t2m, t3, t4, t5)
+    subroutine print_table(nA, t)
         use simple_ansi_ctrls
         integer(8) :: nA
-        real :: t1, t2, t3, t4, t2m
-        real, optional :: t5
-        character(len=:), allocatable :: redc
-        character(len=:), allocatable :: rede
-        redc=achar(27)//'[31m'
-        rede=achar(27)//'[0m'
-        write(*,'(I15,1x)', advance='no') nA
-        if (t1 < t2 .and. t1< t2m .and. t1<t3 .and. t1<t4 )then
-        !    write(*,'(a15)', advance='no') format_str(trim(real2str(t1)),C_RED)
-            !1write(*,'(ES15.8,"*",1x)', advance='no') t1
-            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t1,rede
-        else
-            write(*,'(ES15.8,2x)', advance='no') t1
-        endif
-        if (t2 < t1 .and. t2< t2m .and. t2<t3 .and. t2<t4 )then
-            !write(*,'(a15)', advance='no') format_str(trim(real2str(t2)),C_RED)
-            !write(*,'(ES15.8,"*",1x)', advance='no') t2
-            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t2,rede
-        else
-            write(*,'(ES15.8,2x)', advance='no') t2
-        endif
-        if (t2m < t2 .and. t2m< t1 .and. t2m<t3 .and. t2m<t4 )then
-        !    write(*,'(a15)', advance='no') format_str(trim(real2str(t2m)),C_RED)
-            !write(*,'(ES15.8,"*",1x)', advance='no') t2m
-            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t2m,rede
-        else
-            write(*,'(ES15.8,2x)', advance='no') t2m
-        endif
-        if (t3 < t2 .and. t3< t2m .and. t3<t1 .and. t1<t4 )then
-        !    write(*,'(a15)', advance='no') format_str(trim(real2str(t3)),C_RED)
-            !write(*,'(ES15.8,"*",1x)', advance='no') t3
-            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t3,rede
-        else
-            write(*,'(ES15.8,2x)', advance='no') t3
-        endif
-        if (t4 < t1 .and. t4< t2 .and. t4<t2m .and. t4<t3 )then
-            write(*,'(a,ES15.8,a,1x)', advance='no') redc,t4,rede !format_str(trim(real2str(t4)),C_RED)
-           ! write(*,'(ES15.8,"*",1x)', advance='no') t4
-        else
-            write(*,'(ES15.8,2x)', advance='no') t4
-        endif
-        if(present(t5))then
-            if (t5 < t1 .and. t5< t2 .and. t5<t2m .and. t5<t3 .and. t5<t4 )then
-        !        write(*,'(a15)', advance='no') format_str(trim(real2str(t5)),C_RED)
-                write(*,'(ES15.8,"*",1x)', advance='no') t5
-            else
-                write(*,'(ES15.8),2x', advance='no') t5
-            endif
-        endif
-        write(*,*) ""
+        real,intent(in) :: t(:)
+        character(len=*),parameter :: redc=achar(27)//'[31m'
+        character(len=*),parameter :: rede=achar(27)//'[0m'
+        integer :: i,nt, idx_best
+        integer,allocatable:: idx(:)
+        real,allocatable :: tsorted(:)
+        nt=size(t)
+        allocate(tsorted(nt),source=t)
+        allocate(idx(nt))
+        do i=1,nt
+            idx(i)=i
+        end do
 
+        call hpsort(tsorted,idx)
+        idx_best =idx(1)
+
+        write(*,'(I15,1x)', advance='no') nA
+        do i=1,nt
+            if(i == idx_best)then
+                write(*,'(a,ES15.8,a,1x)', advance='no') redc,t(i),rede
+            else
+                write(*,'(ES15.8,2x)', advance='no') t(i)
+            endif
+        end do
+
+        write(*,*) ""
+        deallocate(tsorted,idx)
     end subroutine print_table
 
 
