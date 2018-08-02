@@ -2182,7 +2182,7 @@ contains
         do ik = params_glob%kfromto(1), params_glob%kfromto(2)
             sigma_contrib(ik) = self%calc_euclidk_for_rot(pft_ref, self%pinds(iptcl), ik, irot)
         end do
-        sigma_contrib = sigma_contrib !/ real(self%nrots)
+        sigma_contrib = sigma_contrib / real(self%nrots)
     end subroutine gencorr_sigma_contrib
 
     real function specscore( self, iref, iptcl, irot )
