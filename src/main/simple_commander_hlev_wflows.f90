@@ -319,7 +319,6 @@ contains
             res       = spproj%os_cls2D%get_all('res')
             lplims(1) = max(median_nocopy(res), lplims(2))
             deallocate(res)
-            write(*,*)'>>> '
         else
             if( cline%defined('lpstart') ) lplims(1) = params%lpstart
         endif
@@ -655,6 +654,7 @@ contains
         use simple_oris,             only: oris
         use simple_sym,              only: sym
         use simple_commander_volops, only: postprocess_commander
+        use simple_cluster_seed,     only: gen_labelling
         use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -704,12 +704,10 @@ contains
         call cline_refine3D1%delete('neigh')
         call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
-        call cline_refine3D2%set('prg', 'refine3D')
+        call cline_refine3D2%set('prg',    'refine3D')
         call cline_refine3D2%set('refine', 'multi')
-        !!!!!!!!!!!!!! Under testing
-        call cline_refine3D2%set('neigh', 'yes')
-        call cline_refine3D2%set('nnn', real(max(30,nint(0.1*real(params%nspace)))))
-        !!!!!!!!!!!!!!!!!!
+        call cline_refine3D2%set('neigh',  'yes')
+        call cline_refine3D2%set('nnn',    real(max(30,nint(0.05*real(params%nspace)))))
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
@@ -727,19 +725,6 @@ contains
             trs = min(MAXSHIFT, max(MINSHIFT, trs))
             call cline_refine3D1%set('trs',trs)
             call cline_refine3D2%set('trs',trs)
-        endif
-
-        ! MIXED MODEL RECONSTRUCTION
-        ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-        if( params%eo .ne. 'no' )then
-            if( trim(params%refine) .eq. 'sym' ) call cline_reconstruct3D_mixed_distr%set('pgrp', 'c1')
-            call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
-            rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
-            rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
-            rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
         endif
 
         ! PREP
@@ -766,6 +751,8 @@ contains
             call symop%symrandomize(os)
             call symop%kill
         endif
+
+        ! MIXED MODEL RECONSTRUCTION
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
         if( params%eo .ne. 'no' )then
             spproj%os_ptcl3D = os
@@ -778,11 +765,10 @@ contains
             rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
             rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
         endif
+
         ! randomize state labels
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-        call diverse_labeling(os, params%nstates, labels, corr_ranked=.true.)
-        call os%set_all('state', real(labels))
+        call gen_labelling(os, params%nstates, 'squared_uniform2')
         call os%write('cluster3D_init.txt') ! analysis purpose only
         ! writes for refine3D
         spproj%os_ptcl3D = os
@@ -812,68 +798,6 @@ contains
 
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER3D NORMAL STOP ****')
-
-        contains
-
-            subroutine diverse_labeling( os, nlabels, config_diverse, corr_ranked )
-                use simple_oris, only: oris
-                type(oris),           intent(inout) :: os
-                integer,              intent(in)    :: nlabels
-                integer, allocatable, intent(out)   :: config_diverse(:)
-                logical, optional,    intent(in)    :: corr_ranked
-                integer, allocatable :: tmp(:), states(:), order(:)
-                real,    allocatable :: corrs(:)
-                type(ran_tabu)       :: rt
-                integer              :: iptcl, nptcls,nonzero_nptcls, alloc_stat, cnt, s, ind
-                logical              :: corr_ranked_here
-                corr_ranked_here = .false.
-                if(present(corr_ranked)) corr_ranked_here = corr_ranked
-                if(.not.os%isthere('corr')) corr_ranked_here = .false.
-                nptcls = os%get_noris()
-                states = nint(os%get_all('state'))
-                nonzero_nptcls = count(states>0)
-                if( .not.corr_ranked_here )then
-                    allocate(config_diverse(nptcls), tmp(nonzero_nptcls), stat=alloc_stat )
-                    if(alloc_stat /= 0) call allocchk('In: commander_hlev_wflows::diverse_labeling ', alloc_stat)
-                    rt = ran_tabu(nonzero_nptcls)
-                    call rt%balanced(nlabels, tmp)
-                    cnt = 0
-                    do iptcl=1,nptcls
-                        if(states(iptcl)>0 .and. states(iptcl)<=nlabels)then
-                            cnt = cnt + 1
-                            config_diverse(iptcl) = tmp(cnt)
-                        else
-                            config_diverse(iptcl) = states(iptcl)
-                        endif
-                    enddo
-                    deallocate(tmp,states)
-                else
-                    allocate(config_diverse(nptcls), source=0, stat=alloc_stat )
-                    allocate(order(nptcls),          source=0, stat=alloc_stat )
-                    allocate(tmp(nlabels),           source=0, stat=alloc_stat )
-                    corrs = os%get_all('corr')
-                    tmp   = (/(s,s=1,nlabels)/)
-                    where( states<=0 ) corrs = -1.
-                    order = (/(iptcl,iptcl=1,nptcls)/)
-                    call hpsort( corrs, order )
-                    call reverse(order)
-                    call reverse(corrs)
-                    rt = ran_tabu(nlabels)
-                    do iptcl = 1, nonzero_nptcls+nlabels, nlabels
-                        call rt%reset
-                        call rt%shuffle(tmp)
-                        do s = 1, nlabels
-                            ind = iptcl + s - 1
-                            if(ind > nptcls)exit
-                            config_diverse(order(ind)) = tmp(s)
-                        enddo
-                    enddo
-                    where( states<=0 ) config_diverse = 0
-                    deallocate(states,corrs,order,tmp)
-                endif
-                call rt%kill
-            end subroutine diverse_labeling
-
     end subroutine exec_cluster3D
 
     !> multi-particle refinement after cluster3D

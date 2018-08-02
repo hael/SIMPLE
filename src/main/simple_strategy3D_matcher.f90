@@ -158,7 +158,7 @@ contains
                     if(which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
                 endif
                 if( do_extr )then
-                    extr_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
+                    extr_thresh       = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
                     extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
                 endif
                 if(trim(params_glob%refine).eq.'clustersym')then

@@ -22,9 +22,7 @@ contains
         allocate(parts(nparts,2), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce :: split_nobjs_even',alloc_stat)
         nobjs_per_part = nobjs/nparts
-      !  DebugPrint   'nobjs_per_part: ', nobjs_per_part
         leftover = nobjs-nobjs_per_part*nparts
-       ! DebugPrint   'leftover: ', leftover
         istop  = 0
         istart = 0
         sszmax = 0
