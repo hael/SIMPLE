@@ -23,6 +23,8 @@ contains
     procedure :: check_temp_files
     procedure :: read
     procedure :: print_info
+
+    !! Explicit import/export methods
     procedure :: export_micrographs
     procedure :: import_micrographs
     procedure :: export_motion_corrected_micrographs
@@ -140,6 +142,7 @@ contains
 
     subroutine print_info( self )
         class(star_project), intent(inout)     :: self
+        call self%doc%print()
     end subroutine print_info
 
     subroutine check_temp_files(self,msg)

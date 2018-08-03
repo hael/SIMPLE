@@ -51,6 +51,7 @@ contains
     procedure,public :: read_header
     procedure,public :: read_data_lines
     procedure,public :: setdoprint
+    procedure        :: print
     procedure        :: write
     procedure        :: get_header
     procedure        :: get_data
@@ -813,6 +814,32 @@ contains
         end do
         call fclose(starfd)
     end subroutine read
+
+    subroutine print (self)
+        class(stardoc), intent(inout) :: self
+        integer :: i
+        write(*,*) " Star formatted project information "
+        write(*,*) " Star file:               ", trim(adjustl(self%current_file))
+        write(*,*) " # header parameters:     ", self%num_data_elements
+        write(*,*) " # compatible parameters: ", self%num_valid_elements
+        write(*,*) " # data lines:            ", self%num_data_lines
+
+        if(self%num_valid_elements>0 .and. allocated(self%param_labels))then
+            do i=1, self%num_data_elements
+                if(self%param_converted(i)==1)then
+                    if(self%param_isstr(i))then
+                        write(*,'(A30,1x,A30)') self%param_starlabels(i)%str,self%param_labels(i)%str 
+                    else
+                        write(*,'(A30,1x,A30,2x,F15.8)') self%param_starlabels(i)%str,self%param_labels(i)%str, self%param_scale(i)
+                    endif
+                else
+                    write(*,'(A30,1x,A30)') self%param_starlabels(i)%str, "N/A" 
+                endif
+            enddo
+        endif
+
+    end subroutine print
+
 
     subroutine putdata(self, strarr)
         class(stardoc), intent(inout) :: self
