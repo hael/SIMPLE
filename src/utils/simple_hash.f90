@@ -196,7 +196,6 @@ contains
         class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer :: i, ind
-        character(len=:), allocatable :: tmp
         ind = self%lookup( key )
         if( ind==0 .or. ind > self%hash_index ) return
         do i=ind,self%hash_index - 1
@@ -234,8 +233,9 @@ contains
     !>  \brief  gets the index to a key
     pure integer function lookup( self, key )
         class(hash),      intent(in) :: self
-        character(len=*), intent(in)    :: key
+        character(len=*), intent(in) :: key
         integer :: i
+        lookup = 0
         do i=1,self%hash_index
             if( trim(self%keys(i)%str) .eq. trim(key) )then
                 lookup = i
