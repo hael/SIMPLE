@@ -106,7 +106,7 @@ contains
                 ! scale distances with TAU
                 dists = dists / tau
             else
-                dists = - corrs / params_glob%sigma2_fudge                
+                dists = - corrs / params_glob%sigma2_fudge
             end if
             ! argument for softmax function is negative distances
             arg4softmax = -dists
@@ -150,7 +150,6 @@ contains
         integer,                intent(out)   :: best_loc(1)
         type(ori) :: o, o_best
         real      :: dists(n), arg4softmax(n), ang_dist, inpl_dist
-        ! real      :: ang_weights(n), ang_lim
         integer   :: ipeak
         if( n == 1 )then
             best_loc(1)  = 1
@@ -160,36 +159,13 @@ contains
             wcorr        = corrs(1)
         else
             best_loc = maxloc(corrs)
-
-            ! REMOVED 4 NOW. HE 180709
-            ! reweighting according to angular distance to best peak
-            ! ang_lim = deg2rad( build_glob%pgrpsyms%srchrange_theta()/2. )
-            ! o_best  = s3D%o_peaks(s%iptcl)%get_ori(best_loc(1))
-            ! do ipeak = 1,n
-            !     if( ipeak == best_loc(1) )then
-            !         ang_weights(ipeak) = 1.0
-            !         cycle
-            !     endif
-            !     if( trim(build_glob%pgrpsyms%get_pgrp()).eq.'c1' )then
-            !         ang_dist = s3D%o_peaks(s%iptcl)%get_ori(ipeak).euldist.o_best
-            !     else
-            !         call build_glob%pgrpsyms%sym_dists( o_best, s3D%o_peaks(s%iptcl)%get_ori(ipeak), o, ang_dist, inpl_dist)
-            !         ang_dist = deg2rad( ang_dist )
-            !     endif
-            !     if( ang_dist > ang_lim )then
-            !         ang_weights(ipeak) = 0.
-            !     else
-            !         ang_weights(ipeak) = max(0., cos(ang_dist/ang_lim*PIO2))**2.
-            !     endif
-            ! enddo
-
             if (.not. pftcc_glob%is_euclid(s%iptcl)) then
                 ! convert correlations to distances
                 dists = 1.0 - corrs
                 ! scale distances with TAU
                 dists = dists / tau
             else
-                dists = - corrs / params_glob%sigma2_fudge                
+                dists = - corrs / params_glob%sigma2_fudge
             end if
             ! argument for softmax function is negative distances
             arg4softmax = -dists

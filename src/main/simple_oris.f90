@@ -117,6 +117,7 @@ type :: oris
     procedure, private :: write_1
     procedure, private :: write_2
     generic            :: write => write_1, write_2
+    procedure          :: write2bild
     ! CALCULATORS
     procedure          :: compress
     procedure          :: split_state
@@ -1810,6 +1811,44 @@ contains
         call self%o(i)%write(fnr)
         call fclose(fnr, errmsg=' Error closing file for writing: '//trim(orifile))
     end subroutine write_2
+
+    !>  \brief  writes object to BILD Chimera readable format
+    subroutine write2bild( self, file  )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: file
+        integer :: i,funit, file_stat
+        call fopen(funit, file, status='REPLACE', action='WRITE',iostat=file_stat)
+        call fileiochk( 'In: write2bild, module: simple_oris.f90  opening '//trim(file), file_stat )
+        ! header
+        write(funit,'(A)')".translate 0.0 0.0 0.0"
+        write(funit,'(A)')".scale 10"
+        write(funit,'(A)')".comment -- unit sphere --"
+        write(funit,'(A)')".color 0.8 0.8 0.8"
+        write(funit,'(A)')".sphere 0 0 0 1.0"
+        write(funit,'(A)')".comment -- planes --"
+        write(funit,'(A)')".color 0.3 0.3 0.3"
+        write(funit,'(A)')".cylinder -0.02 0 0 0.02 0 0 1.02"
+        write(funit,'(A)')".cylinder 0 -0.02 0 0 0.02 0 1.02"
+        write(funit,'(A)')".cylinder 0 0 -0.02 0 0 0.02 1.02"
+        write(funit,'(A)')".comment -- x-axis --"
+        write(funit,'(A)')".color 1 0 0"
+        write(funit,'(A)')".cylinder -1.5 0 0 1.5 0 0 0.02"
+        write(funit,'(A)')".comment -- y-axis --"
+        write(funit,'(A)')".color 0 1 0"
+        write(funit,'(A)')".cylinder 0 -1.5 0 0 1.5 0 0.02"
+        write(funit,'(A)')".comment -- z-axis --"
+        write(funit,'(A)')".color 0 0 1"
+        write(funit,'(A)')".cylinder 0 0 -1.5 0 0 1.5 0.02"
+        write(funit,'(A)')".comment -- north pole --"
+        write(funit,'(A)')".color 0 0 1"
+        write(funit,'(A)')".sphere 0 0 1.5 0.1"
+        ! body
+        write(funit,'(A)')".color 0.4 0.4 0.4"
+        do i=1,self%n
+            call self%o(i)%write2bild(funit)
+        enddo
+        call fclose(funit, errmsg=' Error closing file for writing: '//trim(file))
+    end subroutine write2bild
 
     ! CALCULATORS
 

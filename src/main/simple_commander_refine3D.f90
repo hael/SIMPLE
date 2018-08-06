@@ -73,7 +73,7 @@ contains
     subroutine exec_refine3D_init( self, cline )
         use simple_qsys_funs,      only: qsys_job_finished
         class(refine3D_init_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
         integer, parameter :: MAXIMGS=1000
@@ -231,7 +231,7 @@ contains
             endif
         else
             select case(params%refine)
-            case('cluster','clustersym','cluster_snhc')
+            case('cluster','clustersym')
                     converged = conv%check_conv_cluster(cline)
                 case DEFAULT
                     converged = conv%check_conv3D(cline, params%msk)

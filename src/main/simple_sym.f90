@@ -22,7 +22,6 @@ type sym
   contains
     procedure          :: new
     procedure          :: srchrange
-    procedure          :: srchrange_theta
     procedure          :: get_nsym
     procedure          :: get_pgrp
     procedure          :: apply
@@ -58,8 +57,6 @@ integer, parameter          :: nico   = 60 ! # icosahedral symmetry operations
 double precision, parameter :: delta2 = 180.d0
 double precision, parameter :: delta3 = 120.d0
 double precision, parameter :: delta5 = 72.d0
-double precision, parameter :: alpha  = 58.282524d0
-double precision, parameter :: beta   = 20.905157d0
 double precision, parameter :: gamma  = 54.735611d0
 
 contains
@@ -146,15 +143,14 @@ contains
         else if( self%pgrp(1:1).eq.'t' )then
             eullims(1,2) = 180.
             eullims(2,2) = 54.7
-            if(.not.incl_mirror_here )stop 'fundamental domain for t symmetry not implemented yet; simple_sym::build_srchrange'
         else if( self%pgrp(1:1).eq.'o' )then
             eullims(1,2) = 90.
             eullims(2,2) = 54.7
-            if(.not.incl_mirror_here )stop 'fundamental domain for o symmetry not implemented yet; simple_sym::build_srchrange'
+            if(.not.incl_mirror_here ) eullims(1,2) = 45.
         else if( self%pgrp(1:1).eq.'i' )then
             eullims(1,2) = 180.
             eullims(2,2) = 31.7
-            if(.not.incl_mirror_here )stop 'fundamental domain for i symmetry not implemented yet; simple_sym::build_srchrange'
+            if(.not.incl_mirror_here ) eullims(1,2) = 36.
         endif
     end function build_srchrange
 
@@ -164,12 +160,6 @@ contains
         real                      :: eullims(3,2) !< 3-axis search range
         eullims = self%eullims
     end function srchrange
-
-    !>  \brief  returns the search range for the point-group
-    real function srchrange_theta( self )
-        class(sym), intent(inout) :: self !< this instance
-        srchrange_theta = self%eullims(2,2)
-    end function srchrange_theta
 
     !>  \brief  is a getter
     pure function get_nsym( self ) result( n )
@@ -493,7 +483,7 @@ contains
             cnt = cnt + 1
             call self%e_sym%set_euler(cnt,real([0.d0, 0.d0, phi]))
             do j = 1,4
-                psi = (j-1) * 90.d0
+                psi = dble(j-1) * 90.d0
                 cnt = cnt + 1
                 call self%e_sym%set_euler(cnt,real([psi, 90.d0, phi]))
             end do
@@ -518,12 +508,12 @@ contains
             cnt = cnt+1
             psi   = 0.d0
             theta = 0.d0
-            phi   = i*delta3
+            phi   = dble(i)*delta3
             call self%e_sym%set_euler(cnt,real([psi,theta,phi]))
             psi = phi
             do j=0,2
-                cnt = cnt+1
-                phi = 60.d0+j*delta3
+                cnt   = cnt+1
+                phi   = 60.d0+dble(j)*delta3
                 theta = degree
                 call self%e_sym%set_euler(cnt,real([psi,theta,phi]))
             end do
@@ -535,14 +525,14 @@ contains
         class(sym), intent(inout) :: self
         double precision :: deltan, psi, theta, phi
         integer   :: i, j, cnt
-        deltan = 36.0
+        deltan = 36.0d0
         cnt = 0
         do i=0,1
             do j=0,4
-                cnt = cnt+1
-                psi = 0.d0
-                theta = i*delta2
-                phi = j*delta5
+                cnt   = cnt+1
+                psi   = 0.d0
+                theta = dble(i)*delta2
+                phi   = dble(j)*delta5
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
             end do
         end do
@@ -739,11 +729,11 @@ contains
         euls(2) = radtha*(180.d0/dpi)
         sintha  = sin(radtha)
         ! close enough test, set corner to -1
-        if(abs(1.-(rotmat(3,3)/(-1.))).lt.(1.e-6))then
+        if(abs(1.d0-(rotmat(3,3)/(-1.d0))).lt.(1.e-6))then
             rotmat(3,3) = -1.d0
         endif
         ! close enough test, set corner to 1
-        if (abs(1.-(rotmat(3,3)/(1.))).lt.(1.e-6))then
+        if (abs(1.d0-(rotmat(3,3)/(1.d0))).lt.(1.e-6))then
             rotmat(3,3) = 1.d0
         endif
         ! special case of euls(2) rotation/ y rotaion = 180 or 0
@@ -786,15 +776,15 @@ contains
             endif
         endif
         ! catch to change 360 euls(3) to 0
-        if(abs(1.-(euls(3)/(360.))).lt.(1.e-2))then
+        if(abs(1.d0-(euls(3)/(360.d0))).lt.(1.e-2))then
             euls(3) = 0.d0
         endif
         ! catch to change really small euls(1) to 0, for oct.
-        if(abs(1.-((euls(1)+1.)/1.)).lt.(1.e-4))then
+        if(abs(1.d0-((euls(1)+1.d0)/1.d0)).lt.(1.e-4))then
             euls(1) = 0.d0
         endif
         ! catch to change really small euls(3) to 0, for oct.
-        if(abs(1.-((euls(3)+1.)/1.)).lt.(1.e-4))then
+        if(abs(1.d0-((euls(3)+1.)/1.d0)).lt.(1.e-4))then
             euls(3) = 0.d0
         endif
     end function matextract

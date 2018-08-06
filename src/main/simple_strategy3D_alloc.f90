@@ -80,7 +80,7 @@ contains
         s3D%proj_space_euls    = 0.
         ! search orders allocation
         select case( trim(params_glob%refine) )
-            case( 'cluster','clustersym','cluster_snhc')
+            case( 'cluster','clustersym')
                 srch_order_allocated = .false.
             case DEFAULT
                 if( params_glob%neigh.eq.'yes' )then

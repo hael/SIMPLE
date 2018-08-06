@@ -33,7 +33,6 @@ type sp_project
 contains
     ! field constructor
     procedure          :: new_seg_with_ptr
-    procedure, private :: ptr2segment
     ! field updaters
     procedure          :: update_projinfo
     procedure          :: update_compenv
@@ -98,6 +97,8 @@ contains
     procedure          :: write_segment_inside
     procedure, private :: segwriter
     procedure          :: segwriter_inside
+    ! private supporting subroutines / functions
+    procedure, private :: ptr2oritype
     ! destructor
     procedure          :: kill
 end type sp_project
@@ -138,31 +139,6 @@ contains
                 stop 'unsupported oritype; sp_project :: new_seg_with_ptr'
         end select
     end subroutine new_seg_with_ptr
-
-    subroutine ptr2segment( self, oritype, os_ptr )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        class(oris),      pointer, intent(inout) :: os_ptr
-        select case(trim(oritype))
-            case('mic')
-                os_ptr => self%os_mic
-            case('stk')
-                os_ptr => self%os_stk
-            case('ptcl2D')
-                os_ptr => self%os_ptcl2D
-            case('cls2D')
-                os_ptr => self%os_cls2D
-            case('cls3D')
-                os_ptr => self%os_cls3D
-            case('ptcl3D')
-                os_ptr => self%os_ptcl3D
-            case('out')
-                os_ptr => self%os_out
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: ptr2segment'
-        end select
-    end subroutine ptr2segment
 
     ! field updaters
 
@@ -1954,7 +1930,7 @@ contains
         call self%bos%open(projfile, del_if_exists=.false.)
         call self%bos%write_segment_inside(isegment, os_strings, [1,nptcls], strlen_max)
         ! transfer to memory & destruct
-        call self%ptr2segment(oritype, os)
+        call self%ptr2oritype(oritype, os)
         do i=1,nptcls
             call os%str2ori(i, os_strings(i)%str)
             if( allocated(os_strings(i)%str) ) deallocate(os_strings(i)%str)
@@ -2542,5 +2518,30 @@ contains
                 stop 'unsupported oritype flag; sp_project :: oritype_flag2isgement'
         end select
     end function oritype2segment
+
+    subroutine ptr2oritype( self, oritype, os_ptr )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        class(oris),      pointer, intent(inout) :: os_ptr
+        select case(trim(oritype))
+            case('mic')
+                os_ptr => self%os_mic
+            case('stk')
+                os_ptr => self%os_stk
+            case('ptcl2D')
+                os_ptr => self%os_ptcl2D
+            case('cls2D')
+                os_ptr => self%os_cls2D
+            case('cls3D')
+                os_ptr => self%os_cls3D
+            case('ptcl3D')
+                os_ptr => self%os_ptcl3D
+            case('out')
+                os_ptr => self%os_out
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype)
+                stop 'unsupported oritype; sp_project :: ptr2segment'
+        end select
+    end subroutine ptr2oritype
 
 end module simple_sp_project

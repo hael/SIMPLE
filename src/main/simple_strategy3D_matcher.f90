@@ -19,7 +19,6 @@ use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
     prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
 use simple_strategy3D_cluster,       only: strategy3D_cluster
-use simple_strategy3D_cluster_snhc,  only: strategy3D_cluster_snhc
 use simple_strategy3D_single,        only: strategy3D_single
 use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
@@ -99,7 +98,7 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cluster_snhc', 'cont_single')
+            case('cluster', 'snhc', 'clustersym', 'cont_single')
                 npeaks = 1
             case('hard_single','hard_multi')
                 npeaks = MAXNPEAKS
@@ -144,7 +143,7 @@ contains
         ! EXTREMAL LOGICS
         do_extr = .false.
         select case(trim(params_glob%refine))
-            case('cluster','clustersym', 'cluster_snhc')
+            case('cluster','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
                 zero_pop          = count(.not.build_glob%spproj_field%included(consider_w=.false.))
@@ -272,14 +271,6 @@ contains
                         allocate(strategy3D_cluster       :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         if(alloc_stat.ne.0)&
                              call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster",alloc_stat)
-                    endif
-                end do
-            case('cluster_snhc')
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_cluster_snhc :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster_neigh",alloc_stat)
                     endif
                 end do
             case DEFAULT

@@ -72,6 +72,7 @@ type :: ori
     procedure          :: print_mat
     procedure          :: print_ori
     procedure          :: write
+    procedure          :: write2bild
     procedure          :: read
     ! CALCULATORS
     procedure          :: round_shifts
@@ -565,6 +566,17 @@ contains
         call self%str2ori(line)
     end subroutine chash2ori
 
+    !>  \brief  converts euler angles into BILD Chimera readbale format
+    subroutine write2bild( self, fnr )
+        class(ori),     intent(inout) :: self
+        integer,        intent(in)    :: fnr
+        real :: xyz_start(3), xyz_end(3), radius
+        xyz_start = self%get_normal()
+        xyz_end   = 1.1 * xyz_start
+        radius    = 0.05
+        write(fnr,'(A,3F7.3,F7.3,F7.3,F7.3,F6.3)')'.cylinder ',xyz_start,xyz_end,radius
+    end subroutine write2bild
+
     function get_ctfvars(self) result(ctfvars)
         class(ori), intent(inout) :: self
         type(ctfparams) :: ctfvars
@@ -962,7 +974,7 @@ contains
         ! get_euler image of (0,0,1)
         imagevec = matmul( zvec, mat )
         ! extract eul1 from imagevec:
-        absxy = sqrt(imagevec(1)**2+imagevec(2)**2)
+        absxy = sqrt(imagevec(1)**2.+imagevec(2)**2.)
         if(absxy < 0.0000001) then
             ! normal parallel to z, phi undefined
             euls(1) = 0.
