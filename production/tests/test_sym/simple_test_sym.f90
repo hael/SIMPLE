@@ -44,7 +44,8 @@ call o%print_ori
 o = symop%get_symori(4)
 call o%print_ori
 
-call symspiral('c3')
+call symspiral('c1')
+call symspiral('d7')
 call symspiral('t')
 call symspiral('o')
 call symspiral('i')
@@ -63,26 +64,13 @@ contains
 
     subroutine symspiral( pgrp )
         character(len=*) :: pgrp
-        type(oris) :: spiral, tmp
+        type(oris) :: spiral
         type(sym)  :: symop
         integer :: i,j
-        symop = sym(pgrp, incl_mirror=.false.)
-        call tmp%new(200)
-        call spiral%new(200)
-        call spiral%spiral(symop%get_nsym(), symop%srchrange())
-        call spiral%write(pgrp//'_oris.txt')
+        symop = sym(pgrp)
+        call spiral%new(1000)
+        call symop%build_refspiral(spiral)
         call spiral%write2bild(pgrp//'.bild')
-        call spiral%mirror2d
-        call spiral%write(pgrp//'_mirr_oris.txt')
-        call spiral%write2bild(pgrp//'_mirr.bild')
-        do i=1,symop%get_nsym()
-            do j=1,spiral%get_noris()
-                o = symop%apply(spiral%get_ori(j),i)
-                call tmp%set_ori(j,o)
-            enddo
-            call tmp%write2bild(pgrp//'_mirr_'//int2str(i)//'.bild')
-        enddo
-        call tmp%kill
         call symop%kill
         call spiral%kill
     end subroutine symspiral

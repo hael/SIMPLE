@@ -203,7 +203,7 @@ contains
         ! set up symmetry functionality
         call self%pgrpsyms%new(trim(params%pgrp))
         params%nsym    = self%pgrpsyms%get_nsym()
-        params%eullims = self%pgrpsyms%srchrange()
+        params%eullims = self%pgrpsyms%get_eullims()
         DebugPrint ' did setup symmetry functionality                            ', toc()
         ! build spproj
         call self%build_spproj(params, cline)

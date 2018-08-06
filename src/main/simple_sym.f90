@@ -12,7 +12,8 @@ type sym
     private
     type(oris)                    :: e_sym            !< symmetry eulers
     character(len=3), allocatable :: subgrps(:)       !< subgroups
-    real                          :: eullims(3,2)= 0. !< euler angles limits (asymetric unit)
+    real                          :: eullims(3,2)     = 0.  !< euler angles limits (asymetric unit)
+    real                          :: eullims_mirr(3,2)= 0.  !< euler angles limits (asymetric unit, excluding mirrors)
     integer                       :: n=1              !< nr of symmetry ops
     integer                       :: ncsym=1          !< num of order C sym
     integer                       :: ndsym=1          !< num of order D sym
@@ -21,7 +22,7 @@ type sym
     logical                       :: c_or_d=.false.   !< c- or d-symmetry
   contains
     procedure          :: new
-    procedure          :: srchrange
+    procedure          :: get_eullims
     procedure          :: get_nsym
     procedure          :: get_pgrp
     procedure          :: apply
@@ -38,7 +39,8 @@ type sym
     procedure          :: nearest_proj_neighbors
     procedure          :: nearest_sym_neighbors
     procedure          :: symrandomize
-    procedure, private :: build_srchrange
+    procedure          :: build_refspiral
+    procedure, private :: build_eullims
     procedure, private :: make_c_and_d
     procedure, private :: make_t
     procedure, private :: make_o
@@ -62,18 +64,16 @@ double precision, parameter :: gamma  = 54.735611d0
 contains
 
     !>  \brief  is a constructor
-    function constructor( pgrp, incl_mirror ) result( self )
+    function constructor( pgrp ) result( self )
         character(len=*), intent(in)  :: pgrp        !< sym group string
-        logical, optional, intent(in) :: incl_mirror !< whether to include mirror
         type(sym)                     :: self
-        call self%new(pgrp, incl_mirror)
+        call self%new(pgrp)
     end function constructor
 
     !>  \brief  is a constructor
-    subroutine new( self, pgrp, incl_mirror )
+    subroutine new( self, pgrp )
         class(sym),        intent(inout) :: self
         character(len=*),  intent(in)    :: pgrp         !< sym group string
-        logical, optional, intent(in)    :: incl_mirror  !< whether to include mirror
         call self%kill
         self%c_or_d = .false.
         self%n      = 1
@@ -91,7 +91,7 @@ contains
         else if(pgrp(1:1).eq.'d' .or. pgrp(1:1).eq.'D')then
             if( self%pgrp(1:1).eq.'D' ) self%pgrp(1:1) = 'd'
             self%c_or_d = .true.
-            self%ndsym = 2
+            self%ndsym  = 2
             read(pgrp(2:),'(I2)') self%ncsym
             self%n = self%ncsym*self%ndsym
             call self%e_sym%new(self%n)
@@ -99,13 +99,13 @@ contains
         else if( pgrp(1:1).eq.'t' .or. pgrp(1:1).eq.'T' )then
             if( self%pgrp(1:1).eq.'T' ) self%pgrp(1:1) = 't'
             self%t_or_o = 1
-            self%n = ntet
+            self%n      = ntet
             call self%e_sym%new(self%n)
             call self%make_t
         else if( pgrp(1:1).eq.'o' .or. pgrp(1:1).eq.'O' )then
             if( self%pgrp(1:1).eq.'O' ) self%pgrp(1:1) = 'o'
             self%t_or_o = 3
-            self%n = noct
+            self%n      = noct
             call self%e_sym%new(self%n)
             call self%make_o
         else if( pgrp(1:1).eq.'i' .or. pgrp(1:1).eq.'I' )then
@@ -119,47 +119,50 @@ contains
         endif
         call self%e_sym%swape1e3
         if(trim(self%pgrp).ne.'d1')call self%set_subgrps
-        self%eullims = self%build_srchrange(incl_mirror)
+        call self%build_eullims
     end subroutine new
 
     !>  \brief  builds the search range for the point-group
-    function build_srchrange( self, incl_mirror ) result( eullims )
-        class(sym),        intent(inout) :: self
-        logical, optional, intent(in)    :: incl_mirror     !< whether to include mirror
-        real    :: eullims(3,2) !< 3-axis search range
-        logical :: incl_mirror_here
-        incl_mirror_here = .true.
-        if(present(incl_mirror)) incl_mirror_here = incl_mirror
-        eullims(:,1) = 0.
-        eullims(:,2) = 360.
-        eullims(2,2) = 180.
+    subroutine build_eullims( self )
+        class(sym), intent(inout) :: self
+        self%eullims(:,1) = 0.
+        self%eullims(:,2) = 360.
+        self%eullims(2,2) = 180.
+        self%eullims_mirr = self%eullims
         if( self%pgrp(1:1).eq.'c' )then
-            eullims(1,2) = 360./real(self%ncsym)
-            if(.not.incl_mirror_here) eullims(2,2) = 90.             ! northern hemisphere only
+            if( self%n > 1 )then
+                self%eullims(1,2)  = 360./real(self%ncsym)
+            endif
+            self%eullims_mirr      = self%eullims
+            self%eullims_mirr(2,2) = 90.
         else if( self%pgrp(1:1).eq.'d' .and. self%ncsym > 1 )then
-            eullims(1,2) = 360./real(self%ncsym)
-            eullims(2,2) = 90.
-            if(.not.incl_mirror_here) eullims(1,2) = eullims(1,2)/2. ! half e1 slice
+            self%eullims(1,2)      = 360./real(self%ncsym)
+            self%eullims(2,2)      = 90.
+            self%eullims_mirr      = self%eullims
+            self%eullims_mirr(1,2) = self%eullims_mirr(1,2)/2.
         else if( self%pgrp(1:1).eq.'t' )then
-            eullims(1,2) = 180.
-            eullims(2,2) = 54.7
+            self%eullims(1,2)      = 180.
+            self%eullims(2,2)      = 54.7
+            self%eullims_mirr      = self%eullims
         else if( self%pgrp(1:1).eq.'o' )then
-            eullims(1,2) = 90.
-            eullims(2,2) = 54.7
-            if(.not.incl_mirror_here ) eullims(1,2) = 45.
+            self%eullims(1,2)      = 90.
+            self%eullims(2,2)      = 54.7
+            self%eullims_mirr      = self%eullims
+            self%eullims_mirr(1,2) = 45.
         else if( self%pgrp(1:1).eq.'i' )then
-            eullims(1,2) = 180.
-            eullims(2,2) = 31.7
-            if(.not.incl_mirror_here ) eullims(1,2) = 36.
+            self%eullims(1,2)      = 180.
+            self%eullims(2,2)      = 31.7
+            self%eullims_mirr      = self%eullims
+            self%eullims_mirr(1,2) = 90.
         endif
-    end function build_srchrange
+    end subroutine build_eullims
 
     !>  \brief  returns the search range for the point-group
-    function srchrange( self ) result( eullims )
+    function get_eullims( self ) result( eullims )
         class(sym), intent(inout) :: self !< this instance
         real                      :: eullims(3,2) !< 3-axis search range
         eullims = self%eullims
-    end function srchrange
+    end function get_eullims
 
     !>  \brief  is a getter
     pure function get_nsym( self ) result( n )
@@ -449,6 +452,95 @@ contains
             endif
         end do
     end subroutine symrandomize
+
+    !>  \brief  is for building a spiral INCLUDING mirror projections
+    subroutine build_refspiral( self, os )
+        class(sym), intent(inout) :: self
+        type(oris), intent(inout) :: os
+        type(oris) :: tmp, os_nomirr
+        integer    :: cnt, i, n, nprojs, lim, nos, nos_nomirr
+        real       :: e1lim, e2lim, frac, frac1, frac2
+        logical, allocatable :: avail(:)
+        nos = os%get_noris()
+        if(is_odd(nos))stop 'Odd number of projections directions is not supported; simple_sym :: build refspiral'
+        nos_nomirr = nos/2
+        call os%new(nos)
+        call os_nomirr%new(nos_nomirr)
+        e1lim  = self%eullims_mirr(1,2)
+        e2lim  = self%eullims_mirr(2,2)
+        ! building spiral excluding mirrors
+        frac1  = 360./e1lim
+        frac2  = 1. / ( (1.-cos(deg2rad(e2lim))) /2. )
+        frac   = frac1 * frac2 ! area sphere / area asu (no mirror)
+        n      = ceiling(real(nos_nomirr) * frac)
+        call gen_c1
+        nprojs = count(avail)
+        if( nprojs < nos_nomirr )then
+            ! under sampling
+            n = n + nint(real(nos_nomirr)/4.)
+            call gen_c1
+            nprojs = count(avail)
+        endif
+        if( nprojs > nos_nomirr )then
+            ! over sampling
+            lim = max(2, floor(real(nprojs)/real(nprojs-nos_nomirr)))
+            cnt  = 0
+            do i=1,n
+                if(.not.avail(i))cycle
+                cnt  = cnt + 1
+                if(cnt == lim) then
+                    avail(i) = .false.
+                    cnt      = 0
+                    nprojs   = nprojs-1
+                    if( nprojs == nos_nomirr )exit
+                endif
+            enddo
+        endif
+        ! copy asu
+        cnt = 0
+        do i=1,n
+            if( .not.avail(i) )cycle
+            cnt = cnt + 1
+            if(cnt > nos_nomirr)exit
+            call os_nomirr%set_euler(cnt, tmp%get_euler(i))
+        enddo
+        ! builds mirror projections
+        do i=1,nos_nomirr
+            call os%set_euler(i, os_nomirr%get_euler(i))
+        enddo
+        call os_nomirr%mirror2d
+        ! now apply symmetry to mirrored projection directions
+        ! such that they fall within the asymmetric unit
+        if( self%n > 1 )then
+            call self%rotall_to_asym(os_nomirr)
+        endif
+        ! append
+        cnt = 0
+        do i=nos_nomirr+1,nos
+            cnt = cnt + 1
+            call os%set_euler(i, os_nomirr%get_euler(cnt))
+        enddo
+        ! cleanup
+        call os_nomirr%kill
+        call tmp%kill
+        deallocate(avail)
+
+        contains
+
+            subroutine gen_c1
+                integer :: i
+                if( allocated(avail) )deallocate(avail, stat=alloc_stat)
+                allocate(avail(n), source=.false., stat=alloc_stat)
+                call tmp%new(n)
+                call tmp%spiral
+                do i=1,n
+                    avail(i) = tmp%e1get(i) < e1lim
+                    if(.not.avail(i))cycle
+                    avail(i) = avail(i) .and.tmp%e2get(i) < e2lim
+                end do
+            end subroutine gen_c1
+
+    end subroutine build_refspiral
 
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )
