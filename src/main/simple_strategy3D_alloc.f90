@@ -125,8 +125,9 @@ contains
     ! init thread specific search arrays
     subroutine prep_strategy3D_thread( ithr )
         integer, intent(in)    :: ithr
+        real                   :: areal
         s3D%proj_space_euls(ithr,:,:,:)   = master_proj_space_euls
-        s3D%proj_space_corrs(ithr,:,:)    = -1.
+        s3D%proj_space_corrs(ithr,:,:)    = -HUGE(areal)
         s3D%proj_space_shift(ithr,:,:,:)  = 0.
         s3D%proj_space_refinds(ithr,:)    = 0
         s3D%proj_space_inplinds(ithr,:,:) = 0
