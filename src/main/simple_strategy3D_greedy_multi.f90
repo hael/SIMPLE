@@ -39,7 +39,8 @@ contains
         class(strategy3D_greedy_multi), intent(inout) :: self
         integer,                        intent(in)    :: ithr
         integer :: iref, isample,nrefs
-        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
+        real    :: inpl_corrs(self%s%nrots)
+        real    :: inpl_corrs_mir(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -58,9 +59,7 @@ contains
             end do
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = nrefs
-            ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%ithr,:,1)
-            call hpsort(corrs, s3D%proj_space_refinds(self%s%ithr,:))
+            call sort_corrs(self%s)  ! sort in correlation projection direction space
             ! take care of the in-planes
             call self%s%inpl_srch
             ! prepare weights & orientation
@@ -73,14 +72,29 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(3)
+                integer :: loc(3), loc_mir(3)
+                integer :: iref_mir
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                    ! calculate in-plane correlations
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    ! identify the 3 top scoring in-planes
-                    loc = max3loc(inpl_corrs)
-                    ! stash
-                    call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
+                    if (mir_projns) then
+                        if (s3D%proj_space_corrs_calcd(self%s%ithr,iref)) then
+                            s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
+                        else
+                            call pftcc_glob%gencorrs_mir(iref, self%s%iptcl, inpl_corrs, inpl_corrs_mir)
+                            ! identify the 3 top scoring in-planes
+                            loc      = max3loc(inpl_corrs)
+                            loc_mir  = max3loc(inpl_corrs_mir)
+                            iref_mir = iref ! +/ - nrefs/2
+                            call self%s%store_solution(iref,     loc,     [inpl_corrs(loc(1)),         inpl_corrs(loc(2)),         inpl_corrs(loc(3))],         .true. )
+                            call self%s%store_solution(iref_mir, loc_mir, [inpl_corrs_mir(loc_mir(1)), inpl_corrs_mir(loc_mir(2)), inpl_corrs_mir(loc_mir(3))], .false.)
+                        end if
+                    else
+                        ! calculate in-plane correlations
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                        ! identify the 3 top scoring in-planes
+                        loc = max3loc(inpl_corrs)
+                        ! stash
+                        call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))], .true.)
+                    end if
                 endif
             end subroutine per_ref_srch
 

@@ -39,7 +39,9 @@ contains
         class(strategy3D_multi), intent(inout) :: self
         integer,                 intent(in)    :: ithr
         integer :: iref,isample,nrefs
-        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
+        real    :: inpl_corrs(self%s%nrots)
+        real    :: areal
+        real    :: inpl_corrs_mir(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -56,14 +58,12 @@ contains
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
             do isample=1,nrefs
-                iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
+                iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
                 call per_ref_srch                           ! actual search
                 if( self%s%nbetter >= self%s%npeaks ) exit  ! exit condition
             end do
-            ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%ithr,:,1)
-            call hpsort(corrs,s3D%proj_space_refinds(self%s%ithr,:))
-            call self%s%inpl_srch ! search shifts
+            call sort_corrs(self%s)  ! sort in correlation projection direction space
+            call self%s%inpl_srch    ! search shifts
             ! prepare weights and orientations
             call self%oris_assign
         else
@@ -71,26 +71,47 @@ contains
         endif
         DebugPrint  '>>> STRATEGY3D_MULTI :: FINISHED STOCHASTIC SEARCH'
 
-        contains
+    contains
 
-            subroutine per_ref_srch
-                integer :: loc(3)
-                if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                    ! calculate in-plane correlations
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    ! identify the 3 top scoring in-planes
-                    loc = max3loc(inpl_corrs)
-                    call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
-                    ! update nbetter to keep track of how many improving solutions we have identified
-                    if( self%s%npeaks == 1 )then
-                        if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+        subroutine per_ref_srch
+            real    :: best_inpl_corr
+            integer :: loc(3)
+            integer :: loc_mir(3)
+            integer :: iref_mir
+            real    :: best_inpl_corr_mir
+            if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
+                if (mir_projns) then
+                    if (s3D%proj_space_corrs_calcd(self%s%ithr,iref)) then
+                        best_inpl_corr = s3D%proj_space_corrs(self%s%ithr,iref,1)
+                        s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
                     else
-                        if( inpl_corrs(loc(1)) >= self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
-                    endif
-                    ! keep track of how many references we are evaluating
-                    self%s%nrefs_eval = self%s%nrefs_eval + 1
+                        call pftcc_glob%gencorrs_mir(iref, self%s%iptcl, inpl_corrs, inpl_corrs_mir)
+                        ! identify the 3 top scoring in-planes
+                        loc                = max3loc(inpl_corrs)
+                        loc_mir            = max3loc(inpl_corrs_mir)
+                        best_inpl_corr     = inpl_corrs(loc(1))
+                        best_inpl_corr_mir = inpl_corrs_mir(loc(1))
+                        iref_mir           = iref ! +/ - nrefs/2
+                        call self%s%store_solution(iref,     loc,     [best_inpl_corr,    inpl_corrs(loc(2)),         inpl_corrs(loc(3))],         .true. )
+                        call self%s%store_solution(iref_mir, loc_mir, [best_inpl_corr_mir,inpl_corrs_mir(loc_mir(2)), inpl_corrs_mir(loc_mir(3))], .false.)
+                    end if
+                else
+                    ! identify the 3 top scoring in-planes
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    loc                = max3loc(inpl_corrs)
+                    best_inpl_corr     = inpl_corrs(loc(1))
+                    call self%s%store_solution(iref, loc, [best_inpl_corr, inpl_corrs(loc(2)), inpl_corrs(loc(3))], .true.)
+                end if
+                ! update nbetter to keep track of how many improving solutions we have identified
+                if( self%s%npeaks == 1 )then
+                    if( best_inpl_corr > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                else
+                    if( best_inpl_corr >= self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                 endif
-            end subroutine per_ref_srch
+                ! keep track of how many references we are evaluating
+                self%s%nrefs_eval = self%s%nrefs_eval + 1
+            end if
+        end subroutine per_ref_srch
 
     end subroutine srch_multi
 

@@ -54,3 +54,5 @@ end associate;endif
 #else
 #define CheckLaunchError(s)
 #endif
+
+  logical :: mir_projns = .false.    ! flag indicating if mirrored projection should be computed simultaneously (remove this flag once integration is done)

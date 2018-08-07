@@ -39,7 +39,7 @@ contains
         class(strategy3D_snhc_single), intent(inout) :: self
         integer,                       intent(in)    :: ithr
         integer :: iref, isample
-        real    :: corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
+        real    ::  inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -53,9 +53,7 @@ contains
                 call per_ref_srch                           ! actual search
             end do
             self%s%nrefs_eval = self%spec%szsn
-            ! sort in correlation projection direction space
-            corrs = s3D%proj_space_corrs(self%s%ithr,:,1)
-            call hpsort(corrs, s3D%proj_space_refinds(self%s%ithr,:))
+            call sort_corrs(self%s)  ! sort in correlation projection direction space
             ! output
             call self%oris_assign
         else
@@ -72,7 +70,7 @@ contains
                 ! identify the 3 top scoring in-planes
                 loc = max3loc(inpl_corrs)
                 ! stash
-                call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))])
+                call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))], .true.)
             end subroutine per_ref_srch
 
     end subroutine srch_snhc_single

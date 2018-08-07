@@ -357,4 +357,13 @@ contains
         call build_glob%spproj_field%set(s%iptcl, 'mi_joint',  mi_joint)
     end subroutine convergence_stats_multi
 
+    subroutine sort_corrs( s )
+        class(strategy3D_srch), intent(inout) :: s
+        real                                  :: corrs(s%nrefs)
+        real                                  :: areal
+        corrs = s3D%proj_space_corrs(s%ithr,:,1)
+        where(.not. s3D%proj_space_corrs_srchd(s%ithr,:)) corrs = -HUGE(areal)
+        call hpsort(corrs, s3D%proj_space_refinds(s%ithr,:))
+    end subroutine sort_corrs
+
 end module simple_strategy3D_utils

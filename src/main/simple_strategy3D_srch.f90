@@ -258,10 +258,11 @@ contains
         endif
     end subroutine inpl_srch
 
-    subroutine store_solution( self, ref, inpl_inds, corrs )
+    subroutine store_solution( self, ref, inpl_inds, corrs, searched )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_inds(MAXNINPLPEAKS)
         real,                   intent(in)    :: corrs(MAXNINPLPEAKS)
+        logical,                intent(in)    :: searched
         integer :: inpl
         s3D%proj_space_refinds(self%ithr,ref)    = ref
         s3D%proj_space_inplinds(self%ithr,ref,:) = inpl_inds
@@ -269,6 +270,8 @@ contains
             s3D%proj_space_euls(self%ithr,ref,inpl,3) = 360. - pftcc_glob%get_rot(inpl_inds(inpl))
         end do
         s3D%proj_space_corrs(self%ithr,ref,:) = corrs
+        s3D%proj_space_corrs_calcd(self%ithr,ref) = .true.
+        if (searched) s3D%proj_space_corrs_srchd(self%ithr,ref) = .true.
     end subroutine store_solution
 
     subroutine kill( self )
