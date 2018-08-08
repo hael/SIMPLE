@@ -42,13 +42,11 @@ enable_language(Fortran C CXX)
 include(CMakeDetermineFortranCompiler)
 include(CMakeDetermineCompiler)
 
-
-
 # Try to identify the ABI and configure it into CMakeFortranCompiler.cmake
 include(${CMAKE_ROOT}/Modules/CMakeDetermineCompilerABI.cmake)
 CMAKE_DETERMINE_COMPILER_ABI(Fortran ${CMAKE_ROOT}/Modules/CMakeFortranCompilerABI.F)
 
-# Test for Fortran 2008 support by using a F2008 specific construct.
+# Test Fortran 2008 support by using a F2008 specific construct.
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08)
   message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008")
   file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCompilerF08.f90 "
@@ -78,9 +76,48 @@ END PROGRAM
   endif()
   unset(CMAKE_Fortran_COMPILER_SUPPORTS_F08 CACHE)
 endif()
+# Test Fortran 2008 support by using a F2008 specific construct.
+if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_USC4)
+  message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008 Unicode 10646")
+  file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranUnicodeSupport.f90 "
+    program test_iso_10646_support
+        use iso_fortran_env ,only: output_unit, error_unit
+        implicit none
+        integer, parameter :: UCS4_K = selected_char_kind('ISO_10646')
+        if ( UCS4_K == -1 ) then
+            write(error_unit,'(A)') 'Your compiler does not support ISO 10646/UCS4 characters!'
+            write(error_unit,'(A)') 'JSON-Fortran must/will be configured to use the DEFAULT'
+            write(error_unit,'(A)') 'character set. (Should be ASCII on a reasonable system.)'
+            stop 2
+        else
+            write(error_unit,'(A)') 'Congratulations! Your compiler supports ISO 10646/UCS4!'
+            write(error_unit,'(A)') 'JSON-Fortran may be configured to enable UCS4 support.'
+            write(output_unit,'(A)') 'UCS4_SUPPORTED'
+        end if
+    end program test_iso_10646_support
+")
+  try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranUnicodeSupport.f90
+    OUTPUT_VARIABLE OUTPUT)
+  if(CMAKE_Fortran_COMPILER_SUPPORTS_USC4)
+    message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Unicode 10646 -- yes")
+    file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
+      "Determining if the Fortran compiler supports Fortran Unicode 10646 passed with "
+      "the following output:\n${OUTPUT}\n\n")
+    set(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 1)
+  else()
+    message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Unicode 10646 -- no")
+    file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
+      "Determining if the Fortran compiler supports Fortran 2008 failed with "
+      "the following output:\n${OUTPUT}\n\n")
+    set(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 0)
+  endif()
+  unset(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 CACHE)
+endif()
 
 
-# Test for Fortran preprocessor support for variadic macros
+
+# Test Fortran preprocessor support for variadic macros
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC)
   message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports variadic macros")
   file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCPPCompilerVariadic.f90 "
@@ -185,7 +222,7 @@ message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
   set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                # preprocessor flags
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
+  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none  -fno-second-underscore")  # language style
   set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wreal-q-constant ")
   #-Wconversion, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow -Wtarget-lifetime
   #-Wcompare-reals, -Wunused-parameter and -Wdo-subscript

@@ -46,7 +46,7 @@ string(REGEX REPLACE "^#define[ ]*JPEG_LIB_VERSION[ \t]+\([0-9]\)\([0-9]\)" "\\1
 message(STATUS "JPEGlib version ${JPEGLIB_VERSION} FOUND")
  if ("${JPEGLIB_VERSION}" VERSION_GREATER "8.0")
    set(JPEG_FOUND OFF)
-   message(STATUS " Jpeglib.h version not equal to or greater than 8.0 " )
+   message(STATUS "Jpeglib.h version not equal to or greater than 8.0 " )
  endif()
 
 if(JPEG_FOUND)

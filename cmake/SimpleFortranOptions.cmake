@@ -7,8 +7,9 @@
 ####################################################################
 include(SetCompileFlag)
 include(ZSetParallelLibrary)
-#include(${CMAKE_ROOT}/Modules/CMakeDetermineFortranCompiler.cmake)
-#include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
+include(CMakeFortranInformation)
+
+
 ## Double check cpp is not Clang
 if(NOT CMAKE_CPP_COMPILER)
   if(NOT $ENV{CPP} STREQUAL "")
@@ -54,7 +55,7 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
   execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_FC_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-    message(STATUS " GFORTRAN version: ${ACTUAL_FC_TARGET}")
+    message(STATUS "GFORTRAN version: ${ACTUAL_FC_TARGET}")
   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file (
@@ -68,7 +69,7 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
       message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} --
 ${CLANG_FATAL_MSG}")
     endif()
-    message(STATUS " GFORTRAN replaced with ${CMAKE_Fortran_COMPILER")
+    message(STATUS "GFORTRAN replaced with ${CMAKE_Fortran_COMPILER")
 
   endif()
 endif()
@@ -82,7 +83,7 @@ message(STATUS "Making sure your C compiler points to the correct binary")
   execute_process(COMMAND ${CMAKE_C_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_C_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-  message(STATUS " GCC version: ${ACTUAL_C_TARGET}")
+  message(STATUS "GCC version: ${ACTUAL_C_TARGET}")
 
   if(ACTUAL_C_TARGET MATCHES "Clang|clang")
     message(STATUS "WARNING gcc points to Clang -- Attempting other paths, starting with ${FORTRAN_PARENT_DIR}")
@@ -93,7 +94,7 @@ message(STATUS "Making sure your C compiler points to the correct binary")
       PATHS  /sw/bin /usr/local/bin /opt/local/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gcc preprocessor, starting with ${FORTRAN_PARENT_DIR} "
-      NO_CMAKE_PATH NO_DEFAULT_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH     
+      NO_CMAKE_PATH NO_DEFAULT_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
 )
     message (STATUS " Found ${CMAKE_C_COMPILER_NEW}")
     if(EXISTS "${CMAKE_C_COMPILER_NEW}")
@@ -110,7 +111,7 @@ message(STATUS "Making sure your C++ compiler points to the correct binary")
   execute_process(COMMAND ${CMAKE_CXX_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_CXX_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-    message(STATUS " G++ version: ${ACTUAL_CXX_TARGET}")
+    message(STATUS "G++ version: ${ACTUAL_CXX_TARGET}")
   if(ACTUAL_CXX_TARGET MATCHES "Clang|clang")
     message(STATUS "WARNING g++ points to Clang -- Trying other paths")
     find_file (
@@ -330,7 +331,7 @@ endif()
 
 
 if (USE_OPENMP)
- # message(STATUS " in USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
+ # message(STATUS "in USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
   # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   #      Fortran REQUIRED
   #      "-fopenmp"            # GNU
@@ -338,7 +339,7 @@ if (USE_OPENMP)
   #      "-openmp"             # depreciated Intel Open MP flag
   #      "/mp"
   #      )
-  #    message(STATUS " leaving USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
+  #    message(STATUS "leaving USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
 #   endif()
 # endif()
 #if(USE_OPENMP)
@@ -379,32 +380,32 @@ if(USE_MPI)
  #     else()
 
   if(MPI_Fortran_FOUND)
-    message(STATUS " MPI found -- ${MPI_COMPILE_FLAGS}")
-    message(STATUS " MPI_Fortran_COMPILER ${MPI_Fortran_COMPILER}")
-    message(STATUS " MPI_Fortran_COMPILE_FLAGS ${MPI_Fortran_COMPILE_FLAGS}")
-    message(STATUS " MPI_Fortran_LIBRARIES ${MPI_Fortran_LIBRARIES}")
-    message(STATUS " MPI_Fortran_INCLUDE_PATH ${MPI_Fortran_INCLUDE_PATH}")
-    message(STATUS " MPI_Fortran_LINK_FLAGS ${MPI_Fortran_LINK_FLAGS}")
-    message(STATUS " MPI_Fortran mpi_f08_mod_path  ${mpi_f08_mod_path}")
-    # message(STATUS " MPI_C_COMPILER ${MPI_C_COMPILER}")
-    # message(STATUS " MPI_C_COMPILE_FLAGS ${MPI_C_COMPILE_FLAGS}")
-    # message(STATUS " MPI_C_LIBRARIES ${MPI_C_LIBRARIES}")
-    # message(STATUS " MPI_C_INCLUDE_PATH ${MPI_C_INCLUDE_PATH}")
-    # message(STATUS " MPI_C_LINK_FLAGS ${MPI_C_LINK_FLAGS}")
+    message(STATUS "MPI found -- ${MPI_COMPILE_FLAGS}")
+    message(STATUS "MPI_Fortran_COMPILER ${MPI_Fortran_COMPILER}")
+    message(STATUS "MPI_Fortran_COMPILE_FLAGS ${MPI_Fortran_COMPILE_FLAGS}")
+    message(STATUS "MPI_Fortran_LIBRARIES ${MPI_Fortran_LIBRARIES}")
+    message(STATUS "MPI_Fortran_INCLUDE_PATH ${MPI_Fortran_INCLUDE_PATH}")
+    message(STATUS "MPI_Fortran_LINK_FLAGS ${MPI_Fortran_LINK_FLAGS}")
+    message(STATUS "MPI_Fortran mpi_f08_mod_path  ${mpi_f08_mod_path}")
+    # message(STATUS "MPI_C_COMPILER ${MPI_C_COMPILER}")
+    # message(STATUS "MPI_C_COMPILE_FLAGS ${MPI_C_COMPILE_FLAGS}")
+    # message(STATUS "MPI_C_LIBRARIES ${MPI_C_LIBRARIES}")
+    # message(STATUS "MPI_C_INCLUDE_PATH ${MPI_C_INCLUDE_PATH}")
+    # message(STATUS "MPI_C_LINK_FLAGS ${MPI_C_LINK_FLAGS}")
 
-    # message(STATUS " MPI_CXX_COMPILER ${MPI_CXX_COMPILER}")
-    # message(STATUS " MPI_CXX_COMPILE_FLAGS ${MPI_CXX_COMPILE_FLAGS}")
-    # message(STATUS " MPI_CXX_LIBRARIES ${MPI_CXX_LIBRARIES}")
-    # message(STATUS " MPI_CXX_INCLUDE_PATH ${MPI_CXX_INCLUDE_PATH}")
-    # message(STATUS " MPI_CXX_LINK_FLAGS ${MPI_CXX_LINK_FLAGS}")
+    # message(STATUS "MPI_CXX_COMPILER ${MPI_CXX_COMPILER}")
+    # message(STATUS "MPI_CXX_COMPILE_FLAGS ${MPI_CXX_COMPILE_FLAGS}")
+    # message(STATUS "MPI_CXX_LIBRARIES ${MPI_CXX_LIBRARIES}")
+    # message(STATUS "MPI_CXX_INCLUDE_PATH ${MPI_CXX_INCLUDE_PATH}")
+    # message(STATUS "MPI_CXX_LINK_FLAGS ${MPI_CXX_LINK_FLAGS}")
 
     # For backward compatibility with older versions of FindMPI, these
     # variables are set, but deprecated:
-    message(STATUS " MPI_LIBRARY ${MPI_LIBRARY}")
-    message(STATUS " MPI_COMPILE_FLAGS ${MPI_COMPILE_FLAGS}")
-    message(STATUS " MPI_EXTRA_LIBRARY ${MPI_EXTRA_LIBRARY}")
-    message(STATUS " MPI_INCLUDE_PATH ${MPI_INCLUDE_PATH}")
-    message(STATUS " MPI_CXX_LINK_FLAGS ${MPI_LINK_FLAGS}")
+    message(STATUS "MPI_LIBRARY ${MPI_LIBRARY}")
+    message(STATUS "MPI_COMPILE_FLAGS ${MPI_COMPILE_FLAGS}")
+    message(STATUS "MPI_EXTRA_LIBRARY ${MPI_EXTRA_LIBRARY}")
+    message(STATUS "MPI_INCLUDE_PATH ${MPI_INCLUDE_PATH}")
+    message(STATUS "MPI_CXX_LINK_FLAGS ${MPI_LINK_FLAGS}")
 
    # get_filename_component(mpi_f08_mod_path ${MPI_EXTRA_LIBRARY} DIRECTORY)
    # include_directories(SYSTEM ${mpi_f08_mod_path})
@@ -450,7 +451,7 @@ if(USE_CUDA)
     find_package(CUDA)
 
     if(CUDA_FOUND)
-      message(STATUS " CUDA Found ")
+      message(STATUS "CUDA Found ")
       set(EXTRA_LIBS ${EXTRA_LIBS}  ${CUDA_LIBRARIES})
       include_directories( ${CUDA_INCLUDE_DIRS} )
       add_definitions("-DUSING_CUDA")
@@ -542,7 +543,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
     OUTPUT_VARIABLE GFC_VERSION
     ERROR_VARIABLE GFC_VERSION_STDERR
     RESULT_VARIABLE GFC_VERSION_RESULT)
- # message(STATUS " ${CMAKE_Fortran_COMPILER} -dumpversion :  ${GFC_VERSION} : ${GFC_VERSION_RESULT} : ${GFC_VERSION_STDERR}")
+ # message(STATUS "${CMAKE_Fortran_COMPILER} -dumpversion :  ${GFC_VERSION} : ${GFC_VERSION_RESULT} : ${GFC_VERSION_STDERR}")
   if( RESULT_VARIABLE EQUAL 1 )
     message(FATAL_ERROR "${PROJECT_NAME} requires ${CMAKE_Fortran_COMPILER} to compile")
   endif()
