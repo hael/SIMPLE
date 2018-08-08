@@ -6,7 +6,7 @@
 
 program simple_test_mpi
     include 'simple_lib.f08'
-#ifdef INTEL
+#ifdef MPI_NOF08_MODULE
     use mpi
 #else
     use mpi_f08
@@ -56,7 +56,7 @@ contains
     subroutine ring
         implicit none
         integer :: rank, size, tag, next, from, i, message, ierr
-
+        include 'mpif.h'
 
         ! Start up MPI
 
@@ -79,7 +79,7 @@ contains
 
             write(*, '("Process 0 sending ", i2, " to ", i2, " tag ", i3, " (", i2, " processes in ring)")') &
                 &message, next, tag, size
-            call MPI_SEND(message, 1, MPI_INTEGER, next, tag, MPI_COMM_WORLD)
+            call MPI_SEND(message, 1, MPI_INTEGER, next, tag, MPI_COMM_WORLD,ierr)
             write(*, '("Process 0 sent to ", i2)') next
         endif
 
@@ -92,14 +92,14 @@ contains
 
         i = 1
 10      call MPI_Recv(message, i, MPI_INTEGER, from, tag, MPI_COMM_WORLD, &
-            MPI_STATUS_IGNORE)
+            MPI_STATUS_IGNORE,ierr)
 
         if (rank .eq. 0) then
             message = message - 1
             write(*, '("Process 0 decremented value: ", i2)') message
         endif
 
-        call MPI_SEND(message, 1, MPI_INTEGER, next, tag, MPI_COMM_WORLD)
+        call MPI_SEND(message, 1, MPI_INTEGER, next, tag, MPI_COMM_WORLD,ierr)
 
         if (message .eq. 0) then
             write(*, '("Process ", i2, " exiting")') rank
@@ -112,7 +112,7 @@ contains
 
 20      if (rank .eq. 0) then
             call MPI_RECV(message, 1, MPI_INTEGER, from, tag, MPI_COMM_WORLD, &
-                MPI_STATUS_IGNORE)
+                MPI_STATUS_IGNORE,ierr)
         endif
 
         ! All done

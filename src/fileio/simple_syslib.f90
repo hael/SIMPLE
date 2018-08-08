@@ -716,8 +716,6 @@ contains
         if(allocated(targetdir))deallocate(targetdir)
         check_exists=.true.
         call simple_abspath (trim(newd), targetdir, eemsg, check_exists)
-
-        write(*,*) " In simple_syslib chdir changing to target dir "//trim(targetdir)
 #ifdef INTEL
         inquire(DIRECTORY=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
 #else
