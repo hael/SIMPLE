@@ -83,7 +83,7 @@ contains
                             ! identify the 3 top scoring in-planes
                             loc      = max3loc(inpl_corrs)
                             loc_mir  = max3loc(inpl_corrs_mir)
-                            iref_mir = iref ! +/ - nrefs/2
+                            iref_mir = proj_mirror_idx(iref)
                             call self%s%store_solution(iref,     loc,     [inpl_corrs(loc(1)),         inpl_corrs(loc(2)),         inpl_corrs(loc(3))],         .true. )
                             call self%s%store_solution(iref_mir, loc_mir, [inpl_corrs_mir(loc_mir(1)), inpl_corrs_mir(loc_mir(2)), inpl_corrs_mir(loc_mir(3))], .false.)
                         end if

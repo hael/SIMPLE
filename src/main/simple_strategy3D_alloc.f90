@@ -6,7 +6,7 @@ use simple_builder,    only: build_glob
 use simple_oris,       only: oris
 implicit none
 
-public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
+public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread, proj_mirror_idx
 private
 
 type strategy3D_alloc
@@ -20,8 +20,8 @@ type strategy3D_alloc
     real,           allocatable :: proj_space_euls(:,:,:,:)          !< euler angles
     real,           allocatable :: proj_space_shift(:,:,:,:)         !< shift vectors
     real,           allocatable :: proj_space_corrs(:,:,:)           !< reference vs. particle correlations
-    logical,        allocatable :: proj_space_corrs_srchd(:,:)    !< reference vs. particle correlations
-    logical,        allocatable :: proj_space_corrs_calcd(:,:)  !< reference vs. particle correlations    
+    logical,        allocatable :: proj_space_corrs_srchd(:,:)       !< reference vs. particle correlations
+    logical,        allocatable :: proj_space_corrs_calcd(:,:)       !< reference vs. particle correlations
     integer,        allocatable :: proj_space_refinds(:,:)           !< reference indices
     integer,        allocatable :: proj_space_inplinds(:,:,:)        !< in-plane indices
     integer,        allocatable :: srch_order(:,:)                   !< stochastic search index
@@ -29,6 +29,7 @@ end type strategy3D_alloc
 
 type(strategy3D_alloc) :: s3D ! singleton
 real,      allocatable :: master_proj_space_euls(:,:,:)     !< references euler angles
+integer,   allocatable :: proj_mirror_idx(:)                !< indices of mirrored projection directions
 logical                :: srch_order_allocated = .false.
 
 contains
@@ -56,7 +57,8 @@ contains
             &s3D%proj_space_corrs(nthr_glob,nrefs,MAXNINPLPEAKS), s3D%proj_space_refinds(nthr_glob,nrefs),&
             &s3D%proj_space_corrs_srchd(nthr_glob,nrefs), s3D%proj_space_corrs_calcd(nthr_glob,nrefs),&
             &s3D%proj_space_inplinds(nthr_glob,nrefs,MAXNINPLPEAKS),&
-            &s3D%proj_space_proj(nrefs), stat=alloc_stat )
+            &s3D%proj_space_proj(nrefs),&
+            &proj_mirror_idx(nrefs), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
@@ -75,6 +77,11 @@ contains
                 do inpl=1,MAXNINPLPEAKS
                     master_proj_space_euls(cnt,inpl,:) = eul
                 end do
+                ! mirror references indices
+                if (iproj .le. params_glob%nspace/2) then
+                    proj_mirror_idx(cnt)                      = (params_glob%nstates-1)*params_glob%nspace + params_glob%nspace/2 + iproj
+                    proj_mirror_idx(cnt+params_glob%nspace/2) = (params_glob%nstates-1)*params_glob%nspace + iproj
+                end if
             enddo
         enddo
         s3D%proj_space_shift       = 0.

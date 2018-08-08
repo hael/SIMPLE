@@ -90,8 +90,8 @@ contains
                         loc                = max3loc(inpl_corrs)
                         loc_mir            = max3loc(inpl_corrs_mir)
                         best_inpl_corr     = inpl_corrs(loc(1))
-                        best_inpl_corr_mir = inpl_corrs_mir(loc(1))
-                        iref_mir           = iref ! +/ - nrefs/2
+                        best_inpl_corr_mir = inpl_corrs_mir(loc_mir(1))
+                        iref_mir           = proj_mirror_idx(iref)
                         call self%s%store_solution(iref,     loc,     [best_inpl_corr,    inpl_corrs(loc(2)),         inpl_corrs(loc(3))],         .true. )
                         call self%s%store_solution(iref_mir, loc_mir, [best_inpl_corr_mir,inpl_corrs_mir(loc_mir(2)), inpl_corrs_mir(loc_mir(3))], .false.)
                     end if
