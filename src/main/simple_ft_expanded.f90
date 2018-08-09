@@ -459,7 +459,7 @@ contains
     subroutine corr_normalize( self1, self2, corr )
         class(ft_expanded), intent(inout) :: self1, self2 !< instances
         real,               intent(inout) :: corr
-        real                              :: sumasq,sumbsq
+        real(dp)                          :: sumasq,sumbsq
         sumasq = sum(csq(self1%cmat))
         sumbsq = sum(csq(self2%cmat))
         corr   = corr * denom / sqrt(sumasq * sumbsq)

@@ -80,7 +80,7 @@ contains
         type(ran_tabu) :: rt
         integer        :: tmp(nlabels), order(nptcls), config(nptcls)
         real           :: corrs(nptcls)
-        integer        :: iptcl, cnt, s, ind
+        integer        :: iptcl, s, ind
         write(*,'(A)') '>>> GENERATING DIVERSE LABELLING WITH RESPECT TO OBJECTIVE FUNCTION'
         config = 0
         corrs = os%get_all('corr')
@@ -113,7 +113,7 @@ contains
         integer  :: inds(nptcls), pops(nlabels), config(nptcls)
         logical  :: mask(nptcls)
         real     :: areal
-        integer  :: i,iptcl, cnt, s, n_drawn, ind, n_avail, half_pop
+        integer  :: i,iptcl, s, n_drawn, ind, n_avail, half_pop
         write(*,'(A)') '>>> GENERATING MIXED UNIFORM & SKEWED LABELLING'
         mask   = (states > 0) .and. (states <= nlabels)
         dists  = 1. - os%get_all('corr')
@@ -178,7 +178,7 @@ contains
         integer  :: inds(nptcls), pops(nlabels), config(nptcls)
         logical  :: mask(nptcls)
         real     :: areal
-        integer  :: i,iptcl, cnt, s, n_drawn, ind, n_avail, half_pop
+        integer  :: i,iptcl, s, n_drawn, ind, n_avail, half_pop
         write(*,'(A)') '>>> GENERATING MIXED UNIFORM & SKEWED LABELLING'
         mask   = (states > 0) .and. (states <= nlabels)
         dists  = 1. - os%get_all('corr')
@@ -246,7 +246,7 @@ contains
         integer  :: inds(nptcls), pops(nlabels), config(nptcls)
         logical  :: mask(nptcls)
         real     :: areal
-        integer  :: i,iptcl, cnt, s, n_drawn, ind, n_avail, half_pop
+        integer  :: iptcl, s, n_drawn, ind, n_avail
         write(*,'(A)') '>>> GENERATING SKEWED LABELLING WITH RESPECT TO OBJECTIVE FUNCTION'
         mask   = (states > 0) .and. (states <= nlabels)
         dists  = 1. - os%get_all('corr')

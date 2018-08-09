@@ -115,7 +115,6 @@ contains
     function randn_1( n ) result( a )
         integer, intent(in) :: n
         real, allocatable   :: a(:)
-        integer             :: i
         allocate( a(n) )
         call random_number(a)
         a = a * 2. - 1.
@@ -126,7 +125,6 @@ contains
     function randn_2( n1, n2 ) result( a )
         integer, intent(in) :: n1, n2
         real, allocatable   :: a(:,:)
-        integer             :: i, j
         allocate( a(n1,n2) )
         call random_number(a)
         a = a * 2. - 1.

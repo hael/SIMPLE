@@ -7,8 +7,6 @@
 ####################################################################
 include(SetCompileFlag)
 include(ZSetParallelLibrary)
-include(CMakeFortranInformation)
-
 
 ## Double check cpp is not Clang
 if(NOT CMAKE_CPP_COMPILER)
@@ -154,8 +152,6 @@ endif()
 set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
 
 
-
-
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
 
 if(CMAKE_INSTALL_LIBDIR MATCHES "lib64")
@@ -201,7 +197,16 @@ endif()
 string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)
 add_definitions(-D${ID_STRING})
 message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
+message(STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
 
+################################################################
+# Json-fortran definitions
+################################################################
+add_definitions("-DJF_REAL32")
+add_definitions("-DJF_INT32")
+if(CMAKE_Fortran_COMPILER_SUPPORTS_USC4==1)
+  add_definitions("-DUSE_USC4")
+endif()
 
 
 ################################################################
@@ -559,7 +564,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
   set(CMAKE_Fortran_FLAGS                "${EXTRA_FLAGS} ")
   set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS_DEBUG} ${EXTRA_FLAGS} " )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        " ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${EXTRA_FLAGS} ")
+  set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${EXTRA_FLAGS} ")
 
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT} \
  ${EXTRA_FLAGS} \

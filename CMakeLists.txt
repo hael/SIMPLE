@@ -259,7 +259,7 @@ endif()
 add_subdirectory(production bin)
 
 #only for debugging
-if(VERBOSE) 
+if(VERBOSE)
  include(GenericLogging)
 endif()
 

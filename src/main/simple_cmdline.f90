@@ -151,7 +151,7 @@ contains
         integer                   :: i, cmdstat, cmdlen, ikey
         integer                   :: nreq, cmdargcnt
         logical                   :: distr_exec
-        call getarg(0,exec_name)
+        call get_command_argument(0,exec_name)
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)

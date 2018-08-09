@@ -41,6 +41,7 @@ endif()
 enable_language(Fortran C CXX)
 include(CMakeDetermineFortranCompiler)
 include(CMakeDetermineCompiler)
+# include(CMakeFortranInformation)
 
 # Try to identify the ABI and configure it into CMakeFortranCompiler.cmake
 include(${CMAKE_ROOT}/Modules/CMakeDetermineCompilerABI.cmake)

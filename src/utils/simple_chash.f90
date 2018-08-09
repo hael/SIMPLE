@@ -300,7 +300,7 @@ contains
 
     !>  \brief  looks up the index of a value in the chash
     !!* Warning* this will get the first occurance of the value
-    !! 
+    !!
     function reverselookup( self, key ) result( which )
         class(chash),     intent(in) :: self
         character(len=*), intent(in) :: key
@@ -397,7 +397,6 @@ contains
         class(chash),          intent(inout) :: self
         character(len=KEYLEN), allocatable   :: keys_sorted(:)
         character(len=:),      allocatable   :: val
-        character(len=KEYLEN) :: key
         type(chash) :: tmp
         integer     :: ikey, sz
         if( self%chash_index > 1 )then

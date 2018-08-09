@@ -1,5 +1,6 @@
 ! for manging orientation data using binary files
 module simple_binoris
+use, intrinsic :: ISO_C_BINDING
 use simple_defs     ! use all in there
 use simple_strings, only: spaces
 use simple_error,   only: allocchk
@@ -178,7 +179,7 @@ contains
         character(len=:), allocatable :: str_dyn
         integer         :: i, nspaces, noris, iseg
         integer(kind=8) :: end_part1, start_part3, end_part3
-        integer(kind=8) :: n_bytes_part3, n_bytes_part3_orig, ibytes, first_data_byte
+        integer(kind=8) :: ibytes, first_data_byte
         character(len=1), allocatable ::bytearr_part3(:)
         noris = os%get_noris()
         if( noris == 0 ) return
@@ -240,7 +241,7 @@ contains
         character(len=:), allocatable :: str_dyn
         integer         :: i, nspaces, noris, iseg
         integer(kind=8) :: end_part1, start_part3, end_part3
-        integer(kind=8) :: n_bytes_part3, n_bytes_part3_orig, ibytes, first_data_byte
+        integer(kind=8) :: ibytes, first_data_byte
         character(len=1), allocatable :: bytearr_part3(:)
         noris = size(os_strings)
         if( noris == 0 ) return

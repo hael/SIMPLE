@@ -837,8 +837,8 @@ contains
         if(  abs(denom) < TINY )then
            if( abs(nom) < TINY )then
 #else
-        if( denom == 0. )then
-           if( nom == 0. )then
+        if( is_zero(denom) )then
+           if( is_zero(nom) )then
 #endif
                 phase = 0.
             else if( nom > 0. )then
@@ -862,9 +862,9 @@ contains
             sq = y*y
         else if( y < TINY ) then
 #else
-        if( x == 0.) then
+        if( is_zero(x)) then
             sq = y*y
-        else if( y == 0. ) then
+        else if( is_zero(y) ) then
 #endif
            sq = x*x
         else if( x > y ) then
@@ -887,9 +887,9 @@ contains
             sq = y*y
         else if( y < TINY ) then
 #else
-        if( x == 0.) then
+        if( is_zero(x)) then
             sq = y*y
-        else if( y == 0. ) then
+        else if( is_zero(y) ) then
 #endif
             sq = x*x
         else if( x > y ) then
@@ -912,9 +912,9 @@ contains
             myabs = y
         else if( y < TINY ) then
 #else
-        if( x == 0. ) then
+        if( is_zero(x) ) then
             myabs = y
-        else if( y == 0. ) then
+        else if( is_zero(y)  ) then
 #endif
            myabs = x
         else if( x > y ) then
@@ -1402,7 +1402,7 @@ contains
         end do
         ! reduce augmented matrix to upper traingular form
         do k=1,n-1
-              if( augmatrix(k,k) == 0. )then
+              if( is_zero(augmatrix(k,k)) )then
                  flag = .false.
                 do i=k+1,n
                     if( augmatrix(i,k) > 0. )then
@@ -1428,7 +1428,7 @@ contains
         end do
         ! test for invertibility
         do i=1,n
-            if( augmatrix(i,i) == 0. )then
+            if( is_zero(augmatrix(i,i)) )then
                 inverse = 0
                 errflg = -1
                 return
@@ -2813,7 +2813,7 @@ contains
 
     function max3loc( rarr ) result( loc )
         real, intent(in) :: rarr(:)
-        real :: x, arr(3), val
+        real ::  arr(3), val
         integer :: loc(3), i, sz
         sz  = size(rarr)
         loc = [0,0,0]
@@ -2855,7 +2855,6 @@ contains
         integer, intent(in) :: n
         real :: min_n(n)
         integer :: j, nr
-        real    :: ra
         nr = size(rarr)
         if( nr < 4)then
             min_n(:nr) = rarr
@@ -3089,7 +3088,7 @@ contains
     real function bapprox(n,x)
       integer n
       real x(n)
-      integer i,bottom,counts(0:1000),bin,k,j,count,medbin
+      integer i,bottom,counts(0:1000),bin,k,j,count
       real mu,sigma,scalefac,leftend,rghtend
 
       !     Compute the mean and standard deviation
@@ -3227,7 +3226,7 @@ contains
             !        Stop if all points in medbin are the same
             samepts = .TRUE.
             do 6 i = r+1,n
-                if (x(i).ne.x(r)) then
+                if (.not.is_equal(x(i),x(r))) then
                     samepts = .FALSE.
                     goto 7
                 endif
@@ -3344,7 +3343,7 @@ contains
             !        Stop if all points in medbin are the same
             samepts = .TRUE.
             do  i = r+1,n
-                if (x(i).ne.x(r)) then
+                if (.not.is_equal(x(i),x(r))) then
                     samepts = .FALSE.
                     exit
                 endif
