@@ -6,12 +6,12 @@ module simple_sort
     !! Quicksort
     public :: qsortf
     private :: partition
-    !! Quicksort microbench 
+    !! Quicksort microbench
     public :: quicksort_m_sp, quicksort_m_dp, quicksort_m_int
     !! Bitonic sort
-    public :: bitSort, bitonic_sort   
+    public :: bitSort, bitonic_sort
     !! Radix sort
-    public :: radixsort  
+    public :: radixsort
     logical, parameter :: noassert = .true.
 contains
 
@@ -164,19 +164,17 @@ contains
         end do
     end subroutine quicksort_m_int
 
-
-
     pure subroutine assertion(cond)
         implicit none
         logical, intent(in) :: cond
-        real, volatile :: r 
-
+        !real, volatile :: r
+        real :: r
         if ( noassert ) return   !<=== Arjen M special note: compiler will detect .true. and eliminate assertion function
         r = 1.0
         if (.not. cond) r = r / 0.0
     end subroutine assertion
 
-    pure subroutine bitonic_kernel(up, a, p,  q) 
+    pure subroutine bitonic_kernel(up, a, p,  q)
         real,    intent(inout):: a(:)
         integer, intent(in)  :: p,q
         integer d, i,id
@@ -194,7 +192,7 @@ contains
         enddo
     end subroutine bitonic_kernel
 
-    recursive subroutine bitSort(up, aN,  a) 
+    recursive subroutine bitSort(up, aN,  a)
         real,    intent(inout):: a(:)
         integer, intent(in)   :: aN
         logical, intent(inout):: up
@@ -229,7 +227,7 @@ contains
         logical, intent(inout) :: up
         real, intent(inout):: x(:)
         integer, intent(in) :: p1,p2
-        ! assume input x is bitonic, and sorted list is returned 
+        ! assume input x is bitonic, and sorted list is returned
         if (p2-p1 > 1) then
             call bitonic_compare(up, x,p1,p2)
             call bitonic_merge(up, x, p1, p1+(p2-p1)/2)
@@ -243,10 +241,10 @@ contains
         real::tmp
         integer i, dist
         dist = p1 + (p2-p1)/2
-        do i=p1,dist  
+        do i=p1,dist
             if ((x(i) > x(i + dist)) .eqv. up)then
                 tmp=x(i);
-                x(i)=x(i + dist) 
+                x(i)=x(i + dist)
                 x(i + dist)=x(i)
             end if
         end do
@@ -254,7 +252,7 @@ contains
 
 
     !! radix sort -- only for integers
-    subroutine radixsort (ix, iw, n)      
+    subroutine radixsort (ix, iw, n)
         implicit none
         integer n
         integer :: ix(n), iw(n)
@@ -298,7 +296,7 @@ contains
                     end if
                 end do
 
-            else 
+            else
                 do j = 1, p0old, +1             ! copy data from the zeros
                     if ( btest(ix(j), i) ) then
                         p1 = p1 - 1
@@ -325,11 +323,11 @@ contains
         p1old = p1
         p0old = p0
         p1 = n+1
-        p0 = 0 
+        p0 = 0
 
         !          if sign bit is set, send to the zero end
         do j = 1, p0old, +1
-            if ( btest(iw(j), ilim-1) ) then 
+            if ( btest(iw(j), ilim-1) ) then
                 p0 = p0 + 1
                 ix(p0) = iw(j)
             else
@@ -359,14 +357,14 @@ contains
 
 !! https://rosettacode.org/wiki/Sorting_algorithms/Merge_sort
 subroutine Merge(A,NA,B,NB,C,NC)
- 
+
    integer, intent(in) :: NA,NB,NC         ! Normal usage: NA+NB = NC
    integer, intent(in out) :: A(NA)        ! B overlays C(NA+1:NC)
    integer, intent(in)     :: B(NB)
    integer, intent(in out) :: C(NC)
- 
+
    integer :: I,J,K
- 
+
    I = 1; J = 1; K = 1;
    do while(I <= NA .and. J <= NB)
       if (A(I) <= B(J)) then
@@ -384,17 +382,17 @@ subroutine Merge(A,NA,B,NB,C,NC)
       K = K + 1
    enddo
    return
- 
+
 end subroutine merge
- 
+
 recursive subroutine MergeSort(A,N,T)
- 
+
    integer, intent(in) :: N
    integer, dimension(N), intent(in out) :: A
    integer, dimension((N+1)/2), intent (out) :: T
- 
+
    integer :: NA,NB,V
- 
+
    if (N < 2) return
    if (N == 2) then
       if (A(1) > A(2)) then
@@ -403,30 +401,30 @@ recursive subroutine MergeSort(A,N,T)
          A(2) = V
       endif
       return
-   endif      
+   endif
    NA=(N+1)/2
    NB=N-NA
- 
+
    call MergeSort(A,NA,T)
    call MergeSort(A(NA+1),NB,T)
- 
+
    if (A(NA) > A(NA+1)) then
       T(1:NA)=A(1:NA)
       call Merge(T,NA,A(NA+1),NB,A,N)
    endif
    return
- 
+
 end subroutine MergeSort
 
 subroutine Merge_r4(A,NA,B,NB,C,NC)
- 
+
    integer, intent(in) :: NA,NB,NC         ! Normal usage: NA+NB = NC
    real, intent(in out) :: A(NA)        ! B overlays C(NA+1:NC)
    real, intent(in)     :: B(NB)
    real, intent(in out) :: C(NC)
- 
+
    integer :: i,j,k
- 
+
    i = 1; j = 1; k = 1;
    do while(i <= NA .and. j <= NB)
       if (A(i) <= B(j)) then
@@ -444,17 +442,17 @@ subroutine Merge_r4(A,NA,B,NB,C,NC)
       k = k + 1
    enddo
    return
- 
+
 end subroutine merge_r4
- 
+
 recursive subroutine MergeSort_r4(A,N,T)
- 
+
    integer, intent(in) :: N
    real, dimension(N), intent(in out) :: A
    real, dimension((N+1)/2), intent (out) :: T
- 
+
    integer :: NA,NB,V
- 
+
    if (N < 2) return
    if (N == 2) then
       if (A(1) > A(2)) then
@@ -463,19 +461,19 @@ recursive subroutine MergeSort_r4(A,N,T)
          A(2) = V
       endif
       return
-   endif      
+   endif
    NA=(N+1)/2
    NB=N-NA
- 
+
    call MergeSort_r4(A,NA,T)
    call MergeSort_r4(A(NA+1),NB,T)
- 
+
    if (A(NA) > A(NA+1)) then
       T(1:NA)=A(1:NA)
       call Merge_r4(T,NA,A(NA+1),NB,A,N)
    endif
    return
- 
+
 end subroutine MergeSort_r4
 
 
