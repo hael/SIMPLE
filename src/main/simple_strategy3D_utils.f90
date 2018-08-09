@@ -181,9 +181,20 @@ contains
             ! threshold weights
             included = (ws >= SOFTMAXW_THRESH)
             s%npeaks_eff = count(included)
-            where( .not. included ) ws = 0.
-            ! weighted corr
-            wcorr = sum(ws*corrs,mask=included)
+            if( s%npeaks_eff > 0 )then
+                ! exclusion
+                where( .not. included ) ws = 0.
+                ! weighted corr
+                wcorr = sum(ws*corrs,mask=included)
+            else
+                ! defaults to best when all fall below threshold
+                s%npeaks_eff          = 1
+                wcorr                 = corrs(best_loc(1))
+                ws                    = 0.
+                ws(best_loc(1))       = 1.
+                included              = .false.
+                included(best_loc(1)) = .true.
+            endif
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
