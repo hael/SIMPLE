@@ -201,7 +201,7 @@ contains
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
             str_dyn = os%ori2str(i)
-            nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
+            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
             else
@@ -256,7 +256,7 @@ contains
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
             str_dyn = os_strings(i)%str
-            nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
+            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
             else
@@ -382,7 +382,7 @@ contains
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
             str_dyn = os%ori2str(i)
-            nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
+            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
             else
@@ -407,7 +407,7 @@ contains
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            nspaces = self%header(isegment)%n_bytes_per_record - len(sarr(i)%str)
+            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(sarr(i)%str)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) sarr(i)%str//spaces(nspaces)
                 DebugPrint 'wrote: ', sizeof(sarr(i)%str//spaces(nspaces)),&
