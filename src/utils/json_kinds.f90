@@ -37,23 +37,23 @@
 !
 !@note The default real kind (`RK`) and the default integer kind (`IK`) can be
 !      changed using optional preprocessor flags. This library was built with kinds:
-#ifdef REAL32
+#ifdef JF_REAL32
 !      real(kind=real32) [4 bytes]
-#elif REAL64
+#elif JF_REAL64
 !      real(kind=real64) [8 bytes]
-#elif REAL128
+#elif JF_REAL128
 !      real(kind=real128) [16 bytes]
 #else
 !      real(kind=real64) [8 bytes]
 #endif
 !      and
-#ifdef INT8
+#ifdef JF_INT8
 !      integer(kind=int8) [1 byte]
-#elif INT16
+#elif JF_INT16
 !      integer(kind=int16) [2 bytes]
-#elif INT32
+#elif JF_INT32
 !      integer(kind=int32) [4 bytes]
-#elif INT64
+#elif JF_INT64
 !      integer(kind=int64) [8 bytes]
 #else
 !      integer(kind=int32) [4 bytes]
@@ -68,23 +68,23 @@
 
     private
 
-#ifdef REAL32
+#if defined(JF_REAL32)
     integer,parameter,public :: RK = real32   !! Default real kind [4 bytes]
-#elif REAL64
+#elif defined(JF_REAL64)
     integer,parameter,public :: RK = real64   !! Default real kind [8 bytes]
-#elif REAL128
+#elif defined(JF_REAL128)
     integer,parameter,public :: RK = real128  !! Default real kind [16 bytes]
 #else
     integer,parameter,public :: RK = real64   !! Default real kind if not specified [8 bytes]
 #endif
 
-#ifdef INT8
+#if defined(JF_INT8)
     integer,parameter,public :: IK = int8     !! Default integer kind [1 byte]
-#elif INT16
+#elif defined(JF_INT16)
     integer,parameter,public :: IK = int16    !! Default integer kind [2 bytes]
-#elif INT32
+#elif defined(JF_INT32)
     integer,parameter,public :: IK = int32    !! Default integer kind [4 bytes]
-#elif INT64
+#elif defined(JF_INT64)
     integer,parameter,public :: IK = int64    !! Default integer kind [8 bytes]
 #else
     integer,parameter,public :: IK = int32    !! Default integer kind if not specified [4 bytes]

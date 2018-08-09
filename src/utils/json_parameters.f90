@@ -38,29 +38,31 @@
     integer(IK),parameter :: json_string    = 7  !! String JSON data type
 
     !special JSON characters
-    character(kind=CK,len=*),parameter :: space           = CK_' '
-    character(kind=CK,len=*),parameter :: start_object    = CK_'{'
-    character(kind=CK,len=*),parameter :: end_object      = CK_'}'
-    character(kind=CK,len=*),parameter :: start_array     = CK_'['
-    character(kind=CK,len=*),parameter :: end_array       = CK_']'
-    character(kind=CK,len=*),parameter :: delimiter       = CK_','
-    character(kind=CK,len=*),parameter :: colon_char      = CK_':'
-    character(kind=CK,len=*),parameter :: start_array_alt = CK_'('  !! for [[json_get_by_path]]
-    character(kind=CK,len=*),parameter :: end_array_alt   = CK_')'  !! for [[json_get_by_path]]
-    character(kind=CK,len=*),parameter :: root            = CK_'$'  !! for [[json_get_by_path]]
-    character(kind=CK,len=*),parameter :: this            = CK_'@'  !! for [[json_get_by_path]]
-    character(kind=CK,len=*),parameter :: dot             = CK_'.'  !! for [[json_get_by_path]]
+    character(kind=CK,len=*),parameter :: space           = CK_' '  !! space character
+    character(kind=CK,len=*),parameter :: start_object    = CK_'{'  !! start of a JSON object
+    character(kind=CK,len=*),parameter :: end_object      = CK_'}'  !! end of a JSON object
+    character(kind=CK,len=*),parameter :: start_array     = CK_'['  !! start of a JSON array
+    character(kind=CK,len=*),parameter :: end_array       = CK_']'  !! end of a JSON array
+    character(kind=CK,len=*),parameter :: delimiter       = CK_','  !! delimiter for JSON
+    character(kind=CK,len=*),parameter :: colon_char      = CK_':'  !! colon character for JSON
+    character(kind=CK,len=*),parameter :: start_array_alt = CK_'('  !! alternate start of JSON array for
+                                                                    !! [[json_get_by_path_default]]
+    character(kind=CK,len=*),parameter :: end_array_alt   = CK_')'  !! alternate end of JSON array for
+                                                                    !! [[json_get_by_path_default]]
+    character(kind=CK,len=*),parameter :: root            = CK_'$'  !! root for [[json_get_by_path_default]]
+    character(kind=CK,len=*),parameter :: this            = CK_'@'  !! 'this' for [[json_get_by_path_default]]
+    character(kind=CK,len=*),parameter :: dot             = CK_'.'  !! path separator for [[json_get_by_path_default]]
     character(kind=CK,len=*),parameter :: tilde           = CK_'~'  !! RFC 6901 escape character
     character(kind=CK,len=*),parameter :: percent         = CK_'%'  !! Fortran path separator
     character(kind=CK,len=*),parameter :: single_quote    = CK_"'"  !! for JSONPath bracket-notation
-    character(kind=CK,len=*),parameter :: bspace          = achar(8,  kind=CK)
-    character(kind=CK,len=*),parameter :: horizontal_tab  = achar(9,  kind=CK)
-    character(kind=CK,len=*),parameter :: newline         = achar(10, kind=CK)
-    character(kind=CK,len=*),parameter :: formfeed        = achar(12, kind=CK)
-    character(kind=CK,len=*),parameter :: carriage_return = achar(13, kind=CK)
-    character(kind=CK,len=*),parameter :: quotation_mark  = achar(34, kind=CK)
-    character(kind=CK,len=*),parameter :: slash           = achar(47, kind=CK)
-    character(kind=CK,len=*),parameter :: backslash       = achar(92, kind=CK)
+    character(kind=CK,len=*),parameter :: bspace          = achar(8,  kind=CK) !! JSON special character
+    character(kind=CK,len=*),parameter :: horizontal_tab  = achar(9,  kind=CK) !! JSON special character
+    character(kind=CK,len=*),parameter :: newline         = achar(10, kind=CK) !! JSON special character
+    character(kind=CK,len=*),parameter :: formfeed        = achar(12, kind=CK) !! JSON special character
+    character(kind=CK,len=*),parameter :: carriage_return = achar(13, kind=CK) !! JSON special character
+    character(kind=CK,len=*),parameter :: quotation_mark  = achar(34, kind=CK) !! JSON special character
+    character(kind=CK,len=*),parameter :: slash           = achar(47, kind=CK) !! JSON special character
+    character(kind=CK,len=*),parameter :: backslash       = achar(92, kind=CK) !! JSON special character
 
     character(kind=CDK,len=*),parameter :: default_real_fmt = '(ss,E27.17E4)'
         !! default real number format statement (for writing real values to strings and files).
@@ -69,25 +71,25 @@
     character(kind=CK,len=*),parameter :: star = CK_'*' !! for invalid numbers and
                                                         !! list-directed real output
 
-#if defined __GFORTRAN__
-    !not parameters due to gfortran bug (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65141)
-    character(kind=CK,len=26),protected :: upper = CK_'ABCDEFGHIJKLMNOPQRSTUVWXYZ' !! uppercase characters
-    character(kind=CK,len=26),protected :: lower = CK_'abcdefghijklmnopqrstuvwxyz' !! lowercase characters
-#else
+! #if defined __GFORTRAN__
+!     !not parameters due to gfortran bug (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65141)
+!     character(kind=CK,len=26),protected :: upper = CK_'ABCDEFGHIJKLMNOPQRSTUVWXYZ' !! uppercase characters
+!     character(kind=CK,len=26),protected :: lower = CK_'abcdefghijklmnopqrstuvwxyz' !! lowercase characters
+! #else
     character(kind=CK,len=*),parameter :: upper = CK_'ABCDEFGHIJKLMNOPQRSTUVWXYZ' !! uppercase characters
     character(kind=CK,len=*),parameter :: lower = CK_'abcdefghijklmnopqrstuvwxyz' !! lowercase characters
-#endif
+! #endif
 
-#if defined __GFORTRAN__
-    !not parameters due to gfortran bug (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65141)
-    character(kind=CK,len=4),protected :: null_str  = CK_'null'  !! JSON Null variable string
-    character(kind=CK,len=4),protected :: true_str  = CK_'true'  !! JSON logical True string
-    character(kind=CK,len=5),protected :: false_str = CK_'false' !! JSON logical False string
-#else
+! #if defined __GFORTRAN__
+!     !not parameters due to gfortran bug (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65141)
+!     character(kind=CK,len=4),protected :: null_str  = CK_'null'  !! JSON Null variable string
+!     character(kind=CK,len=4),protected :: true_str  = CK_'true'  !! JSON logical True string
+!     character(kind=CK,len=5),protected :: false_str = CK_'false' !! JSON logical False string
+! #else
     character(kind=CK,len=*),parameter :: null_str  = CK_'null'  !! JSON Null variable string
     character(kind=CK,len=*),parameter :: true_str  = CK_'true'  !! JSON logical True string
     character(kind=CK,len=*),parameter :: false_str = CK_'false' !! JSON logical False string
-#endif
+!#endif
 
     integer, private :: i_      !! just a counter for `control_chars` array
     character(kind=CK,len=*),dimension(32),parameter :: control_chars = &
@@ -103,11 +105,11 @@
     !Get the number of possible digits in the exponent when using decimal number system
     integer(IK),parameter :: maxexp = maxexponent(1.0_RK)
     integer(IK),parameter :: minexp = minexponent(1.0_RK)
-    integer(IK),parameter :: real_exponent_digits = floor( 1 + log10( &
+    integer(IK),parameter :: real_exponent_digits = floor( 1_IK + log10( &
                                   real(max(maxexp,abs(maxexp)),&
                                   kind=RK) ) )
 
-    integer(IK),parameter :: max_numeric_str_len = real_precision + real_exponent_digits + 6
+    integer(IK),parameter :: max_numeric_str_len = real_precision + real_exponent_digits + 6_IK
         !! 6 = sign + leading 0 + decimal + 'E' + exponent sign + 1 extra
     character(kind=CDK,len=*),parameter :: int_fmt  = '(ss,I0)' !! minimum width format for integers
 
