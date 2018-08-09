@@ -48,7 +48,6 @@ type :: builder
     type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)             !< matrix with nearest neighbor indices
-    integer,                allocatable :: grid_projs(:)          !< projection directions for coarse grid search
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
     logical, private                    :: cluster_tbox_exists    = .false.
@@ -216,12 +215,9 @@ contains
         DebugPrint ' created & filled object for orientations                    ', toc()
         ! generate discrete projection direction spaces
         call self%eulspace%new(params%nspace)
-        call self%eulspace%spiral(params%nsym, params%eullims)
+        call self%pgrpsyms%build_refspiral(self%eulspace)
         call self%eulspace_red%new(NSPACE_REDUCED)
-        call self%eulspace_red%spiral(params%nsym, params%eullims)
-        ! create angular subspace
-        DebugPrint ' build_general_tbox: create angular subspace                 ', toc()
-        self%grid_projs = self%eulspace%create_proj_subspace(NPDIRS_SUBSPACE, params%nsym, params%eullims)
+        call self%pgrpsyms%build_refspiral(self%eulspace_red)
         DebugPrint ' build_general_tbox: projection direction space              ', toc()
         if( params%box > 0 )then
             ! build image objects

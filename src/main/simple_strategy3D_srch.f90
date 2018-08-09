@@ -19,7 +19,6 @@ private
 logical, parameter :: DOCONTINUOUS = .false.
 
 type strategy3D_spec
-    integer, pointer :: grid_projs(:) => null()
     integer, pointer :: symmat(:,:)   => null()
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.

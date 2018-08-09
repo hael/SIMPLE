@@ -355,7 +355,7 @@ contains
         else
             params%nptcls = params%nspace
             call build%build_general_tbox(params, cline)
-            call build%spproj_field%spiral(params%nsym, params%eullims)
+            call build%pgrpsyms%build_refspiral(build%spproj_field)
         endif
         ! fix volumes and stacks
         call build%vol%read(params%vols(1))
@@ -736,7 +736,7 @@ contains
             if( cline%defined('vol1') )then
                 params%nptcls = NPROJS
                 call build%spproj_field%new(NPROJS)
-                call build%spproj_field%spiral( params%nsym, params%eullims )
+                call build%pgrpsyms%build_refspiral(build%spproj_field)
                 call build%spproj_field%write(trim(ORIFILE), [1,NPROJS])
                 cline_project = cline
                 call cline_project%set('nspace', real(NPROJS))

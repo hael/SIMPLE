@@ -96,7 +96,7 @@ type :: oris
     procedure          :: mul_shifts
     procedure          :: rnd_oris
     procedure          :: rnd_ori
-    procedure          :: rnd_oris_discrete
+    procedure          :: rnd_oris_discrete_from
     procedure          :: rnd_inpls
     procedure          :: rnd_ctf
     procedure          :: rnd_states
@@ -149,9 +149,6 @@ type :: oris
     procedure          :: calc_hard_weights2D
     procedure          :: calc_bfac_rec
     procedure          :: find_closest_proj
-    procedure, private :: create_proj_subspace_1
-    procedure, private :: create_proj_subspace_2
-    generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
     procedure          :: discretize
     procedure          :: nearest_proj_neighbors
     procedure          :: find_angres
@@ -1424,25 +1421,20 @@ contains
         if(allocated(parts))deallocate(parts)
     end subroutine ini_tseries
 
-    !>  \brief  randomizes eulers in oris
-    subroutine rnd_oris_discrete( self, discrete, nsym, eullims )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: discrete, nsym
-        real,        intent(in)    :: eullims(3,2)
-        type(oris) :: tmp
+    !>  \brief  randomizes eulers in oris from an oris object that is assumed non-redundant
+    subroutine rnd_oris_discrete_from( self, os_discrete )
+        class(oris), intent(inout) :: self, os_discrete
         real       :: euls(3)
-        integer    :: i, irnd
-        euls(3) = 0.
-        tmp = oris(discrete)
-        call tmp%spiral(nsym, eullims)
+        integer    :: i, irnd, ndiscrete
+        euls(3)   = 0.
+        ndiscrete = os_discrete%get_noris()
         do i=1,self%n
-            irnd    = irnd_uni(discrete)
-            euls    = tmp%get_euler( irnd )
+            irnd    = irnd_uni(ndiscrete)
+            euls    = os_discrete%get_euler( irnd )
             euls(3) = self%o( i )%e3get()
             call self%o(i)%set_euler( euls )
         end do
-        call tmp%kill
-    end subroutine rnd_oris_discrete
+    end subroutine rnd_oris_discrete_from
 
     !>  \brief  randomizes the in-plane degrees of freedom
     subroutine rnd_inpls( self, trs )
@@ -2260,45 +2252,6 @@ contains
         loc     = minloc( dists )
         closest = loc(1)
     end function find_closest_proj
-
-    !>  \brief  to identify a subspace of projection directions
-    function create_proj_subspace_1( self, nsub ) result( subspace_projs )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nsub
-        type(oris)           :: suboris
-        integer, allocatable :: subspace_projs(:)
-        integer :: isub
-        call suboris%new(nsub)
-        call suboris%spiral
-        allocate( subspace_projs(nsub), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_1, module: simple_oris',alloc_stat)
-        !$omp parallel do default(shared) private(isub) schedule(static) proc_bind(close)
-        do isub=1,nsub
-            subspace_projs(isub) = self%find_closest_proj(suboris%o(isub))
-        end do
-        !$omp end parallel do
-        call suboris%kill
-    end function create_proj_subspace_1
-
-    !>  \brief  to identify a subspace of projection directions
-    function create_proj_subspace_2( self, nsub, nsym, eullims ) result( subspace_projs )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nsub
-        integer,     intent(in)    :: nsym
-        real,        intent(in)    :: eullims(3,2)
-        type(oris)           :: suboris
-        integer, allocatable :: subspace_projs(:)
-        integer :: isub
-        call suboris%new(nsub)
-        call suboris%spiral(nsym, eullims)
-        allocate( subspace_projs(nsub) , stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: create_proj_subspace_2, module: simple_oris',alloc_stat)
-        !$omp parallel do default(shared) private(isub) schedule(static) proc_bind(close)
-        do isub=1,nsub
-            subspace_projs(isub) = self%find_closest_proj(suboris%o(isub))
-        end do
-        !$omp end parallel do
-    end function create_proj_subspace_2
 
     !>  \brief  method for discretization of the projection directions
     subroutine discretize( self, n )

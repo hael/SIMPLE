@@ -53,13 +53,13 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(ori)        :: orientation
-        type(oris)       :: os_even
+        type(oris)       :: os_even, spiral
         real             :: e3, x, y
         integer          :: i, class
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( cline%defined('ncls') )then
             os_even = oris(params%ncls)
-            call os_even%spiral(params%nsym, params%eullims)
+            call build%pgrpsyms%build_refspiral(os_even)
             call build%spproj_field%new(params%nptcls)
             do i=1,params%nptcls
                 class = irnd_uni(params%ncls)
@@ -75,11 +75,14 @@ contains
             end do
         else if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
-                call build%spproj_field%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
+                call spiral%new(params%ndiscrete)
+                call build%pgrpsyms%build_refspiral(spiral)
+                call build%spproj_field%rnd_oris_discrete_from(spiral)
+                call spiral%kill
             endif
             call build%spproj_field%rnd_inpls(params%sherr)
         else if( params%even .eq. 'yes' )then
-            call build%spproj_field%spiral(params%nsym, params%eullims)
+            call build%pgrpsyms%build_refspiral(build%spproj_field)
             call build%spproj_field%rnd_inpls(params%sherr)
         else
             call build%spproj_field%rnd_oris(params%sherr)
@@ -250,7 +253,7 @@ contains
                 ptcl_mask = build%spproj_field%included(consider_w=.true.)
                 allocate(clustering(noris), clustszs(NSPACE_REDUCED))
                 call osubspace%new(NSPACE_REDUCED)
-                call osubspace%spiral(params%nsym, params%eullims)
+                call build%pgrpsyms%build_refspiral(osubspace)
                 call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_REDUCED])
                 do iptcl=1,build%spproj_field%get_noris()
                     if( ptcl_mask(iptcl) )then

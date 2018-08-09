@@ -894,7 +894,7 @@ contains
         call prepeovol(build_glob%vol2)
         ! create e_space
         call e_space%new(NSPACE_REDUCED)
-        call e_space%spiral(params_glob%nsym, params_glob%eullims)
+        call build_glob%pgrpsyms%build_refspiral(e_space)
         ! generate even/odd projections
         even_imgs = reproject(build_glob%vol,  e_space)
         odd_imgs  = reproject(build_glob%vol2, e_space)

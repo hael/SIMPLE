@@ -63,11 +63,13 @@ contains
     subroutine exec_simulate_particles( self, cline )
         use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
+        use simple_oris,       only: oris
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         type(ori)        :: orientation
+        type(oris)       :: spiral
         type(ctf)        :: tfun
         type(projector)  :: vol_pad
         real             :: snr_pink, snr_detector, bfac, bfacerr
@@ -84,7 +86,10 @@ contains
         ! generate orientation/CTF parameters
         if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
-                call build%spproj_field%rnd_oris_discrete(params%ndiscrete, params%nsym, params%eullims)
+                call spiral%new(params%ndiscrete)
+                call build%pgrpsyms%build_refspiral(spiral)
+                call build%spproj_field%rnd_oris_discrete_from(spiral)
+                call spiral%kill
             endif
             call build%spproj_field%rnd_inpls(params%trs)
         else if( .not. cline%defined('oritab') )then

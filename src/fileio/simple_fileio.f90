@@ -452,6 +452,10 @@ contains
         logical,          allocatable :: lnrs(:)
         integer :: ind, i, istat
         ind          = index(fname, 'iter')
+        if(ind == 0)then
+            fname2iter = 0
+            return
+        endif
         iter_num_ext = fname(ind:)
         lnrs         = map_str_nrs(iter_num_ext)
         nrstr        = ''

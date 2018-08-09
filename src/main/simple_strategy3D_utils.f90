@@ -172,8 +172,7 @@ contains
             ! subtract maxval of negative distances for numerical stability
             arg4softmax = arg4softmax - maxval(arg4softmax)
             ! calculate softmax weights
-            ws = exp(arg4softmax) !* ang_weights
-            ! corrs <= TINY => ws = 0.
+            ws = exp(arg4softmax)
             if (.not. pftcc_glob%is_euclid(s%iptcl)) then
                 where( corrs <= TINY ) ws = 0.
             end if

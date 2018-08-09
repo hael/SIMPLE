@@ -5,15 +5,15 @@ use simple_oris, only: oris
 use simple_ori,  only: ori
 implicit none
 
-public :: sym
+public :: sym, sym_tester
 private
 
 type sym
     private
     type(oris)                    :: e_sym            !< symmetry eulers
     character(len=3), allocatable :: subgrps(:)       !< subgroups
-    real                          :: eullims(3,2)     = 0.  !< euler angles limits (asymetric unit)
-    real                          :: eullims_mirr(3,2)= 0.  !< euler angles limits (asymetric unit, excluding mirrors)
+    real                          :: eullims(3,2)     = 0.  !< euler angles limits (asymetric unit, including mirrors)
+    real                          :: eullims_nomirr(3,2)= 0.  !< euler angles limits (asymetric unit, excluding mirrors)
     integer                       :: n=1              !< nr of symmetry ops
     integer                       :: ncsym=1          !< num of order C sym
     integer                       :: ndsym=1          !< num of order D sym
@@ -21,31 +21,39 @@ type sym
     character(len=3)              :: pgrp='c1'        !< point-group symmetry
     logical                       :: c_or_d=.false.   !< c- or d-symmetry
   contains
+    ! constructor
     procedure          :: new
+    ! getters
     procedure          :: get_eullims
     procedure          :: get_nsym
     procedure          :: get_pgrp
-    procedure          :: apply
-    procedure          :: apply2all
-    procedure          :: rot_to_asym
-    procedure          :: rotall_to_asym
-    procedure          :: sym_dists
     procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
     procedure          :: get_subgrp_descr
-    procedure          :: within_asymunit
+    ! setters
+    procedure, private :: set_subgrps
+    ! modifiers
+    procedure          :: apply
+    procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
-    procedure          :: nearest_proj_neighbors
-    procedure          :: nearest_sym_neighbors
+    procedure          :: rot_to_asym
+    procedure, private :: rotall_to_asym
     procedure          :: symrandomize
     procedure          :: build_refspiral
+    ! calculators
+    procedure          :: sym_dists
+    procedure          :: nearest_proj_neighbors
+    procedure          :: nearest_sym_neighbors
+    ! utils
     procedure, private :: build_eullims
     procedure, private :: make_c_and_d
     procedure, private :: make_t
     procedure, private :: make_o
     procedure, private :: make_i
-    procedure, private :: set_subgrps
+    procedure, private :: within_asymunit
+    procedure, private :: within_platonic_asymunit
+    ! destructor
     procedure          :: kill
 end type sym
 
@@ -59,7 +67,10 @@ integer, parameter          :: nico   = 60 ! # icosahedral symmetry operations
 double precision, parameter :: delta2 = 180.d0
 double precision, parameter :: delta3 = 120.d0
 double precision, parameter :: delta5 = 72.d0
-double precision, parameter :: gamma  = 54.735611d0
+double precision, parameter :: gamma  = 54.735610317245346d0
+real,             parameter :: tet_theta_lim = 70.52877936550931
+real,             parameter :: oct_theta_lim = real(gamma)
+real,             parameter :: ico_theta_lim = 37.37736814064969
 
 contains
 
@@ -117,9 +128,9 @@ contains
             write(*,'(a)') 'symmetry not supported; new; simple_sym', pgrp
             stop
         endif
-        call self%e_sym%swape1e3
         if(trim(self%pgrp).ne.'d1')call self%set_subgrps
         call self%build_eullims
+        ! call self%e_sym%swape1e3
     end subroutine new
 
     !>  \brief  builds the search range for the point-group
@@ -128,32 +139,37 @@ contains
         self%eullims(:,1) = 0.
         self%eullims(:,2) = 360.
         self%eullims(2,2) = 180.
-        self%eullims_mirr = self%eullims
+        self%eullims_nomirr = self%eullims
         if( self%pgrp(1:1).eq.'c' )then
             if( self%n > 1 )then
                 self%eullims(1,2)  = 360./real(self%ncsym)
             endif
-            self%eullims_mirr      = self%eullims
-            self%eullims_mirr(2,2) = 90.
+            self%eullims_nomirr      = self%eullims
+            self%eullims_nomirr(2,2) = 90.
         else if( self%pgrp(1:1).eq.'d' .and. self%ncsym > 1 )then
             self%eullims(1,2)      = 360./real(self%ncsym)
             self%eullims(2,2)      = 90.
-            self%eullims_mirr      = self%eullims
-            self%eullims_mirr(1,2) = self%eullims_mirr(1,2)/2.
+            self%eullims_nomirr      = self%eullims
+            if(is_even(self%n/2))then
+                self%eullims_nomirr(1,2) = 360./(2.*real(self%ncsym))
+            else
+                self%eullims_nomirr(1,1) = 360./(4.*real(self%ncsym))
+                self%eullims_nomirr(1,2) = 360.*3./(4.*real(self%ncsym))
+            endif
         else if( self%pgrp(1:1).eq.'t' )then
-            self%eullims(1,2)      = 180.
-            self%eullims(2,2)      = 54.7
-            self%eullims_mirr      = self%eullims
+            self%eullims(1,2)   = 120.
+            self%eullims(2,2)   = tet_theta_lim
+            self%eullims_nomirr = self%eullims
         else if( self%pgrp(1:1).eq.'o' )then
-            self%eullims(1,2)      = 90.
-            self%eullims(2,2)      = 54.7
-            self%eullims_mirr      = self%eullims
-            self%eullims_mirr(1,2) = 45.
+            self%eullims(1,2)        = 90.
+            self%eullims(2,2)        = oct_theta_lim
+            self%eullims_nomirr      = self%eullims
+            self%eullims_nomirr(1,2) = 45.
         else if( self%pgrp(1:1).eq.'i' )then
-            self%eullims(1,2)      = 180.
-            self%eullims(2,2)      = 31.7
-            self%eullims_mirr      = self%eullims
-            self%eullims_mirr(1,2) = 90.
+            self%eullims(1,2)        = real(delta5)
+            self%eullims(2,2)        = ico_theta_lim
+            self%eullims_nomirr      = self%eullims
+            self%eullims_nomirr(1,2) = 36.
         endif
     end subroutine build_eullims
 
@@ -223,18 +239,29 @@ contains
         call e_sym%set_euler(e_tmp%get_euler())
     end function apply
 
-    !>  \brief  rotates any orientation to the asymmetric unit
+    !>  \brief  is a symmetry adaptor
+    subroutine apply2all( self, e_in, symop )
+        class(sym), intent(inout) :: self
+        class(oris), intent(inout):: e_in  !< orientations object
+        integer,    intent(in)    :: symop !< index of sym operation
+        integer :: i
+        do i=1,e_in%get_noris()
+            call e_in%set_ori(i, self%apply(e_in%get_ori(i),symop))
+        enddo
+    end subroutine apply2all
+
+    ! !>  \brief  rotates any orientation to the asymmetric unit
     subroutine rot_to_asym( self, osym )
         class(sym), intent(inout) :: self
         class(ori), intent(inout) :: osym !< orientation
         type(ori) :: oasym
         integer   :: nsym
-        if( self%within_asymunit(osym) )then
+        if( self%within_asymunit(osym, incl_mirr=.true.) )then
             ! already in asymetric unit
         else
             do nsym=2,self%n     ! nsym=1 is the identity operator
                 oasym = self%apply(osym, nsym)
-                if( self%within_asymunit(oasym) )exit
+                if( self%within_asymunit(oasym, incl_mirr=.true.) )exit
             enddo
             osym = oasym
         endif
@@ -293,37 +320,76 @@ contains
         e_sym = self%e_sym%get_ori(symop)
     end function get_symori
 
-    !>  \brief  is a symmetry adaptor
-    subroutine apply2all( self, e_in )
-        class(sym),  intent(inout) :: self
-        class(oris), intent(inout) :: e_in
-        type(ori) :: orientation
-        integer   :: j, cnt
-        cnt = 0
-        do j=1,e_in%get_noris()
-            cnt = cnt+1
-            orientation = e_in%get_ori(j)
-            call e_in%set_ori(j, self%apply(orientation, cnt))
-            if( cnt == self%n ) cnt = 0
-        end do
-    end subroutine apply2all
-
-    !>  \brief  whether or not an orientation falls within the asymetric unit
-    function within_asymunit( self, o )result( is_within )
-        class(sym), intent(inout) :: self
-        class(ori), intent(in)    :: o !< symmetry orientation
-        logical :: is_within
-        real    :: euls(3)
-        euls = o%get_euler()
-        is_within = .false.
-        if( euls(1)<self%eullims(1,1) )return
-        if( euls(1)>=self%eullims(1,2) )return
-        if( euls(2)<self%eullims(2,1) )return
-        if( euls(2)>=self%eullims(2,2) )return
-        if( euls(3)<self%eullims(3,1) )return
-        if( euls(3)>=self%eullims(3,2) )return
-        is_within = .true.
+    !>  \brief  whether or not an orientation falls within the asymetric unit excluding mirror
+    logical function within_asymunit( self, o, incl_mirr )
+        class(sym),        intent(inout) :: self
+        class(ori),        intent(in)    :: o !< symmetry orientation
+        logical, optional, intent(in)    :: incl_mirr
+        real    :: e1, e2
+        logical :: incl_mirr_here
+        within_asymunit = .false.
+        incl_mirr_here  = .true.
+        if(present(incl_mirr))incl_mirr_here = incl_mirr
+        e1 = o%e1get()
+        if( incl_mirr_here )then
+            if(e1 <  self%eullims(1,1) )return
+            if(e1 >= self%eullims(1,2) )return
+            e2 = o%e2get()
+            if(e2 <  self%eullims(2,1) )return
+            if(e2 >= self%eullims(2,2) )return
+        else
+            if(e1 <  self%eullims_nomirr(1,1) )return
+            if(e1 >= self%eullims_nomirr(1,2) )return
+            e2 = o%e2get()
+            if(e2 <  self%eullims_nomirr(2,1) )return
+            if(e2 >= self%eullims_nomirr(2,2) )return
+        endif
+        within_asymunit = self%within_platonic_asymunit(e1,e2,incl_mirr_here)
     end function within_asymunit
+
+    !>  Modified from SPARX
+    logical function within_platonic_asymunit(self, e1, e2, incl_mirr)
+        class(sym), intent(inout) :: self
+        real,       intent(in)    :: e1,e2
+        logical,    intent(in)    :: incl_mirr
+        real :: e1_here
+        within_platonic_asymunit = .true.
+        if( self%c_or_d )return
+        e1_here = min(e1, self%eullims(1,2)-e1)
+        select case(self%n)
+            case(24)    ! o
+                within_platonic_asymunit = e2 < e2_bound(self%eullims(1,2),45.0,oct_theta_lim)
+            case(60)    ! i
+                within_platonic_asymunit = e2 < e2_bound(self%eullims(1,2),31.717474411461005,ico_theta_lim)
+            case(12)    ! t
+                if(e2 > e2_bound(self%eullims(1,2),oct_theta_lim,tet_theta_lim))then
+                    within_platonic_asymunit = .false.
+                else
+                    if(.not.incl_mirr)then
+                        within_platonic_asymunit = e2 < e2_upper_bound(self%eullims(1,2),real(gamma),tet_theta_lim)
+                    endif
+                endif
+        end select
+
+        contains
+
+            real function e2_bound( ang1, ang2, ang3 )
+                real, intent(in) :: ang1, ang2, ang3
+                e2_bound = sin(deg2rad(ang1/2.-e1_here)) / tan(deg2rad(ang2))
+                e2_bound = e2_bound + sin(deg2rad(e1_here)) / tan(deg2rad(ang3))
+                e2_bound = e2_bound / sin(deg2rad(ang1/2.))
+                e2_bound = rad2deg(atan(1./e2_bound))
+            end function e2_bound
+
+            real function e2_upper_bound( ang1, ang2, ang3 )
+                real, intent(in) :: ang1, ang2, ang3
+                e2_upper_bound = sin(deg2rad(ang1/2.-e1_here)) / tan(deg2rad(ang2))
+                e2_upper_bound = e2_upper_bound + sin(deg2rad(e1_here)) / tan(deg2rad(ang3/2.))
+                e2_upper_bound = e2_upper_bound / sin(deg2rad(ang1/2.))
+                e2_upper_bound = rad2deg(atan(1./e2_upper_bound))
+            end function e2_upper_bound
+
+    end function within_platonic_asymunit
 
     !>  apply symmetry orientations with shift
     subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )
@@ -459,31 +525,29 @@ contains
         type(oris), intent(inout) :: os
         type(oris) :: tmp, os_nomirr
         integer    :: cnt, i, n, nprojs, lim, nos, nos_nomirr
-        real       :: e1lim, e2lim, frac, frac1, frac2
         logical, allocatable :: avail(:)
+        !!!!!!!!!!!!!!
+        !!! old fashioned way
+        ! call os%spiral(self%get_nsym(), self%get_eullims())
+        ! return
+        !!!!!!
         nos = os%get_noris()
         if(is_odd(nos))stop 'Odd number of projections directions is not supported; simple_sym :: build refspiral'
         nos_nomirr = nos/2
         call os%new(nos)
         call os_nomirr%new(nos_nomirr)
-        e1lim  = self%eullims_mirr(1,2)
-        e2lim  = self%eullims_mirr(2,2)
-        ! building spiral excluding mirrors
-        frac1  = 360./e1lim
-        frac2  = 1. / ( (1.-cos(deg2rad(e2lim))) /2. )
-        frac   = frac1 * frac2 ! area sphere / area asu (no mirror)
-        n      = ceiling(real(nos_nomirr) * frac)
+        n = self%n * nos
         call gen_c1
         nprojs = count(avail)
         if( nprojs < nos_nomirr )then
             ! under sampling
-            n = n + nint(real(nos_nomirr)/4.)
+            n = n + nint(real(nos_nomirr)/2.)
             call gen_c1
             nprojs = count(avail)
         endif
         if( nprojs > nos_nomirr )then
             ! over sampling
-            lim = max(2, floor(real(nprojs)/real(nprojs-nos_nomirr)))
+            lim = max(2, floor(real(nprojs)/real(nprojs-nos_nomirr+1)) )
             cnt  = 0
             do i=1,n
                 if(.not.avail(i))cycle
@@ -496,7 +560,7 @@ contains
                 endif
             enddo
         endif
-        ! copy asu
+        ! copy un-mirrored asu
         cnt = 0
         do i=1,n
             if( .not.avail(i) )cycle
@@ -504,16 +568,20 @@ contains
             if(cnt > nos_nomirr)exit
             call os_nomirr%set_euler(cnt, tmp%get_euler(i))
         enddo
-        ! builds mirror projections
+        ! stash un-mirrored
         do i=1,nos_nomirr
             call os%set_euler(i, os_nomirr%get_euler(i))
         enddo
+        ! mirror
         call os_nomirr%mirror2d
         ! now apply symmetry to mirrored projection directions
-        ! such that they fall within the asymmetric unit
+        ! such that they fall within the mirrored asymmetric unit
         if( self%n > 1 )then
             call self%rotall_to_asym(os_nomirr)
         endif
+        do i=1,nos_nomirr
+            call os_nomirr%e3set(i,0.)
+        enddo
         ! append
         cnt = 0
         do i=nos_nomirr+1,nos
@@ -528,16 +596,44 @@ contains
         contains
 
             subroutine gen_c1
-                integer :: i
+                integer   :: j, north_pole_ind
+                type(ori) :: o, north_pole
+                real      :: min_dist, dist
                 if( allocated(avail) )deallocate(avail, stat=alloc_stat)
                 allocate(avail(n), source=.false., stat=alloc_stat)
                 call tmp%new(n)
                 call tmp%spiral
-                do i=1,n
-                    avail(i) = tmp%e1get(i) < e1lim
-                    if(.not.avail(i))cycle
-                    avail(i) = avail(i) .and.tmp%e2get(i) < e2lim
+                call north_pole%new
+                call north_pole%set_euler([0.,0.,0.])
+                north_pole_ind = 0
+                min_dist = PI
+                do j=1,n
+                    o    = tmp%get_ori(j)
+                    dist = north_pole.euldist.o
+                    if(dist < 0.001 )then !in radians
+                        ! the north pole shall always be present
+                        avail(j) = .true.
+                        north_pole_ind = j
+                    else
+                        avail(j) = self%within_asymunit(tmp%get_ori(j), incl_mirr=.false.)
+                        if(avail(j)) min_dist = min(dist,min_dist)
+                    endif
                 end do
+                select case(self%pgrp(1:1))
+                case('d','i','o')
+                    ! this is to jitter the north pole such that
+                    ! its mirror symmetric is not the north pole
+                    if(north_pole_ind>0)then
+                        min_dist = min(0.5,rad2deg(min_dist)/5.)
+                        call o%set_euler([min_dist,min_dist,0.])
+                        o = o.compose.north_pole
+                        call tmp%set_euler(north_pole_ind,o%get_euler())
+                    endif
+                case DEFAULT
+                    ! all is good
+                end select
+                call o%kill
+                call north_pole%kill
             end subroutine gen_c1
 
     end subroutine build_refspiral
@@ -551,11 +647,11 @@ contains
         delta = 360.d0/dble(self%ncsym)
         cnt = 0
         do i=0,1
-           degree = i*delta2
+           degree = dble(i)*delta2
            a = matcreate(0, degree)
            do j=0,self%ncsym-1
               cnt = cnt+1
-              degree = j*delta
+              degree = dble(j)*delta
               b = matcreate(1, degree)
               g = matmul(a,b) ! this is the c-symmetry
               call self%e_sym%set_euler(cnt,real(matextract(g)))
@@ -571,7 +667,7 @@ contains
         double precision :: psi, phi
         cnt = 0
         do i = 1,4
-            phi = (i-1) * 90.d0
+            phi = dble(i-1) * 90.d0
             cnt = cnt + 1
             call self%e_sym%set_euler(cnt,real([0.d0, 0.d0, phi]))
             do j = 1,4
@@ -628,7 +724,7 @@ contains
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
             end do
         end do
-        theta = 63.4349d0
+        theta = 63.43494882292201d0
         do i=0,4
             do j=0,4
                 cnt = cnt+1
@@ -637,7 +733,7 @@ contains
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
             end do
         end do
-        theta = 116.5651
+        theta = 116.56505117707799d0
         do i=0,4
             do j=0,4
                 cnt = cnt+1
@@ -880,5 +976,76 @@ contains
             euls(3) = 0.d0
         endif
     end function matextract
+
+    subroutine sym_tester(pgrp)
+        character(len=*), intent(in) :: pgrp
+        type(sym)  :: se, tmp
+        type(ori)  :: o, oj, north_pole
+        type(oris) :: os
+        integer    :: i,j,isym,n
+        logical    :: found
+        write(*,'(A,A)')'>>>'
+        write(*,'(A,A)')'>>> POINT GROUP: ', trim(pgrp)
+        call se%new(pgrp)
+        write(*,'(A)')'>>> SYMMETRY SUB-GROUPS'
+        do isym=1, se%get_nsubgrp()
+            tmp = se%get_subgrp(isym)
+            write(*,'(I3,1X,A3)') isym, tmp%get_pgrp()
+        enddo
+        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE PHI  :', se%eullims_nomirr(1,:)
+        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE THETA:', se%eullims_nomirr(2,:)
+        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR PHI  :', se%eullims(1,:)
+        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR THETA:', se%eullims(2,:)
+        write(*,'(A)')'>>> SPIRAL'
+        call os%new(1000)
+        call se%build_refspiral(os)
+        call os%write(pgrp//'.txt')
+        call os%write2bild(pgrp//'.bild')
+        ! redundancy
+        n = 0
+        call oj%new
+        do i=1,os%get_noris()-1
+            o = os%get_ori(i)
+            do j=i+1,os%get_noris()
+                oj = os%get_ori(j)
+                if( rad2deg(o.euldist.oj) < 0.001 )then
+                    n=n+1
+                    print *,i,j,o%get_euler(),oj%get_euler()
+                endif
+            enddo
+        enddo
+        if(n==0)then
+            write(*,'(A)')'>>> SPIRAL REDUNDANCY PASSED'
+        else
+            write(*,'(A)')'>>> SPIRAL REDUNDANCY FAILED'
+            print *,n
+        endif
+        ! north pole
+        call north_pole%new
+        call north_pole%set_euler([0.,0.,0.])
+        found = .false.
+        do i=1,os%get_noris()
+            o = os%get_ori(i)
+            if( (o.euldist.north_pole) < 0.01 )then
+                found = .true.
+                exit
+            endif
+        enddo
+        if(found)then
+            write(*,'(A)')'>>> NORTH POLE PASSED'
+        else
+            write(*,'(A)')'>>> NORTH POLE FAILED'
+        endif
+        write(*,'(A)')'>>> SYMMETRY OPERATORS EULER ANGLES:'
+        do isym=1, se%get_nsym()
+            call se%e_sym%print_(isym)
+        enddo
+        ! cleanup
+        call se%kill
+        call os%kill
+        call tmp%kill
+        call o%kill
+        call oj%kill
+    end subroutine sym_tester
 
 end module simple_sym
