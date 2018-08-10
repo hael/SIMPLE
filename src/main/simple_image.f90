@@ -200,10 +200,11 @@ contains
     procedure          :: bin2logical
     procedure          :: collage
     procedure, private :: enumerate_white_pixels
-    ! procedure, private :: enumerate_connected_comps
+    procedure, private :: enumerate_connected_comps  !!!!!!!!!ADDED BY CHIARA
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
     procedure          :: prepare_connected_comps
+    procedure          :: elim_cc             !!!!!!!!!ADDED BY CHIARA
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -229,6 +230,9 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: sobel
+    procedure          :: automatic_thresh_sobel
+    !procedure          :: NLmean              !!!!!!!!!ADDED BY CHIARA, still to work on
+    !procedure          :: similarity_window   !!!!!!!!!ADDED BY CHIARA
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: rmsd
@@ -264,6 +268,8 @@ contains
     procedure, private :: oshift_2
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
+    procedure          :: median_value !!!!!!!!!!!!!!ADDED BY CHIARA
+    procedure          :: center_edge  !!!!!!!!!!!!!!ADDED BY CHIARA
     ! MODIFIERS
     procedure          :: insert
     procedure          :: insert_lowres
@@ -282,6 +288,7 @@ contains
     procedure          :: norm_subtr_backgr_pad_serial
     procedure          :: salt_n_pepper
     procedure          :: square
+    procedure          :: draw_picked  !!!!!ADDED BY CHIARA
     procedure          :: corners
     procedure          :: before_after
     procedure, private :: gauimg_1
@@ -299,6 +306,8 @@ contains
     procedure          :: pad_mirr
     procedure          :: clip
     procedure          :: clip_inplace
+    procedure          :: scale_img         !!!!!!!ADDED BY CHIARA
+    procedure          :: negative_image    !!!!!!ADDED BY CHIARA
     procedure          :: mirror
     procedure          :: norm
     procedure, private :: norm4viz
@@ -3105,94 +3114,130 @@ contains
         enddo
     end subroutine enumerate_white_pixels
 
-    ! This function is to enumerate the labels of a connected components image.
-    ! This routine assumes that the input pixel values are 0 or cnt (see enumerate_white_pixels, above)
-    ! subroutine enumerate_connected_comps( img )
-    !     class(image), intent(inout) :: img
-    !     integer           :: i, j
-    !     real, allocatable :: tmp_mat(:,:,:) !unnecessary if in simple_image module
-    !     real :: tmp
-    !     allocate(tmp_mat(img%ldim(1), img%ldim(2), 1), source = 0.)
-    !     do i = 1, img%ldim(1)
-    !         do j = 1, img%ldim(2)
-    !             if( img%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
-    !                 tmp = img%rmat(i,j,1) ! tmp is now [1,cnt]
-    !                 where(img%rmat == tmp)
-    !                     img%rmat = 0.     !Not to consider this cc again
-    !                     tmp_mat = tmp
-    !                 endwhere
-    !             endif
-    !         enddo
-    !     enddo
-    ! end subroutine enumerate_connected_comps
+
+    !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+    !This subroutine enumerates (increasing order) the connected components
+    !of the image. This connected components are selected by
+    !'find_connected_comps' procedure.
+    subroutine enumerate_connected_comps(self_in, self_out)
+        class(image), intent(inout) :: self_in
+        class(image), intent(out)   :: self_out
+        integer :: i, j, cnt
+        real    :: tmp
+        if(self_out%existence) call self_out%kill    !Reset if present
+        call self_out%new(self_in%ldim,self_in%smpd)
+        if(self_in%ldim(3) /= 1) stop 'simple_image :: enumerate_connected_comps. This procedure is for 2D images!'
+        cnt = 0   !it is going to be the new label of the connected component
+        do i = 1, self_in%ldim(1)
+           do j = 1, self_in%ldim(2)
+               if( self_in%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
+                   cnt = cnt + 1
+                   tmp = self_in%rmat(i,j,1)
+                   where(self_in%rmat == tmp)
+                       self_out%rmat = cnt
+                       self_in%rmat  = 0.            !Not to consider this cc again
+                   endwhere
+               endif
+           enddo
+        enddo
+    end subroutine enumerate_connected_comps
 
     ! Img_in should be a binary image. Img_out is the connencted component image.
     subroutine find_connected_comps(img_in, img_out)
-        class(image), intent(in)    :: img_in
-        class(image), intent(inout) :: img_out
+        class(image), intent(in)  :: img_in
+        type(image),  intent(out) :: img_out
+        type(image)       :: img_cc   !in this img will be stored the cc with no specific order
         real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:),neigh_8(:)
         integer           :: i, j, n_it, n_maxit
-        call img_out%new(img_in%ldim,1.)
+        logical           :: finished_job
+        if(img_out%existence) call img_out%kill
+        finished_job = .false.
+        call img_cc%new (img_in%ldim,img_in%smpd)
         allocate(mat4compare(img_in%ldim(1),img_in%ldim(2),1), source = 0.)
         call enumerate_white_pixels(img_in, label_matrix)
-        call img_out%set_rmat(label_matrix)
-        n_maxit = maxval(label_matrix) ! maybe I can improve it (overestimate? check the book)
+        call img_cc%set_rmat(label_matrix)
+        n_maxit = maxval(label_matrix)
         do n_it = 1, n_maxit
-            if( all(abs(mat4compare - img_out%rmat(:img_out%ldim(1),:img_out%ldim(2),:img_out%ldim(3))) < TINY) )then
-                ! the matrices are identical
-                return
+            if( all(abs(mat4compare - img_cc%rmat(:img_cc%ldim(1),:img_cc%ldim(2),:img_cc%ldim(3))) < TINY) )then
+                finished_job = .true.! the matrices are identical
             endif
-            mat4compare = img_out%rmat
-            do i = 1, img_in%ldim(1)
-                do j = 1, img_in%ldim(2)
-                    if(img_in%rmat(i,j,1) /= 0) then
-                        neigh_8 = img_out%calc_neigh_8([i,j,1])
-                        img_out%rmat(i,j,1) = minval(neigh_8, neigh_8 /= 0)
-                    endif
+            if(.not. finished_job) then
+                mat4compare = img_cc%rmat
+                do i = 1, img_in%ldim(1)
+                    do j = 1, img_in%ldim(2)
+                        if(img_in%rmat(i,j,1) > 0.5) then  !not background
+                            neigh_8 = img_cc%calc_neigh_8([i,j,1])
+                            img_cc%rmat(i,j,1) = minval(neigh_8, neigh_8 > 0.5)
+                        endif
+                    enddo
                 enddo
-            enddo
-        enddo
-        ! call enumerate_connected_comps(img_out) ! to be tested
+              endif
+          enddo
+        call img_cc%enumerate_connected_comps(img_out)
         deallocate(label_matrix, mat4compare)
     end subroutine find_connected_comps
 
     ! The result of the function is the size(# of pixels) of each cc. This
     ! value is stored in the 2nd column of sz. In the first one is recorded
     ! the label of the cc.  (cc = connected component)
-    function size_connected_comps(img) result(sz)
-        class(image), intent(in) :: img
+    function size_connected_comps(self) result(sz)
+        class(image), intent(in) :: self
         integer, allocatable :: sz(:,:)
         integer :: n_cc
-        allocate(sz(2,int(maxval(img%rmat))), source = 0)
-        do n_cc = int(maxval(img%rmat)),1,-1
+        if(allocated(sz)) deallocate(sz)
+        allocate(sz(2,int(maxval(self%rmat))), source = 0)
+        do n_cc = int(maxval(self%rmat)),1,-1
             sz(1, n_cc) = n_cc
-            sz(2, n_cc) = count(img%rmat == n_cc)
+            sz(2, n_cc) = count(self%rmat == n_cc)
         enddo
     end function size_connected_comps
 
     ! This function takes in input a connected component image and modifies
     ! it in order to prepare the centering process developed through the
     ! mass center function.
-    subroutine prepare_connected_comps(img, discard, min_sz)
-        class(image), intent(inout)   :: img !image which contains connected components
-        logical, intent(out)          :: discard
-        integer, optional, intent(in) :: min_sz
-        integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
-        integer              :: mmin_sz
-        mmin_sz = 250
-        discard = .false.
-        sz = size_connected_comps(img)
-        biggest_cc  = maxloc(sz(2,:))
-        biggest_val =real(sz(1, biggest_cc))
-        if(present(min_sz)) mmin_sz = min_sz
-        if(maxval(sz(2,:)) < mmin_sz) discard = .true.
-        where(img%rmat /= real(biggest_val(1)))
-            img%rmat = 0.
-        elsewhere
-            img%rmat = 1.
-        endwhere
-        deallocate(sz,biggest_cc)
+    ! Notation: cc = connected component.
+    subroutine prepare_connected_comps(self, discard, min_sz)
+            class(image), intent(inout)   :: self     !image which contains connected components
+            logical, intent(out)          :: discard
+            integer, optional, intent(in) :: min_sz
+            integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
+            integer              :: mmin_sz
+            mmin_sz = 1
+            discard = .false.
+            sz = self%size_connected_comps()
+            biggest_cc  = maxloc(sz(2,:))
+            biggest_val = real(sz(1, biggest_cc))
+            if(present(min_sz)) mmin_sz = min_sz
+            if( sz(2,biggest_cc(1)) < mmin_sz ) discard = .true.  !if the biggest cc is smaller than mmin_sz, discard image
+            where( abs(self%rmat - real(biggest_val(1))) > TINY)  !keep just the biggest cc
+                self%rmat = 0.
+            elsewhere
+                self%rmat = 1.   !self is now binary
+            endwhere
+            deallocate(sz,biggest_cc,biggest_val)
     end subroutine prepare_connected_comps
+
+    !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!
+    ! This subroutine takes in input a connected component (cc) image
+    ! and sets to 0 the cc which has size (# pixels) smaller than min_sz = range(1)
+    ! or bigger than max_sz = range(2).
+    ! It is created in order to prepare a micrograph for picking particles.
+    subroutine elim_cc(self, range)
+          class(image), intent(inout) :: self
+          integer,      intent(in)    :: range(2)
+          integer, allocatable :: sz(:,:)
+          integer              :: n_cc
+          real                 :: label
+          sz = self%size_connected_comps()
+          do n_cc = 1, size(sz, dim = 2)  !for each cc
+            if(sz(2,n_cc) < range(1) .or. sz(2,n_cc) > range(2)) then  !if the cc has size < min_sz or > max_sz
+                label = real(sz(1,n_cc))  !label of the cc
+                where(abs(self%rmat - label) < TINY)  !rmat == label
+                    self%rmat = 0.        !set to 0
+                endwhere
+            endif
+          enddo
+    end subroutine elim_cc
 
     ! FILTERS
 
@@ -4042,17 +4087,154 @@ contains
         call img_filt%kill()
     end subroutine real_space_filter
 
-    ! Edge detection, Sobel algorithm
     subroutine sobel(img_in,img_out,thresh)
-        class(image), intent(inout) :: img_in,img_out        !image input and output
-        real,         intent(in)    :: thresh                !threshold for Sobel algorithm
-        real,  allocatable :: grad(:,:,:)                    !matrices
-        call img_out%new(img_in%ldim,1.)     !reset if not empty
-        call calc_gradient(img_in, grad)
-        where( grad > thresh ) img_out%rmat = 1.
-        deallocate(grad)
+    class(image), intent(inout) :: img_in,img_out        !image input and output
+    real,         intent(in)    :: thresh(1)                !threshold for Sobel algorithm
+    real,  allocatable :: grad(:,:,:)                    !matrices
+    call img_out%new(img_in%ldim,1.)     !reset if not empty
+    call calc_gradient(img_in, grad)
+    where( grad > thresh(1) ) img_out%rmat = 1.
+    deallocate(grad)
     end subroutine sobel
 
+    !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!
+    ! This soubroutine performs sobel edge detection with an automatic iterative
+    ! threshold selection in order to obtian a threshold which leads to
+    ! a ratio between foreground and background pixels in the binary image
+    ! close to 'goal'. This particular number is selected because it is what needed
+    ! for Chiara's particle picking routine.
+    subroutine automatic_thresh_sobel(self, bin_img, goal, thresh)
+        class(image),    intent(inout)   :: self
+        class(image),    intent(out)     :: bin_img
+        real, optional,  intent(in)      :: goal
+        real, optional,  intent(out)     :: thresh(1) !to keep track of the selected threshold
+        real, allocatable  :: grad(:,:,:)
+        real               :: tthresh(1), ggoal       !selected threshold and ratio nforeground/nbackground
+        real               :: t(3)                    !to calculate 3 possible sobel thresholds for each iteration
+        real               :: ratio(3)                !n_foreground/nbackground for 3 different values of the thresh
+        real               :: diff(3)                 !difference between the ideal ratio (= goal) and the obtained 3 ratios
+        integer, parameter :: N_MAXIT = 100           !max number of iterations
+        integer            :: n_it
+        logical            :: DEBUG
+        real               :: r                       !random # which guarantees me not to get stuck
+        DEBUG  = .true.
+        ggoal = 2.
+        if(present(goal)) ggoal = goal
+        if(bin_img%exists()) call bin_img%kill
+        call bin_img%new(self%ldim, self%smpd)
+        call self%calc_gradient(grad)
+        tthresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
+        diff = 1. !initialization
+        if(DEBUG) print*, 'Initial guessing: ', tthresh
+        n_it = 0
+        do while(abs(minval(diff(:))) > 0.005 .and. n_it < N_MAXIT)
+            n_it = n_it + 1
+            call random_seed()
+            call random_number(r)                   !rand # in  [ 0,1 ), uniform distribution
+            r = r*(maxval(grad) + minval(grad))/100 !rand # in  [ 0,(max(grad)-min(grad))/100 )
+            t(1) = tthresh(1) + r
+            t(2) = 3./2.*tthresh(1) + r
+            t(3) = 3./4.*tthresh(1) + r
+            if(t(2) > maxval(grad) .or. t(3) < minval(grad)) stop 'Error in finding the threshold! simple_image :: automatic_thresh_sobel'
+            call self%sobel(bin_img, t(1))
+            if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
+                ratio(1) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(1)
+            else
+                ratio(1) = 0.
+            endif
+            call self%sobel(bin_img, t(2))
+            if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
+                ratio(2) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(2)
+            else
+                ratio(2) = 0.
+            endif
+            call self%sobel(bin_img, t(3))
+            if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
+                ratio(3) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(3)
+            else
+                ratio(3) = 0.
+            endif
+            diff(:) = abs(ggoal-ratio(:))
+            tthresh(:) = t(minloc(diff))
+            if(DEBUG) then
+                print *, 'ITERATION ', n_it
+                print *, 'ratios = ', ratio
+                print *, 'thresholds = ', t
+                print *, 'threshold selected = ', tthresh
+            endif
+        end do
+        if(present(thresh)) thresh = tthresh
+        call self%sobel(bin_img, tthresh)
+        if(DEBUG) print *, 'Final threshold = ', tthresh
+        deallocate(grad)
+    end subroutine automatic_thresh_sobel
+
+    ! !!!!!!!!!ADDED BY CHIARA, for NLmean.
+    ! function similarity_window(self,px) result(sw)
+    !     class(image), intent(in) :: self
+    !     integer,      intent(in) :: px(3)
+    !     integer, parameter  :: DIM_SW = 7
+    !     real                :: sw_mat(DIM_SW,DIM_SW,1), sw(DIM_SW*DIM_SW)
+    !     if(px(3) /= 1) stop 'simple_image :: similarity window. Image has to be 2D!'
+    !     if(px(1) < 1 .or. px(1)+DIM_SW-1 > self%ldim(1) .or. &
+    !     &  px(2) < 1 .or. px(2)+DIM_SW-1 > self%ldim(2)) stop 'simple_image :: similarity window. Padding error!'
+    !     sw_mat(:DIM_SW,:DIM_SW,1) = self%rmat(px(1):px(1)+DIM_SW-1, px(2):px(2)+DIM_SW-1,1)  !self is meant to be pad
+    !     sw = reshape(sw_mat,[DIM_SW*DIM_SW])
+    ! end function similarity_window
+
+    !!!!!!!!ADDED BY CHIARA, still to work on
+    ! subroutine NLmean(self)
+    !   class(image), intent(inout) :: self
+    !   real, allocatable  :: NL(:,:,:), Z(:,:,:)
+    !   integer, parameter :: DIM_SW = 7
+    !   real               :: sw(DIM_SW*DIM_SW), sw_px(DIM_SW*DIM_SW)
+    !   integer            :: i, j, m, n,  pad
+    !   integer, parameter :: cfr_box = 10
+    !   real, parameter    :: sigma = 5., h =4.*sigma !SIGMA, H..?
+    !   type(image)        :: img_p
+    !   real               :: w
+    !   pad = (DIM_SW-1)/2
+    !   call img_p%new([self%ldim(1)+2*pad,self%ldim(2)+2*pad,1],1.) !you can also insert a control so that you pad only if necessary
+    !   call self%scale_img([1.,500.])
+    !   call self%pad(img_p)
+    !   allocate(Z(self%ldim(1),self%ldim(2),1), NL(self%ldim(1),self%ldim(2),1), source = 0.)
+    !   do m = 1,self%ldim(1)             !fix pixel (m,n)
+    !     do n = 1,self%ldim(2)
+    !       do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
+    !           do j = -cfr_box,cfr_box
+    !             if(i/=0 .or. j/=0) then !Not to take pixel (m,n)
+    !                 if(m+i > 0 .and. m+i <= self%ldim(1) .and. n+j > 0 .and. n+j <= self%ldim(2)) then
+    !                     Z(m,n,1) = Z(m,n,1)+ &
+    !                     & exp(-((norm2( img_p%similarity_window([m,n,1]) &
+    !                                 & - img_p%similarity_window([m+i,n+j,1])))**2./h**2.))
+    !                 endif
+    !             endif
+    !           enddo
+    !       enddo
+    !     enddo
+    !   enddo
+    !
+    !   do m = 1,self%ldim(1)
+    !     do n = 1,self%ldim(2)
+    !       sw_px = img_p%similarity_window([m,n,1])
+    !       do i = -cfr_box,cfr_box   !As suggested in the paper, I just consider a box 21x21
+    !           do j = -cfr_box,cfr_box
+    !             if(i/=0 .or. j/=0) then !Not to take pixel (m,n)
+    !                 if(m+i > 0 .and. m+i <= self%ldim(1) .and. n+j > 0 .and. n+j <= self%ldim(2)) then
+    !                     if(abs(Z(m,n,1)) > TINY) then !do not divide by 0
+    !                         sw = img_p%similarity_window([m+i,n+j,1])
+    !                         w = (exp(-((norm2(sw_px-sw))**2./h**2.)))/Z(m,n,1)
+    !                         NL(m,n,1) = NL(m,n,1)+w*self%rmat(m+i,n+j,1)
+    !                     endif
+    !                 endif
+    !             endif
+    !           enddo
+    !       enddo
+    !     enddo
+    !   enddo
+    !   call self%set_rmat(NL)
+    !   deallocate(Z,NL)
+    ! end subroutine NLmean
     ! CALCULATORS
 
     !> \brief stats  is for providing foreground/background statistics
@@ -4880,6 +5062,41 @@ contains
         end do
     end function gen_argtransf_comp
 
+   !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
+   ! The result of this funcion is the median value of the intensities
+   ! of the pixels in the image self.
+   function median_value(self) result(m)
+      class(image), intent(in) :: self
+      real              :: m
+      real, allocatable :: pixels(:), pixels_nodup(:)
+      pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+      & mask = .true.)
+      call elim_dup(pixels,pixels_nodup)
+      m = median(pixels_nodup)  !or median_nocopy?
+      deallocate(pixels,pixels_nodup)
+   end function median_value
+
+   !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
+   ! This function has as output the coordinates of the mass center
+   ! of img_in, calculated on the basis of the biggest connected
+   ! component (cc) in img_in. If this cc is too small, than
+   ! discard = .true.
+   function center_edge( self, discard ) result( xyz )
+       class(image), intent(inout) :: self
+       logical,        intent(out) :: discard
+       type(image) :: imgcc
+       real        :: xyz(3)
+       integer     :: min_sz !minumum size of the biggest cc in img_in
+       min_sz = 20 !too small cc have already been eliminated, this control
+       ! is in order to discard too offcentered windows, in which it wouldn t
+       ! be possible to properly center the particle
+       ! find all the cc in img_in
+       call self%find_connected_comps(imgcc)
+       !find the biggest cc
+       call imgcc%prepare_connected_comps(discard, min_sz)
+       xyz = imgcc%masscen()
+   end function center_edge
+
     ! MODIFIERS
 
     !> \brief insert  inserts a box*box particle image into a micrograph
@@ -5402,6 +5619,52 @@ contains
         endif
         self%ft = .false.
     end subroutine square
+
+    !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
+    ! This functions draws a window in self centered in part_coords.
+    ! Required inputs: coordinates of the particle, radius of the particle.
+    ! This function is meant to mark picked particles (visual purpose).
+    subroutine draw_picked(self, part_coords, part_radius, border)
+      class(image),intent(inout)    :: self
+      integer,     intent(in)       :: part_coords(2)  !coordinates of the picked particle
+      integer,     intent(in)       :: part_radius
+      integer, optional, intent(in) :: border          !width of the border of the drawn line
+      integer :: bborder
+      real    :: value             !intensity value of the window
+      integer :: wide              !side width of the window
+      integer :: length            !length of the drawn side
+      bborder = 1
+      if(present(border)) bborder = border
+      value = maxval(self%rmat(:,:,:))
+      wide = 4*part_radius
+      length = int(part_radius/2)
+      if( .not. self%is_2d() ) stop 'only for 2D images; draw_picked; simple_image'
+      if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
+      &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then
+        print *, 'The window is put of the bborder of the image!'
+        return    !Do not throw error, just do not draw
+      endif
+      ! Edges of the window
+      ! self%rmat(part_coords(1)-wide/2:part_coords(1)-wide/2+length, &
+      !    & part_coords(2)-wide/2-int((bborder-1)/2):part_coords(2)-wide/2+int((bborder-1)/2), 1) = value
+      ! self%rmat(part_coords(1)-wide/2-int((bborder-1)/2):part_coords(1)-wide/2+int((bborder-1)/2),&
+      !    & part_coords(2)-wide/2:part_coords(2)-wide/2+length, 1) = value
+      ! self%rmat(part_coords(1)+wide/2-length:part_coords(1)+wide/2,&
+      !    & part_coords(2)-wide/2-int((bborder-1)/2):part_coords(2)-wide/2+int((bborder-1)/2), 1) = value
+      ! self%rmat(part_coords(1)+wide/2-int((bborder-1)/2):part_coords(1)+wide/2+int((bborder-1)/2),&
+      !    & part_coords(2)-wide/2:part_coords(2)-wide/2+length, 1) = value
+      ! self%rmat(part_coords(1)-wide/2:part_coords(1)-wide/2+length,&
+      !    & part_coords(2)+wide/2-int((bborder-1)/2):part_coords(2)+wide/2+int((bborder-1)/2), 1) = value
+      ! self%rmat(part_coords(1)-wide/2-int((bborder-1)/2):part_coords(1)-wide/2+int((bborder-1)/2),&
+      !    & part_coords(2)+wide/2-length:part_coords(2)+wide/2, 1) = value
+      ! self%rmat(part_coords(1)+wide/2-length:part_coords(1)+wide/2,&
+      !    & part_coords(2)+wide/2-int((bborder-1)/2):part_coords(2)+wide/2+int((bborder-1)/2), 1) = value
+      ! self%rmat(part_coords(1)+wide/2-int((bborder-1)/2):part_coords(1)+wide/2+int((bborder-1)/2),&
+      ! & part_coords(2)+wide/2-length:part_coords(2)+wide/2, 1) = value
+      ! Central cross
+      self%rmat(part_coords(1)-length:part_coords(1)+length,  part_coords(2), 1) = value
+      self%rmat(part_coords(1),  part_coords(2)-length:part_coords(2)+length, 1) = value
+    end subroutine draw_picked
 
     !>  \brief  just a corner filling fun for testing purposes
     !! \param sqrad half width of square
@@ -6198,6 +6461,27 @@ contains
         call self%copy(tmp)
         call tmp%kill()
     end subroutine clip_inplace
+
+    !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
+    ! This subroutine rescales the pixel intensities to a new input range.
+    subroutine scale_img(self, new_range)
+          class(image), intent(inout) :: self
+          real,         intent(in)    :: new_range(2)
+          real :: old_range(2), sc
+          if( .not. self%is_2d() ) stop 'only for 2D images; scale_img; simple_image'
+          old_range(1) = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+          old_range(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+          sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
+          self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sc*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))+new_range(1)-sc*old_range(1)
+    end subroutine scale_img
+
+    !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
+   ! This subroutine takes in input the image self and trasforms it in its negative image.
+    subroutine negative_image(self)
+      class(image), intent(inout) :: self
+      self%rmat = -self%rmat + maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) &
+                           & + minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+    end subroutine negative_image
 
     !>  \brief  is for mirroring an image
     !!          mirror('x') corresponds to mirror2d

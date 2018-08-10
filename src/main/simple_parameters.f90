@@ -348,6 +348,7 @@ type :: parameters
     real    :: nsig=2.5            !< # sigmas
     real    :: optlims(7,2)=0.
     real    :: outer=0.            !< outer mask radius(in pixels)
+    real    :: part_radius         !< particle   radius(in pixels)  !!!!!!!!!ADDED BY CHIARA
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
@@ -719,6 +720,7 @@ contains
         call check_rarg('ndev',           self%ndev)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
+        call check_rarg('part_radius',    self%part_radius)  !!!ADDED BY CHIARA
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)

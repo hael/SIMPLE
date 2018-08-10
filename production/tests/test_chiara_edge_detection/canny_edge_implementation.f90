@@ -4,31 +4,10 @@ module canny_no_thresh_mod
   use simple_ctf,  only : ctf
   implicit none
 
-  public :: sobel, canny_edge, canny, build_ctf
+  public :: sobel, canny_edge, canny, sobel_nothresh, build_ctf
   private
 
   contains
-    !This subroutine rescales the pixel intensities to a new range
-    subroutine scale_img(img, new_min, new_max)
-          type(image), intent(inout) :: img
-          real,        intent(in)    :: new_min, new_max
-          real, allocatable :: rmat(:,:,:)
-          real              :: old_min, old_max, sc
-          integer           ::  ldim(3)
-          ldim = img%get_ldim()
-          if(ldim(3) /= 1) then
-            print *, "The image has to be 2D!"
-            stop
-          endif
-          rmat = img%get_rmat()
-          old_min = minval(rmat)
-          old_max = maxval(rmat)
-          sc = (new_max - new_min)/(old_max - old_min)
-          rmat = sc*rmat+new_min-sc*old_min
-          call img%set_rmat(rmat)
-          deallocate(rmat)
-    end subroutine scale_img
-
    !To build a ctf and visualize it in the image img_ctf
     function build_ctf(smpd, kv, cs, fraca, dfx, dfy, angast) result(img_ctf)
         real,        intent(in) :: smpd, kv, cs, fraca, dfx, dfy, angast
@@ -88,21 +67,6 @@ module canny_no_thresh_mod
      end do
    end subroutine Partition
 
- !To eliminate redundants elements from arraya and store the unique elements in arrayb
-  subroutine elim_dup(arraya, arrayb)
-      real,              intent(in)  :: arraya(:)
-      real, allocatable, intent(out) :: arrayb(:)
-      integer              :: ix
-      logical, allocatable :: mask(:)
-      integer, allocatable :: index_vector(:)
-      allocate(mask(size(arraya)))
-      mask = .true.
-      do ix = size(arraya),2,-1
-        mask(ix) = .not.(any(arraya(:ix-1)==arraya(ix)))
-      enddo
-      arrayb = pack(arraya, mask)
-    end subroutine elim_dup
-
 !To calculate the median value of the intensities of entries of the matrix
     function median_img(mat_in) result(m)
         real, intent(in)  :: mat_in(:,:,:)
@@ -123,8 +87,11 @@ module canny_no_thresh_mod
         deallocate(vect2)
     end function median_img
 
-    !Returns 8-neighborhoods of the pixel px in the matrix mat
-    function calc_neigh_8(mat, px) result(neigh_8)
+    !Returns 8-neighborhoods of the pixel px in the matrix mat. This
+    !function is specific for Canny edge detection. If Canny will
+    !be inserted in simple_image, it would be useful to merge this
+    !function with calc_neigh_8 present in simple_image.
+    function calc_neigh_8_canny(mat, px) result(neigh_8)
       real,    intent(in)  :: mat(:,:,:)
       integer, intent(in)  :: px(3)
       integer, allocatable :: neigh_8(:,:,:)
@@ -195,7 +162,7 @@ module canny_no_thresh_mod
         neigh_8(1:3,7,1) = [i-1,j+1,1]
         neigh_8(1:3,8,1) = [i-1,j,1]
       endif
-    end function calc_neigh_8
+    end function calc_neigh_8_canny
 
 !This function returns a matrix in which the first columns contain colum derivates,
 !the last columns contain row derivates of the input image
@@ -341,6 +308,30 @@ module canny_no_thresh_mod
           deallocate(grad)
       end subroutine sobel
 
+     !Sobel no thresh
+      subroutine sobel_nothresh(img_in,img_out, sigma)
+          type(image),    intent(inout) :: img_in,img_out         !image input and output
+          real, optional, intent(in)    :: sigma
+          real               :: threshold, ssigma, m               !threshold for Sobel algorithm
+          real,  allocatable :: grad(:,:,:)                    !matrices
+          type(image)        :: Gr                             !Gradient image
+          real, allocatable  :: rmat(:,:,:)
+          ssigma = 0.33              !empirical experiments (papers advices)
+          if(present(sigma)) ssigma = sigma
+          call img_in%scale_img([0.,255.])
+          call img_out%new(img_in%get_ldim(),1.)     !reset if not empty
+          img_out = 0.
+          rmat = img_out%get_rmat()
+          call calc_gradient(img_in, grad)
+          call Gr%new(img_in%get_ldim(),img_in%get_smpd())
+          call Gr%set_rmat(grad)
+          m = Gr%median_value()
+          threshold = ( max(0.,(1-ssigma)*m) + min(255.,(1+ssigma)*m) )/2
+          where( grad > threshold ) rmat = 1.
+          call img_out%set_rmat(rmat)
+          deallocate(grad, rmat)
+      end subroutine sobel_nothresh
+
       !Canny routine for edge detection, it requires a double threshold
         subroutine canny_edge(img_in,img_out, thresh)
             type(image), intent(inout) :: img_in, img_out                                             !input and output images
@@ -380,7 +371,7 @@ module canny_no_thresh_mod
                 do j = 1, ldim(2)
                     if(grad(i,j,1) == 0.5) then
                         grad(i,j,1) = 0.                         !suppress this edge, later I might re-build it
-                        neigh_8 = calc_neigh_8(grad,[i,j,1])
+                        neigh_8 = calc_neigh_8_canny(grad,[i,j,1])
                         s = shape(neigh_8)
                         do k = 1, s(2)
                             r = int(neigh_8(1:3,k,1))           !indexes of 8 neighbourhoods
@@ -405,11 +396,11 @@ module canny_no_thresh_mod
             integer                    :: ldim(3)
             ssigma = 0.33              !empirical experiments (papers advices)
             if(present(sigma)) ssigma = sigma
-            call scale_img(img_in, 0.,255.)
+            call img_in%scale_img([0.,255.])
             ldim = img_in%get_ldim()
             call calc_gradient(img_in, grad)
-            m = median_img(grad)    !I think it's the gradient, the sorce talks about the image itself
-                                  !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+            m = median_img(grad) !I used the gradient, the source talks about the image itself
+            !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
             thresh(1) = max(0.   ,(1-ssigma)*m) !lower
             thresh(2) = min(255., (1+ssigma)*m) !upper
             call canny_edge(img_in, img_out, thresh)
@@ -422,23 +413,15 @@ use simple_image, only : image
 use simple_jpg
 implicit none
 type(image)  :: img_in, img_out, img_in2, img_in1, img_in05
-integer      :: box, ldim(3)
-! box    = 256
-! ldim   = [box,box,1]
-call img_in%new( [128,128,1],1. )
-call img_in2%new( [128,128,1],1. )
-call img_in1%new( [128,128,1],1. )
-call img_in05%new( [128,128,1],1. )
-! img_in = build_ctf(smpd=0.5, kv=300., cs=2.7, fraca=0.1, dfx=0., dfy=0., angast=0.)
-! call img_in%vis
 
-!call img_in%read('/home/lenovoc30/Desktop/ctf_rings/image012.mrc')
-
+call img_in%new([128,128,1],1.)
+call img_in2%new([128,128,1],1.)
+call img_in1%new([128,128,1],1.)
+call img_in05%new([128,128,1],1.)
 call img_in%read('/home/lenovoc30/Desktop/Edge Detection/one_projection.mrc')
 call img_in2%read('/home/lenovoc30/Desktop/Edge Detection/one_projection2.mrc')
 call img_in1%read('/home/lenovoc30/Desktop/Edge Detection/one_projection1.mrc')
 call img_in05%read('/home/lenovoc30/Desktop/Edge Detection/one_projection05.mrc')
-
 !Let's use this image and apply three different metods for edge detection on it:
 !1) Sobel, threshold:
 !2) Canny, threshold:

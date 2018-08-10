@@ -5,22 +5,23 @@ module chiara_pick_particles_mod
 contains
   function center_edge( img_in, lp, thresh, bin_img, discard ) result( xyz )
       class(image),   intent(inout)      :: img_in
-      real,           intent(in)         :: lp, thresh
+      real,           intent(in)         :: lp, thresh(1)
       logical, intent(out)               :: discard
       type(image)       :: tmp, bin_img, imgcc
       real              :: xyz(3)
       integer           :: ldim(3), min_sz
       real, allocatable :: rmat(:,:,:)
-      min_sz = 400
+      min_sz = 30*30/2   !(part_radius**2)/2
       ldim = img_in%get_ldim()
       call tmp%copy(img_in)
       call tmp%bp(0., lp)
       call tmp%ifft()
       rmat = tmp%get_rmat()
-      where( rmat < 0. )
-           rmat = 0.
+     where( rmat < 0. )
+         rmat = 0.
       end where
-      call tmp%sobel(bin_img, thresh)
+      call tmp%sobel(bin_img, thresh(1))  !I use the threshold automatically selected for the whole micrograph
+      !call tmp%automatic_thresh_sobel(bin_img)
       call bin_img%real_space_filter(3, 'median') !median filtering allows me to calculate cc in an easy way
       call bin_img%find_connected_comps(imgcc)
       call imgcc%prepare_connected_comps(discard, min_sz)
@@ -28,16 +29,19 @@ contains
       call tmp%kill
   end function center_edge
 
-  function is_picked( new_coord,saved_coord, part_radius, saved ) result(yes_no)
-    integer, intent(in) :: new_coord(2)       !Coordinates of a new window to extract
-    integer, intent(in) :: saved_coord(:,:)   !Coordinates of extracted windows
+  ! This function tells whether the new_coord of a likely particle have already been identified.
+  function is_picked( new_coord, saved_coord, part_radius, saved ) result(yes_no)
+    integer, intent(in) :: new_coord(2)       !Coordinates of a new particle to pick
+    integer, intent(in) :: saved_coord(:,:)   !Coordinates of picked particles
     integer, intent(in) :: part_radius        !Approximate radius of the particle
     integer, intent(in), optional :: saved    !How many particles have already been saved
     logical :: yes_no
     integer :: iwind, ssaved, s(2)
-
     s = shape(saved_coord)
-    if(s(2) /= 2) stop 'Dimension error'
+    if(s(2) /= 2) then
+      print*, 'Dimension error'
+      stop 'stop :: simple_test_chiara_picking_particles'
+    endif
     yes_no = .false.
     ssaved = s(1)
     if(present(saved)) ssaved = saved
@@ -48,6 +52,91 @@ contains
         endif
     enddo
   end function is_picked
+
+  ! This routine is aimed to eliminate aggregations of particles.
+  ! It takes in input the list of the coordinates of the identified
+  ! particles and the approximate radius of the particle.
+  ! The output is a new list of coordinates where aggregate picked_particles
+  ! have been deleted
+  subroutine elimin_aggregation( saved_coord, part_radius, refined_coords )
+    integer,              intent(in)  :: saved_coord(:,:)     !Coordinates of picked particles
+    integer,              intent(in)  :: part_radius          !Approximate radius of the particle
+    integer, allocatable, intent(out) :: refined_coords(:,:)  !New coordinates of not aggregated particles
+    logical, allocatable :: msk(:)
+    integer              :: i, j, cnt
+    allocate(msk(size(saved_coord, dim = 1)), source = .true.)
+    cnt = 0
+    do i = 1, size(saved_coord, dim = 1)        !fix one coord
+        do j = 1, size(saved_coord, dim = 1)    !fix another coord to compare
+           if(j > i .and. msk(i) .and. msk(j)) then !not to compare twice the same couple and if it hasn t already been deleted
+               if(  sqrt(real((saved_coord(i,1)-saved_coord(j,1))**2 + (saved_coord(i,2)-saved_coord(j,2))**2)) <= real(2*part_radius)) then
+                   msk(i) = .false.
+                   msk(j) = .false.
+                   cnt = cnt + 1
+               endif
+          endif
+        enddo
+    enddo
+    allocate(refined_coords(size(saved_coord, dim = 1)-cnt,2), source = 0)
+    cnt = 0
+    do i = 1, size(saved_coord, dim = 1)
+    if(msk(i)) then
+        cnt = cnt + 1
+        refined_coords(cnt, :) = saved_coord(i, :)
+    endif
+    enddo
+    deallocate(msk)
+  end subroutine elimin_aggregation
+
+  ! subroutine automatic_thresh_sobel(self, bin_img, thresh)
+  !     type(image),    intent(inout) :: self
+  !     type(image),    intent(out)   :: bin_img
+  !     real, optional, intent(out)   :: thresh(1)  !to keep track of the selected threshold
+  !     real, allocatable  :: grad(:,:,:)
+  !     real               :: tthresh(1)    !selected threshold for sobel edge detection
+  !     real               ::  t(3)         !to calculate 3 possible sobel thresholds for each iteration
+  !     real               :: ratio(3)      !n_foreground/nbackground for 3 different values of the thresh
+  !     real               :: diff(3)       !difference between the ideal ratio (= 2) and the obtained 3 ratios
+  !     integer, parameter :: N_MAXIT = 10  !max number of iterations
+  !     integer            :: n_it
+  !     logical            :: DEBUG
+  !     real               :: r             !random # which guarantees me not to get stuck
+  !     DEBUG  = .true.
+  !     if(bin_img%exists()) call bin_img%kill
+  !     call bin_img%new(self%get_ldim(), self%get_smpd())
+  !     call self%calc_gradient(grad)
+  !     tthresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
+  !     diff = 1. !initialization
+  !     if(DEBUG) print*, 'Initial guessing: ', tthresh
+  !     n_it = 0
+  !     do while(abs(minval(diff(:))) > 0.02 .and. n_it < N_MAXIT)
+  !         n_it = n_it + 1
+  !         call random_seed()
+  !         call random_number(r)                   !rand # in  [ 0,1 ), uniform distribution
+  !         r = r*(maxval(grad) + minval(grad))/100 !rand # in  [ 0,(max(grad)-min(grad))/100 )
+  !         t(1) = tthresh(1) + r
+  !         t(2) = 3./2.*tthresh(1) + r
+  !         t(3) = 3./4.*tthresh(1) + r
+  !         if(t(2) > maxval(grad) .or. t(3) < minval(grad)) stop 'Error in finding the threshold! simple_image :: automatic_thresh_sobel'
+  !         call self%sobel(bin_img, t(1))
+  !         ratio(1) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(1)
+  !         call self%sobel(bin_img, t(2))
+  !         ratio(2) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(2)
+  !         call self%sobel(bin_img, t(3))
+  !         ratio(3) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(3)
+  !         diff(:) = abs(2.-ratio(:))
+  !         tthresh(:) = t(minloc(diff))
+  !         if(DEBUG) then
+  !             print *, 'ITERATION ', n_it
+  !             print *, 'ratios = ', ratio
+  !             print *, 'thresholds = ', t
+  !             print *, 'threshold selected = ', tthresh
+  !         endif
+  !     end do
+  !     if(present(thresh)) thresh = tthresh
+  !     call self%sobel(bin_img, tthresh)
+  !     if(DEBUG) print *, 'Final threshold = ', tthresh
+  ! end subroutine automatic_thresh_sobel
 end module chiara_pick_particles_mod
 
 program simple_test_chiara_pick_particles
@@ -57,55 +146,73 @@ program simple_test_chiara_pick_particles
   use simple_stackops
   use simple_math
   use chiara_pick_particles_mod
-  integer              :: ldim_shrunken(3), n_images, ifeat, box_shrunken, ldim(3), cnt, xind, yind, part_radius
-  integer, allocatable :: coord_build(:,:), coord(:,:), coord_center_edge(:,:)
+  integer              :: ldim_shrunken(3), n_images, ifeat, box_shrunken, ldim(3), cnt, xind, yind, part_radius, cnt1
+  integer, allocatable :: coord_build(:,:), coord(:,:), xyz_saved(:,:), xyz_no_rep(:,:), xyz_norep_noagg(:,:)
   real,    parameter   :: SHRINK = 4.
   integer, parameter   :: BOX = 370, OFFSET = BOX/SHRINK-20, BOFFSET = 1
-  type(image)          :: img, img_extrac, imgwin, mic_original, mic_shrunken, bin_img, imgcc
-  real                 :: smpd_shrunken, lp, xyz(3), sobel_thresh
+  type(image)          :: img, img_extrac, imgwin, mic_original, mic_shrunken, bin_img, imgcc, &
+  & mic_bin, mic_back_no_aggreg
+  real                 :: smpd_shrunken, lp, xyz(3), sobel_thresh(1)
   logical              :: outside, discard, picked
+
+
   call read_micrograph( micfname = &
+  !& '/home/lenovoc30/Desktop/NLmeanDenoising/Denoised.mrc', smpd = 1.0)
   & '/home/lenovoc30/Desktop/MassCenter/MicrographsMArion/micrographs/FoilHole_1574549_Data_1584496_1584497_20180703_1915-40767_intg.mrc'&
   &, smpd = 1.)
+
   call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
   call set_box(BOX, box_shrunken)  !Here I can decide to add noise
   call extract_boxes2file(OFFSET, 'extracted_windows.mrc', n_images, BOFFSET, coord)
   call mic_shrunken%new(ldim_shrunken, smpd_shrunken)   !Shrunken-high pass filtered version
   call mic_shrunken%read('shrunken_hpassfiltered.mrc')
+  call mic_shrunken%automatic_thresh_sobel( mic_bin, 2., sobel_thresh(1))  !Automatic selection of the threshold
+  call mic_bin%write('AutomaticThresh.mrc')
   call img_extrac%new ([box_shrunken,box_shrunken,1],1.)   !it will be the extracted window
   call imgwin%new ([box_shrunken,box_shrunken,1],1.)       !it will be the centered window
-  lp = 4. !I chose the threshold for low-pass filtering
-  sobel_thresh = 0.1
-  part_radius = 36
-
-  ! lp = 5.5
-  ! sobel_thresh = 0.1
-
+  lp = 4.
+  part_radius = 30
   picked = .false.
   cnt  = 0
-  allocate(coord_center_edge(n_images,2), source = 0)
-
+  allocate(xyz_saved(n_images,2), xyz_no_rep(n_images,2), source = 0)
+  call mic_back_no_aggreg%copy(mic_shrunken)
   do ifeat = 1, n_images
       call img_extrac%read('extracted_windows.mrc', ifeat)
-
-      ! call img_extrac%sobel(bin_img, 0.15)
-      ! call bin_img%write('sobel_detection.mrc',ifeat)
-      ! call bin_img%real_space_filter(1, 'median')
-      ! call bin_img%write('median_filtered.mrc',ifeat)
-
-      xyz = center_edge(img_extrac, lp, sobel_thresh, bin_img, discard )
+      xyz = center_edge(img_extrac, lp, sobel_thresh(1), bin_img, discard )
+      xyz_saved(ifeat,:) = int(xyz(:2))+coord(ifeat,:)+box_shrunken/2
       call bin_img%write('binary_images_sobel.mrc', ifeat)
-      call mic_shrunken%window_slim( [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)], &
-                                                &  box_shrunken, imgwin, outside )
-      if(ifeat > 1) picked = is_picked([int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)],coord_center_edge, part_radius, ifeat-1 )
-      coord_center_edge(ifeat,:) =     [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)]
-     if(.not. picked) then  !window not already selected
-          if(.not. discard) then
-              if( .not. outside )then
+      call mic_shrunken%window_slim( int(xyz(:2))+coord(ifeat,:), box_shrunken, imgwin, outside )
+    if(ifeat > 1) picked = is_picked( int(xyz) + coord(ifeat,:) + box_shrunken/2, xyz_saved, part_radius, ifeat-1 )
+    if( .not. picked .and. .not. discard .and. .not. outside) then
                   cnt = cnt + 1
-                  call imgwin%write('centered_particles_edge.mrc', cnt)
-              endif
-          endif
-      endif
+                  xyz_no_rep(cnt,:) = int(xyz) + coord(ifeat,:) + box_shrunken/2
+    endif
   end do
+  call elimin_aggregation( xyz_no_rep, part_radius, xyz_norep_noagg )
+  do ifeat = 1, cnt
+    if( abs(xyz_norep_noagg(ifeat,1)) > 0) call mic_back_no_aggreg%draw_picked( xyz_norep_noagg(ifeat,:),part_radius,2)
+  enddo
+  call mic_back_no_aggreg%write('picked_particles_no_aggreg.mrc')
+  cnt1 = 0
+  do ifeat = 1, cnt
+    if( xyz_norep_noagg(ifeat,1) /=  0) then
+        call mic_shrunken%window_slim( xyz_norep_noagg(ifeat,:) - box_shrunken/2, box_shrunken, imgwin, outside )
+        if( .not. outside) then
+            cnt1 = cnt1 + 1
+            call imgwin%write('centered_particles_NOrepNOagg.mrc', cnt1)
+        endif
+    endif
+  end do
+  !To center again the picked_particles
+  ! cnt = 0
+  ! do ifeat = 1, cnt1
+  !     call img_extrac%read('centered_particles_NOrepNOagg.mrc', ifeat)
+  !     call img_extrac%mask( real(part_radius), 'soft') !This time I mask, that's why I improve
+  !     xyz = center_edge(img_extrac, lp, sobel_thresh(1), bin_img, discard )
+  !     call mic_shrunken%window_slim( int(xyz(:2))+xyz_norep_noagg(ifeat,:) - box_shrunken/2, box_shrunken, imgwin, outside )
+  !     if(.not. outside) then
+  !         cnt = cnt + 1
+  !         call imgwin%write('centered_particles_RECENTERED.mrc', cnt)
+  !     endif
+  ! enddo
 end program simple_test_chiara_pick_particles

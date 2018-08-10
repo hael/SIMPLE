@@ -3640,8 +3640,8 @@ end function selec_1
         tr = tr + mat(i,i)
       enddo
   end function trace
-
-  !>  \brief  generates a binary mask from a logical one  !CHIARA
+  !!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!!!!
+  !>  \brief  generates a binary mask from a logical one
   function logical2bin( mask ) result( matrix )
      logical, intent(in) :: mask(:,:,:)
      real, allocatable   :: matrix(:,:,:)
@@ -3654,4 +3654,21 @@ end function selec_1
        enddo
      enddo
   end function logical2bin
+
+  !!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!!!!
+  ! This function takes in input arraya and gives as output arrayb
+  ! which is the same as arraya, but with NO repetition in the elements.
+  subroutine elim_dup(arraya, arrayb)
+      real,              intent(in)  :: arraya(:)
+      real, allocatable, intent(out) :: arrayb(:)
+      integer              :: ix
+      logical, allocatable :: mask(:)
+      allocate(mask(size(arraya)))
+      mask = .true.
+      do ix = size(arraya),2,-1
+        mask(ix) = .not.(any(arraya(:ix-1)==arraya(ix)))
+      enddo
+      arrayb = pack(arraya, mask)
+      deallocate(mask)
+    end subroutine elim_dup
 end module simple_math

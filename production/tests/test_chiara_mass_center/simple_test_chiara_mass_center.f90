@@ -4,6 +4,27 @@ module chiara_mass_center_mod
   implicit none
 contains
 
+! This function is to enumerate the labels of a connected components image.
+! This routine assumes that the input pixel values are 0 or cnt (see enumerate_white_pixels, above)
+! subroutine enumerate_connected_comps( img )
+!     class(image), intent(inout) :: img
+!     integer           :: i, j
+!     real, allocatable :: tmp_mat(:,:,:) !unnecessary if in simple_image module
+!     real :: tmp
+!     allocate(tmp_mat(img%ldim(1), img%ldim(2), 1), source = 0.)
+!     do i = 1, img%ldim(1)
+!         do j = 1, img%ldim(2)
+!             if( img%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
+!                 tmp = img%rmat(i,j,1) ! tmp is now [1,cnt]
+!                 where(img%rmat == tmp)
+!                     img%rmat = 0.     !Not to consider this cc again
+!                     tmp_mat = tmp
+!                 endwhere
+!             endif
+!         enddo
+!     enddo
+! end subroutine enumerate_connected_comps
+
 !The output of this function is the crossing number of a pixel as defined in
 !'Binary digital image processing' (book).
 !The crossing number indicates the number of 4-connected components in the 8-neighbourhoods.
@@ -53,7 +74,7 @@ function crossing_number(neigh_8) result(cn)
 
   function center_edge( img_in, lp, thresh, bin_img, discard ) result( xyz )
       class(image),   intent(inout)      :: img_in
-      real,           intent(in)         :: lp, thresh
+      real,           intent(in)         :: lp, thresh(1)
       logical, intent(out)               :: discard
       type(image)       :: tmp, bin_img, imgcc
       real              :: xyz(3)
@@ -68,7 +89,7 @@ function crossing_number(neigh_8) result(cn)
       where( rmat < 0. )
            rmat = 0.
       end where
-      call tmp%sobel(bin_img, thresh)
+      call tmp%sobel(bin_img, thresh(1))
       call bin_img%real_space_filter(3, 'median') !median filtering allows me to calculate cc in an easy way
       call bin_img%find_connected_comps(imgcc)
       call imgcc%prepare_connected_comps(discard, min_sz)
@@ -119,7 +140,7 @@ program simple_test_chiara_mass_center
   real,    parameter   :: SHRINK = 2.
   integer, parameter   :: BOX = 256, OFFSET = BOX/SHRINK-20, BOFFSET = 1, N_PROJ = 64
   type(image)          :: img, img_extrac, imgwin, mic_original, mic_shrunken, bin_img
-  real                 :: smpd_shrunken, lp, xyz(3)
+  real                 :: smpd_shrunken, lp, xyz(3), thresh(1)
   logical              :: outside, discard, picked
   logical, allocatable :: mask(:)
 
@@ -148,56 +169,32 @@ program simple_test_chiara_mass_center
   call read_micrograph( micfname = 'original_micrograph.mrc', smpd = 1.0)
   call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
   call set_box(BOX, box_shrunken,0.2)  !Here I can decide to add noise
-  !part_radius = box_shrunken/4  it should work in real cases, in this case particles are well distinguished, so I need a bigger one
-  part_radius = 100
+  part_radius = 20
   call extract_boxes2file(OFFSET, 'extracted_windows.mrc', n_images, BOFFSET, coord)
   call mic_shrunken%new(ldim_shrunken, smpd_shrunken)   !Shrunken-high pass filtered version
   call mic_shrunken%read('shrunken_hpassfiltered.mrc')
   call img_extrac%new ([box_shrunken,box_shrunken,1],1.)   !it will be the extracted window
   call imgwin%new ([box_shrunken,box_shrunken,1],1.)       !it will be the centered window
-
-  lp = 4.   ! ??????
+  lp = 4.
   cnt  = 0
   allocate(coord_center_edge(n_images,2), source = 0)
-
-  ! do ifeat = 1, n_images
-  !     call img_extrac%read('extracted_windows.mrc', ifeat)
-  !     xyz = center_edge(img_extrac, lp, 0.99, bin_img, discard ) !noiseless image, threshold = 0.5
-  !     call bin_img%write('binary_images_sobel.mrc', ifeat)
-  !     !SOBEL
-  !     if(.not. discard) then
-  !     coord_center_edge(ifeat,:) =   [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)]
-  !     call mic_shrunken%window_slim( [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)], &
-  !                                               &  box_shrunken, imgwin, outside )
-  !     if( .not. outside )then
-  !         cnt = cnt + 1
-  !         call imgwin%write('centered_particles_edge.mrc', cnt)
-  !         !print *, 'coordinates ', int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2) , 'ifeat =', ifeat-1, 'cnt = ', cnt-1
-  !     endif
-  !   endif
-  ! end do
-
-
-cnt = 0
-picked = .false. !initialization
-
-do ifeat = 1, n_images
-    call img_extrac%read('extracted_windows.mrc', ifeat)
-    xyz = center_edge(img_extrac, lp, 0.99, bin_img, discard )
-    if(.not. discard) then    !it means sobel has found enough points
-        call mic_shrunken%window_slim( [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)], &
-                                                            &  box_shrunken, imgwin, outside )
-        if(ifeat > 1) picked = is_picked([int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)],coord_center_edge, part_radius, ifeat-1 )
-        coord_center_edge(ifeat,:) =     [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)]
-        if(.not. picked) then  !window not already selected
-            if( .not. outside  )then  !not outside of the borders of the image
-                 cnt = cnt + 1
-                 call imgwin%write('centered_particles_edgeNOREP.mrc', cnt)
-            endif
-        !else
-          !print *, 'ifeat = ', ifeat -1, 'picked = ', picked
-        endif
-    endif
-end do
-print *,
+  picked = .false. !initialization
+ thresh(1) = 0.99
+  do ifeat = 1, n_images
+      call img_extrac%read('extracted_windows.mrc', ifeat)
+      xyz = center_edge(img_extrac, lp, thresh(1), bin_img, discard )
+      call bin_img%write('binary_images_sobel.mrc', ifeat)
+      if(.not. discard) then    !it means sobel has found enough points
+          call mic_shrunken%window_slim( [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)], &
+                                                              &  box_shrunken, imgwin, outside )
+          if(ifeat > 1) picked = is_picked([int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)],coord_center_edge, part_radius, ifeat-1 )
+          coord_center_edge(ifeat,:) =     [int(xyz(1))+coord(ifeat,1), int(xyz(2))+coord(ifeat,2)]
+          if(.not. picked) then  !window not already selected
+              if( .not. outside  )then  !not outside of the borders of the image
+                   cnt = cnt + 1
+                   call imgwin%write('centered_particles_edgeNOREP.mrc', cnt)
+              endif
+          endif
+      endif
+  end do
 end program simple_test_chiara_mass_center

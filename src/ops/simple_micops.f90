@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: read_micrograph, shrink_micrograph, set_box, extract_boxes2file, generate_sampling_coordinates, extract_boxes2file_input_coord
+public :: read_micrograph, shrink_micrograph, set_box, extract_boxes2file, extract_windows2file, generate_sampling_coordinates
 private
 
 logical, parameter :: DEBUG = .true.
@@ -13,7 +13,6 @@ integer     :: ldim(3), ldim_shrunken(3), box, box_shrunken, nx, ny, border_offs
 real        :: shrink_factor
 
 contains
-
     subroutine read_micrograph( micfname, smpd )
         character(len=*), intent(in) :: micfname
         real,             intent(in) :: smpd
@@ -112,31 +111,54 @@ contains
         endif
         if( DEBUG ) print *, 'debug(micops); wrote # images to stack: ', n_images
     end subroutine extract_boxes2file
+    !!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!
+    ! This subroutine does exactly what 'extract_boxes2file' in simple_micops does, but it works on
+    ! whatever input image (not necessary a mic)
+    subroutine extract_windows2file( micrograph_shrunken, offset, outstk, n_images, boffset, coord )
+        type(image), intent(inout) :: micrograph_shrunken
+        integer,           intent(in)               :: offset
+        character(len=*),  intent(in)               :: outstk
+        integer,           intent(out)              :: n_images
+        integer, optional, intent(in)               :: boffset
+        integer, optional, allocatable, intent(out) :: coord(:,:)
+        type(image) :: imgwin
+        integer     :: xind, yind, cnt, toc(2)
+        logical     :: outside
+        if( present(boffset) )then
+          border_offset = boffset
+        else
+          border_offset = 0
+        endif
+        call imgwin%new([box_shrunken,box_shrunken,1], micrograph_shrunken%get_smpd())
+        cnt = 0
+        do xind=border_offset,nx-border_offset,offset
+            do yind=border_offset,ny-border_offset,offset
+                call micrograph_shrunken%window_slim([xind,yind], box_shrunken, imgwin, outside)
+                if( .not. outside )then
+                    cnt = cnt + 1
+                    call imgwin%write(outstk, cnt)
+                endif
+            end do
+        end do
+        n_images = cnt
+        if(present(coord)) then
+              allocate(coord(cnt,2))
+              cnt = 0
+              do xind=border_offset,nx-border_offset,offset
+                  do yind=border_offset,ny-border_offset,offset
+                    outside = .false.
+                    toc = [xind,yind] + box_shrunken
+                    if(toc(1) > ldim_shrunken(1) .or. toc(2) > ldim_shrunken(2))  outside = .true.
+                      if( .not. outside )then
+                          cnt = cnt + 1
+                          coord(cnt,:) = [xind,yind]
+                      endif
+                  end do
+              end do
 
-
-  !!!!!!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine extract_boxes2file_input_coord( outstk, coord, n_images )
-      character(len=*),  intent(in)  :: outstk
-      integer,           intent(in)  :: coord(:,:)
-      integer, optional, intent(out) :: n_images
-      type(image) :: imgwin
-      integer     :: cnt, i
-      logical     :: outside
-      call imgwin%new([box_shrunken,box_shrunken,1], micrograph_shrunken%get_smpd())
-      cnt = 0
-      do i = 1, size(coord,dim = 1)
-              call micrograph_shrunken%window_slim([coord(i,1),coord(i,2)], box_shrunken, imgwin, outside)
-              if( .not. outside )then
-                  cnt = cnt + 1
-                  call imgwin%write(outstk, cnt)
-              endif
-      end do
-      if(present(n_images)) n_images = cnt
-      if( DEBUG ) print *, 'debug(micops); extracted # images: ', cnt
-  end subroutine extract_boxes2file_input_coord
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
+        endif
+        if( DEBUG ) print *, 'debug(micops); wrote # images to stack: ', n_images
+    end subroutine extract_windows2file
 
     function generate_sampling_coordinates( offset ) result( coords )
         integer, intent(in)  :: offset
