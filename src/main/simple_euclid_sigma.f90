@@ -58,15 +58,17 @@ contains
         call pftcc_glob%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
         call pftcc_glob%assign_pinds(self%pinds)
         self%fname = trim(fname)
-        self%file_header(1) = params_glob%fromp
-        self%file_header(2) = params_glob%top
-        self%file_header(3) = params_glob%kfromto(1)
-        self%file_header(4) = params_glob%kfromto(2)
-        self%headsz         = sizeof(self%file_header)
-        self%sigmassz       = sizeof(r)*(params_glob%kfromto(2)-params_glob%kfromto(1)+1)
-        self%do_divide      = .false.
-        self%exists         = .true.
-        eucl_sigma_glob     => self
+        self%file_header(1)    = params_glob%fromp
+        self%file_header(2)    = params_glob%top
+        self%file_header(3)    = params_glob%kfromto(1)
+        self%file_header(4)    = params_glob%kfromto(2)
+        self%headsz            = sizeof(self%file_header)
+        self%sigmassz          = sizeof(r)*(params_glob%kfromto(2)-params_glob%kfromto(1)+1)
+        self%do_divide         = .false.
+        self%exists            = .true.
+        self%sigma2_noise      = 0.
+        self%sigma2_exists_msk = .false.
+        eucl_sigma_glob        => self
     end subroutine new
 
     ! I/O
@@ -95,7 +97,7 @@ contains
             sigma2_noise_n = 0.
             do iptcl = params_glob%fromp, params_glob%top
                 if (.not. ptcl_mask(iptcl)) cycle
-                self%sigma2_noise(:,self%pinds(iptcl)) = sigma2_noise_n
+                self%sigma2_noise(:,self%pinds(iptcl))    = sigma2_noise_n
                 self%sigma2_exists_msk(self%pinds(iptcl)) = .false.
             end do
         end if
