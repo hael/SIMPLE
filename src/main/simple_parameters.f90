@@ -859,7 +859,7 @@ contains
         if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box  = self%ldim(1)
-        DebugPrint 'found logical dimension of volume: ', self%ldim
+            DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
         ! no stack given,not vol given, get ldim from mskfile if present
         if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then

@@ -695,13 +695,17 @@ contains
         ! first stage
         call cline_refine3D1%set('prg', 'refine3D')
         call cline_refine3D1%set('maxits', real(MAXITS1))
+        call cline_refine3D1%delete('neigh')
         select case(trim(params%refine))
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
+            case('cluster_snhc')
+                call cline_refine3D1%set('refine', 'cluster_snhc')
+                call cline_refine3D1%set('neigh', 'yes')
+                call cline_refine3D1%set('nnn',   10.)
             case DEFAULT
                 call cline_refine3D1%set('refine', trim(params%refine))
         end select
-        call cline_refine3D1%delete('neigh')
         call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg',    'refine3D')

@@ -459,7 +459,7 @@ contains
         complex(sp),             intent(in)    :: pft(:,:) !< particle's pft
         self%pfts_ptcls(:,:,self%pinds(iptcl)) = pft
         ! calculate the square sum required for correlation calculation
-        call self%memoize_sqsum_ptcl(self%pinds(iptcl))        
+        call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine set_ptcl_pft
 
     subroutine set_ref_fcomp( self, iref, irot, k, comp, iseven )
@@ -994,7 +994,7 @@ contains
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         integer :: rot
         real    :: corr
-        complex :: tmp        
+        complex :: tmp
         corr = 0.
         tmp  = 0.
         if( irot >= self%pftsz + 1 )then
@@ -1200,14 +1200,15 @@ contains
         real(sp),    pointer :: kcorrs(:)
         real(sp) :: sumsqref, sumsqptcl, sqsum_ref
         integer  :: k, ithr
-        ithr     =  omp_get_thread_num() + 1
-        pft_ref  => self%heap_vars(ithr)%pft_ref
-        kcorrs   => self%heap_vars(ithr)%kcorrs
+        ithr    =  omp_get_thread_num() + 1
+        pft_ref => self%heap_vars(ithr)%pft_ref
+        kcorrs  => self%heap_vars(ithr)%kcorrs
         call self%prep_ref4corr(iref, i, pft_ref, sqsum_ref, params_glob%kstop)
         do k=params_glob%kfromto(1),params_glob%kstop
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            frc(k)    = kcorrs(irot) / sqrt(self%sqsums_ptcls(i) * sumsqptcl)
+            frc(k)    = kcorrs(irot) / sqrt(sumsqptcl * sumsqref)
         end do
     end subroutine genfrc
 
@@ -1243,8 +1244,9 @@ contains
         endif
         do k=params_glob%kfromto(1),params_glob%kstop
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            frc(k)    = kcorrs(irot) / sqrt(self%sqsums_ptcls(i) * sumsqptcl)
+            frc(k)    = kcorrs(irot) / sqrt(sumsqptcl * sumsqref)
         end do
     end subroutine calc_frc
 
