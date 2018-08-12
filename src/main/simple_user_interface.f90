@@ -88,7 +88,7 @@ type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
 type(simple_program), target :: import_particles
-type(simple_program), target :: importstar_project
+type(simple_program), target :: import_starproject
 type(simple_program), target :: exportstar_project
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
@@ -239,7 +239,7 @@ contains
         call new_import_cavgs
         call new_import_movies
         call new_import_particles
-        call new_importstar_project
+        call new_import_starproject
         call new_make_cavgs
         call new_make_oris
         call new_make_pickrefs
@@ -305,7 +305,7 @@ contains
         prg_ptr_array(18)%ptr2prg => import_cavgs
         prg_ptr_array(19)%ptr2prg => import_movies
         prg_ptr_array(20)%ptr2prg => import_particles
-        prg_ptr_array(21)%ptr2prg => importstar_project
+        prg_ptr_array(21)%ptr2prg => import_starproject
         prg_ptr_array(22)%ptr2prg => make_cavgs
         prg_ptr_array(23)%ptr2prg => make_oris
         prg_ptr_array(24)%ptr2prg => make_pickrefs
@@ -392,8 +392,8 @@ contains
                 ptr2prg => import_movies
             case('import_particles')
                 ptr2prg => import_particles
-            case('importstar_project')
-                ptr2prg => importstar_project
+            case('import_starproject')
+                ptr2prg => import_starproject
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -517,7 +517,7 @@ contains
         write(*,'(A)') import_cavgs%name
         write(*,'(A)') import_movies%name
         write(*,'(A)') import_particles%name
-        write(*,'(A)') importstar_project%name
+        write(*,'(A)') import_starproject%name
         write(*,'(A)') make_oris%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
@@ -1356,10 +1356,10 @@ contains
         ! <empty>
     end subroutine new_import_particles
 
-    subroutine new_importstar_project
+    subroutine new_import_starproject
         ! PROGRAM SPECIFICATION
-        call importstar_project%new(&
-        &'importstar_project',&                  ! name
+        call import_starproject%new(&
+        &'import_starproject',&                  ! name
         &'Import STAR file to SIMPLE project ',& ! descr_short
         &'is a program for importing STAR-formatted EM project files to the current SIMPLE project and saving as a SIMPLE project',&
         &'simple_exec',&                         ! executable
@@ -1375,98 +1375,98 @@ contains
         ! .true.)                                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-!        call importstar_project%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
-!        call importstar_project%set_input('img_ios', 2, 'stk', 'file', 'Stack of class averages',&
+!        call import_starproject%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
+!        call import_starproject%set_input('img_ios', 2, 'stk', 'file', 'Stack of class averages',&
 !        &'Stack of class average images to import', 'e.g. cavgs.mrcs', .true., '')
-!     call importstar_project%set_input('img_ios', 3, 'dir_target', 'file', 'Target directory',&
-!        &'Directory where the importstar_project_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
+!     call import_starproject%set_input('img_ios', 3, 'dir_target', 'file', 'Target directory',&
+!        &'Directory where the import_starproject_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
         ! parameter input/output
 
-        call importstar_project%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted text file of input parameters',&
+        call import_starproject%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted text file of input parameters',&
             'STAR-formatted text file of input parameters ', 'e.g. params.star', .false., 'NONE')
-        importstar_project%parm_ios(1)%required = .true.
- call importstar_project%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
+        import_starproject%parm_ios(1)%required = .true.
+ call import_starproject%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
             'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. micrographs or class2D', .false., '')
-!        call importstar_project%set_input('parm_ios', 1, smpd)
-        ! call importstar_project%set_input('parm_ios', 2, kv)
-        ! call importstar_project%set_input('parm_ios', 3, cs)
-        ! call importstar_project%set_input('parm_ios', 4, fraca)
-        ! call importstar_project%set_input('parm_ios', 5, ctf)
-        ! call importstar_project%set_input('parm_ios', 6, phaseplate)
-        ! call importstar_project%set_input('parm_ios', 7, oritab)
-        ! call importstar_project%set_input('parm_ios', 8, deftab)
-        ! call importstar_project%set_input('parm_ios', 9, 'plaintexttab', 'file', 'Plain text file of input parameters',&
+!        call import_starproject%set_input('parm_ios', 1, smpd)
+        ! call import_starproject%set_input('parm_ios', 2, kv)
+        ! call import_starproject%set_input('parm_ios', 3, cs)
+        ! call import_starproject%set_input('parm_ios', 4, fraca)
+        ! call import_starproject%set_input('parm_ios', 5, ctf)
+        ! call import_starproject%set_input('parm_ios', 6, phaseplate)
+        ! call import_starproject%set_input('parm_ios', 7, oritab)
+        ! call import_starproject%set_input('parm_ios', 8, deftab)
+        ! call import_starproject%set_input('parm_ios', 9, 'plaintexttab', 'file', 'Plain text file of input parameters',&
         ! 'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', 'e.g. params.txt', .false., '')
-        ! call importstar_project%set_input('parm_ios', 10, 'dfunit', 'binary', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
-        ! call importstar_project%set_input('parm_ios', 11, 'angastunit', 'binary', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
-        ! call importstar_project%set_input('parm_ios', 12, 'phshiftunit', 'binary', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
-        ! call importstar_project%set_input('parm_ios', 13, 'boxtab', 'file', 'List of box files', &
+        ! call import_starproject%set_input('parm_ios', 10, 'dfunit', 'binary', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
+        ! call import_starproject%set_input('parm_ios', 11, 'angastunit', 'binary', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
+        ! call import_starproject%set_input('parm_ios', 12, 'phshiftunit', 'binary', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
+        ! call import_starproject%set_input('parm_ios', 13, 'boxtab', 'file', 'List of box files', &
         !     'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
 
   !       call new_project%set_input('parm_ios', 15, user_email)
-  !       call importstar_project%set_input('parm_ios', 16, 'refs', 'file', 'picking 2D references',&
+  !       call import_starproject%set_input('parm_ios', 16, 'refs', 'file', 'picking 2D references',&
   !       &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
-  !       call importstar_project%set_input('parm_ios', 17, 'box_extract', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
-  !       call importstar_project%set_input('parm_ios', 18, pcontrast)
-  !       call importstar_project%set_input('parm_ios', 19, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
-  ! call importstar_project%set_input('parm_ios', 1, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
-  !       call importstar_project%set_input('parm_ios', 20, mkdir_)
-  !    call importstar_project%set_input('parm_ios', 21,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-  !       call importstar_project%set_input('parm_ios', 22,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-  ! call importstar_project%set_input('parm_ios', 23,  'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
-  ! call importstar_project%set_input('parm_ios', 24,  'fbody', 'string', 'Template output micrograph name',&
+  !       call import_starproject%set_input('parm_ios', 17, 'box_extract', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+  !       call import_starproject%set_input('parm_ios', 18, pcontrast)
+  !       call import_starproject%set_input('parm_ios', 19, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+  ! call import_starproject%set_input('parm_ios', 1, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
+  !       call import_starproject%set_input('parm_ios', 20, mkdir_)
+  !    call import_starproject%set_input('parm_ios', 21,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
+  !       call import_starproject%set_input('parm_ios', 22,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+  ! call import_starproject%set_input('parm_ios', 23,  'scale', 'num', 'Down-scaling factor', 'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
+  ! call import_starproject%set_input('parm_ios', 24,  'fbody', 'string', 'Template output micrograph name',&
   !       &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-  !       call importstar_project%set_input('parm_ios', 25,  pspecsz)
-  !       call importstar_project%set_input('parm_ios', 26,  numlen)
+  !       call import_starproject%set_input('parm_ios', 25,  pspecsz)
+  !       call import_starproject%set_input('parm_ios', 26,  numlen)
 
   !       ! alternative inputs
-  !       call importstar_project%set_input('alt_ios', 1, 'stktab', 'file', 'List of per-micrograph particle stacks',&
+  !       call import_starproject%set_input('alt_ios', 1, 'stktab', 'file', 'List of per-micrograph particle stacks',&
   !       &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
-  !       call importstar_project%set_input('alt_ios', 2, 'stk', 'file', 'Stack of particles',&
+  !       call import_starproject%set_input('alt_ios', 2, 'stk', 'file', 'Stack of particles',&
   !           &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
   !       ! search controls
-  !       call  importstar_project%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
-  !       call  importstar_project%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+  !       call  import_starproject%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
+  !       call  import_starproject%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
   !       ! filter controls
-  !       call  importstar_project%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
-  ! call importstar_project%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+  !       call  import_starproject%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+  ! call import_starproject%set_input('filt_ctrls', 2, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
   !       & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
-  !       call importstar_project%set_input('filt_ctrls', 3, bfac)
-  !       call importstar_project%set_input('filt_ctrls', 4, mirr)
-  !       call importstar_project%set_input('filt_ctrls', 5, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
+  !       call import_starproject%set_input('filt_ctrls', 3, bfac)
+  !       call import_starproject%set_input('filt_ctrls', 4, mirr)
+  !       call import_starproject%set_input('filt_ctrls', 5, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
   !       &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
-  !       call importstar_project%set_input('filt_ctrls', 6, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
+  !       call import_starproject%set_input('filt_ctrls', 6, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
   !       &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
-  !       call importstar_project%set_input('filt_ctrls', 7, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
+  !       call import_starproject%set_input('filt_ctrls', 7, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
   !       & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
-  !       call importstar_project%set_input('filt_ctrls', 8, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
+  !       call import_starproject%set_input('filt_ctrls', 8, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
   !       & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
-  !       call importstar_project%set_input('filt_ctrls', 9, 'lp_pick', 'num', 'Low-pass limit for picking',&
+  !       call import_starproject%set_input('filt_ctrls', 9, 'lp_pick', 'num', 'Low-pass limit for picking',&
   !       & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
   !       ! mask controls
-  !       call importstar_project%set_input('mask_ctrls', 1, msk)
-  !       call importstar_project%set_input('mask_ctrls', 2, inner)
-  !       call importstar_project%set_input('mask_ctrls', 3, mskfile)
-  !       call importstar_project%set_input('mask_ctrls', 4, 'binwidth', 'num', 'Envelope binary layers width',&
+  !       call import_starproject%set_input('mask_ctrls', 1, msk)
+  !       call import_starproject%set_input('mask_ctrls', 2, inner)
+  !       call import_starproject%set_input('mask_ctrls', 3, mskfile)
+  !       call import_starproject%set_input('mask_ctrls', 4, 'binwidth', 'num', 'Envelope binary layers width',&
   !       &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
-  !       call importstar_project%set_input('mask_ctrls', 5, 'thres', 'num', 'Volume threshold',&
+  !       call import_starproject%set_input('mask_ctrls', 5, 'thres', 'num', 'Volume threshold',&
   !       &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
-  !       call importstar_project%set_input('mask_ctrls', 6, 'automsk', 'binary', 'Perform envelope masking',&
+  !       call import_starproject%set_input('mask_ctrls', 6, 'automsk', 'binary', 'Perform envelope masking',&
   !       &'Whether to generate an envelope mask(yes|no){no}', '(yes|no){no}', .false., 'no')
-  !       call importstar_project%set_input('mask_ctrls', 7, mw)
-  !       call importstar_project%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
+  !       call import_starproject%set_input('mask_ctrls', 7, mw)
+  !       call import_starproject%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
   !       &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
-  !       call importstar_project%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
+  !       call import_starproject%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
   !       &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
   !       ! computer controls
-  !       call  importstar_project%set_input('comp_ctrls', 1, time_per_image)
-  !       call  importstar_project%set_input('comp_ctrls', 2, user_account)
-  !       call  importstar_project%set_input('comp_ctrls', 3, user_project)
-  !       call  importstar_project%set_input('comp_ctrls', 4, qsys_partition)
-  !       call  importstar_project%set_input('comp_ctrls', 5, qsys_qos)
-  !       call  importstar_project%set_input('comp_ctrls', 6, qsys_reservation)
-  !       call  importstar_project%set_input('comp_ctrls', 7, job_memory_per_task)
-    end subroutine new_importstar_project
+  !       call  import_starproject%set_input('comp_ctrls', 1, time_per_image)
+  !       call  import_starproject%set_input('comp_ctrls', 2, user_account)
+  !       call  import_starproject%set_input('comp_ctrls', 3, user_project)
+  !       call  import_starproject%set_input('comp_ctrls', 4, qsys_partition)
+  !       call  import_starproject%set_input('comp_ctrls', 5, qsys_qos)
+  !       call  import_starproject%set_input('comp_ctrls', 6, qsys_reservation)
+  !       call  import_starproject%set_input('comp_ctrls', 7, job_memory_per_task)
+    end subroutine new_import_starproject
 
     subroutine new_exportstar_project
         ! PROGRAM SPECIFICATION

@@ -145,7 +145,7 @@ contains
         l_starfile = cline%defined('starfile')
         if( .not. l_starfile)then
             write(*,*) 'Star project file argument empty or not set, e.g. starfile=<filename> or <directory>'
-            call simple_stop( "ERROR! simple_commander_star :: exec_importstar_project ")
+            call simple_stop( "ERROR! simple_commander_star :: exec_import_starproject ")
         end if
         if(dir_exists(params%starfile))then
            call simple_list_files(trim(params%starfile)//'*.star', starfiles)
@@ -157,14 +157,14 @@ contains
            nStarfiles=1
         else
            write(*,*) " Importing star project must have a valid input file, starfile=<filename|directory>"
-           call simple_stop('ERROR! simple_commander_star :: exec_importstar_project')
+           call simple_stop('ERROR! simple_commander_star :: exec_import_starproject')
        endif
        inputted_boxtab = cline%defined('boxtab')
 
        ! project file management
        if( .not. file_exists(trim(params%projfile)) )then
            write(*,*) 'Project file: ', trim(params%projfile), ' does not exist!'
-           HALT_NOW("exec_importstar_project; not in SIMPLE project dir")
+           HALT_NOW("exec_import_starproject; not in SIMPLE project dir")
        endif
         !! Read existing SIMPLE project
         call spproj%read(params%projfile)
@@ -175,14 +175,14 @@ contains
        nrecs     = starproj%get_nrecs_per_line()
 
        if(nrecs == 0)then
-           HALT_NOW("exec_importstar_project; Unable to read header records in STAR file.")
+           HALT_NOW("exec_import_starproject; Unable to read header records in STAR file.")
        end if
         if(ndatlines == 0)then
-           HALT_NOW("exec_importstar_project; Unable to read data line records in STAR file.")
+           HALT_NOW("exec_import_starproject; Unable to read data line records in STAR file.")
        end if
 
         if( params%startype  == 'NONE')then
-           write (*,*) " importstar_project valid startypes:"
+           write (*,*) " import_starproject valid startypes:"
            write (*,*) " Accepted values are movies|micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post or all."
            write (*,*) "    movies:         for raw micrographs"
            write (*,*) "    micrographs:    for non-dose weighted micrographs"
@@ -227,7 +227,7 @@ contains
         case('all')
            call starproj%import_all(spproj, params, params%starfile)
         case default
-           call simple_stop( " importstar_project must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
+           call simple_stop( " import_starproject must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
        end select
 
 
@@ -307,7 +307,7 @@ contains
 
         call spproj%write
         call spproj%kill
-        call simple_end('**** IMPORTSTAR_PROJECT NORMAL STOP ****')
+        call simple_end('**** import_starproject NORMAL STOP ****')
     end subroutine exec_import_star_project
 
 

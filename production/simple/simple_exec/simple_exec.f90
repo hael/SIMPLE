@@ -34,7 +34,7 @@ type(import_cavgs_commander)         :: ximport_cavgs
 
 ! STAR PROJECT SUPPORT
 type(export_star_project_commander)   :: xexportstar_project
-type(import_star_project_commander)   :: ximportstar_project
+type(import_star_project_commander)   :: ximport_starproject
 type(print_star_project_info_commander):: xprint_star_project_info
 
 ! PART OF SP WORKFLOW
@@ -129,10 +129,10 @@ select case(prg)
         call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call xexportstar_project%execute(cline)
-    case( 'importstar_project' )
+    case( 'import_starproject' )
         call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
-        call ximportstar_project%execute(cline)
+        call ximport_starproject%execute(cline)
     case( 'print_star_project_info' )
         call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
