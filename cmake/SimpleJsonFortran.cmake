@@ -11,9 +11,11 @@
 
 
  file ( GLOB JF_TEST_SRCS "${CMAKE_SOURCE_DIR}/production/tests/json_fortran/jf_test_*.F90" )
- file ( COPY "${CMAKE_SOURCE_DIR}/production/tests/json-fortran/files"
+ file ( COPY "${CMAKE_SOURCE_DIR}/production/tests/json_fortran/files"
     DESTINATION "${CMAKE_BINARY_DIR}/Testing/" )
   set ( DATA_DIR "${CMAKE_BINARY_DIR}/Testing/files" )
+  set ( TESTBIN_DIR "${CMAKE_BINARY_DIR}/Testing/jf_test" )
+
   set_directory_properties ( PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES
     "${DATA_DIR}/test2.json;${DATA_DIR}/test4.json;" )
   find_program ( JSONLINT jsonlint )
@@ -55,9 +57,9 @@
     add_dependencies ( check_json ${TEST} )
     set_target_properties ( ${TEST}
       PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
+      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Testing/jf_test )
     add_test( NAME ${TEST}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/Testing/jf_test
       COMMAND ./${TEST})
     list ( APPEND UNIT_TESTS ${TEST} )
     if ( JSONLINT )

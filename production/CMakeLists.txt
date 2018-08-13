@@ -196,7 +196,7 @@ list(APPEND CTESTDIRS
 
 foreach(CHECKUNIT ${CTESTDIRS})
 add_test(NAME ${CHECKUNIT}
-  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND source add2.bashrc && ${CHECKUNIT}  nthr=4 verbose=yes)
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/Testing
+  COMMAND ../bin/${CHECKUNIT}  nthr=4 verbose=yes)
 add_dependencies( check ${CHECKUNIT} )
 endforeach()

@@ -28,7 +28,7 @@ call test_imghead
 call test_ori
 call test_oris(.false.)
 call test_image(.false.)
-call test_ftexp_shsrch
+!call test_ftexp_shsrch
 call test_cluster_shc
 call test_ftiter
 ! LOCAL TESTFUNCTIONS

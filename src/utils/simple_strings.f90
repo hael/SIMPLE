@@ -536,6 +536,18 @@ contains
         endif
     end function cntRecsPerLine
 
+    !! reverse string
+    recursive function strflip (string) result (res)
+        implicit none
+        character (*), intent (in) :: string
+        character (len (string)) :: res
+        if (len (string) == 0) then
+            res = ''
+        else
+            res = string(len(string):)//strflip(string(:len(string)-1))
+        end if
+    end function strflip
+
     !> \brief  Lexographical sort.
     !> \param strArr is a one-dimensional array of character strings to be  sorted in ascending lexical order.
     !>   the sorted array. The characters of
