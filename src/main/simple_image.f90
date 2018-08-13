@@ -6973,6 +6973,7 @@ contains
             if( .not. passed )  stop 'getters/setters test failed'
 
             write(*,'(a)') '**info(simple_image_unit_test, part 4): testing checkups'
+            img_2 = img
             test(1) = img%even_dims()
             if( ld1 == ld2 )then
                 test(2) = img%square_dims()
@@ -6984,7 +6985,12 @@ contains
             test(5) = img%is_2d()
             test(6) = .not. img%is_3d()
             passed = all(test)
-            if( .not. passed ) stop 'checkups test failed'
+            if( .not. passed ) then
+                write(*,*) ""
+                print *, ' checkups ', test
+                write(*,*) ""
+                stop 'checkups test failed'
+            endif
             write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
             passed = .false.
             call img%gauran( 5., 15. )
