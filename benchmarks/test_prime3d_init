@@ -21,9 +21,9 @@ if [ ! -d prime3Dinit_bench ];then
 else
     cd prime3Dinit_bench
 #time simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
-nice simple_exec prg=import_cavgs   stk=../cavgs_final.mrc  smpd=1.5 msk=50 ctf=no pgrp=c1 stk=../cavgs_final.mrc
-time simple_distr_exec prg=initial_3Dmodel  nthr=10
-fi
+nice simple_exec prg=import_cavgs   stk=../cavgs_final_ranked.mrc  smpd=1.5 msk=50 ctf=no pgrp=c1
+time simple_distr_exec prg=initial_3Dmodel  nthr=10 nparts=2 msk=50 ctf=no pgrp=c1 eo=no
+
 ## valgrind --tool=cachegrind  simple_distr_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
 ## valgrind --tool=memgrind  simple_distr_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
 duration=$SECONDS
