@@ -140,7 +140,7 @@ contains
                             iref = (state-1) * self%s%nprojs + self%s%prev_proj
                             corr = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], self%s%prev_roind))
                             s3D%proj_space_corrs(self%s%ithr,iref,1)         = corr ! inpl = 1
-                            s3D%proj_space_refinds(self%s%ithr,self%s%nrefs) = iref
+                            s3D%proj_space_refinds_sorted(self%s%ithr,self%s%nrefsmaxinpl) = iref
                             call self%s%inpl_srch
                             if( s3D%proj_space_corrs(self%s%ithr,iref,1) > corr )then
                                 corr  = s3D%proj_space_corrs(self%s%ithr,iref,1)

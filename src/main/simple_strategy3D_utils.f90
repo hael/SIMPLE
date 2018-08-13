@@ -11,7 +11,7 @@ contains
 
     subroutine extract_peaks( s, corrs, multistates )
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(out)   :: corrs(s%npeaks * MAXNINPLPEAKS)
+        real,                   intent(out)   :: corrs(s%npeaks)
         logical, optional,      intent(in)    :: multistates
         integer :: ipeak, cnt, ref, inpl, state
         real    :: shvec(2)
@@ -23,7 +23,7 @@ contains
         endif
         cnt = 0
         do ipeak = 1, s%npeaks
-            ref = s3D%proj_space_refinds(s%ithr, s%nrefs - s%npeaks + ipeak)
+            ref = s3D%proj_space_refinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
             if( ref < 1 .or. ref > s%nrefs )then
                 print *, 'ref: ', ref
                 stop 'ref index out of bound; strategy3D_utils :: extract_peaks'
@@ -35,27 +35,26 @@ contains
                     stop 'strategy3D_utils :: extract_peak'
                 endif
             endif
-            do inpl=1,MAXNINPLPEAKS
-                cnt = cnt + 1
-                ! add shift
-                shvec = s%prev_shvec
-                if( s%doshift ) shvec = shvec + s3D%proj_space_shift(s%ithr,ref,inpl,1:2)
-                where( abs(shvec) < 1e-6 ) shvec = 0.
-                ! transfer to solution set
-                corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
-                if (.not. pftcc_glob%is_euclid(s%iptcl)) then
-                    if( corrs(cnt) < 0. ) corrs(cnt) = 0.
-                end if
-                if( l_multistates )then
-                    call s3D%o_peaks(s%iptcl)%set(cnt, 'state', real(state))
-                else
-                    call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
-                endif
-                call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',  real(s3D%proj_space_proj(ref)))
-                call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',  corrs(cnt))
-                call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
-                call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)
-            end do
+            inpl = s3D%proj_space_inplinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
+            cnt = cnt + 1
+            ! add shift
+            shvec = s%prev_shvec
+            if( s%doshift ) shvec = shvec + s3D%proj_space_shift(s%ithr,ref,inpl,1:2)
+            where( abs(shvec) < 1e-6 ) shvec = 0.
+            ! transfer to solution set
+            corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
+            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+                if( corrs(cnt) < 0. ) corrs(cnt) = 0.
+            end if
+            if( l_multistates )then
+                call s3D%o_peaks(s%iptcl)%set(cnt, 'state', real(state))
+            else
+                call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
+            endif
+            call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',  real(s3D%proj_space_proj(ref)))
+            call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',  corrs(cnt))
+            call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
+            call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)
         enddo
     end subroutine extract_peaks
 
@@ -67,11 +66,12 @@ contains
         integer :: inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
         integer :: prob_peak, ipeak, rank, loc(1)
         real    :: bound, rnd, dists(s%npeaks), arg4softmax(s%npeaks)
-        do ipeak = 1, s%npeaks
+        write (*,*) 'prob_select_peak executed'
+        do ipeak = 1, s%npeaks 
             ! stash peak index
             inds(ipeak) = ipeak
             ! stash reference index
-            refs(ipeak) = s3D%proj_space_refinds(s%ithr, s%nrefs - s%npeaks + ipeak)
+            refs(ipeak) = s3D%proj_space_refinds_sorted_highest(s%ithr, s%nrefs - s%npeaks + ipeak)
             if( refs(ipeak) < 1 .or. refs(ipeak) > s%nrefs )then
                 print *, 'refs(ipeak): ', refs(ipeak)
                 stop 'refs(ipeak) index out of bound; strategy3D_utils :: prob_select_peak'
@@ -368,11 +368,40 @@ contains
 
     subroutine sort_corrs( s )
         class(strategy3D_srch), intent(inout) :: s
-        real                                  :: corrs(s%nrefs)
+        real                                  :: corrs(s%nrefs*MAXNINPLPEAKS), corrs_highest(s%nrefs)
+        real                                  :: proj_space_tmp(s%nrefs*MAXNINPLPEAKS)
         real                                  :: areal
-        corrs = s3D%proj_space_corrs(s%ithr,:,1)
-        where(.not. s3D%proj_space_corrs_srchd(s%ithr,:)) corrs = -HUGE(areal)
-        call hpsort(corrs, s3D%proj_space_refinds(s%ithr,:))
+        integer                               :: i, j
+        integer                               :: arange(2)
+        integer                               :: asequence(MAXNINPLPEAKS) = (/(j, j=1,MAXNINPLPEAKS)/)
+        integer                               :: idx_array(s%nrefs*MAXNINPLPEAKS)
+        do i = 1,s%nrefs
+            arange(1) = (i-1)*MAXNINPLPEAKS+1
+            arange(2) = i*MAXNINPLPEAKS
+            s3D%proj_space_refinds_sorted        (s%ithr,arange(1):arange(2)) = i
+            s3D%proj_space_inplinds_sorted       (s%ithr,arange(1):arange(2)) = asequence(:)
+            s3D%proj_space_refinds_sorted_highest(s%ithr,                  i) = i
+            if (.not. s3D%proj_space_corrs_srchd(s%ithr,i)) then
+                corrs(arange(1):arange(2)) = -HUGE(areal)
+                corrs_highest(i)           = -HUGE(areal)
+            else
+                corrs(arange(1):arange(2)) = s3D%proj_space_corrs(s%ithr,i,:)
+                corrs_highest(i)           = s3D%proj_space_corrs(s%ithr,i,1)
+            end if
+        end do
+        do j = 1,s%nrefs*MAXNINPLPEAKS
+            idx_array(j) = j
+        end do
+        call hpsort(corrs, idx_array)
+        proj_space_tmp(:) = s3D%proj_space_refinds_sorted(s%ithr,:)
+        do j = 1,s%nrefs*MAXNINPLPEAKS
+            s3D%proj_space_refinds_sorted(s%ithr,j) = proj_space_tmp(idx_array(j))
+        end do
+        proj_space_tmp(:) = s3D%proj_space_inplinds_sorted(s%ithr,:)
+        do j = 1,s%nrefs*MAXNINPLPEAKS
+            s3D%proj_space_inplinds_sorted(s%ithr,j) = proj_space_tmp(idx_array(j))
+        end do
+        call hpsort(corrs_highest, s3D%proj_space_refinds_sorted_highest(s%ithr, :))
     end subroutine sort_corrs
 
 end module simple_strategy3D_utils

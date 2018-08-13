@@ -86,7 +86,7 @@ contains
         class(strategy3D_cluster_snhc), intent(inout) :: self
         integer :: loc(1), iproj, iref, istate, roind
         real    :: shvec(2), euls(3), corr, mi_state, frac, mi_inpl, mi_proj
-        iref     = s3D%proj_space_refinds(self%s%ithr,self%s%nrefs)
+        iref     = s3D%proj_space_refinds_sorted_highest(self%s%ithr,self%s%nrefs)
         iproj    = s3D%proj_space_proj(iref)
         corr     = s3D%proj_space_corrs(self%s%ithr,iref,1)
         istate   = s3D%proj_space_state(iref)

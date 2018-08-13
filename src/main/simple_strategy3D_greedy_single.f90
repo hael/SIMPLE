@@ -25,11 +25,11 @@ contains
         use simple_oris, only: oris
         class(strategy3D_greedy_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS)
+        real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac, ang_spread, dist_inpl, euldist
         integer   :: best_loc(1), npeaks_all
-        logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
-        npeaks_all = self%s%npeaks * MAXNINPLPEAKS
+        logical   :: included(self%s%npeaks)
+        npeaks_all = self%s%npeaks
         ! extract peak info
         call extract_peaks(self%s, corrs)
         ! stochastic weights

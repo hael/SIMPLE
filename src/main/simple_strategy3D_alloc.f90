@@ -11,20 +11,22 @@ private
 
 type strategy3D_alloc
     ! per-ptcl/ref allocation
-    type(oris),       allocatable :: o_peaks(:)                      !< solution objects
-    integer,          allocatable :: proj_space_state(:)             !< states
-    integer,          allocatable :: proj_space_proj(:)              !< projection directions (1 state assumed)
-    logical,          allocatable :: state_exists(:)                 !< indicates state existence
+    type(oris),       allocatable :: o_peaks(:)                           !< solution objects
+    integer,          allocatable :: proj_space_state(:)                  !< states
+    integer,          allocatable :: proj_space_proj(:)                   !< projection directions (1 state assumed)
+    logical,          allocatable :: state_exists(:)                      !< indicates state existence
     ! per thread allocation
-    type(ran_tabu), allocatable :: rts(:)                            !< stochastic serach order generators
-    real,           allocatable :: proj_space_euls(:,:,:,:)          !< euler angles
-    real,           allocatable :: proj_space_shift(:,:,:,:)         !< shift vectors
-    real,           allocatable :: proj_space_corrs(:,:,:)           !< reference vs. particle correlations
-    logical,        allocatable :: proj_space_corrs_srchd(:,:)       !< reference vs. particle correlations
-    logical,        allocatable :: proj_space_corrs_calcd(:,:)       !< reference vs. particle correlations
-    integer,        allocatable :: proj_space_refinds(:,:)           !< reference indices
-    integer,        allocatable :: proj_space_inplinds(:,:,:)        !< in-plane indices
-    integer,        allocatable :: srch_order(:,:)                   !< stochastic search index
+    type(ran_tabu), allocatable :: rts(:)                                 !< stochastic serach order generators
+    real,           allocatable :: proj_space_euls(:,:,:,:)               !< euler angles
+    real,           allocatable :: proj_space_shift(:,:,:,:)              !< shift vectors
+    real,           allocatable :: proj_space_corrs(:,:,:)                !< reference vs. particle correlations
+    logical,        allocatable :: proj_space_corrs_srchd(:,:)            !< has correlation already been searched
+    logical,        allocatable :: proj_space_corrs_calcd(:,:)            !< has correlation already been calculated
+    integer,        allocatable :: proj_space_inplinds(:,:,:)             !< in-plane indices
+    integer,        allocatable :: proj_space_refinds_sorted(:,:)         !< reference indices for shift search
+    integer,        allocatable :: proj_space_inplinds_sorted(:,:)        !< in-plane indices for shift search
+    integer,        allocatable :: proj_space_refinds_sorted_highest(:,:) !< reference indices for shift search (considering only highest inpl)
+    integer,        allocatable :: srch_order(:,:)                        !< stochastic search index
 end type strategy3D_alloc
 
 type(strategy3D_alloc) :: s3D ! singleton
@@ -54,7 +56,10 @@ contains
         ! shared-memory arrays
         allocate(master_proj_space_euls(nrefs,MAXNINPLPEAKS,3), s3D%proj_space_euls(nthr_glob,nrefs,MAXNINPLPEAKS,3),&
             &s3D%proj_space_shift(nthr_glob,nrefs,MAXNINPLPEAKS,2),s3D%proj_space_state(nrefs),&
-            &s3D%proj_space_corrs(nthr_glob,nrefs,MAXNINPLPEAKS), s3D%proj_space_refinds(nthr_glob,nrefs),&
+            &s3D%proj_space_corrs(nthr_glob,nrefs,MAXNINPLPEAKS),&
+            &s3D%proj_space_refinds_sorted(nthr_glob,nrefs*MAXNINPLPEAKS),&
+            &s3D%proj_space_refinds_sorted_highest(nthr_glob,nrefs),&
+            &s3D%proj_space_inplinds_sorted(nthr_glob,nrefs*MAXNINPLPEAKS),&
             &s3D%proj_space_corrs_srchd(nthr_glob,nrefs), s3D%proj_space_corrs_calcd(nthr_glob,nrefs),&
             &s3D%proj_space_inplinds(nthr_glob,nrefs,MAXNINPLPEAKS),&
             &s3D%proj_space_proj(nrefs),&
@@ -84,12 +89,14 @@ contains
                 end if
             enddo
         enddo
-        s3D%proj_space_shift       = 0.
-        s3D%proj_space_corrs       = -HUGE(areal)
-        s3D%proj_space_refinds     = 0
-        s3D%proj_space_euls        = 0.
-        s3D%proj_space_corrs_srchd = .false.
-        s3D%proj_space_corrs_calcd = .false.
+        s3D%proj_space_shift                  = 0.
+        s3D%proj_space_corrs                  = -HUGE(areal)
+        s3D%proj_space_refinds_sorted         = 0
+        s3D%proj_space_inplinds_sorted        = 0
+        s3D%proj_space_refinds_sorted_highest = 0
+        s3D%proj_space_euls                   = 0.
+        s3D%proj_space_corrs_srchd            = .false.
+        s3D%proj_space_corrs_calcd            = .false.
         ! search orders allocation
         select case( trim(params_glob%refine) )
             case( 'cluster','clustersym')
@@ -115,7 +122,7 @@ contains
         do iptcl = params_glob%fromp, params_glob%top
             if( ptcl_mask(iptcl) )then
                 ! orientation peaks
-                call s3D%o_peaks(iptcl)%new(npeaks * MAXNINPLPEAKS)
+                call s3D%o_peaks(iptcl)%new(npeaks)
                 ! transfer CTF params
                 if( params_glob%ctf.ne.'no' )then
                     call s3D%o_peaks(iptcl)%set_all2single('kv',     build_glob%spproj_field%get(iptcl,'kv')    )
@@ -143,25 +150,29 @@ contains
         s3D%proj_space_corrs_srchd(ithr,:)              = .false.
         s3D%proj_space_corrs_calcd(ithr,:)              = .false.
         s3D%proj_space_shift(ithr,:,:,:)                = 0.
-        s3D%proj_space_refinds(ithr,:)                  = 0
         s3D%proj_space_inplinds(ithr,:,:)               = 0
+        s3D%proj_space_refinds_sorted(ithr,:)           = 0
+        s3D%proj_space_inplinds_sorted(ithr,:)          = 0
+        s3D%proj_space_refinds_sorted_highest(ithr,:)   = 0
         if(srch_order_allocated) s3D%srch_order(ithr,:) = 0
     end subroutine prep_strategy3D_thread
 
     subroutine clean_strategy3D
         integer :: ithr
-        if( allocated(master_proj_space_euls)      ) deallocate(master_proj_space_euls)
-        if( allocated(s3D%state_exists)            ) deallocate(s3D%state_exists)
-        if( allocated(s3D%proj_space_state)        ) deallocate(s3D%proj_space_state)
-        if( allocated(s3D%proj_space_proj)         ) deallocate(s3D%proj_space_proj)
-        if( allocated(s3D%srch_order)              ) deallocate(s3D%srch_order)
-        if( allocated(s3D%proj_space_euls)         ) deallocate(s3D%proj_space_euls)
-        if( allocated(s3D%proj_space_shift)        ) deallocate(s3D%proj_space_shift)
-        if( allocated(s3D%proj_space_corrs)        ) deallocate(s3D%proj_space_corrs)
-        if( allocated(s3D%proj_space_corrs_srchd)  ) deallocate(s3D%proj_space_corrs_srchd)
-        if( allocated(s3D%proj_space_corrs_calcd)  ) deallocate(s3D%proj_space_corrs_calcd)
-        if( allocated(s3D%proj_space_refinds)      ) deallocate(s3D%proj_space_refinds)
-        if( allocated(s3D%proj_space_inplinds)     ) deallocate(s3D%proj_space_inplinds)
+        if( allocated(master_proj_space_euls)               ) deallocate(master_proj_space_euls)
+        if( allocated(s3D%state_exists)                     ) deallocate(s3D%state_exists)
+        if( allocated(s3D%proj_space_state)                 ) deallocate(s3D%proj_space_state)
+        if( allocated(s3D%proj_space_proj)                  ) deallocate(s3D%proj_space_proj)
+        if( allocated(s3D%srch_order)                       ) deallocate(s3D%srch_order)
+        if( allocated(s3D%proj_space_euls)                  ) deallocate(s3D%proj_space_euls)
+        if( allocated(s3D%proj_space_shift)                 ) deallocate(s3D%proj_space_shift)
+        if( allocated(s3D%proj_space_corrs)                 ) deallocate(s3D%proj_space_corrs)
+        if( allocated(s3D%proj_space_corrs_srchd)           ) deallocate(s3D%proj_space_corrs_srchd)
+        if( allocated(s3D%proj_space_corrs_calcd)           ) deallocate(s3D%proj_space_corrs_calcd)
+        if( allocated(s3D%proj_space_inplinds)              ) deallocate(s3D%proj_space_inplinds)
+        if( allocated(s3D%proj_space_refinds_sorted)        ) deallocate(s3D%proj_space_refinds_sorted)
+        if( allocated(s3D%proj_space_inplinds_sorted)       ) deallocate(s3D%proj_space_inplinds_sorted)
+        if( allocated(s3D%proj_space_refinds_sorted_highest)) deallocate(s3D%proj_space_refinds_sorted_highest)
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob
                 call s3D%rts(ithr)%kill

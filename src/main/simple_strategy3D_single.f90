@@ -24,11 +24,11 @@ contains
         use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_spread, convergence_stats_single
         class(strategy3D_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks * MAXNINPLPEAKS), ws(self%s%npeaks * MAXNINPLPEAKS)
+        real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac,  ang_spread, dist_inpl, euldist
         integer   :: best_loc(1), npeaks_all
-        logical   :: included(self%s%npeaks * MAXNINPLPEAKS)
-        npeaks_all = self%s%npeaks * MAXNINPLPEAKS
+        logical   :: included(self%s%npeaks)
+        npeaks_all = self%s%npeaks
         ! extract peak info
         call extract_peaks( self%s, corrs )
         ! stochastic weights

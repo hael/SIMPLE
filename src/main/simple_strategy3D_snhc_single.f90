@@ -82,7 +82,7 @@ contains
         real       :: dist_inpl, corr, frac, euldist, bfac
         integer    :: ref, roind
         ! orientation parameters
-        ref = s3D%proj_space_refinds(self%s%ithr, self%s%nrefs)
+        ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefsmaxinpl)
         if( ref < 1 .or. ref > self%s%nrefs )then
             print *, 'ref: ', ref
             write(*,*)'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'

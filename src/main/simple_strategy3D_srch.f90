@@ -31,6 +31,7 @@ type strategy3D_srch
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
+    integer                  :: nrefsmaxinpl  = 0         !< total # references (nstates*nprojs)
     integer                  :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
     integer                  :: nstates       = 0         !< # states
     integer                  :: nprojs        = 0         !< # projections
@@ -102,26 +103,27 @@ contains
         integer, parameter :: MAXITS = 60
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%iptcl      = spec%iptcl
-        self%nstates    = params_glob%nstates
-        self%nprojs     = params_glob%nspace
-        self%nrefs      = self%nprojs*self%nstates
-        self%nrots      = round2even(twopi*real(params_glob%ring2))
-        self%npeaks     = npeaks
-        self%nbetter    = 0
-        self%nrefs_eval = 0
-        self%nsym       = build_glob%pgrpsyms%get_nsym()
-        self%doshift    = params_glob%l_doshift
-        self%neigh      = params_glob%neigh == 'yes'
-        self%nnn_static = params_glob%nnn
-        self%nnn        = params_glob%nnn
-        self%nnnrefs    = self%nnn*self%nstates
-        self%dowinpl    = (npeaks /= 1) .and. (self%nstates == 1)
+        self%iptcl        = spec%iptcl
+        self%nstates      = params_glob%nstates
+        self%nprojs       = params_glob%nspace
+        self%nrefs        = self%nprojs*self%nstates
+        self%nrefsmaxinpl = self%nrefs*MAXNINPLPEAKS
+        self%nrots        = round2even(twopi*real(params_glob%ring2))
+        self%npeaks       = npeaks
+        self%nbetter      = 0
+        self%nrefs_eval   = 0
+        self%nsym         = build_glob%pgrpsyms%get_nsym()
+        self%doshift      = params_glob%l_doshift
+        self%neigh        = params_glob%neigh == 'yes'
+        self%nnn_static   = params_glob%nnn
+        self%nnn          = params_glob%nnn
+        self%nnnrefs      = self%nnn*self%nstates
+        self%dowinpl      = (npeaks /= 1) .and. (self%nstates == 1)
         ! create in-plane search object
-        lims(:,1)      = -params_glob%trs
-        lims(:,2)      =  params_glob%trs
-        lims_init(:,1) = -SHC_INPL_TRSHWDTH
-        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        lims(:,1)         = -params_glob%trs
+        lims(:,2)         =  params_glob%trs
+        lims_init(:,1)    = -SHC_INPL_TRSHWDTH
+        lims_init(:,2)    =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
             &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.not. self%dowinpl)
         ! create all df:s search object
@@ -196,7 +198,7 @@ contains
             cnt = 0
             do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                 cnt = cnt + 1
-                ref = s3D%proj_space_refinds(self%ithr, i)
+                ref = s3D%proj_space_refinds_sorted_highest(self%ithr, i)
                 if( cnt <= CONTNPEAKS )then
                     ! continuous refinement over all df:s
                     call o%set_euler(s3D%proj_space_euls(self%ithr,ref,1,:))
@@ -224,26 +226,25 @@ contains
             if( self%doshift )then
                 if( self%dowinpl )then
                     ! BFGS over shifts only
-                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                        ref = s3D%proj_space_refinds(self%ithr, i)
+                    do i=self%nrefsmaxinpl,self%nrefsmaxinpl-self%npeaks+1,-1
+                        ref = s3D%proj_space_refinds_sorted(self%ithr, i)
                         call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                        do j=1,MAXNINPLPEAKS
-                            irot = s3D%proj_space_inplinds(self%ithr, ref, j)
-                            cxy  = self%grad_shsrch_obj%minimize(irot=irot)
-                            if( irot > 0 )then
-                                ! irot > 0 guarantees improvement found, update solution
-                                s3D%proj_space_euls( self%ithr,ref,j,3) = 360. - pftcc_glob%get_rot(irot)
-                                s3D%proj_space_corrs(self%ithr,ref,j)   = cxy(1)
-                                s3D%proj_space_shift(self%ithr,ref,j,:) = cxy(2:3)
-                            endif
-                        end do
+                        j   = s3D%proj_space_inplinds_sorted(self%ithr, i)
+                        irot = s3D%proj_space_inplinds(self%ithr, ref, j)
+                        cxy  = self%grad_shsrch_obj%minimize(irot=irot)
+                        if( irot > 0 )then
+                            ! irot > 0 guarantees improvement found, update solution
+                            s3D%proj_space_euls( self%ithr,ref,j,3) = 360. - pftcc_glob%get_rot(irot)
+                            s3D%proj_space_corrs(self%ithr,ref,j)   = cxy(1)
+                            s3D%proj_space_shift(self%ithr,ref,j,:) = cxy(2:3)
+                        endif
                     end do
                 else
                     ! BFGS over shifts with in-plane rot exhaustive callback
-                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                        ref = s3D%proj_space_refinds(self%ithr, i)
-                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                        cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                    do i=self% nrefs,self%nrefs-self%npeaks+1,-1
+                               ref = s3D%proj_space_refinds_sorted_highest(self%ithr, i)
+                               call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                               cxy = self%grad_shsrch_obj%minimize(irot=irot)
                         if( irot > 0 )then
                             ! irot > 0 guarantees improvement found, update solution
                             s3D%proj_space_euls( self%ithr,ref,1,3) = 360. - pftcc_glob%get_rot(irot)
@@ -263,7 +264,6 @@ contains
         real,                   intent(in)    :: corrs(MAXNINPLPEAKS)
         logical,                intent(in)    :: searched
         integer :: inpl
-        s3D%proj_space_refinds(self%ithr,ref)    = ref
         s3D%proj_space_inplinds(self%ithr,ref,:) = inpl_inds
         do inpl=1,MAXNINPLPEAKS
             s3D%proj_space_euls(self%ithr,ref,inpl,3) = 360. - pftcc_glob%get_rot(inpl_inds(inpl))
