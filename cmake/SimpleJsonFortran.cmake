@@ -9,6 +9,7 @@
 # this software. The contributing author, Izaak Beekman, retains all
 # rights permitted by the terms of the JSON-Fortran license.
 
+add_custom_target(check_json COMMAND ${CMAKE_CTEST_COMMAND})
 
  file ( GLOB JF_TEST_SRCS "${CMAKE_SOURCE_DIR}/production/tests/json_fortran/jf_test_*.F90" )
  file ( COPY "${CMAKE_SOURCE_DIR}/production/tests/json_fortran/files"
@@ -54,13 +55,13 @@
     endif()
     add_executable ( ${TEST} EXCLUDE_FROM_ALL ${UNIT_TEST} )
     target_link_libraries ( ${TEST} ${SIMPLELIB} )
-    add_dependencies ( check_json ${TEST} )
     set_target_properties ( ${TEST}
       PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Testing/jf_test )
     add_test( NAME ${TEST}
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/Testing/jf_test
       COMMAND ./${TEST})
+    add_dependencies(check_json ${TEST})
     list ( APPEND UNIT_TESTS ${TEST} )
     if ( JSONLINT )
       set_property ( TEST ${TEST}
@@ -107,3 +108,5 @@
     message ( WARNING
       "For full test coverage diff, or a similar tool must be present on your system" )
   endif ()
+
+  add_dependencies( check check_json )
