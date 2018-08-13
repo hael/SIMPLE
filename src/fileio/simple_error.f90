@@ -59,7 +59,8 @@ contains
         if(present(alloc_err))alloc_status=alloc_err
         if (alloc_status/=0)then
             write(stderr,'(a)') 'ERROR: Allocation failure!'
-            call simple_error_check(alloc_status)
+            write(stdout,'(a)') 'ERROR: Allocation failure!'
+            call simple_error_check(alloc_status, message)
             if(present(iomsg))&
                 write(stderr,'("IO Message ",A)') trim(adjustl(iomsg))
             if(present(file).and.present(line))&
@@ -72,19 +73,16 @@ contains
         integer,          intent(in), optional :: io_stat
         character(len=*), intent(in), optional :: msg
         integer :: io_stat_this, last_sys_error
-        character(len=LONGSTRLEN ) :: newmsg
         if (present(io_stat))then
             io_stat_this = io_stat
         else
             io_stat_this = get_sys_error()
         end if
-
         !! Intel and GNU
         if (io_stat_this==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat_this
         if (io_stat_this==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat_this
-
         if( io_stat_this /= 0 ) then
-            write(stderr,'(a,1x,I0 )') 'ERROR: File I/O failure, IOS# ', io_stat_this
+            write(stderr,'(a,1x,I0 )') 'ERROR, IOS# ', io_stat_this
             if(present(msg)) write(stderr,'(a)') trim(adjustl(msg))
             !! do not stop yet -- let the fopen/fclose call to finish
             !! stop

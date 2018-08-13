@@ -710,8 +710,10 @@ contains
         ! second stage
         call cline_refine3D2%set('prg',    'refine3D')
         call cline_refine3D2%set('refine', 'multi')
-        call cline_refine3D2%set('neigh',  'yes')
-        call cline_refine3D2%set('nnn',    real(max(30,nint(0.05*real(params%nspace)))))
+        if(.not.cline%defined('neigh'))then
+            call cline_refine3D2%set('neigh',  'yes')
+            call cline_refine3D2%set('nnn',    real(max(30,nint(0.05*real(params%nspace)))))
+        endif
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
@@ -772,7 +774,7 @@ contains
 
         ! randomize state labels
         write(*,'(A)') '>>>'
-        call gen_labelling(os, params%nstates, 'squared_uniform2')
+        call gen_labelling(os, params%nstates, 'squared_uniform')
         call os%write('cluster3D_init.txt') ! analysis purpose only
         ! writes for refine3D
         spproj%os_ptcl3D = os

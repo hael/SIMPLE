@@ -192,7 +192,6 @@ contains
                 wcorr                 = corrs(best_loc(1))
                 ws                    = 0.
                 ws(best_loc(1))       = 1.
-                included              = .false.
                 included(best_loc(1)) = .true.
             endif
         endif

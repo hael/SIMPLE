@@ -578,6 +578,7 @@ contains
         class(ft_expanded), intent(inout) :: self
         if( self%existence )then
             deallocate(self%cmat, self%transfmat)
+            call ft_exp_reset_tmp_pointers
             self%existence = .false.
         endif
     end subroutine kill

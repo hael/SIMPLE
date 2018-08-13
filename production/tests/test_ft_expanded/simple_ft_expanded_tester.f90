@@ -82,7 +82,7 @@ contains
                 real    :: shvec(3), corr
                 integer :: ysh_best, xsh_best, xsh, ysh
                 call ftexp_trial%new(img_shifted, HP, LP)
-                corr_best = -1.
+                corr_best = -huge(corr)
                 do xsh=nint(-TRS),nint(TRS)
                     do ysh=nint(-TRS),nint(TRS)
                         shvec(1) = real(xsh)
@@ -96,7 +96,9 @@ contains
                         endif
                     end do
                 end do
+                call ftexp_img%corr_normalize(ftexp_trial, corr_best)
                 dist = euclid(real([xsh_best,ysh_best]), real([-x,-y]))
+                call ftexp_trial%kill
             end subroutine find_shift
 
     end subroutine test_shifted_correlator
@@ -106,15 +108,12 @@ contains
         use ifport
 #endif
 
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         integer, parameter   :: NTSTS=1000, NTHR=8
         integer              :: itst
         type(image)          :: img_ref, img_ptcl
         type(ft_expanded)    :: ftexp_ref, ftexp_ptcl
         real, allocatable    :: shvecs(:,:)
         real(4)    :: corr, actual, delta, shvec(3), tarray(2)
-!$      call omp_set_num_threads(NTHR)
         call img_ref%new([4096,4096,1],SMPD)
         call img_ref%ran
         call img_ref%fft()
@@ -143,12 +142,9 @@ contains
         delta = dtime( tarray )
         write(*,'(A,F9.2)') 'Relative cpu-time:', delta
         write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR'
-        !$omp parallel do schedule(auto) default(shared) private(itst)
         do itst=1,NTST
             corr = real(ftexp_ref%corr_shifted_8(ftexp_ptcl, dble(shvecs(itst,:))))
         end do
-        !$omp end parallel do
-
         actual = etime( tarray )
         write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         delta = dtime( tarray )

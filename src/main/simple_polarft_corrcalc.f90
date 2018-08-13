@@ -2494,10 +2494,11 @@ contains
             if( allocated(self%ptcl_bfac_weights) ) deallocate(self%ptcl_bfac_weights)
             if( allocated(self%ptcl_bfac_norms)   ) deallocate(self%ptcl_bfac_norms)
             if( allocated(self%inv_resarrsq)      ) deallocate(self%inv_resarrsq)
+            if( allocated(self%ctfmats)           ) deallocate(self%ctfmats)
             deallocate( self%sqsums_ptcls, self%sqsums_ptcls_frange, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls,&
-                &self%iseven, self%pinds)
+                self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
+                &self%iseven, self%pinds, self%heap_vars)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)

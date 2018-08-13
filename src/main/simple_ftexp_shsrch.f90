@@ -83,10 +83,14 @@ contains
         real, optional, intent(in) :: prev_corr, prev_shift(2)
         real :: cxy(3), lims(2,2) ! max_shift, maxlim
         class(*), pointer :: fun_self => null()
-        lims(1,1) = prev_shift(1) - maxHWshift
-        lims(1,2) = prev_shift(1) + maxHWshift
-        lims(2,1) = prev_shift(2) - maxHWshift
-        lims(2,2) = prev_shift(2) + maxHWshift
+        lims(1,1) = - maxHWshift
+        lims(1,2) =   maxHWshift
+        lims(2,1) = - maxHWshift
+        lims(2,2) =   maxHWshift
+        if( present(prev_shift) )then
+            lims(1,:) = lims(1,:) + prev_shift(1)
+            lims(2,:) = lims(2,:) + prev_shift(2)
+        endif
         call ospec%specify('lbfgsb', 2, ftol=motion_correctftol, gtol=motion_correctgtol, limits=lims) ! nrestarts=nrestarts
         call ospec%set_costfun_8(ftexp_shsrch_cost_8)
         call ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
@@ -97,8 +101,8 @@ contains
             deallocate(nlopt)
         end if
         call ofac%new(ospec, nlopt)
+        if( present(prev_shift) )ospec%x = prev_shift
         ! set initial solution to previous shift
-        ospec%x = prev_shift
         call nlopt%minimize(ospec, fun_self, cxy(1))
         call reference%corr_normalize(particle, cxy(1))
         call ft_exp_reset_tmp_pointers

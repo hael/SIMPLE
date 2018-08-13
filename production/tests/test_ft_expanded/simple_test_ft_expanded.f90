@@ -4,9 +4,9 @@
 !> Test program for simple_ft_expanded module
 !
 ! @author
-! 
 !
-! DESCRIPTION: 
+!
+! DESCRIPTION:
 !> Brief description of moduletest.
 !
 ! REVISION HISTORY:
@@ -17,5 +17,6 @@ program simple_test_ft_expanded
 include 'simple_lib.f08'
 use simple_ft_expanded_tester
 implicit none
+call seed_rnd
 call exec_ft_expanded_test
 end program simple_test_ft_expanded
