@@ -1,21 +1,29 @@
 module simple_error
 use simple_defs, only: alloc_stat, LONGSTRLEN
-
-#if defined(GNU)
-    use, intrinsic :: iso_fortran_env, only: &
-        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-        &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
-#elif defined(INTEL)
-    use, intrinsic :: iso_fortran_env, only: &
-        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-        &IOSTAT_END, IOSTAT_EOR
-#endif
+use, intrinsic :: iso_fortran_env
 #if defined(INTEL)
     use ifport, killpid=>kill, intel_ran=>ran
     use ifcore
 #endif
 implicit none
 
+#ifdef GNU
+!integer(4), external :: ierrno
+#endif
+#ifdef GNU_STD2008
+interface
+        subroutine gerror(str)
+        character*(*), intent(out) :: str
+        end subroutine
+
+        integer function ierrno()
+        end function
+
+        subroutine perror(str)
+        character*(*), intent(in) :: str
+        end subroutine
+end interface
+#endif
 contains
 
     !! ERROR Routines
@@ -26,8 +34,8 @@ contains
         integer,               intent(in), optional :: l !< line number from calling file
         integer   :: last_err
         if(present(f).and.present(l))&
-            write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
-        write(stderr,'("Message: ",/,a,/)') trim(msg)
+            write(ERROR_UNIT,'("Stopping in file ",/,A,/," at line ",I0)') f,l
+        write(ERROR_UNIT,'("Message: ",/,a,/)') trim(msg)
         last_err = get_sys_error()
         stop
     end subroutine simple_stop
@@ -38,8 +46,8 @@ contains
         err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
         if( err < 0)then
             call gerror(msg) !! EXTERNAL;
-            write(stderr,'("SIMPLE_SYSLIB::SYSERROR NEG ",I0)') err
-            write(stderr,*) trim(msg)
+            write(ERROR_UNIT,'("SIMPLE_SYSLIB::SYSERROR NEG ",I0)') err
+            write(ERROR_UNIT,*) trim(msg)
         else if (err /= 0) then
 
             write(msg,'("Last detected error (SIMPLE_SYSLIB::SYSERROR) ",I0,":")') err
@@ -58,13 +66,12 @@ contains
         alloc_status=alloc_stat    !! global variable from simple_defs
         if(present(alloc_err))alloc_status=alloc_err
         if (alloc_status/=0)then
-            write(stderr,'(a)') 'ERROR: Allocation failure!'
-            write(stdout,'(a)') 'ERROR: Allocation failure!'
-            call simple_error_check(alloc_status, message)
+            write(ERROR_UNIT,'(a)') 'ERROR: Allocation failure!'
+            call simple_error_check(alloc_status)
             if(present(iomsg))&
-                write(stderr,'("IO Message ",A)') trim(adjustl(iomsg))
+                write(ERROR_UNIT,'("IO Message ",A)') trim(adjustl(iomsg))
             if(present(file).and.present(line))&
-                write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') file,line
+                write(ERROR_UNIT,'("Stopping in file ",/,A,/," at line ",I0)') file,line
             call simple_stop(message)
         endif
     end subroutine allocchk
@@ -82,8 +89,8 @@ contains
         if (io_stat_this==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat_this
         if (io_stat_this==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat_this
         if( io_stat_this /= 0 ) then
-            write(stderr,'(a,1x,I0 )') 'ERROR, IOS# ', io_stat_this
-            if(present(msg)) write(stderr,'(a)') trim(adjustl(msg))
+            write(ERROR_UNIT,'(a,1x,I0 )') 'ERROR: IOS# ', io_stat_this
+            if(present(msg)) write(ERROR_UNIT,'(a)') trim(adjustl(msg))
             !! do not stop yet -- let the fopen/fclose call to finish
             !! stop
         endif

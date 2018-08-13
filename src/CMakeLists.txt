@@ -34,6 +34,7 @@ file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
 list(REMOVE_ITEM  UTILS_src
   #   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_btree.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_parallel_bsearch.f90"
+  #"${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_qsort_mt.f90"
   )
 if (NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
  list(REMOVE_ITEM  UTILS_src

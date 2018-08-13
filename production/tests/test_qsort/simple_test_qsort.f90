@@ -37,6 +37,7 @@ program simple_test_sort
     !#endif
 
     t1=0.;t2=0.;t3=0.;t4=0.;t2m=0.
+    write(*,*) " SORTING ROUTINES:  SINGLE PRECISION FLOATING POINT "
     write(*,*) "   M       HPSORT            QSORT     RecursiveQsort      C-QSORT         MT-QSORT"
     do m=25,6,-1
         nAsp = INT(2**m,4) + 1
@@ -197,9 +198,9 @@ program simple_test_sort
     ! write (*,*) t4
     ! deallocate(A)
 
-
+    write(*,*) " SORTING ROUTINES:  SINGLE PRECISION 2D ITERATIVE "
     ! ITERATIVE  2D test
-    write (*,*) "2D test for 2500x2500 real matrix"
+    write (*,*) "2D test for 2500x2500 real single precision matrix"
 
     nAsp = 2500 ! 2_8**n
     t1=0.;t2=0.;t3=0.;t4=0.
@@ -441,8 +442,8 @@ program simple_test_sort
 
 
     !! Double Precision
-
-
+    write(*,*)
+    write(*,*) " SORTING ROUTINES:  DOUBLE PRECISION FLOATING POINT "
     t1=0.;t2=0.;t3=0.;t4=0.;t2m=0.
     write(*,*) "   M       HPSORT            QSORT     RecursiveQsort      C-QSORT         MT-QSORT"
     do n=25,6,-1
@@ -605,8 +606,8 @@ program simple_test_sort
     ! write (*,*) t4
     ! deallocate(A)
 
-
-    ! ITERATIVE  2D test
+    write(*,*)
+    write(*,*) " SORTING ROUTINES:  DOUBLE PRECISION ITERATIVE  2D test"
     write (*,*) "2D test for 2500x2500 real matrix"
 
     nA = 2500 ! 2_8**n

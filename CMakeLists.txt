@@ -237,10 +237,7 @@ if(VERBOSE) #only for the fool-hardy
   OPTION(USE_AUTO_PARALLELISE "Optimize code for parallel systems. [Intel and PGI only]" OFF)
   OPTION(USE_AGGRESSIVE_OPTIMISATION "Flags for aggressive optimization level. Unroll all loops and inline functions."  OFF)
   option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
-  #
-  # CTest
-  #
-  enable_testing()
+
   #
   # CPack
   #
@@ -249,6 +246,14 @@ if(VERBOSE) #only for the fool-hardy
   ## Debugging CMAKE
   include(CMakeGraphVizOptions)
 endif()
+
+#################################################################
+# CTest
+#################################################################
+enable_testing()
+# emulate GNU Autotools `make check`
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
+
 
 #################################################################
 #

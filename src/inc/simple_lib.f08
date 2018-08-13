@@ -1,5 +1,5 @@
 !! Simple cryo-EM core library
-use, intrinsic :: iso_fortran_env, stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
+use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 !! Config and constants
 use simple_defs

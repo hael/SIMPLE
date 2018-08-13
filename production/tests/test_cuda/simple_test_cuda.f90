@@ -45,7 +45,9 @@ program simple_test_cuda
 
     call check_cuda_device
     !  call set_cuda_device(0)
-    call test_cuda_precision( error_found)
+
+    write (*,'(A)') 'TESTING CUDA FORTRAN PRECISION '
+    call test_cuda_precision( error_found )
 
     write (*,'(A)') 'SIMPLE_CUDA timer setup'
     ctimer = timer_cuda()

@@ -1,8 +1,8 @@
-# Configuration file for @PROJECTNAME@ library.
+# Configuration file for @PROJECT_NAME@ library.
 
 # Pick up the auto-generated file which knows how to add the library targets
 # This will mean that we don't have to supply full paths for the libraries
-set(exports_file "@CMAKE_CURRENT_BINARY_DIR@/Use@PROJECTNAME@.cmake")
+set(exports_file "@CMAKE_CURRENT_BINARY_DIR@/Use@PROJECT_NAME@.cmake")
 
 if( NOT SIMPLE_FOUND)
     #only pull in if not already done!
@@ -14,7 +14,7 @@ endif()
 
 
 include( FindPackageHandleStandardArgs )
-find_package_handle_standard_args( @PROJECTNAME@ DEFAULT_MSG exports_file )
+find_package_handle_standard_args( @PROJECT_NAME@ DEFAULT_MSG exports_file )
 #message(STATUS "SIMPLE_FOUND=${SIMPLE_FOUND} time to dance")
 
 

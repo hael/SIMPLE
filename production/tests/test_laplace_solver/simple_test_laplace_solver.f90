@@ -67,7 +67,7 @@ contains
       integer :: i
       print *, '---------- Iteration number: ', iter, ' ---------------'
       do i=5,0,-1
-         write (*,'("("i4,",",i4,"):",f6.2,"  ")',advance='no') height-i,width-i,temp(height-i,width-i)
+         write (*,'("(",i4,",",i4,"):",f6.2,"  ")',advance='no') height-i,width-i,temp(height-i,width-i)
       enddo
       print *
   end subroutine track_progress

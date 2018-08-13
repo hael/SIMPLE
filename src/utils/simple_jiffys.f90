@@ -19,9 +19,9 @@ contains
     subroutine progress( i, n )
         integer, intent(in) :: i, n
         if( .not. l_distr_exec_glob )then
-            write(stdout,'(a1,a,t21,i3,a)',advance="no") achar(13),&
+            write(OUTPUT_UNIT,'(a1,a,t21,i3,a)',advance="no") achar(13),&
                 &"Percent Complete: ", nint((real(i)/real(n))*100.0), "%"
-            flush (stdout)
+            flush (OUTPUT_UNIT)
             if( i >= n ) write(*,*) ''
         endif
     end subroutine progress
@@ -71,16 +71,16 @@ contains
         pprint_simple = .true.
         if( present(print_simple) ) pprint_simple = print_simple
         if( pprint_simple )then
-            write(stdout,'(A)') "       _______ _____ _______  _____         _______"
-            write(stdout,'(A)') "       |______   |   |  |  | |_____] |      |______"
-            write(stdout,'(A)') "       ______| __|__ |  |  | |       |_____ |______"
-            write(stdout,'(A)') " "
-            write(stdout,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"
-            write(stdout,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
-            write(stdout,'(A)') "         (_                  (\   (_         _)      (_"
-            write(stdout,'(A)') ""
+            write(OUTPUT_UNIT,'(A)') "       _______ _____ _______  _____         _______"
+            write(OUTPUT_UNIT,'(A)') "       |______   |   |  |  | |_____] |      |______"
+            write(OUTPUT_UNIT,'(A)') "       ______| __|__ |  |  | |       |_____ |______"
+            write(OUTPUT_UNIT,'(A)') " "
+            write(OUTPUT_UNIT,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"
+            write(OUTPUT_UNIT,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
+            write(OUTPUT_UNIT,'(A)') "         (_                  (\   (_         _)      (_"
+            write(OUTPUT_UNIT,'(A)') ""
         endif
-        write(stdout,'(A)') str
+        write(OUTPUT_UNIT,'(A)') str
     end subroutine simple_end
 
     !> \brief  for pretty haloween ending

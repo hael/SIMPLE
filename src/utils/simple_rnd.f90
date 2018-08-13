@@ -4,6 +4,7 @@ module simple_rnd
 use simple_defs ! singleton
 use simple_math
 use simple_error, only: allocchk
+use simple_syslib, only: get_process_id
 implicit none
 
 private :: idum
@@ -60,7 +61,7 @@ contains
                     + dt(6) * 60 * 1000 + dt(7) * 1000 &
                     + dt(8)
             end if
-            pid = my_getpid()
+            pid = get_process_id()
             t = ieor( t, int(pid, kind(t)) )
             do i = 1, n
                 seed(i) = lcg(t)
@@ -81,14 +82,6 @@ contains
             s = mod(s * 279470273_int64, 4294967291_int64)
             res = int(mod(s, int(huge(0), 8)), kind(0))
         end function lcg
-
-        !this option is especially used for pgf90 to provide a getpid() function
-        !Returns the process ID of the current process
-        !todo: write the actual code, for now returns a fixed value
-        function my_getpid()result(pid)
-            integer :: pid
-            pid = 53 !just a prime number, no special meaning
-        end function my_getpid
 
     end subroutine seed_rnd
 

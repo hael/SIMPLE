@@ -15,16 +15,8 @@ module simple_syslib
 use simple_defs
 use simple_error
 use iso_c_binding
-#if defined(GNU)
-use, intrinsic :: iso_fortran_env, only: &
-    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-    &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
-#elif defined(INTEL)
-use, intrinsic :: iso_fortran_env, only: &
-    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-    &IOSTAT_END, IOSTAT_EOR
-#endif
-#if defined(INTEL)
+use iso_fortran_env
+#ifdef __INTEL_COMPILER
 use ifport, killpid=>kill, intel_ran=>ran
 use ifcore
 #endif
@@ -33,6 +25,131 @@ implicit none
 
 private :: raise_sys_error
 public
+#ifdef GNU_STD2008
+! external :: stat
+! external :: chdir
+! external :: chmod
+! external :: rename, getcwd, getpid, getuid,
+integer , external :: sizeof, iand, ishft, loc
+   interface
+        integer function chdir(path)
+        character*(*), intent(in) :: path
+        end function
+
+        integer function chmod(nam, mode)
+        character*(*), intent(in) :: nam, mode
+!        integer, intent(in) :: mode
+        end function
+
+        pure character*(24) function ctime(stime)
+        integer, intent(in) :: stime
+        end function
+
+        pure subroutine date(str)
+        character*(*), intent(out) :: str
+        end subroutine
+
+        ! pure real function etime(tarray)
+        ! real, intent(out) :: tarray(2)
+        ! end function
+
+        ! pure real function dtime(tarray)
+        ! real, intent(out) :: tarray(2)
+        ! end function
+
+        subroutine flush(lu)
+        integer, intent(in) :: lu
+        end subroutine
+
+        integer function fork()
+        end function
+
+        integer function fputc(lu,ch)
+        integer, intent(in) :: lu
+        character*(*), intent(in) :: ch
+        end function
+
+        subroutine free(p)
+        integer, intent(in) :: p
+        end subroutine
+
+        integer function fseek(lu,offset,from)
+        integer, intent(in) :: lu, offset, from
+        end function
+
+        integer function ftell(lu)
+        integer, intent(in) :: lu
+        end function
+
+        subroutine getarg(i,c)
+            integer, intent(in) :: i
+            character*(*), intent(out) :: c
+        end subroutine
+
+        integer function iargc()
+        end function
+
+        integer function getc(ch)
+            character*(*), intent(out) :: ch
+        end function
+
+        integer function getcwd(dir)
+            character*(*), intent(out) :: dir
+        end function
+
+        ! subroutine getenv(en,ev)
+        !     character*(*), intent(in) :: en
+        !     character*(*), intent(out) :: ev
+        ! end subroutine
+
+        ! integer function getfd(lu)
+        !     integer, intent(in) :: lu
+        ! end function
+
+        ! integer function getgid()
+        ! end function
+
+        ! subroutine getlog(name)
+        !     character*(*), intent(out) :: name
+        ! end subroutine
+
+        ! integer function getpid()
+        ! end function
+
+        ! integer function getuid()
+        ! end function
+
+        integer function rename(from,to)
+        character*(*), intent(in) :: from, to
+        end function
+
+        subroutine sleep(itime)
+        integer, intent(in) :: itime
+        end subroutine
+
+        integer function stat(nm,statb)
+        character*(*), intent(in) :: nm
+        integer, intent(out) :: statb(*)
+        end function
+
+        integer function symlnk(n1,n2)
+        character*(*), intent(in) :: n1, n2
+        end function
+
+        pure integer function time()
+        end function
+
+        integer function unlink(fil)
+        character*(*), intent(in) :: fil
+        end function
+
+        integer function wait(st)
+        integer, intent(out) :: st
+        end function
+
+      end interface
+
+#endif
 
 !> glibc interface CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
 interface
@@ -489,7 +606,7 @@ contains
     logical function is_io(unit)
         integer, intent(in) :: unit
         is_io=.false.
-        if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
+        if (unit == ERROR_UNIT .or. unit == OUTPUT_UNIT .or. unit == INPUT_UNIT) is_io= .true.
     end function is_io
 
     !>  \brief  check whether a IO unit is currently opened
@@ -559,7 +676,7 @@ contains
             if( wait_time == 60 )then
                 write(*,'(A,A)')'>>> WARNING: been waiting for a minute for file: ',trim(adjustl(fname))
                 wait_time = 0
-                flush(stdout)
+                flush(OUTPUT_UNIT)
             endif
             exists = file_exists(fname)
             closed = .false.
@@ -1100,11 +1217,11 @@ contains
 
     !! SYSTEM INFO ROUTINES
 
-    integer function get_process_id( )
+    integer(4) function get_process_id( )
         get_process_id = getpid()
     end function get_process_id
 
-    integer function get_login_id( )
+    integer(4) function get_login_id( )
         get_login_id = getuid()
     end function get_login_id
 
@@ -1117,13 +1234,13 @@ contains
         character(len=56)  :: str
 #endif
 #ifdef GNU
-        character(*), parameter :: compilation_cmd = compiler_options()
-        character(*), parameter :: compiler_ver = compiler_version()
+        character(len=*), parameter :: compilation_cmd = compiler_options()
+        character(len=*), parameter :: compiler_ver = compiler_version()
 #endif
         if (present(file_unit)) then
             file_unit_op = file_unit
         else
-            file_unit_op = stdout
+            file_unit_op = OUTPUT_UNIT
         end if
 #if defined(GNU)
         write( file_unit_op, '(A,A,A,A)' ) &

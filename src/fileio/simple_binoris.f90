@@ -2,10 +2,11 @@
 module simple_binoris
 use, intrinsic :: ISO_C_BINDING
 use simple_defs     ! use all in there
-use simple_strings, only: spaces
-use simple_error,   only: allocchk
-use simple_fileio,  only: fopen, fclose, fileiochk, funit_size
-use simple_syslib,  only: del_file, file_exists
+use simple_strings
+use simple_error
+use simple_syslib
+use simple_fileio
+
 implicit none
 
 public :: binoris

@@ -202,10 +202,10 @@ message(STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_
 ################################################################
 # Json-fortran definitions
 ################################################################
-add_definitions("-DJF_REAL32")
-add_definitions("-DJF_INT32")
+#add_definitions("-DJF_REAL32=4")
+#add_definitions("-DJF_INT32=4")
 if(CMAKE_Fortran_COMPILER_SUPPORTS_USC4==1)
-  add_definitions("-DUSE_USC4")
+  add_definitions("-DUSE_USC4=1")
 endif()
 
 
@@ -224,6 +224,8 @@ endif()
 #   "-tp=x64"      # Portland Group - generic 64 bit platform
 #   )
 if(NOT BUILD_SHARED_LIBS)
+  message(STATUS "Build static executables.")
+  message(STATUS "On glibc-based systems, OpenMP enabled applications cannot be statically linked due to limitations of the underlying pthreads-implementation. It might be possible to get a working solution if -Wl,--whole-archive -lpthread -Wl,--no-whole-archive is added to the command line. However, this is not supported by gcc and thus not recommended.")
   set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
   add_definitions("-fPIE -fPIC")
 endif()
@@ -783,7 +785,7 @@ endif()
  set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
  else()
    # #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-    set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> ")
+    set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} $ENV{FFLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> $ENV{FFLAGS} <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> $ENV{FFLAGS} <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> ")
     # uncomment below to show compilation times
     #set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||(TIME='PTIME %C %E' time <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> 2>&1 | awk '/PTIME/ {cmd=\"basename -- \" \$\$\(NF-1\)\;cmd|getline out\;print \$\$\(NF-1\),\$\$NF\;close(cmd)\;}')")
  endif()

@@ -37,23 +37,23 @@
 !
 !@note The default real kind (`RK`) and the default integer kind (`IK`) can be
 !      changed using optional preprocessor flags. This library was built with kinds:
-#ifdef JF_REAL32
+#ifdef REAL32
 !      real(kind=real32) [4 bytes]
-#elif JF_REAL64
+#elif REAL64
 !      real(kind=real64) [8 bytes]
-#elif JF_REAL128
+#elif REAL128
 !      real(kind=real128) [16 bytes]
 #else
 !      real(kind=real64) [8 bytes]
 #endif
 !      and
-#ifdef JF_INT8
+#ifdef INT8
 !      integer(kind=int8) [1 byte]
-#elif JF_INT16
+#elif INT16
 !      integer(kind=int16) [2 bytes]
-#elif JF_INT32
+#elif INT32
 !      integer(kind=int32) [4 bytes]
-#elif JF_INT64
+#elif INT64
 !      integer(kind=int64) [8 bytes]
 #else
 !      integer(kind=int32) [4 bytes]
@@ -61,30 +61,30 @@
 !      .
 
     module json_kinds
-
-    use,intrinsic :: iso_fortran_env
+    use, intrinsic :: iso_c_binding
+    use, intrinsic :: ISO_FORTRAN_ENV, only: int8,int16,int32,int64, real32,real64,real128,logical_kinds
 
     implicit none
 
     private
 
-#if defined(JF_REAL32)
+#ifdef REAL32
     integer,parameter,public :: RK = real32   !! Default real kind [4 bytes]
-#elif defined(JF_REAL64)
+#elif REAL64
     integer,parameter,public :: RK = real64   !! Default real kind [8 bytes]
-#elif defined(JF_REAL128)
+#elif REAL128
     integer,parameter,public :: RK = real128  !! Default real kind [16 bytes]
 #else
     integer,parameter,public :: RK = real64   !! Default real kind if not specified [8 bytes]
 #endif
 
-#if defined(JF_INT8)
+#ifdef INT8
     integer,parameter,public :: IK = int8     !! Default integer kind [1 byte]
-#elif defined(JF_INT16)
+#elif INT16
     integer,parameter,public :: IK = int16    !! Default integer kind [2 bytes]
-#elif defined(JF_INT32)
+#elif INT32
     integer,parameter,public :: IK = int32    !! Default integer kind [4 bytes]
-#elif defined(JF_INT64)
+#elif INT64
     integer,parameter,public :: IK = int64    !! Default integer kind [8 bytes]
 #else
     integer,parameter,public :: IK = int32    !! Default integer kind if not specified [4 bytes]
@@ -104,7 +104,7 @@
     !  (and perhaps others).
     !  The declaration ensures a valid kind
     !  if the compiler doesn't have a logical_kinds(3).
-    integer,parameter,public :: LK = logical_kinds(min(3,size(logical_kinds)))
+    integer,parameter,public :: LK = logical_kinds(3)! selected_int_kind(min(3,size(logical_kinds)))
     !*********************************************************
 
     !*********************************************************

@@ -19,8 +19,8 @@ module gnufor2
     character(len=100), parameter :: default_color4='dark-salmon'
     character(len=100), parameter :: default_terminal='x11' !'wxt' <-- changed
     character(len=100), parameter :: default_palette='CMY'
-    character(len=100), parameter	:: default_xlabel='X'
-    character(len=100), parameter	:: default_ylabel='Y'
+    character(len=100), parameter :: default_xlabel='X'
+    character(len=100), parameter :: default_ylabel='Y'
 
     interface plot
         module procedure plot_1
@@ -588,7 +588,7 @@ contains
             if (pause<0.0) then
                 write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
             else
-                write (	my_pause,'(e9.3)') pause
+                write ( my_pause,'(e9.3)') pause
                 write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
             end if
         else
@@ -731,7 +731,7 @@ contains
             if (pause<0.0) then
                 write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
             else
-                write (	my_pause,'(e9.3)') pause
+                write ( my_pause,'(e9.3)') pause
                 write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
             end if
         else
@@ -837,7 +837,7 @@ contains
             if (pause<0.0) then
                 write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
             else
-                write (	my_pause,'(e9.3)') pause
+                write ( my_pause,'(e9.3)') pause
                 write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
             end if
         else

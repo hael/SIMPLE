@@ -231,6 +231,11 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(forspeed "-O3 -ffrontend-optimize -fno-stack-protector -fno-lifetime-dse")                # optimisation
   set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                   # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
+  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08)
+     set(target "${target} -std=f2008 -fall-intrinsics -Wintrinsics-std")
+   else()
+     set(target "${target} -std=f2003 -fall-intrinsics -Wintrinsics-std")
+   endif()
 
   set(common   "${preproc} ${dialect} ${target} ${warn}")
 
@@ -293,6 +298,12 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port  ")
   set(forpar   " ")
   set(target   "-no-prec-div -fPIC -xHost -traceback ")
+  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08)
+    set(target "${target} -std08")
+  else()
+    set(target "${target} -std03")
+  endif()
+
   set(common   "${preproc} ${dialect} ${checks} ${target}")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")

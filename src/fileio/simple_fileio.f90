@@ -32,11 +32,11 @@ contains
         iostat_this=2
         if( present(die) ) die_this=die
         if( present(iostat) ) iostat_this=iostat
-        if( iostat_this /= 0 ) write(stderr,'(a)') message
+        if( iostat_this /= 0 ) write(ERROR_UNIT,'(a)') message
         if (iostat_this == -1)then
-            write(stderr,'(a)') "fileio: EOF reached "
+            write(ERROR_UNIT,'(a)') "fileio: EOF reached "
         else if (iostat_this == -2) then
-            write(stderr,'(a)') "fileio: End-of-record reached "
+            write(ERROR_UNIT,'(a)') "fileio: End-of-record reached "
         else if( iostat_this /= 0 ) then
             call simple_error_check(iostat_this,'File I/O Error#'//int2str(iostat_this))
             if(die_this)call simple_stop('File I/O stop ',__FILENAME__,__LINE__)

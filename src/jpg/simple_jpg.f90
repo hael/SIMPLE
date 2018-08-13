@@ -17,7 +17,8 @@ integer, parameter         :: cptr          = kind(5)
 integer, parameter         :: numComponents = 3
 integer, parameter, public :: max_colors =  256
 integer, parameter         :: GREYSCALE  =  1
-
+integer(kind=4), parameter :: boz_00ff = INT(z'000000ff',kind=4)
+integer(kind=4), parameter :: boz_ffff = INT(z'00ffffff',kind=4)
 type jpg_img
     private
     integer                           :: width      =  0
@@ -26,7 +27,7 @@ type jpg_img
     integer                           :: colorspace =  1
     integer(cptr)                     :: ptr        =  0
     logical                           :: fmode      = .false.
-    real                              :: gamma      = 0.707
+    real                              :: gamma      = 0.707    ! 1./sqrt(2.)
     logical                           :: normalised = .false.
 contains
     procedure          :: destructor
@@ -281,12 +282,12 @@ contains
                     c=3
                     pixel = NINT( (2**24) * (in_buffer(i+1,j+1)-lo)/(hi-lo),kind=4)
                     img_buffer((i-1)*c + (j-1) * w * c+ 1)  = INT( ISHFT( pixel , -16) ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , z'000000ff') ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , boz_00ff) ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , boz_00ff) ,kind=c_char)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*REAL( (in_buffer(i+1,j+1)-lo)/REAL(hi - lo) ) ,kind=c_int)
-                    pixel =  IAND( pixel , z'00ffffff')
+                    pixel =  IAND( pixel , boz_ffff)
                     img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
                 end if
 
@@ -338,12 +339,12 @@ contains
                     c=3
                     pixel = NINT( REAL(2**24) * REAL(in_buffer(i+1,j+1)-lo)/REAL(hi-lo),kind=4)
                     img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , z'000000ff') ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , z'000000ff') ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , boz_00ff) ,kind=c_char)
+                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , boz_00ff) ,kind=c_char)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*( REAL(in_buffer(i+1,j+1)-lo) / REAL(hi - lo) ) ,kind=c_int)
-                    pixel =  IAND( pixel , z'00ffffff')
+                    pixel =  IAND( pixel , boz_ffff)
                     img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
                 end if
             end do

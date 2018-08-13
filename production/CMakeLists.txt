@@ -182,28 +182,21 @@ endforeach(TESTNAME)
 #
 # Default CTest tests
 #
+
 list(APPEND CTESTDIRS
-  test_imgfile
-  test_install
-  test_parse
-  test_speed
-  test_srch
-  test_timer
-  test_units )
+  simple_test_timer
+  simple_test_imgfile
+  simple_test_fileio
+  simple_test_syslib
+  #test_install
+  simple_test_parse
+  #test_speed
+  simple_test_srch
+  simple_test_units )
 
-add_test(NAME test_parse
+foreach(CHECKUNIT ${CTESTDIRS})
+add_test(NAME ${CHECKUNIT}
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND source add2.bashrc &&  simple_test_parse nthr=4 verbose=yes)
-
-add_test(NAME test_install
-  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND source add2.bashrc  && simple_test_install nthr=4 verbose=yes)
-
-
-add_test(NAME test_units
-  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND source add2.bashrc &&  simple_test_units nthr=4)
-
-add_test(NAME test_timer
-  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND source add2.bashrc && ${CMAKE_COMMAND} -E simple_test_timer verbose=yes debug=yes)
+  COMMAND source add2.bashrc && ${CHECKUNIT}  nthr=4 verbose=yes)
+add_dependencies( check ${CHECKUNIT} )
+endforeach()
