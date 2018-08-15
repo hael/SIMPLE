@@ -183,11 +183,12 @@ contains
         labels=(/ 'MicrographNameNoDW' /)
         call self%doc%write(filename, sp, labels)
     end subroutine export_micrographs
-    subroutine import_micrographs (self, sp, params, filename)
+    subroutine import_micrographs (self, sp, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
-        class(parameters), intent(inout) :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: sp
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
 
     end subroutine import_micrographs
 
@@ -199,7 +200,7 @@ contains
     !! _rlnMicrographName #2
     !! [#1 MotionCorr/job026/Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729_noDW.mrc] [#2 MotionCorr/job026/ Micrographs3/FoilHole_24003709_Data_23978423_23978424_20180225_0629-1729.mrc]
     !! ...
-    subroutine export_motion_corrected_micrographs (self,  sp, filename)
+    subroutine export_motion_corrected_micrographs (self, sp, filename)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout) :: filename
@@ -210,11 +211,12 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_motion_corrected_micrographs
-    subroutine import_motion_corrected_micrographs (self,  sp, params, filename)
+    subroutine import_motion_corrected_micrographs (self, sp, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
-        class(parameters),intent(inout) :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: sp
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_motion_corrected_micrographs
 
     !! CTF Estimation: Simple/GCTF/CTFFIND4
@@ -257,7 +259,6 @@ contains
     end subroutine export_ctf_estimation
     subroutine import_ctf_estimation (self, spproj, params, cline, filename)
         use simple_sp_project, only: oritype2segment
-             
         class(star_project), intent(inout) :: self
         class(sp_project),   intent(inout) :: spproj
         class(parameters),   intent(inout) :: params
@@ -412,11 +413,12 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_autopick
-    subroutine import_autopick (self, spproj, params, filename)
+    subroutine import_autopick (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_autopick
 
 
@@ -579,11 +581,12 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D
-    subroutine import_class2D (self, spproj, params, filename)
+    subroutine import_class2D (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_class2D
 
     !! Class 2D select
@@ -654,11 +657,12 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_class2D_select
-    subroutine import_class2D_select (self, spproj, params, filename)
+    subroutine import_class2D_select (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_class2D_select
 
     !! Class3D
@@ -746,20 +750,21 @@ contains
     !!
     subroutine export_class3D (self, sp, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: sp
+        character(len=*),    intent(inout) :: filename
     end subroutine export_class3D
-    subroutine import_class3D (self, spproj, params, filename)
+    subroutine import_class3D (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_class3D
 
     subroutine export_init3Dmodel (self, sp, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: sp
+        character(len=*),    intent(inout) :: filename
         character(len=KEYLEN), allocatable :: labels(:)
         labels=(/ &
             'MicrographName           ',&
@@ -799,9 +804,9 @@ contains
     end subroutine export_init3Dmodel
     subroutine import_init3Dmodel (self, spproj, params, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout)    :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        character(len=*),    intent(inout) :: filename
     end subroutine import_init3Dmodel
 
 
@@ -883,11 +888,12 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_refine3D
-    subroutine import_refine3D (self, spproj, params, filename)
+    subroutine import_refine3D (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_refine3D
 
 
@@ -971,32 +977,34 @@ contains
         call self%doc%write(filename, sp, labels)
 
     end subroutine export_shiny3D
-    subroutine import_shiny3D (self, spproj, params, filename)
+    subroutine import_shiny3D (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_shiny3D
 
 
     subroutine export_all (self, sp, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: sp
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: sp
+        character(len=*),    intent(inout) :: filename
     end subroutine export_all
 
 
-    subroutine import_all (self, spproj, params, filename)
+    subroutine import_all (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
-        class(sp_project), intent(inout)   :: spproj
-        class(parameters), intent(inout)   :: params
-        character(len=*), intent(inout) :: filename
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
     end subroutine import_all
 
 
     function exporttype2star( exporttype ) result(stype)
         character(len=*),  intent(in) :: exporttype
-        integer(kind=kind(MIC_STAR)) :: stype
+        integer(kind=kind(MIC_STAR))  :: stype
         !select case(trim(exporttype))
         ! match oritype equivalent for star export type
         !case('movies') ! movies

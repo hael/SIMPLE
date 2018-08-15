@@ -831,13 +831,12 @@ contains
                         write(*,'(A30,1x,A30)') self%param_starlabels(i)%str,self%param_labels(i)%str 
                     else
                         write(*,'(A30,1x,A30,2x,F15.8)') self%param_starlabels(i)%str,self%param_labels(i)%str, self%param_scale(i)
-                    endif
+                    end if
                 else
                     write(*,'(A30,1x,A30)') self%param_starlabels(i)%str, "N/A" 
-                endif
-            enddo
-        endif
-     
+                end if
+            end do
+        end if
     end subroutine print
      
      

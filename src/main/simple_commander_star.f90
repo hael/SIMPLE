@@ -123,39 +123,40 @@ contains
    end subroutine exec_export_star_project
 
     !> for importing STAR formatted project files to *.simple
-    subroutine exec_import_star_project( self, cline )
-        use simple_oris,      only: oris
-        use simple_nrtxtfile, only: nrtxtfile
-        use simple_binoris_io ! use all in there
-        class(import_star_project_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(star_project):: starproj
-        type(ctfparams)  :: ctfvars
-        type(oris)       :: os
-        character(len=LONGSTRLEN),allocatable :: line(:)
-        character(len=LONGSTRLEN),allocatable :: starfiles(:)
-        character(len=:),      allocatable :: phaseplate, boxf_abspath
-        character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        integer :: nStarfiles,istar,i, ndatlines,nrecs, nboxf, nmovf
-        logical :: l_starfile, inputted_boxtab
-        call params%new(cline)
-        ! parameter input management
-        l_starfile = cline%defined('starfile')
-        if( .not. l_starfile)then
-            write(*,*) 'Star project file argument empty or not set, e.g. starfile=<filename> or <directory>'
-            call simple_stop( "ERROR! simple_commander_star :: exec_import_starproject ")
-        end if
-        if(dir_exists(params%starfile))then
+   subroutine exec_import_star_project( self, cline )
+       use simple_oris,      only: oris
+       use simple_nrtxtfile, only: nrtxtfile
+       use simple_binoris_io ! use all in there
+       class(import_star_project_commander), intent(inout) :: self
+       class(cmdline),                       intent(inout) :: cline
+       type(parameters) :: params
+       type(sp_project) :: spproj
+       type(star_project):: starproj
+       type(ctfparams)  :: ctfvars
+       type(oris)       :: os
+       character(len=LONGSTRLEN),allocatable :: line(:)
+       character(len=LONGSTRLEN),allocatable :: starfiles(:)
+       character(len=:),      allocatable :: phaseplate, boxf_abspath
+       character(len=LONGSTRLEN), allocatable :: boxfnames(:)
+       integer :: nStarfiles,istar,i, ndatlines,nrecs, nboxf, nmovf
+       logical :: l_starfile, inputted_boxtab
+       call params%new(cline)
+
+       ! parameter input management
+       l_starfile = cline%defined('starfile')
+       if( .not. l_starfile)then
+           write(*,*) 'Star project file argument empty or not set, e.g. starfile=<filename> or <directory>'
+           call simple_stop( "ERROR! simple_commander_star :: exec_import_starproject ")
+       end if
+       if(dir_exists(params%starfile))then
            call simple_list_files(trim(params%starfile)//'*.star', starfiles)
            nStarfiles = size(starfiles)
            write(*,*) " Importing star project :", nStarfiles, " found "
-        else if(file_exists(params%starfile))then
+       else if(file_exists(params%starfile))then
            allocate(starfiles(1))
            starfiles(1)=trim(params%starfile)
            nStarfiles=1
-        else
+       else
            write(*,*) " Importing star project must have a valid input file, starfile=<filename|directory>"
            call simple_stop('ERROR! simple_commander_star :: exec_import_starproject')
        endif
@@ -166,22 +167,23 @@ contains
            write(*,*) 'Project file: ', trim(params%projfile), ' does not exist!'
            HALT_NOW("exec_import_starproject; not in SIMPLE project dir")
        endif
-        !! Read existing SIMPLE project
-        call spproj%read(params%projfile)
+       !! Read existing SIMPLE project
+       call spproj%read(params%projfile)
 
        ! Prepare STAR project module
        call starproj%prepareimport( spproj, params, starfiles(1))
        ndatlines = starproj%get_ndatalines()
        nrecs     = starproj%get_nrecs_per_line()
 
+       !! Check number of records on data line to validate starfile 
        if(nrecs == 0)then
            HALT_NOW("exec_import_starproject; Unable to read header records in STAR file.")
        end if
-        if(ndatlines == 0)then
+       if(ndatlines == 0)then
            HALT_NOW("exec_import_starproject; Unable to read data line records in STAR file.")
        end if
 
-        if( params%startype  == 'NONE')then
+       if( params%startype  == 'NONE')then
            write (*,*) " import_starproject valid startypes:"
            write (*,*) " Accepted values are movies|micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post or all."
            write (*,*) "    movies:         for raw micrographs"
@@ -197,118 +199,52 @@ contains
            write (*,*) "    refine3d:       for refined 3D particles"
            write (*,*) "    post:           for post-processing"
 
-           
-        end if
+
+       end if
 
 
-!! vvvvv TODO vvvvv
+       !! vvvvv TODO vvvvv
 
-        select case(params%startype)
-        case('movies')
-           call  starproj%import_micrographs(spproj, params, params%starfile)
-        case('micrographs')
-           call  starproj%import_micrographs(spproj, params, params%starfile)
-        case('mcmicrographs')
-           call  starproj%import_motion_corrected_micrographs(spproj, params, params%starfile)
-        case('ctf_estimation')
-           call starproj%import_ctf_estimation(spproj, params, cline,params%starfile)
-        case('select')
-            call starproj%import_class2D_select(spproj, params,  params%starfile)
-        case('extract')
+       select case(params%startype)
+       case('movies')
+           call  starproj%import_micrographs(spproj, params, cline, params%starfile)
+       case('micrographs')
+           call  starproj%import_micrographs(spproj, params, cline, params%starfile)
+       case('mcmicrographs')
+           call  starproj%import_motion_corrected_micrographs(spproj, params, cline, params%starfile)
+       case('ctf_estimation')
+           call starproj%import_ctf_estimation(spproj, params, cline, params%starfile)
+       case('select')
+           call starproj%import_class2D_select(spproj, params, cline,params%starfile)
+       case('extract')
            call starproj%import_extract_doseweightedptcls(spproj,params, cline, params%starfile)
-        case('class2d')
-           call starproj%import_class2D(spproj, params, params%starfile)
-        case('init3dmodel')
-           call starproj%import_init3Dmodel(spproj, params, params%starfile)
-        case('refine3d')
-           call starproj%import_class3D(spproj, params, params%starfile)
-        case('post')
-           call starproj%import_shiny3D(spproj, params, params%starfile)
-        case('all')
-           call starproj%import_all(spproj, params, params%starfile)
-        case default
+       case('class2d')
+           call starproj%import_class2D(spproj, params, cline, params%starfile)
+       case('init3dmodel')
+           call starproj%import_init3Dmodel(spproj, params, cline, params%starfile)
+       case('refine3d')
+           call starproj%import_class3D(spproj, params, cline, params%starfile)
+       case('post')
+           call starproj%import_shiny3D(spproj, params, cline, params%starfile)
+       case('all')
+           call starproj%import_all(spproj, params, cline, params%starfile)
+       case default
            call simple_stop( " import_starproject must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
        end select
+       call starproj%check_temp_files("importstar commander")
+       call starproj%print_info
 
+       ! Import STAR filename
+       ! do istar=1, nStarfiles
+       !      call starproj%read(starfiles(i), spproj, params)
+       ! end do
 
+       ! Copy to SIMPLE's project format
 
-
-
-!! ***** Class averages
-!        call spproj%add_cavgs2os_out(params%stk, params%smpd)
-
-!! ******  Import boxes
-        ! ! get boxfiles into os_mic
-        ! call read_filetable(params%boxtab, boxfnames)
-        ! nboxf   = size(boxfnames)
-        ! nos_mic = spproj%os_mic%get_noris()
-        ! if( nboxf /= nos_mic )then
-        !     write(*,*) '# boxfiles       : ', nboxf
-        !     write(*,*) '# os_mic entries : ', nos_mic
-        !     stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
-        ! endif
-        ! do i=1,nos_mic
-        !     call abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
-        !     call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
-        ! end do
-
-!! ******  Import  particles
-
-        if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-           write(*,*) 'unsupported nr of rec:s in plaintexttab'
-           stop 'commander_starproject :: exec_extract_ptcls'
-        endif
-!   call os%new(ndatlines)
-! allocate( line(nrecs) )
-!             do i=1,ndatlines
-!                 call starproj%readNextDataLine(line)
-!                 select case(params%dfunit)
-!                     case( 'A' )
-!                         line(1) = line(1)/1.0e4
-!                         if( nrecs > 1 )  line(2) = line(2)/1.0e4
-!                     case( 'microns' )
-!                         ! nothing to do
-!                     case DEFAULT
-!                         stop 'unsupported dfunit; commander_project :: exec_extract_ptcls'
-!                 end select
-!                 select case(params%angastunit)
-!                     case( 'radians' )
-!                         if( nrecs == 3 ) line(3) = rad2deg(line(3))
-!                     case( 'degrees' )
-!                         ! nothing to do
-!                     case DEFAULT
-!                         stop 'unsupported angastunit; commander_project :: exec_extract_ptcls'
-!                 end select
-!                 select case(params%phshiftunit)
-!                     case( 'radians' )
-!                         ! nothing to do
-!                     case( 'degrees' )
-!                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
-!                     case DEFAULT
-!                         stop 'unsupported phshiftunit; commander_project :: exec_extract_ptcls'
-!                 end select
-!  call os%set(i, 'dfx', line(1))
-!                 if( nrecs > 1 )then
-!                     call os%set(i, 'dfy', line(2))
-!                     call os%set(i, 'angast', line(3))
-!                 endif
-!                 if( nrecs > 3 )then
-!                     call os%set(i, 'phshift', line(4))
-!                 endif
-!             end do
-
-
-        ! Import STAR filename
-        ! do istar=1, nStarfiles
-        !      call starproj%read(starfiles(i), spproj, params)
-        ! end do
-
-        ! Copy to SIMPLE's project format
-
-        call spproj%write
-        call spproj%kill
-        call simple_end('**** import_starproject NORMAL STOP ****')
-    end subroutine exec_import_star_project
+       call spproj%write
+       call spproj%kill
+       call simple_end('**** import_starproject NORMAL STOP ****')
+   end subroutine exec_import_star_project
 
 
     !> convert binary (.simple) oris doc to text (.txt)
