@@ -26,13 +26,12 @@ contains
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac,  ang_spread, dist_inpl, euldist
-        integer   :: best_loc(1), npeaks_all
+        integer   :: best_loc(1)
         logical   :: included(self%s%npeaks)
-        npeaks_all = self%s%npeaks
         ! extract peak info
         call extract_peaks( self%s, corrs )
         ! stochastic weights
-        call corrs2softmax_weights(self%s, npeaks_all, corrs, params_glob%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, params_glob%tau, ws, included, best_loc, wcorr )
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         ! angular distances

@@ -74,7 +74,7 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(3), loc_mir(3)
+                integer :: loc(MAXNINPLPEAKS), loc_mir(MAXNINPLPEAKS)
                 integer :: iref_mir
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     if (mir_projns) then
@@ -82,20 +82,20 @@ contains
                             s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
                         else
                             call pftcc_glob%gencorrs_mir(iref, self%s%iptcl, inpl_corrs, inpl_corrs_mir)
-                            ! identify the 3 top scoring in-planes
-                            loc      = max3loc(inpl_corrs)
-                            loc_mir  = max3loc(inpl_corrs_mir)
-                            iref_mir = proj_mirror_idx(iref)
-                            call self%s%store_solution(iref,     loc,     [inpl_corrs(loc(1)),         inpl_corrs(loc(2)),         inpl_corrs(loc(3))],         .true. )
-                            call self%s%store_solution(iref_mir, loc_mir, [inpl_corrs_mir(loc_mir(1)), inpl_corrs_mir(loc_mir(2)), inpl_corrs_mir(loc_mir(3))], .false.)
+                            ! identify the MAXNINPLPEAKS top scoring in-planes
+                            loc      = maxnloc(inpl_corrs,     MAXNINPLPEAKS)
+                            loc_mir  = maxnloc(inpl_corrs_mir, MAXNINPLPEAKS)
+                            iref_mir = s3D%proj_mirror_idx(iref)
+                            call self%s%store_solution(iref,     loc,     inpl_corrs(loc),         .true. )
+                            call self%s%store_solution(iref_mir, loc_mir, inpl_corrs_mir(loc_mir), .false.)
                         end if
                     else
                         ! calculate in-plane correlations
                         call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                        ! identify the 3 top scoring in-planes
-                        loc = max3loc(inpl_corrs)
+                        ! identify the MAXNINPLPEAKS top scoring in-planes
+                        loc = maxnloc(inpl_corrs, MAXNINPLPEAKS)
                         ! stash
-                        call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))], .true.)
+                        call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
                     end if
                 endif
             end subroutine per_ref_srch

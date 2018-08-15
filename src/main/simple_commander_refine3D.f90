@@ -9,7 +9,6 @@ use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
 implicit none
 
-public :: npeaks_commander
 public :: nspace_commander
 public :: refine3D_init_commander
 public :: refine3D_commander
@@ -17,10 +16,6 @@ public :: check_3Dconv_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: npeaks_commander
-  contains
-    procedure :: execute      => exec_npeaks
-end type npeaks_commander
 type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
@@ -39,19 +34,6 @@ type, extends(commander_base) :: check_3Dconv_commander
 end type check_3Dconv_commander
 
 contains
-
-    subroutine exec_npeaks( self, cline )
-        class(npeaks_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer :: npeaks
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        npeaks = min(build%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
-        write(*,'(A,1X,I4)') '>>> NPEAKS:', npeaks
-        ! end gracefully
-        call simple_end('**** SIMPLE_NPEAKS NORMAL STOP ****')
-    end subroutine exec_npeaks
 
     subroutine exec_nspace(self,cline)
         class(nspace_commander), intent(inout) :: self

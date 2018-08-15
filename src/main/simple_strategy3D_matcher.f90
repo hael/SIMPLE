@@ -101,11 +101,11 @@ contains
             case('cluster', 'snhc', 'clustersym', 'cont_single')
                 npeaks = 1
             case('hard_single','hard_multi')
-                npeaks = MAXNPEAKS
+                npeaks = 40
                 ! command line overrides
                 if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
             case DEFAULT
-                npeaks = min(build_glob%eulspace%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
+                npeaks = NPEAKS2REFINE
                 ! command line overrides
                 if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
         end select

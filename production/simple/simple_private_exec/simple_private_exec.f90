@@ -34,7 +34,6 @@ type(check_2Dconv_commander)         :: xcheck_2Dconv
 type(rank_cavgs_commander)           :: xrank_cavgs
 
 ! REFINE3D PROGRAMS
-type(npeaks_commander)               :: xnpeaks
 type(nspace_commander)               :: xnspace
 type(refine3D_init_commander)        :: xrefine3D_init
 type(refine3D_commander)             :: xprime3D
@@ -373,20 +372,6 @@ select case(prg)
 
     ! REFINE3D PROGRAMS
 
-    case( 'npeaks' )
-        ! for checking the number of nonzero orientation weights (number of correlation peaks
-        ! included in the weighted reconstruction)
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'box'
-        keys_required(3) = 'lp'
-        ! set optional keys
-        keys_optional(1) = 'nspace'
-        keys_optional(2) = 'moldiam'
-        keys_optional(3) = 'pgrp'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
-        ! set defaults
-        if( .not. cline%defined('lp') ) call cline%set('lp', 20.)
-        call xnpeaks%execute(cline)
     case( 'nspace' )
         ! for calculating the expected resolution obtainable with different values of nspace
         ! (number of discrete projection directions used for discrete search)

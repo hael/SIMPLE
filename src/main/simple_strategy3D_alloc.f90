@@ -6,7 +6,7 @@ use simple_builder,    only: build_glob
 use simple_oris,       only: oris
 implicit none
 
-public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread, proj_mirror_idx
+public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 private
 
 type strategy3D_alloc
@@ -15,8 +15,9 @@ type strategy3D_alloc
     integer,          allocatable :: proj_space_state(:)                  !< states
     integer,          allocatable :: proj_space_proj(:)                   !< projection directions (1 state assumed)
     logical,          allocatable :: state_exists(:)                      !< indicates state existence
+    integer,          allocatable :: proj_mirror_idx(:)                   !< indices of mirrored projection directions
     ! per thread allocation
-    type(ran_tabu), allocatable :: rts(:)                                 !< stochastic serach order generators
+    type(ran_tabu), allocatable :: rts(:)                                 !< stochastic search order generators
     real,           allocatable :: proj_space_euls(:,:,:,:)               !< euler angles
     real,           allocatable :: proj_space_shift(:,:,:,:)              !< shift vectors
     real,           allocatable :: proj_space_corrs(:,:,:)                !< reference vs. particle correlations
@@ -25,13 +26,12 @@ type strategy3D_alloc
     integer,        allocatable :: proj_space_inplinds(:,:,:)             !< in-plane indices
     integer,        allocatable :: proj_space_refinds_sorted(:,:)         !< reference indices for shift search
     integer,        allocatable :: proj_space_inplinds_sorted(:,:)        !< in-plane indices for shift search
-    integer,        allocatable :: proj_space_refinds_sorted_highest(:,:) !< reference indices for shift search (considering only highest inpl)
+    integer,        allocatable :: proj_space_refinds_sorted_highest(:,:) !< reference indices for shift search (considering only highest scoring inpl)
     integer,        allocatable :: srch_order(:,:)                        !< stochastic search index
 end type strategy3D_alloc
 
-type(strategy3D_alloc) :: s3D ! singleton
-real,      allocatable :: master_proj_space_euls(:,:,:)     !< references euler angles
-integer,   allocatable :: proj_mirror_idx(:)                !< indices of mirrored projection directions
+type(strategy3D_alloc) :: s3D                           ! singleton
+real,      allocatable :: master_proj_space_euls(:,:,:) !< references euler angles
 logical                :: srch_order_allocated = .false.
 
 contains
@@ -63,7 +63,7 @@ contains
             &s3D%proj_space_corrs_srchd(nthr_glob,nrefs), s3D%proj_space_corrs_calcd(nthr_glob,nrefs),&
             &s3D%proj_space_inplinds(nthr_glob,nrefs,MAXNINPLPEAKS),&
             &s3D%proj_space_proj(nrefs),&
-            &proj_mirror_idx(nrefs), stat=alloc_stat )
+            &s3D%proj_mirror_idx(nrefs), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
@@ -84,8 +84,8 @@ contains
                 end do
                 ! mirror references indices
                 if (iproj .le. params_glob%nspace/2) then
-                    proj_mirror_idx(cnt)                      = (params_glob%nstates-1)*params_glob%nspace + params_glob%nspace/2 + iproj
-                    proj_mirror_idx(cnt+params_glob%nspace/2) = (params_glob%nstates-1)*params_glob%nspace + iproj
+                    s3D%proj_mirror_idx(cnt)                      = (params_glob%nstates-1)*params_glob%nspace + params_glob%nspace/2 + iproj
+                    s3D%proj_mirror_idx(cnt+params_glob%nspace/2) = (params_glob%nstates-1)*params_glob%nspace + iproj
                 end if
             enddo
         enddo
@@ -173,6 +173,7 @@ contains
         if( allocated(s3D%proj_space_refinds_sorted)        ) deallocate(s3D%proj_space_refinds_sorted)
         if( allocated(s3D%proj_space_inplinds_sorted)       ) deallocate(s3D%proj_space_inplinds_sorted)
         if( allocated(s3D%proj_space_refinds_sorted_highest)) deallocate(s3D%proj_space_refinds_sorted_highest)
+        if( allocated(s3D%proj_mirror_idx)                  ) deallocate(s3D%proj_mirror_idx)
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob
                 call s3D%rts(ithr)%kill

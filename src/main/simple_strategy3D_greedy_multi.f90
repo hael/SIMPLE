@@ -72,7 +72,7 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(3), loc_mir(3)
+                integer :: loc(MAXNINPLPEAKS), loc_mir(MAXNINPLPEAKS)
                 integer :: iref_mir
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     if (mir_projns) then
@@ -80,20 +80,20 @@ contains
                             s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
                         else
                             call pftcc_glob%gencorrs_mir(iref, self%s%iptcl, inpl_corrs, inpl_corrs_mir)
-                            ! identify the 3 top scoring in-planes
-                            loc      = max3loc(inpl_corrs)
-                            loc_mir  = max3loc(inpl_corrs_mir)
-                            iref_mir = proj_mirror_idx(iref)
-                            call self%s%store_solution(iref,     loc,     [inpl_corrs(loc(1)),         inpl_corrs(loc(2)),         inpl_corrs(loc(3))],         .true. )
-                            call self%s%store_solution(iref_mir, loc_mir, [inpl_corrs_mir(loc_mir(1)), inpl_corrs_mir(loc_mir(2)), inpl_corrs_mir(loc_mir(3))], .false.)
+                            ! identify the MAXNINPLPEAKS top scoring in-planes
+                            loc      = maxnloc(inpl_corrs,     MAXNINPLPEAKS)
+                            loc_mir  = maxnloc(inpl_corrs_mir, MAXNINPLPEAKS)
+                            iref_mir = s3D%proj_mirror_idx(iref)
+                            call self%s%store_solution(iref,     loc,     inpl_corrs(loc),         .true. )
+                            call self%s%store_solution(iref_mir, loc_mir, inpl_corrs_mir(loc_mir), .false.)
                         end if
                     else
                         ! calculate in-plane correlations
                         call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                        ! identify the 3 top scoring in-planes
-                        loc = max3loc(inpl_corrs)
+                        ! identify the MAXNINPLPEAKS top scoring in-planes
+                        loc = maxnloc(inpl_corrs, MAXNINPLPEAKS)
                         ! stash
-                        call self%s%store_solution(iref, loc, [inpl_corrs(loc(1)),inpl_corrs(loc(2)),inpl_corrs(loc(3))], .true.)
+                        call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
                     end if
                 endif
             end subroutine per_ref_srch
@@ -107,15 +107,14 @@ contains
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac, ang_spread, dist_inpl, euldist
-        integer   :: best_loc(1), neff_states, state, npeaks_all
+        integer   :: best_loc(1), neff_states, state
         logical   :: included(self%s%npeaks)
-        npeaks_all = self%s%npeaks
         ! extract peak info
         call extract_peaks(self%s, corrs, multistates=.true.)
         ! stochastic weights
-        call corrs2softmax_weights(self%s, npeaks_all, corrs, params_glob%tau, ws, included, best_loc, wcorr)
+        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, params_glob%tau, ws, included, best_loc, wcorr)
         ! state reweighting
-        call states_reweight(self%s, npeaks_all, ws, included, state, best_loc, wcorr )
+        call states_reweight(self%s, self%s%npeaks, ws, included, state, best_loc, wcorr )
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         ! angular distances

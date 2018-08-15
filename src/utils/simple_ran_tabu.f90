@@ -1,37 +1,41 @@
 ! routines for generation of directed random numbers
 module simple_ran_tabu
 use simple_defs
-use simple_error, only:allocchk
-use simple_rnd, only: multinomal, irnd_gasdev, irnd_uni
+use simple_error, only: allocchk
+use simple_rnd,   only: multinomal, irnd_gasdev, irnd_uni
 implicit none
+
+public :: ran_tabu
 private
+
 type :: ran_tabu
     private
     integer :: NP=0       !< integer ranges from 1 to NP
     integer :: N_tabus=0
     logical, allocatable :: avail(:) !< flags for checking availability
   contains
-    procedure :: reset
-    procedure :: insert
-    procedure :: is
-    procedure :: remove
-    procedure :: irnd
-    procedure :: irnd_pair
-    procedure :: irnd_gau
-    procedure :: mnomal
-    procedure :: ne_ran_iarr
-    procedure :: ne_mnomal_iarr
-    procedure :: stoch_nnmat
-    procedure :: shuffle
-    procedure :: balanced
-    procedure :: kill
+    procedure          :: reset
+    procedure          :: insert
+    procedure          :: is
+    procedure          :: remove
+    procedure          :: irnd
+    procedure          :: irnd_pair
+    procedure          :: irnd_gau
+    procedure          :: mnomal
+    procedure          :: ne_ran_iarr
+    procedure          :: ne_mnomal_iarr
+    procedure          :: stoch_nnmat
+    procedure, private :: shuffle_1
+    procedure, private :: shuffle_2
+    generic            :: shuffle => shuffle_1, shuffle_2
+    procedure          :: balanced
+    procedure          :: kill
 end type ran_tabu
 
 interface ran_tabu
     module procedure constructor
 end interface ran_tabu
 
-public :: ran_tabu
 contains
 
     !>  \brief  is a constructor
@@ -219,7 +223,7 @@ contains
     end function stoch_nnmat
 
     !>  \brief  shuffles an integer array
-    subroutine shuffle( self, shuffled )
+    subroutine shuffle_1( self, shuffled )
         class(ran_tabu), intent(inout) :: self
         integer,         intent(inout) :: shuffled(self%NP)  !< integer array for shuffling
         integer :: tmp(self%NP), irnd, i
@@ -231,7 +235,23 @@ contains
         end do
         shuffled = tmp
         call self%reset
-    end subroutine shuffle
+    end subroutine shuffle_1
+
+    !>  \brief  shuffles a real array
+    subroutine shuffle_2( self, shuffled )
+        class(ran_tabu), intent(inout) :: self
+        real,            intent(inout) :: shuffled(self%NP)  !< integer array for shuffling
+        real    :: tmp(self%NP)
+        integer :: irnd, i
+        call self%reset
+        do i=1,self%NP
+            irnd = self%irnd()
+            tmp(i) = shuffled(irnd)
+            call self%insert(irnd)
+        end do
+        shuffled = tmp
+        call self%reset
+    end subroutine shuffle_2
 
     !>  \brief  creates a balanced randomised paritioning over nstates states
     subroutine balanced( self, nstates, iarr )
